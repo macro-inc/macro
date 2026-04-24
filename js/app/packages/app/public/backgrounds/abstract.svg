@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="50%" style="stop-color:#16213e"/>
+      <stop offset="100%" style="stop-color:#0f3460"/>
+    </linearGradient>
+    <linearGradient id="glow1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e94560;stop-opacity:0.6"/>
+      <stop offset="100%" style="stop-color:#e94560;stop-opacity:0"/>
+    </linearGradient>
+    <linearGradient id="glow2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f3460;stop-opacity:0.8"/>
+      <stop offset="100%" style="stop-color:#533483;stop-opacity:0.3"/>
+    </linearGradient>
+  </defs>
+  <rect fill="url(#bg)" width="1920" height="1080"/>
+  <circle fill="url(#glow1)" cx="300" cy="200" r="300" opacity="0.5"/>
+  <circle fill="url(#glow2)" cx="1600" cy="800" r="400" opacity="0.6"/>
+  <circle fill="#e94560" cx="1700" cy="150" r="100" opacity="0.3"/>
+  <circle fill="#533483" cx="200" cy="900" r="200" opacity="0.4"/>
+  <polygon fill="#e94560" points="960,100 1100,400 820,400" opacity="0.2"/>
+  <polygon fill="#533483" points="1400,600 1600,900 1200,900" opacity="0.3"/>
+  <polygon fill="#0f3460" points="400,500 600,800 200,800" opacity="0.4"/>
+  <circle fill="none" stroke="#e94560" stroke-width="2" cx="960" cy="540" r="200" opacity="0.3"/>
+  <circle fill="none" stroke="#533483" stroke-width="2" cx="960" cy="540" r="300" opacity="0.2"/>
+  <circle fill="none" stroke="#0f3460" stroke-width="2" cx="960" cy="540" r="400" opacity="0.15"/>
+</svg>

@@ -1,0 +1,444 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <!-- Dark base background -->
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#141414"/>
+      <stop offset="100%" style="stop-color:#1a1a1a"/>
+    </linearGradient>
+
+    <!-- Raised tile - top face -->
+    <linearGradient id="tile-raised-top" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2d2d2d"/>
+      <stop offset="100%" style="stop-color:#262626"/>
+    </linearGradient>
+
+    <!-- Raised tile - right face (darker) -->
+    <linearGradient id="tile-raised-right" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1f1f1f"/>
+      <stop offset="100%" style="stop-color:#1a1a1a"/>
+    </linearGradient>
+
+    <!-- Raised tile - bottom face (darkest) -->
+    <linearGradient id="tile-raised-bottom" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#181818"/>
+      <stop offset="100%" style="stop-color:#141414"/>
+    </linearGradient>
+
+    <!-- Sunken tile -->
+    <linearGradient id="tile-sunken" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f0f0f"/>
+      <stop offset="100%" style="stop-color:#121212"/>
+    </linearGradient>
+
+    <!-- Flat tile -->
+    <linearGradient id="tile-flat" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1e1e"/>
+      <stop offset="100%" style="stop-color:#1a1a1a"/>
+    </linearGradient>
+
+    <!-- Orange glow for logo -->
+    <radialGradient id="logo-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#E8A84C;stop-opacity:0.25"/>
+      <stop offset="60%" style="stop-color:#E8A84C;stop-opacity:0.08"/>
+      <stop offset="100%" style="stop-color:#E8A84C;stop-opacity:0"/>
+    </radialGradient>
+
+    <!-- Orange accent for special tiles -->
+    <linearGradient id="tile-accent-top" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3d3020"/>
+      <stop offset="100%" style="stop-color:#2a2218"/>
+    </linearGradient>
+
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Base background -->
+  <rect fill="url(#bg-gradient)" width="1920" height="1080"/>
+
+  <!-- 3D Grid of tiles -->
+  <g id="grid">
+    <!-- Row 0 -->
+    <g transform="translate(0, 0)">
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="0" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="160" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(320, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="480" y="0" width="160" height="135" rx="4"/>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="640" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised accent -->
+      <g transform="translate(800, 0)">
+        <rect fill="#1a1510" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="#221a12" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-accent-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="960" y="0" width="160" height="135" rx="4"/>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="1120" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(1280, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1440" y="0" width="160" height="135" rx="4"/>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="1600" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(1760, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+    </g>
+
+    <!-- Row 1 -->
+    <g transform="translate(0, 135)">
+      <!-- Raised -->
+      <g transform="translate(0, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="160" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="320" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(480, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="640" y="0" width="160" height="135" rx="4"/>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="800" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(960, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1120" y="0" width="160" height="135" rx="4"/>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="1280" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised accent -->
+      <g transform="translate(1440, 0)">
+        <rect fill="#1a1510" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="#221a12" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-accent-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1600" y="0" width="160" height="135" rx="4"/>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="1760" y="0" width="160" height="135" rx="4"/>
+    </g>
+
+    <!-- Row 2 -->
+    <g transform="translate(0, 270)">
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="0" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(160, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="320" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="480" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised accent -->
+      <g transform="translate(640, 0)">
+        <rect fill="#1a1510" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="#221a12" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-accent-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="800" y="0" width="160" height="135" rx="4"/>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="960" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(1120, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1280" y="0" width="160" height="135" rx="4"/>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="1440" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(1600, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1760" y="0" width="160" height="135" rx="4"/>
+    </g>
+
+    <!-- Row 3 -->
+    <g transform="translate(0, 405)">
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="0" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="160" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(320, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="480" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="640" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(800, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="960" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised accent -->
+      <g transform="translate(1120, 0)">
+        <rect fill="#1a1510" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="#221a12" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-accent-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="1280" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1440" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(1600, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="1760" y="0" width="160" height="135" rx="4"/>
+    </g>
+
+    <!-- Row 4 -->
+    <g transform="translate(0, 540)">
+      <!-- Raised -->
+      <g transform="translate(0, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="160" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="320" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised accent -->
+      <g transform="translate(480, 0)">
+        <rect fill="#1a1510" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="#221a12" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-accent-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="640" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="800" y="0" width="160" height="135" rx="4"/>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="960" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1120" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(1280, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="1440" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1600" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(1760, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+    </g>
+
+    <!-- Row 5 -->
+    <g transform="translate(0, 675)">
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="0" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(160, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="320" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="480" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(640, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Raised accent -->
+      <g transform="translate(800, 0)">
+        <rect fill="#1a1510" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="#221a12" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-accent-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="960" y="0" width="160" height="135" rx="4"/>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="1120" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1280" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(1440, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="1600" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1760" y="0" width="160" height="135" rx="4"/>
+    </g>
+
+    <!-- Row 6 -->
+    <g transform="translate(0, 810)">
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="0" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="160" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised accent -->
+      <g transform="translate(320, 0)">
+        <rect fill="#1a1510" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="#221a12" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-accent-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="480" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="640" y="0" width="160" height="135" rx="4"/>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="800" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(960, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1120" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(1280, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="1440" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1600" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(1760, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+    </g>
+
+    <!-- Row 7 -->
+    <g transform="translate(0, 945)">
+      <!-- Raised -->
+      <g transform="translate(0, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="160" y="0" width="160" height="135" rx="4"/>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="320" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(480, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="640" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(800, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="960" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised accent -->
+      <g transform="translate(1120, 0)">
+        <rect fill="#1a1510" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="#221a12" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-accent-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1280" y="0" width="160" height="135" rx="4"/>
+      <!-- Sunken -->
+      <rect fill="url(#tile-sunken)" x="1440" y="0" width="160" height="135" rx="4"/>
+      <!-- Raised -->
+      <g transform="translate(1600, 0)">
+        <rect fill="url(#tile-raised-bottom)" x="8" y="12" width="160" height="135" rx="4"/>
+        <rect fill="url(#tile-raised-right)" x="152" y="0" width="16" height="135" rx="0 4 4 0"/>
+        <rect fill="url(#tile-raised-top)" x="0" y="0" width="160" height="127" rx="4"/>
+      </g>
+      <!-- Flat -->
+      <rect fill="url(#tile-flat)" x="1760" y="0" width="160" height="135" rx="4"/>
+    </g>
+  </g>
+
+  <!-- Logo glow backdrop -->
+  <ellipse fill="url(#logo-glow)" cx="960" cy="120" rx="350" ry="200"/>
+
+  <!-- Bright Macro logo at top center -->
+  <g transform="translate(960, 95)" filter="url(#glow)">
+    <!-- Shadow -->
+    <g transform="translate(2, 3)" opacity="0.4">
+      <path fill="#000" d="m-52 -39 -19.5 7.8v50.7l-15.6-14.3-19.5 7.8v57.85c0 2.21 0.91 4.355 2.535 5.85l24.05 22.75 19.5-7.8v-50.7l61.75 57.85 19.5-7.8v-50.7l61.75 57.85 19.5-7.8v-57.85c0-2.21-0.91-4.355-2.535-5.85l-70.2-66.3-19.5 7.8v50.7z" transform="scale(0.85)"/>
+    </g>
+    <!-- Main logo - bright orange -->
+    <path fill="#E8A84C" d="m-52 -39 -19.5 7.8v50.7l-15.6-14.3-19.5 7.8v57.85c0 2.21 0.91 4.355 2.535 5.85l24.05 22.75 19.5-7.8v-50.7l61.75 57.85 19.5-7.8v-50.7l61.75 57.85 19.5-7.8v-57.85c0-2.21-0.91-4.355-2.535-5.85l-70.2-66.3-19.5 7.8v50.7z" transform="scale(0.85)" opacity="0.95"/>
+    <!-- Highlight -->
+    <path fill="#F5C87A" d="m-52 -39 -19.5 7.8v50.7l-15.6-14.3-19.5 7.8v57.85c0 2.21 0.91 4.355 2.535 5.85l24.05 22.75 19.5-7.8v-50.7l61.75 57.85 19.5-7.8v-50.7l61.75 57.85 19.5-7.8v-57.85c0-2.21-0.91-4.355-2.535-5.85l-70.2-66.3-19.5 7.8v50.7z" transform="scale(0.85) translate(-1, -1.5)" opacity="0.3"/>
+  </g>
+
+  <!-- Subtle vignette -->
+  <radialGradient id="vignette" cx="50%" cy="50%" r="70%">
+    <stop offset="0%" style="stop-color:#000;stop-opacity:0"/>
+    <stop offset="100%" style="stop-color:#000;stop-opacity:0.5"/>
+  </radialGradient>
+  <rect fill="url(#vignette)" width="1920" height="1080"/>
+</svg>
