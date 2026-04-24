@@ -6391,6 +6391,10 @@
             "type": "string",
             "description": "The transcribed text content."
           },
+          "diarizedSpeakerId": {
+            "type": ["string", "null"],
+            "description": "Stable per-speaker identifier produced by the STT provider's diarization\npass. Unique across tracks in the call. `None` when the provider didn't\nreturn a speaker label."
+          },
           "endedAt": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -11674,6 +11678,10 @@
           "content": {
             "type": "string",
             "description": "The transcribed text content."
+          },
+          "diarizedSpeakerId": {
+            "type": ["string", "null"],
+            "description": "Stable per-speaker identifier produced by the STT provider's diarization\npass. Namespaced upstream by audio track so values are unique across all\ntracks in a call. `None` when the provider didn't return a speaker label."
           },
           "endedAt": {
             "type": ["string", "null"],

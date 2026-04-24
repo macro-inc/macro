@@ -964,6 +964,12 @@ export const getCallRecordResponse = zod
         zod
           .object({
             content: zod.string().describe('The transcribed text content.'),
+            diarizedSpeakerId: zod
+              .string()
+              .nullish()
+              .describe(
+                "Stable per-speaker identifier produced by the STT provider's diarization\npass. Unique across tracks in the call. `None` when the provider didn't\nreturn a speaker label."
+              ),
             endedAt: zod
               .string()
               .datetime({})
@@ -1140,6 +1146,12 @@ export const ingestTranscriptParams = zod.object({
 export const ingestTranscriptBody = zod
   .object({
     content: zod.string().describe('The transcribed text content.'),
+    diarizedSpeakerId: zod
+      .string()
+      .nullish()
+      .describe(
+        "Stable per-speaker identifier produced by the STT provider's diarization\npass. Namespaced upstream by audio track so values are unique across all\ntracks in a call. `None` when the provider didn't return a speaker label."
+      ),
     endedAt: zod
       .string()
       .datetime({})

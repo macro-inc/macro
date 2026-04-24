@@ -527,6 +527,7 @@ export const ReadCallRecordResponse = z.object({
   transcript: z.array(
     z.object({
       content: z.string(),
+      diarizedSpeakerId: z.union([z.string(), z.null()]).optional(),
       endedAt: z
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),

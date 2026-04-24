@@ -1031,6 +1031,11 @@ export interface ReadCallRecordResponse {
      */
     content: string;
     /**
+     * Stable per-speaker identifier produced by diarization, when available.
+     * Distinguishes multiple speakers sharing one audio track.
+     */
+    diarizedSpeakerId?: string | null;
+    /**
      * When the speaker stopped (if known).
      */
     endedAt?: string | null;
