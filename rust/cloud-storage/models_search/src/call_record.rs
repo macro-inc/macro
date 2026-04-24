@@ -6,7 +6,6 @@ use utoipa::ToSchema;
 
 use crate::{MatchType, SearchHighlight, SearchOn};
 
-/// A hit on a transcript segment.
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct CallRecordSearchResult {
     pub transcript_id: Option<uuid::Uuid>,
@@ -19,7 +18,6 @@ pub struct CallRecordSearchResult {
     pub score: Option<f64>,
 }
 
-/// One call-record response item.
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct CallRecordSearchResponseItem {
     pub id: uuid::Uuid,
@@ -31,7 +29,6 @@ pub struct CallRecordSearchResponseItem {
     pub call_search_results: Vec<CallRecordSearchResult>,
 }
 
-/// DB-sourced enrichment for a call record.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct CallRecordMetadata {
     pub created_by: String,
@@ -43,9 +40,9 @@ pub struct CallRecordMetadata {
     pub attended: bool,
 }
 
-/// CallRecordSearchResponseItem + DB metadata (`None` if deleted).
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct CallRecordSearchResponseItemWithMetadata {
+    /// `None` if the call has been deleted.
     pub metadata: Option<CallRecordMetadata>,
     #[serde(flatten)]
     pub extra: CallRecordSearchResponseItem,

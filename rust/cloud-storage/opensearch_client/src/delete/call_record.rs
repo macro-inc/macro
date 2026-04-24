@@ -2,7 +2,6 @@ use models_opensearch::SearchIndex;
 
 use crate::{Result, error::OpensearchClientError};
 
-/// Delete every segment for a call id (fan-out via `entity_id`).
 #[tracing::instrument(skip(client))]
 pub async fn delete_call_record_by_id(
     client: &opensearch::OpenSearch,
@@ -11,7 +10,6 @@ pub async fn delete_call_record_by_id(
     delete_by_term(client, "entity_id", call_id, "delete_call_record_by_id").await
 }
 
-/// Delete every segment tied to a channel id.
 #[tracing::instrument(skip(client))]
 pub async fn delete_call_records_by_channel_id(
     client: &opensearch::OpenSearch,

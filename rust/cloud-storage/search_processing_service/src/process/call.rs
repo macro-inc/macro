@@ -6,7 +6,6 @@ use sqlx::PgPool;
 use sqs_client::search::call::{CallRecordMessage, RemoveCallRecord};
 use uuid::Uuid;
 
-/// Upsert one doc per transcript segment.
 #[tracing::instrument(skip(opensearch_client, db), err)]
 pub async fn process_call_record(
     opensearch_client: &OpensearchClient,
@@ -79,7 +78,6 @@ pub async fn process_call_record(
     Ok(())
 }
 
-/// Delete a call (or every call for a channel).
 #[tracing::instrument(skip(opensearch_client), err)]
 pub async fn process_remove_call_record(
     opensearch_client: &OpensearchClient,

@@ -10,7 +10,6 @@ use sqs_client::{
 };
 use uuid::Uuid;
 
-/// SQS-backed `CallSearchIndexer`.
 #[derive(Clone)]
 pub struct SqsCallSearchIndexer {
     sqs: Arc<SQS>,

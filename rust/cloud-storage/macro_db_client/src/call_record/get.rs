@@ -2,13 +2,11 @@ use chrono::{DateTime, Utc};
 use sqlx::Row;
 use uuid::Uuid;
 
-/// Row used to enqueue a call record for search indexing.
 #[derive(Debug, Clone)]
 pub struct CallRecordSearchBackfill {
     pub call_id: Uuid,
 }
 
-/// Metadata used to enrich call record search hits.
 #[derive(Debug, Clone)]
 pub struct CallRecordMetadataRow {
     pub call_id: Uuid,
@@ -21,10 +19,8 @@ pub struct CallRecordMetadataRow {
     pub attended: bool,
 }
 
-/// One transcript segment for indexing.
 #[derive(Debug, Clone)]
 pub struct CallRecordTranscriptSegment {
-    /// `call_record_transcripts.id` — segment suffix of the OpenSearch `_id`.
     pub transcript_id: Uuid,
     pub speaker_id: String,
     pub sequence_num: i32,
@@ -33,7 +29,6 @@ pub struct CallRecordTranscriptSegment {
     pub ended_at: Option<DateTime<Utc>>,
 }
 
-/// Everything needed to upsert a call into search (one doc per segment).
 #[derive(Debug, Clone)]
 pub struct CallRecordSearchPayload {
     pub call_id: Uuid,
@@ -44,7 +39,7 @@ pub struct CallRecordSearchPayload {
     pub segments: Vec<CallRecordTranscriptSegment>,
 }
 
-/// Call ids the user can access, optionally narrowed by attended.
+/// `attended` optionally narrows by participation.
 #[tracing::instrument(skip(db))]
 pub async fn get_accessible_call_ids(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -93,7 +88,6 @@ pub async fn get_accessible_call_ids(
     Ok(rows.into_iter().map(|r| r.get::<Uuid, _>("id")).collect())
 }
 
-/// Page through every archived call record (backfill).
 #[tracing::instrument(skip(db))]
 pub async fn get_call_records_for_search_backfill(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -115,7 +109,7 @@ pub async fn get_call_records_for_search_backfill(
         .collect())
 }
 
-/// Load the indexing payload for a call, or `None` if missing.
+/// Returns `None` if the call has been deleted.
 #[tracing::instrument(skip(db))]
 pub async fn get_call_record_search_payload(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -187,7 +181,7 @@ pub async fn get_call_record_search_payload(
     }))
 }
 
-/// Enrichment metadata for a batch of call ids; `user_id` drives `attended`.
+/// `user_id` drives the per-row `attended` flag.
 #[tracing::instrument(skip(db))]
 pub async fn get_call_records_metadata(
     db: &sqlx::Pool<sqlx::Postgres>,

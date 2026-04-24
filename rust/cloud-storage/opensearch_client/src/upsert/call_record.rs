@@ -3,7 +3,6 @@ use models_opensearch::SearchIndex;
 use super::BulkUpsertResult;
 use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
-/// Upsert args for one transcript segment (one OpenSearch doc).
 #[derive(Debug, serde::Serialize)]
 pub struct UpsertCallRecordSegmentArgs {
     #[serde(rename = "entity_id")]

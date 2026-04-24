@@ -21,7 +21,6 @@ pub struct BackfillCallsResponse {
 
 const BACKFILL_PAGE: i64 = 2000;
 
-/// Enqueue calls for reindexing.
 #[tracing::instrument(skip(ctx, req))]
 pub async fn handler(
     State(ctx): State<ApiContext>,

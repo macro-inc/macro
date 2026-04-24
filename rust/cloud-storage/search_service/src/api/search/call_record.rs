@@ -9,7 +9,6 @@ use sqlx::types::Uuid;
 use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
 
-/// Group segment hits by call and attach DB metadata.
 #[tracing::instrument(skip(ctx, results), err)]
 pub(in crate::api::search) async fn enrich_call_records(
     ctx: &SearchHandlerState,

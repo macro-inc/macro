@@ -1,5 +1,3 @@
-/// Backfill archived call records into OpenSearch.
-/// Requires DATABASE_URL + SEARCH_EVENT_QUEUE.
 use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
 use sqlx::postgres::PgPoolOptions;
