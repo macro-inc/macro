@@ -12,10 +12,11 @@ import { isListViewID } from '@app/constants/list-views';
 import { useUserContext, useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
 import { useContacts } from '@queries/contacts/contacts';
-import { batch, createMemo, createSignal } from 'solid-js';
+import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import type { ActiveFilter } from './active-filter-chips';
 import { INDEX_OPTIONS } from './search-operator-autocomplete';
 import {
+  type SearchableOption,
   useSearchFilterOptions,
   useSearchIndexController,
 } from './search-filter-controls';
@@ -279,168 +280,90 @@ export function useFilterRefinements() {
       );
     }
 
-    // Sub-filters: assignee
-    const _optionsMap = assigneeOptionsMap();
-    for (const id of assigneeFilter()) {
-      const key = `Assignee|${id}`;
-      seenKeys.add(key);
+    // Keep a chip alive while its popup is still open, even if the user
+    // toggled every option off — closing the menu mid-swap is jarring.
+    const pushSearchableChip = (args: {
+      key: string;
+      categoryLabel: 'In' | 'From';
+      optionIdPrefix: string;
+      getIds: () => string[];
+      searchableOptions: Accessor<SearchableOption[]>;
+      labelMap: Accessor<Map<string, string>>;
+      onChange: (ids: string[]) => void;
+      searchPlaceholder: string;
+    }) => {
+      const popupOpen = chipCache.get(args.key)?.isPopupOpen?.() ?? false;
+      if (args.getIds().length === 0 && !popupOpen) return;
+      seenKeys.add(args.key);
       filters.push(
-        getOrCreateChip(key, () => ({
-          categoryLabel: 'Assignee',
-          optionId: () => id,
-          optionLabel: () => assigneeOptionsMap().get(id)?.label ?? id,
-          onRemove: () =>
-            setAssigneeFilter(assigneeFilter().filter((a) => a !== id)),
-        }))
-      );
-    }
-
-    // Search operator filters: in: (channel_ids)
-    const channelIds = (
-      queryFilters().channel_filters?.channel_ids ?? []
-    ).filter((id) => id !== NIL_UUID);
-    // Keep the chip alive while its popup is still open, even if the user
-    // toggled every option off — they may be mid-way through swapping A→B
-    // and closing the menu on them would be jarring.
-    const inChipOpen = chipCache.get('In')?.isPopupOpen?.() ?? false;
-    if (channelIds.length > 0 || inChipOpen) {
-      const key = 'In';
-      seenKeys.add(key);
-      filters.push(
-        getOrCreateChip(key, () => {
+        getOrCreateChip(args.key, () => {
           const [isPopupOpen, setPopupOpen] = createSignal(false);
           return {
-            categoryLabel: 'In',
-            optionId: () => {
-              const ids = (
-                queryFilters().channel_filters?.channel_ids ?? []
-              ).filter((id) => id !== NIL_UUID);
-              return `in:${ids.join(',')}`;
-            },
-            optionLabel: () => {
-              const ids = (
-                queryFilters().channel_filters?.channel_ids ?? []
-              ).filter((id) => id !== NIL_UUID);
-              return labelForIds(ids, channelLabelMap());
-            },
-            searchableOptions: channelOptions,
-            activeSearchableIds: () =>
-              (queryFilters().channel_filters?.channel_ids ?? []).filter(
-                (id) => id !== NIL_UUID
-              ),
-            onSearchableChange: setChannelIds,
-            searchPlaceholder: 'Search channels...',
-            onRemove: () => setChannelIds([]),
+            categoryLabel: args.categoryLabel,
+            optionId: () => `${args.optionIdPrefix}:${args.getIds().join(',')}`,
+            optionLabel: () => labelForIds(args.getIds(), args.labelMap()),
+            searchableOptions: args.searchableOptions,
+            activeSearchableIds: args.getIds,
+            onSearchableChange: args.onChange,
+            searchPlaceholder: args.searchPlaceholder,
+            onRemove: () => args.onChange([]),
             isPopupOpen,
             setPopupOpen,
           };
         })
       );
-    }
+    };
 
-    // Search operator filters: from: (sender_ids)
-    const senderIds = queryFilters().channel_filters?.sender_ids ?? [];
-    const fromChipOpen = chipCache.get('From')?.isPopupOpen?.() ?? false;
-    if (senderIds.length > 0 || fromChipOpen) {
-      const key = 'From';
-      seenKeys.add(key);
-      filters.push(
-        getOrCreateChip(key, () => {
-          const [isPopupOpen, setPopupOpen] = createSignal(false);
-          return {
-            categoryLabel: 'From',
-            optionId: () => {
-              const ids = queryFilters().channel_filters?.sender_ids ?? [];
-              return `from:${ids.join(',')}`;
-            },
-            optionLabel: () => {
-              const ids = queryFilters().channel_filters?.sender_ids ?? [];
-              return labelForIds(ids, senderLabelMap());
-            },
-            searchableOptions: senderOptions,
-            activeSearchableIds: () =>
-              queryFilters().channel_filters?.sender_ids ?? [],
-            onSearchableChange: setSenderIds,
-            searchPlaceholder: 'Search senders...',
-            onRemove: () => setSenderIds([]),
-            isPopupOpen,
-            setPopupOpen,
-          };
-        })
-      );
-    }
+    pushSearchableChip({
+      key: 'ChannelIn',
+      categoryLabel: 'In',
+      optionIdPrefix: 'channel-in',
+      getIds: () =>
+        (queryFilters().channel_filters?.channel_ids ?? []).filter(
+          (id) => id !== NIL_UUID
+        ),
+      searchableOptions: channelOptions,
+      labelMap: channelLabelMap,
+      onChange: setChannelIds,
+      searchPlaceholder: 'Search channels...',
+    });
+
+    pushSearchableChip({
+      key: 'ChannelFrom',
+      categoryLabel: 'From',
+      optionIdPrefix: 'channel-from',
+      getIds: () => queryFilters().channel_filters?.sender_ids ?? [],
+      searchableOptions: senderOptions,
+      labelMap: senderLabelMap,
+      onChange: setSenderIds,
+      searchPlaceholder: 'Search senders...',
+    });
 
     if (currentView() === 'search' && soup.filters.isActive('calls')) {
-      const callChannelIds = (
-        queryFilters().call_filters?.channel_ids ?? []
-      ).filter((id) => id !== NIL_UUID);
-      const callInOpen = chipCache.get('CallIn')?.isPopupOpen?.() ?? false;
-      if (callChannelIds.length > 0 || callInOpen) {
-        const key = 'CallIn';
-        seenKeys.add(key);
-        filters.push(
-          getOrCreateChip(key, () => {
-            const [isPopupOpen, setPopupOpen] = createSignal(false);
-            return {
-              categoryLabel: 'In',
-              optionId: () => {
-                const ids = (
-                  queryFilters().call_filters?.channel_ids ?? []
-                ).filter((id) => id !== NIL_UUID);
-                return `call-in:${ids.join(',')}`;
-              },
-              optionLabel: () => {
-                const ids = (
-                  queryFilters().call_filters?.channel_ids ?? []
-                ).filter((id) => id !== NIL_UUID);
-                return labelForIds(ids, channelLabelMap());
-              },
-              searchableOptions: channelOptions,
-              activeSearchableIds: () =>
-                (queryFilters().call_filters?.channel_ids ?? []).filter(
-                  (id) => id !== NIL_UUID
-                ),
-              onSearchableChange: setCallChannelIds,
-              searchPlaceholder: 'Search channels...',
-              onRemove: () => setCallChannelIds([]),
-              isPopupOpen,
-              setPopupOpen,
-            };
-          })
-        );
-      }
+      pushSearchableChip({
+        key: 'CallIn',
+        categoryLabel: 'In',
+        optionIdPrefix: 'call-in',
+        getIds: () =>
+          (queryFilters().call_filters?.channel_ids ?? []).filter(
+            (id) => id !== NIL_UUID
+          ),
+        searchableOptions: channelOptions,
+        labelMap: channelLabelMap,
+        onChange: setCallChannelIds,
+        searchPlaceholder: 'Search channels...',
+      });
 
-      const speakerIds = queryFilters().call_filters?.speaker_ids ?? [];
-      const fromSpeakerOpen =
-        chipCache.get('CallFrom')?.isPopupOpen?.() ?? false;
-      if (speakerIds.length > 0 || fromSpeakerOpen) {
-        const key = 'CallFrom';
-        seenKeys.add(key);
-        filters.push(
-          getOrCreateChip(key, () => {
-            const [isPopupOpen, setPopupOpen] = createSignal(false);
-            return {
-              categoryLabel: 'From',
-              optionId: () => {
-                const ids = queryFilters().call_filters?.speaker_ids ?? [];
-                return `call-from:${ids.join(',')}`;
-              },
-              optionLabel: () => {
-                const ids = queryFilters().call_filters?.speaker_ids ?? [];
-                return labelForIds(ids, senderLabelMap());
-              },
-              searchableOptions: senderOptions,
-              activeSearchableIds: () =>
-                queryFilters().call_filters?.speaker_ids ?? [],
-              onSearchableChange: setSpeakerIds,
-              searchPlaceholder: 'Search speakers...',
-              onRemove: () => setSpeakerIds([]),
-              isPopupOpen,
-              setPopupOpen,
-            };
-          })
-        );
-      }
+      pushSearchableChip({
+        key: 'CallFrom',
+        categoryLabel: 'From',
+        optionIdPrefix: 'call-from',
+        getIds: () => queryFilters().call_filters?.speaker_ids ?? [],
+        searchableOptions: senderOptions,
+        labelMap: senderLabelMap,
+        onChange: setSpeakerIds,
+        searchPlaceholder: 'Search speakers...',
+      });
 
       const callAttended = queryFilters().call_filters?.attended;
       if (callAttended !== undefined && callAttended !== null) {

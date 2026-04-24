@@ -577,7 +577,6 @@ export const UnifiedFilterDropdown = () => {
 
   const importance = createMemo(() => queryFilters().email_filters?.importance);
 
-  // Calls sub-filters: In (channel), From (speaker), Attended.
   const activeCallChannelIds: Accessor<string[]> = createMemo(
     () => queryFilters().call_filters?.channel_ids ?? []
   );
