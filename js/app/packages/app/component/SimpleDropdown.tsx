@@ -1,3 +1,5 @@
+import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   autoUpdate,
   computePosition,
@@ -5,10 +7,8 @@ import {
   offset,
   shift,
 } from '@floating-ui/dom';
-import { isMobile } from '@core/mobile/isMobile';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { cn } from '@ui/utils/classname';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
   type Component,

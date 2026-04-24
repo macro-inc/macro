@@ -217,10 +217,13 @@ export function SplitFileMenu(props: {
                   text={
                     typeof tool.label === 'function' ? tool.label() : tool.label
                   }
-                  onClick={() => {
+                  onClick={(e: MouseEvent) => {
                     tool.action();
                     if (tool.focusTarget) {
-                      triggerFocusInput(tool.focusTarget);
+                      triggerFocusInput(
+                        tool.focusTarget,
+                        e.currentTarget as HTMLElement
+                      );
                     }
                     setOpen(false);
                   }}

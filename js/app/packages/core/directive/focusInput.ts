@@ -58,9 +58,12 @@ export function triggerFocusInput(
     // click gesture so the virtual keyboard opens, then transfer focus to
     // the real target once it appears in the DOM.
     tempEl = document.createElement('input');
-    tempEl.style.position = 'absolute';
-    tempEl.style.top = `${(anchor?.offsetTop ?? 0) + 7}px`;
-    tempEl.style.left = `${anchor?.offsetLeft ?? 0}px`;
+    // Use fixed positioning (viewport-relative) so focusing the temp element
+    // doesn't cause the page to scroll.
+    const anchorRect = anchor?.getBoundingClientRect();
+    tempEl.style.position = 'fixed';
+    tempEl.style.top = `${(anchorRect?.top ?? 0) + 7}px`;
+    tempEl.style.left = `${anchorRect?.left ?? 0}px`;
     tempEl.style.height = '0';
     tempEl.style.opacity = '0';
     tempEl.style.fontSize = '16px';
