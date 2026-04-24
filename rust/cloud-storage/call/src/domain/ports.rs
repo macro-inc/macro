@@ -15,9 +15,9 @@ use crate::domain::models::EditCallRecordRequest;
 
 use super::models::{
     AddParticipantError, Call, CallActiveResponse, CallError, CallParticipant, CallRecord,
-    CallRecordPreview, CallTokenResponse, CallWebhookEvent, EgressS3Config,
-    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
-    LeaveCallResponse, TranscriptSegmentRequest,
+    CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse, CallWebhookEvent,
+    EgressS3Config, GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse,
+    GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -257,6 +257,28 @@ impl<T: RecordingStorage> RecordingStorage for Option<T> {
             None => anyhow::bail!("recording storage not configured"),
         }
     }
+}
+
+/// Summarizer port for generating an AI summary of a finished call.
+///
+/// Implementations are expected to produce a natural-language summary of
+/// the call given its finalized transcript. The returned [`String`] is the
+/// summary text that will be persisted on the corresponding `call_records`
+/// row (see the `insert_call_summary` repository operation).
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait CallSummarizer: Send + Sync + 'static {
+    /// The error type returned by summarization operations.
+    type Err: Into<anyhow::Error> + Send + Debug;
+
+    /// Produce a summary for the call identified by `call_id` using the
+    /// supplied finalized `transcript` segments. The segments are expected
+    /// to be ordered by `sequence_num` ascending (matching what is stored
+    /// in a [`CallRecord`]).
+    fn summarize_call(
+        &self,
+        call_id: &Uuid,
+        transcript: Vec<CallRecordTranscriptSegment>,
+    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
