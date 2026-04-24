@@ -5,15 +5,26 @@ import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHea
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { useCallRecordQuery } from '@queries/call/call';
 import type { Accessor } from 'solid-js';
-import { Match, Show, Switch, createSignal, onCleanup } from 'solid-js';
+import {
+  Match,
+  Show,
+  Switch,
+  createMemo,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { CallTranscript } from './CallTranscript';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { format } from 'date-fns';
 import PhoneCallIcon from '@macro-icons/wide/call.svg';
-import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
+import Eye from '@phosphor-icons/core/assets/regular/eye.svg';
+import EyeSlash from '@phosphor-icons/core/assets/regular/eye-slash.svg';
 import { cn } from '@ui/utils/classname';
 import { formatCallDuration } from '../utils';
-import { getActiveTranscriptSequenceNum } from './transcript-playback';
+import {
+  getActiveTranscriptSequenceNum,
+  sortTranscriptSegments,
+} from './transcript-playback';
 
 function isUnauthorized(error: Error | null): boolean {
   if (error instanceof MaybeResultError) {
@@ -93,10 +104,15 @@ function CallMetaStrip(props: {
         }
         onClick={() => props.onToggleTranscript()}
       >
-        <Subtitles class="size-4 shrink-0" />
-        <span>
-          {props.transcriptOpen ? 'Hide Transcript' : 'Show Transcript'}
-        </span>
+        <Show when={props.transcriptOpen}>
+          <Eye class="size-4 shrink-0" />
+        </Show>
+
+        <Show when={!props.transcriptOpen}>
+          <EyeSlash class="size-4 shrink-0" />
+        </Show>
+
+        <span>Transcript</span>
       </button>
     </div>
   );
@@ -104,7 +120,8 @@ function CallMetaStrip(props: {
 
 function RecordingVideo(props: {
   url: string;
-  onTimeUpdate?: (seconds: number) => void;
+  onTimeUpdate?: (seconds: number, source: 'playback' | 'seek') => void;
+  setVideoRef?: (el: HTMLVideoElement) => void;
 }) {
   const [isLoaded, setIsLoaded] = createSignal(false);
   let rafId: number | null = null;
@@ -119,7 +136,7 @@ function RecordingVideo(props: {
   const startTicking = (video: HTMLVideoElement) => {
     stopTicking();
     const tick = () => {
-      props.onTimeUpdate?.(video.currentTime);
+      props.onTimeUpdate?.(video.currentTime, 'playback');
       if (!video.paused && !video.ended) {
         rafId = requestAnimationFrame(tick);
       } else {
@@ -133,6 +150,7 @@ function RecordingVideo(props: {
   return (
     <div class="p-4 h-full min-h-0 flex justify-center items-start overflow-hidden">
       <video
+        ref={props.setVideoRef}
         class="max-w-full max-h-full rounded transition-opacity duration-200"
         classList={{ 'opacity-0': !isLoaded(), 'opacity-100': isLoaded() }}
         controls
@@ -147,20 +165,20 @@ function RecordingVideo(props: {
         onPlay={(event) => startTicking(event.currentTarget)}
         onPause={() => stopTicking()}
         onSeeking={(event) =>
-          props.onTimeUpdate?.(event.currentTarget.currentTime)
+          props.onTimeUpdate?.(event.currentTarget.currentTime, 'seek')
         }
         onSeeked={(event) =>
-          props.onTimeUpdate?.(event.currentTarget.currentTime)
+          props.onTimeUpdate?.(event.currentTarget.currentTime, 'seek')
         }
         onEnded={(event) => {
           stopTicking();
-          props.onTimeUpdate?.(event.currentTarget.duration);
+          props.onTimeUpdate?.(event.currentTarget.duration, 'playback');
         }}
         onTimeUpdate={(event) =>
-          props.onTimeUpdate?.(event.currentTarget.currentTime)
+          props.onTimeUpdate?.(event.currentTarget.currentTime, 'playback')
         }
         onLoadedMetadata={(event) =>
-          props.onTimeUpdate?.(event.currentTarget.currentTime)
+          props.onTimeUpdate?.(event.currentTarget.currentTime, 'playback')
         }
       />
     </div>
@@ -171,10 +189,32 @@ function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
   const record = props.data;
   const hasTranscripts = () => record().transcript.length > 0;
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
+  const [allowFutureLead, setAllowFutureLead] = createSignal(true);
+  const [videoRef, setVideoRef] = createSignal<HTMLVideoElement>();
+  const sortedTranscript = createMemo(() =>
+    sortTranscriptSegments(record().transcript)
+  );
 
   const [transcriptOpen, setTranscriptOpen] = createSignal(true);
   const activeSequenceNum = () =>
-    getActiveTranscriptSequenceNum(record().transcript, playbackSeconds());
+    getActiveTranscriptSequenceNum(
+      sortedTranscript(),
+      playbackSeconds(),
+      allowFutureLead()
+    );
+  const handleTimeUpdate = (seconds: number, source: 'playback' | 'seek') => {
+    setPlaybackSeconds(seconds);
+    setAllowFutureLead(source === 'playback');
+  };
+  const seekToSeconds = (seconds: number) => {
+    const video = videoRef();
+    if (!video || !Number.isFinite(seconds)) return;
+    const maxTime = Number.isFinite(video.duration) ? video.duration : seconds;
+    const targetSeconds = Math.max(0, Math.min(seconds, maxTime));
+    video.currentTime = targetSeconds;
+    setPlaybackSeconds(targetSeconds);
+    setAllowFutureLead(false);
+  };
 
   return (
     <>
@@ -200,7 +240,11 @@ function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
           <Show when={record().recordingUrl} keyed>
             {(url) => (
               <div class="min-h-0 flex-1 overflow-hidden">
-                <RecordingVideo url={url} onTimeUpdate={setPlaybackSeconds} />
+                <RecordingVideo
+                  url={url}
+                  onTimeUpdate={handleTimeUpdate}
+                  setVideoRef={setVideoRef}
+                />
               </div>
             )}
           </Show>
@@ -234,6 +278,7 @@ function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
                 transcript={record().transcript}
                 channelId={record().channelId}
                 activeSequenceNum={activeSequenceNum()}
+                onSeekToSeconds={seekToSeconds}
               />
             </Show>
           </div>
