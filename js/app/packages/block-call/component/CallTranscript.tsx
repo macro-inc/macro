@@ -4,7 +4,14 @@ import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
 import { Message } from '@channel/Message';
 import { Thread } from '@channel/Thread/Thread';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { createMemo, createSignal, createEffect, For, on, Show } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  createEffect,
+  For,
+  on,
+  Show,
+} from 'solid-js';
 import {
   formatVideoTimestamp,
   getSegmentVideoSeconds,
@@ -52,6 +59,7 @@ function TranscriptSegmentRow(props: {
   channelId: string;
   isActive: boolean;
   timelineStartMs: number | null;
+  onSeekToSeconds?: (seconds: number) => void;
 }) {
   const message = segmentToApiChannelMessage(props.segment, props.channelId);
   const videoTimestamp = getSegmentVideoSeconds(
@@ -64,6 +72,10 @@ function TranscriptSegmentRow(props: {
         message={message}
         highlighted={props.isActive}
         selected={props.isActive}
+        class="cursor-pointer"
+        onClick={() => {
+          if (videoTimestamp !== null) props.onSeekToSeconds?.(videoTimestamp);
+        }}
       >
         <Message.Layout class="pt-(--regular-message-padding-t)">
           <Message.Slot placement="icon">
@@ -95,14 +107,24 @@ function GroupedTranscriptSegmentRow(props: {
   segment: CallRecordTranscriptSegment;
   channelId: string;
   isActive: boolean;
+  timelineStartMs: number | null;
+  onSeekToSeconds?: (seconds: number) => void;
 }) {
   const message = segmentToApiChannelMessage(props.segment, props.channelId);
+  const videoTimestamp = getSegmentVideoSeconds(
+    props.segment,
+    props.timelineStartMs
+  );
   return (
     <Thread.Row message={message}>
       <Message.Root
         message={message}
         highlighted={props.isActive}
         selected={props.isActive}
+        class="cursor-pointer"
+        onClick={() => {
+          if (videoTimestamp !== null) props.onSeekToSeconds?.(videoTimestamp);
+        }}
       >
         <Message.Layout>
           <Message.Slot placement="icon">
@@ -123,9 +145,13 @@ export function CallTranscript(props: {
   transcript: CallRecordTranscriptSegment[];
   channelId: string;
   activeSequenceNum?: number | null;
+  onSeekToSeconds?: (seconds: number) => void;
 }) {
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
+  const [syncToVideoTime, setSyncToVideoTime] = createSignal(true);
+  const [isActiveRowInView, setIsActiveRowInView] = createSignal(true);
   const rowRefs = new Map<number, HTMLDivElement>();
+  let ignoreScrollUntil = 0;
 
   const transcriptMeta = createMemo(() => {
     const sorted = [...props.transcript].sort(
@@ -144,27 +170,60 @@ export function CallTranscript(props: {
     };
   });
 
+  const scrollActiveIntoView = (behavior: ScrollBehavior = 'smooth') => {
+    const activeSequenceNum = props.activeSequenceNum;
+    if (activeSequenceNum === null || activeSequenceNum === undefined) return;
+
+    const container = scrollRef();
+    const row = rowRefs.get(activeSequenceNum);
+    if (!container || !row) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const isAbove = rowRect.top < containerRect.top;
+    const isBelow = rowRect.bottom > containerRect.bottom;
+    if (!isAbove && !isBelow) return;
+
+    const targetScrollTop =
+      container.scrollTop +
+      (rowRect.top - containerRect.top) -
+      container.clientHeight / 2 +
+      row.clientHeight / 2;
+
+    ignoreScrollUntil = performance.now() + 350;
+    container.scrollTo({
+      top: Math.max(0, targetScrollTop),
+      behavior,
+    });
+  };
+
+  const updateActiveRowVisibility = () => {
+    const activeSequenceNum = props.activeSequenceNum;
+    if (activeSequenceNum === null || activeSequenceNum === undefined) {
+      setIsActiveRowInView(true);
+      return;
+    }
+
+    const container = scrollRef();
+    const row = rowRefs.get(activeSequenceNum);
+    if (!container || !row) {
+      setIsActiveRowInView(false);
+      return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const isInView =
+      rowRect.top >= containerRect.top && rowRect.bottom <= containerRect.bottom;
+    setIsActiveRowInView(isInView);
+  };
+
   createEffect(
     on(
       () => props.activeSequenceNum,
-      (activeSequenceNum) => {
-        if (activeSequenceNum === null || activeSequenceNum === undefined) return;
-
-        const container = scrollRef();
-        const row = rowRefs.get(activeSequenceNum);
-        if (!container || !row) return;
-
-        const containerRect = container.getBoundingClientRect();
-        const rowRect = row.getBoundingClientRect();
-        const isAbove = rowRect.top < containerRect.top;
-        const isBelow = rowRect.bottom > containerRect.bottom;
-        if (!isAbove && !isBelow) return;
-
-        row.scrollIntoView({
-          block: 'center',
-          inline: 'nearest',
-          behavior: 'smooth',
-        });
+      () => {
+        if (syncToVideoTime()) scrollActiveIntoView();
+        updateActiveRowVisibility();
       }
     )
   );
@@ -177,6 +236,12 @@ export function CallTranscript(props: {
         <div
           ref={setScrollRef}
           class="h-full min-h-0 flex-1 overflow-y-auto scrollbar-hidden"
+          onWheel={() => setSyncToVideoTime(false)}
+          onTouchMove={() => setSyncToVideoTime(false)}
+          onScroll={() => {
+            if (performance.now() < ignoreScrollUntil) return;
+            updateActiveRowVisibility();
+          }}
         >
 
         <div class="isolate flex items-center gap-2 sticky top-0 bg-panel z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
@@ -197,6 +262,7 @@ export function CallTranscript(props: {
                       channelId={props.channelId}
                       isActive={item.segment.sequenceNum === props.activeSequenceNum}
                       timelineStartMs={transcriptMeta().timelineStartMs}
+                      onSeekToSeconds={props.onSeekToSeconds}
                     />
                   </div>
                 }
@@ -206,6 +272,8 @@ export function CallTranscript(props: {
                     segment={item.segment}
                     channelId={props.channelId}
                     isActive={item.segment.sequenceNum === props.activeSequenceNum}
+                    timelineStartMs={transcriptMeta().timelineStartMs}
+                    onSeekToSeconds={props.onSeekToSeconds}
                   />
                 </div>
               </Show>
@@ -214,6 +282,31 @@ export function CallTranscript(props: {
         </div>
         </div>
       </div>
+      <Show
+        when={
+          !syncToVideoTime() &&
+          !isActiveRowInView() &&
+          props.activeSequenceNum !== null &&
+          props.activeSequenceNum !== undefined
+        }
+      >
+        <div
+          class="absolute bottom-0 right-px left-px px-2 pb-2 flex justify-center pointer-events-none z-20"
+          style={{ 'background-image': 'linear-gradient(transparent, var(--color-panel) 85%)' }}
+        >
+          <button
+            type="button"
+            class="pointer-events-auto isolate overflow-hidden relative bg-panel border border-accent/30 flex h-8 px-2 items-center justify-center text-xs font-mono uppercase font-medium leading-5 whitespace-nowrap cursor-pointer text-accent before:absolute before:inset-0 before:bg-accent/10 hover:before:bg-accent/20 before:content-[''] before:transition-colors"
+            onClick={() => {
+              setSyncToVideoTime(true);
+              scrollActiveIntoView('smooth');
+              setIsActiveRowInView(true);
+            }}
+          >
+            <span class="relative z-1">Sync to video time</span>
+          </button>
+        </div>
+      </Show>
       <CustomScrollbar scrollContainer={scrollRef} />
     </div>
   );

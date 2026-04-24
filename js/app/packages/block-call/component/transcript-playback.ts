@@ -1,29 +1,37 @@
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
 
-export function getActiveTranscriptSequenceNum(
-  transcript: CallRecordTranscriptSegment[],
-  playbackSeconds: number
-): number | null {
-  if (transcript.length === 0 || playbackSeconds < 0) return null;
+export function sortTranscriptSegments(
+  transcript: CallRecordTranscriptSegment[]
+): CallRecordTranscriptSegment[] {
+  return [...transcript].sort((a, b) => a.sequenceNum - b.sequenceNum);
+}
 
-  const sorted = [...transcript].sort((a, b) => a.sequenceNum - b.sequenceNum);
-  const firstStartMs = new Date(sorted[0].startedAt).getTime();
+export function getActiveTranscriptSequenceNum(
+  sortedTranscript: CallRecordTranscriptSegment[],
+  playbackSeconds: number,
+  allowFutureLead = true
+): number | null {
+  if (sortedTranscript.length === 0 || playbackSeconds < 0) return null;
+  const firstStartMs = new Date(sortedTranscript[0].startedAt).getTime();
   if (!Number.isFinite(firstStartMs)) return null;
 
   // Bias slightly earlier so short segments feel responsive.
   const ACTIVE_LEAD_MS = 250;
-  const currentTimelineMs = firstStartMs + playbackSeconds * 1000 + ACTIVE_LEAD_MS;
-  if (currentTimelineMs < firstStartMs) return null;
+  const rawTimelineMs = firstStartMs + playbackSeconds * 1000;
+  if (rawTimelineMs < firstStartMs) return null;
+  const currentTimelineMs = allowFutureLead
+    ? rawTimelineMs + ACTIVE_LEAD_MS
+    : rawTimelineMs;
 
   let activeSequenceNum: number | null = null;
-  for (let i = 0; i < sorted.length; i += 1) {
-    const currentStartMs = new Date(sorted[i].startedAt).getTime();
+  for (let i = 0; i < sortedTranscript.length; i += 1) {
+    const currentStartMs = new Date(sortedTranscript[i].startedAt).getTime();
     if (!Number.isFinite(currentStartMs)) continue;
 
     // Use the latest segment whose start is <= playback time.
     // This handles close/identical timestamps without skipping rows.
-    if (currentTimelineMs >= currentStartMs) {
-      activeSequenceNum = sorted[i].sequenceNum;
+    if (currentTimelineMs >= currentStartMs && rawTimelineMs >= currentStartMs) {
+      activeSequenceNum = sortedTranscript[i].sequenceNum;
     } else {
       break;
     }
