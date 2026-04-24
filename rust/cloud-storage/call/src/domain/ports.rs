@@ -218,6 +218,17 @@ pub trait CallRepository: Send + Sync + 'static {
         call_record_id: &Uuid,
         request: &EditCallRecordRequest,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Persist the AI-generated summary text on the archived call record.
+    ///
+    /// Tolerates unknown `call_id` (no row matches): the summarization flow
+    /// can race with the record being deleted, so this is an idempotent no-op
+    /// when the target row is gone.
+    fn insert_call_summary(
+        &self,
+        call_id: &Uuid,
+        summary: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Storage port for generating presigned recording URLs.

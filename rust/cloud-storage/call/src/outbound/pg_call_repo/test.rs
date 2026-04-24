@@ -1682,3 +1682,48 @@ async fn patch_call_record_share_with_team_true_noop_when_creator_has_no_team(
 
     Ok(())
 }
+
+// -- insert_call_summary ------------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn insert_call_summary_sets_summary_text(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let summary = "A short synopsis of the call.";
+
+    repo.insert_call_summary(&CALL_ARCHIVED, summary).await?;
+
+    let stored = sqlx::query_scalar!(
+        r#"SELECT summary FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(stored.as_deref(), Some(summary));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn insert_call_summary_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    // Unknown id should be an idempotent no-op (not an error).
+    repo.insert_call_summary(&Uuid::now_v7(), "irrelevant")
+        .await?;
+
+    // The archived fixture row must remain untouched.
+    let stored = sqlx::query_scalar!(
+        r#"SELECT summary FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(stored.is_none());
+    Ok(())
+}
