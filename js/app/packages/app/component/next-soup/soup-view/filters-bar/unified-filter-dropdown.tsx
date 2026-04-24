@@ -348,50 +348,21 @@ const SearchableFilterSubmenu = (props: {
     else setInternalOpen(v);
   };
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
-  const [subContentRef, setSubContentRef] = createSignal<HTMLDivElement>();
 
-  // Hold focus on the search input while the sub is open. Kobalte's menu
-  // primitives can focus the SubContent in several places with different
-  // timing for hover vs keyboard opens (`tryAutoFocus` on mount,
-  // `focusContent` on pointer-grace, item-leave handlers). We combine:
-  //   1. A scoped focusin listener that reclaims focus whenever anything
-  //      inside the sub that isn't the input or a listbox option receives
-  //      focus.
-  //   2. A short rAF-poll for ~200ms after open, to cover any focus moves
-  //      that don't emit a focusin on the container (some Kobalte paths
-  //      focus outside the sub root or blur without a replacement).
+  // Focus the search input on open. The rAF is load-bearing: Kobalte's
+  // DismissableLayer registers itself as a nested layer of the parent menu
+  // in `onMount`, and the search input lives in a portaled sub. If we focus
+  // synchronously before that registration runs, the parent (Channels)
+  // treats focus landing in the portaled sub as "focus outside" and closes
+  // the whole menu tree. Waiting one frame lets the nested-layer
+  // registration complete, so focus transitions stay within the layer stack.
   createEffect(() => {
     const el = inputRef();
-    const container = subContentRef();
-    if (!isOpen() || !el || !container) return;
-
-    const ensureFocus = () => {
-      if (!isOpen()) return;
-      if (document.activeElement === el) return;
-      el.focus();
-    };
-
-    const reclaim = (e: FocusEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target || target === el) return;
-      if (!container.contains(target)) return;
-      if (target.getAttribute?.('role') === 'option') return;
-      el.focus();
-    };
-    document.addEventListener('focusin', reclaim, true);
-
-    const start = performance.now();
-    let rafId = requestAnimationFrame(function tick() {
-      ensureFocus();
-      if (performance.now() - start < 200) rafId = requestAnimationFrame(tick);
+    if (!isOpen() || !el) return;
+    const raf = requestAnimationFrame(() => {
+      if (isOpen()) el.focus();
     });
-
-    onCleanup(() => {
-      document.removeEventListener('focusin', reclaim, true);
-      cancelAnimationFrame(rafId);
-    });
-
-    el.focus();
+    onCleanup(() => cancelAnimationFrame(raf));
   });
 
   return (
@@ -415,10 +386,7 @@ const SearchableFilterSubmenu = (props: {
       </DropdownMenu.SubTrigger>
 
       <DropdownMenu.Portal>
-        <DropdownMenu.SubContent
-          ref={setSubContentRef}
-          class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden"
-        >
+        <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden">
           <SearchableMultiSelectInline
             options={props.options}
             activeIds={props.activeIds}
