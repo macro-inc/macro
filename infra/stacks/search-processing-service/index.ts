@@ -57,9 +57,7 @@ const databaseUrlArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: DATABASE_URL })
   .apply((secret) => secret.arn);
 
-const DATABASE_URL_READONLY = config.require(
-  'macro_db_readonly_secret_key',
-);
+const DATABASE_URL_READONLY = config.require('macro_db_readonly_secret_key');
 const databaseUrlReadonlyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: DATABASE_URL_READONLY })
   .apply((secret) => secret.arn);
