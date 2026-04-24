@@ -10,6 +10,7 @@ import {
   createEffect,
   For,
   on,
+  onCleanup,
   Show,
 } from 'solid-js';
 import {
@@ -145,7 +146,10 @@ export function CallTranscript(props: {
   transcript: CallRecordTranscriptSegment[];
   channelId: string;
   activeSequenceNum?: number | null;
+  /** Bumps when the user seeks via the native video controls (deduped in CallBlockAdapter). */
+  videoSeekGeneration?: number;
   onSeekToSeconds?: (seconds: number) => void;
+  hideHeader?: boolean;
 }) {
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
   const [syncToVideoTime, setSyncToVideoTime] = createSignal(true);
@@ -170,7 +174,10 @@ export function CallTranscript(props: {
     };
   });
 
-  const scrollActiveIntoView = (behavior: ScrollBehavior = 'smooth') => {
+  const scrollActiveIntoView = (
+    behavior: ScrollBehavior = 'smooth',
+    opts?: { mode?: 'auto' | 'force' }
+  ) => {
     const activeSequenceNum = props.activeSequenceNum;
     if (activeSequenceNum === null || activeSequenceNum === undefined) return;
 
@@ -180,9 +187,13 @@ export function CallTranscript(props: {
 
     const containerRect = container.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
-    const isAbove = rowRect.top < containerRect.top;
-    const isBelow = rowRect.bottom > containerRect.bottom;
-    if (!isAbove && !isBelow) return;
+    const mode = opts?.mode ?? 'auto';
+
+    if (mode === 'auto') {
+      const isAbove = rowRect.top < containerRect.top;
+      const isBelow = rowRect.bottom > containerRect.bottom;
+      if (!isAbove && !isBelow) return;
+    }
 
     const targetScrollTop =
       container.scrollTop +
@@ -213,20 +224,90 @@ export function CallTranscript(props: {
 
     const containerRect = container.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
-    const isInView =
-      rowRect.top >= containerRect.top && rowRect.bottom <= containerRect.bottom;
-    setIsActiveRowInView(isInView);
+    const intersects =
+      rowRect.bottom > containerRect.top && rowRect.top < containerRect.bottom;
+    setIsActiveRowInView(intersects);
   };
+
+  const onTranscriptViewportResize = () => {
+    updateActiveRowVisibility();
+
+    // If we're following video time, keep the active row placed sensibly after layout changes.
+    if (syncToVideoTime()) {
+      scrollActiveIntoView('auto');
+      updateActiveRowVisibility();
+      return;
+    }
+
+    // If the user has disabled follow-scroll, don't fight them — unless the active row is now
+    // fully scrolled out of view due to a viewport resize, in which case recover visibility.
+    if (!isActiveRowInView()) {
+      scrollActiveIntoView('auto');
+      updateActiveRowVisibility();
+    }
+  };
+
+  /** Avoid double `scrollActiveIntoView` when seek bumps `videoSeekGeneration` and active line updates in the same flush. */
+  let suppressFollowScrollAfterSeek = false;
 
   createEffect(
     on(
-      () => props.activeSequenceNum,
-      () => {
-        if (syncToVideoTime()) scrollActiveIntoView();
-        updateActiveRowVisibility();
+      () => props.videoSeekGeneration ?? 0,
+      (gen, prev) => {
+        if (prev === undefined) {
+          updateActiveRowVisibility();
+          return;
+        }
+        if (gen !== prev) {
+          suppressFollowScrollAfterSeek = true;
+          queueMicrotask(() => {
+            suppressFollowScrollAfterSeek = false;
+          });
+          setSyncToVideoTime(true);
+          scrollActiveIntoView('smooth', { mode: 'force' });
+          updateActiveRowVisibility();
+        }
       }
     )
   );
+
+  createEffect(() => {
+    void props.activeSequenceNum;
+    void syncToVideoTime();
+    void scrollRef();
+
+    if (suppressFollowScrollAfterSeek) {
+      updateActiveRowVisibility();
+      return;
+    }
+
+    if (syncToVideoTime()) {
+      scrollActiveIntoView();
+    }
+    updateActiveRowVisibility();
+  });
+
+  createEffect(() => {
+    const el = scrollRef();
+    if (!el) return;
+
+    let rafId = 0;
+    const schedule = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        onTranscriptViewportResize();
+      });
+    };
+
+    schedule();
+    const observer = new ResizeObserver(schedule);
+    observer.observe(el);
+    onCleanup(() => {
+      observer.disconnect();
+      if (rafId) cancelAnimationFrame(rafId);
+    });
+  });
 
   return (
     <div
@@ -244,13 +325,14 @@ export function CallTranscript(props: {
           }}
         >
 
-        <div class="isolate flex items-center gap-2 sticky top-0 bg-panel z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
-          <Subtitles class="size-4 text-ink shrink-0" />
-          
-          <p class="font-semibold text-ink select-none text-sm shrink-0">Transcript</p>
-        </div>
+        <Show when={!props.hideHeader}>
+          <div class="isolate flex items-center gap-2 sticky top-0 bg-panel z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
+            <Subtitles class="size-4 text-ink shrink-0" />
+            <p class="font-semibold text-ink select-none text-sm shrink-0">Transcript</p>
+          </div>
+        </Show>
 
-        <div class="flex flex-col p-4 pt-0 ">
+        <div class="flex flex-col p-4 pt-0">
           <For each={transcriptMeta().items}>
             {(item) => (
               <Show
