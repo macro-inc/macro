@@ -1,4 +1,3 @@
-import MacroJump from '@app/component/MacroJump';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { Popover, type PopoverRootProps } from '@kobalte/core/popover';
 import { createMutationObserver } from '@solid-primitives/mutation-observer';
@@ -176,7 +175,6 @@ const DropdownMenu: ParentComponent<
             {props.children}
           </div>
         </Popover.Content>
-        <MacroJump tabbableParent={() => popoverContentEl} />
       </Popover.Portal>
     </Popover>
   );

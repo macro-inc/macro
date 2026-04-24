@@ -120,6 +120,11 @@ export async function fetchWithAuth<
           code: 'UNAUTHORIZED',
           message: 'Unauthorized access',
         };
+      case 409:
+        return {
+          code: 'CONFLICT',
+          message: 'Resource conflict',
+        };
       case 410:
         return {
           code: 'GONE',

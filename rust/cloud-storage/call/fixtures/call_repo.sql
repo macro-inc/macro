@@ -4,7 +4,7 @@
 -- Active call: call1 in ch1, created by user-a
 -- Participants: user-a (creator), user-b
 --
--- Channel: ch2 (public, no active call)
+-- Channel: ch2 (public, no active call — tests opt in via create_call)
 
 -- channels
 INSERT INTO comms_channels (id, name, channel_type, org_id, owner_id, created_at, updated_at) VALUES

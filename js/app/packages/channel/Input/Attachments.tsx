@@ -1,4 +1,7 @@
-import { staticFileIdEndpoint } from '@core/constant/servers';
+import {
+  staticFileIdEndpoint,
+  staticFileSizedEndpoint,
+} from '@core/constant/servers';
 import { EntityIcon } from '@core/component/EntityIcon';
 import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -58,7 +61,10 @@ function MediaAttachmentItem(props: {
   onRemove: (attachment: InputAttachmentData) => void;
   onOpen?: () => void;
 }) {
-  const mediaSrc = () => staticFileIdEndpoint(props.attachment.id);
+  const mediaSrc = () =>
+    props.attachment.kind === 'image'
+      ? staticFileSizedEndpoint(props.attachment.id, 'medium')
+      : staticFileIdEndpoint(props.attachment.id);
 
   return (
     <div class="ph-no-capture relative group">
@@ -166,13 +172,20 @@ export function Attachments(props: AttachmentsProps) {
     );
 
   const mediaItems = createMemo((): MediaItem[] =>
-    mediaAttachments().map((a) => ({
-      id: a.id,
-      src: staticFileIdEndpoint(a.id),
-      kind: a.kind,
-      width: a.width,
-      height: a.height,
-    }))
+    mediaAttachments().map((a) => {
+      const fullSrc = staticFileIdEndpoint(a.id);
+      return {
+        id: a.id,
+        src:
+          a.kind === 'image'
+            ? staticFileSizedEndpoint(a.id, 'medium')
+            : fullSrc,
+        fullSrc,
+        kind: a.kind,
+        width: a.width,
+        height: a.height,
+      };
+    })
   );
 
   const handleRemove = (attachment: InputAttachmentData) => {

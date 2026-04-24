@@ -52,7 +52,6 @@ import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
-import { GlitchText } from '@ui/components/GlitchText';
 import {
   $getLocationUrl,
   $getSelectionLocation,
@@ -505,7 +504,6 @@ export function MarkdownPopup(props: {
                       height={20}
                       class="text-accent"
                     />
-                    <GlitchText from="Reading document" continuous />
                   </div>
                 }
               >

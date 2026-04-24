@@ -1,7 +1,10 @@
 import { cn } from '@ui/utils/classname';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
-import { staticFileIdEndpoint } from '@core/constant/servers';
+import {
+  staticFileIdEndpoint,
+  staticFileSizedUrl,
+} from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
 false && internalDrag;
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
@@ -79,20 +82,28 @@ export function ProfilePicture(props: ProfilePictureProps) {
       }
       keyed
     >
-      {(url) => (
-        <div
-          class={cn(
-            'flex-shrink-0 overflow-hidden rounded-full',
-            props.sizeClass.container
-          )}
-        >
-          <img
-            src={url}
-            class="object-cover rounded-full w-full h-full origin-[50%_20%]"
-            use:internalDrag={true}
-          />
-        </div>
-      )}
+      {(url) => {
+        const smallUrl = staticFileSizedUrl(url, 'small');
+        return (
+          <div
+            class={cn(
+              'flex-shrink-0 overflow-hidden rounded-full',
+              props.sizeClass.container
+            )}
+          >
+            <img
+              src={smallUrl}
+              class="object-cover rounded-full w-full h-full origin-[50%_20%]"
+              use:internalDrag={true}
+              onError={(e) => {
+                if (e.currentTarget.src !== url) {
+                  e.currentTarget.src = url;
+                }
+              }}
+            />
+          </div>
+        );
+      }}
     </Show>
   );
 }

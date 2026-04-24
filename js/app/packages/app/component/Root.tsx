@@ -63,12 +63,12 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { currentThemeId } from '../../block-theme/signals/themeSignals';
+import { currentThemeId } from '../../theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
   systemThemeEffect,
-} from '../../block-theme/utils/themeUtils';
+} from '../../theme/utils/themeUtils';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { Login } from './auth/Login';
 import { Signup } from './auth/Signup';
@@ -77,7 +77,6 @@ import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
 import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
-import MacroJump from './MacroJump';
 import { ReactiveFavicon } from './ReactiveFavicon';
 import { lazy } from 'solid-js';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
@@ -85,7 +84,6 @@ import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 const InteractiveOnboarding = lazy(
   () => import('./interactive-onboarding/InteractiveOnboarding')
 );
-import Visor from './Visor';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import {
   AnalyticsContextProvider,
@@ -446,8 +444,6 @@ export function Root() {
                           <ChatAttachmentsInit />
                           <ReactiveFavicon />
                           <Title>{tabTitle()}</Title>
-                          <MacroJump />
-                          <Visor />
                           <Suspense>
                             <IsomorphicRouter
                               transformUrl={transformShortIdInUrlPathname}

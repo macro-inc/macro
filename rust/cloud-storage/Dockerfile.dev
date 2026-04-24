@@ -1,16 +1,20 @@
 # syntax=docker/dockerfile:1
 FROM rust:latest AS chef
 ENV SQLX_OFFLINE=true
+ENV CARGO_PROFILE_DEV_DEBUG=0
 WORKDIR /app
 
 FROM chef AS builder
+ARG CARGO_BUILD_JOBS=0
 COPY . .
 
 # Build ALL standard service binaries at once (with BuildKit cache mounts for incremental builds)
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
     --mount=type=cache,target=/usr/local/cargo/git/db,sharing=shared \
     --mount=type=cache,target=/app/target,id=rust-target-dev-debug,sharing=locked \
-    cargo build -j 2 \
+    jobs="${CARGO_BUILD_JOBS:-0}" \
+    && if [ -z "${jobs}" ] || [ "${jobs}" = "0" ]; then jobs="$(nproc)"; fi \
+    && cargo build -j "${jobs}" \
         --bin authentication_service \
         --bin connection_gateway_service \
         --bin contacts_service \
@@ -42,53 +46,38 @@ WORKDIR /app
 ENV PORT=8080
 EXPOSE 8080
 
+FROM base AS services_bundle
+COPY --from=builder /app/out/ /app/out/
+RUN chmod +x /app/out/*
+ENTRYPOINT ["dumb-init", "--"]
+
 # Individual service targets
-FROM base AS authentication_service
-COPY --from=builder /app/out/authentication_service /app/svc
-RUN chmod +x /app/svc
-ENTRYPOINT ["dumb-init", "./svc"]
+FROM services_bundle AS authentication_service
+CMD ["/app/out/authentication_service"]
 
-FROM base AS connection_gateway_service
-COPY --from=builder /app/out/connection_gateway_service /app/svc
-RUN chmod +x /app/svc
-ENTRYPOINT ["dumb-init", "./svc"]
+FROM services_bundle AS connection_gateway_service
+CMD ["/app/out/connection_gateway_service"]
 
-FROM base AS contacts_service
-COPY --from=builder /app/out/contacts_service /app/svc
-RUN chmod +x /app/svc
-ENTRYPOINT ["dumb-init", "./svc"]
+FROM services_bundle AS contacts_service
+CMD ["/app/out/contacts_service"]
 
-FROM base AS document_cognition_service
-COPY --from=builder /app/out/document_cognition_service /app/svc
-RUN chmod +x /app/svc
-ENTRYPOINT ["dumb-init", "./svc"]
+FROM services_bundle AS document_cognition_service
+CMD ["/app/out/document_cognition_service"]
 
-FROM base AS document_storage_service
-COPY --from=builder /app/out/document_storage_service /app/svc
-RUN chmod +x /app/svc
-ENTRYPOINT ["dumb-init", "./svc"]
+FROM services_bundle AS document_storage_service
+CMD ["/app/out/document_storage_service"]
 
-FROM base AS email_service
-COPY --from=builder /app/out/email_service /app/svc
-RUN chmod +x /app/svc
-ENTRYPOINT ["dumb-init", "./svc"]
+FROM services_bundle AS email_service
+CMD ["/app/out/email_service"]
 
-FROM base AS notification_service
-COPY --from=builder /app/out/notification_service /app/svc
-RUN chmod +x /app/svc
-ENTRYPOINT ["dumb-init", "./svc"]
+FROM services_bundle AS notification_service
+CMD ["/app/out/notification_service"]
 
-FROM base AS static_file_service
-COPY --from=builder /app/out/static_file_service /app/svc
-RUN chmod +x /app/svc
-ENTRYPOINT ["dumb-init", "./svc"]
+FROM services_bundle AS static_file_service
+CMD ["/app/out/static_file_service"]
 
-FROM base AS unfurl_service
-COPY --from=builder /app/out/unfurl_service /app/svc
-RUN chmod +x /app/svc
-ENTRYPOINT ["dumb-init", "./svc"]
+FROM services_bundle AS unfurl_service
+CMD ["/app/out/unfurl_service"]
 
-FROM base AS image_proxy_service
-COPY --from=builder /app/out/image_proxy_service /app/svc
-RUN chmod +x /app/svc
-ENTRYPOINT ["dumb-init", "./svc"]
+FROM services_bundle AS image_proxy_service
+CMD ["/app/out/image_proxy_service"]

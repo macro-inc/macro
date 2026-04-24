@@ -3,12 +3,12 @@ import { For, Show, createSignal, type Component, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { TrackView } from './TrackView';
 import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
-import Microphone from '@icon/regular/microphone.svg';
-import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
-import VideoCamera from '@icon/regular/video-camera.svg';
-import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
-import Screencast from '@icon/regular/screencast.svg';
-import Users from '@icon/regular/users.svg';
+import Microphone from '@macro-icons/wide/microphone.svg';
+import MicrophoneSlash from '@macro-icons/wide/microphone-slash.svg';
+import VideoCamera from '@macro-icons/wide/video.svg';
+import VideoCameraSlash from '@macro-icons/wide/video-slash.svg';
+import Screencast from '@macro-icons/wide/screencast.svg';
+import Users from '@macro-icons/wide/users.svg';
 import CaretDown from '@icon/regular/caret-down.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -368,6 +368,17 @@ export function CallOverlay(props: { onLeave: () => void }) {
                   onSelect={(id) => callCtx.switchAudioOutput(id)}
                 />
               </Show>
+              <MenuSeparator />
+              <MenuGroup>
+                <GroupLabel>Effects</GroupLabel>
+                <MenuItem
+                  text="Noise suppression"
+                  selectorType="checkbox"
+                  checked={callCtx.isNoiseSuppressed()}
+                  closeOnSelect={false}
+                  onClick={() => callCtx.toggleNoiseSuppression()}
+                />
+              </MenuGroup>
             </>
           }
         >

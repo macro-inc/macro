@@ -541,7 +541,7 @@
     --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 
     --text-xxs: 0.625rem;
-    
+
     /* Custom container size */
     --container-small: 40rem;
 
@@ -728,7 +728,7 @@ html[data-modality="keyboard"] .suppress-css-brackets .allow-css-brackets *:focu
 /* Suppressed on touch devices */
 html:not([data-touch-device="true"]) [data-message]:hover,
 html:not([data-touch-device="true"]) [data-message][data-highlighted] {
-    @apply bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px];
+    @apply bg-accent/5 outline-1 outline-accent/20 outline-offset-1;
 }
 
 /* Keyboard selection accent bar can coexist with hover styles */
@@ -830,7 +830,7 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 
 @utility macro-message-width {
     max-width: 100%;
-    
+
     @media (min-width: 640px) {
         max-width: 800px;
         min-width: 250px;
@@ -838,7 +838,7 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 }
 
 @utility macro-message-padding {
-  
+
   @container (width < 816px) {
       padding-inline: calc(var(--spacing) * 4);
   }
@@ -848,7 +848,7 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 }
 
 @utility macro-message-margin {
-  
+
   @container (width < 816px) {
       margin-inline: calc(var(--spacing) * 4);
   }
