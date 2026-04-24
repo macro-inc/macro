@@ -191,7 +191,13 @@ function InviteNotFound() {
         This invitation may have already been accepted, expired, or was sent to
         a different email address.
       </p>
-      <Button as="a" href="/" variant="primary" size="md" class="rounded-xs">
+      <Button
+        as="a"
+        href="/"
+        variant="primary"
+        size="md"
+        class="w-full rounded-xs"
+      >
         Go to Home
       </Button>
     </div>
