@@ -1,7 +1,7 @@
 use crate::domain::models::{
-    ChannelAttachment, ChannelMessageFilters, ChannelParticipant, CountedReaction,
-    MessageAttachment, MessagePageDirection, ThreadData, ThreadReply, ThreadReplyRow,
-    TopLevelMessageRow,
+    ChannelAttachment, ChannelAttachmentType, ChannelMessageFilters, ChannelParticipant,
+    CountedReaction, MessageAttachment, MessagePageDirection, ThreadData, ThreadReply,
+    ThreadReplyRow, TopLevelMessageRow,
 };
 use chrono::{DateTime, Utc};
 use models_pagination::{CreatedAt, Query};
@@ -55,6 +55,7 @@ pub trait ChannelMessagesRepo: Send + Sync + 'static {
         channel_id: Uuid,
         query: &Query<Uuid, CreatedAt, ()>,
         limit: u16,
+        attachment_type: Option<ChannelAttachmentType>,
     ) -> impl Future<Output = Result<Vec<ChannelAttachment>, Self::Err>> + Send;
 
     /// Fetch active participants for a channel.
@@ -100,6 +101,7 @@ pub trait ChannelMessagesService: Send + Sync + 'static {
         channel_id: Uuid,
         query: Query<Uuid, CreatedAt, ()>,
         limit: u16,
+        attachment_type: Option<ChannelAttachmentType>,
     ) -> impl Future<Output = Result<ChannelAttachmentsPage, ChannelMessagesErr>> + Send;
 
     /// Fetch active participants for a channel.

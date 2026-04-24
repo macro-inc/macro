@@ -189,6 +189,7 @@ impl ChannelMessagesService for MockService {
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         Ok(Vec::<ChannelAttachment>::new()
             .into_iter()
@@ -245,6 +246,7 @@ impl ChannelMessagesService for ErrorService {
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
@@ -300,6 +302,7 @@ impl ChannelMessagesService for ParticipantsService {
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         Ok(Vec::<ChannelAttachment>::new()
             .into_iter()
@@ -599,6 +602,7 @@ impl ChannelMessagesService for NotFoundService {
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         Ok(Vec::<ChannelAttachment>::new()
             .into_iter()
@@ -658,6 +662,7 @@ impl ChannelMessagesService for AroundHasItemsService {
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         Ok(Vec::<ChannelAttachment>::new()
             .into_iter()
@@ -823,6 +828,7 @@ impl ChannelMessagesService for std::sync::Arc<CapturingService> {
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         Ok(Vec::<ChannelAttachment>::new()
             .into_iter()

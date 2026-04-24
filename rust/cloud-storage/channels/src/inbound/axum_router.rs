@@ -3,8 +3,8 @@ mod test;
 
 pub use crate::domain::models::ChannelMessageFilters;
 use crate::domain::models::{
-    ChannelAttachment, ChannelMessage, ChannelParticipant, CountedReaction, MessageAttachment,
-    MessagePageDirection, ParticipantRole, ThreadInfo, ThreadReply,
+    ChannelAttachment, ChannelAttachmentType, ChannelMessage, ChannelParticipant, CountedReaction,
+    MessageAttachment, MessagePageDirection, ParticipantRole, ThreadInfo, ThreadReply,
 };
 use crate::domain::ports::{
     ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult, ChannelMessagesService,
@@ -83,6 +83,9 @@ pub struct Params {
     /// instead of cursor-paginated results.
     #[serde(default)]
     load_around_message_id: Option<Uuid>,
+    /// Filter attachments by type: `static` for images/videos, `dss` for documents.
+    #[serde(default)]
+    attachment_type: Option<ChannelAttachmentType>,
 }
 
 /// Path params for thread replies endpoint.
@@ -367,6 +370,7 @@ pub async fn get_thread_replies_handler<S: ChannelMessagesService, Svc: EntityAc
         ("channel_id" = Uuid, Path, description = "Channel ID"),
         ("limit" = Option<u16>, Query, description = "Page size (1-500, default 50)"),
         ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value"),
+        ("attachment_type" = Option<String>, Query, description = "Filter by type: 'static' for images/videos, 'dss' for documents"),
     ),
     responses(
         (status = 200, body = ApiChannelAttachmentsPage),
@@ -381,7 +385,8 @@ pub async fn get_thread_replies_handler<S: ChannelMessagesService, Svc: EntityAc
     fields(
         channel_id = tracing::field::Empty,
         limit = tracing::field::Empty,
-        has_cursor = tracing::field::Empty
+        has_cursor = tracing::field::Empty,
+        attachment_type = tracing::field::Empty
     )
 )]
 pub async fn get_channel_attachments_handler<
@@ -401,10 +406,14 @@ pub async fn get_channel_attachments_handler<
     span.record("channel_id", tracing::field::display(channel_id));
     span.record("limit", limit);
     span.record("has_cursor", has_cursor);
+    span.record(
+        "attachment_type",
+        tracing::field::debug(&params.attachment_type),
+    );
 
     let page = state
         .service
-        .get_channel_attachments(channel_id, query, limit)
+        .get_channel_attachments(channel_id, query, limit, params.attachment_type)
         .await?;
 
     Ok(Json(page.type_erase().map(ApiChannelAttachment::from)))

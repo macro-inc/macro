@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Request to fetch a page of channel messages.
@@ -10,6 +10,17 @@ pub struct GetChannelMessagesRequest {
     pub channel_id: Uuid,
     /// Page size, clamped to [1, 100].
     pub limit: u16,
+}
+
+/// Filter for the type of channel attachments to return.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelAttachmentType {
+    /// Static file attachments (images, videos).
+    Static,
+    /// Document storage service attachments.
+    Dss,
 }
 
 /// Filters for channel message queries.

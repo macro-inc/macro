@@ -3,9 +3,9 @@ mod tests;
 
 use crate::domain::{
     models::{
-        ChannelAttachment, ChannelMessageFilters, ChannelParticipant, CountedReaction,
-        MessageAttachment, MessagePageDirection, ParticipantRole, ThreadData, ThreadReplyRow,
-        TopLevelMessageRow,
+        ChannelAttachment, ChannelAttachmentType, ChannelMessageFilters, ChannelParticipant,
+        CountedReaction, MessageAttachment, MessagePageDirection, ParticipantRole, ThreadData,
+        ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{ChannelMessagesRepo, TopLevelMessagesQueryResult},
 };
@@ -449,11 +449,14 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         channel_id: Uuid,
         query: &Query<Uuid, CreatedAt, ()>,
         limit: u16,
+        attachment_type: Option<ChannelAttachmentType>,
     ) -> Result<Vec<ChannelAttachment>, Self::Err> {
         let (cursor_created_at, cursor_id) = match query.vals() {
             (Some(id), Some(val)) => (Some(*val), Some(*id)),
             _ => (None, None),
         };
+
+        let is_static_filter = attachment_type.map(|t| t == ChannelAttachmentType::Static);
 
         let rows = sqlx::query_as!(
             ChannelAttachmentRow,
@@ -466,6 +469,9 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             WHERE a.channel_id = $1
               AND m.deleted_at IS NULL
               AND ($2::timestamptz IS NULL OR (a.created_at, a.id) < ($2, $3))
+              AND ($5::bool IS NULL
+                   OR ($5 = true AND a.entity_type LIKE 'static/%')
+                   OR ($5 = false AND a.entity_type NOT LIKE 'static/%'))
             ORDER BY a.created_at DESC, a.id DESC
             LIMIT $4
             "#,
@@ -473,6 +479,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             cursor_created_at,
             cursor_id,
             i64::from(limit) as i64,
+            is_static_filter,
         )
         .fetch_all(&self.pool)
         .await?;

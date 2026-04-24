@@ -41,7 +41,7 @@ fn empty_repo() -> MockChannelMessagesRepo {
     repo.expect_get_attachments_batch()
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
     repo.expect_get_channel_attachments()
-        .returning(|_, _, _| Box::pin(async { Ok(vec![]) }));
+        .returning(|_, _, _, _| Box::pin(async { Ok(vec![]) }));
     repo.expect_get_channel_participants()
         .returning(|_| Box::pin(async { Ok(vec![]) }));
     repo.expect_resolve_top_level_parent()
@@ -205,7 +205,7 @@ async fn clamps_limit() {
 async fn returns_empty_attachments_page() {
     let svc = ChannelMessagesServiceImpl::new(empty_repo());
     let page = svc
-        .get_channel_attachments(Uuid::nil(), Query::Sort(CreatedAt, ()), 50)
+        .get_channel_attachments(Uuid::nil(), Query::Sort(CreatedAt, ()), 50, None)
         .await
         .unwrap();
 

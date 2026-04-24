@@ -444,7 +444,7 @@ async fn channel_attachments_cursor_pagination(pool: Pool<Postgres>) -> anyhow::
     let repo = repo(pool);
     // ch1 has 3 attachments total (a001, a002 on msg1, a003 on msg3)
     let page1 = repo
-        .get_channel_attachments(CH1, &Query::Sort(CreatedAt, ()), 2)
+        .get_channel_attachments(CH1, &Query::Sort(CreatedAt, ()), 2, None)
         .await?;
     assert_eq!(page1.len(), 2, "limit respected");
 
@@ -459,7 +459,9 @@ async fn channel_attachments_cursor_pagination(pool: Pool<Postgres>) -> anyhow::
         },
         filter: (),
     });
-    let page2 = repo.get_channel_attachments(CH1, &cursor, 2).await?;
+    let page2 = repo
+        .get_channel_attachments(CH1, &cursor, 2, None)
+        .await?;
     assert_eq!(page2.len(), 1, "remaining attachment");
 
     // No overlap between pages
@@ -476,7 +478,7 @@ async fn channel_attachments_cursor_pagination(pool: Pool<Postgres>) -> anyhow::
 async fn channel_attachments_include_dimensions(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     let all = repo
-        .get_channel_attachments(CH1, &Query::Sort(CreatedAt, ()), 50)
+        .get_channel_attachments(CH1, &Query::Sort(CreatedAt, ()), 50, None)
         .await?;
 
     let img = all.iter().find(|a| a.entity_type == "image").unwrap();
@@ -496,7 +498,7 @@ async fn channel_attachments_include_dimensions(pool: Pool<Postgres>) -> anyhow:
 async fn channel_attachments_exclude_deleted_messages(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     let all = repo
-        .get_channel_attachments(CH1, &Query::Sort(CreatedAt, ()), 50)
+        .get_channel_attachments(CH1, &Query::Sort(CreatedAt, ()), 50, None)
         .await?;
 
     let ids: Vec<Uuid> = all.iter().map(|a| a.id).collect();

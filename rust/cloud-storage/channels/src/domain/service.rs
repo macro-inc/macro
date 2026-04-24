@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
-        ChannelMessage, ChannelMessageFilters, ChannelParticipant, MessagePageDirection,
-        ThreadInfo, ThreadReply, TopLevelMessageRow,
+        ChannelAttachmentType, ChannelMessage, ChannelMessageFilters, ChannelParticipant,
+        MessagePageDirection, ThreadInfo, ThreadReply, TopLevelMessageRow,
     },
     ports::{
         ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage,
@@ -191,12 +191,13 @@ where
         channel_id: Uuid,
         query: Query<Uuid, CreatedAt, ()>,
         limit: u16,
+        attachment_type: Option<ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         let limit = limit.clamp(1, 500);
 
         let attachments = self
             .repo
-            .get_channel_attachments(channel_id, &query, limit)
+            .get_channel_attachments(channel_id, &query, limit, attachment_type)
             .await
             .map_err(anyhow::Error::from)?;
 
