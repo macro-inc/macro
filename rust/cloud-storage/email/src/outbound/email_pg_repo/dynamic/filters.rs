@@ -249,7 +249,11 @@ pub(super) fn build_thread_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragment
                     FROM email_messages m_cal
                     JOIN email_attachments a_cal ON a_cal.message_id = m_cal.id
                     WHERE m_cal.thread_id = t.id
-                      AND (a_cal.filename ILIKE '%.ics' OR a_cal.mime_type = 'application/ics')
+                      AND (
+                        a_cal.filename ILIKE '%.ics'
+                        OR a_cal.mime_type = 'text/calendar'
+                        OR a_cal.mime_type = 'application/ics'
+                      )
                 )"#,
         ),
 

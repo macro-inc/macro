@@ -593,6 +593,7 @@ fn test_build_thread_email_filter_calendar_only_true_emits_ics_exists() {
     assert!(debug.contains("email_attachments"));
     assert!(debug.contains("m_cal.thread_id = t.id"));
     assert!(debug.contains("a_cal.filename ILIKE '%.ics'"));
+    assert!(debug.contains("a_cal.mime_type = 'text/calendar'"));
     assert!(debug.contains("a_cal.mime_type = 'application/ics'"));
 }
 

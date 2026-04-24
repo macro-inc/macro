@@ -1543,11 +1543,8 @@ async fn test_dynamic_query_calendar_only_combined_with_sender(
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let limit = 50;
 
-    // calendar_only=true AND sender=john@example.com → threads 1 and 5 (both john, both .ics)
-    // Excludes thread 2 (john, .ics, but let me double-check — thread 2 is from john, it is .ics.
-    // Actually thread 2 IS from john as sender too. But thread 2's message has from_contact=john)
-    // Wait — the filter is message-level sender. Thread 2 has from john. So it'd match.
-    // Threads 1, 2, 5 are all from john. Thread 4 is from alice. So john+.ics = {1, 2, 5}.
+    // calendar_only=true AND sender=john@example.com → {1, 2, 5}. Threads 1, 2, 5 are all
+    // from john with an .ics attachment; thread 4 has .ics but is from alice.
     let filter = Arc::new(Expr::and(
         Expr::Literal(EmailLiteral::CalendarOnly(true)),
         Expr::Literal(EmailLiteral::Sender(Email::Complete(
