@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isThemeV1,
   parseThemeV1Json,
-} from '@block-theme/utils/themeValidation';
+} from '@theme/utils/themeValidation';
 
 const validThemeJson = JSON.stringify({
   id: 'test-theme-id',
