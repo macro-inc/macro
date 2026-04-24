@@ -100,9 +100,9 @@ pub async fn grant_bundle_update(
     let mut service = service.lock().await;
     let grant_tx = service.try_recv_grant_sender().map_err(|e| e.to_string())?;
     let approval = if approved {
-        UpdateApproval::Granted(UpdateGranted::new())
+        UpdateApproval::Granted(UpdateGranted::default())
     } else {
-        UpdateApproval::Denied(UpdateDenied::new())
+        UpdateApproval::Denied(UpdateDenied::default())
     };
     grant_tx
         .send(approval)
@@ -119,34 +119,18 @@ pub async fn apply_completed_update<R: Runtime>(
     let service_state = app_handle
         .try_state::<Mutex<PluginService>>()
         .ok_or_else(|| "Bundle updater plugin not initialized".to_string())?;
-    let mut service = service_state.lock().await;
-
-    let entrypoint = {
-        let status = service.status().borrow();
-        match status.as_ref() {
-            Ok(UpdateStatus::Completed(bundle_location)) => bundle_location.entrypoint.clone(),
-            _ => return Ok(false),
-        }
-    };
-
-    let bundle_dir = entrypoint
-        .parent()
-        .ok_or_else(|| format!("entrypoint {entrypoint:?} has no parent directory"))?
-        .to_path_buf();
 
     let cache_dir = app_handle
         .path()
         .app_cache_dir()
         .map_err(|e| e.to_string())?;
 
-    tracing::info!("Setting bundle root to {bundle_dir:?}");
+    let mut service = service_state.lock().await;
+
     service
-        .set_bundle_root(bundle_dir.clone(), &cache_dir)
+        .apply_update(&cache_dir)
         .await
         .map_err(|e| e.to_string())?;
-
-    // Remove old bundle directories now that we've switched to the new one
-    service.cleanup_old_bundles(&cache_dir, &bundle_dir).await;
 
     drop(service);
 
@@ -162,9 +146,7 @@ pub async fn apply_completed_update<R: Runtime>(
 /// Apply a completed bundle update: set the bundle root and navigate to it.
 #[tauri::command]
 #[tracing::instrument(err, skip(app_handle))]
-pub async fn perform_update<R: Runtime>(
-    app_handle: tauri::AppHandle<R>,
-) -> Result<(), String> {
+pub async fn perform_update<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Result<(), String> {
     match apply_completed_update(&app_handle).await? {
         true => Ok(()),
         false => Err("No pending update".into()),

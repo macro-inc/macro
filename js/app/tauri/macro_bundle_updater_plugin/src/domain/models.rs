@@ -64,7 +64,8 @@ impl BundleRoot {
         match self.0.as_ref() {
             Some(root) => {
                 tracing::info!("Persisting bundle root {root:?} to {persist_path:?}");
-                fs.write(&persist_path, root.to_string_lossy().as_bytes()).await
+                fs.write(&persist_path, root.to_string_lossy().as_bytes())
+                    .await
             }
             None => fs.remove_file(&persist_path).await,
         }
@@ -73,11 +74,6 @@ impl BundleRoot {
     /// Get the current bundle root path, if any.
     pub(crate) fn path(&self) -> Option<&Path> {
         self.0.as_deref()
-    }
-
-    /// Set the bundle root to a new path.
-    pub(crate) fn set(&mut self, path: PathBuf) {
-        self.0 = Some(path);
     }
 
     /// Clear the bundle root, reverting to the built-in assets.
@@ -332,26 +328,12 @@ pub enum UpdateError {
 }
 
 /// denotes that an update was approved
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct UpdateGranted(());
 
-impl UpdateGranted {
-    /// Create a new granted token.
-    pub fn new() -> Self {
-        UpdateGranted(())
-    }
-}
-
 /// denotes that an update was denied
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct UpdateDenied(());
-
-impl UpdateDenied {
-    /// Create a new denied token.
-    pub fn new() -> Self {
-        UpdateDenied(())
-    }
-}
 
 /// Whether the user approved or denied a pending update.
 #[derive(Debug, Clone)]

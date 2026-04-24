@@ -180,17 +180,17 @@ pub fn run() {
         ])
         .setup(|app| {
             // Restore persisted bundle root on startup
-            if let Ok(cache_dir) = app.path().app_cache_dir() {
-                if let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>() {
-                    tauri::async_runtime::block_on(async {
-                        let mut service = s.lock().await;
-                        service.load_bundle_root(&cache_dir).await;
-                        tracing::info!(
-                            "Setup: restored bundle root to {:?}",
-                            service.bundle_root_path()
-                        );
-                    });
-                }
+            if let Ok(cache_dir) = app.path().app_cache_dir()
+                && let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>()
+            {
+                tauri::async_runtime::block_on(async {
+                    let mut service = s.lock().await;
+                    service.load_bundle_root(&cache_dir).await;
+                    tracing::info!(
+                        "Setup: restored bundle root to {:?}",
+                        service.bundle_root_path()
+                    );
+                });
             }
 
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
