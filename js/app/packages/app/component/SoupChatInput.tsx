@@ -23,7 +23,7 @@ import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 function SoupChatInputInner() {
@@ -133,54 +133,50 @@ function SoupChatInputInner() {
   };
 
   return (
-    <Show when={!soup.previewEntity()}>
-      <div
-        ref={attachContainer}
-        class="absolute bottom-0 right-px left-px pb-2 px-2 flex justify-center pointer-events-none"
-        style={{
-          'background-image': `linear-gradient(transparent, var(--color-panel) 85%)`,
-        }}
-      >
-        <div class="w-full max-w-3xl">
-          <div class="pointer-events-auto">
-            <ChatInput
-              editor={editor}
-              onSend={handleSend}
-              onEscape={() => {
-                splitPanelContext.panelRef()?.focus();
-                return true;
-              }}
-              isPersistent={true}
-              autoFocusOnMount={false}
-              extraRightControls={() => (
-                <Tooltip
-                  tooltip="⌘ Enter to send in background"
-                  placement="top"
+    <div
+      ref={attachContainer}
+      class="absolute bottom-0 right-px left-px pb-2 px-2 flex justify-center pointer-events-none"
+      classList={{ hidden: !!soup.previewEntity() }}
+      style={{
+        'background-image': `linear-gradient(transparent, var(--color-panel) 85%)`,
+      }}
+    >
+      <div class="w-full max-w-3xl">
+        <div class="pointer-events-auto">
+          <ChatInput
+            editor={editor}
+            onSend={handleSend}
+            onEscape={() => {
+              splitPanelContext.panelRef()?.focus();
+              return true;
+            }}
+            isPersistent={true}
+            autoFocusOnMount={false}
+            extraRightControls={() => (
+              <Tooltip tooltip="⌘ Enter to send in background" placement="top">
+                <div
+                  class="flex items-center gap-1"
+                  classList={{
+                    'text-accent': metaHeld(),
+                  }}
                 >
                   <div
-                    class="flex items-center gap-1"
+                    class="flex border text-xxs rounded-xs items-center px-1 py-0.5"
                     classList={{
-                      'text-accent': metaHeld(),
+                      'border-accent text-accent': metaHeld(),
+                      'border-edge-muted': !metaHeld(),
                     }}
                   >
-                    <div
-                      class="flex border text-xxs rounded-xs items-center px-1 py-0.5"
-                      classList={{
-                        'border-accent text-accent': metaHeld(),
-                        'border-edge-muted': !metaHeld(),
-                      }}
-                    >
-                      <Hotkey shortcut="cmd+Enter" />
-                    </div>
-                    <span>Background</span>
+                    <Hotkey shortcut="cmd+Enter" />
                   </div>
-                </Tooltip>
-              )}
-            />
-          </div>
+                  <span>Background</span>
+                </div>
+              </Tooltip>
+            )}
+          />
         </div>
       </div>
-    </Show>
+    </div>
   );
 }
 
