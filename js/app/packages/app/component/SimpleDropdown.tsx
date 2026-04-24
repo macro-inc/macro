@@ -151,7 +151,6 @@ function ItemInner(props: Pick<DropdownItemProps, 'icon' | 'text'>) {
 function TouchItem(props: DropdownItemProps) {
   return (
     <div
-      disabled={props.disabled}
       onClick={props.onClick}
       class={cn(
         ITEM_BASE_CLASS,

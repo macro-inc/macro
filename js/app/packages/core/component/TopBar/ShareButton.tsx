@@ -1,4 +1,3 @@
-
 import { useAnalytics } from '@app/component/analytics-context';
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { useChannelParticipants } from '@channel/use-channel-participants';
@@ -1126,36 +1125,35 @@ export function ShareModal(props: ShareModalProps) {
                 <Panel>
                   <div class="text-ink flex flex-col">
                     <div
-                      class="h-10 flex items-center justify-between px-3 text-sm font-medium"
-                      classList={{
-                        'border-b border-edge-muted':
-                          publicAccessLevel() != null,
-                      }}
+                      class={cn(
+                        'h-10 flex items-center justify-between px-3 text-sm font-medium',
+                        publicAccessLevel() != null &&
+                          'border-b border-edge-muted'
+                      )}
                     >
                       <div class="flex items-center gap-2">
                         Public link
                         <div
-                        class="px-2 rounded-xl border py-0.5 flex justify-center items-center"
-                        classList={{
-                          'border-accent/30 bg-accent/10':
-                            publicAccessLevel() != null,
-                          'border-edge-muted bg-edge-muted/20':
-                            publicAccessLevel() == null,
-                        }}
-                      >
-                        <span
-                          class="text-xs font-medium whitespace-nowrap"
-                          classList={{
-                            'text-accent-ink': publicAccessLevel() != null,
-                            'text-ink-extra-muted':
-                              publicAccessLevel() == null,
-                          }}
+                          class={cn(
+                            'px-2 rounded-xl border py-0.5 flex justify-center items-center',
+                            publicAccessLevel() != null
+                              ? 'border-accent/30 bg-accent/10'
+                              : 'border-edge-muted bg-edge-muted/20'
+                          )}
                         >
-                          {publicAccessLevel() != null
-                            ? 'ENABLED'
-                            : 'DISABLED'}
-                        </span>
-                      </div>
+                          <span
+                            class={cn(
+                              'text-xs font-medium whitespace-nowrap',
+                              publicAccessLevel() != null
+                                ? 'text-accent-ink'
+                                : 'text-ink-extra-muted'
+                            )}
+                          >
+                            {publicAccessLevel() != null
+                              ? 'ENABLED'
+                              : 'DISABLED'}
+                          </span>
+                        </div>
                       </div>
                       <MiniToggleSwitch
                         size="Base"
