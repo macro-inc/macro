@@ -1,21 +1,13 @@
 import type { DateValue } from '@core/util/date';
-import type { ContentHitData } from '../types/search';
+import { type ContentHitData, hitHasSender } from '../types/search';
 import { formatRelativeTimestamp } from '../utils/timestamp';
 
 interface SearchTimestampProps {
   hit?: ContentHitData;
 }
 
-/**
- * Gets timestamp from content hit if available
- */
 function getTimestamp(hit: ContentHitData): DateValue | undefined {
-  switch (hit.type) {
-    case 'email':
-    case 'channel':
-      return hit.sentAt;
-  }
-  return undefined;
+  return hitHasSender(hit) ? hit.sentAt : undefined;
 }
 
 /**

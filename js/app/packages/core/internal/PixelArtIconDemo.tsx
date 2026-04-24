@@ -422,7 +422,7 @@ function GlyphGrid(props: GlyphGridProps) {
   });
 
   return (
-    <div class="grow-1">
+    <div class="grow">
       <div class="flex items-center justify-between mb-6 p-2">
         <div class="flex item-center gap-4">
           <h2 class="font-mono text-xs">Icons [ {props.glyphs.length} ]</h2>
@@ -509,7 +509,7 @@ function GlyphGrid(props: GlyphGridProps) {
                       />
                     </Show>
                   </div>
-                  <div class="text-xs text-ink-muted w-full border-t-1 border-edge/50 p-1">
+                  <div class="text-xs text-ink-muted w-full border-t border-edge/50 p-1">
                     <EditableLabel
                       value={glyph.name}
                       onSave={(newName) => props.onGlyphRename(glyph, newName)}
@@ -791,7 +791,7 @@ function GlyphEditor(props: GlyphEditorProps) {
     <Show when={props.isOpen}>
       <div class="absolute inset-0 bg-modal-overlay flex items-center justify-center z-action-menu">
         <div
-          class="bg-menu border-1 border-edge max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+          class="bg-menu border border-edge max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
           use:clickOutside={() => props.onClose()}
         >
           <div class="p-2 border-b border-edge flex items-center justify-between">
@@ -810,7 +810,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                 placeholder="Icon name..."
                 value={glyphName()}
                 onInput={(e) => setGlyphName(e.currentTarget.value)}
-                class="p-2 w-full text-sm border-b-1 border-edge/50 mb-4"
+                class="p-2 w-full text-sm border-b border-edge/50 mb-4"
                 ref={inputRef}
               />
               <div class="flex flex-col items-center gap-6">
@@ -1093,7 +1093,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
         </div>
       </div>
 
-      <hr class="border-b-1 border-dashed border-edge/50 my-4" />
+      <hr class="border-b border-dashed border-edge/50 my-4" />
 
       <Show
         when={props.selectedGlyph}

@@ -100,11 +100,11 @@ pub static BUNDLE_ARCHIVE_NAME: &str = "/app/app-archive.zip";
 #[derive(Debug, Error)]
 pub enum UpdateErr {
     /// a network error has occirred
-    #[error("A network error occurred: {0:?}")]
-    Network(#[from] anyhow::Error),
+    #[error("A network error occurred")]
+    Network,
     /// failed to parse a semver string
-    #[error("Failed to parse semver {0}")]
-    Semver(#[from] semver::Error),
+    #[error("Failed to parse semver")]
+    Semver,
 }
 
 /// contains information about bundle ids for various app platforms

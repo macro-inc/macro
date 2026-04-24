@@ -219,6 +219,11 @@ export function insertTopLevelMessageIntoChannelMessages(
 
   const [newestPage, ...olderPages] = data.pages;
 
+  console.debug(
+    '[channel-messages.insertTopLevelMessageIntoChannelMessages]',
+    ` previous_cursor: ${newestPage.previous_cursor}`
+  );
+
   // Only insert into cache entries that represent the bottom of the
   // conversation. If the newest page has a previous_cursor, we're viewing
   // a mid-conversation slice (e.g. load-around) and prepending here would

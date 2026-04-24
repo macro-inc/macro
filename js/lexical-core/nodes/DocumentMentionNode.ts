@@ -25,6 +25,8 @@ export type DocumentMentionInfo = {
   collapsed?: boolean;
   // for channels
   channelType?: string;
+  // timestamp when mention was created
+  createdAt?: number;
 };
 
 export type SerializedDocumentMentionNode = Spread<
@@ -47,6 +49,7 @@ export class DocumentMentionNode extends DecoratorNode<
   __mentionUuid: string | undefined;
   __collapsed: boolean;
   __channelType: string | undefined;
+  __createdAt: number | undefined;
 
   static getType() {
     return 'document-mention';
@@ -69,6 +72,7 @@ export class DocumentMentionNode extends DecoratorNode<
       node.__mentionUuid,
       node.__collapsed,
       node.__channelType,
+      node.__createdAt,
       node.__key
     );
   }
@@ -81,6 +85,7 @@ export class DocumentMentionNode extends DecoratorNode<
     mentionUuid?: string,
     collapsed?: boolean,
     channelType?: string,
+    createdAt?: number,
     key?: NodeKey
   ) {
     super(key);
@@ -91,6 +96,7 @@ export class DocumentMentionNode extends DecoratorNode<
     this.__mentionUuid = mentionUuid;
     this.__collapsed = collapsed ?? false;
     this.__channelType = channelType;
+    this.__createdAt = createdAt;
   }
 
   static importJSON(serializedNode: SerializedDocumentMentionNode) {
@@ -102,6 +108,7 @@ export class DocumentMentionNode extends DecoratorNode<
       mentionUuid: serializedNode.mentionUuid,
       collapsed: serializedNode.collapsed ?? false,
       channelType: serializedNode.channelType,
+      createdAt: serializedNode.createdAt,
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
@@ -117,6 +124,7 @@ export class DocumentMentionNode extends DecoratorNode<
       mentionUuid: this.__mentionUuid,
       collapsed: this.__collapsed,
       channelType: this.__channelType,
+      createdAt: this.__createdAt,
       type: DocumentMentionNode.getType(),
       version: VERSION,
     };
@@ -131,6 +139,7 @@ export class DocumentMentionNode extends DecoratorNode<
       mentionUuid: this.__mentionUuid,
       collapsed: this.__collapsed,
       channelType: this.__channelType,
+      createdAt: this.__createdAt,
     };
   }
 
@@ -155,6 +164,7 @@ export class DocumentMentionNode extends DecoratorNode<
       const collapsed = domNode.getAttribute('data-collapsed') === 'true';
       const channelType =
         domNode.getAttribute('data-channel-type') || undefined;
+      const createdAt = domNode.getAttribute('data-created-at');
 
       if (documentId && blockName) {
         const node = $createDocumentMentionNode({
@@ -165,6 +175,7 @@ export class DocumentMentionNode extends DecoratorNode<
           mentionUuid,
           collapsed,
           channelType,
+          createdAt: createdAt ? parseInt(createdAt, 10) : undefined,
         });
         return { node };
       }
@@ -193,6 +204,7 @@ export class DocumentMentionNode extends DecoratorNode<
       'data-block-params': JSON.stringify(this.__blockParams),
       'data-mention-uuid': this.__mentionUuid || '',
       'data-channel-type': this.__channelType || '',
+      'data-created-at': this.__createdAt?.toString() || '',
       DOMConversionMap: this.__collapsed.toString(),
     };
   }
@@ -245,6 +257,10 @@ export class DocumentMentionNode extends DecoratorNode<
     return this.__channelType;
   }
 
+  getCreatedAt(): number | undefined {
+    return this.__createdAt;
+  }
+
   setDocumentId(documentId: string) {
     const writable = this.getWritable();
     writable.__documentId = documentId;
@@ -287,6 +303,12 @@ export class DocumentMentionNode extends DecoratorNode<
     return writable;
   }
 
+  setCreatedAt(createdAt: number | undefined) {
+    const writable = this.getWritable();
+    writable.__createdAt = createdAt;
+    return writable;
+  }
+
   decorate(_: LexicalEditor, config: EditorConfig) {
     const decorator =
       getDecorator<DocumentMentionDecoratorProps>(DocumentMentionNode);
@@ -300,6 +322,7 @@ export class DocumentMentionNode extends DecoratorNode<
           mentionUuid: this.__mentionUuid,
           collapsed: this.__collapsed,
           channelType: this.__channelType,
+          createdAt: this.__createdAt,
           key: this.getKey(),
           theme: config.theme,
         });
@@ -317,7 +340,8 @@ export function $createDocumentMentionNode(
     params.blockParams,
     params.mentionUuid,
     params.collapsed,
-    params.channelType
+    params.channelType,
+    params.createdAt ?? Date.now()
   );
   return $applyNodeReplacement(node);
 }

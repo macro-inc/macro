@@ -187,6 +187,149 @@
               "type": "string"
             },
             "description": "Channel IDs to filter calls by. Empty to include all calls."
+          },
+          "speaker_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Speaker macro user ids. Empty to include all."
+          }
+        }
+      },
+      "CallRecordMetadata": {
+        "type": "object",
+        "required": [
+          "created_by",
+          "started_at",
+          "ended_at",
+          "duration_ms",
+          "updated_at",
+          "attended"
+        ],
+        "properties": {
+          "attended": {
+            "type": "boolean"
+          },
+          "channel_name": {
+            "type": ["string", "null"]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ended_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CallRecordSearchResponseItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "owner_id",
+          "call_id",
+          "channel_id",
+          "participant_ids",
+          "call_search_results"
+        ],
+        "properties": {
+          "call_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "call_search_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordSearchResult"
+            }
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "participant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CallRecordSearchResponseItemWithMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CallRecordSearchResponseItem"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CallRecordMetadata",
+                    "description": "`None` if the call has been deleted."
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "CallRecordSearchResult": {
+        "type": "object",
+        "required": ["highlight"],
+        "properties": {
+          "ended_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double"
+          },
+          "sequence_num": {
+            "type": ["integer", "null"],
+            "format": "int32"
+          },
+          "speaker_id": {
+            "type": ["string", "null"]
+          },
+          "started_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "transcript_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
           }
         }
       },
@@ -2313,6 +2456,56 @@
         "description": "Controls whether shared email threads are included in results.",
         "enum": ["exclude", "include", "only"]
       },
+      "SimpleCallRecordSearchResponseBaseItem_HumanReadableTimestamp": {
+        "type": "object",
+        "required": [
+          "call_id",
+          "channel_id",
+          "user_id",
+          "participant_ids",
+          "started_at",
+          "ended_at",
+          "duration_ms",
+          "highlight"
+        ],
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "channel_id": {
+            "type": "string"
+          },
+          "channel_name": {
+            "type": ["string", "null"]
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ended_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight"
+          },
+          "participant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+          },
+          "user_id": {
+            "type": "string"
+          }
+        }
+      },
       "SimpleChannelSearchReponseBaseItem": {
         "type": "object",
         "required": [
@@ -3110,6 +3303,23 @@
                 }
               }
             ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleCallRecordSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["callRecord"]
+                  }
+                }
+              }
+            ]
           }
         ]
       },
@@ -3195,6 +3405,23 @@
                   "type": {
                     "type": "string",
                     "enum": ["project"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleCallRecordSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["callRecord"]
                   }
                 }
               }
@@ -3358,6 +3585,23 @@
                   "type": {
                     "type": "string",
                     "enum": ["project"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CallRecordSearchResponseItemWithMetadata"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["callRecord"]
                   }
                 }
               }

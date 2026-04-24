@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "attachment"
+publish = false
+version = "0.1.0"
+
+[features]
+provider = ["dep:futures"]
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+ai = { path = "../ai" }
+macro_user_id = { path = "../macro_user_id" }
+non_empty = { path = "../non_empty" }
+futures = { workspace = true, optional = true }

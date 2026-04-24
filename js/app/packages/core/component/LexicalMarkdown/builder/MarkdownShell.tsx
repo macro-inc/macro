@@ -19,7 +19,7 @@ import {
 } from 'solid-js';
 import { FloatingMenuGroup } from '../context/FloatingMenuContext';
 import { LexicalWrapperContext } from '../context/LexicalWrapperContext';
-import { registerCommandEffect } from '../plugins';
+import { autoRegister, registerCommandEffect } from '../plugins';
 import {
   createFilesReadyHandler,
   getDragDropPosition,
@@ -97,10 +97,11 @@ export const MarkdownShell: Component<
   );
 
   // Placeholder visibility
-  createEffect(() => {
-    markdownState();
-    setShowPlaceholder(editorIsEmpty(editor));
-  });
+  autoRegister(
+    editor.registerUpdateListener(({ editorState }) => {
+      setShowPlaceholder(editorIsEmpty(editorState));
+    })
+  );
 
   // Register key handlers
   registerCommandEffect(

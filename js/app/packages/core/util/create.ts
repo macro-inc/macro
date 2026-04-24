@@ -16,6 +16,7 @@ import {
 import { queryClient } from '@queries/client';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { CreateChatRequest } from '@service-cognition/generated/schemas';
+import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
@@ -31,6 +32,7 @@ import {
 import { isPaymentError } from './handlePaymentError';
 import { err, isErr, ok } from './maybeResult';
 import { refetchSoupEntity } from '@queries/soup/cache';
+import { setPreviewOnCreate } from '@queries/preview/preview';
 
 /**
  * Generate a fake sha256 hash
@@ -90,6 +92,12 @@ export async function createMarkdownFile(
   if (isErr(res)) {
     return;
   }
+  setPreviewOnCreate({
+    itemId: documentId,
+    itemType: 'document',
+    name: args?.title ?? '',
+    fileType: 'md',
+  });
   refetchSoupEntity(documentId, 'document');
   return documentId;
 }
@@ -159,6 +167,13 @@ export async function createTask(
     // Task was created, just without content - still return the id
   }
 
+  setPreviewOnCreate({
+    itemId: documentId,
+    itemType: 'document',
+    name: args?.title ?? '',
+    fileType: 'md',
+    subType: { type: 'task', is_completed: false },
+  });
   refetchSoupEntity(documentId, 'document');
   return documentId;
 }
@@ -226,6 +241,12 @@ export async function createCodeFileFromText({
   });
   if (isErr(uploadResult)) return err('SERVER_ERROR', 'Failed to upload file');
   postNewHistoryItem('document', document.metadata.documentId);
+  setPreviewOnCreate({
+    itemId: document.metadata.documentId,
+    itemType: 'document',
+    name: title ?? 'New Code File',
+    fileType: finalExtension,
+  });
   refetchSoupEntity(document.metadata.documentId, 'document');
   return ok({ documentId: document.metadata.documentId });
 }
@@ -260,6 +281,12 @@ export async function createCanvasFileFromJsonString(args: {
   if (isErr(uploadResult)) return { error: 'Failed to upload file.' };
 
   postNewHistoryItem('document', canvas.metadata.documentId);
+  setPreviewOnCreate({
+    itemId: canvas.metadata.documentId,
+    itemType: 'document',
+    name: title ?? 'New Canvas',
+    fileType: 'canvas',
+  });
   refetchSoupEntity(canvas.metadata.documentId, 'document');
   return { documentId: canvas.metadata.documentId };
 }
@@ -289,6 +316,11 @@ export async function createChat(args?: CreateChatRequest) {
   }
   const [, chat] = maybeChat;
   postNewHistoryItem('chat', chat.id);
+  setPreviewOnCreate({
+    itemId: chat.id,
+    itemType: 'chat',
+    name: args?.name ?? DEFAULT_CHAT_NAME,
+  });
   refetchSoupEntity(chat.id, 'chat');
   return { chatId: chat.id };
 }

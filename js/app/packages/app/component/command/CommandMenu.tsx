@@ -532,7 +532,7 @@ function VirtualizedCommandList(props: {
 function HotkeyHint(props: { shortcut: string; label: string }) {
   return (
     <span class="flex items-center gap-1">
-      <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+      <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
         <Hotkey shortcut={props.shortcut} class="space-x-1" />
       </div>
       {props.label}
@@ -553,10 +553,10 @@ function CommandMenuFooter(props: {
     <div class="flex items-center gap-4 px-4 py-2 bg-panel border-t border-edge-muted text-xs text-ink-extra-muted/80">
       <span class="flex items-center gap-1">
         <div class="flex gap-1">
-          <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+          <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
             <Hotkey shortcut="arrowup" class="space-x-1" />
           </div>
-          <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+          <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
             <Hotkey shortcut="arrowdown" class="space-x-1" />
           </div>
         </div>

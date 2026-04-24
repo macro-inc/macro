@@ -18,7 +18,10 @@ use cal::{
 use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
-    outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
+    outbound::{
+        ai_call_summarizer::AiCallSummarizer, livekit_rtc_client::LivekitRtcClient,
+        pg_call_repo::PgCallRepo,
+    },
 };
 use channels::{
     domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
@@ -436,7 +439,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         None => None,
     };
-    let mut call_service_builder = CallServiceImpl::new(
+    let mut call_service_builder = CallServiceImpl::<_, _, _, _, _, _, AiCallSummarizer>::new(
         call_repo,
         livekit_rtc_client,
         call_connection_service,
@@ -444,7 +447,8 @@ async fn main() -> anyhow::Result<()> {
         (*notification_ingress_service).clone(),
         recording_storage,
         config.vars.livekit_server_url.as_ref(),
-    );
+    )
+    .with_summarizer(AiCallSummarizer::new());
     if let Some(secret) = internal_call_secret {
         call_service_builder = call_service_builder.with_internal_call_secret(secret);
     }
@@ -452,7 +456,10 @@ async fn main() -> anyhow::Result<()> {
         call_service_builder = call_service_builder.with_egress(config);
     }
 
-    let call_service = Arc::new(call_service_builder);
+    let call_search_indexer = crate::service::call_search_indexer::SqsCallSearchIndexer::new(
+        Arc::new(sqs_client.clone()),
+    );
+    let call_service = Arc::new(call_service_builder.with_search_indexer(call_search_indexer));
 
     let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
     let call_webhook_state = WebhookRouterState::new(call_service.clone());

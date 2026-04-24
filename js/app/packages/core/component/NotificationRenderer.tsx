@@ -48,7 +48,7 @@ export function NotificationRenderer(props: NotificationRendererProps) {
               <span class="font-medium text-ink">{displayName()}</span>
               <span class="font-normal">{action()}</span>
               <Show when={showTarget() && isChannel() && entityId()}>
-                <div class="self-center max-h-[1lh]">
+                <div class="self-center max-h-lh">
                   <InlineItemPreview id={entityId()} type="channel" />
                 </div>
               </Show>

@@ -69,7 +69,7 @@ export const Button = <T extends ValidComponent = 'button'>(
       class={cn(
         'inline-flex items-center justify-center font-medium rounded-md',
         'focus-visible:outline-none',
-        'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
+        'data-disabled:cursor-not-allowed data-disabled:opacity-50',
         variantStyles[variant()],
         sizeStyles[size()],
         local.class

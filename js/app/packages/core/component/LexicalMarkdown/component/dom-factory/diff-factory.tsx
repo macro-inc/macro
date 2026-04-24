@@ -40,7 +40,7 @@ export function registerDiffNodeFactory() {
           </div>
           <div class="flex gap-1">
             <button
-              class="px-2 py-0.5 rounded text-sm flex border-1 border-edge bg-edge/30 items-center gap-2 hover:bg-hover hover-transition-bg"
+              class="px-2 py-0.5 rounded text-sm flex border border-edge bg-edge/30 items-center gap-2 hover:bg-hover hover-transition-bg"
               onClick={handleReject}
               onMouseEnter={() =>
                 container.classList.toggle('opt-reject', true)
@@ -53,7 +53,7 @@ export function registerDiffNodeFactory() {
               Reject
             </button>
             <button
-              class="px-2 py-0.5 rounded text-sm flex border-1 border-edge bg-edge/30 items-center gap-2 hover:bg-hover hover-transition-bg"
+              class="px-2 py-0.5 rounded text-sm flex border border-edge bg-edge/30 items-center gap-2 hover:bg-hover hover-transition-bg"
               onClick={handleAccept}
               onMouseEnter={() =>
                 container.classList.toggle('opt-accept', true)

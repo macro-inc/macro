@@ -205,7 +205,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                           property={property}
                           class="opacity-50 shrink-0"
                         />
-                        <p class="text-sm font-medium truncate text-left grow-1">
+                        <p class="text-sm font-medium truncate text-left grow">
                           {property.displayName}
                         </p>
                         <p class="text-sm text-ink-extra-muted/50 shrink-0">

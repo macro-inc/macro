@@ -705,7 +705,7 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
     <div class="w-full bg-[#1a1a1a] rounded-lg shadow-2xl overflow-hidden">
       <div class="flex items-start gap-3 p-4">
         {/* Icon with optional badge */}
-        <div class="relative flex-shrink-0">
+        <div class="relative shrink-0">
           <div class="w-10 h-10 rounded-lg overflow-hidden bg-[oklch(0.278_0.033_256.848)] flex items-center justify-center">
             <Show
               when={props.icon}
@@ -717,7 +717,7 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
             </Show>
           </div>
           <Show when={props.badge}>
-            <div class="absolute -top-1 -left-1 w-5 h-5 bg-[oklch(0.637_0.237_25.331)] rounded-full flex items-center justify-center">
+            <div class="absolute -top-1 -left-1 w-5 h-5 bg-failure rounded-full flex items-center justify-center">
               <img src={props.badge} alt="" class="w-3 h-3" />
             </div>
           </Show>
@@ -736,7 +736,7 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
         {/* Close button */}
         <button
           onClick={props.onClose}
-          class="flex-shrink-0 text-[oklch(0.551_0.027_264.364)] hover:text-[oklch(0.872_0.01_258.338)] transition-colors"
+          class="shrink-0 text-[oklch(0.551_0.027_264.364)] hover:text-[oklch(0.872_0.01_258.338)] transition-colors"
         >
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
             <path

@@ -70,13 +70,24 @@ impl TeamUserTier {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, PartialOrd, Copy, std::cmp::Ord, serde::Serialize)]
+#[derive(
+    Eq,
+    PartialEq,
+    Debug,
+    Clone,
+    PartialOrd,
+    Copy,
+    std::cmp::Ord,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",
     sqlx(type_name = "\"team_role\"", rename_all = "lowercase")
 )]
+#[serde(rename_all = "lowercase")]
 /// Ordered from least to most access top -> bottom
 pub enum TeamRole {
     /// The user is a member of the team
@@ -149,6 +160,19 @@ pub struct TeamInviteDetails {
 pub struct PatchTeamRequest {
     /// The new name for the team
     pub name: Option<String>,
+    /// Role updates to apply to team users
+    pub user_role_updates: Option<Vec<PatchTeamUserRole>>,
+}
+
+/// Request to update a team user's role
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamUserRole {
+    /// The team user you are updating
+    #[cfg_attr(feature = "axum", schema(value_type = String))]
+    pub team_user_id: MacroUserIdStr<'static>,
+    /// The new role of the team user
+    pub role: TeamRole,
 }
 
 /// Request to update a team user's tier

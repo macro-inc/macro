@@ -8,4 +8,4 @@
 temp/
 .env.local
 run-local.fish
-node_modules/
+**/node_modules

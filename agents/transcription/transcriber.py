@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import uuid
+from collections import Counter
 from datetime import datetime, timezone
 
 import httpx
@@ -18,6 +19,7 @@ from livekit.agents import (
     inference,
     llm,
     room_io,
+    stt as stt_pkg,
     utils,
     WorkerOptions,
 )
@@ -56,12 +58,49 @@ class Transcriber(Agent):
                     "numerals": True,
                     "interim_results": True,
                     "no_delay": True,
+                    # Emit per-word speaker labels so we can attribute segments to
+                    # distinct voices even when one audio track carries multiple.
+                    "diarize": True,
                 },
             ),
         )
         self.participant_identity = participant_identity
         self.channel_id = channel_id
         self.http_client = http_client
+        # Word counts per Deepgram speaker int, accumulated across final
+        # transcripts inside a single user turn and cleared on turn completion.
+        self._pending_speakers: Counter[int] = Counter()
+        # Deepgram's speaker ints are only unique within one streaming session.
+        # Namespace them with a nonce regenerated per Transcriber so a reconnect
+        # doesn't silently merge two different humans under the same UUID.
+        self._speaker_namespace = uuid.uuid4().hex
+        self._speaker_uuids: dict[int, str] = {}
+
+    def _resolve_diarized_speaker_id(self, dg_speaker: int) -> str:
+        cached = self._speaker_uuids.get(dg_speaker)
+        if cached is not None:
+            return cached
+        seed = (
+            f"{self.channel_id}:{self.participant_identity}:"
+            f"{self._speaker_namespace}:{dg_speaker}"
+        )
+        value = str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
+        self._speaker_uuids[dg_speaker] = value
+        return value
+
+    async def stt_node(self, audio, model_settings):
+        async for event in super().stt_node(audio, model_settings):
+            if isinstance(event, stt_pkg.SpeechEvent) and (
+                event.type == stt_pkg.SpeechEventType.FINAL_TRANSCRIPT
+            ):
+                alt = event.alternatives[0] if event.alternatives else None
+                for word in getattr(alt, "words", None) or ():
+                    speaker = getattr(word, "speaker", None)
+                    if speaker is None:
+                        speaker = getattr(word, "speaker_id", None)
+                    if speaker is not None:
+                        self._pending_speakers[int(speaker)] += 1
+            yield event
 
     async def on_user_turn_completed(
         self, chat_ctx: llm.ChatContext, new_message: llm.ChatMessage
@@ -86,9 +125,16 @@ class Transcriber(Agent):
             )
             segment_id = str(uuid.uuid5(uuid.NAMESPACE_URL, segment_seed))
 
+            diarized_speaker_id = None
+            if self._pending_speakers:
+                dominant_speaker, _ = self._pending_speakers.most_common(1)[0]
+                diarized_speaker_id = self._resolve_diarized_speaker_id(dominant_speaker)
+            self._pending_speakers.clear()
+
             segment = {
                 "segmentId": segment_id,
                 "speakerId": self.participant_identity,
+                "diarizedSpeakerId": diarized_speaker_id,
                 "content": content,
                 "startedAt": timestamp,
                 "endedAt": timestamp,

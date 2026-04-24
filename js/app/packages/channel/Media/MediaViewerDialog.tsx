@@ -87,7 +87,7 @@ function VideoViewerContent(props: {
             controls
             autoplay
             playsinline
-            src={props.item().src}
+            src={props.item().fullSrc}
           />
         </div>
       </Dialog.Content>
@@ -132,7 +132,7 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
               }
             >
               <Lightbox
-                src={() => item().src}
+                src={() => item().fullSrc}
                 imageId={() => item().id}
                 onPrevious={hasPrevious() ? navigatePrevious : undefined}
                 onNext={hasNext() ? navigateNext : undefined}

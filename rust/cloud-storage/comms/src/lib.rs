@@ -1,5 +1,5 @@
 pub mod domain;
-#[cfg(feature = "inbound")]
+#[cfg(any(feature = "inbound", feature = "attachment"))]
 pub mod inbound;
 #[cfg(feature = "outbound")]
 pub mod outbound;

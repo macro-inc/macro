@@ -1,19 +1,21 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+use crate::call_record::CallRecordSearchResponseItemWithMetadata;
 use crate::channel::ChannelSearchResponseItemWithMetadata;
 use crate::chat::ChatSearchResponseItemWithMetadata;
 use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
 use crate::project::ProjectSearchResponseItemWithMetadata;
 use crate::{
-    MatchType, SearchOn, channel::SimpleChannelSearchReponseBaseItem,
-    chat::SimpleChatSearchResponseBaseItem, document::SimpleDocumentSearchResponseBaseItem,
-    email::SimpleEmailSearchResponseBaseItem, project::SimpleProjectSearchResponseBaseItem,
+    MatchType, SearchOn, call_record::SimpleCallRecordSearchResponseBaseItem,
+    channel::SimpleChannelSearchReponseBaseItem, chat::SimpleChatSearchResponseBaseItem,
+    document::SimpleDocumentSearchResponseBaseItem, email::SimpleEmailSearchResponseBaseItem,
+    project::SimpleProjectSearchResponseBaseItem,
 };
 use item_filters::{
-    ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, ProjectFilters,
-    ast::document::resolve_file_types,
+    CallFilters, ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters,
+    ProjectFilters, ast::document::resolve_file_types,
 };
 use model_file_type::FileAssociation;
 use schemars::JsonSchema;
@@ -28,6 +30,8 @@ pub enum UnifiedSearchIndex {
     Emails,
     Channels,
     Projects,
+    #[serde(rename = "call_records")]
+    CallRecords,
 }
 
 const NIL_UUID: &str = "00000000-0000-0000-0000-000000000000";
@@ -57,7 +61,10 @@ pub fn entity_filters_from_include(
         filters.channel_filters.channel_ids = exclude.clone();
     }
     if !include.contains(&UnifiedSearchIndex::Projects) {
-        filters.project_filters.project_ids = exclude;
+        filters.project_filters.project_ids = exclude.clone();
+    }
+    if !include.contains(&UnifiedSearchIndex::CallRecords) {
+        filters.call_filters.channel_ids = exclude;
     }
     filters
 }
@@ -110,6 +117,8 @@ pub struct SearchEntityFilters {
     pub should_include_channels: bool,
     /// Whether to include projects in search results
     pub should_include_projects: bool,
+    /// Whether to include call records in search results
+    pub should_include_call_records: bool,
     /// Document filters with file associations expanded
     pub document_filters: DocumentFilters,
     /// Chat filters
@@ -120,6 +129,8 @@ pub struct SearchEntityFilters {
     pub channel_filters: ChannelFilters,
     /// Project filters
     pub project_filters: ProjectFilters,
+    /// Call filters
+    pub call_filters: CallFilters,
 }
 
 fn contains_nil_uuid(ids: &[String]) -> bool {
@@ -149,12 +160,14 @@ impl From<EntityFilters> for SearchEntityFilters {
         let mut email_filters = filters.email_filters;
         let mut channel_filters = filters.channel_filters;
         let mut project_filters = filters.project_filters;
+        let mut call_filters = filters.call_filters;
 
         let should_include_documents = !contains_nil_uuid(&document_filters.document_ids);
         let should_include_chats = !contains_nil_uuid(&chat_filters.chat_ids);
         let should_include_emails = !contains_nil_uuid(&email_filters.email_thread_ids);
         let should_include_channels = !contains_nil_uuid(&channel_filters.channel_ids);
         let should_include_projects = !contains_nil_uuid(&project_filters.project_ids);
+        let should_include_call_records = !contains_nil_uuid(&call_filters.channel_ids);
 
         strip_nil_uuids(&mut document_filters.document_ids);
         strip_nil_uuids(&mut chat_filters.chat_ids);
@@ -162,6 +175,7 @@ impl From<EntityFilters> for SearchEntityFilters {
         strip_nil_uuids(&mut email_filters.recipients);
         strip_nil_uuids(&mut channel_filters.channel_ids);
         strip_nil_uuids(&mut project_filters.project_ids);
+        strip_nil_uuids(&mut call_filters.channel_ids);
 
         document_filters.file_types = expand_file_types_for_search(document_filters.file_types);
 
@@ -171,11 +185,13 @@ impl From<EntityFilters> for SearchEntityFilters {
             should_include_emails,
             should_include_channels,
             should_include_projects,
+            should_include_call_records,
             document_filters,
             chat_filters,
             email_filters,
             channel_filters,
             project_filters,
+            call_filters,
         }
     }
 }
@@ -188,6 +204,7 @@ pub enum UnifiedSearchResponseItem {
     Email(EmailSearchResponseItemWithMetadata),
     Channel(ChannelSearchResponseItemWithMetadata),
     Project(ProjectSearchResponseItemWithMetadata),
+    CallRecord(CallRecordSearchResponseItemWithMetadata),
 }
 
 impl UnifiedSearchResponseItem {
@@ -198,6 +215,7 @@ impl UnifiedSearchResponseItem {
             Self::Email(item) => item.extra.id,
             Self::Channel(item) => item.extra.id,
             Self::Project(item) => item.extra.id,
+            Self::CallRecord(item) => item.extra.id,
         }
     }
     /// Get the updated_at timestamp for each item
@@ -219,6 +237,7 @@ impl UnifiedSearchResponseItem {
                 max_result_updated_at.or_else(|| item.metadata.as_ref().map(|m| m.updated_at))
             }
             Self::Project(item) => item.metadata.as_ref().map(|m| m.updated_at),
+            Self::CallRecord(item) => item.metadata.as_ref().map(|m| m.updated_at),
         }
     }
 }
@@ -239,6 +258,7 @@ pub enum SimpleUnifiedSearchResponseBaseItem<T> {
     Email(SimpleEmailSearchResponseBaseItem<T>),
     Channel(SimpleChannelSearchReponseBaseItem<T>),
     Project(SimpleProjectSearchResponseBaseItem<T>),
+    CallRecord(SimpleCallRecordSearchResponseBaseItem<T>),
 }
 
 pub type SimpleUnifiedSearchResponseItem =

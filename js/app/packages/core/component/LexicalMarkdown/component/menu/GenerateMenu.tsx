@@ -157,7 +157,7 @@ function InnerGenerateMenu(props: GenerateMenuProps) {
   return (
     <ScopedPortal scope="local">
       <div
-        class="z-100 flex flex-col rounded-md -mt-7"
+        class="z-full-page-modal-base flex flex-col rounded-md -mt-7"
         style={{
           width: targetWidth() + 'px',
         }}

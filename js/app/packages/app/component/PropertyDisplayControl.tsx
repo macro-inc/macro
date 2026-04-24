@@ -60,7 +60,7 @@ const PropertyDropdown: Component<PropertyDropdownProps> = (props) => {
     <Show when={props.isOpen()}>
       <div
         ref={props.dropdownRef}
-        class="absolute left-0 right-0 top-full mt-1 z-[100]
+        class="absolute left-0 right-0 top-full mt-1 z-full-page-modal-base
                border border-edge bg-menu shadow-lg
                max-h-48 overflow-y-auto
                font-mono"

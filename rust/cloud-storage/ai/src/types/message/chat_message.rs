@@ -1,6 +1,6 @@
 use super::Role;
 use crate::tokens::{TokenCount, count_tokens};
-use crate::types::request::ImageData;
+use crate::types::ImageData;
 use anyhow::Result;
 use async_openai::types::ChatCompletionRequestMessage;
 use serde::{self, Deserialize, Serialize};

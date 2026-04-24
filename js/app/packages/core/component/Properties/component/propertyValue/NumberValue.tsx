@@ -52,7 +52,7 @@ export const NumberValue: Component<PropertyValueProps> = (props) => {
       fallback={
         <button
           onClick={handleClick}
-          class="text-left px-2 py-0.5 border border-edge-muted bg-transparent block max-w-full break-words cursor-default"
+          class="text-left px-2 py-0.5 border border-edge-muted bg-transparent block max-w-full wrap-break-word cursor-default"
           classList={{
             'text-ink': supportsInline(),
             'text-ink-muted': !supportsInline(),

@@ -8,6 +8,7 @@ import type {
   UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import type { ScheduleDraft, ScheduleFrequency } from './types';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 
 export const INPUT_CLASS =
   'w-full border border-edge-muted rounded-sm bg-input px-2 py-1.5 text-sm text-ink outline-none placeholder:text-ink/30 focus:border-accent/20 cursor-default';
@@ -51,7 +52,7 @@ function normalizePrompt(value: string) {
 
 function deriveScheduleName(prompt: string) {
   const summary = normalizePrompt(prompt);
-  if (!summary) return 'Untitled automation';
+  if (!summary) return blockNameToDefaultFile('automation');
   return summary.length > 72 ? `${summary.slice(0, 71)}…` : summary;
 }
 

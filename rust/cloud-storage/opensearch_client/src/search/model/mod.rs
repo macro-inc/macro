@@ -388,6 +388,17 @@ pub struct SearchGotoChannel {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct SearchGotoCallRecord {
+    pub channel_id: uuid::Uuid,
+    pub transcript_id: uuid::Uuid,
+    pub speaker_id: String,
+    pub sequence_num: i32,
+    pub started_at: chrono::DateTime<chrono::Utc>,
+    pub ended_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub participant_ids: Vec<String>,
+}
+
 /// Enum containing structs for all data needed to handle search "goto" in the frontend
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 #[serde(untagged)]
@@ -396,6 +407,7 @@ pub enum SearchGotoContent {
     Chats(SearchGotoChat),
     Emails(SearchGotoEmail),
     Channels(SearchGotoChannel),
+    CallRecords(SearchGotoCallRecord),
     // there is no goto needed for projects
 }
 

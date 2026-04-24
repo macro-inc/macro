@@ -10,6 +10,7 @@ pub mod read;
 mod rewrite;
 pub mod search;
 pub mod serde_utils;
+mod subagent;
 mod tool_context;
 pub mod web_fetch;
 use call::inbound::toolset::call_toolset;
@@ -22,6 +23,7 @@ use properties::inbound::toolset::properties_toolset;
 use search::web::anthropic_web_search::anthropic_web_search_tool;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
+use subagent::Subagent;
 use web_fetch::anthropic_web_fetch_tool;
 
 pub use build_context::build_tool_service_context_from_env;
@@ -41,16 +43,23 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
     }
 }
 
-/// These are actually sent to the AI provider
-pub fn all_tools() -> ToolSetWithPrompt {
-    let toolset = AsyncToolSet::new()
+/// Toolset available to subagents — everything except email and the Subagent
+/// tool itself (subagents cannot create subagents).
+pub(crate) fn subagent_toolset() -> AiToolSet {
+    AsyncToolSet::new()
         .add_toolset(search_toolset())
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_tool::<read::ReadThread, Arc<ToolScribe>>()
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
+        .add_subtoolset::<ToolCallToolContext>(call_toolset())
+}
+
+/// These are actually sent to the AI provider
+pub fn all_tools() -> ToolSetWithPrompt {
+    let toolset = subagent_toolset()
         .add_subtoolset::<ToolEmailToolContext>(email_toolset())
-        .add_subtoolset::<ToolCallToolContext>(call_toolset());
+        .add_tool::<Subagent, ToolServiceContext>();
     let prompt = prompts::TOOLS_PROMPT;
     let toolset = Arc::new(toolset);
     ToolSetWithPrompt { toolset, prompt }

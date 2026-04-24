@@ -35,7 +35,7 @@ export const UserGroup = (props: UserEntityPillProps) => {
         )}
       </For>
       <Show when={remaining()}>
-        <div class="z-4">
+        <div class="z-placeable">
           <div class="size-5 bg-menu border-2 text-[10px] -mr-2 text-ink border-panel rounded-full flex flex-col justify-center items-center">
             <span>+{remaining()}</span>
           </div>

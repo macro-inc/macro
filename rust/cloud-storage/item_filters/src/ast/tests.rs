@@ -803,6 +803,7 @@ fn entity_type_ast_deserialization_rejects_invalid() {
 fn it_expands_call_filter_with_attended_only() {
     let f = CallFilters {
         channel_ids: vec![],
+        speaker_ids: vec![],
         attended: Some(true),
     };
     let ast = CallFilters::expand_ast(f)
@@ -817,6 +818,7 @@ fn it_expands_call_filter_with_attended_only() {
 fn it_expands_call_filter_with_attended_false() {
     let f = CallFilters {
         channel_ids: vec![],
+        speaker_ids: vec![],
         attended: Some(false),
     };
     let ast = CallFilters::expand_ast(f).unwrap().unwrap();
@@ -830,6 +832,7 @@ fn it_expands_call_filter_with_channel_and_attended_as_and() {
     let channel_id = Uuid::new_v4();
     let f = CallFilters {
         channel_ids: vec![channel_id.to_string()],
+        speaker_ids: vec![],
         attended: Some(true),
     };
     let ast = CallFilters::expand_ast(f).unwrap().unwrap();

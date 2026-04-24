@@ -142,7 +142,7 @@ export const FilterValueSelect: Component<FilterValueSelectProps> = (props) => {
         />
         <div
           ref={dropdownRef}
-          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[160px] max-h-48 overflow-y-auto z-1"
+          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[160px] max-h-48 overflow-y-auto z-user-highlight"
         >
           <Show
             when={filteredOptions().length > 0}

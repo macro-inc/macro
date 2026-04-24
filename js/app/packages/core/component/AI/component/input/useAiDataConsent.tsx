@@ -39,7 +39,7 @@ export function useAiDataConsentGate() {
       <Dialog open={open()} onOpenChange={(isOpen) => !isOpen && denyConsent()}>
         <Dialog.Portal>
           <DialogWrapper width="480px">
-            <div class="flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
+            <div class="flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b border-b-edge-muted">
               <div class="flex flex-row items-center gap-2">
                 <Dialog.CloseButton>
                   <DeprecatedIconButton
