@@ -12,7 +12,13 @@ import {
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { SoupBody } from '@queries/soup/items';
-import { batch, createMemo, type JSX } from 'solid-js';
+import {
+  type Accessor,
+  batch,
+  createEffect,
+  createMemo,
+  type JSX,
+} from 'solid-js';
 import type { Option } from './filter-primitives';
 import type {
   ChannelFilters,
@@ -206,6 +212,129 @@ export function cacheCallSubFilters(
   } catch {
     // best-effort
   }
+}
+
+type SearchFilterHookOpts = {
+  contentId: string;
+  isSearchView: Accessor<boolean>;
+};
+
+/** Channel-message search filters (in:, from:). */
+export function useChannelSearchFilter(opts: SearchFilterHookOpts) {
+  const { soup, queryFilters, setQueryFilters } = useSoupView();
+  const { changeIndex } = useSearchIndexController();
+
+  const isActive = () => soup.filters.isActive('channels');
+  const mutate = <K extends keyof ChannelFilters>(
+    field: K,
+    value: ChannelFilters[K]
+  ) =>
+    batch(() => {
+      if (!isActive()) changeIndex('channels');
+      setQueryFilters((prev) => ({
+        ...prev,
+        channel_filters: { ...prev.channel_filters, [field]: value },
+      }));
+    });
+
+  const channelIds = createMemo(
+    () => queryFilters().channel_filters?.channel_ids ?? []
+  );
+  const senderIds = createMemo(
+    () => queryFilters().channel_filters?.sender_ids ?? []
+  );
+
+  createEffect(() => {
+    if (!opts.isSearchView() || !isActive()) return;
+    const sub: ChannelSubFilters = {};
+    if (channelIds().length) sub.channel_ids = channelIds();
+    if (senderIds().length) sub.sender_ids = senderIds();
+    cacheChannelSubFilters(opts.contentId, sub);
+  });
+
+  return {
+    isActive,
+    channelIds,
+    setChannelIds: (ids: string[]) =>
+      mutate('channel_ids', ids.length ? ids : undefined),
+    senderIds,
+    setSenderIds: (ids: string[]) =>
+      mutate('sender_ids', ids.length ? ids : undefined),
+  };
+}
+
+/** Email search filters (importance). */
+export function useEmailSearchFilter(opts: SearchFilterHookOpts) {
+  const { soup, queryFilters, setQueryFilters } = useSoupView();
+  const { changeIndex } = useSearchIndexController();
+
+  const isActive = () => soup.filters.isActive('email');
+  const importance = createMemo(() => queryFilters().email_filters?.importance);
+
+  const setImportance = (val: boolean | undefined) =>
+    batch(() => {
+      if (!isActive()) changeIndex('email');
+      setQueryFilters((prev) => ({
+        ...prev,
+        email_filters: { ...prev.email_filters, importance: val },
+      }));
+    });
+
+  createEffect(() => {
+    if (!opts.isSearchView() || !isActive()) return;
+    cacheEmailSubFilters(opts.contentId, { importance: importance() ?? null });
+  });
+
+  return { isActive, importance, setImportance };
+}
+
+/** Call-record search filters (in:, from:, attended). */
+export function useCallSearchFilter(opts: SearchFilterHookOpts) {
+  const { soup, queryFilters, setQueryFilters } = useSoupView();
+  const { changeIndex } = useSearchIndexController();
+
+  const isActive = () => soup.filters.isActive('calls');
+  const mutate = (
+    field: 'channel_ids' | 'speaker_ids' | 'attended',
+    value: string[] | boolean | undefined
+  ) =>
+    batch(() => {
+      if (!isActive()) changeIndex('calls');
+      setQueryFilters((prev) => ({
+        ...prev,
+        call_filters: { ...prev.call_filters, [field]: value },
+      }));
+    });
+
+  const channelIds = createMemo(
+    () => queryFilters().call_filters?.channel_ids ?? []
+  );
+  const speakerIds = createMemo(
+    () => queryFilters().call_filters?.speaker_ids ?? []
+  );
+  const attended = createMemo(() => queryFilters().call_filters?.attended);
+
+  createEffect(() => {
+    if (!opts.isSearchView() || !isActive()) return;
+    const sub: CallSubFilters = {};
+    if (channelIds().length) sub.channel_ids = channelIds();
+    if (speakerIds().length) sub.speaker_ids = speakerIds();
+    if (attended() !== undefined && attended() !== null)
+      sub.attended = attended();
+    cacheCallSubFilters(opts.contentId, sub);
+  });
+
+  return {
+    isActive,
+    channelIds,
+    setChannelIds: (ids: string[]) =>
+      mutate('channel_ids', ids.length ? ids : undefined),
+    speakerIds,
+    setSpeakerIds: (ids: string[]) =>
+      mutate('speaker_ids', ids.length ? ids : undefined),
+    attended,
+    setAttended: (val: boolean | undefined) => mutate('attended', val),
+  };
 }
 
 export function useSearchIndexController() {

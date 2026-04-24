@@ -7,8 +7,6 @@ import { isListViewID } from '@app/constants/list-views';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import {
   type Accessor,
-  batch,
-  createEffect,
   createMemo,
   createSignal,
   For,
@@ -34,13 +32,11 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import {
   INDEX_OPTIONS,
-  cacheCallSubFilters,
-  cacheChannelSubFilters,
-  cacheEmailSubFilters,
+  useCallSearchFilter,
+  useChannelSearchFilter,
+  useEmailSearchFilter,
   useSearchFilterOptions,
   useSearchIndexController,
-  type CallSubFilters,
-  type ChannelSubFilters,
   type SearchableOption,
 } from './search-filter-controls';
 
@@ -424,13 +420,7 @@ const SearchableFilterSubmenu = (props: {
 export const UnifiedFilterDropdown = () => {
   const [open, setOpen] = createSignal(false);
   const panel = useSplitPanelOrThrow();
-  const {
-    soup,
-    queryFilters,
-    setQueryFilters,
-    assigneeFilter,
-    setAssigneeFilter,
-  } = useSoupView();
+  const { soup, assigneeFilter, setAssigneeFilter } = useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
   const contentId = panel.handle.content().id;
@@ -493,135 +483,18 @@ export const UnifiedFilterDropdown = () => {
   });
 
   const isTasksView = () => currentView() === 'tasks';
-  const isSearchView = () => currentView() === 'search';
-  const isChannelsIndexActive = () => soup.filters.isActive('channels');
-  const isEmailIndexActive = () => soup.filters.isActive('email');
-  const isCallsIndexActive = () => soup.filters.isActive('calls');
+  const isSearchView = createMemo(() => currentView() === 'search');
   const hasActiveIndex = () =>
     INDEX_OPTIONS.some((opt) => soup.filters.isActive(opt.value));
 
   const { changeIndex: handleIndexChange } = useSearchIndexController();
 
-  createEffect(() => {
-    if (!isSearchView() || !isChannelsIndexActive()) return;
-    const cf = queryFilters().channel_filters;
-    const sub: ChannelSubFilters = {};
-    if (cf?.channel_ids?.length) sub.channel_ids = cf.channel_ids;
-    if (cf?.sender_ids?.length) sub.sender_ids = cf.sender_ids;
-    cacheChannelSubFilters(contentId, sub);
-  });
-
-  createEffect(() => {
-    if (!isSearchView() || !isEmailIndexActive()) return;
-    const ef = queryFilters().email_filters;
-    cacheEmailSubFilters(contentId, { importance: ef?.importance ?? null });
-  });
-
-  createEffect(() => {
-    if (!isSearchView() || !isCallsIndexActive()) return;
-    const cf = queryFilters().call_filters;
-    const sub: CallSubFilters = {};
-    if (cf?.channel_ids?.length) sub.channel_ids = cf.channel_ids;
-    if (cf?.speaker_ids?.length) sub.speaker_ids = cf.speaker_ids;
-    if (cf?.attended !== undefined && cf?.attended !== null)
-      sub.attended = cf.attended;
-    cacheCallSubFilters(contentId, sub);
-  });
+  const channel = useChannelSearchFilter({ contentId, isSearchView });
+  const email = useEmailSearchFilter({ contentId, isSearchView });
+  const call = useCallSearchFilter({ contentId, isSearchView });
 
   const { channelOptions: inChannelOptions, senderOptions: fromSenderOptions } =
     useSearchFilterOptions();
-
-  const activeChannelIds: Accessor<string[]> = createMemo(
-    () => queryFilters().channel_filters?.channel_ids ?? []
-  );
-
-  const setChannelIds = (ids: string[]) => {
-    batch(() => {
-      if (!isChannelsIndexActive()) handleIndexChange('channels');
-      setQueryFilters((prev) => ({
-        ...prev,
-        channel_filters: {
-          ...prev.channel_filters,
-          channel_ids: ids.length > 0 ? ids : undefined,
-        },
-      }));
-    });
-  };
-
-  const activeSenderIds: Accessor<string[]> = createMemo(
-    () => queryFilters().channel_filters?.sender_ids ?? []
-  );
-
-  const setSenderIds = (ids: string[]) => {
-    batch(() => {
-      if (!isChannelsIndexActive()) handleIndexChange('channels');
-      setQueryFilters((prev) => ({
-        ...prev,
-        channel_filters: {
-          ...prev.channel_filters,
-          sender_ids: ids.length > 0 ? ids : undefined,
-        },
-      }));
-    });
-  };
-
-  const setImportance = (val: boolean | undefined) => {
-    batch(() => {
-      if (!isEmailIndexActive()) handleIndexChange('email');
-      setQueryFilters((prev) => ({
-        ...prev,
-        email_filters: { ...prev.email_filters, importance: val },
-      }));
-    });
-  };
-
-  const importance = createMemo(() => queryFilters().email_filters?.importance);
-
-  const activeCallChannelIds: Accessor<string[]> = createMemo(
-    () => queryFilters().call_filters?.channel_ids ?? []
-  );
-
-  const setCallChannelIds = (ids: string[]) => {
-    batch(() => {
-      if (!isCallsIndexActive()) handleIndexChange('calls');
-      setQueryFilters((prev) => ({
-        ...prev,
-        call_filters: {
-          ...prev.call_filters,
-          channel_ids: ids.length > 0 ? ids : undefined,
-        },
-      }));
-    });
-  };
-
-  const activeSpeakerIds: Accessor<string[]> = createMemo(
-    () => queryFilters().call_filters?.speaker_ids ?? []
-  );
-
-  const setSpeakerIds = (ids: string[]) => {
-    batch(() => {
-      if (!isCallsIndexActive()) handleIndexChange('calls');
-      setQueryFilters((prev) => ({
-        ...prev,
-        call_filters: {
-          ...prev.call_filters,
-          speaker_ids: ids.length > 0 ? ids : undefined,
-        },
-      }));
-    });
-  };
-
-  const setAttended = (val: boolean | undefined) => {
-    batch(() => {
-      if (!isCallsIndexActive()) handleIndexChange('calls');
-      setQueryFilters((prev) => ({
-        ...prev,
-        call_filters: { ...prev.call_filters, attended: val },
-      }));
-    });
-  };
-
-  const attended = createMemo(() => queryFilters().call_filters?.attended);
 
   const [openChannelSub, setOpenChannelSub] = createSignal<
     'in' | 'from' | null
@@ -809,8 +682,8 @@ export const UnifiedFilterDropdown = () => {
                                     <SearchableFilterSubmenu
                                       label="In"
                                       options={inChannelOptions}
-                                      activeIds={activeChannelIds}
-                                      onChange={setChannelIds}
+                                      activeIds={channel.channelIds}
+                                      onChange={channel.setChannelIds}
                                       placeholder="Search channels..."
                                       open={() => openChannelSub() === 'in'}
                                       onOpenChange={(v) =>
@@ -820,8 +693,8 @@ export const UnifiedFilterDropdown = () => {
                                     <SearchableFilterSubmenu
                                       label="From"
                                       options={fromSenderOptions}
-                                      activeIds={activeSenderIds}
-                                      onChange={setSenderIds}
+                                      activeIds={channel.senderIds}
+                                      onChange={channel.setSenderIds}
                                       placeholder="Search senders..."
                                       open={() => openChannelSub() === 'from'}
                                       onOpenChange={(v) =>
@@ -861,13 +734,13 @@ export const UnifiedFilterDropdown = () => {
                                           >
                                             {(importanceOption) => {
                                               const importanceActive = () =>
-                                                importance() ===
+                                                email.importance() ===
                                                 importanceOption.value;
                                               return (
                                                 <DropdownMenu.Item
                                                   class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                                                   onSelect={() =>
-                                                    setImportance(
+                                                    email.setImportance(
                                                       importanceOption.value
                                                     )
                                                   }
@@ -898,8 +771,8 @@ export const UnifiedFilterDropdown = () => {
                                     <SearchableFilterSubmenu
                                       label="In"
                                       options={inChannelOptions}
-                                      activeIds={activeCallChannelIds}
-                                      onChange={setCallChannelIds}
+                                      activeIds={call.channelIds}
+                                      onChange={call.setChannelIds}
                                       placeholder="Search channels..."
                                       open={() => openCallSub() === 'in'}
                                       onOpenChange={(v) =>
@@ -909,8 +782,8 @@ export const UnifiedFilterDropdown = () => {
                                     <SearchableFilterSubmenu
                                       label="From"
                                       options={fromSenderOptions}
-                                      activeIds={activeSpeakerIds}
-                                      onChange={setSpeakerIds}
+                                      activeIds={call.speakerIds}
+                                      onChange={call.setSpeakerIds}
                                       placeholder="Search speakers..."
                                       open={() => openCallSub() === 'from'}
                                       onOpenChange={(v) =>
@@ -948,13 +821,13 @@ export const UnifiedFilterDropdown = () => {
                                           >
                                             {(attendedOption) => {
                                               const attendedActive = () =>
-                                                attended() ===
+                                                call.attended() ===
                                                 attendedOption.value;
                                               return (
                                                 <DropdownMenu.Item
                                                   class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover"
                                                   onSelect={() =>
-                                                    setAttended(
+                                                    call.setAttended(
                                                       attendedOption.value
                                                     )
                                                   }
