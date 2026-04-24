@@ -24,12 +24,6 @@ pub async fn process_call_record(
         return Ok(());
     };
 
-    // Clear stale segments before re-indexing.
-    opensearch_client
-        .delete_call_record(&payload.call_id.to_string())
-        .await
-        .context("failed to clear stale call record segments before upsert")?;
-
     if payload.segments.is_empty() {
         tracing::debug!(call_id = %call_id, "call has no transcript segments to index");
         return Ok(());
