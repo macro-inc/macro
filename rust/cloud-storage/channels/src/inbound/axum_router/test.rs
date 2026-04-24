@@ -19,6 +19,7 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use http_body_util::BodyExt;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model_user::UserContext;
@@ -173,7 +174,7 @@ impl ChannelMessagesService for MockService {
         _direction: MessagePageDirection,
         _limit: u16,
         _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<MacroUserIdStr<'static>>,
+        _notification_user_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -237,7 +238,7 @@ impl ChannelMessagesService for ErrorService {
         _direction: MessagePageDirection,
         _limit: u16,
         _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<MacroUserIdStr<'static>>,
+        _notification_user_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
@@ -286,7 +287,7 @@ impl ChannelMessagesService for ParticipantsService {
         _direction: MessagePageDirection,
         _limit: u16,
         _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<MacroUserIdStr<'static>>,
+        _notification_user_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -586,7 +587,7 @@ impl ChannelMessagesService for NotFoundService {
         _direction: MessagePageDirection,
         _limit: u16,
         _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<MacroUserIdStr<'static>>,
+        _notification_user_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -646,7 +647,7 @@ impl ChannelMessagesService for AroundHasItemsService {
         _direction: MessagePageDirection,
         _limit: u16,
         _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<MacroUserIdStr<'static>>,
+        _notification_user_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -813,10 +814,11 @@ impl ChannelMessagesService for std::sync::Arc<CapturingService> {
         _direction: MessagePageDirection,
         _limit: u16,
         filters: &ChannelMessageFilters,
-        notification_user_id: Option<MacroUserIdStr<'static>>,
+        notification_user_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         *self.captured.lock().unwrap() = Some(filters.clone());
-        *self.captured_notification_user_id.lock().unwrap() = notification_user_id;
+        *self.captured_notification_user_id.lock().unwrap() =
+            notification_user_id.map(CowLike::into_owned);
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
                 .into_iter()

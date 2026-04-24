@@ -29,7 +29,7 @@ impl PgChannelMessagesRepo {
 }
 
 /// Intermediate row for the top-level messages query.
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug)]
 struct TopLevelRow {
     id: Uuid,
     channel_id: Uuid,
@@ -152,7 +152,8 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         let (rows, has_more_newer) = match direction {
             MessagePageDirection::Older => {
                 let rows = if notification_filter_active {
-                    sqlx::query_as::<_, TopLevelRow>(
+                    sqlx::query_as!(
+                        TopLevelRow,
                         r#"
                         WITH done_top_level AS (
                             SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
@@ -164,7 +165,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                               AND un.deleted_at IS NULL
                               AND un.done = $8
                               AND n.event_item_type = 'channel'
-                              AND n.event_item_id = $1::text
+                              AND n.event_item_id = $1::uuid::text
                               AND n.metadata->>'messageId' IS NOT NULL
                               AND msg.channel_id = $1
                               AND msg.deleted_at IS NULL
@@ -179,7 +180,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                               AND un.deleted_at IS NULL
                               AND (un.seen_at IS NOT NULL) = $9
                               AND n.event_item_type = 'channel'
-                              AND n.event_item_id = $1::text
+                              AND n.event_item_id = $1::uuid::text
                               AND n.metadata->>'messageId' IS NOT NULL
                               AND msg.channel_id = $1
                               AND msg.deleted_at IS NULL
@@ -191,8 +192,8 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                             m.content,
                             m.created_at,
                             m.updated_at,
-                            m.edited_at::timestamptz AS edited_at,
-                            m.deleted_at::timestamptz AS deleted_at
+                            m.edited_at::timestamptz AS "edited_at?",
+                            m.deleted_at::timestamptz AS "deleted_at?"
                         FROM comms_messages m
                         WHERE m.channel_id = $1
                           AND m.thread_id IS NULL
@@ -222,16 +223,16 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                         ORDER BY m.created_at DESC, m.id DESC
                         LIMIT $4
                         "#,
+                        channel_id,
+                        cursor_created_at,
+                        cursor_id,
+                        limit_i64,
+                        message_ids_filter as Option<&[Uuid]>,
+                        last_activity,
+                        notification_user_id,
+                        notification_done,
+                        notification_seen,
                     )
-                    .bind(channel_id)
-                    .bind(cursor_created_at)
-                    .bind(cursor_id)
-                    .bind(limit_i64)
-                    .bind(message_ids_filter)
-                    .bind(last_activity)
-                    .bind(notification_user_id)
-                    .bind(notification_done)
-                    .bind(notification_seen)
                     .fetch_all(&self.pool)
                     .await?
                 } else {
@@ -283,7 +284,8 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             }
             MessagePageDirection::Newer => {
                 let mut rows = if notification_filter_active {
-                    sqlx::query_as::<_, TopLevelRow>(
+                    sqlx::query_as!(
+                        TopLevelRow,
                         r#"
                         WITH done_top_level AS (
                             SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
@@ -295,7 +297,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                               AND un.deleted_at IS NULL
                               AND un.done = $8
                               AND n.event_item_type = 'channel'
-                              AND n.event_item_id = $1::text
+                              AND n.event_item_id = $1::uuid::text
                               AND n.metadata->>'messageId' IS NOT NULL
                               AND msg.channel_id = $1
                               AND msg.deleted_at IS NULL
@@ -310,7 +312,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                               AND un.deleted_at IS NULL
                               AND (un.seen_at IS NOT NULL) = $9
                               AND n.event_item_type = 'channel'
-                              AND n.event_item_id = $1::text
+                              AND n.event_item_id = $1::uuid::text
                               AND n.metadata->>'messageId' IS NOT NULL
                               AND msg.channel_id = $1
                               AND msg.deleted_at IS NULL
@@ -322,8 +324,8 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                             m.content,
                             m.created_at,
                             m.updated_at,
-                            m.edited_at::timestamptz AS edited_at,
-                            m.deleted_at::timestamptz AS deleted_at
+                            m.edited_at::timestamptz AS "edited_at?",
+                            m.deleted_at::timestamptz AS "deleted_at?"
                         FROM comms_messages m
                         WHERE m.channel_id = $1
                           AND m.thread_id IS NULL
@@ -353,16 +355,16 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                         ORDER BY m.created_at ASC, m.id ASC
                         LIMIT $4
                         "#,
+                        channel_id,
+                        cursor_created_at,
+                        cursor_id,
+                        limit_i64 + 1,
+                        message_ids_filter as Option<&[Uuid]>,
+                        last_activity,
+                        notification_user_id,
+                        notification_done,
+                        notification_seen,
                     )
-                    .bind(channel_id)
-                    .bind(cursor_created_at)
-                    .bind(cursor_id)
-                    .bind(limit_i64 + 1)
-                    .bind(message_ids_filter)
-                    .bind(last_activity)
-                    .bind(notification_user_id)
-                    .bind(notification_done)
-                    .bind(notification_seen)
                     .fetch_all(&self.pool)
                     .await?
                 } else {
