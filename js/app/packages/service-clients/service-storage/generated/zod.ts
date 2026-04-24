@@ -811,6 +811,100 @@ export const createCommentResponse = zod
   );
 
 /**
+ * Batch-fetches lightweight previews for a list of call ids. Mirrors the
+`POST /documents/preview` endpoint: no per-id access checks, duplicate
+ids are deduplicated server-side, and missing ids come back as
+`CallRecordPreview::DoesNotExist` rather than producing an error.
+ * @summary Handler for `POST /call/record/preview`.
+ */
+export const getBatchCallRecordPreviewBody = zod
+  .object({
+    callIds: zod
+      .array(zod.string().uuid())
+      .describe(
+        'The call ids to preview. Duplicate ids are deduplicated server-side.'
+      ),
+  })
+  .describe('Request body for `POST \/call\/record\/preview`.');
+
+export const getBatchCallRecordPreviewResponse = zod
+  .object({
+    previews: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                callId: zod.string().uuid().describe('The call identifier.'),
+                channelId: zod
+                  .string()
+                  .uuid()
+                  .describe('The channel this call belongs to.'),
+                channelName: zod
+                  .string()
+                  .nullish()
+                  .describe('Resolved display name for the channel.'),
+                endedAt: zod
+                  .string()
+                  .datetime({})
+                  .nullish()
+                  .describe('When the call ended (None if still active).'),
+                startedAt: zod
+                  .string()
+                  .datetime({})
+                  .describe(
+                    'When the call started (created_at for active, started_at for archived).'
+                  ),
+              })
+              .describe('Preview payload returned for each found call id.')
+              .and(
+                zod.object({
+                  type: zod.enum(['access']),
+                })
+              )
+              .describe(
+                'The call exists and the caller is permitted to see it.'
+              ),
+            zod
+              .object({
+                callId: zod.string().uuid().describe('The call identifier.'),
+              })
+              .describe(
+                'Wrapper carrying just a call id. Used by the non-`Access` variants of\n[`CallRecordPreview`].'
+              )
+              .and(
+                zod.object({
+                  type: zod.enum(['no_access']),
+                })
+              )
+              .describe(
+                'The call exists but the caller cannot see it. Not produced today —\nretained for structural parity with `DocumentPreview` and so we can\nstart emitting it in the future without a breaking response change.'
+              ),
+            zod
+              .object({
+                callId: zod.string().uuid().describe('The call identifier.'),
+              })
+              .describe(
+                'Wrapper carrying just a call id. Used by the non-`Access` variants of\n[`CallRecordPreview`].'
+              )
+              .and(
+                zod.object({
+                  type: zod.enum(['does_not_exist']),
+                })
+              )
+              .describe(
+                'No call with this id exists in either the active or archived tables.'
+              ),
+          ])
+          .describe(
+            'Lightweight preview of a call record, returned by the batch preview endpoint.\n\nMirrors `model::document::DocumentPreview` in shape: a tagged enum with\none variant per possible outcome for each requested id.'
+          )
+      )
+      .describe('One entry per deduplicated input id.'),
+  })
+  .describe('Response body for `POST \/call\/record\/preview`.');
+
+/**
  * Returns the full [`CallRecord`] (metadata + participants + transcript)
 for a call identified by its own id. Covers both active and archived calls.
 Access is validated via channel membership (MemberParticipantRole).

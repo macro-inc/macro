@@ -1,6 +1,8 @@
 use std::{ops::Deref, sync::Arc, sync::LazyLock};
 
-use crate::domain::models::{AddParticipantError, EditCallRecordRequest, TranscriptSegmentRequest};
+use crate::domain::models::{
+    AddParticipantError, CallRecordPreview, EditCallRecordRequest, TranscriptSegmentRequest,
+};
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
 use chrono::Utc;
@@ -884,6 +886,103 @@ async fn get_call_record_returns_none_for_unknown(pool: Pool<Postgres>) -> anyho
     let repo = repo(pool);
     let record = repo.get_call_record_by_call_id(&Uuid::now_v7()).await?;
     assert!(record.is_none());
+    Ok(())
+}
+
+// -- batch_get_call_record_previews -------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn batch_get_call_record_previews_mixes_active_archived_and_missing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let missing = Uuid::now_v7();
+
+    let previews = repo
+        .batch_get_call_record_previews(
+            &[CALL1, CALL_ARCHIVED, missing],
+            USER_A.deref().copied(),
+        )
+        .await?;
+
+    assert_eq!(previews.len(), 3);
+
+    // Active call comes back as Access with ended_at = None.
+    match &previews[0] {
+        CallRecordPreview::Access(data) => {
+            assert_eq!(data.call_id, CALL1);
+            assert_eq!(data.channel_id, CH1);
+            assert_eq!(data.channel_name.as_deref(), Some("call-test-channel"));
+            assert!(data.ended_at.is_none());
+        }
+        other => panic!("expected Access for active call, got {other:?}"),
+    }
+
+    // Archived call comes back as Access with ended_at populated.
+    match &previews[1] {
+        CallRecordPreview::Access(data) => {
+            assert_eq!(data.call_id, CALL_ARCHIVED);
+            assert_eq!(data.channel_id, CH1);
+            assert!(data.ended_at.is_some());
+        }
+        other => panic!("expected Access for archived call, got {other:?}"),
+    }
+
+    // Missing id comes back as DoesNotExist.
+    match &previews[2] {
+        CallRecordPreview::DoesNotExist(w) => assert_eq!(w.call_id, missing),
+        other => panic!("expected DoesNotExist for missing id, got {other:?}"),
+    }
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn batch_get_call_record_previews_deduplicates_input(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // Four inputs but only two distinct ids; response should have exactly two.
+    let previews = repo
+        .batch_get_call_record_previews(
+            &[CALL1, CALL1, CALL_ARCHIVED, CALL1],
+            USER_A.deref().copied(),
+        )
+        .await?;
+
+    assert_eq!(previews.len(), 2, "duplicates should be collapsed");
+
+    let ids: Vec<Uuid> = previews
+        .iter()
+        .map(|p| match p {
+            CallRecordPreview::Access(d) => d.call_id,
+            CallRecordPreview::NoAccess(w) | CallRecordPreview::DoesNotExist(w) => w.call_id,
+        })
+        .collect();
+    assert_eq!(
+        ids,
+        vec![CALL1, CALL_ARCHIVED],
+        "first-occurrence order must be preserved"
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn batch_get_call_record_previews_empty_input_returns_empty(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let previews = repo
+        .batch_get_call_record_previews(&[], USER_A.deref().copied())
+        .await?;
+    assert!(previews.is_empty());
     Ok(())
 }
 

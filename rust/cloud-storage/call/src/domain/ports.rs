@@ -15,8 +15,9 @@ use crate::domain::models::EditCallRecordRequest;
 
 use super::models::{
     AddParticipantError, Call, CallActiveResponse, CallError, CallParticipant, CallRecord,
-    CallTokenResponse, CallWebhookEvent, EgressS3Config, GetCallRecordsRequest, LeaveCallResponse,
-    TranscriptSegmentRequest,
+    CallRecordPreview, CallTokenResponse, CallWebhookEvent, EgressS3Config,
+    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
+    LeaveCallResponse, TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -165,6 +166,23 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_id: &Uuid,
     ) -> impl Future<Output = Result<Option<CallRecord>, Self::Err>> + Send;
+
+    /// Batch-fetch lightweight previews for the given call ids.
+    ///
+    /// Returns one [`CallRecordPreview`] per deduplicated id in `call_ids`,
+    /// in the order supplied. Ids that resolve to a row (in either `calls`
+    /// or `call_records`) come back as [`CallRecordPreview::Access`]; ids
+    /// that match neither come back as [`CallRecordPreview::DoesNotExist`].
+    /// The repository layer never produces [`CallRecordPreview::NoAccess`]
+    /// — access is not checked here.
+    ///
+    /// `user_id` is used solely to resolve channel display names (e.g. the
+    /// "other participant" in a DM) and is not used for authorization.
+    fn batch_get_call_record_previews<'a>(
+        &self,
+        call_ids: &[Uuid],
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Vec<CallRecordPreview>, Self::Err>> + Send;
 
     /// Fetch the most recent call records where the given user was a
     /// participant, spanning both active (`calls` + `call_participants`)
@@ -366,6 +384,19 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<bool, CallError>> + Send;
+
+    /// Batch-fetch lightweight previews for a list of call ids.
+    ///
+    /// Mirrors the `POST /documents/preview` endpoint in
+    /// `document_storage_service`: no per-id access checks, duplicate ids
+    /// are deduplicated, and the response preserves the deduplicated input
+    /// order. `user_id` is passed through to the repository solely for
+    /// channel-name resolution.
+    fn get_batch_call_record_previews<'a>(
+        &self,
+        request: GetBatchCallRecordPreviewRequest,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<GetBatchCallRecordPreviewResponse, CallError>> + Send;
 }
 
 /// Lightweight read-only port for querying call records in Soup.

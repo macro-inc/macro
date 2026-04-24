@@ -25,7 +25,8 @@ use crate::domain::models::EditCallRecordRequest;
 
 use super::models::{
     AddParticipantError, CallActiveResponse, CallError, CallRecord, CallTokenResponse,
-    EgressS3Config, GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
+    EgressS3Config, GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse,
+    GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
 };
 use super::ports::{
     CallRecordQueryService, CallRepository, CallRtcClient, CallService, RecordingStorage,
@@ -857,6 +858,20 @@ impl<
         .await;
 
         Ok(new_value)
+    }
+
+    #[tracing::instrument(err, skip(self, request, user_id), fields(num_call_ids = request.call_ids.len()))]
+    async fn get_batch_call_record_previews<'a>(
+        &self,
+        request: GetBatchCallRecordPreviewRequest,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<GetBatchCallRecordPreviewResponse, CallError> {
+        let previews = self
+            .repo
+            .batch_get_call_record_previews(&request.call_ids, user_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        Ok(GetBatchCallRecordPreviewResponse { previews })
     }
 }
 

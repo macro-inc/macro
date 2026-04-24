@@ -33,7 +33,8 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     CallActiveResponse, CallError, CallRecord, CallTokenResponse, EditCallRecordRequest,
-    LeaveCallResponse, TranscriptSegmentRequest,
+    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, LeaveCallResponse,
+    TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallService;
 
@@ -82,6 +83,7 @@ impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
 /// - `PATCH /record/{call_id}` — edit a call record (e.g. share permissions)
 /// - `DELETE /record/{call_id}` — delete a call record
 /// - `POST /record/{call_id}/share-with-team/toggle` — flip the call's share_with_team flag
+/// - `POST /record/preview` — batch-fetch lightweight previews for many call ids
 pub fn call_router<S, Svc, T>(state: CallRouterState<S, Svc>) -> Router<T>
 where
     S: CallService,
@@ -96,6 +98,10 @@ where
         .route(
             "/{channel_id}/active",
             get(check_active_call_handler::<S, Svc>),
+        )
+        .route(
+            "/record/preview",
+            post(get_batch_call_record_preview_handler::<S, Svc>),
         )
         .route(
             "/record/{call_id}",
@@ -419,6 +425,36 @@ pub async fn toggle_share_with_team_handler<S: CallService, Svc: EntityAccessSer
         .toggle_share_with_team(access.entity_access_receipt)
         .await?;
     Ok(Json(new_value))
+}
+
+/// Handler for `POST /call/record/preview`.
+///
+/// Batch-fetches lightweight previews for a list of call ids. Mirrors the
+/// `POST /documents/preview` endpoint: no per-id access checks, duplicate
+/// ids are deduplicated server-side, and missing ids come back as
+/// `CallRecordPreview::DoesNotExist` rather than producing an error.
+#[utoipa::path(
+    post,
+    operation_id = "get_batch_call_record_preview",
+    path = "/call/record/preview",
+    request_body = GetBatchCallRecordPreviewRequest,
+    responses(
+        (status = 200, body = GetBatchCallRecordPreviewResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_batch_call_record_preview_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    user: MacroUserExtractor,
+    Json(request): Json<GetBatchCallRecordPreviewRequest>,
+) -> Result<Json<GetBatchCallRecordPreviewResponse>, CallError> {
+    let response = state
+        .service
+        .get_batch_call_record_previews(request, user.macro_user_id)
+        .await?;
+    Ok(Json(response))
 }
 
 /// Handler for `DELETE /call/{channel_id}`.

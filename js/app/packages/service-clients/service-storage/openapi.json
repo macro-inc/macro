@@ -594,6 +594,56 @@
         }
       }
     },
+    "/call/record/preview": {
+      "post": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `POST /call/record/preview`.",
+        "description": "Batch-fetches lightweight previews for a list of call ids. Mirrors the\n`POST /documents/preview` endpoint: no per-id access checks, duplicate\nids are deduplicated server-side, and missing ids come back as\n`CallRecordPreview::DoesNotExist` rather than producing an error.",
+        "operationId": "get_batch_call_record_preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetBatchCallRecordPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBatchCallRecordPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/record/{call_id}": {
       "get": {
         "tags": ["call::inbound::axum_router"],
@@ -6248,6 +6298,99 @@
           }
         }
       },
+      "CallRecordPreview": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CallRecordPreviewData",
+                "description": "The call exists and the caller is permitted to see it."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["access"]
+                  }
+                }
+              }
+            ],
+            "description": "The call exists and the caller is permitted to see it."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WithCallId",
+                "description": "The call exists but the caller cannot see it. Not produced today —\nretained for structural parity with `DocumentPreview` and so we can\nstart emitting it in the future without a breaking response change."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["no_access"]
+                  }
+                }
+              }
+            ],
+            "description": "The call exists but the caller cannot see it. Not produced today —\nretained for structural parity with `DocumentPreview` and so we can\nstart emitting it in the future without a breaking response change."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WithCallId",
+                "description": "No call with this id exists in either the active or archived tables."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["does_not_exist"]
+                  }
+                }
+              }
+            ],
+            "description": "No call with this id exists in either the active or archived tables."
+          }
+        ],
+        "description": "Lightweight preview of a call record, returned by the batch preview endpoint.\n\nMirrors `model::document::DocumentPreview` in shape: a tagged enum with\none variant per possible outcome for each requested id."
+      },
+      "CallRecordPreviewData": {
+        "type": "object",
+        "description": "Preview payload returned for each found call id.",
+        "required": ["callId", "channelId", "startedAt"],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "channelName": {
+            "type": ["string", "null"],
+            "description": "Resolved display name for the channel."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the call ended (None if still active)."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call started (created_at for active, started_at for archived)."
+          }
+        }
+      },
       "CallRecordTranscriptSegment": {
         "type": "object",
         "description": "A transcript segment as returned in a [`CallRecord`].",
@@ -8728,6 +8871,35 @@
           }
         },
         "deprecated": true
+      },
+      "GetBatchCallRecordPreviewRequest": {
+        "type": "object",
+        "description": "Request body for `POST /call/record/preview`.",
+        "required": ["callIds"],
+        "properties": {
+          "callIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The call ids to preview. Duplicate ids are deduplicated server-side."
+          }
+        }
+      },
+      "GetBatchCallRecordPreviewResponse": {
+        "type": "object",
+        "description": "Response body for `POST /call/record/preview`.",
+        "required": ["previews"],
+        "properties": {
+          "previews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordPreview"
+            },
+            "description": "One entry per deduplicated input id."
+          }
+        }
       },
       "GetBatchPreviewRequest": {
         "type": "object",
@@ -11851,6 +12023,18 @@
             "items": {
               "$ref": "#/components/schemas/View"
             }
+          }
+        }
+      },
+      "WithCallId": {
+        "type": "object",
+        "description": "Wrapper carrying just a call id. Used by the non-`Access` variants of\n[`CallRecordPreview`].",
+        "required": ["callId"],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
           }
         }
       },

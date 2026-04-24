@@ -20,7 +20,8 @@ use uuid::Uuid;
 use crate::domain::channel_name::{NameLookup, display_name, resolve_channel_name};
 use crate::domain::models::{
     AddParticipantError, Call, CallParticipant, CallRecord, CallRecordParticipant,
-    CallRecordTranscriptSegment, EditCallRecordRequest, TranscriptSegmentRequest,
+    CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, EditCallRecordRequest,
+    TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
 
@@ -88,6 +89,112 @@ impl PgCallRepo {
     /// Create a new repo with the given connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    /// Batch-resolve display names for a list of channel ids from the
+    /// perspective of `viewer_user_id`. The viewer is only used to pick the
+    /// right "other person" for DM channels; it is not an authorization check.
+    ///
+    /// Channels the query can't find simply have no entry in the returned map.
+    async fn batch_resolve_channel_names<'a>(
+        &self,
+        channel_ids: &[Uuid],
+        viewer_user_id: MacroUserIdStr<'a>,
+    ) -> Result<HashMap<Uuid, String>, sqlx::Error> {
+        if channel_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let channel_info_rows = sqlx::query!(
+            r#"
+            SELECT id, name, channel_type::text as "channel_type!"
+            FROM comms_channels
+            WHERE id = ANY($1)
+            "#,
+            channel_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let channel_map: HashMap<Uuid, (Option<String>, String)> = channel_info_rows
+            .into_iter()
+            .map(|r| (r.id, (r.name, r.channel_type)))
+            .collect();
+
+        // Channels that need participant-derived names (DMs, unnamed privates).
+        let needs_participants: Vec<Uuid> = channel_map
+            .iter()
+            .filter(|(_, (name, ct))| {
+                ct == "direct_message"
+                    || (ct == "private" && name.as_ref().is_none_or(|n| n.trim().is_empty()))
+            })
+            .map(|(id, _)| *id)
+            .collect();
+
+        let (participant_map, name_lookup) = if needs_participants.is_empty() {
+            (HashMap::new(), NameLookup::new())
+        } else {
+            let participant_rows = sqlx::query!(
+                r#"
+                SELECT channel_id, user_id
+                FROM comms_channel_participants
+                WHERE channel_id = ANY($1) AND left_at IS NULL
+                "#,
+                &needs_participants
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
+            let mut part_map: HashMap<Uuid, Vec<MacroUserIdStr<'static>>> = HashMap::new();
+            let mut all_user_ids = HashSet::new();
+            for row in participant_rows {
+                let uid = MacroUserIdStr::parse_from_str(&row.user_id)
+                    .expect("valid user id from db")
+                    .into_owned();
+                all_user_ids.insert(row.user_id);
+                part_map.entry(row.channel_id).or_default().push(uid);
+            }
+
+            let user_id_strings: Vec<String> = all_user_ids.into_iter().collect();
+            let name_rows = sqlx::query!(
+                r#"
+                SELECT u.id as user_profile_id, mui.first_name, mui.last_name
+                FROM macro_user_info mui
+                JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+                WHERE u.id = ANY($1)
+                "#,
+                &user_id_strings
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
+            let lookup: NameLookup = name_rows
+                .into_iter()
+                .filter_map(|row| {
+                    let name = display_name(row.first_name.as_deref(), row.last_name.as_deref())?;
+                    Some((row.user_profile_id, name))
+                })
+                .collect();
+
+            (part_map, lookup)
+        };
+
+        let mut resolved: HashMap<Uuid, String> = HashMap::with_capacity(channel_map.len());
+        for (channel_id, (name, channel_type)) in &channel_map {
+            let empty = Vec::new();
+            let participants = participant_map.get(channel_id).unwrap_or(&empty);
+            let resolved_name = resolve_channel_name(
+                channel_type,
+                name.as_deref(),
+                participants,
+                channel_id,
+                viewer_user_id.copied(),
+                &name_lookup,
+            );
+            resolved.insert(*channel_id, resolved_name);
+        }
+
+        Ok(resolved)
     }
 }
 
@@ -808,6 +915,95 @@ impl CallRepository for PgCallRepo {
         }))
     }
 
+    #[tracing::instrument(err, skip(self, call_ids), fields(num_call_ids = call_ids.len()))]
+    async fn batch_get_call_record_previews<'a>(
+        &self,
+        call_ids: &[Uuid],
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Vec<CallRecordPreview>, Self::Err> {
+        if call_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Deduplicate ids while preserving first-occurrence order for the response.
+        let mut seen = HashSet::new();
+        let unique_call_ids: Vec<Uuid> = call_ids
+            .iter()
+            .copied()
+            .filter(|id| seen.insert(*id))
+            .collect();
+
+        // Single query across both `calls` (active) and `call_records` (archived).
+        // An id in both tables should be impossible; if it somehow happens the
+        // active row wins by appearing first.
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                id as "call_id!",
+                channel_id as "channel_id!",
+                created_at as "started_at!",
+                NULL::timestamptz as "ended_at"
+            FROM calls
+            WHERE id = ANY($1)
+            UNION ALL
+            SELECT
+                id as "call_id!",
+                channel_id as "channel_id!",
+                started_at as "started_at!",
+                ended_at as "ended_at"
+            FROM call_records
+            WHERE id = ANY($1)
+            "#,
+            &unique_call_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        struct Found {
+            channel_id: Uuid,
+            started_at: chrono::DateTime<Utc>,
+            ended_at: Option<chrono::DateTime<Utc>>,
+        }
+
+        let mut found: HashMap<Uuid, Found> = HashMap::with_capacity(rows.len());
+        for row in rows {
+            // If the same id ever shows up twice, keep the first (active) hit.
+            found.entry(row.call_id).or_insert(Found {
+                channel_id: row.channel_id,
+                started_at: row.started_at,
+                ended_at: row.ended_at,
+            });
+        }
+
+        let unique_channel_ids: Vec<Uuid> = {
+            let mut seen = HashSet::new();
+            found
+                .values()
+                .filter_map(|f| seen.insert(f.channel_id).then_some(f.channel_id))
+                .collect()
+        };
+
+        let channel_names = self
+            .batch_resolve_channel_names(&unique_channel_ids, user_id)
+            .await?;
+
+        let previews = unique_call_ids
+            .into_iter()
+            .map(|call_id| match found.remove(&call_id) {
+                Some(f) => CallRecordPreview::Access(CallRecordPreviewData {
+                    call_id,
+                    channel_id: f.channel_id,
+                    channel_name: channel_names.get(&f.channel_id).cloned(),
+                    started_at: f.started_at,
+                    ended_at: f.ended_at,
+                }),
+                None => CallRecordPreview::DoesNotExist(WithCallId { call_id }),
+            })
+            .collect();
+
+        Ok(previews)
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_call_records_by_user<'a>(
         &self,
@@ -953,94 +1149,12 @@ impl CallRepository for PgCallRepo {
                 .collect()
         };
 
-        let channel_info_rows = sqlx::query!(
-            r#"
-            SELECT id, name, channel_type::text as "channel_type!"
-            FROM comms_channels
-            WHERE id = ANY($1)
-            "#,
-            &unique_channel_ids
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let channel_map: HashMap<Uuid, (Option<String>, String)> = channel_info_rows
-            .into_iter()
-            .map(|r| (r.id, (r.name, r.channel_type)))
-            .collect();
-
-        // Identify channels needing participant-based name resolution
-        // (DM channels or unnamed private channels).
-        let needs_participants: Vec<Uuid> = channel_map
-            .iter()
-            .filter(|(_, (name, ct))| {
-                ct == "direct_message"
-                    || (ct == "private" && name.as_ref().is_none_or(|n| n.trim().is_empty()))
-            })
-            .map(|(id, _)| *id)
-            .collect();
-
-        let (participant_map, name_lookup) = if needs_participants.is_empty() {
-            (HashMap::new(), NameLookup::new())
-        } else {
-            let participant_rows = sqlx::query!(
-                r#"
-                SELECT channel_id, user_id
-                FROM comms_channel_participants
-                WHERE channel_id = ANY($1) AND left_at IS NULL
-                "#,
-                &needs_participants
-            )
-            .fetch_all(&self.pool)
+        let channel_names = self
+            .batch_resolve_channel_names(&unique_channel_ids, user_id.copied())
             .await?;
-
-            let mut part_map: HashMap<Uuid, Vec<MacroUserIdStr<'static>>> = HashMap::new();
-            let mut all_user_ids = HashSet::new();
-            for row in participant_rows {
-                let uid = MacroUserIdStr::parse_from_str(&row.user_id)
-                    .expect("valid user id from db")
-                    .into_owned();
-                all_user_ids.insert(row.user_id);
-                part_map.entry(row.channel_id).or_default().push(uid);
-            }
-
-            let user_id_strings: Vec<String> = all_user_ids.into_iter().collect();
-            let name_rows = sqlx::query!(
-                r#"
-                SELECT u.id as user_profile_id, mui.first_name, mui.last_name
-                FROM macro_user_info mui
-                JOIN "User" u ON mui.macro_user_id = u.macro_user_id
-                WHERE u.id = ANY($1)
-                "#,
-                &user_id_strings
-            )
-            .fetch_all(&self.pool)
-            .await?;
-
-            let lookup: NameLookup = name_rows
-                .into_iter()
-                .filter_map(|row| {
-                    let name = display_name(row.first_name.as_deref(), row.last_name.as_deref())?;
-                    Some((row.user_profile_id, name))
-                })
-                .collect();
-
-            (part_map, lookup)
-        };
 
         for record in &mut records {
-            if let Some((name, channel_type)) = channel_map.get(&record.channel_id) {
-                let empty = Vec::new();
-                let participants = participant_map.get(&record.channel_id).unwrap_or(&empty);
-                record.channel_name = Some(resolve_channel_name(
-                    channel_type,
-                    name.as_deref(),
-                    participants,
-                    &record.channel_id,
-                    user_id.copied(),
-                    &name_lookup,
-                ));
-            }
+            record.channel_name = channel_names.get(&record.channel_id).cloned();
         }
 
         Ok(records)

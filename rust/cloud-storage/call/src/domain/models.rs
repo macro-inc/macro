@@ -222,6 +222,69 @@ pub struct CallRecord {
     pub transcript: Vec<CallRecordTranscriptSegment>,
 }
 
+/// Lightweight preview of a call record, returned by the batch preview endpoint.
+///
+/// Mirrors `model::document::DocumentPreview` in shape: a tagged enum with
+/// one variant per possible outcome for each requested id.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum CallRecordPreview {
+    /// The call exists and the caller is permitted to see it.
+    Access(CallRecordPreviewData),
+    /// The call exists but the caller cannot see it. Not produced today —
+    /// retained for structural parity with `DocumentPreview` and so we can
+    /// start emitting it in the future without a breaking response change.
+    NoAccess(WithCallId),
+    /// No call with this id exists in either the active or archived tables.
+    DoesNotExist(WithCallId),
+}
+
+/// Wrapper carrying just a call id. Used by the non-`Access` variants of
+/// [`CallRecordPreview`].
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct WithCallId {
+    /// The call identifier.
+    pub call_id: Uuid,
+}
+
+/// Preview payload returned for each found call id.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CallRecordPreviewData {
+    /// The call identifier.
+    pub call_id: Uuid,
+    /// The channel this call belongs to.
+    pub channel_id: Uuid,
+    /// Resolved display name for the channel.
+    pub channel_name: Option<String>,
+    /// When the call started (created_at for active, started_at for archived).
+    pub started_at: DateTime<Utc>,
+    /// When the call ended (None if still active).
+    pub ended_at: Option<DateTime<Utc>>,
+}
+
+/// Request body for `POST /call/record/preview`.
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GetBatchCallRecordPreviewRequest {
+    /// The call ids to preview. Duplicate ids are deduplicated server-side.
+    pub call_ids: Vec<Uuid>,
+}
+
+/// Response body for `POST /call/record/preview`.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GetBatchCallRecordPreviewResponse {
+    /// One entry per deduplicated input id.
+    pub previews: Vec<CallRecordPreview>,
+}
+
 /// Request to fetch recent call records for a user (used by Soup).
 #[derive(Debug)]
 pub struct GetCallRecordsRequest {
