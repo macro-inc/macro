@@ -99,6 +99,14 @@ async fn oauth_callback<I: InflightAuthStore + 'static>(
             )
                 .into_response()
         }
+        Err(CompleteCallbackError::MissingCode) => {
+            tracing::warn!("upstream OAuth callback missing both code and error");
+            (
+                axum::http::StatusCode::BAD_REQUEST,
+                "missing code parameter",
+            )
+                .into_response()
+        }
         Err(CompleteCallbackError::UnknownOrExpiredSession) => (
             axum::http::StatusCode::BAD_REQUEST,
             "unknown or expired session",

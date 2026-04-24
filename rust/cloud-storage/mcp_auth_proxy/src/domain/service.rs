@@ -282,9 +282,33 @@ where
             .map_err(CompleteCallbackError::InflightStore)?
             .ok_or(CompleteCallbackError::UnknownOrExpiredSession)?;
 
+        if let Some(error) = params.error {
+            tracing::warn!(
+                %session_id,
+                %error,
+                description = ?params.error_description,
+                "upstream oauth returned error"
+            );
+            let mut redirect = format!(
+                "{}?error={}&state={}",
+                pending.client_redirect_uri,
+                urlencoding::encode(&error),
+                urlencoding::encode(&pending.client_state),
+            );
+            if let Some(desc) = params.error_description {
+                redirect.push_str(&format!(
+                    "&error_description={}",
+                    urlencoding::encode(&desc)
+                ));
+            }
+            return Ok(redirect);
+        }
+
+        let code = params.code.ok_or(CompleteCallbackError::MissingCode)?;
+
         let (access_token, refresh_token) = self
             .oauth_provider
-            .exchange_authorization_code(&params.code)
+            .exchange_authorization_code(&code)
             .await
             .map_err(CompleteCallbackError::AuthorizationCodeExchangeFailed)?;
 
@@ -371,6 +395,9 @@ pub enum CompleteCallbackError {
     /// Upstream callback omitted state.
     #[error("missing state parameter")]
     MissingState,
+    /// Upstream callback omitted both the authorization code and an error code.
+    #[error("missing code parameter")]
+    MissingCode,
     /// Pending broker session was missing or expired.
     #[error("unknown or expired session")]
     UnknownOrExpiredSession,
