@@ -2,6 +2,7 @@ use crate::domain::{
     models::{BUNDLE_ARCHIVE_NAME, SEMVER_FILE_NAME, UpdateErr},
     ports::GetJsBundleSemver,
 };
+use rootcause::{Report, prelude::ResultExt};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 use tokio::sync::RwLock;
@@ -32,34 +33,31 @@ impl DefaultBundleFetcher {
     }
 
     /// Download the bundle and compute its SHA-256 hex digest
-    async fn compute_checksum(&self) -> Result<String, UpdateErr> {
-        let url = self.get_app_bundle_path();
-        let bytes = reqwest::get(url)
-            .await
-            .map_err(anyhow::Error::from)?
-            .error_for_status()
-            .map_err(anyhow::Error::from)?
-            .bytes()
-            .await
-            .map_err(anyhow::Error::from)?;
-        let hash = Sha256::digest(&bytes);
-        Ok(format!("{:x}", hash))
+    async fn compute_checksum(&self) -> Result<String, Report<UpdateErr>> {
+        async move {
+            let url = self.get_app_bundle_path();
+            let bytes = reqwest::get(url).await?.error_for_status()?.bytes().await?;
+            let hash = Sha256::digest(&bytes);
+            Result::<_, Report>::Ok(format!("{:x}", hash))
+        }
+        .await
+        .context(UpdateErr::Network)
     }
 }
 
 impl GetJsBundleSemver for DefaultBundleFetcher {
     #[tracing::instrument(skip(self), ret, err)]
-    async fn get_app_semver(&self) -> Result<semver::Version, UpdateErr> {
+    async fn get_app_semver(&self) -> Result<semver::Version, Report<UpdateErr>> {
         let url = self.base_url.join(self.semver_file_name).unwrap();
         let res = reqwest::get(url)
             .await
-            .map_err(anyhow::Error::from)?
+            .context(UpdateErr::Network)?
             .error_for_status()
-            .map_err(anyhow::Error::from)?
+            .context(UpdateErr::Network)?
             .text()
             .await
-            .map_err(anyhow::Error::from)?;
-        let cur_ver = semver::Version::from_str(res.trim())?;
+            .context(UpdateErr::Network)?;
+        let cur_ver = semver::Version::from_str(res.trim()).context(UpdateErr::Semver)?;
         Ok(cur_ver)
     }
 
@@ -71,7 +69,7 @@ impl GetJsBundleSemver for DefaultBundleFetcher {
     async fn get_app_bundle_checksum(
         &self,
         version: &semver::Version,
-    ) -> Result<String, UpdateErr> {
+    ) -> Result<String, Report<UpdateErr>> {
         // return cached checksum if version matches
         if let Some((cached_ver, cached_checksum)) = self.checksum_cache.read().await.as_ref()
             && cached_ver == version
