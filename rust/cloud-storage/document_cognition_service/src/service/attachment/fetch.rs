@@ -1,7 +1,7 @@
 use crate::api::context::DcsScribe;
 use crate::core::constants::CHANNEL_TRANSCRIPT_MAX_MESSAGES;
-use ai::types::{Attachment, ImageData};
-use ai_format::document::Document;
+use attachment::image::ImageData;
+use chat::domain::models::{ImageContent, ResolvedMessagePart};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
     chat::{AttachmentType, ChatAttachmentWithName},
@@ -10,51 +10,48 @@ use model::{
 use std::sync::Arc;
 
 pub const EMAIL_THREAD_MESSAGE_LIMIT: i64 = 20;
-// TODO: @ehayes2000 this needs to return an enumerated error (Not Found | Permission | Internal)
+
 #[tracing::instrument(err, skip(scribe, attachments))]
 pub async fn fetchium(
     scribe: Arc<DcsScribe>,
     attachments: Vec<ChatAttachmentWithName>,
     jwt: &str,
     user_id: MacroUserIdStr<'static>,
-) -> Result<Vec<Attachment>, anyhow::Error> {
-    // --- closure to fetch single attachment ---
+) -> Result<Vec<ResolvedMessagePart>, anyhow::Error> {
     #[tracing::instrument(err, skip(scribe))]
     async fn fetchington(
         attachment: ChatAttachmentWithName,
         scribe: Arc<DcsScribe>,
         jwt: &str,
         user_id: MacroUserIdStr<'static>,
-    ) -> Result<Attachment, anyhow::Error> {
+    ) -> Result<ResolvedMessagePart, anyhow::Error> {
+        let name = attachment.name().unwrap_or_default().to_string();
+
         match attachment.attachment_type {
             AttachmentType::Project => {
-                // fetch id's of stuff in folder
                 let project_items = scribe
                     .document
                     .fetch_project(attachment.attachment_id.clone())
                     .content(scribe.document.db(), user_id)
                     .await?
                     .to_string();
-                Ok(Attachment::Text(
-                    Document {
-                        id: attachment.attachment_id.clone(),
-                        file_type: "Project".into(),
-                        name: attachment.name().unwrap_or_default().into(),
+                Ok(ResolvedMessagePart::Attachment {
+                    name,
+                    parts: vec![ResolvedMessagePart::Text {
                         content: project_items,
-                        properties: None,
-                    }
-                    .boxed(),
-                ))
+                    }],
+                })
             }
             AttachmentType::Image => {
-                let image = scribe
+                let file = scribe
                     .static_file
                     .fetch(attachment.attachment_id.clone())
                     .file_content()
                     .await?
                     .content;
 
-                Ok(Attachment::Image(ImageData::try_from(image)?))
+                let data = ImageData::try_from(file)?;
+                Ok(ResolvedMessagePart::Image(image_data_to_content(data)))
             }
             AttachmentType::Channel => {
                 let transcript = scribe
@@ -66,16 +63,12 @@ pub async fn fetchium(
                     )
                     .await?;
 
-                Ok(Attachment::Text(
-                    Document {
+                Ok(ResolvedMessagePart::Attachment {
+                    name,
+                    parts: vec![ResolvedMessagePart::Text {
                         content: transcript,
-                        file_type: "channel".into(),
-                        id: attachment.attachment_id.clone(),
-                        name: "unknown channel name".into(),
-                        properties: None,
-                    }
-                    .boxed(),
-                ))
+                    }],
+                })
             }
             AttachmentType::Document => {
                 let document = scribe
@@ -84,12 +77,15 @@ pub async fn fetchium(
                     .document_content()
                     .await?;
                 if document.file_type().is_image() {
-                    Ok(Attachment::Image(ImageData::try_from(document.content)?))
+                    let data = ImageData::try_from(document.content)?;
+                    Ok(ResolvedMessagePart::Image(image_data_to_content(data)))
                 } else {
-                    document
-                        .text_attachment()
-                        .ok_or(anyhow::anyhow!("Expected text content found image"))
-                        .map(Attachment::Text)
+                    let doc_name = document.location.metadata().document_name.clone();
+                    let text = document.content.text_content().unwrap_or_default();
+                    Ok(ResolvedMessagePart::Attachment {
+                        name: doc_name,
+                        parts: vec![ResolvedMessagePart::Text { content: text }],
+                    })
                 }
             }
             AttachmentType::Email => {
@@ -114,16 +110,10 @@ pub async fn fetchium(
                     .collect::<Result<Vec<_>, _>>()?
                     .join("\n");
 
-                Ok(Attachment::Text(
-                    Document {
-                        id: attachment.attachment_id,
-                        name: subject.clone(),
-                        file_type: "email".to_string(),
-                        content,
-                        properties: None,
-                    }
-                    .boxed(),
-                ))
+                Ok(ResolvedMessagePart::Attachment {
+                    name: subject,
+                    parts: vec![ResolvedMessagePart::Text { content }],
+                })
             }
         }
     }
@@ -136,4 +126,13 @@ pub async fn fetchium(
         |err| tracing::error!(error=?err, "failed to fetch one or more attachments"),
     )?;
     Ok(results)
+}
+
+fn image_data_to_content(data: ImageData) -> ImageContent {
+    match data {
+        ImageData::StaticUrl(url) => ImageContent::StaticUrl { url },
+        ImageData::Base64(b64) => ImageContent::Base64 {
+            data: b64.to_string(),
+        },
+    }
 }

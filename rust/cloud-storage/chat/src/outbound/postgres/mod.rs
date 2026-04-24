@@ -6,7 +6,7 @@ mod test;
 
 use crate::domain::models::{
     ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatArgs, PatchChatMessageArgs,
-    WebCitation,
+    ResolvedMessagePart, WebCitation,
 };
 use crate::domain::ports::ChatRepo;
 use ai::types::{ChatMessageContent, Model};
@@ -52,6 +52,16 @@ impl PgChatRepo {
         chat_id: &str,
     ) -> anyhow::Result<Vec<(String, Vec<WebCitation>)>> {
         queries::get_web_citations::get_web_citations(&self.pool, chat_id).await
+    }
+
+    /// Store a resolved message without going through the trait.
+    pub async fn store_resolved_message_static(
+        &self,
+        message_id: &str,
+        parts: &[ResolvedMessagePart],
+    ) -> anyhow::Result<()> {
+        queries::store_resolved_message::store_resolved_message(&self.pool, message_id, parts)
+            .await
     }
 }
 
@@ -349,5 +359,26 @@ impl ChatRepo for PgChatRepo {
         )
         .await
         .map_err(to_chat_err)
+    }
+
+    #[tracing::instrument(err, skip(self, parts))]
+    async fn store_resolved_message(
+        &self,
+        message_id: &str,
+        parts: &[ResolvedMessagePart],
+    ) -> Result<(), ChatErr> {
+        queries::store_resolved_message::store_resolved_message(&self.pool, message_id, parts)
+            .await
+            .map_err(to_chat_err)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_resolved_message(
+        &self,
+        message_id: &str,
+    ) -> Result<Option<Vec<ResolvedMessagePart>>, ChatErr> {
+        queries::get_resolved_message::get_resolved_message(&self.pool, message_id)
+            .await
+            .map_err(to_chat_err)
     }
 }

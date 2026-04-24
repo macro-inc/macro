@@ -3,10 +3,10 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use ai::types::ImageData;
+use attachment::image::ImageData;
 use attachment::{
-    AttachmentContent, AttachmentError, AttachmentPart, AttachmentReference, AttachmentService,
-    Attachments, ResolutionError,
+    AttachmentContent, AttachmentError, AttachmentPart, AttachmentService, Attachments,
+    ResolutionError,
 };
 use entity_access::domain::{
     models::{EntityAccessReceipt, ViewAccessLevel},
@@ -16,7 +16,7 @@ use futures::future::join_all;
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::DocumentBasic;
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use model_file_type::{FileAssociation, FileType};
 use non_empty::NonEmpty;
 
@@ -50,16 +50,25 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> AttachmentService
     for DocumentAttachmentService<DSvc, ESvc>
 {
     #[tracing::instrument(skip_all)]
-    async fn resolve_attachments(
+    async fn resolve_attachments<'a>(
         &self,
         user_id: MacroUserIdStr<'_>,
-        ids: NonEmpty<&[&str]>,
-    ) -> Attachments {
+        ids: NonEmpty<&[&'a Entity<'a>]>,
+    ) -> Attachments<'a> {
         let user_id = &user_id;
-        let results = join_all(ids.iter().map(|id| async move {
-            self.resolve_one(user_id, id)
+        let results = join_all(ids.iter().map(|entity| async move {
+            if entity.entity_type != EntityType::Document {
+                return Err(ResolutionError::new(
+                    entity.entity_id.to_string(),
+                    AttachmentError::RoutingError(
+                        "DocumentAttachmentService".to_string(),
+                        entity.entity_type,
+                    ),
+                ));
+            }
+            self.resolve_one(user_id, &entity.entity_id)
                 .await
-                .map_err(|error| ResolutionError::new(id.to_string(), error))
+                .map_err(|error| ResolutionError::new(entity.entity_id.to_string(), error))
         }))
         .await;
 
@@ -73,7 +82,7 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentAttachmentService
         &self,
         user_id: &MacroUserIdStr<'_>,
         id: &str,
-    ) -> Result<AttachmentContent, AttachmentError> {
+    ) -> Result<AttachmentContent<'static>, AttachmentError> {
         let receipt = self
             .entity_access_service
             .generate_entity_access_receipt(user_id, None, id, EntityType::Document)
@@ -118,7 +127,7 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentAttachmentService
         };
 
         Ok(AttachmentContent {
-            reference: AttachmentReference::DssFile { id: id.to_string() },
+            reference: EntityType::Document.with_entity_string(id.to_string()),
             name: Some(document.document_name.clone()),
             content: NonEmpty::new(parts).expect("parts has one element"),
         })

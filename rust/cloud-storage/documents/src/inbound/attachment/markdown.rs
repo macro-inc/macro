@@ -1,9 +1,7 @@
 //! Markdown document resolution via the lexical client.
 
-use ai::types::ImageData;
-use attachment::{
-    AttachmentContent, AttachmentError, AttachmentPart, AttachmentReference, ResolutionError,
-};
+use attachment::image::ImageData;
+use attachment::{AttachmentContent, AttachmentError, AttachmentPart, ResolutionError};
 use entity_access::domain::ports::EntityAccessService;
 use futures::future::join_all;
 use lexical_client::types::NewMdNode;
@@ -23,7 +21,7 @@ pub(super) async fn resolve_markdown<DSvc: DocumentService, ESvc: EntityAccessSe
     user_id: &MacroUserIdStr<'_>,
     id: &str,
     document: &DocumentBasic,
-) -> Result<AttachmentContent, AttachmentError> {
+) -> Result<AttachmentContent<'static>, AttachmentError> {
     let response = svc
         .lexical_client
         .parse_cognition_v2(id)
@@ -42,7 +40,7 @@ pub(super) async fn resolve_markdown<DSvc: DocumentService, ESvc: EntityAccessSe
     let content = NonEmpty::new(parts).map_err(|_| AttachmentError::NoContent)?;
 
     Ok(AttachmentContent {
-        reference: AttachmentReference::DssFile { id: id.to_string() },
+        reference: EntityType::Document.with_entity_string(id.to_string()),
         name: Some(document.document_name.clone()),
         content,
     })
@@ -52,10 +50,8 @@ async fn resolve_dss_image<DSvc: DocumentService, ESvc: EntityAccessService>(
     svc: &DocumentAttachmentService<DSvc, ESvc>,
     user_id: &MacroUserIdStr<'_>,
     image_id: &str,
-) -> AttachmentPart {
-    let reference = AttachmentReference::DssFile {
-        id: image_id.to_string(),
-    };
+) -> AttachmentPart<'static> {
+    let reference = EntityType::Document.with_entity_string(image_id.to_string());
     let result = try_resolve_dss_image(svc, user_id, image_id)
         .await
         .map(|data| AttachmentContent {
@@ -87,10 +83,8 @@ async fn try_resolve_dss_image<DSvc: DocumentService, ESvc: EntityAccessService>
     svc.get_image_from_location(&document, receipt).await
 }
 
-async fn resolve_static_image(url: &str) -> AttachmentPart {
-    let reference = AttachmentReference::SfsImage {
-        url: url.to_string(),
-    };
+async fn resolve_static_image(url: &str) -> AttachmentPart<'static> {
+    let reference = EntityType::StaticFile.with_entity_string(url.to_string());
     let result = try_resolve_static_image(url)
         .await
         .map(|data| AttachmentContent {

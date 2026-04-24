@@ -1,6 +1,6 @@
 use crate::domain::models::{
     ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs,
-    PatchChatMessageArgs,
+    PatchChatMessageArgs, ResolvedMessagePart,
 };
 use ai::types::ChatMessageContent;
 use ai_toolset::tool_object::UserToolResponse;
@@ -108,6 +108,19 @@ pub trait ChatRepo: Send + Sync + 'static {
         message_id: &str,
         content: &ChatMessageContent,
     ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
+
+    /// Store the resolved (AI-facing) representation of a user message.
+    fn store_resolved_message(
+        &self,
+        message_id: &str,
+        parts: &[ResolvedMessagePart],
+    ) -> impl std::future::Future<Output = Result<(), ChatErr>> + Send;
+
+    /// Get the resolved representation of a user message, if it exists.
+    fn get_resolved_message(
+        &self,
+        message_id: &str,
+    ) -> impl std::future::Future<Output = Result<Option<Vec<ResolvedMessagePart>>, ChatErr>> + Send;
 }
 
 /// Service trait for chat business logic.

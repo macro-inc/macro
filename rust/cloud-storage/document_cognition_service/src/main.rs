@@ -253,6 +253,28 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized document tool context");
 
+    let attachment_provider = Arc::new(attachment::provider::AttachmentProvider {
+        document: documents::inbound::attachment::DocumentAttachmentService::new(
+            document_tool_context.service.clone(),
+            document_tool_context.entity_access_service.clone(),
+            document_tool_context.lexical_client.clone(),
+        ),
+        email_thread: email::inbound::attachment::EmailAttachmentService::new(
+            email_service_for_tools.clone(),
+            entity_access_service.clone(),
+        ),
+        chat: chat::inbound::attachment::ChatAttachmentService::new(
+            Arc::new(chat::outbound::postgres::PgChatRepo::new(db.clone())),
+            entity_access_service.clone(),
+        ),
+        channel: comms::inbound::attachment::CommsAttachmentService::new(
+            Arc::new(PgCommsRepo::new(ReadOnlyPool(db.clone()))),
+            entity_access_service.clone(),
+        ),
+    });
+
+    tracing::info!("initialized attachment provider");
+
     let email_service_client_external = Arc::new(EmailServiceClientExternal::new(
         email_service_client.url().to_owned(),
     ));
@@ -387,6 +409,7 @@ async fn main() -> anyhow::Result<()> {
         all_tools: all_tools_toolset,
         all_tools_prompt,
         entity_access_service,
+        attachment_provider,
         ai_stream_registry: service::ai_stream_registry::AiStreamRegistry::new(
             redis_client.clone(),
         ),

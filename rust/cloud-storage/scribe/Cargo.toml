@@ -47,6 +47,7 @@ uuid = { workspace = true }
 # Internal dependencies
 ai = { path = "../ai" }
 ai_format = { path = "../ai_format" }
+attachment = { path = "../attachment" }
 macro_client_errors = { path = "../macro_client_errors" }
 model = { path = "../model" }
 models_dcs = { path = "../models_dcs" }

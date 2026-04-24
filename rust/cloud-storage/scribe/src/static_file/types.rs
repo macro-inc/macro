@@ -1,4 +1,4 @@
-use ai::types::ImageData;
+use attachment::image::ImageData;
 use anyhow::{Error, bail};
 use model::document::{ContentType, ContentTypeExt};
 
