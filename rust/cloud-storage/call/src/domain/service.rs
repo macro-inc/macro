@@ -237,13 +237,13 @@ impl NotificationExtIos for CallStartedNotification {
 }
 
 impl<
-    R: CallRepository,
+    R: CallRepository + Clone,
     C: CallRtcClient,
     Cn: ConnectionService,
     E: EntityAccessService,
     N: NotificationIngress,
     S: RecordingStorage,
-    Sm: CallSummarizer,
+    Sm: CallSummarizer + Clone,
 > CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
@@ -526,6 +526,10 @@ impl<
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
 
+                    // Fire-and-forget summarization now that the
+                    // `call_records` row is persisted.
+                    self.spawn_summarize_call(call.id);
+
                     self.send_call_event(
                         &channel_id,
                         "call_ended",
@@ -626,6 +630,10 @@ impl<
                         .archive_call(&call.id)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
+
+                    // Fire-and-forget summarization now that the
+                    // `call_records` row is persisted.
+                    self.spawn_summarize_call(call.id);
 
                     // Stop egress explicitly before deleting the room. DeleteRoom
                     // is expected to cascade-stop egress, but a failed or slow
@@ -926,6 +934,61 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?;
 
         Ok(())
+    }
+}
+
+impl<
+    R: CallRepository + Clone,
+    C: CallRtcClient,
+    Cn: ConnectionService,
+    E: EntityAccessService,
+    N: NotificationIngress,
+    S: RecordingStorage,
+    Sm: CallSummarizer + Clone,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm>
+{
+    /// Fire-and-forget spawn of [`CallService::summarize_call`] for `call_id`.
+    ///
+    /// Called after the `call_records` row is persisted so that summarization
+    /// can run off the request path without blocking call completion. The
+    /// spawned task owns cloned handles to `repo` and `summarizer`; errors
+    /// are logged, never propagated. When no summarizer is configured this is
+    /// a no-op and no task is spawned.
+    fn spawn_summarize_call(&self, call_id: Uuid) {
+        let Some(summarizer) = self.summarizer.clone() else {
+            return;
+        };
+        let repo = self.repo.clone();
+        tokio::spawn(async move {
+            let record = match repo.get_call_record_by_call_id(&call_id).await {
+                Ok(Some(record)) => record,
+                Ok(None) => {
+                    tracing::warn!(%call_id, "call record not found for summarization; skipping");
+                    return;
+                }
+                Err(e) => {
+                    tracing::error!(error=?e, %call_id, "failed to load call record for summarization");
+                    return;
+                }
+            };
+
+            if record.transcript.is_empty() {
+                tracing::info!(%call_id, "call has empty transcript; skipping summarization");
+                return;
+            }
+
+            let summary = match summarizer.summarize_call(&call_id, record.transcript).await {
+                Ok(summary) => summary,
+                Err(e) => {
+                    tracing::error!(error=?e, %call_id, "failed to summarize call on completion");
+                    return;
+                }
+            };
+
+            if let Err(e) = repo.insert_call_summary(&call_id, &summary).await {
+                tracing::error!(error=?e, %call_id, "failed to persist call summary");
+            }
+        });
     }
 }
 

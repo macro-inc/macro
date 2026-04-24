@@ -81,6 +81,7 @@ fn find_attended(expr: &Expr<CallLiteral>) -> Option<bool> {
 }
 
 /// Postgres implementation of [`CallRepository`].
+#[derive(Clone)]
 pub struct PgCallRepo {
     pool: PgPool,
 }
