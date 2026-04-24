@@ -38,6 +38,7 @@ function CallChannelNameText(props: { entity: CallEntity }) {
   );
 }
 
+// TODO: once we have call record rename/preview, we should use that instead of the channel name
 function CallChannelNameFromPreview(props: { channelId: string }) {
   const [preview] = useItemPreview(() => ({
     id: props.channelId,

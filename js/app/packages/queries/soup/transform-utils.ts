@@ -136,6 +136,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
     }
     case 'call_record': {
       contentHitData = data.results.flatMap((r) => {
+        // TODO: support name only hits for call records when we support rename
         const isContentHit = !!r.transcript_id;
         if (!isContentHit) return [];
 
