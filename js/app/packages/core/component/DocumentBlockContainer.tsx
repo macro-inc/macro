@@ -33,7 +33,7 @@ export function DocumentBlockContainer(
             }
           >
             <Match when={isLoading()}>
-              <LoadingPanel blockId={blockId} />
+              <LoadingPanel />
             </Match>
             <Match when={blockError() === 'UNAUTHORIZED'}>
               <Unauthorized />
