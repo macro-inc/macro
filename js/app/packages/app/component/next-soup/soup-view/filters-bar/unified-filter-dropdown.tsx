@@ -562,16 +562,22 @@ const CallSearchSubContent = (props: {
   );
 };
 
-/** One row in the Type picker — a flat item, or a Sub with nested filters. */
+/** One row in the Type picker — a flat item, or a Sub with nested filters.
+ *
+ * `renderSubContent` is a function rather than JSX so the nested submenus
+ * instantiate *inside* this row's `DropdownMenu.SubContent`. Eager JSX would
+ * evaluate in the outer content's context, which makes Kobalte register
+ * nested `DropdownMenu.Sub`s against the wrong parent — positioning falls
+ * back to the viewport and keyboard nav treats them as siblings of the row. */
 const SearchIndexRow = (props: {
   option: (typeof INDEX_OPTIONS)[number];
   active: Accessor<boolean>;
   onSelect: () => void;
   closeRoot: () => void;
-  subContent?: JSX.Element;
+  renderSubContent?: () => JSX.Element;
 }) => (
   <Show
-    when={props.subContent !== undefined}
+    when={props.renderSubContent !== undefined}
     fallback={
       <DropdownMenu.Item
         class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
@@ -630,7 +636,7 @@ const SearchIndexRow = (props: {
       </DropdownMenu.SubTrigger>
       <DropdownMenu.Portal>
         <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[180px] p-1">
-          {props.subContent}
+          {props.renderSubContent?.()}
         </DropdownMenu.SubContent>
       </DropdownMenu.Portal>
     </DropdownMenu.Sub>
@@ -822,24 +828,31 @@ export const UnifiedFilterDropdown = () => {
                   <Show when={isSearchView()}>
                     <For each={INDEX_OPTIONS}>
                       {(option) => {
-                        const subContent = match(option.value)
-                          .with('channels', () => (
-                            <ChannelSearchSubContent
-                              channel={channel}
-                              channelOptions={inChannelOptions}
-                              senderOptions={fromSenderOptions}
-                            />
-                          ))
-                          .with('email', () => (
-                            <EmailSearchSubContent email={email} />
-                          ))
-                          .with('calls', () => (
-                            <CallSearchSubContent
-                              call={call}
-                              channelOptions={inChannelOptions}
-                              senderOptions={fromSenderOptions}
-                            />
-                          ))
+                        const renderSubContent = match(option.value)
+                          .with(
+                            'channels',
+                            () => () => (
+                              <ChannelSearchSubContent
+                                channel={channel}
+                                channelOptions={inChannelOptions}
+                                senderOptions={fromSenderOptions}
+                              />
+                            )
+                          )
+                          .with(
+                            'email',
+                            () => () => <EmailSearchSubContent email={email} />
+                          )
+                          .with(
+                            'calls',
+                            () => () => (
+                              <CallSearchSubContent
+                                call={call}
+                                channelOptions={inChannelOptions}
+                                senderOptions={fromSenderOptions}
+                              />
+                            )
+                          )
                           .otherwise(() => undefined);
                         return (
                           <SearchIndexRow
@@ -847,7 +860,7 @@ export const UnifiedFilterDropdown = () => {
                             active={() => soup.filters.isActive(option.value)}
                             onSelect={() => handleIndexChange(option.value)}
                             closeRoot={() => setOpen(false)}
-                            subContent={subContent}
+                            renderSubContent={renderSubContent}
                           />
                         );
                       }}
