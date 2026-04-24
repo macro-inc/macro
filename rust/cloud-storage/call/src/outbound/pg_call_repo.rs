@@ -19,10 +19,25 @@ use uuid::Uuid;
 
 use crate::domain::channel_name::{NameLookup, display_name, resolve_channel_name};
 use crate::domain::models::{
-    Call, CallParticipant, CallRecord, CallRecordParticipant, CallRecordTranscriptSegment,
-    EditCallRecordRequest, TranscriptSegmentRequest,
+    AddParticipantError, Call, CallParticipant, CallRecord, CallRecordParticipant,
+    CallRecordTranscriptSegment, EditCallRecordRequest, TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallRepository;
+
+/// Name of the partial unique index enforcing one active call per user.
+const ACTIVE_CALL_UNIQUE_INDEX: &str = "call_participants_one_active_per_user";
+
+/// Translate a sqlx error from an `add_participant` insert into the domain
+/// [`AddParticipantError`]. A unique-violation on the
+/// `call_participants_one_active_per_user` partial index becomes
+/// [`AddParticipantError::UserAlreadyActive`]; everything else is wrapped.
+fn classify_add_participant_err(err: sqlx::Error) -> AddParticipantError {
+    if err.as_database_error().and_then(|db| db.constraint()) == Some(ACTIVE_CALL_UNIQUE_INDEX) {
+        AddParticipantError::UserAlreadyActive
+    } else {
+        AddParticipantError::Repository(err.into())
+    }
+}
 
 /// Extract channel_id UUIDs from a call filter AST.
 fn extract_channel_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
@@ -265,7 +280,7 @@ impl CallRepository for PgCallRepo {
         &self,
         call_id: &Uuid,
         user_id: MacroUserIdStr<'_>,
-    ) -> Result<CallParticipant, Self::Err> {
+    ) -> Result<CallParticipant, AddParticipantError> {
         let row = sqlx::query!(
             r#"
             INSERT INTO call_participants (call_id, user_id)
@@ -277,13 +292,35 @@ impl CallRepository for PgCallRepo {
             user_id.as_ref(),
         )
         .fetch_one(&self.pool)
-        .await?;
+        .await
+        .map_err(classify_add_participant_err)?;
 
         Ok(CallParticipant {
             call_id: row.call_id,
             user_id: row.user_id,
             joined_at: row.joined_at,
         })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn find_active_call_for_user(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<(Uuid, Uuid)>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT c.id, c.channel_id
+            FROM call_participants cp
+            JOIN calls c ON c.id = cp.call_id
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            LIMIT 1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| (r.id, r.channel_id)))
     }
 
     #[tracing::instrument(err, skip(self))]

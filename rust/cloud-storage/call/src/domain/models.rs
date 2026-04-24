@@ -233,6 +233,22 @@ pub struct GetCallRecordsRequest {
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<CallLiteral>>,
 }
 
+/// Errors that can occur when adding a participant to a call at the
+/// repository boundary. Splitting the "already-active-elsewhere" case into
+/// a typed variant lets the service handle it without looking at the
+/// underlying database error type.
+#[derive(Debug, thiserror::Error)]
+pub enum AddParticipantError {
+    /// The user is already an active participant in another call, as
+    /// enforced by the DB-level partial unique index on
+    /// `call_participants (user_id) WHERE left_at IS NULL`.
+    #[error("user is already an active participant in another call")]
+    UserAlreadyActive,
+    /// Any other repository/infrastructure error.
+    #[error(transparent)]
+    Repository(anyhow::Error),
+}
+
 /// Errors that can occur during call operations.
 #[derive(Debug, thiserror::Error)]
 pub enum CallError {
@@ -242,6 +258,11 @@ pub enum CallError {
     /// User is not in the call.
     #[error("user not in call")]
     NotInCall,
+    /// User is already an active participant in another call. The inner
+    /// string is the `channel_id` of that other call, so clients can show
+    /// a targeted message (and optionally deep-link to leave it).
+    #[error("user is already in a call in channel {0}")]
+    AlreadyInCall(String),
     /// Authentication or signature validation failed.
     #[error("authentication failed")]
     Auth,

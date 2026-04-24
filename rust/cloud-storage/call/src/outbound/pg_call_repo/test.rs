@@ -1,6 +1,6 @@
 use std::{ops::Deref, sync::Arc, sync::LazyLock};
 
-use crate::domain::models::{EditCallRecordRequest, TranscriptSegmentRequest};
+use crate::domain::models::{AddParticipantError, EditCallRecordRequest, TranscriptSegmentRequest};
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
 use chrono::Utc;
@@ -23,6 +23,7 @@ fn attended_filter(b: bool) -> LiteralTree<CallLiteral> {
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 const CALL1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
+const CALL2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca220);
 const CALL_ARCHIVED: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca2ed);
 static USER_A: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-a@test.com").unwrap());
@@ -161,6 +162,137 @@ async fn remove_participant_removes_from_db(pool: Pool<Postgres>) -> anyhow::Res
     repo.remove_participant(&CALL1, USER_B.deref().copied())
         .await?;
     assert!(!repo.is_participant(&CALL1, &USER_B.as_ref()).await?);
+    Ok(())
+}
+
+// -- find_active_call_for_user ------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn find_active_call_for_user_returns_current_participation(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // user-a is an active participant in call1 (ch1) per the fixture.
+    let found = repo
+        .find_active_call_for_user(USER_A.deref().copied())
+        .await?;
+    assert_eq!(found, Some((CALL1, CH1)));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn find_active_call_for_user_returns_none_when_never_joined(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // user-c is a channel member but not a participant in any call.
+    let found = repo
+        .find_active_call_for_user(USER_C.deref().copied())
+        .await?;
+    assert!(found.is_none());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn find_active_call_for_user_returns_none_after_leave(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    repo.remove_participant(&CALL1, USER_B.deref().copied())
+        .await?;
+
+    let found = repo
+        .find_active_call_for_user(USER_B.deref().copied())
+        .await?;
+    assert!(found.is_none());
+    Ok(())
+}
+
+// -- one-active-call-per-user invariant ---------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn add_participant_rejects_user_already_active_in_other_call(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // Seed a second active call in ch2 (the fixture leaves ch2 empty).
+    repo.create_call(&CALL2, &CH2, "room-ch2", USER_C.deref().copied())
+        .await?
+        .expect("should create call2 in ch2");
+
+    // user-a is already active in call1 (ch1) per the fixture. Trying to
+    // add them to call2 (ch2) must hit the partial unique index and surface
+    // as AddParticipantError::UserAlreadyActive.
+    let err = repo
+        .add_participant(&CALL2, USER_A.deref().copied())
+        .await
+        .expect_err("should reject user already active elsewhere");
+
+    assert!(
+        matches!(err, AddParticipantError::UserAlreadyActive),
+        "expected UserAlreadyActive, got {err:?}"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn add_participant_same_call_rejoin_is_idempotent(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // user-a is already active in call1. Re-adding to the same call must
+    // succeed (upsert no-op) — the partial unique index only rejects when
+    // the active row would be in a *different* call.
+    let participant = repo
+        .add_participant(&CALL1, USER_A.deref().copied())
+        .await?;
+    assert_eq!(participant.call_id, CALL1);
+    assert_eq!(participant.user_id, USER_A.as_ref());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn add_participant_allows_join_other_call_after_leave(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    repo.create_call(&CALL2, &CH2, "room-ch2", USER_C.deref().copied())
+        .await?
+        .expect("should create call2 in ch2");
+
+    // user-a leaves call1, freeing them up to join call2.
+    repo.remove_participant(&CALL1, USER_A.deref().copied())
+        .await?;
+
+    let participant = repo
+        .add_participant(&CALL2, USER_A.deref().copied())
+        .await?;
+    assert_eq!(participant.call_id, CALL2);
+    assert_eq!(participant.user_id, USER_A.as_ref());
     Ok(())
 }
 

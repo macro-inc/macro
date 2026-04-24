@@ -14,8 +14,8 @@ use item_filters::ast::{LiteralTree, call::CallLiteral};
 use crate::domain::models::EditCallRecordRequest;
 
 use super::models::{
-    Call, CallActiveResponse, CallError, CallParticipant, CallRecord, CallTokenResponse,
-    CallWebhookEvent, EgressS3Config, GetCallRecordsRequest, LeaveCallResponse,
+    AddParticipantError, Call, CallActiveResponse, CallError, CallParticipant, CallRecord,
+    CallTokenResponse, CallWebhookEvent, EgressS3Config, GetCallRecordsRequest, LeaveCallResponse,
     TranscriptSegmentRequest,
 };
 
@@ -54,11 +54,24 @@ pub trait CallRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
 
     /// Add a participant to a call.
+    ///
+    /// Returns [`AddParticipantError::UserAlreadyActive`] if the DB-level
+    /// partial unique index rejects the insert because the user is already
+    /// an active participant in another call. Other failures are wrapped in
+    /// [`AddParticipantError::Repository`].
     fn add_participant<'a>(
         &self,
         call_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
-    ) -> impl Future<Output = Result<CallParticipant, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<CallParticipant, AddParticipantError>> + Send;
+
+    /// Find the call the user is currently an active participant of, if any.
+    /// Scans globally across all channels and returns `(call_id, channel_id)`
+    /// for the first active participation row (`left_at IS NULL`).
+    fn find_active_call_for_user<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Option<(Uuid, Uuid)>, Self::Err>> + Send;
 
     /// Remove a participant from a call.
     fn remove_participant<'a>(

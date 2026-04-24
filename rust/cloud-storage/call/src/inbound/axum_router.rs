@@ -530,6 +530,7 @@ impl IntoResponse for CallError {
         let status_code = match &self {
             CallError::NotFound(_) => StatusCode::NOT_FOUND,
             CallError::NotInCall => StatusCode::BAD_REQUEST,
+            CallError::AlreadyInCall(_) => StatusCode::CONFLICT,
             CallError::Auth => StatusCode::UNAUTHORIZED,
             CallError::Internal(_) => {
                 tracing::error!(error=?self, "internal server error");

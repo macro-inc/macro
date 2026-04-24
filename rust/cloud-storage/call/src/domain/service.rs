@@ -24,8 +24,8 @@ use uuid::Uuid;
 use crate::domain::models::EditCallRecordRequest;
 
 use super::models::{
-    CallActiveResponse, CallError, CallRecord, CallTokenResponse, EgressS3Config,
-    GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
+    AddParticipantError, CallActiveResponse, CallError, CallRecord, CallTokenResponse,
+    EgressS3Config, GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
 };
 use super::ports::{
     CallRecordQueryService, CallRepository, CallRtcClient, CallService, RecordingStorage,
@@ -392,11 +392,40 @@ impl<
             }
         };
 
-        // Idempotent upsert — handles concurrent joins and rejoin after leave.
-        self.repo
-            .add_participant(&call.id, user_id.copied())
+        // Enforce: a user can only be active in one call at a time. If the
+        // user already has an active participation in a *different* call,
+        // reject before we add them here.
+        if let Some((other_call_id, other_channel_id)) = self
+            .repo
+            .find_active_call_for_user(user_id.copied())
             .await
-            .map_err(|e| CallError::Internal(e.into()))?;
+            .map_err(|e| CallError::Internal(e.into()))?
+            && other_call_id != call.id
+        {
+            return Err(CallError::AlreadyInCall(other_channel_id.to_string()));
+        }
+
+        // Idempotent upsert — handles concurrent joins and rejoin after leave.
+        // The DB-level partial unique index is the race-safe backstop: if a
+        // concurrent request slipped past the pre-flight above, the adapter
+        // returns AddParticipantError::UserAlreadyActive, which we translate
+        // to a typed CallError::AlreadyInCall.
+        match self.repo.add_participant(&call.id, user_id.copied()).await {
+            Ok(_) => {}
+            Err(AddParticipantError::UserAlreadyActive) => {
+                let channel = self
+                    .repo
+                    .find_active_call_for_user(user_id.copied())
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?
+                    .map(|(_, ch)| ch.to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+                return Err(CallError::AlreadyInCall(channel));
+            }
+            Err(AddParticipantError::Repository(e)) => {
+                return Err(CallError::Internal(e));
+            }
+        }
 
         // Always generate a fresh token (supports reconnection from different devices).
         let token = self
@@ -514,15 +543,32 @@ impl<
                 };
 
                 // Reconcile: idempotent upsert (handles reconnect/race conditions).
-                self.repo
+                // UserAlreadyActive means our DB has the user active in
+                // another call while LiveKit says they joined this one —
+                // state drift. Don't fail the whole webhook; log and move on.
+                match self
+                    .repo
                     .add_participant(&call.id, participant_identity.copied())
                     .await
-                    .map_err(|e| CallError::Internal(e.into()))?;
-                tracing::info!(
-                    call_id = %call.id,
-                    participant = participant_identity.as_ref(),
-                    "reconciled participant_joined via webhook"
-                );
+                {
+                    Ok(_) => {
+                        tracing::info!(
+                            call_id = %call.id,
+                            participant = participant_identity.as_ref(),
+                            "reconciled participant_joined via webhook"
+                        );
+                    }
+                    Err(AddParticipantError::UserAlreadyActive) => {
+                        tracing::warn!(
+                            call_id = %call.id,
+                            participant = participant_identity.as_ref(),
+                            "participant_joined webhook: user already active in another call; ignoring reconcile"
+                        );
+                    }
+                    Err(AddParticipantError::Repository(e)) => {
+                        return Err(CallError::Internal(e));
+                    }
+                }
             }
             "participant_left" => {
                 let (Some(room_name), Some(participant_identity)) =
