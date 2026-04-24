@@ -13,10 +13,10 @@ pub enum SearchIndex {
     Chats,
     /// The document index
     Documents,
-    /// The email index
+    /// aliased email index
     #[strum(serialize = "emails_alias")]
     Emails,
-    /// The call records index (via alias).
+    /// aliased call records index
     #[strum(serialize = "call_records_alias")]
     CallRecords,
 }
