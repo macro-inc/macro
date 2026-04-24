@@ -24,12 +24,14 @@ use uuid::Uuid;
 use crate::domain::models::EditCallRecordRequest;
 
 use super::models::{
-    AddParticipantError, CallActiveResponse, CallError, CallRecord, CallTokenResponse,
-    EgressS3Config, GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse,
-    GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
+    AddParticipantError, CallActiveResponse, CallError, CallRecord, CallRecordTranscriptSegment,
+    CallTokenResponse, EgressS3Config, GetBatchCallRecordPreviewRequest,
+    GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse,
+    TranscriptSegmentRequest,
 };
 use super::ports::{
-    CallRecordQueryService, CallRepository, CallRtcClient, CallService, RecordingStorage,
+    CallRecordQueryService, CallRepository, CallRtcClient, CallService, CallSummarizer,
+    RecordingStorage,
 };
 
 /// The concrete call service implementation.
@@ -40,6 +42,7 @@ pub struct CallServiceImpl<
     E: EntityAccessService,
     N: NotificationIngress,
     S: RecordingStorage,
+    Sm: CallSummarizer = NoopCallSummarizer,
 > {
     repo: R,
     rtc_client: C,
@@ -50,6 +53,7 @@ pub struct CallServiceImpl<
     server_url: String,
     egress_s3_config: Option<EgressS3Config>,
     internal_call_secret: Option<String>,
+    summarizer: Option<Sm>,
 }
 
 impl<
@@ -59,7 +63,8 @@ impl<
     E: EntityAccessService,
     N: NotificationIngress,
     S: RecordingStorage,
-> CallServiceImpl<R, C, Cn, E, N, S>
+    Sm: CallSummarizer,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm>
 {
     /// Create a new call service.
     pub fn new(
@@ -81,6 +86,7 @@ impl<
             server_url: server_url.into(),
             egress_s3_config: None,
             internal_call_secret: None,
+            summarizer: None,
         }
     }
 
@@ -93,6 +99,13 @@ impl<
     /// Set the shared secret used to validate internal call requests.
     pub fn with_internal_call_secret(mut self, secret: String) -> Self {
         self.internal_call_secret = Some(secret);
+        self
+    }
+
+    /// Enable AI call summarization with the given [`CallSummarizer`]
+    /// implementation. When unset, calls are never summarized.
+    pub fn with_summarizer(mut self, summarizer: Sm) -> Self {
+        self.summarizer = Some(summarizer);
         self
     }
 
@@ -230,7 +243,8 @@ impl<
     E: EntityAccessService,
     N: NotificationIngress,
     S: RecordingStorage,
-> CallService for CallServiceImpl<R, C, Cn, E, N, S>
+    Sm: CallSummarizer,
+> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
@@ -885,6 +899,32 @@ fn extract_recording_key(file_url: &str) -> &str {
         .find("calls/")
         .map(|idx| &file_url[idx + "calls/".len()..])
         .unwrap_or(file_url)
+}
+
+/// Zero-sized placeholder implementation of [`CallSummarizer`].
+///
+/// [`CallServiceImpl`]'s summarizer generic defaults to this type so callers
+/// that do not wire an AI summarizer can simply leave the `summarizer` field
+/// as `None`. The implementation itself is never executed — [`CallServiceImpl`]
+/// only invokes `summarize_call` when `summarizer.is_some()`, and this
+/// placeholder is exclusively used as the type parameter when the field is
+/// `None`. If it is ever called, that is a programming error.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoopCallSummarizer;
+
+impl CallSummarizer for NoopCallSummarizer {
+    type Err = anyhow::Error;
+
+    async fn summarize_call(
+        &self,
+        _call_id: &Uuid,
+        _transcript: Vec<CallRecordTranscriptSegment>,
+    ) -> Result<String, Self::Err> {
+        // Type-placeholder only — [`CallServiceImpl`] must never invoke this
+        // when `summarizer` is `None`, and [`NoopCallSummarizer`] is never a
+        // `Some(_)` value in practice.
+        unreachable!("NoopCallSummarizer::summarize_call invoked; it exists only as a type placeholder when the optional summarizer is None")
+    }
 }
 
 /// Lightweight implementation of [`CallRecordQueryService`] for read-only
