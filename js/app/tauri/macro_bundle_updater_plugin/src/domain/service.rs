@@ -331,7 +331,10 @@ impl<Fs: FsRepo> Service<Fs> {
         self.bundle_root.path()
     }
 
-    /// Apply the update by modifying the bundle root and resetting the worker thread to the initial state
+    /// Apply the update by modifying the bundle root and resetting the worker thread to the initial state.
+    ///
+    /// Returns `Ok(false)` when there is no pending update or another caller
+    /// is already applying one.
     pub async fn apply_update(&mut self, cache_dir: &Path) -> Result<bool, Report> {
         let entrypoint = {
             let status = self.status().borrow();
@@ -340,6 +343,12 @@ impl<Fs: FsRepo> Service<Fs> {
                 _ => return Ok(false),
             }
         };
+
+        // Claim the worker restart slot before doing any work. If the channel
+        // is full another apply_update is already in flight — short-circuit.
+        if self.start().is_err() {
+            return Ok(false);
+        }
 
         let bundle_dir = entrypoint
             .parent()
@@ -351,8 +360,6 @@ impl<Fs: FsRepo> Service<Fs> {
 
         // Remove old bundle directories now that we've switched to the new one
         self.cleanup_old_bundles(cache_dir, &bundle_dir).await;
-
-        let _ = self.start();
 
         Ok(true)
     }

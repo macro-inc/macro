@@ -7094,6 +7094,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "cool_asserts",
+ "futures",
  "reqwest",
  "rootcause",
  "semver",

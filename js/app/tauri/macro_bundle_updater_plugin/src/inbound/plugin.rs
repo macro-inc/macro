@@ -127,20 +127,22 @@ pub async fn apply_completed_update<R: Runtime>(
 
     let mut service = service_state.lock().await;
 
-    service
+    let applied = service
         .apply_update(&cache_dir)
         .await
         .map_err(|e| e.to_string())?;
 
     drop(service);
 
-    // Reload to pick up the new bundle. Using location.reload() instead of
-    // navigating to a new URL preserves WKWebView's cookie store.
-    if let Some(webview) = app_handle.webview_windows().values().next() {
-        tracing::info!("Bundle update complete, reloading to pick up new assets");
-        let _ = webview.eval("window.location.reload();");
+    if applied {
+        // Reload to pick up the new bundle. Using location.reload() instead of
+        // navigating to a new URL preserves WKWebView's cookie store.
+        if let Some(webview) = app_handle.webview_windows().values().next() {
+            tracing::info!("Bundle update complete, reloading to pick up new assets");
+            let _ = webview.eval("window.location.reload();");
+        }
     }
-    Ok(true)
+    Ok(applied)
 }
 
 /// Apply a completed bundle update: set the bundle root and navigate to it.

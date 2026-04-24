@@ -2,6 +2,7 @@ use crate::domain::{
     models::{BUNDLE_ARCHIVE_NAME, SEMVER_FILE_NAME, UpdateErr},
     ports::GetJsBundleSemver,
 };
+use futures::StreamExt;
 use rootcause::{Report, prelude::ResultExt};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
@@ -32,13 +33,17 @@ impl DefaultBundleFetcher {
         }
     }
 
-    /// Download the bundle and compute its SHA-256 hex digest
+    /// Download the bundle and compute its SHA-256 hex digest by streaming
     async fn compute_checksum(&self) -> Result<String, Report<UpdateErr>> {
         async move {
             let url = self.get_app_bundle_path();
-            let bytes = reqwest::get(url).await?.error_for_status()?.bytes().await?;
-            let hash = Sha256::digest(&bytes);
-            Result::<_, Report>::Ok(format!("{:x}", hash))
+            let response = reqwest::get(url).await?.error_for_status()?;
+            let mut stream = response.bytes_stream();
+            let mut hasher = Sha256::new();
+            while let Some(chunk) = stream.next().await {
+                hasher.update(&chunk?);
+            }
+            Result::<_, Report>::Ok(format!("{:x}", hasher.finalize()))
         }
         .await
         .context(UpdateErr::Network)
