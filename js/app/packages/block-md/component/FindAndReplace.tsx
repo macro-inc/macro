@@ -387,7 +387,7 @@ export function FindAndReplace() {
                   onKeyDown={replaceKeyDownHandler}
                 />
               </div>
-              <div class="flex flex-grow justify-center ml-2">
+              <div class="flex grow justify-center ml-2">
                 <Tooltip tooltip={`Replace`}>
                   <div
                     class="flex items-center px-1 w-6 h-6 justify-center rounded-md hover:bg-hover hover-transition-bg"

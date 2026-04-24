@@ -15,7 +15,7 @@ export function FileTypeChip() {
     <Show when={fileType()}>
       <span
         class={cn(
-          'shrink-0 rounded px-1 py-0.5 text-[0.625rem] font-mono font-medium uppercase leading-none',
+          'shrink-0 rounded px-1 py-0.5 text-xxs font-mono font-medium uppercase leading-none',
           config().background,
           config().foreground
         )}

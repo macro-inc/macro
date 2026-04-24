@@ -54,9 +54,9 @@ export function MobileSearchOuter() {
       <Dialog.Portal>
         <Dialog.Content
           class={cn(
-            'fixed inset-0 z-modal flex flex-col h-[calc(var(--dvh,1dvh)*100)] pt-[var(--safe-top)] pl-[var(--safe-left)] pr-[var(--safe-right)]',
+            'fixed inset-0 z-modal flex flex-col h-[calc(var(--dvh,1dvh)*100)] pt-(--safe-top) pl-(--safe-left) pr-(--safe-right)',
             {
-              'pb-[var(--safe-bottom)]': !virtualKeyboardVisible(),
+              'pb-(--safe-bottom)': !virtualKeyboardVisible(),
             }
           )}
         >
@@ -406,7 +406,7 @@ function CategoryFilterTabs() {
               <Tabs.Trigger
                 value={category.id}
                 class={cn(
-                  'px-2 py-1 text-xs border first:border-l-1 border-l-0 border-edge-muted/50 font-semibold',
+                  'px-2 py-1 text-xs border first:border-l border-l-0 border-edge-muted/50 font-semibold',
                   SearchState.categoryFilter() === category.id
                     ? 'text-ink pattern bg-edge-muted'
                     : 'text-ink-muted/70 hover:text-ink hover:bg-hover'

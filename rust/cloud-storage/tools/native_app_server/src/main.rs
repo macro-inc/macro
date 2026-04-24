@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use native_app_service::{
@@ -8,17 +9,22 @@ use native_app_service::{
     },
     inbound::{RouterState, native_app_router},
 };
+use rootcause::{Report, report};
+use sha2::{Digest, Sha256};
+use tokio::io::AsyncReadExt;
 use tower_http::services::ServeFile;
 use url::Url;
 
 /// Bundle fetcher that always reports a very high version, forcing an update.
+/// The checksum is recomputed from the archive on disk each time it is
+/// requested, so rebuilding the archive doesn't require restarting the server.
 struct AlwaysUpdateFetcher {
     bundle_url: Url,
-    checksum: String,
+    archive_path: PathBuf,
 }
 
 impl GetJsBundleSemver for AlwaysUpdateFetcher {
-    async fn get_app_semver(&self) -> Result<semver::Version, UpdateErr> {
+    async fn get_app_semver(&self) -> Result<semver::Version, Report<UpdateErr>> {
         Ok(semver::Version::new(999, 0, 0))
     }
 
@@ -29,9 +35,26 @@ impl GetJsBundleSemver for AlwaysUpdateFetcher {
     async fn get_app_bundle_checksum(
         &self,
         _version: &semver::Version,
-    ) -> Result<String, UpdateErr> {
-        Ok(self.checksum.clone())
+    ) -> Result<String, Report<UpdateErr>> {
+        sha256_hex(&self.archive_path).await.map_err(|e| {
+            tracing::error!(error=?e, path=?self.archive_path, "failed to hash bundle archive");
+            report!(e).context(UpdateErr::Network)
+        })
     }
+}
+
+async fn sha256_hex(path: &Path) -> std::io::Result<String> {
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        let n = file.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 const ADDR: &str = "127.0.0.1:3001";
@@ -46,14 +69,10 @@ async fn main() {
         .parse()
         .expect("BUNDLE_URL must be a valid URL");
 
-    let checksum = std::env::var("BUNDLE_CHECKSUM").unwrap_or_else(|_| {
-        "1be759e3b1befdd6639cd89f93e9aa79857ca5c06c06e71de9b3702a9cd8af29".to_string()
-    });
-
     let service = NativeAppServiceImpl {
         bundle_fetcher: AlwaysUpdateFetcher {
             bundle_url,
-            checksum,
+            archive_path: PathBuf::from(ARCHIVE_PATH),
         },
         platform_data: PlatformData {
             ios_development_team_id: String::new(),

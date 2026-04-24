@@ -429,7 +429,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
                   // setActiveInput();
                 }}
                 placeholder="https://example.com"
-                class="grow overflow-ellipsis ease-in-out placeholder-gray-400"
+                class="grow text-ellipsis ease-in-out placeholder-gray-400"
               />
             </div>
             <div class="relative flex items-center justify-end shrink">
@@ -507,7 +507,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
                   setActiveInput();
                 }}
                 placeholder="Link text"
-                class="grow overflow-ellipsis ease-in-out placeholder-gray-400"
+                class="grow text-ellipsis ease-in-out placeholder-gray-400"
               />
             </div>
           </div>

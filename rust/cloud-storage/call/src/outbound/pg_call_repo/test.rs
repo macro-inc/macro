@@ -688,6 +688,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
     let seg1 = TranscriptSegmentRequest {
         segment_id: "seg-001".to_string(),
         speaker_id: USER_A.to_string(),
+        diarized_speaker_id: Some("spk-a0".to_string()),
         content: "hello world".to_string(),
         started_at: now,
         ended_at: Some(now),
@@ -696,6 +697,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
     let seg2 = TranscriptSegmentRequest {
         segment_id: "seg-002".to_string(),
         speaker_id: USER_B.to_string(),
+        diarized_speaker_id: None,
         content: "hi there".to_string(),
         started_at: now,
         ended_at: Some(now),
@@ -710,7 +712,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
 
     let rows = sqlx::query!(
         r#"
-        SELECT speaker_id, content, sequence_num
+        SELECT speaker_id, diarized_speaker_id, content, sequence_num
         FROM call_transcripts
         WHERE call_id = $1
         ORDER BY sequence_num ASC
@@ -723,8 +725,10 @@ async fn create_transcript_segment_stores_and_increments_sequence(
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].content, "hello world");
     assert_eq!(rows[0].sequence_num, 1);
+    assert_eq!(rows[0].diarized_speaker_id.as_deref(), Some("spk-a0"));
     assert_eq!(rows[1].content, "hi there");
     assert_eq!(rows[1].sequence_num, 2);
+    assert_eq!(rows[1].diarized_speaker_id, None);
     Ok(())
 }
 
@@ -742,6 +746,7 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
     let seg = TranscriptSegmentRequest {
         segment_id: "seg-archive-001".to_string(),
         speaker_id: USER_A.to_string(),
+        diarized_speaker_id: Some("spk-archive-a0".to_string()),
         content: "test transcript".to_string(),
         started_at: now,
         ended_at: Some(now),
@@ -755,7 +760,7 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
     // Transcripts should be in call_record_transcripts.
     let transcripts = sqlx::query!(
         r#"
-        SELECT speaker_id, content, sequence_num
+        SELECT speaker_id, diarized_speaker_id, content, sequence_num
         FROM call_record_transcripts
         WHERE call_record_id = $1
         "#,
@@ -767,6 +772,10 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
     assert_eq!(transcripts.len(), 1);
     assert_eq!(transcripts[0].content, "test transcript");
     assert_eq!(transcripts[0].speaker_id, USER_A.as_ref());
+    assert_eq!(
+        transcripts[0].diarized_speaker_id.as_deref(),
+        Some("spk-archive-a0")
+    );
     assert_eq!(transcripts[0].sequence_num, 1);
 
     // Ephemeral transcripts should be gone (cascaded).
@@ -797,6 +806,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
         &TranscriptSegmentRequest {
             segment_id: "seg-live-1".to_string(),
             speaker_id: USER_A.to_string(),
+            diarized_speaker_id: Some("spk-live-a0".to_string()),
             content: "hello there".to_string(),
             started_at: now,
             ended_at: Some(now),
@@ -809,6 +819,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
         &TranscriptSegmentRequest {
             segment_id: "seg-live-2".to_string(),
             speaker_id: USER_B.to_string(),
+            diarized_speaker_id: None,
             content: "general kenobi".to_string(),
             started_at: now,
             ended_at: Some(now),
@@ -844,8 +855,13 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
         record.transcript[0].segment_id.as_deref(),
         Some("seg-live-1")
     );
+    assert_eq!(
+        record.transcript[0].diarized_speaker_id.as_deref(),
+        Some("spk-live-a0")
+    );
     assert_eq!(record.transcript[1].sequence_num, 2);
     assert_eq!(record.transcript[1].content, "general kenobi");
+    assert_eq!(record.transcript[1].diarized_speaker_id, None);
     Ok(())
 }
 
@@ -874,7 +890,12 @@ async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::
     // Transcripts ordered by sequence_num.
     assert_eq!(record.transcript.len(), 2);
     assert_eq!(record.transcript[0].content, "archived hello");
+    assert_eq!(
+        record.transcript[0].diarized_speaker_id.as_deref(),
+        Some("spk-arch-a0")
+    );
     assert_eq!(record.transcript[1].content, "archived reply");
+    assert_eq!(record.transcript[1].diarized_speaker_id, None);
     Ok(())
 }
 
@@ -1680,5 +1701,50 @@ async fn patch_call_record_share_with_team_true_noop_when_creator_has_no_team(
         .await?;
     assert!(flag);
 
+    Ok(())
+}
+
+// -- insert_call_summary ------------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn insert_call_summary_sets_summary_text(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let summary = "A short synopsis of the call.";
+
+    repo.insert_call_summary(&CALL_ARCHIVED, summary).await?;
+
+    let stored = sqlx::query_scalar!(
+        r#"SELECT summary FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(stored.as_deref(), Some(summary));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn insert_call_summary_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    // Unknown id should be an idempotent no-op (not an error).
+    repo.insert_call_summary(&Uuid::now_v7(), "irrelevant")
+        .await?;
+
+    // The archived fixture row must remain untouched.
+    let stored = sqlx::query_scalar!(
+        r#"SELECT summary FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(stored.is_none());
     Ok(())
 }

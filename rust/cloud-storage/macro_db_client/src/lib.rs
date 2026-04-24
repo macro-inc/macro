@@ -4,6 +4,7 @@ pub mod activity;
 pub mod advisory_lock;
 pub mod annotations;
 pub mod blocked_email;
+pub mod call_record;
 pub mod chat;
 pub mod chat_history;
 pub mod convert;

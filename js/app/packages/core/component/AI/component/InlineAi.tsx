@@ -104,7 +104,7 @@ export function InlineInputReady(props: InlineInputReadyProps) {
           class={cn(
             isEmpty()
               ? 'text-ink-extra-muted/30 fill-ink-disabled'
-              : 'text-accent-ink !fill-accent'
+              : 'text-accent-ink fill-accent!'
           )}
         />
       </button>

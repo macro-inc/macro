@@ -20,6 +20,10 @@ use super::CallToolContext;
 pub struct TranscriptSegment {
     /// The speaker's user id.
     pub speaker_id: String,
+    /// Stable per-speaker identifier produced by diarization, when available.
+    /// Distinguishes multiple speakers sharing one audio track.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diarized_speaker_id: Option<String>,
     /// The transcribed text.
     pub content: String,
     /// When the speaker started this segment.
@@ -96,6 +100,7 @@ where
             .into_iter()
             .map(|s| TranscriptSegment {
                 speaker_id: s.speaker_id,
+                diarized_speaker_id: s.diarized_speaker_id,
                 content: s.content,
                 started_at: s.started_at,
                 ended_at: s.ended_at,

@@ -12,7 +12,7 @@ export function SenderIcon(props: SenderIconProps) {
 
   return (
     <div
-      class={cn('flex-shrink-0 size-[var(--user-icon-width)]', props.class, {
+      class={cn('shrink-0 size-(--user-icon-width)', props.class, {
         invisible: props.hidden,
       })}
       aria-hidden={props.hidden ? 'true' : undefined}

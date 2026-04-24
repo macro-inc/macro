@@ -94,7 +94,7 @@ function TranscriptSegmentRow(props: {
             </span>
           </Message.Slot>
           <Message.Slot placement="content">
-            <div class="whitespace-pre-wrap break-words text-sm">
+            <div class="whitespace-pre-wrap wrap-break-word text-sm">
               {props.segment.content}
             </div>
           </Message.Slot>
@@ -132,7 +132,7 @@ function GroupedTranscriptSegmentRow(props: {
             <Message.SenderIcon hidden />
           </Message.Slot>
           <Message.Slot placement="content">
-            <div class="whitespace-pre-wrap break-words text-sm">
+            <div class="whitespace-pre-wrap wrap-break-word text-sm">
               {props.segment.content}
             </div>
           </Message.Slot>

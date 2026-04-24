@@ -1,6 +1,6 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useMaybeBlockId } from '@core/block';
+import { useMaybeBlockId, type BlockName, type BlockAlias } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { createCallback } from '@solid-primitives/rootless';
@@ -19,7 +19,7 @@ export const blockNamesWithLocations = [
 export type BlockNameWithLocations = (typeof blockNamesWithLocations)[number];
 
 export function isBlockNameWithLocation(
-  name: string
+  name: BlockName | BlockAlias
 ): name is BlockNameWithLocations {
   return blockNamesWithLocations.includes(name as BlockNameWithLocations);
 }

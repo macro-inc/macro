@@ -1,14 +1,16 @@
 import { createMemo } from 'solid-js';
 import {
   flattenAttachments,
-  useChannelAttachmentsQuery,
+  useChannelMediaAttachmentsQuery,
   type ChannelAttachmentsData,
 } from '@queries/channel/channel-attachments';
 import { type MediaItem, mapMediaItems } from '@channel/Media/media-items';
 import { MediaGallery } from './MediaGallery';
 
 export function ChannelAttachmentMediaSection(props: { channelId: string }) {
-  const attachmentsQuery = useChannelAttachmentsQuery(() => props.channelId);
+  const attachmentsQuery = useChannelMediaAttachmentsQuery(
+    () => props.channelId
+  );
 
   const items = createMemo<MediaItem[]>((previous = []) =>
     mapMediaItems(

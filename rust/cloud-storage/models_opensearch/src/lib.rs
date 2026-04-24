@@ -13,14 +13,15 @@ pub enum SearchIndex {
     Chats,
     /// The document index
     Documents,
-    /// The email index
+    /// aliased email index
     #[strum(serialize = "emails_alias")]
     Emails,
+    /// aliased call records index
+    #[strum(serialize = "call_records_alias")]
+    CallRecords,
 }
 
-/// All searchable entity types across the system.
-/// Not all variants have a corresponding OpenSearch index — Projects
-/// are searched via Postgres only.
+/// All searchable entity types. Projects are Postgres-only.
 #[derive(
     Debug,
     Clone,
@@ -44,12 +45,15 @@ pub enum SearchEntityType {
     Documents,
     /// The email entity type (has OpenSearch index)
     Emails,
-    /// The project entity type (Postgres-only, no OpenSearch index)
+    /// The project entity type (Postgres-only)
     Projects,
+    /// The call records entity type (has OpenSearch index)
+    #[strum(serialize = "call_records")]
+    #[serde(rename = "call_records")]
+    CallRecords,
 }
 
-/// The subset of [`SearchEntityType`] that have a corresponding OpenSearch index.
-/// Projects are intentionally excluded — they are searched via Postgres only.
+/// `SearchEntityType` variants that have an OpenSearch index.
 #[derive(
     Debug,
     Clone,
@@ -73,6 +77,10 @@ pub enum OpenSearchEntityType {
     Documents,
     /// The email index
     Emails,
+    /// The call records index
+    #[strum(serialize = "call_records")]
+    #[serde(rename = "call_records")]
+    CallRecords,
 }
 
 impl OpenSearchEntityType {
@@ -83,6 +91,7 @@ impl OpenSearchEntityType {
             Self::Chats => "chats",
             Self::Documents => "documents",
             Self::Emails => "emails_alias",
+            Self::CallRecords => "call_records_alias",
         }
     }
 }
@@ -94,6 +103,7 @@ impl From<OpenSearchEntityType> for SearchEntityType {
             OpenSearchEntityType::Chats => SearchEntityType::Chats,
             OpenSearchEntityType::Documents => SearchEntityType::Documents,
             OpenSearchEntityType::Emails => SearchEntityType::Emails,
+            OpenSearchEntityType::CallRecords => SearchEntityType::CallRecords,
         }
     }
 }
@@ -105,6 +115,7 @@ impl From<OpenSearchEntityType> for SearchIndex {
             OpenSearchEntityType::Chats => SearchIndex::Chats,
             OpenSearchEntityType::Documents => SearchIndex::Documents,
             OpenSearchEntityType::Emails => SearchIndex::Emails,
+            OpenSearchEntityType::CallRecords => SearchIndex::CallRecords,
         }
     }
 }
@@ -120,6 +131,7 @@ mod test {
             OpenSearchEntityType::Chats,
             OpenSearchEntityType::Documents,
             OpenSearchEntityType::Emails,
+            OpenSearchEntityType::CallRecords,
         ] {
             let from_index: SearchIndex = variant.clone().into();
             assert_eq!(variant.index_name(), from_index.as_ref());

@@ -85,7 +85,7 @@ export function CodeFileTypeChip() {
           }}
           gutter={4}
         >
-          <Popover.Trigger class="shrink-0 rounded px-1 py-0.5 text-[0.625rem] font-mono font-medium uppercase leading-none bg-code-bg text-code hover:brightness-90 transition-[filter]">
+          <Popover.Trigger class="shrink-0 rounded px-1 py-0.5 text-xxs font-mono font-medium uppercase leading-none bg-code-bg text-code hover:brightness-90 transition-[filter]">
             {fileType()}
           </Popover.Trigger>
           <Popover.Portal>

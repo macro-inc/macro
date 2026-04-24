@@ -80,7 +80,7 @@ export const FilterActionSelect: Component<FilterActionSelectProps> = (
       <Show when={isOpen()}>
         <div
           ref={dropdownRef}
-          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono min-w-[120px] z-1"
+          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono min-w-[120px] z-user-highlight"
         >
           <Show
             when={validActions().length > 0}

@@ -21,7 +21,7 @@ export function ThreadTypingIndicator(props: ThreadTypingIndicatorProps) {
   const isActive = () => typingUsers().length > 0;
 
   return (
-    <div class="flex flex-row items-stretch justify-start ml-[var(--left-of-connector)] min-h-7">
+    <div class="flex flex-row items-stretch justify-start ml-(--left-of-connector) min-h-7">
       <Show when={isActive()}>
         <ThreadTypingIndicatorContent text={typingText()} />
       </Show>

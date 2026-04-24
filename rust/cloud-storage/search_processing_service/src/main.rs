@@ -138,6 +138,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     api::setup_and_serve(ApiContext {
+        db,
         sqs_client: Arc::new(sqs_client),
         opensearch_client: Arc::new(opensearch_client),
         internal_auth_key,

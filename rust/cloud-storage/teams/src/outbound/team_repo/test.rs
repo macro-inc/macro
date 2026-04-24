@@ -773,3 +773,42 @@ async fn test_patch_team_tier(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_user_role(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
+
+    // Promote to Admin
+    team_repo
+        .patch_team_user_role(&team_id, &user_id, TeamRole::Admin)
+        .await?;
+
+    let member = team_repo.get_team_member(&team_id, &user_id).await?;
+    assert_eq!(member.role, TeamRole::Admin);
+
+    // Demote back to Member
+    team_repo
+        .patch_team_user_role(&team_id, &user_id, TeamRole::Member)
+        .await?;
+
+    let member = team_repo.get_team_member(&team_id, &user_id).await?;
+    assert_eq!(member.role, TeamRole::Member);
+
+    // Patch role for non-existent member
+    let missing_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+    let err = team_repo
+        .patch_team_user_role(&team_id, &missing_id, TeamRole::Admin)
+        .await
+        .err()
+        .unwrap();
+
+    assert!(err.to_string().contains("member not found"));
+
+    Ok(())
+}

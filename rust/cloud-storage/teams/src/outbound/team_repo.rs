@@ -971,4 +971,32 @@ impl TeamRepository for TeamRepositoryImpl {
 
         Ok(())
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn patch_team_user_role(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        team_role: TeamRole,
+    ) -> Result<(), TeamError> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE team_user
+            SET team_role = $3
+            WHERE team_id = $1
+            AND user_id = $2
+            "#,
+            team_id,
+            user_id.as_ref(),
+            team_role as _,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(TeamError::TeamMemberNotFound(*team_id));
+        }
+
+        Ok(())
+    }
 }

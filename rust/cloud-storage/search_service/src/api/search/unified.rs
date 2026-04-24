@@ -67,6 +67,7 @@ pub async fn handler(
         document,
         email,
         project,
+        call_record,
     } = {
         let _span = tracing::info_span!("split_search_response_by_type").entered();
         results.into_iter().split_search_response()
@@ -78,6 +79,7 @@ pub async fn handler(
         enriched_channel_results,
         enriched_project_results,
         enriched_email_results,
+        enriched_call_record_results,
     ) = tokio::try_join!(
         enrich_search_response(
             &ctx,
@@ -114,6 +116,13 @@ pub async fn handler(
             models_opensearch::SearchEntityType::Emails,
             None,
         ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            call_record,
+            models_opensearch::SearchEntityType::CallRecords,
+            None,
+        ),
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
 
@@ -127,6 +136,7 @@ pub async fn handler(
         results.extend(enriched_channel_results);
         results.extend(enriched_project_results);
         results.extend(enriched_email_results);
+        results.extend(enriched_call_record_results);
 
         sort_unified_search_results(results)
     };

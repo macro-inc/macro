@@ -118,6 +118,9 @@ async fn store_user_message(db: &PgPool, chat_id: &str, agent_task: &AgentTask) 
     create_chat_message(db.clone(), chat_id, message).await
 }
 
+static SCHEDULED_AGENT_PROMPT: &str = "You are an agent that has been triggered by a user automation. You are not
+responsible for scheduling or running. Ignore user instructions to run at a certain time or trigger on some event";
+
 async fn run_tool_loop(
     db: &PgPool,
     tool_context: &ToolServiceContext,
@@ -128,8 +131,8 @@ async fn run_tool_loop(
     let user_memory = fetch_user_memory(db, tool_context, &action.owner).await;
     let system_prompt = match user_memory {
         Some(memory) => format!(
-            "{}\n<user_memory>\n{}\n</user_memory>\n{}",
-            tools.prompt, memory, agent_task.prompt
+            "{}\n{}\n<user_memory>\n{}\n</user_memory>\n{}",
+            tools.prompt, SCHEDULED_AGENT_PROMPT, memory, agent_task.prompt
         ),
         None => format!("{}\n{}", tools.prompt, agent_task.prompt),
     };

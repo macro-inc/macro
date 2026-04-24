@@ -1,7 +1,7 @@
-import { ThemeEditorAdvanced } from '../../../block-theme/components/ThemeEditorAdvanced';
-import { ThemeEditorBasic } from '../../../block-theme/components/ThemeEditorBasic';
-import ThemeTools from '../../../block-theme/components/ThemeTools';
-import ThemeList from '../../../block-theme/components/ThemeList';
+import { ThemeEditorAdvanced } from '../../../theme/components/ThemeEditorAdvanced';
+import { ThemeEditorBasic } from '../../../theme/components/ThemeEditorBasic';
+import ThemeTools from '../../../theme/components/ThemeTools';
+import ThemeList from '../../../theme/components/ThemeList';
 
 export function Appearance() {
   return (

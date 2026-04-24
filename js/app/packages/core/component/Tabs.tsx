@@ -59,7 +59,7 @@ export const Tabs = (
                 class={cn(
                   'flex items-center px-2 py-1 text-sm font-medium',
                   'text-ink-extra-muted',
-                  'data-[checked]:text-accent hover:text-accent'
+                  'data-checked:text-accent hover:text-accent'
                 )}
                 onPointerDown={() => rootProps.onChange?.(item.value)}
               >

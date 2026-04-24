@@ -23,7 +23,7 @@ pub(crate) struct ChannelMessageIndex {
 pub(crate) struct ChannelMessageSearchConfig;
 
 impl SearchQueryConfig for ChannelMessageSearchConfig {
-    const USER_ID_KEY: &'static str = "sender_id";
+    const USER_ID_KEY: Option<&'static str> = Some("sender_id");
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Channels;
 }

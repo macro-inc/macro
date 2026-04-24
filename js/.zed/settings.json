@@ -6,5 +6,10 @@
         "require_config_file": true,
       }
     }
+  },
+  "languages": {
+    "CSS": {
+      "language_servers": ["tailwindcss-language-server", "!vscode-css-language-server"]
+    }
   }
 }

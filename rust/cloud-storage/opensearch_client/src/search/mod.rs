@@ -1,4 +1,5 @@
 mod builder;
+pub mod call_records;
 pub mod channels;
 pub mod chats;
 pub mod documents;

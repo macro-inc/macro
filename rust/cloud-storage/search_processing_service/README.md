@@ -4,17 +4,23 @@ This service is responsible for processing search text extraction messages and u
 
 ## Running Locally
 
-To run the service locally, you need to have aws cli setup with valid credentials for Macro.
+The `localdev` sops bundle already carries every env var this service needs (dev `DATABASE_URL`, dev OpenSearch creds, `ENVIRONMENT=local`, dummy `SYNC_SERVICE_AUTH_KEY` / `LEXICAL_SERVICE_URL` that are unused by most processors). Requires valid AWS credentials for secrets manager + SQS.
 
-Copy the `.env.sample` file to `.env` and fill in the values for the environment variables.
-
-Run the following command to start the service:
+From the repo root:
 
 ```bash
+just get_environment localdev                    # writes .env at repo root
+cd rust/cloud-storage/search_processing_service
 cargo run
 ```
 
-To run without processing queue messages, you can run the following command:
+Override `SEARCH_EVENT_QUEUE` on a per-run basis (e.g. backfills onto a scratch queue) so you don't consume the shared dev queue:
+
+```bash
+SEARCH_EVENT_QUEUE=search-event-queue-<scope>-<you> cargo run
+```
+
+To run the API surface without the worker loop:
 
 ```bash
 cargo run --features disable_processing

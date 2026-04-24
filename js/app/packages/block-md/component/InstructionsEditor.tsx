@@ -356,7 +356,7 @@ export function InstructionsEditor() {
       {/* SCUFFED: are these the right transparency values? */}
       <Show when={editorError()}>
         {(error) => (
-          <div class="pointer-events-none text-alert-ink p-2 bg-alert-bg w-full border-alert/30 border-1 mb-2 flex items-center gap-2">
+          <div class="pointer-events-none text-alert-ink p-2 bg-alert-bg w-full border-alert/30 border mb-2 flex items-center gap-2">
             <WarningIcon class="size-6 shrink-0" />
             {getErrorDescription(error())}
           </div>

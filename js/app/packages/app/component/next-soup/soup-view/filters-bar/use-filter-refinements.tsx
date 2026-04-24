@@ -12,10 +12,11 @@ import { isListViewID } from '@app/constants/list-views';
 import { useUserContext, useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
 import { useContacts } from '@queries/contacts/contacts';
-import { batch, createMemo, createSignal } from 'solid-js';
+import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import type { ActiveFilter } from './active-filter-chips';
 import { INDEX_OPTIONS } from './search-operator-autocomplete';
 import {
+  type SearchableOption,
   useSearchFilterOptions,
   useSearchIndexController,
 } from './search-filter-controls';
@@ -56,7 +57,8 @@ export function useFilterRefinements() {
   const user = useUserContext();
   const contacts = useContacts();
   const currentUserId = useUserId();
-  const { channelOptions, senderOptions } = useSearchFilterOptions();
+  const { channelOptions, channelLabelMap, senderOptions, senderLabelMap } =
+    useSearchFilterOptions();
   const { changeIndex } = useSearchIndexController();
 
   const getPresetContext = (): PresetContext => ({
@@ -131,21 +133,6 @@ export function useFilterRefinements() {
     return VIEW_FILTER_CATEGORIES[view as ListView] ?? [];
   });
 
-  // Reactive id → label maps derived from the chip's option sources.
-  // Using quickAccess.getById here would read a plain Map that isn't a signal,
-  // so on page reload the chip label shows the raw uuid until the first
-  // rerender that happens to read live data.
-  const channelLabelMap = createMemo(() => {
-    const map = new Map<string, string>();
-    for (const opt of channelOptions()) map.set(opt.id, opt.label);
-    return map;
-  });
-  const senderLabelMap = createMemo(() => {
-    const map = new Map<string, string>();
-    for (const opt of senderOptions()) map.set(opt.id, opt.label);
-    return map;
-  });
-
   const labelForIds = (
     ids: string[],
     labelMap: Map<string, string>
@@ -157,23 +144,16 @@ export function useFilterRefinements() {
     return `${firstLabel} and ${rest.length} ${rest.length === 1 ? 'other' : 'others'}`;
   };
 
-  const setChannelIds = (ids: string[]) =>
-    setQueryFilters((prev) => ({
-      ...prev,
-      channel_filters: {
-        ...prev.channel_filters,
-        channel_ids: ids.length > 0 ? ids : undefined,
-      },
-    }));
-
-  const setSenderIds = (ids: string[]) =>
-    setQueryFilters((prev) => ({
-      ...prev,
-      channel_filters: {
-        ...prev.channel_filters,
-        sender_ids: ids.length > 0 ? ids : undefined,
-      },
-    }));
+  const setFilterIds =
+    (filterKey: 'channel_filters' | 'call_filters', field: string) =>
+    (ids: string[]) =>
+      setQueryFilters((prev) => ({
+        ...prev,
+        [filterKey]: {
+          ...(prev[filterKey] ?? {}),
+          [field]: ids.length > 0 ? ids : undefined,
+        },
+      }));
 
   /**
    * Cache of chip objects keyed by a stable id derived from the chip's category
@@ -261,8 +241,40 @@ export function useFilterRefinements() {
       );
     }
 
-    // Sub-filters: assignee
-    const _optionsMap = assigneeOptionsMap();
+    // Keep a chip alive while its popup is still open, even if the user
+    // toggled every option off — closing the menu mid-swap is jarring.
+    const pushSearchableChip = (args: {
+      key: string;
+      categoryLabel: 'In' | 'From';
+      optionIdPrefix: string;
+      getIds: () => string[];
+      searchableOptions: Accessor<SearchableOption[]>;
+      labelMap: Accessor<Map<string, string>>;
+      onChange: (ids: string[]) => void;
+      searchPlaceholder: string;
+    }) => {
+      const popupOpen = chipCache.get(args.key)?.isPopupOpen?.() ?? false;
+      if (args.getIds().length === 0 && !popupOpen) return;
+      seenKeys.add(args.key);
+      filters.push(
+        getOrCreateChip(args.key, () => {
+          const [isPopupOpen, setPopupOpen] = createSignal(false);
+          return {
+            categoryLabel: args.categoryLabel,
+            optionId: () => `${args.optionIdPrefix}:${args.getIds().join(',')}`,
+            optionLabel: () => labelForIds(args.getIds(), args.labelMap()),
+            searchableOptions: args.searchableOptions,
+            activeSearchableIds: args.getIds,
+            onSearchableChange: args.onChange,
+            searchPlaceholder: args.searchPlaceholder,
+            onRemove: () => args.onChange([]),
+            isPopupOpen,
+            setPopupOpen,
+          };
+        })
+      );
+    };
+
     for (const id of assigneeFilter()) {
       const key = `Assignee|${id}`;
       seenKeys.add(key);
@@ -277,86 +289,112 @@ export function useFilterRefinements() {
       );
     }
 
-    // Search operator filters: in: (channel_ids)
-    const channelIds = (
-      queryFilters().channel_filters?.channel_ids ?? []
-    ).filter((id) => id !== NIL_UUID);
-    // Keep the chip alive while its popup is still open, even if the user
-    // toggled every option off — they may be mid-way through swapping A→B
-    // and closing the menu on them would be jarring.
-    const inChipOpen = chipCache.get('In')?.isPopupOpen?.() ?? false;
-    if (channelIds.length > 0 || inChipOpen) {
-      const key = 'In';
-      seenKeys.add(key);
-      filters.push(
-        getOrCreateChip(key, () => {
-          const [isPopupOpen, setPopupOpen] = createSignal(false);
-          return {
-            categoryLabel: 'In',
-            optionId: () => {
-              const ids = (
-                queryFilters().channel_filters?.channel_ids ?? []
-              ).filter((id) => id !== NIL_UUID);
-              return `in:${ids.join(',')}`;
-            },
-            optionLabel: () => {
-              const ids = (
-                queryFilters().channel_filters?.channel_ids ?? []
-              ).filter((id) => id !== NIL_UUID);
-              return labelForIds(ids, channelLabelMap());
-            },
-            searchableOptions: channelOptions,
-            activeSearchableIds: () =>
-              (queryFilters().channel_filters?.channel_ids ?? []).filter(
-                (id) => id !== NIL_UUID
-              ),
-            onSearchableChange: setChannelIds,
-            searchPlaceholder: 'Search channels...',
-            onRemove: () => setChannelIds([]),
-            isPopupOpen,
-            setPopupOpen,
-          };
-        })
-      );
-    }
+    pushSearchableChip({
+      key: 'ChannelIn',
+      categoryLabel: 'In',
+      optionIdPrefix: 'channel-in',
+      getIds: () =>
+        (queryFilters().channel_filters?.channel_ids ?? []).filter(
+          (id) => id !== NIL_UUID
+        ),
+      searchableOptions: channelOptions,
+      labelMap: channelLabelMap,
+      onChange: setFilterIds('channel_filters', 'channel_ids'),
+      searchPlaceholder: 'Search channels...',
+    });
 
-    // Search operator filters: from: (sender_ids)
-    const senderIds = queryFilters().channel_filters?.sender_ids ?? [];
-    const fromChipOpen = chipCache.get('From')?.isPopupOpen?.() ?? false;
-    if (senderIds.length > 0 || fromChipOpen) {
-      const key = 'From';
-      seenKeys.add(key);
-      filters.push(
-        getOrCreateChip(key, () => {
-          const [isPopupOpen, setPopupOpen] = createSignal(false);
-          return {
-            categoryLabel: 'From',
-            optionId: () => {
-              const ids = queryFilters().channel_filters?.sender_ids ?? [];
-              return `from:${ids.join(',')}`;
-            },
-            optionLabel: () => {
-              const ids = queryFilters().channel_filters?.sender_ids ?? [];
-              return labelForIds(ids, senderLabelMap());
-            },
-            searchableOptions: senderOptions,
-            activeSearchableIds: () =>
-              queryFilters().channel_filters?.sender_ids ?? [],
-            onSearchableChange: setSenderIds,
-            searchPlaceholder: 'Search senders...',
-            onRemove: () => setSenderIds([]),
-            isPopupOpen,
-            setPopupOpen,
-          };
-        })
-      );
-    }
+    pushSearchableChip({
+      key: 'ChannelFrom',
+      categoryLabel: 'From',
+      optionIdPrefix: 'channel-from',
+      getIds: () => queryFilters().channel_filters?.sender_ids ?? [],
+      searchableOptions: senderOptions,
+      labelMap: senderLabelMap,
+      onChange: setFilterIds('channel_filters', 'sender_ids'),
+      searchPlaceholder: 'Search senders...',
+    });
 
-    // Email importance (only when the email index is active in the search view
-    // and the user has explicitly set a value — undefined means "All", no chip)
-    if (currentView() === 'search' && soup.filters.isActive('email')) {
-      const importance = queryFilters().email_filters?.importance;
-      if (importance !== undefined) {
+    if (currentView() === 'search') {
+      if (soup.filters.isActive('calls')) {
+        pushSearchableChip({
+          key: 'CallIn',
+          categoryLabel: 'In',
+          optionIdPrefix: 'call-in',
+          getIds: () =>
+            (queryFilters().call_filters?.channel_ids ?? []).filter(
+              (id) => id !== NIL_UUID
+            ),
+          searchableOptions: channelOptions,
+          labelMap: channelLabelMap,
+          onChange: setFilterIds('call_filters', 'channel_ids'),
+          searchPlaceholder: 'Search channels...',
+        });
+
+        pushSearchableChip({
+          key: 'CallFrom',
+          categoryLabel: 'From',
+          optionIdPrefix: 'call-from',
+          getIds: () => queryFilters().call_filters?.speaker_ids ?? [],
+          searchableOptions: senderOptions,
+          labelMap: senderLabelMap,
+          onChange: setFilterIds('call_filters', 'speaker_ids'),
+          searchPlaceholder: 'Search speakers...',
+        });
+
+        const callAttended = queryFilters().call_filters?.attended;
+        if (callAttended !== undefined && callAttended !== null) {
+          const ATTENDED_YES = 'attended:yes';
+          const ATTENDED_NO = 'attended:no';
+          const key = 'CallAttended';
+          seenKeys.add(key);
+          filters.push(
+            getOrCreateChip(key, () => ({
+              categoryLabel: 'Attended',
+              hideCategoryLabel: true,
+              optionId: () =>
+                queryFilters().call_filters?.attended
+                  ? ATTENDED_YES
+                  : ATTENDED_NO,
+              optionLabel: () =>
+                queryFilters().call_filters?.attended
+                  ? 'Attended'
+                  : 'Unattended',
+              categoryOptions: [
+                { id: ATTENDED_YES, label: 'Attended' },
+                { id: ATTENDED_NO, label: 'Unattended' },
+              ] as unknown as ActiveFilter['categoryOptions'],
+              multiple: false,
+              isOptionActive: (optionId) =>
+                optionId ===
+                (queryFilters().call_filters?.attended
+                  ? ATTENDED_YES
+                  : ATTENDED_NO),
+              onRemove: () =>
+                setQueryFilters((prev) => ({
+                  ...prev,
+                  call_filters: {
+                    ...prev.call_filters,
+                    attended: undefined,
+                  },
+                })),
+              onReplace: (newOptionId) =>
+                setQueryFilters((prev) => ({
+                  ...prev,
+                  call_filters: {
+                    ...prev.call_filters,
+                    attended: newOptionId === ATTENDED_YES,
+                  },
+                })),
+            }))
+          );
+        }
+      }
+
+      // undefined importance means "All" — no chip.
+      if (
+        soup.filters.isActive('email') &&
+        queryFilters().email_filters?.importance !== undefined
+      ) {
         const IMPORTANCE_SIGNAL = 'importance:signal';
         const IMPORTANCE_NOISE = 'importance:noise';
         const key = 'Importance';

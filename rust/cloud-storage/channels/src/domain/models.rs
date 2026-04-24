@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Request to fetch a page of channel messages.
@@ -10,6 +10,17 @@ pub struct GetChannelMessagesRequest {
     pub channel_id: Uuid,
     /// Page size, clamped to [1, 100].
     pub limit: u16,
+}
+
+/// Filter for the type of channel attachments to return.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelAttachmentType {
+    /// Static file attachments (images, videos).
+    Static,
+    /// Document storage service attachments.
+    Dss,
 }
 
 /// Filters for channel message queries.
@@ -24,6 +35,32 @@ pub struct ChannelMessageFilters {
     /// this time, or a thread reply was created after this time.
     #[serde(default)]
     pub last_activity: Option<DateTime<Utc>>,
+    /// When set, only return top-level messages where the message itself or
+    /// any active thread reply has a notification for the requesting user that
+    /// matches these notification state constraints.
+    #[serde(default)]
+    pub notification_filters: NotificationFilters,
+}
+
+/// Notification state filters for channel message queries.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct NotificationFilters {
+    /// Filter by notification done state. `Some(true)` selects done
+    /// notifications; `Some(false)` selects not-done notifications.
+    #[serde(default)]
+    pub done: Option<bool>,
+    /// Filter by notification seen state. `Some(true)` selects seen
+    /// notifications; `Some(false)` selects not-seen notifications.
+    #[serde(default)]
+    pub seen: Option<bool>,
+}
+
+impl NotificationFilters {
+    /// Returns true when no notification constraints are requested.
+    pub fn is_empty(&self) -> bool {
+        self.done.is_none() && self.seen.is_none()
+    }
 }
 
 /// Direction for cursor-based message pagination.

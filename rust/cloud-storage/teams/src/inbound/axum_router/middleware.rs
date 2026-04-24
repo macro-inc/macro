@@ -175,7 +175,10 @@ impl IntoResponse for PremiumUserErr {
 use roles_and_permissions::domain::model::PermissionId;
 
 /// The permission ID required to create a team.
-const CREATE_TEAM_PERMISSION: PermissionId = PermissionId::ReadProfessionalFeatures;
+const CREATE_TEAM_PERMISSION: [PermissionId; 2] = [
+    PermissionId::ReadProfessionalFeatures,
+    PermissionId::WriteStripeSubscription,
+];
 
 impl<S, TS> FromRequestParts<S> for TeamPremiumUserExtractor<TS>
 where
@@ -198,8 +201,10 @@ where
             .get_team_user_permissions(&user_context.macro_user_id)
             .await?;
 
-        if !permissions.contains(&CREATE_TEAM_PERMISSION) {
-            return Err(PremiumUserErr::MissingPermission);
+        for perm in CREATE_TEAM_PERMISSION {
+            if !permissions.contains(&perm) {
+                return Err(PremiumUserErr::MissingPermission);
+            }
         }
 
         Ok(Self {

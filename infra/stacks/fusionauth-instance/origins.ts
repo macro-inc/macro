@@ -22,6 +22,9 @@ export const ALLOWED_ORIGINS = () => {
         'http://localhost:3009',
         'http://localhost:5173',
         'https://github.com',
+        'https://claude.ai',
+        'https://chatgpt.com',
+        'https://chat.openai.com',
       ];
     case 'dev':
       return [
@@ -41,6 +44,9 @@ export const ALLOWED_ORIGINS = () => {
         'http://localhost:5173',
         'https://dashboarddev.macro.com',
         'https://github.com',
+        'https://claude.ai',
+        'https://chatgpt.com',
+        'https://chat.openai.com',
       ];
     case 'prod':
       return [
@@ -51,6 +57,9 @@ export const ALLOWED_ORIGINS = () => {
         'https://www.macro.com',
         'https://pdf.macro.com',
         'https://github.com',
+        'https://claude.ai',
+        'https://chatgpt.com',
+        'https://chat.openai.com',
       ];
   }
 

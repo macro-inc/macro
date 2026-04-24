@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PatchTeamRequestName } from './patchTeamRequestName';
+import type { PatchTeamRequestUserRoleUpdates } from './patchTeamRequestUserRoleUpdates';
 
 /**
  * Request to update a team
@@ -12,4 +13,6 @@ import type { PatchTeamRequestName } from './patchTeamRequestName';
 export interface PatchTeamRequest {
   /** The new name for the team */
   name?: PatchTeamRequestName;
+  /** Role updates to apply to team users */
+  user_role_updates?: PatchTeamRequestUserRoleUpdates;
 }
