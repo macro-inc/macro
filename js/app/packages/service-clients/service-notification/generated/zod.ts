@@ -429,6 +429,12 @@ export const listTypedNotificationsResponse = zod
                             .string()
                             .uuid()
                             .describe('The unique identifier of the team'),
+                          teamInviteId: zod
+                            .string()
+                            .uuid()
+                            .describe(
+                              'The unique identifier of the team invite'
+                            ),
                           teamName: zod
                             .string()
                             .describe('The name of the team being invited to'),
@@ -861,6 +867,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .string()
                             .uuid()
                             .describe('The unique identifier of the team'),
+                          teamInviteId: zod
+                            .string()
+                            .uuid()
+                            .describe(
+                              'The unique identifier of the team invite'
+                            ),
                           teamName: zod
                             .string()
                             .describe('The name of the team being invited to'),
@@ -1287,6 +1299,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .string()
                             .uuid()
                             .describe('The unique identifier of the team'),
+                          teamInviteId: zod
+                            .string()
+                            .uuid()
+                            .describe(
+                              'The unique identifier of the team invite'
+                            ),
                           teamName: zod
                             .string()
                             .describe('The name of the team being invited to'),
@@ -1698,6 +1716,10 @@ export const getTypedNotificationByIdResponse = zod
                     .string()
                     .uuid()
                     .describe('The unique identifier of the team'),
+                  teamInviteId: zod
+                    .string()
+                    .uuid()
+                    .describe('The unique identifier of the team invite'),
                   teamName: zod
                     .string()
                     .describe('The name of the team being invited to'),
