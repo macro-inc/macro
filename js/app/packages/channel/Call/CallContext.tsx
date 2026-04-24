@@ -269,6 +269,10 @@ function createCallState() {
    * Dynamic-imports @livekit/track-processors so the MediaPipe WASM/model
    * payload is only fetched when the user actually enables an effect.
    *
+   * If a processor already exists and forceRecreate is false, uses switchTo()
+   * for seamless transitions. When the track changes (camera switch, video
+   * toggle), pass forceRecreate=true to destroy and recreate the processor.
+   *
    * Returns true on success or when there's no live camera track yet (the
    * processor will be attached later by the video-(un)mute / device-switch
    * paths). Returns false when the browser does not actually support the
@@ -276,7 +280,8 @@ function createCallState() {
    * backgroundEffect optimistically should revert it in that case.
    */
   async function ensureBackgroundEffectOnCameraTrack(
-    r: Room
+    r: Room,
+    forceRecreate = false
   ): Promise<boolean> {
     const effect = store.backgroundEffect;
     if (effect.type === 'none') return true;
@@ -284,24 +289,35 @@ function createCallState() {
     const camPub = r.localParticipant.getTrackPublication(Track.Source.Camera);
     if (!camPub?.track) return true;
 
-    try {
-      // Destroy the old instance — processors are bound to a specific
-      // MediaStreamTrack instance, so a fresh track needs a fresh processor.
-      const prev = blurProcessor();
-      if (prev) await prev.destroy();
+    const processorOptions =
+      effect.type === 'blur'
+        ? {
+            mode: 'background-blur' as const,
+            blurRadius: BLUR_RADIUS[effect.intensity],
+          }
+        : { mode: 'virtual-background' as const, imagePath: effect.path };
 
+    try {
+      const existing = blurProcessor();
+
+      // If we have a processor and the track hasn't changed, use switchTo()
+      // for a seamless transition without destroying and recreating.
+      if (existing && !forceRecreate) {
+        await existing.switchTo(processorOptions);
+        return true;
+      }
+
+      // Destroy old processor if it exists (track changed or force recreate)
+      if (existing) {
+        await existing.destroy();
+        setBlurProcessor(null);
+      }
+
+      // Create and attach a new processor.
       const { BackgroundProcessor, ProcessorWrapper } = await import(
         '@livekit/track-processors'
       );
       if (!ProcessorWrapper.isSupported) return false;
-
-      const processorOptions =
-        effect.type === 'blur'
-          ? {
-              mode: 'background-blur' as const,
-              blurRadius: BLUR_RADIUS[effect.intensity],
-            }
-          : { mode: 'virtual-background' as const, imagePath: effect.path };
 
       const processor = BackgroundProcessor(processorOptions);
       await (camPub.track as LocalTrack).setProcessor(processor);
@@ -529,7 +545,7 @@ function createCallState() {
           deviceId: { exact: deviceId },
         });
         // New track was created — re-attach the background effect processor if enabled.
-        await ensureBackgroundEffectOnCameraTrack(r);
+        await ensureBackgroundEffectOnCameraTrack(r, true);
       }
     } catch (e) {
       console.error('failed to switch video input device', e);
@@ -669,7 +685,7 @@ function createCallState() {
           }
         }
         // New camera track was created — attach background effect processor if preference is on.
-        await ensureBackgroundEffectOnCameraTrack(r);
+        await ensureBackgroundEffectOnCameraTrack(r, true);
       }
       setStore('isVideoMuted', newMuted);
     } catch (e) {
