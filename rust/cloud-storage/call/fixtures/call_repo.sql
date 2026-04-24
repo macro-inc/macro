@@ -55,10 +55,10 @@ INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_a
   ('00000000-0000-0000-0000-0000000ca2ed', 'macro|user-a@test.com', '2024-01-01 10:00:00+00', '2024-01-01 10:05:00+00'),
   ('00000000-0000-0000-0000-0000000ca2ed', 'macro|user-b@test.com', '2024-01-01 10:01:00+00', '2024-01-01 10:04:30+00');
 
-INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, content, started_at, ended_at, sequence_num) VALUES
-  ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-1', 'macro|user-a@test.com', 'archived hello',
+INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num) VALUES
+  ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-1', 'macro|user-a@test.com', 'spk-arch-a0', 'archived hello',
    '2024-01-01 10:00:05+00', '2024-01-01 10:00:07+00', 1),
-  ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-2', 'macro|user-b@test.com', 'archived reply',
+  ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-2', 'macro|user-b@test.com', NULL, 'archived reply',
    '2024-01-01 10:00:08+00', '2024-01-01 10:00:10+00', 2);
 
 -- entity_access grants for the active call (owner + channel view).

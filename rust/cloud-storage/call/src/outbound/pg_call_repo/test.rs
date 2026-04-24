@@ -688,6 +688,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
     let seg1 = TranscriptSegmentRequest {
         segment_id: "seg-001".to_string(),
         speaker_id: USER_A.to_string(),
+        diarized_speaker_id: Some("spk-a0".to_string()),
         content: "hello world".to_string(),
         started_at: now,
         ended_at: Some(now),
@@ -696,6 +697,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
     let seg2 = TranscriptSegmentRequest {
         segment_id: "seg-002".to_string(),
         speaker_id: USER_B.to_string(),
+        diarized_speaker_id: None,
         content: "hi there".to_string(),
         started_at: now,
         ended_at: Some(now),
@@ -710,7 +712,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
 
     let rows = sqlx::query!(
         r#"
-        SELECT speaker_id, content, sequence_num
+        SELECT speaker_id, diarized_speaker_id, content, sequence_num
         FROM call_transcripts
         WHERE call_id = $1
         ORDER BY sequence_num ASC
@@ -723,8 +725,10 @@ async fn create_transcript_segment_stores_and_increments_sequence(
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].content, "hello world");
     assert_eq!(rows[0].sequence_num, 1);
+    assert_eq!(rows[0].diarized_speaker_id.as_deref(), Some("spk-a0"));
     assert_eq!(rows[1].content, "hi there");
     assert_eq!(rows[1].sequence_num, 2);
+    assert_eq!(rows[1].diarized_speaker_id, None);
     Ok(())
 }
 
@@ -742,6 +746,7 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
     let seg = TranscriptSegmentRequest {
         segment_id: "seg-archive-001".to_string(),
         speaker_id: USER_A.to_string(),
+        diarized_speaker_id: Some("spk-archive-a0".to_string()),
         content: "test transcript".to_string(),
         started_at: now,
         ended_at: Some(now),
@@ -755,7 +760,7 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
     // Transcripts should be in call_record_transcripts.
     let transcripts = sqlx::query!(
         r#"
-        SELECT speaker_id, content, sequence_num
+        SELECT speaker_id, diarized_speaker_id, content, sequence_num
         FROM call_record_transcripts
         WHERE call_record_id = $1
         "#,
@@ -767,6 +772,10 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
     assert_eq!(transcripts.len(), 1);
     assert_eq!(transcripts[0].content, "test transcript");
     assert_eq!(transcripts[0].speaker_id, USER_A.as_ref());
+    assert_eq!(
+        transcripts[0].diarized_speaker_id.as_deref(),
+        Some("spk-archive-a0")
+    );
     assert_eq!(transcripts[0].sequence_num, 1);
 
     // Ephemeral transcripts should be gone (cascaded).
@@ -797,6 +806,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
         &TranscriptSegmentRequest {
             segment_id: "seg-live-1".to_string(),
             speaker_id: USER_A.to_string(),
+            diarized_speaker_id: Some("spk-live-a0".to_string()),
             content: "hello there".to_string(),
             started_at: now,
             ended_at: Some(now),
@@ -809,6 +819,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
         &TranscriptSegmentRequest {
             segment_id: "seg-live-2".to_string(),
             speaker_id: USER_B.to_string(),
+            diarized_speaker_id: None,
             content: "general kenobi".to_string(),
             started_at: now,
             ended_at: Some(now),
@@ -844,8 +855,13 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
         record.transcript[0].segment_id.as_deref(),
         Some("seg-live-1")
     );
+    assert_eq!(
+        record.transcript[0].diarized_speaker_id.as_deref(),
+        Some("spk-live-a0")
+    );
     assert_eq!(record.transcript[1].sequence_num, 2);
     assert_eq!(record.transcript[1].content, "general kenobi");
+    assert_eq!(record.transcript[1].diarized_speaker_id, None);
     Ok(())
 }
 
@@ -874,7 +890,12 @@ async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::
     // Transcripts ordered by sequence_num.
     assert_eq!(record.transcript.len(), 2);
     assert_eq!(record.transcript[0].content, "archived hello");
+    assert_eq!(
+        record.transcript[0].diarized_speaker_id.as_deref(),
+        Some("spk-arch-a0")
+    );
     assert_eq!(record.transcript[1].content, "archived reply");
+    assert_eq!(record.transcript[1].diarized_speaker_id, None);
     Ok(())
 }
 
