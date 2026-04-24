@@ -73,7 +73,6 @@ class PreviewDataLoader {
   );
 
   load(item: ItemEntity): Promise<PreviewItem> {
-    console.log('## LOADING', item);
     const key = this.getCacheKey(item);
 
     return new Promise((resolve, reject) => {

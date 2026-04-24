@@ -337,7 +337,6 @@ function registerMentionsPlugin(
     editor.registerCommand(
       INSERT_DOCUMENT_MENTION_COMMAND,
       (payload) => {
-        console.log(payload);
         editor.update(() => {
           const selection = $getSelection();
           const mentionNode = $createDocumentMentionNode({

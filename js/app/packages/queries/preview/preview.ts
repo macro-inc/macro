@@ -47,9 +47,7 @@ export async function getItemPreview(item: ItemEntity): Promise<PreviewItem> {
 }
 
 export function useItemPreview(item: Accessor<ItemEntity>) {
-  console.log('## useItemPreview', item());
   const previewQuery = useQuery(() => itemPreviewQueryOptions(item()));
-  console.log('##', { previewQuery });
 
   const maybeChannelMessageQuery = useQuery(() => {
     const item_ = item();

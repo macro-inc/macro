@@ -34,7 +34,6 @@ const Hosts = {
 const IgnoredParams = new Set(['referral_code']);
 
 const ValidBlockNames = [...BlockRegistry, ...BlockAliasRegistry];
-console.log('ValidBlockNames', ValidBlockNames);
 
 function cleanHostname(hostname: string): string {
   return hostname.replace('www.', '').toLowerCase();
