@@ -346,8 +346,7 @@ const SearchableFilterSubmenu = (props: {
     if (props.onOpenChange) props.onOpenChange(v);
     else setInternalOpen(v);
   };
-  let inputRef: HTMLInputElement | undefined;
-  let openedByKeyboard = false;
+  const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
 
   return (
     <DropdownMenu.Sub gutter={4} open={isOpen()} onOpenChange={setIsOpen}>
@@ -361,14 +360,8 @@ const SearchableFilterSubmenu = (props: {
           // + open so Kobalte's parent selection manager updates to this
           // trigger and the shared signal closes the sibling.
           if (e.pointerType !== 'mouse') return;
-          openedByKeyboard = false;
           e.currentTarget.focus({ preventScroll: true });
           if (!isOpen()) setIsOpen(true);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowRight' || e.key === 'Enter' || e.key === ' ') {
-            openedByKeyboard = true;
-          }
         }}
       >
         <span class="text-ink">{props.label}</span>
@@ -379,13 +372,11 @@ const SearchableFilterSubmenu = (props: {
         <DropdownMenu.SubContent
           class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden"
           onFocusIn={(e) => {
-            // Kobalte focuses SubContent itself on open. Only redirect to the
-            // search input when the sub was opened via keyboard — otherwise
-            // a hover would flash the caret in the input.
-            if (e.target === e.currentTarget && inputRef && openedByKeyboard) {
-              inputRef.focus();
-              openedByKeyboard = false;
-            }
+            // Kobalte focuses SubContent on open, and again via its deferred
+            // `tryAutoFocus` (the menu has no items of its own — the Combobox
+            // owns them). Redirect to the search input both times so the
+            // caret lands in the input and stays there.
+            if (e.target === e.currentTarget) inputRef()?.focus();
           }}
         >
           <SearchableMultiSelectInline
@@ -393,9 +384,7 @@ const SearchableFilterSubmenu = (props: {
             activeIds={props.activeIds}
             onChange={props.onChange}
             placeholder={props.placeholder}
-            inputRef={(el) => {
-              inputRef = el;
-            }}
+            inputRef={setInputRef}
             onRequestClose={() => setIsOpen(false)}
           />
         </DropdownMenu.SubContent>
