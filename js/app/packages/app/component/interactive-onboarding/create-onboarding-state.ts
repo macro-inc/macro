@@ -1,24 +1,45 @@
-import { createSignal } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { type Accessor, createEffect, createSignal, on } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import type { LessonDefinition, LessonId, LessonState } from './types';
 
 interface OnboardingStateOptions {
-  definitions: LessonDefinition[];
+  definitions: Accessor<LessonDefinition[]>;
   initialCompleted?: Set<LessonId>;
 }
 
 export function createOnboardingState(options: OnboardingStateOptions) {
-  const sorted = [...options.definitions].sort(
-    (a, b) => (a.order ?? 0) - (b.order ?? 0)
-  );
+  const sortDefinitions = (defs: LessonDefinition[]) =>
+    [...defs].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  const buildLessonStates = (
+    defs: LessonDefinition[],
+    existingStates?: LessonState[]
+  ): LessonState[] => {
+    const sorted = sortDefinitions(defs);
+    const existingById = new Map(
+      existingStates?.map((s) => [s.definition.id, s])
+    );
+
+    return sorted.map((def, index) => {
+      const existing = existingById.get(def.id);
+      return {
+        definition: def,
+        index,
+        completed:
+          existing?.completed ?? options.initialCompleted?.has(def.id) ?? false,
+        skipped: existing?.skipped ?? false,
+      };
+    });
+  };
 
   const [store, setStore] = createStore<LessonState[]>(
-    sorted.map((def, index) => ({
-      definition: def,
-      index,
-      completed: options.initialCompleted?.has(def.id) ?? false,
-      skipped: false,
-    }))
+    buildLessonStates(options.definitions())
+  );
+
+  createEffect(
+    on(options.definitions, (defs) => {
+      setStore(reconcile(buildLessonStates(defs, store)));
+    })
   );
 
   const [dismissed, setDismissed] = createSignal(false);

@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import {
@@ -300,7 +301,12 @@ export function FindAndReplace() {
                 )}
               </Show>
               <MagnifyingGlass
-                class={`size-4 ${findAndReplaceStore.isSearching ? 'animate-pulse text-accent-ink' : 'text-ink '}`}
+                class={cn(
+                  'size-4',
+                  findAndReplaceStore.isSearching
+                    ? 'animate-pulse text-accent-ink'
+                    : 'text-ink'
+                )}
               />
             </div>
           </Tooltip>

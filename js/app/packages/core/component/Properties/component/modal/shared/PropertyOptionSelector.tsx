@@ -1,4 +1,5 @@
 import { Hotkey } from '@core/component/Hotkey';
+import { cn } from '@ui/utils/classname';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
@@ -283,9 +284,10 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const AddOptionButton = (props: { isSelected: boolean }) => (
     <div
       onClick={handleAddOption}
-      class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
-        props.isSelected ? 'bg-hover' : ''
-      }`}
+      class={cn(
+        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2',
+        props.isSelected && 'bg-hover'
+      )}
     >
       <div class="flex items-center gap-2 flex-1 text-left">
         <div class="size-3 flex-shrink-0">

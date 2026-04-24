@@ -3,13 +3,16 @@ import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isMobile } from '@core/mobile/isMobile';
 import { usePermissions } from '@core/context/user';
-import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
+import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE, ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { Subscription } from './Subscription';
 import { MobileApp } from './MobileApp';
 import { Appearance } from './Appearance';
 import { Tabs } from '@core/component/Tabs';
 import { Account } from './Account';
 import { Shortcuts } from './Shortcuts';
+import { Team } from './Team';
+import { useUserTeamsQuery } from '@queries/team/teams';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { SplitHeaderLeft, SplitHeaderRight } from '../split-layout/components/SplitHeader';
@@ -36,6 +39,9 @@ type SettingsPanelProps = {
 export function SettingsPanel(props: SettingsPanelProps) {
   const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
   const permissions = usePermissions();
+  const userTeamsQuery = useUserTeamsQuery();
+  const hasTeam = () => (userTeamsQuery.data?.length ?? 0) > 0;
+  const teamsFlag = useFeatureFlag('enable-teams-settings', { enabledOverride: ENABLE_TEAMS_OVERRIDE });
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
@@ -59,6 +65,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     ];
 
     tabs.push({ value: 'Shortcuts', label: 'Shortcuts' });
+    if (teamsFlag().enabled && hasTeam()) { tabs.push({ value: 'Team', label: 'Team' }) }
     if (permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()) { tabs.push({ value: 'Subscription', label: 'Subscription' }) }
     if (ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()) { tabs.push({ value: 'Mobile App', label: 'App' }) }
     if (isNativeMobilePlatform() && DEV_MODE_ENV) { tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' }) }
@@ -148,8 +155,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
     });
   }
 
-  function handleTabChange(value: string) {
-    if (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts' || value === 'Mobile App') {
+  const handleTabChange = (value: string) => {
+    if (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts' || value === 'Mobile App' || value === 'Team') {
       setActiveTabId(value as SettingsTab);
     }
   }
@@ -207,6 +214,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
         </Show>
         <Show when={activeTabId() === 'Shortcuts'}>
           <Shortcuts />
+        </Show>
+        <Show when={activeTabId() === 'Team' && teamsFlag().enabled && hasTeam()}>
+          <Suspense>
+            <Team />
+          </Suspense>
         </Show>
         <Show when={activeTabId() === 'Mobile App' && ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()}>
           <MobileApp />

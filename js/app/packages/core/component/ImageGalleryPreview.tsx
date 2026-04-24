@@ -1,5 +1,6 @@
 import { internalDrag } from '@core/directive/internalDragState';
 false && internalDrag;
+import { cn } from '@ui/utils/classname';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
@@ -193,8 +194,11 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                           <GalleryImagePlaceholder dims={dims} />
                         </Show>
                         <img
-                          class={`${THEMES[props.variant]} select-none`}
-                          classList={{ hidden: !loaded() }}
+                          class={cn(
+                            THEMES[props.variant],
+                            'select-none',
+                            !loaded() && 'hidden'
+                          )}
                           src={getImageUrl(image.id)}
                           alt="preview"
                           width={dims?.width}

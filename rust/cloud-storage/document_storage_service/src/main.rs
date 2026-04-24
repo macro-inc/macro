@@ -11,7 +11,7 @@ use crate::{
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
 use cal::{
-    domain::service::{CalConfig, CalWebhookServiceImpl},
+    domain::service::{CalConfig, CalEventMeta, CalWebhookServiceImpl},
     inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
 };
@@ -382,13 +382,13 @@ async fn main() -> anyhow::Result<()> {
         posthog: None,
     }));
 
-    let cal_event_type_content_names: std::collections::HashMap<u64, String> =
+    let cal_event_type_meta: std::collections::HashMap<u64, CalEventMeta> =
         serde_json::from_str(cal_event_type_content_names_secret.as_ref())
-            .context("CalEventTypeContentNames secret must be a JSON object mapping eventTypeId (u64) to content_name")?;
+            .context("CalEventTypeContentNames secret must be a JSON object mapping eventTypeId (u64) to { content_name: string, value: number (USD) }")?;
     let cal_webhook_service = CalWebhookServiceImpl::new(
         CalConfig {
             webhook_secret: cal_webhook_secret.as_ref().to_string(),
-            event_type_content_names: cal_event_type_content_names,
+            event_type_meta: cal_event_type_meta,
         },
         AnalyticsClientSink::new(analytics_client.clone()),
     );

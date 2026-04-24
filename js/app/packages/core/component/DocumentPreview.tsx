@@ -4,6 +4,7 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useOpenChatForAttachment } from '@block-chat/client';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
 import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/signal/location';
+import { cn } from '@ui/utils/classname';
 import {
   type BlockAlias,
   type BlockName,
@@ -249,7 +250,14 @@ function MetadataInfo(props: {
 }) {
   return (
     <div
-      class={`${props.align === 'right' ? 'justify-right' : 'justify-left'} mt-2 ${props.align === 'left' ? 'w-fit max-w-[66%]' : ''} text-ink-muted ${props.align === 'left' ? 'overflow-hidden whitespace-nowrap text-ellipsis' : ''}`}
+      class={cn(
+        props.align === 'right' ? 'justify-right' : 'justify-left',
+        'mt-2',
+        props.align === 'left' && 'w-fit max-w-[66%]',
+        'text-ink-muted',
+        props.align === 'left' &&
+          'overflow-hidden whitespace-nowrap text-ellipsis'
+      )}
     >
       <span class="relative text-[0.8em] text-ink-muted max-w-full flex items-center">
         <Dynamic component={props.icon} class="relative size-3 mx-1" />
@@ -327,7 +335,10 @@ function ImageCoverStrip(props: {
 
   return (
     <div
-      class={`w-full overflow-hidden relative bg-edge-muted ${props.class ?? 'h-32'}`}
+      class={cn(
+        'w-full overflow-hidden relative bg-edge-muted',
+        props.class ?? 'h-32'
+      )}
     >
       <Suspense
         fallback={
@@ -340,7 +351,10 @@ function ImageCoverStrip(props: {
           {(url) => (
             <img
               src={url()}
-              class={`absolute inset-0 w-full h-full object-cover ${shouldFadeIn ? 'opacity-0 transition-opacity duration-300' : ''}`}
+              class={cn(
+                'absolute inset-0 w-full h-full object-cover',
+                shouldFadeIn && 'opacity-0 transition-opacity duration-300'
+              )}
               onLoad={
                 shouldFadeIn
                   ? (e) => {

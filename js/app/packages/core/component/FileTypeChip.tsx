@@ -1,5 +1,6 @@
 import { useBlockAliasedName } from '@core/block';
 import { blockMetadataSignal } from '@core/signal/load';
+import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
 import { ENTITY_ICON_CONFIGS, type EntityWithValidIcon } from './EntityIcon';
 
@@ -13,7 +14,11 @@ export function FileTypeChip() {
   return (
     <Show when={fileType()}>
       <span
-        class={`shrink-0 rounded px-1 py-0.5 text-[0.625rem] font-mono font-medium uppercase leading-none ${config().background} ${config().foreground}`}
+        class={cn(
+          'shrink-0 rounded px-1 py-0.5 text-[0.625rem] font-mono font-medium uppercase leading-none',
+          config().background,
+          config().foreground
+        )}
       >
         {fileType()}
       </span>

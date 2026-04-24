@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { createSignal, type JSX, onMount, type ParentProps } from 'solid-js';
 
 type BozzyBracketProps = {
@@ -18,10 +19,10 @@ type BozzyBracketProps = {
 export function BozzyBracket(props: ParentProps<BozzyBracketProps>) {
   return (
     <div
-      class={`relative group/bozzy w-full h-full hover-transition-bg
-        ${props.active && !props.unfocusable ? 'bg-active' : ''}
-        ${props.hover && !props.unfocusable ? 'bg-hover' : ''}
-        ${props.class}`}
+      class={cn(
+        'relative group/bozzy w-full h-full hover-transition-bg',
+        props.class
+      )}
       classList={{
         'bg-active': props.active && !props.unfocusable,
         'bg-hover': props.hover && !props.unfocusable,

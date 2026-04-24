@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { authServiceClient } from '@service-auth/client';
 import type { JSX } from 'solid-js';
 import { createSignal, onMount, Show } from 'solid-js';
@@ -41,7 +42,10 @@ export function Input(props: {
   });
   return (
     <input
-      class={`appearance-none disabled:bg-edge/70 block w-full shadow-none placeholder-placeholder sm:text-sm ${props.textCenter ? 'text-center' : ''}`}
+      class={cn(
+        'appearance-none disabled:bg-edge/70 block w-full shadow-none placeholder-placeholder sm:text-sm',
+        props.textCenter && 'text-center'
+      )}
       required={props.required ?? true}
       placeholder={props.placeholder}
       type={props.type || 'text'}

@@ -1,6 +1,7 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { Hotkey } from '@core/component/Hotkey';
+import { cn } from '@ui/utils/classname';
 import { createSignal, For, Index, type JSX } from 'solid-js';
 
 const cmdOrCtrl = IS_MAC ? 'cmd' : 'ctrl';
@@ -76,7 +77,10 @@ const shortcutSections: ShortcutSection[] = [
 function Kbd(props: { shortcut: string; class?: string }) {
   return (
     <span
-      class={`inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm border border-edge-muted bg-ink/4 text-ink-muted  uppercase ${props.class ?? ''}`}
+      class={cn(
+        'inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm border border-edge-muted bg-ink/4 text-ink-muted uppercase',
+        props.class
+      )}
     >
       <Hotkey shortcut={props.shortcut} class="flex gap-[2px]" lowercase />
     </span>

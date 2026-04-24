@@ -132,7 +132,7 @@ export function Line(props: { edge: CanvasEdge; mode: RenderMode }) {
 
   return (
     <>
-      <div class={`absolute top-0 left-0 opacity-90 pointer-events-none`}>
+      <div class="absolute top-0 left-0 opacity-90 pointer-events-none">
         <svg
           width="10px"
           height="10px"
@@ -183,7 +183,7 @@ export function Line(props: { edge: CanvasEdge; mode: RenderMode }) {
         </svg>
       </div>
       <Portal mount={layerContext().lineSelection}>
-        <div class={`absolute top-0 left-0 pointer-events-none`}>
+        <div class="absolute top-0 left-0 pointer-events-none">
           <svg
             width="10px"
             height="10px"

@@ -1,4 +1,5 @@
 import type { PortalScope } from '@core/component/ScopedPortal';
+import { cn } from '@ui/utils/classname';
 import {
   COMMAND_PRIORITY_HIGH,
   KEY_ENTER_COMMAND,
@@ -167,7 +168,10 @@ export function MentionsTextarea(props: MentionsTextareaProps) {
   return (
     <LexicalWrapperContext.Provider value={props.wrapper}>
       <div
-        class={`${props.class ?? ''} relative w-full h-full overflow-auto min-h-8 supress-css-brackets`}
+        class={cn(
+          'relative w-full h-full overflow-auto min-h-8 supress-css-brackets',
+          props.class
+        )}
         on:keydown={(e) => {
           e.stopPropagation();
         }}

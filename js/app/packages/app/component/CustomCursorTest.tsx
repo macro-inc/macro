@@ -1,4 +1,5 @@
 import { createSignal, For, onMount } from 'solid-js';
+import { cn } from '@ui/utils/classname';
 
 const ShadowDOMTest = () => {
   let shadowHost: HTMLDivElement | undefined;
@@ -155,11 +156,12 @@ const CustomCursorTest = () => {
 
       <div class="mb-6 flex gap-2 flex-wrap">
         <button
-          class={`px-4 py-2 rounded border transition-colors ${
+          class={cn(
+            'px-4 py-2 rounded border transition-colors',
             useClass() && !useStyle()
               ? 'bg-[var(--color-accent)] text-page border-[var(--color-accent)]'
               : 'bg-transparent border-[var(--color-edge)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
-          }`}
+          )}
           onClick={() => {
             setUseClass(true);
             setUseStyle(false);
@@ -168,11 +170,12 @@ const CustomCursorTest = () => {
           Class Only
         </button>
         <button
-          class={`px-4 py-2 rounded border transition-colors ${
+          class={cn(
+            'px-4 py-2 rounded border transition-colors',
             !useClass() && useStyle()
               ? 'bg-[var(--color-accent)] text-page border-[var(--color-accent)]'
               : 'bg-transparent border-[var(--color-edge)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
-          }`}
+          )}
           onClick={() => {
             setUseClass(false);
             setUseStyle(true);
@@ -182,11 +185,12 @@ const CustomCursorTest = () => {
           <div>*by using css variable `--cursor-*`</div>
         </button>
         <button
-          class={`px-4 py-2 rounded border transition-colors ${
+          class={cn(
+            'px-4 py-2 rounded border transition-colors',
             useClass() && useStyle()
               ? 'bg-[var(--color-accent)] text-page border-[var(--color-accent)]'
               : 'bg-transparent border-[var(--color-edge)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
-          }`}
+          )}
           onClick={() => {
             setUseClass(true);
             setUseStyle(true);
