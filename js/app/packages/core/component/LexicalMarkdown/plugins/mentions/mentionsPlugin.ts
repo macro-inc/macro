@@ -144,6 +144,7 @@ export function $isMentionNode(
     $isGroupMentionNode(node)
   );
 }
+
 export function $mentionItemFromNode(node: MentionNode): ItemMention {
   if ($isDocumentMentionNode(node)) {
     let fileType = '';
@@ -335,6 +336,7 @@ function registerMentionsPlugin(
     editor.registerCommand(
       INSERT_DOCUMENT_MENTION_COMMAND,
       (payload) => {
+        console.log(payload);
         editor.update(() => {
           const selection = $getSelection();
           const mentionNode = $createDocumentMentionNode({

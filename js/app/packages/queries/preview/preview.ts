@@ -9,15 +9,25 @@ import { defaultNameTransform, fetchMessageContext } from './fetchers';
 import { previewKeys } from './keys';
 import type { AccessiblePreviewItem, ItemEntity, PreviewItem } from './types';
 
-const simulateDeleted = true;
+// Artificial delay (in ms) to simulate backend propagation lag for testing
+// Set to 0 to disable. Recommended: 2000-5000ms to reliably reproduce race conditions
+const SIMULATE_BACKEND_DELAY_MS = 4000;
+const SIMULATE_FAILURE = true;
 
 const PREVIEW_STALE_TIME = 60 * 1000 * 60 * 24; // 24 hours
 
 function itemPreviewQueryOptions(item: ItemEntity) {
   return {
     queryKey: previewKeys.item(item.id).queryKey,
-    queryFn: () => {
-      if (simulateDeleted) {
+    queryFn: async () => {
+      // Simulate backend propagation delay for testing race conditions
+      if (SIMULATE_BACKEND_DELAY_MS > 0) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, SIMULATE_BACKEND_DELAY_MS)
+        );
+      }
+
+      if (SIMULATE_FAILURE) {
         return Promise.resolve({
           id: item.id,
           type: item.type ?? DEFAULT_ITEM_TYPE,
@@ -149,4 +159,77 @@ export function setPreviewName({
   });
 
   return res;
+}
+
+/**
+ * Optimistically populate preview cache for a newly created item.
+ * This prevents race conditions where a fetch might return 'does_not_exist'
+ * before the backend has fully propagated the new item.
+ *
+ * Call this immediately after creating an item to ensure the preview cache
+ * has valid data before any components try to fetch it.
+ *
+ * @param itemId - The unique identifier of the newly created item
+ * @param itemType - The type of item ('document', 'chat', 'project', etc.)
+ * @param name - Optional name for the item. Defaults to empty string if not provided
+ * @param fileType - Optional file type (e.g., 'md', 'canvas', 'py'). Used for documents
+ * @param subType - Optional subType to distinguish special document types.
+ *                  **Important**: For tasks, you MUST pass `{ type: 'task', is_completed: false }`
+ *                  to properly identify the document as a task rather than a regular markdown file.
+ *                  Without this, tasks will appear as generic markdown documents in the UI.
+ *
+ * @example
+ * // Creating a regular markdown document
+ * setPreviewOnCreate({
+ *   itemId: docId,
+ *   itemType: 'document',
+ *   name: 'My Document',
+ *   fileType: 'md',
+ * });
+ *
+ * @example
+ * // Creating a task - note the subType parameter
+ * setPreviewOnCreate({
+ *   itemId: taskId,
+ *   itemType: 'document',
+ *   name: 'My Task',
+ *   fileType: 'md',
+ *   subType: { type: 'task', is_completed: false },
+ * });
+ */
+export function setPreviewOnCreate({
+  itemId,
+  itemType,
+  name,
+  fileType,
+  subType,
+}: {
+  itemId: string;
+  itemType: ItemType;
+  name?: string;
+  fileType?: string;
+  subType?: { type: 'task'; is_completed?: boolean };
+}) {
+  const defaultPreviewItem: AccessiblePreviewItem = {
+    id: itemId,
+    rawName: name ?? '',
+    name: name ?? '',
+    loading: false,
+    access: 'access',
+    type: itemType,
+    fileType: fileType as any,
+    subType: subType as any,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // Optimistically set the preview data
+  setPreviewData(itemId, (_prev) => defaultPreviewItem);
+
+  // Schedule a background refetch to get the real data from the server
+  // Use a small delay to give the backend time to propagate
+  setTimeout(() => {
+    queryClient.invalidateQueries({
+      queryKey: previewKeys.item(itemId).queryKey,
+    });
+  }, 100);
 }

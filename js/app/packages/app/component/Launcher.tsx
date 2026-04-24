@@ -137,7 +137,7 @@ const createComponent = async (spec: {
 };
 
 export function runCreateAction(
-  blockName: BlockName,
+  blockName: BlockName | BlockAlias,
   options: { shouldInsert?: boolean } = {}
 ) {
   const shouldInsert = options.shouldInsert ?? false;
@@ -236,7 +236,7 @@ export function runCreateAction(
 
 export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
   label: string;
-  blockName: BlockName;
+  blockName: BlockName | BlockAlias;
   altHotkeyToken?: HotkeyToken;
   animatedIcon?: Component<{ triggerAnimation?: boolean }>;
 };

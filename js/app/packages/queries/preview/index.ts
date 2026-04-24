@@ -5,6 +5,7 @@ export {
   invalidatePreview,
   setPreviewName,
   setPreviewFileType,
+  setPreviewOnCreate,
 } from './preview';
 export type {
   PreviewItem,

@@ -19,12 +19,14 @@ type MacroAppUrlParsed = {
   block: BlockName | BlockAlias | undefined;
   params: Record<string, string> | undefined;
 };
+
 const Hosts = {
   Prod: 'macro.com',
   Dev: 'dev.macro.com',
-  Staging: 'staging.macro.com',
   Localhost: 'localhost',
 } as const;
+
+const IgnoredParams = new Set(['referral_code']);
 
 function cleanHostname(hostname: string): string {
   return hostname.replace('www.', '').toLowerCase();
@@ -82,6 +84,7 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
       'channel',
       'project',
       'email',
+      'call',
       'csv',
     ];
     const _block: string = pathParts[1];
@@ -109,6 +112,7 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
     const id: string = pathParts[2];
     const params: Record<string, string> = {};
     url.searchParams.forEach((value, key) => {
+      if (IgnoredParams.has(key)) return;
       params[key] = value;
     });
 
@@ -166,6 +170,7 @@ function registerTextPastePlugin(editor: LexicalEditor) {
             return false;
 
           event.preventDefault();
+          console.log('LINK PASTE');
           editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
             documentId: parsedMacroAppUrl.id,
             documentName: '',

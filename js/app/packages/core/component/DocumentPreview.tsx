@@ -1,4 +1,3 @@
-// URL params constants
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useOpenChatForAttachment } from '@block-chat/client';
@@ -11,7 +10,6 @@ import {
   useMaybeBlockName,
 } from '@core/block';
 import { itemToBlockName } from '@core/constant/allBlocks';
-// Components
 import { EntityIcon } from '@core/component/EntityIcon';
 import { RoundPanel } from '@core/component/RoundPanel';
 import { toast } from '@core/component/Toast/Toast';
@@ -24,7 +22,6 @@ import { blockNameToItemType } from '@service-storage/client';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { matches } from '@core/util/match';
-// Icon imports
 import CollapseInlinePreview from '@icon/regular/arrows-in-line-horizontal.svg';
 import OpenIcon from '@icon/regular/arrows-out.svg';
 import ExpandInlinePreview from '@icon/regular/arrows-out-line-horizontal.svg';
@@ -66,7 +63,6 @@ import { Dynamic } from 'solid-js/web';
 import { useEntityProperties } from '@core/component/Properties/hooks';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
-
 import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
