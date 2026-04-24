@@ -12,8 +12,8 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
     --mount=type=cache,target=/usr/local/cargo/git/db,sharing=shared \
     --mount=type=cache,target=/app/target,id=rust-target-dev-debug,sharing=locked \
-    jobs="${CARGO_BUILD_JOBS}" \
-    && if [ "${jobs}" = "0" ]; then jobs="$(nproc)"; fi \
+    jobs="${CARGO_BUILD_JOBS:-0}" \
+    && if [ -z "${jobs}" ] || [ "${jobs}" = "0" ]; then jobs="$(nproc)"; fi \
     && cargo build -j "${jobs}" \
         --bin authentication_service \
         --bin connection_gateway_service \

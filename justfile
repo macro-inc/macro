@@ -1,3 +1,5 @@
+set positional-arguments
+
 # Creates global networks that are shared across docker-compose files
 create_networks:
   docker network create databases 2>/dev/null || true -- db network
@@ -56,7 +58,6 @@ run_local *ARGS:
 
   just create_networks
   just patch_local_fusionauth_env
-  set -- {{ ARGS }}
 
   do_build=false
   build_processors=false
@@ -68,6 +69,8 @@ run_local *ARGS:
         build_processors=true
       fi
       expecting_profile_name=false
+      filtered_args+=("$arg")
+      continue
     fi
 
     if [ "$arg" = "--build" ]; then
@@ -83,9 +86,7 @@ run_local *ARGS:
     fi
   done
 
-  if [ "$do_build" = true ] || ! docker image inspect macro-local-rust-services:dev >/dev/null 2>&1; then
-    docker compose build rust_services_image
-  fi
+  docker compose build rust_services_image
 
   if [ "$do_build" = true ]; then
     docker compose build websocket_service sync_service lexical_service

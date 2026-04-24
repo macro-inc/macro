@@ -9,6 +9,10 @@ x-common-env: &common-env
 
 x-rust-services-image: &rust-services-image
   image: macro-local-rust-services:dev
+  build:
+    context: ./rust/cloud-storage
+    dockerfile: Dockerfile.dev
+    target: services_bundle
 
 services:
   rust_services_image:
@@ -188,6 +192,8 @@ services:
     profiles:
       - processors
     <<: *common-env
+    # Pinned because search_processing_service/pdfium-lib/linux/libpdfium.so is amd64-only;
+    # on Apple Silicon this forces QEMU emulation for build and runtime.
     platform: linux/amd64
     build:
       context: ./rust/cloud-storage
