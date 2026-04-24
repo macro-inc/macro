@@ -203,7 +203,7 @@ export function MenuItem(props: MenuItemProps) {
               'w-[14px] h-[14px] shrink-0 rounded-sm p-[2px]',
               (props as CheckboxMenuItemProps).checked
                 ? 'bg-accent text-[white]'
-                : 'bg-transparent text-transparent border-1 border-edge'
+                : 'bg-transparent text-transparent border border-edge'
             )}
           />
         </div>
@@ -221,7 +221,7 @@ export function MenuItem(props: MenuItemProps) {
               (props as RadioMenuItemProps).value ===
                 (props as RadioMenuItemProps).groupValue
                 ? 'bg-accent text-[white]'
-                : 'bg-transparent text-transparent border-1 border-edge'
+                : 'bg-transparent text-transparent border border-edge'
             )}
           />
         </div>

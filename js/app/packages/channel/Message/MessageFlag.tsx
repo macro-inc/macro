@@ -11,7 +11,7 @@ export function MessageFlag(props: MessageFlagProps) {
   return (
     <div
       class={cn(
-        'flex flex-row items-stretch justify-start ml-[var(--left-of-connector)]',
+        'flex flex-row items-stretch justify-start ml-(--left-of-connector)',
         props.class
       )}
     >

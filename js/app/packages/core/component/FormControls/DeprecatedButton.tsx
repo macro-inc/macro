@@ -42,15 +42,15 @@ export const DeprecatedButton: ParentComponent<{
   const hasHotkey = () => !!(props.hotkeyShortcut || props.hotkeyToken);
   return (
     <Polymorphic
-      class="relative flex items-stretch hover:opacity-80 disabled:opacity-50 [&:focus]:[--focus-border-inset:-4px] font-mono font-medium uppercase leading-none disabled:cursor-not-allowed"
+      class="relative flex items-stretch hover:opacity-80 disabled:opacity-50 focus:[--focus-border-inset:-4px] font-mono font-medium uppercase leading-none disabled:cursor-not-allowed"
       classList={{
         [`${sizeClass[props.size || 'Base']}`]: !hasHotkey(),
         [`${themeClass[props.theme || 'primary']}`]: !hasHotkey(),
-        'border-accent !bg-accent': props.active,
-        '!text-panel': props.active && props.theme === 'secondary',
+        'border-accent bg-accent!': props.active,
+        'text-panel!': props.active && props.theme === 'secondary',
         'border-ink': !props.active,
         'border justify-center': !hasHotkey(),
-        '!border-0': props.border === false,
+        'border-0!': props.border === false,
         ...(props.classList ?? {}),
       }}
       onClick={props.onClick}
@@ -71,15 +71,15 @@ export const DeprecatedButton: ParentComponent<{
             classList={{
               [`${sizeClass[props.size || 'Base']}`]: true,
               [`${themeClass[props.theme || 'primary']}`]: true,
-              'border-accent !bg-accent': props.active,
+              'border-accent bg-accent!': props.active,
               'border-ink': !props.active,
-              '!border-0': props.border === false,
+              'border-0!': props.border === false,
             }}
           >
             {props.children}
           </div>
           <div
-            class="!p-[0px] border border-ink"
+            class="p-0! border border-ink"
             classList={{
               [`${sizeClass[props.size || 'Base']}`]: true,
             }}
@@ -90,9 +90,9 @@ export const DeprecatedButton: ParentComponent<{
               class="border"
               classList={{
                 [`${sizeClass[props.size || 'Base']}`]: true,
-                'border-accent !bg-accent': props.active,
+                'border-accent bg-accent!': props.active,
                 'border-ink': !props.active,
-                '!border-0': props.border === false,
+                'border-0!': props.border === false,
               }}
             />
           </div>

@@ -45,7 +45,7 @@ export const FilterSelect = (props: FilterSelectProps) => {
     >
       <span
         class={cn(
-          'size-4 flex items-center justify-center shrink-0 border border-edge-muted group-data-[selected]:bg-accent group-data-[selected]:border-accent',
+          'size-4 flex items-center justify-center shrink-0 border border-edge-muted group-data-selected:bg-accent group-data-selected:border-accent',
           multiple() ? 'rounded-xs' : 'rounded-full'
         )}
       >
@@ -62,7 +62,7 @@ export const FilterSelect = (props: FilterSelectProps) => {
         )}
       </Show>
 
-      <KSelect.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink">
+      <KSelect.ItemLabel class="flex-1 truncate text-ink-muted group-data-selected:text-ink">
         {itemProps.item.rawValue.label}
       </KSelect.ItemLabel>
     </KSelect.Item>
@@ -84,7 +84,7 @@ export const FilterSelect = (props: FilterSelectProps) => {
     <>
       <span class="font-medium">{props.label}</span>
       <Show when={multiple() && hasActiveFilters()}>
-        <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 z-1 rounded-full text-xs font-semibold bg-accent text-page">
+        <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 z-user-highlight rounded-full text-xs font-semibold bg-accent text-page">
           {activeCount()}
         </span>
       </Show>
@@ -140,7 +140,7 @@ export const FilterSelect = (props: FilterSelectProps) => {
         )}
       </Show>
       <KSelect.Portal>
-        <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow min-w-[var(--kb-popper-anchor-width)] p-1">
+        <KSelect.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow min-w-(--kb-popper-anchor-width) p-1">
           <KSelect.Listbox />
           <Show when={!props.hideClear}>
             <div class="w-full pt-1 mt-1 flex items-center border-t border-t-edge-muted">
@@ -175,9 +175,9 @@ const COMBOBOX_ITEM_HEIGHT = 36;
 const ComboboxItem = (itemProps: { item: CollectionNode<Option> }) => (
   <Combobox.Item
     item={itemProps.item}
-    class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xs text-left text-xs data-[highlighted]:bg-ink/5 group"
+    class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xs text-left text-xs data-highlighted:bg-ink/5 group"
   >
-    <span class="size-4 flex items-center justify-center shrink-0 rounded-xs border border-edge group-data-[selected]:bg-accent group-data-[selected]:border-accent">
+    <span class="size-4 flex items-center justify-center shrink-0 rounded-xs border border-edge group-data-selected:bg-accent group-data-selected:border-accent">
       <Combobox.ItemIndicator>
         <CheckIcon class="size-2.5 text-page" />
       </Combobox.ItemIndicator>
@@ -191,7 +191,7 @@ const ComboboxItem = (itemProps: { item: CollectionNode<Option> }) => (
       )}
     </Show>
 
-    <Combobox.ItemLabel class="flex-1 truncate text-ink-muted group-data-[selected]:text-ink">
+    <Combobox.ItemLabel class="flex-1 truncate text-ink-muted group-data-selected:text-ink">
       {itemProps.item.rawValue.label}
     </Combobox.ItemLabel>
   </Combobox.Item>
@@ -319,7 +319,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
         >
           <span class="font-medium">{props.label}</span>
           <Show when={hasActiveFilters()}>
-            <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 z-1 rounded-full text-xs font-semibold bg-accent text-page">
+            <span class="absolute -top-2 -right-2 flex items-center justify-center size-4 z-user-highlight rounded-full text-xs font-semibold bg-accent text-page">
               {activeCount()}
             </span>
           </Show>
@@ -347,7 +347,7 @@ export const FilterCombobox = (props: FilterComboboxProps) => {
             <Show
               when={filteredOptions().length > 0}
               fallback={
-                <div class="py-3 px-2 text-center text-xs text-ink-muted whitespace-break-spaces break-words">
+                <div class="py-3 px-2 text-center text-xs text-ink-muted whitespace-break-spaces wrap-break-word">
                   No options match "{searchQuery()}"
                 </div>
               }

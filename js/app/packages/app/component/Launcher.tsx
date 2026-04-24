@@ -441,19 +441,19 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         )}
       ></div>
 
-      <div class="absolute top-1.5 left-2 z-1 p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
+      <div class="absolute top-1.5 left-2 z-user-highlight p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
         <Hotkey token={props.creatableBlock.hotkeyToken} />
       </div>
 
       <div
         class={cn(
-          'absolute size-2 right-2 top-2 z-1 transition-transform ease-click duration-200 transition-color border border-edge/50',
+          'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-click duration-200 transition-color border border-edge/50',
           textFg()
         )}
         style={{ background: props.focused ? 'currentColor' : 'transparent' }}
       />
 
-      <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-1">
+      <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-user-highlight">
         <div class="text-sm font-bold">{props.creatableBlock.label}</div>
         <div class="size-3">
           <PixelArrowRight />

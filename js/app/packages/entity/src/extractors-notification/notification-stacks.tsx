@@ -121,14 +121,14 @@ function NotificationStackRow(props: {
             }
           }}
         >
-          <div class="pt-1 flex-shrink-0">
+          <div class="pt-1 shrink-0">
             <NotificationIcon stack={props.stack} class="size-4" />
           </div>
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-1 text-xs min-w-0 overflow-hidden">
               <span
                 class={cn(
-                  'w-0 transition-[width] overflow-hidden duration-500 ease flex-shrink-0',
+                  'w-0 transition-[width] overflow-hidden duration-500 ease shrink-0',
                   {
                     'w-4': unread(),
                   }
@@ -136,17 +136,17 @@ function NotificationStackRow(props: {
               >
                 <UnreadIndicator active />
               </span>
-              <div class="flex-shrink-0">
+              <div class="shrink-0">
                 <NotificationSenderIcon stack={props.stack} size="xs" />
               </div>
               <span class="ph-no-capture truncate min-w-0">
                 <NotificationDescription stack={props.stack} />
               </span>
-              <span class="text-ink-extra-muted/50 flex-shrink-0">
+              <span class="text-ink-extra-muted/50 shrink-0">
                 {' - '}
                 <NotificationTimestamp stack={props.stack} />
               </span>
-              <div class="ml-auto flex items-center gap-1 pr-2 flex-shrink-0">
+              <div class="ml-auto flex items-center gap-1 pr-2 shrink-0">
                 <Button
                   onClick={handleMarkAsDone}
                   tooltip={'Mark notification done'}

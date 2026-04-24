@@ -12,7 +12,7 @@ import {
 } from '@core/block';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { RoundPanel } from '@core/component/RoundPanel';
+import { Panel } from '@ui';
 import { toast } from '@core/component/Toast/Toast';
 import {
   isAccessiblePreviewItem,
@@ -718,7 +718,7 @@ export function PopupPreview(props: {
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <RoundPanel active>
+      <Panel active class='py-2'>
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>
@@ -762,7 +762,7 @@ export function PopupPreview(props: {
                     <div class="flex shrink-0">{renderActionButtons()}</div>
                   </div>
 
-                  <div class="line-clamp-2 break-words px-2 mb-2">
+                  <div class="line-clamp-2 wrap-break-word px-2 mb-2">
                     {props.documentInfo.name || accessibleItem().name}
                   </div>
 
@@ -797,7 +797,7 @@ export function PopupPreview(props: {
                       <Show when={messageContext()}>
                         {(context) => (
                           <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
-                            <div class="line-clamp-3 break-words">
+                            <div class="line-clamp-3 wrap-break-word">
                               <StaticMarkdown
                                 markdown={context().content}
                                 theme={channelTheme}
@@ -903,7 +903,7 @@ export function PopupPreview(props: {
             )}
           </Match>
         </Switch>
-      </RoundPanel>
+      </Panel>
     </div>
   );
 }

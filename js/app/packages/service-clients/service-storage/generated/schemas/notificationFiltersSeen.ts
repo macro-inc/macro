@@ -6,7 +6,7 @@
  */
 
 /**
- * Filter by notification seen state.
-None to ignore, true to include only seen notifications, false to include only unseen notifications.
+ * Filter by notification seen state. `Some(true)` selects seen
+notifications; `Some(false)` selects not-seen notifications.
  */
 export type NotificationFiltersSeen = boolean | null;

@@ -212,6 +212,9 @@
       "@queries/*": [
         "./packages/queries/*"
       ],
+      "@ui": [
+        "./packages/ui/index.ts"
+      ],
       "@ui/*": [
         "./packages/ui/*"
       ],

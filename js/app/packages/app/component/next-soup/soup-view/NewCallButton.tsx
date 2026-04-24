@@ -101,7 +101,7 @@ export function NewCallButton() {
       <Dialog.Portal>
         <DialogWrapper width="512px">
           <div class="flex flex-col text-ink">
-            <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+            <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
               <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                 <XIcon />
               </Dialog.CloseButton>

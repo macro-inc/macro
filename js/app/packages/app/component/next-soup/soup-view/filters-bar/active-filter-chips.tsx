@@ -229,7 +229,7 @@ const FilterChip = (props: {
                   const isSingleSelect = () => props.filter.multiple === false;
                   return (
                     <DropdownMenu.Item
-                      class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5 cursor-default"
+                      class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-highlighted:bg-ink/5 cursor-default"
                       onSelect={() => {
                         if (active()) return;
                         if (props.filter.onReplace) {

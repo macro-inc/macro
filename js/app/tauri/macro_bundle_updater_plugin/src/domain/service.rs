@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
-        BundleRoot, CompletedStatus, ProgressPercentage, UnzipRequest, UnzipStatus,
-        UpdateApproval, UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateStatus,
+        BundleRoot, CompletedStatus, ProgressPercentage, UnzipRequest, UnzipStatus, UpdateApproval,
+        UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateStatus,
     },
     ports::{AutoUpdateService, FsRepo, SystemQuery, UpdateRepo},
 };
@@ -123,14 +123,12 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                 match res {
                     Some(update) => {
                         // Check if this version was already downloaded in a previous session.
-                        if let Ok(update_dir) = self.system_query.get_update_dir().await {
-                            if let Some(entrypoint) =
-                                find_cached_bundle(&self.fs_repo, &update_dir, &update.version).await
-                            {
-                                return Ok(UpdateStatus::Completed(CompletedStatus {
-                                    entrypoint,
-                                }));
-                            }
+                        if let Ok(update_dir) = self.system_query.get_update_dir().await
+                            && let Some(entrypoint) =
+                                find_cached_bundle(&self.fs_repo, &update_dir, &update.version)
+                                    .await
+                        {
+                            return Ok(UpdateStatus::Completed(CompletedStatus { entrypoint }));
                         }
                         Ok(UpdateStatus::UpdateFound(UpdateFoundStatus {
                             bundle: update,
@@ -291,7 +289,6 @@ async fn find_cached_bundle(
     None
 }
 
-
 /// helper function which pipes the progress of an event from one channel into another
 /// returning true if the value in the sender channel was modified
 async fn glue_channels<F>(
@@ -334,10 +331,43 @@ impl<Fs: FsRepo> Service<Fs> {
         self.bundle_root.path()
     }
 
+    /// Apply the update by modifying the bundle root and resetting the worker thread to the initial state.
+    ///
+    /// Returns `Ok(false)` when there is no pending update or another caller
+    /// is already applying one.
+    pub async fn apply_update(&mut self, cache_dir: &Path) -> Result<bool, Report> {
+        let entrypoint = {
+            let status = self.status().borrow();
+            match status.as_ref() {
+                Ok(UpdateStatus::Completed(bundle_location)) => bundle_location.entrypoint.clone(),
+                _ => return Ok(false),
+            }
+        };
+
+        // Claim the worker restart slot before doing any work. If the channel
+        // is full another apply_update is already in flight — short-circuit.
+        if self.start().is_err() {
+            return Ok(false);
+        }
+
+        let bundle_dir = entrypoint
+            .parent()
+            .ok_or_else(|| report!("entrypoint {entrypoint:?} has no parent directory"))?
+            .to_path_buf();
+
+        tracing::info!("Setting bundle root to {bundle_dir:?}");
+        self.set_bundle_root(bundle_dir.clone(), cache_dir).await?;
+
+        // Remove old bundle directories now that we've switched to the new one
+        self.cleanup_old_bundles(cache_dir, &bundle_dir).await;
+
+        Ok(true)
+    }
+
     /// Set the bundle root to a new directory and persist it.
     ///
     /// The in-memory state is only updated after persistence succeeds.
-    pub async fn set_bundle_root(
+    async fn set_bundle_root(
         &mut self,
         path: PathBuf,
         cache_dir: &Path,
@@ -366,7 +396,7 @@ impl<Fs: FsRepo> Service<Fs> {
     }
 
     /// Remove all numeric bundle subdirectories under `dir` except `keep`.
-    pub async fn cleanup_old_bundles(&self, dir: &Path, keep: &Path) {
+    async fn cleanup_old_bundles(&self, dir: &Path, keep: &Path) {
         for name in self.fs_repo.list_dir_names(dir).await {
             if name.parse::<u64>().is_err() {
                 continue;

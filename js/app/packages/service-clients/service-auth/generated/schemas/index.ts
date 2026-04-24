@@ -42,6 +42,8 @@ export * from './passwordRequest';
 export * from './patchSubscriptionTierRequest';
 export * from './patchTeamRequest';
 export * from './patchTeamRequestName';
+export * from './patchTeamRequestUserRoleUpdates';
+export * from './patchTeamUserRole';
 export * from './patchTeamUserTierRequest';
 export * from './patchUserGroupRequest';
 export * from './patchUserOnboardingRequest';

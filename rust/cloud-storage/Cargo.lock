@@ -109,6 +109,7 @@ dependencies = [
  "entity_access",
  "entity_access_management",
  "frecency",
+ "futures",
  "item_filters",
  "lazy_static",
  "lexical_client",
@@ -6456,6 +6457,7 @@ dependencies = [
  "sha2",
  "thiserror 2.0.17",
  "tower 0.5.2",
+ "tower-http",
  "tracing",
  "url",
  "urlencoding",
@@ -7077,7 +7079,9 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "native_app_service",
+ "rootcause",
  "semver",
+ "sha2",
  "tokio",
  "tower-http",
  "tracing",
@@ -7089,10 +7093,11 @@ dependencies = [
 name = "native_app_service"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "axum",
  "cool_asserts",
+ "futures",
  "reqwest",
+ "rootcause",
  "semver",
  "serde",
  "serde_json",

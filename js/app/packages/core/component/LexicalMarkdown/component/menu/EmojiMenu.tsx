@@ -1,4 +1,4 @@
-import { RoundPanel } from '@core/component/RoundPanel';
+import { Panel } from '@ui';
 import { resolveEmoji, useEmojiData } from '@core/component/Emoji/emojis';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
@@ -245,41 +245,45 @@ export function EmojiMenu(props: EmojiMenuProps) {
           }}
           ref={menuRef}
         >
-          <RoundPanel active class="flex flex-col gap-1 p-2 w-full">
-            <Show
-              when={emojiOptions().length > 0}
-              fallback={<div class="px-2 text text-ink-muted">No results</div>}
-            >
-              <VList
-                data={emojiOptions()}
-                ref={setVirtualHandle}
-                class="scrollbar-hidden"
-                style={{
-                  height:
-                    contentMaxHeight() !== undefined
-                      ? `${contentMaxHeight()}px`
-                      : '200px',
-                  'max-height': '100%',
-                  width: '100%',
-                }}
+          <Panel active>
+            <div class="flex flex-col gap-1 px-2 w-full">
+              <Show
+                when={emojiOptions().length > 0}
+                fallback={
+                  <div class="px-2 text text-ink-muted">No results</div>
+                }
               >
-                {(emojiItem, index) => (
-                  <EmojiItem
-                    emoji={emojiItem.emoji}
-                    name={emojiItem.slug}
-                    selected={selectedIndex() === index()}
-                    onSelect={() => {
-                      insertEmoji(emojiItem.emoji);
-                      props.menu.setIsOpen(false);
-                    }}
-                    setIndex={setSelectedIndexFromMouse}
-                    setOpen={props.menu.setIsOpen}
-                    index={index()}
-                  />
-                )}
-              </VList>
-            </Show>
-          </RoundPanel>
+                <VList
+                  data={emojiOptions()}
+                  ref={setVirtualHandle}
+                  class="scrollbar-hidden"
+                  style={{
+                    height:
+                      contentMaxHeight() !== undefined
+                        ? `${contentMaxHeight()}px`
+                        : '200px',
+                    'max-height': '100%',
+                    width: '100%',
+                  }}
+                >
+                  {(emojiItem, index) => (
+                    <EmojiItem
+                      emoji={emojiItem.emoji}
+                      name={emojiItem.slug}
+                      selected={selectedIndex() === index()}
+                      onSelect={() => {
+                        insertEmoji(emojiItem.emoji);
+                        props.menu.setIsOpen(false);
+                      }}
+                      setIndex={setSelectedIndexFromMouse}
+                      setOpen={props.menu.setIsOpen}
+                      index={index()}
+                    />
+                  )}
+                </VList>
+              </Show>
+            </div>
+          </Panel>
         </div>
       </ScopedPortal>
     </Show>

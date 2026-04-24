@@ -54,7 +54,7 @@ function RecipientChip(props: {
 }) {
   return (
     <div
-      class="flex flex-row flex-shrink-0 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover"
+      class="flex flex-row shrink-0 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover"
       classList={{ 'cursor-grab active:cursor-grabbing': props.draggable }}
       draggable={props.draggable}
       onDragStart={props.onDragStart}

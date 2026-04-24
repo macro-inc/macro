@@ -91,8 +91,8 @@ export const ToggleSwitch: Component<
         </KSwitch.Label>
       </Show>
 
-      <div class="relative focus-bracket-within [&:focus-within]:[--focus-border-inset:-3px] w-fit h-fit">
-        <KSwitch.Input class="absolute inset-0 !h-full !w-full pointer-events-none" />
+      <div class="relative focus-bracket-within focus-within:[--focus-border-inset:-3px] w-fit h-fit">
+        <KSwitch.Input class="absolute inset-0 h-full! w-full! pointer-events-none" />
         <KSwitch.Control
           classList={{
             'animate-[flicker_50ms_3_150ms]':
@@ -177,7 +177,7 @@ export const ToggleSwitch: Component<
               </div>
             </div>
           </div>
-          {/* <KSwitch.Thumb class="relative z-[1]" /> */}
+          {/* <KSwitch.Thumb class="relative z-user-highlight" /> */}
         </KSwitch.Control>
       </div>
     </KSwitch>

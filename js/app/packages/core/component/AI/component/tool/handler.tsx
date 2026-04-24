@@ -20,6 +20,7 @@ import { readMetadataHandler } from './ReadMetadata';
 import { readThreadHandler } from './ReadThread';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { sendEmailHandler } from './SendEmail';
+import { subagentHandler } from './Subagent';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
 import {
   ToolErrorContext,
@@ -47,6 +48,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadMetadata: readMetadataHandler,
   SendEmail: sendEmailHandler,
   SetEntityProperty: setEntityPropertyHandler,
+  Subagent: subagentHandler,
   text_editor_code_execution: textEditorCodeExecutionHandler,
   UpdateThreadLabels: updateThreadLabelsHandler,
   web_fetch: webFetchHandler,

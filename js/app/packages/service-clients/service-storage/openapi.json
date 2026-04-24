@@ -1186,6 +1186,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "attachment_type",
+            "in": "query",
+            "description": "Filter by type: 'static' for images/videos, 'dss' for documents",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -6391,6 +6400,10 @@
             "type": "string",
             "description": "The transcribed text content."
           },
+          "diarizedSpeakerId": {
+            "type": ["string", "null"],
+            "description": "Stable per-speaker identifier produced by the STT provider's diarization\npass. Unique across tracks in the call. `None` when the provider didn't\nreturn a speaker label."
+          },
           "endedAt": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -6607,6 +6620,10 @@
               "format": "uuid"
             },
             "description": "When non-empty, only return messages with these IDs."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "When set, only return top-level messages where the message itself or\nany active thread reply has a notification for the requesting user that\nmatches these notification state constraints."
           }
         }
       },
@@ -9411,15 +9428,15 @@
       },
       "NotificationFilters": {
         "type": "object",
-        "description": "Notification-level filters that apply to an entity type.",
+        "description": "Notification state filters for channel message queries.",
         "properties": {
           "done": {
             "type": ["boolean", "null"],
-            "description": "Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications."
+            "description": "Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications."
           },
           "seen": {
             "type": ["boolean", "null"],
-            "description": "Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications."
+            "description": "Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications."
           }
         }
       },
@@ -11674,6 +11691,10 @@
           "content": {
             "type": "string",
             "description": "The transcribed text content."
+          },
+          "diarizedSpeakerId": {
+            "type": ["string", "null"],
+            "description": "Stable per-speaker identifier produced by the STT provider's diarization\npass. Namespaced upstream by audio track so values are unique across all\ntracks in a call. `None` when the provider didn't return a speaker label."
           },
           "endedAt": {
             "type": ["string", "null"],

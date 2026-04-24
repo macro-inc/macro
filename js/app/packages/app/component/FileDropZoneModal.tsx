@@ -33,7 +33,7 @@ export function FileDropZoneModal() {
               dialogContext.setOpen(false);
             }}
           >
-            <div class="w-[222px] text-center text-ink-muted text-sm font-sans font-normal leading-[20px] break-words select-none cursor-default">
+            <div class="w-[222px] text-center text-ink-muted text-sm font-sans font-normal leading-[20px] wrap-break-word select-none cursor-default">
               Drag and drop or{' '}
               <span class="text-accent-ink underline">click</span> to import.
             </div>

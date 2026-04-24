@@ -357,7 +357,7 @@ export const SoupView = (props: SoupViewProps) => {
             <EmailPermissionsBanner />
           </Show>
           <div
-            class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full"
+            class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full"
             classList={{
               'pointer-events-none opacity-10': hasLinkError(),
             }}

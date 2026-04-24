@@ -113,7 +113,7 @@ export default function HotkeyDebugger() {
       <div class="flex-1 overflow-auto">
         <table class="w-full border-collapse">
           <thead class="sticky top-0 z-10 bg-panel">
-            <tr class="text-left text-[10px] uppercase tracking-wide text-ink-muted">
+            <tr class="text-left text-xxs uppercase tracking-wide text-ink-muted">
               <th class="border-b border-edge px-3 py-2 font-normal">Lvl</th>
               <th class="border-b border-edge px-3 py-2 font-normal">Scope</th>
               <th class="border-b border-edge px-3 py-2 font-normal">

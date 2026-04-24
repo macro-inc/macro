@@ -15,9 +15,9 @@ use crate::domain::models::EditCallRecordRequest;
 
 use super::models::{
     AddParticipantError, Call, CallActiveResponse, CallError, CallParticipant, CallRecord,
-    CallRecordPreview, CallTokenResponse, CallWebhookEvent, EgressS3Config,
-    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
-    LeaveCallResponse, TranscriptSegmentRequest,
+    CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse, CallWebhookEvent,
+    EgressS3Config, GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse,
+    GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -218,6 +218,17 @@ pub trait CallRepository: Send + Sync + 'static {
         call_record_id: &Uuid,
         request: &EditCallRecordRequest,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Persist the AI-generated summary text on the archived call record.
+    ///
+    /// Tolerates unknown `call_id` (no row matches): the summarization flow
+    /// can race with the record being deleted, so this is an idempotent no-op
+    /// when the target row is gone.
+    fn insert_call_summary(
+        &self,
+        call_id: &Uuid,
+        summary: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Storage port for generating presigned recording URLs.
@@ -257,6 +268,28 @@ impl<T: RecordingStorage> RecordingStorage for Option<T> {
             None => anyhow::bail!("recording storage not configured"),
         }
     }
+}
+
+/// Summarizer port for generating an AI summary of a finished call.
+///
+/// Implementations are expected to produce a natural-language summary of
+/// the call given its finalized transcript. The returned [`String`] is the
+/// summary text that will be persisted on the corresponding `call_records`
+/// row (see the `insert_call_summary` repository operation).
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait CallSummarizer: Send + Sync + 'static {
+    /// The error type returned by summarization operations.
+    type Err: Into<anyhow::Error> + Send + Debug;
+
+    /// Produce a summary for the call identified by `call_id` using the
+    /// supplied finalized `transcript` segments. The segments are expected
+    /// to be ordered by `sequence_num` ascending (matching what is stored
+    /// in a [`CallRecord`]).
+    fn summarize_call(
+        &self,
+        call_id: &Uuid,
+        transcript: Vec<CallRecordTranscriptSegment>,
+    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
@@ -396,6 +429,16 @@ pub trait CallService: Send + Sync + 'static {
         request: GetBatchCallRecordPreviewRequest,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<GetBatchCallRecordPreviewResponse, CallError>> + Send;
+
+    /// Generate and persist an AI summary for a finished call.
+    ///
+    /// Loads the [`CallRecord`] for `call_id`, passes its finalized transcript
+    /// to the configured [`CallSummarizer`], and persists the resulting
+    /// summary via [`CallRepository::insert_call_summary`]. If no summarizer
+    /// is configured, this is a no-op. Missing records (e.g. deleted mid-flow)
+    /// and empty transcripts are also no-ops — no AI call is made in those
+    /// cases.
+    fn summarize_call(&self, call_id: &Uuid) -> impl Future<Output = Result<(), CallError>> + Send;
 }
 
 /// Lightweight read-only port for querying call records in Soup.

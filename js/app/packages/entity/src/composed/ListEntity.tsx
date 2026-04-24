@@ -188,7 +188,7 @@ interface LayoutProps {
 
 function InboxDivider() {
   return (
-    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-[1px] max-h-[1px] bg-edge-muted" />
+    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px bg-edge-muted" />
   );
 }
 
@@ -653,7 +653,7 @@ function WideLayout(props: LayoutProps) {
             {(entity) => (
               <>
                 <span class="w-(--title-width) shrink-0">
-                  <span class="truncate max-w-[8rem] flex gap-2 items-center">
+                  <span class="truncate max-w-32 flex gap-2 items-center">
                     <EmailIdentity entity={entity()} />
                   </span>
                 </span>
@@ -902,7 +902,7 @@ export function ListEntity(props: ListEntityProps) {
           'hover:bg-hover/30':
             !props.checked && !props.highlighted && !props.hovered,
           'bg-hover/20': props.hovered && !props.highlighted && !props.checked,
-          'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px]':
+          'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1':
             props.highlighted && !isMobile(),
         }
       )}

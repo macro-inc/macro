@@ -159,8 +159,8 @@ const CustomCursorTest = () => {
           class={cn(
             'px-4 py-2 rounded border transition-colors',
             useClass() && !useStyle()
-              ? 'bg-[var(--color-accent)] text-page border-[var(--color-accent)]'
-              : 'bg-transparent border-[var(--color-edge)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+              ? 'bg-(--color-accent) text-page border-(--color-accent)'
+              : 'bg-transparent border-(--color-edge) text-(--color-text) hover:bg-(--color-surface-hover)'
           )}
           onClick={() => {
             setUseClass(true);
@@ -173,8 +173,8 @@ const CustomCursorTest = () => {
           class={cn(
             'px-4 py-2 rounded border transition-colors',
             !useClass() && useStyle()
-              ? 'bg-[var(--color-accent)] text-page border-[var(--color-accent)]'
-              : 'bg-transparent border-[var(--color-edge)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+              ? 'bg-(--color-accent) text-page border-(--color-accent)'
+              : 'bg-transparent border-(--color-edge) text-(--color-text) hover:bg-(--color-surface-hover)'
           )}
           onClick={() => {
             setUseClass(false);
@@ -188,8 +188,8 @@ const CustomCursorTest = () => {
           class={cn(
             'px-4 py-2 rounded border transition-colors',
             useClass() && useStyle()
-              ? 'bg-[var(--color-accent)] text-page border-[var(--color-accent)]'
-              : 'bg-transparent border-[var(--color-edge)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+              ? 'bg-(--color-accent) text-page border-(--color-accent)'
+              : 'bg-transparent border-(--color-edge) text-(--color-text) hover:bg-(--color-surface-hover)'
           )}
           onClick={() => {
             setUseClass(true);
@@ -203,7 +203,7 @@ const CustomCursorTest = () => {
         <For each={cursorTypes}>
           {({ name, cursor, tw }) => (
             <div
-              class="flex items-center justify-center border border-[var(--color-edge)] p-2 rounded hover:bg-[var(--color-surface-hover)] transition-colors"
+              class="flex items-center justify-center border border-(--color-edge) p-2 rounded hover:bg-(--color-surface-hover) transition-colors"
               classList={{ [`${tw}`]: !!tw && useClass() }}
               style={{
                 cursor: useStyle() ? `var(--cursor-${cursor})` : undefined,
@@ -224,7 +224,7 @@ const CustomCursorTest = () => {
         </div>
         {/* SCUFFED: how do we want to handle this color? */}
         <div
-          class="border border-[color:oklch(0.554_0.046_257.417)] p-2"
+          class="border border-[oklch(0.554_0.046_257.417)] p-2"
           contenteditable
         >
           contenteditable

@@ -28,7 +28,7 @@ export const BulkDeleteView = (props: {
 
   return (
     <>
-      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
         <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
           <CloseIcon />
         </Dialog.CloseButton>

@@ -81,6 +81,7 @@ type WithChannelId = { channel_id: string };
 type WithMessageId = { message_id: string };
 type WithMentionId = { mention_id: string };
 type WithEntity = { entity_type: string; entity_id: string };
+export type ChannelAttachmentType = 'static' | 'dss';
 
 export const ChannelTypeEnum = {
   Public: ChannelType.public,
@@ -435,16 +436,22 @@ export const commsServiceClient = {
     );
   },
   async getChannelAttachments(
-    args: WithChannelId & { limit: number; cursor: string | null }
+    args: WithChannelId & {
+      limit: number;
+      cursor: string | null;
+      attachment_type?: ChannelAttachmentType;
+      signal?: AbortSignal;
+    }
   ) {
-    const { channel_id, limit, cursor } = args;
+    const { channel_id, limit, cursor, attachment_type, signal } = args;
     const params = new URLSearchParams();
     params.append('limit', limit.toString());
     if (cursor) params.append('cursor', cursor);
+    if (attachment_type) params.append('attachment_type', attachment_type);
     return mapOk(
       await commsFetch<ApiChannelAttachmentsPage>(
         `/channels/${channel_id}/attachments?${params.toString()}`,
-        { method: 'GET' }
+        { method: 'GET', signal }
       ),
       (result) => result
     );

@@ -200,20 +200,20 @@ export function SplitFileMenu(props: {
             {(op, i) => (
               <>
                 <Show when={op.divideAbove && i() >= 1}>
-                  <div class="my-1 h-[1px] bg-edge-muted/50" />
+                  <div class="my-1 h-px bg-edge-muted/50" />
                 </Show>
                 <MenuItem text={op.label} onClick={op.action} icon={op.icon} />
               </>
             )}
           </For>
           <Show when={filteredTools().length > 0 && ops().length > 0}>
-            <div class="my-1 h-[1px] bg-edge" />
+            <div class="my-1 h-px bg-edge" />
           </Show>
           <For each={filteredTools()}>
             {(tool, i) => (
               <>
                 <Show when={tool.divideAbove && i() > 0}>
-                  <div class="my-1 h-[1px] bg-edge" />
+                  <div class="my-1 h-px bg-edge" />
                 </Show>
                 <MenuItem
                   text={

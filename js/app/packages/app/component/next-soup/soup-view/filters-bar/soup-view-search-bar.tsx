@@ -127,13 +127,13 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         <SearchIcon class="size-4 shrink-0" />
         <div
           data-soup-search
-          class="flex-1 min-w-0 [&_[contenteditable]]:outline-none [&_[contenteditable]]:p-0 [&_p]:my-0"
+          class="flex-1 min-w-0 **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 [&_p]:my-0"
         >
           <MarkdownShell
             config={editor}
             placeholder={props.placeholder ?? 'Search'}
             autofocus={props.autoFocus}
-            class="!min-h-0 !overflow-visible"
+            class="min-h-0! overflow-visible!"
           />
         </div>
         <Show when={!hasContent() && !props.onDismiss}>

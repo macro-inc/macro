@@ -1,12 +1,10 @@
 import { batch, createEffect, createSignal, For, type Setter, untrack } from 'solid-js';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
 import type { ThemeReactiveColor } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { ColorSwatch } from './ColorSwatch';
 
-const formatArray = ['hex', 'rgb', 'hsl', 'oklch'];
-const [displayType, setDisplayType] = createSignal(formatArray[0]);
+const displayType = () => 'hex';
 
 function setColor(colorValue: ThemeReactiveColor, colorString: string, inputElement: HTMLInputElement, setIsSetByInput: Setter<boolean>){
   if(!colorString || colorString.trim() === '' || colorString.length < 6 || !validateColor(colorString)){
@@ -86,13 +84,7 @@ export function ThemeEditorAdvanced(){
               z-index: 1;
             "
             >
-              <SegmentedControl
-                onChange={setDisplayType}
-                value={displayType()}
-                list={formatArray}
-                label="Format"
-                size="SM"
-              />
+              <div style="font-size: var(--text-xs);">Theme Tokens</div>
             </div>
             <div style="height: 41px;" />
 

@@ -195,6 +195,7 @@ pub(crate) type DssCallService = CallServiceImpl<
     EntityAccessService,
     NotificationIngressType,
     Option<call::outbound::s3_recording_storage::S3RecordingStorage>,
+    call::outbound::ai_call_summarizer::AiCallSummarizer,
 >;
 
 /// Type alias for the call router state.

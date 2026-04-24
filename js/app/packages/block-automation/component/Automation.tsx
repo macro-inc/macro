@@ -232,7 +232,7 @@ export function Automation() {
       {(d) => (
         <>
           <SplitHeaderLeft>
-            <div class="z-3 relative flex h-full w-screen max-w-full shrink items-center gap-2">
+            <div class="z-page-overlay relative flex h-full w-screen max-w-full shrink items-center gap-2">
               <EntityIcon class="shrink-0" targetType="automation" size="xs" />
               <span
                 class="inline-block min-w-0 flex-1 truncate text-sm"

@@ -116,13 +116,13 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
     <Show when={!context.isConsecutive()}>
       <div class="font-mono flex flex-row items-center justify-between">
         {/*  Name */}
-        <div class="ph-no-capture shrink-1 min-w-0 text-sm truncate text-ink-muted">
+        <div class="ph-no-capture shrink min-w-0 text-sm truncate text-ink-muted">
           {local.name}
         </div>
         {/* Tag */}
         <Show when={local.tagLabel}>
-          <div class="inline-flex items-center ml-2 px-0.5 text-xs bg-edge/15 text-ink border-1 border-edge/30 max-w-[240px] min-w-0">
-            <div class="flex-shrink-0 px-0.5">
+          <div class="inline-flex items-center ml-2 px-0.5 text-xs bg-edge/15 text-ink border border-edge/30 max-w-[240px] min-w-0">
+            <div class="shrink-0 px-0.5">
               <Show when={local.tagIcon}>
                 <CustomEntityIcon icon={local.tagIcon!} size="xs" />
               </Show>
@@ -186,7 +186,7 @@ export const NestedConnectorLines: Component<NestedConnectorLinesProps> = (
   }
 
   return (
-    <div class="absolute left-0 top-0 w-full h-full z-1 pointer-events-none">
+    <div class="absolute left-0 top-0 w-full h-full z-user-highlight pointer-events-none">
       {NestedLines}
     </div>
   );
@@ -256,7 +256,7 @@ const Root: Component<MessageRootProps> = (props) => {
           >
             <div
               class={cn(
-                'relative flex flex-col pl-[calc(var(--user-icon-width)/2+var(--message-padding-x))] ml-[var(--left-of-connector)]',
+                'relative flex flex-col pl-[calc(var(--user-icon-width)/2+var(--message-padding-x))] ml-(--left-of-connector)',
                 !props.hideConnectors && 'border-l',
                 props.isNewMessage ? 'border-accent' : 'border-edge-muted',
                 !(
@@ -359,7 +359,7 @@ const Root: Component<MessageRootProps> = (props) => {
           >
             <Show when={props.timestamp}>
               {(timestamp) => (
-                <div class="absolute top-0 translate-y-[-100%] bg-panel pl-2 pt-2 text-xs text-ink-muted font-mono mb-0.5 select-text cursor-default">
+                <div class="absolute top-0 -translate-y-full bg-panel pl-2 pt-2 text-xs text-ink-muted font-mono mb-0.5 select-text cursor-default">
                   {formatDate(timestamp(), {
                     showTime: true,
                   })}
@@ -393,7 +393,7 @@ const Root: Component<MessageRootProps> = (props) => {
                     tabIndex={0}
                     class="text-ink-muted flex flex-row justify-center items-center relative px-0 py-0 hover:bg-transparent active:border-transparent active:bg-transparent active:text-inherit hover:opacity-100"
                   >
-                    <div class="border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center ml-2 mr-2 mb-2 size-[var(--user-icon-width)] touch:min-h-[var(--user-icon-width)] touch:min-w-[var(--user-icon-width)]">
+                    <div class="border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center ml-2 mr-2 mb-2 size-(--user-icon-width) touch:min-h-(--user-icon-width) touch:min-w-(--user-icon-width)">
                       <IconPlus class="size-1/2" />
                     </div>
                   </Button>
