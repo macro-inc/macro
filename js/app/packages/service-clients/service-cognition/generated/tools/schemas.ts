@@ -314,6 +314,9 @@ export const SearchToolResponse = z.object({
           call_id: z.string().uuid(),
           call_search_results: z.array(
             z.object({
+              ended_at: z
+                .union([z.string().datetime({ offset: true }), z.null()])
+                .optional(),
               highlight: z.object({
                 bcc: z.array(z.string()).optional(),
                 cc: z.array(z.string()).optional(),
@@ -324,6 +327,12 @@ export const SearchToolResponse = z.object({
                 user_id: z.union([z.string(), z.null()]).optional(),
               }),
               score: z.union([z.number(), z.null()]).optional(),
+              sequence_num: z.union([z.number().int(), z.null()]).optional(),
+              speaker_id: z.union([z.string(), z.null()]).optional(),
+              started_at: z
+                .union([z.string().datetime({ offset: true }), z.null()])
+                .optional(),
+              transcript_id: z.union([z.string().uuid(), z.null()]).optional(),
             })
           ),
           channel_id: z.string().uuid(),
@@ -331,7 +340,9 @@ export const SearchToolResponse = z.object({
           metadata: z
             .union([
               z.object({
+                attended: z.boolean(),
                 channel_name: z.union([z.string(), z.null()]).optional(),
+                created_by: z.string(),
                 duration_ms: z.number().int(),
                 ended_at: z.string().datetime({ offset: true }),
                 started_at: z.string().datetime({ offset: true }),
