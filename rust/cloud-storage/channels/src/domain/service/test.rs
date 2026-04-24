@@ -26,7 +26,7 @@ fn make_row(id: Uuid, minutes_ago: i64) -> TopLevelMessageRow {
 fn empty_repo() -> MockChannelMessagesRepo {
     let mut repo = MockChannelMessagesRepo::new();
     repo.expect_get_top_level_messages()
-        .returning(|_, _, _, _, _| {
+        .returning(|_, _, _, _, _, _| {
             Box::pin(async {
                 Ok(TopLevelMessagesQueryResult {
                     rows: vec![],
@@ -63,6 +63,7 @@ async fn returns_empty_page_for_no_messages() {
             MessagePageDirection::Older,
             50,
             &ChannelMessageFilters::default(),
+            None,
         )
         .await
         .unwrap();
@@ -93,7 +94,7 @@ async fn returns_messages_with_thread_info() {
 
     let row_clone = row.clone();
     repo.expect_get_top_level_messages()
-        .returning(move |_, _, _, _, _| {
+        .returning(move |_, _, _, _, _, _| {
             let r = row_clone.clone();
             Box::pin(async move {
                 Ok(TopLevelMessagesQueryResult {
@@ -151,6 +152,7 @@ async fn returns_messages_with_thread_info() {
             MessagePageDirection::Older,
             50,
             &ChannelMessageFilters::default(),
+            None,
         )
         .await
         .unwrap();
@@ -169,8 +171,8 @@ async fn returns_messages_with_thread_info() {
 async fn clamps_limit() {
     let mut repo = MockChannelMessagesRepo::new();
     repo.expect_get_top_level_messages()
-        .withf(|_, _, _, limit, _| *limit == 100)
-        .returning(|_, _, _, _, _| {
+        .withf(|_, _, _, limit, _, _| *limit == 100)
+        .returning(|_, _, _, _, _, _| {
             Box::pin(async {
                 Ok(TopLevelMessagesQueryResult {
                     rows: vec![],
@@ -193,6 +195,7 @@ async fn clamps_limit() {
             MessagePageDirection::Older,
             200,
             &ChannelMessageFilters::default(),
+            None,
         )
         .await
         .unwrap();

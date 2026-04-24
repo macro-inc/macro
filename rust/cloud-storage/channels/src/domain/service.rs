@@ -162,12 +162,20 @@ where
         direction: MessagePageDirection,
         limit: u16,
         filters: &ChannelMessageFilters,
+        notification_user_id: Option<String>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         let limit = limit.clamp(1, 100);
 
         let rows_result = self
             .repo
-            .get_top_level_messages(channel_id, &query, direction, limit, filters)
+            .get_top_level_messages(
+                channel_id,
+                &query,
+                direction,
+                limit,
+                filters,
+                notification_user_id,
+            )
             .await
             .map_err(anyhow::Error::from)?;
 
