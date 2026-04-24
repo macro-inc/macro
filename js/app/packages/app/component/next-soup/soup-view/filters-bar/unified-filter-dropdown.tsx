@@ -13,6 +13,7 @@ import {
   createSignal,
   For,
   type JSX,
+  onCleanup,
   Show,
 } from 'solid-js';
 import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';
@@ -347,18 +348,35 @@ const SearchableFilterSubmenu = (props: {
     else setInternalOpen(v);
   };
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
+  const [subContentRef, setSubContentRef] = createSignal<HTMLDivElement>();
 
-  // Focus the search input whenever the sub is open and the input is mounted.
-  // The setTimeout defers past Kobalte's own `setTimeout(tryAutoFocus, 0)` in
-  // `createSelectableCollection`, which would otherwise focus SubContent (the
-  // menu owns no items of its own — the Combobox does). Runs for both hover
-  // and keyboard because we can't rely on Kobalte focusing SubContent: on
-  // hover, its delayed pointer handler opens with `autoFocus=false`, so no
-  // focusin fires on SubContent for us to hook.
+  // Hold focus on the search input while the sub is open. Kobalte's menu
+  // primitives can focus the SubContent in several places (mount's
+  // `tryAutoFocus`, pointer-grace `focusContent`, item-leave handlers), and
+  // which one fires depends on whether the sub was opened by keyboard or
+  // hover — so racing a setTimeout isn't reliable across environments.
+  // Instead, we listen for any focus landing inside the sub that isn't on
+  // the input or a listbox option and pull it back. Scoped to the sub's own
+  // DOM so clicks outside still dismiss the menu normally.
   createEffect(() => {
     const el = inputRef();
-    if (!isOpen() || !el) return;
-    setTimeout(() => el.focus(), 0);
+    const container = subContentRef();
+    if (!isOpen() || !el || !container) return;
+
+    const reclaim = (e: FocusEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || target === el) return;
+      if (!container.contains(target)) return;
+      if (target.getAttribute?.('role') === 'option') return;
+      el.focus();
+    };
+    document.addEventListener('focusin', reclaim, true);
+    onCleanup(() => document.removeEventListener('focusin', reclaim, true));
+
+    // Some open paths (e.g. hover, where Kobalte opens with autoFocus=false)
+    // don't dispatch a focusin on SubContent for us to react to, so pull
+    // focus once up front as well.
+    el.focus();
   });
 
   return (
@@ -382,7 +400,10 @@ const SearchableFilterSubmenu = (props: {
       </DropdownMenu.SubTrigger>
 
       <DropdownMenu.Portal>
-        <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden">
+        <DropdownMenu.SubContent
+          ref={setSubContentRef}
+          class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden"
+        >
           <SearchableMultiSelectInline
             options={props.options}
             activeIds={props.activeIds}
