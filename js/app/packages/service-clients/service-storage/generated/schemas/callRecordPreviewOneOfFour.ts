@@ -9,9 +9,7 @@ import type { CallRecordPreviewOneOfFourAllOf } from './callRecordPreviewOneOfFo
 import type { WithCallId } from './withCallId';
 
 /**
- * The call exists but the caller cannot see it. Not produced today —
-retained for structural parity with `DocumentPreview` and so we can
-start emitting it in the future without a breaking response change.
+ * No call with this id exists in either the active or archived tables.
  */
 export type CallRecordPreviewOneOfFour = WithCallId &
   CallRecordPreviewOneOfFourAllOf;

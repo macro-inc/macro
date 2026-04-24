@@ -990,7 +990,7 @@ impl CallRepository for PgCallRepo {
         let previews = unique_call_ids
             .into_iter()
             .map(|call_id| match found.remove(&call_id) {
-                Some(f) => CallRecordPreview::Access(CallRecordPreviewData {
+                Some(f) => CallRecordPreview::Exists(CallRecordPreviewData {
                     call_id,
                     channel_id: f.channel_id,
                     channel_name: channel_names.get(&f.channel_id).cloned(),

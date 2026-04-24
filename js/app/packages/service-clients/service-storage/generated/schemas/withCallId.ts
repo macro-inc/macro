@@ -6,8 +6,8 @@
  */
 
 /**
- * Wrapper carrying just a call id. Used by the non-`Access` variants of
-[`CallRecordPreview`].
+ * Wrapper carrying just a call id. Used by the [`CallRecordPreview::DoesNotExist`]
+variant.
  */
 export interface WithCallId {
   /** The call identifier. */

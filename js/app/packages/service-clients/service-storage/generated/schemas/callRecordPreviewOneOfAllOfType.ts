@@ -10,5 +10,5 @@ export type CallRecordPreviewOneOfAllOfType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const CallRecordPreviewOneOfAllOfType = {
-  access: 'access',
+  exists: 'exists',
 } as const;

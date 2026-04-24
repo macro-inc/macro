@@ -6,15 +6,14 @@
  */
 import type { CallRecordPreviewOneOf } from './callRecordPreviewOneOf';
 import type { CallRecordPreviewOneOfFour } from './callRecordPreviewOneOfFour';
-import type { CallRecordPreviewOneOfSeven } from './callRecordPreviewOneOfSeven';
 
 /**
  * Lightweight preview of a call record, returned by the batch preview endpoint.
 
-Mirrors `model::document::DocumentPreview` in shape: a tagged enum with
-one variant per possible outcome for each requested id.
+Each requested id resolves to one of two outcomes: the call exists
+(`Exists`) or it does not (`DoesNotExist`). The endpoint does not perform
+access checks, so there is no separate "not authorized" variant.
  */
 export type CallRecordPreview =
   | CallRecordPreviewOneOf
-  | CallRecordPreviewOneOfFour
-  | CallRecordPreviewOneOfSeven;
+  | CallRecordPreviewOneOfFour;

@@ -224,24 +224,21 @@ pub struct CallRecord {
 
 /// Lightweight preview of a call record, returned by the batch preview endpoint.
 ///
-/// Mirrors `model::document::DocumentPreview` in shape: a tagged enum with
-/// one variant per possible outcome for each requested id.
+/// Each requested id resolves to one of two outcomes: the call exists
+/// (`Exists`) or it does not (`DoesNotExist`). The endpoint does not perform
+/// access checks, so there is no separate "not authorized" variant.
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CallRecordPreview {
-    /// The call exists and the caller is permitted to see it.
-    Access(CallRecordPreviewData),
-    /// The call exists but the caller cannot see it. Not produced today —
-    /// retained for structural parity with `DocumentPreview` and so we can
-    /// start emitting it in the future without a breaking response change.
-    NoAccess(WithCallId),
+    /// The call exists (in either the active or archived table).
+    Exists(CallRecordPreviewData),
     /// No call with this id exists in either the active or archived tables.
     DoesNotExist(WithCallId),
 }
 
-/// Wrapper carrying just a call id. Used by the non-`Access` variants of
-/// [`CallRecordPreview`].
+/// Wrapper carrying just a call id. Used by the [`CallRecordPreview::DoesNotExist`]
+/// variant.
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]

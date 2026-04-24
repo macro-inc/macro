@@ -907,25 +907,25 @@ async fn batch_get_call_record_previews_mixes_active_archived_and_missing(
 
     assert_eq!(previews.len(), 3);
 
-    // Active call comes back as Access with ended_at = None.
+    // Active call comes back as Exists with ended_at = None.
     match &previews[0] {
-        CallRecordPreview::Access(data) => {
+        CallRecordPreview::Exists(data) => {
             assert_eq!(data.call_id, CALL1);
             assert_eq!(data.channel_id, CH1);
             assert_eq!(data.channel_name.as_deref(), Some("call-test-channel"));
             assert!(data.ended_at.is_none());
         }
-        other => panic!("expected Access for active call, got {other:?}"),
+        other => panic!("expected Exists for active call, got {other:?}"),
     }
 
-    // Archived call comes back as Access with ended_at populated.
+    // Archived call comes back as Exists with ended_at populated.
     match &previews[1] {
-        CallRecordPreview::Access(data) => {
+        CallRecordPreview::Exists(data) => {
             assert_eq!(data.call_id, CALL_ARCHIVED);
             assert_eq!(data.channel_id, CH1);
             assert!(data.ended_at.is_some());
         }
-        other => panic!("expected Access for archived call, got {other:?}"),
+        other => panic!("expected Exists for archived call, got {other:?}"),
     }
 
     // Missing id comes back as DoesNotExist.
@@ -959,8 +959,8 @@ async fn batch_get_call_record_previews_deduplicates_input(
     let ids: Vec<Uuid> = previews
         .iter()
         .map(|p| match p {
-            CallRecordPreview::Access(d) => d.call_id,
-            CallRecordPreview::NoAccess(w) | CallRecordPreview::DoesNotExist(w) => w.call_id,
+            CallRecordPreview::Exists(d) => d.call_id,
+            CallRecordPreview::DoesNotExist(w) => w.call_id,
         })
         .collect();
     assert_eq!(

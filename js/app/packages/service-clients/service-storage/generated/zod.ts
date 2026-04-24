@@ -859,33 +859,18 @@ export const getBatchCallRecordPreviewResponse = zod
               .describe('Preview payload returned for each found call id.')
               .and(
                 zod.object({
-                  type: zod.enum(['access']),
+                  type: zod.enum(['exists']),
                 })
               )
               .describe(
-                'The call exists and the caller is permitted to see it.'
+                'The call exists (in either the active or archived table).'
               ),
             zod
               .object({
                 callId: zod.string().uuid().describe('The call identifier.'),
               })
               .describe(
-                'Wrapper carrying just a call id. Used by the non-`Access` variants of\n[`CallRecordPreview`].'
-              )
-              .and(
-                zod.object({
-                  type: zod.enum(['no_access']),
-                })
-              )
-              .describe(
-                'The call exists but the caller cannot see it. Not produced today —\nretained for structural parity with `DocumentPreview` and so we can\nstart emitting it in the future without a breaking response change.'
-              ),
-            zod
-              .object({
-                callId: zod.string().uuid().describe('The call identifier.'),
-              })
-              .describe(
-                'Wrapper carrying just a call id. Used by the non-`Access` variants of\n[`CallRecordPreview`].'
+                'Wrapper carrying just a call id. Used by the [`CallRecordPreview::DoesNotExist`]\nvariant.'
               )
               .and(
                 zod.object({
@@ -897,7 +882,7 @@ export const getBatchCallRecordPreviewResponse = zod
               ),
           ])
           .describe(
-            'Lightweight preview of a call record, returned by the batch preview endpoint.\n\nMirrors `model::document::DocumentPreview` in shape: a tagged enum with\none variant per possible outcome for each requested id.'
+            'Lightweight preview of a call record, returned by the batch preview endpoint.\n\nEach requested id resolves to one of two outcomes: the call exists\n(`Exists`) or it does not (`DoesNotExist`). The endpoint does not perform\naccess checks, so there is no separate \"not authorized\" variant.'
           )
       )
       .describe('One entry per deduplicated input id.'),

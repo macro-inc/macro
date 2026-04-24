@@ -6304,7 +6304,7 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/CallRecordPreviewData",
-                "description": "The call exists and the caller is permitted to see it."
+                "description": "The call exists (in either the active or archived table)."
               },
               {
                 "type": "object",
@@ -6312,31 +6312,12 @@
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["access"]
+                    "enum": ["exists"]
                   }
                 }
               }
             ],
-            "description": "The call exists and the caller is permitted to see it."
-          },
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/WithCallId",
-                "description": "The call exists but the caller cannot see it. Not produced today —\nretained for structural parity with `DocumentPreview` and so we can\nstart emitting it in the future without a breaking response change."
-              },
-              {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": ["no_access"]
-                  }
-                }
-              }
-            ],
-            "description": "The call exists but the caller cannot see it. Not produced today —\nretained for structural parity with `DocumentPreview` and so we can\nstart emitting it in the future without a breaking response change."
+            "description": "The call exists (in either the active or archived table)."
           },
           {
             "allOf": [
@@ -6358,7 +6339,7 @@
             "description": "No call with this id exists in either the active or archived tables."
           }
         ],
-        "description": "Lightweight preview of a call record, returned by the batch preview endpoint.\n\nMirrors `model::document::DocumentPreview` in shape: a tagged enum with\none variant per possible outcome for each requested id."
+        "description": "Lightweight preview of a call record, returned by the batch preview endpoint.\n\nEach requested id resolves to one of two outcomes: the call exists\n(`Exists`) or it does not (`DoesNotExist`). The endpoint does not perform\naccess checks, so there is no separate \"not authorized\" variant."
       },
       "CallRecordPreviewData": {
         "type": "object",
@@ -12028,7 +12009,7 @@
       },
       "WithCallId": {
         "type": "object",
-        "description": "Wrapper carrying just a call id. Used by the non-`Access` variants of\n[`CallRecordPreview`].",
+        "description": "Wrapper carrying just a call id. Used by the [`CallRecordPreview::DoesNotExist`]\nvariant.",
         "required": ["callId"],
         "properties": {
           "callId": {

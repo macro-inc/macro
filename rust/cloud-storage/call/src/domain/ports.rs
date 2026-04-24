@@ -171,10 +171,9 @@ pub trait CallRepository: Send + Sync + 'static {
     ///
     /// Returns one [`CallRecordPreview`] per deduplicated id in `call_ids`,
     /// in the order supplied. Ids that resolve to a row (in either `calls`
-    /// or `call_records`) come back as [`CallRecordPreview::Access`]; ids
+    /// or `call_records`) come back as [`CallRecordPreview::Exists`]; ids
     /// that match neither come back as [`CallRecordPreview::DoesNotExist`].
-    /// The repository layer never produces [`CallRecordPreview::NoAccess`]
-    /// — access is not checked here.
+    /// No access checks are performed.
     ///
     /// `user_id` is used solely to resolve channel display names (e.g. the
     /// "other participant" in a DM) and is not used for authorization.

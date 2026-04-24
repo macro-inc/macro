@@ -8,7 +8,7 @@ import type { CallRecordPreviewData } from './callRecordPreviewData';
 import type { CallRecordPreviewOneOfAllOf } from './callRecordPreviewOneOfAllOf';
 
 /**
- * The call exists and the caller is permitted to see it.
+ * The call exists (in either the active or archived table).
  */
 export type CallRecordPreviewOneOf = CallRecordPreviewData &
   CallRecordPreviewOneOfAllOf;
