@@ -1,6 +1,9 @@
+import { cn } from '@ui/utils/classname';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { staticFileIdEndpoint } from '@core/constant/servers';
+import { internalDrag } from '@core/directive/internalDragState';
+false && internalDrag;
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { idToEmail } from '@core/user';
 import { createStaticFile } from '@core/util/create';
@@ -49,41 +52,47 @@ export function ProfilePicture(props: ProfilePictureProps) {
 
   if (!ENABLE_PROFILE_PICTURES) {
     return (
-      <div class="flex size-full min-h-0 min-w-0 items-center justify-center">
-        <span class={`shrink-0 leading-none ${props.sizeClass.text}`}>
-          {email().substring(0, 1).toUpperCase()}
-        </span>
+      <div class={cn('flex-shrink-0', props.sizeClass.text)}>
+        {email().substring(0, 1).toUpperCase()}
       </div>
     );
   }
 
   const [profilePicUrl] = useProfilePictureUrl(props.id);
   return (
-    <div class="flex size-full min-h-0 min-w-0 flex-col items-center justify-center">
-      <Show
-        when={profilePicUrl()}
-        fallback={
-          <div
-            class="flex size-full min-h-0 min-w-0 flex-col items-center justify-center"
-            style={{ 'line-height': 0 }}
-          >
-            <span class={`shrink-0 leading-none ${props.sizeClass.text}`}>
-              {email().substring(0, 1).toUpperCase()}
-            </span>
-          </div>
-        }
-        keyed
-      >
-        {(url) => (
-          <div class="size-full min-h-0 min-w-0 shrink-0 overflow-hidden rounded-full">
-            <img
-              src={url}
-              alt=""
-              class="block size-full object-cover rounded-full"
-            />
-          </div>
-        )}
-      </Show>
-    </div>
+    <Show
+      when={profilePicUrl()}
+      fallback={
+        <div
+          class={cn(
+            'shrink-0 flex items-center justify-center',
+            props.sizeClass.container
+          )}
+          style={{
+            'line-height': 0,
+          }}
+        >
+          <span class={props.sizeClass.text}>
+            {email().substring(0, 1).toUpperCase()}
+          </span>
+        </div>
+      }
+      keyed
+    >
+      {(url) => (
+        <div
+          class={cn(
+            'flex-shrink-0 overflow-hidden rounded-full',
+            props.sizeClass.container
+          )}
+        >
+          <img
+            src={url}
+            class="object-cover rounded-full w-full h-full origin-[50%_20%]"
+            use:internalDrag={true}
+          />
+        </div>
+      )}
+    </Show>
   );
 }

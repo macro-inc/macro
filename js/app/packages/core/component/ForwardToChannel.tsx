@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { useAnalytics } from '@app/component/analytics-context';
@@ -351,7 +352,10 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         <div class="shrink-0 flex w-full items-center p-3 gap-3 flex-wrap">
           <Show when={canSendAsGroup()}>
             <label
-              class={`flex items-start gap-2 ${!canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-default'}`}
+              class={cn(
+                'flex items-start gap-2',
+                !canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-default'
+              )}
             >
               <div class="relative mt-0.5">
                 <input
@@ -364,11 +368,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   type="checkbox"
                 />
                 <div
-                  class={`w-4 h-4 border ${
+                  class={cn(
+                    'w-4 h-4 border',
                     !canSendAsGroup()
                       ? 'border-edge/30 peer-checked:bg-menu/20'
                       : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
-                  }`}
+                  )}
                 >
                   <Show when={sendAsGroupMessage() && canSendAsGroup()}>
                     <CheckIcon class="w-full h-full text-accent p-0.5" />
@@ -376,11 +381,19 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 </div>
               </div>
               <div
-                class={`flex flex-col text-sm ${!canSendAsGroup() ? 'text-ink-disabled/50' : ''}`}
+                class={cn(
+                  'flex flex-col text-sm',
+                  !canSendAsGroup() && 'text-ink-disabled/50'
+                )}
               >
                 <span class="font-medium">Send As Group Message</span>
                 <span
-                  class={`text-xs mt-0.5 ${!canSendAsGroup() ? 'text-ink-disabled/50' : 'text-ink-muted'}`}
+                  class={cn(
+                    'text-xs mt-0.5',
+                    !canSendAsGroup()
+                      ? 'text-ink-disabled/50'
+                      : 'text-ink-muted'
+                  )}
                 >
                   {sendAsGroupMessage() && canSendAsGroup()
                     ? 'Creates a new group message with all recipients'

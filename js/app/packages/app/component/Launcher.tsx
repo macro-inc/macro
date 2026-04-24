@@ -714,7 +714,12 @@ export const LauncherInner = (props: LauncherInnerProps) => {
               class="shift-ripple absolute inset-0 rounded-sm border border-accent pointer-events-none opacity-0"
             />
             <span
-              class={`px-1 py-0.5 rounded-sm h-fit ring text-xs grid place-items-center transition-colors duration-150 ${shiftHeld() ? 'ring-accent text-accent bg-accent/10' : 'ring-edge-muted'}`}
+              class={cn(
+                'px-1 py-0.5 rounded-sm h-fit ring text-xs grid place-items-center transition-colors duration-150',
+                shiftHeld()
+                  ? 'ring-accent text-accent bg-accent/10'
+                  : 'ring-edge-muted'
+              )}
             >
               <Hotkey shortcut="shift" />
             </span>

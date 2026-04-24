@@ -202,6 +202,13 @@ impl DocumentService for StubDocumentService {
     ) -> Result<documents::domain::models::CreateTaskResponse, DocumentError> {
         unimplemented!()
     }
+
+    async fn get_document_comments(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<documents::domain::models::CommentThread>, DocumentError> {
+        unimplemented!()
+    }
 }
 
 /// Stateful stub repo that tracks task IDs per github key.

@@ -14,5 +14,5 @@ urlencoding = { version = "2", optional = true }
 
 [dev-dependencies]
 cool_asserts = "2"
-serde_urlencoded = { version = "0.7" }
+serde_urlencoded = { workspace = true }
 url = { workspace = true, features = ["serde"] }

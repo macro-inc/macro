@@ -1,4 +1,5 @@
 import { Color } from '@block-pdf/model/Color';
+import { cn } from '@ui/utils/classname';
 import { activePlaceableIdSignal } from '@block-pdf/signal/placeables';
 import {
   useDeletePlaceable,
@@ -71,7 +72,10 @@ export function TextBox(props: TextBoxProps) {
 
   return (
     <textarea
-      class={`p-0 overflow-hidden whitespace-pre-wrap rounded-sm ${readOnly() ? 'resize-none' : 'resize'}`}
+      class={cn(
+        'p-0 overflow-hidden whitespace-pre-wrap rounded-sm',
+        readOnly() ? 'resize-none' : 'resize'
+      )}
       style={textStyling()}
       ref={(el) => {
         if (typeof props.ref === 'function') {

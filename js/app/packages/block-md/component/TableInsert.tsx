@@ -87,7 +87,10 @@ const TableGrid = ({
           <Portal>
             <div
               class="fixed bg-dialog text-ink text-xs px-2 py-1 rounded pointer-events-none"
-              style={`left: ${cursorPos().x + 10}px; top: ${cursorPos().y + 10}px;`}
+              style={{
+                left: `${cursorPos().x + 10}px`,
+                top: `${cursorPos().y + 10}px;`,
+              }}
             >
               {hoverPosition().row + 1} × {hoverPosition().col + 1}
             </div>

@@ -1,8 +1,8 @@
 use crate::config::Config;
 use crate::service::ai_stream_registry::AiStreamRegistry;
 use ai_tools::{
-    AiToolSet, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
-    ToolPropertiesToolContext, ToolServiceContext, ToolSoupService,
+    AiToolSet, ToolCallToolContext, ToolDocumentToolContext, ToolEmailService,
+    ToolEmailToolContext, ToolPropertiesToolContext, ToolServiceContext, ToolSoupService,
 };
 use axum::extract::FromRef;
 use connection_gateway::service::connection::ConnectionRepo;
@@ -59,6 +59,7 @@ pub struct ApiContext {
     pub memory_service: Arc<DcsMemoryService>,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
+    pub call_tool_context: ToolCallToolContext,
     pub tool_service_context: ToolServiceContext,
     pub all_tools: Arc<AiToolSet>,
     pub all_tools_prompt: &'static str,

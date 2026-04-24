@@ -290,7 +290,7 @@ pub fn dispatch_notification_task(
 }
 
 /// Updates channel share permissions for a list of items shared in a message.
-async fn update_channel_share_permissions_for_items(
+pub(super) async fn update_channel_share_permissions_for_items(
     db: &PgPool,
     entity_access_service: &impl entity_access::domain::ports::EntityAccessService,
     user_id: &str,

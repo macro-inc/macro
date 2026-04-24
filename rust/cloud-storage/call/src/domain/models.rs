@@ -222,6 +222,76 @@ pub struct CallRecord {
     pub transcript: Vec<CallRecordTranscriptSegment>,
 }
 
+/// Lightweight preview of a call record, returned by the batch preview endpoint.
+///
+/// Each requested id resolves to one of two outcomes: the call exists
+/// (`Exists`) or it does not (`DoesNotExist`). The endpoint does not perform
+/// access checks, so there is no separate "not authorized" variant.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum CallRecordPreview {
+    /// The call exists (in either the active or archived table).
+    Exists(CallRecordPreviewData),
+    /// No call with this id exists in either the active or archived tables.
+    DoesNotExist(WithCallId),
+}
+
+/// Wrapper carrying just a call id. Used by the [`CallRecordPreview::DoesNotExist`]
+/// variant.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct WithCallId {
+    /// The call identifier.
+    pub call_id: Uuid,
+}
+
+/// Preview payload returned for each found call id.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CallRecordPreviewData {
+    /// The call identifier.
+    pub call_id: Uuid,
+    /// The channel this call belongs to.
+    pub channel_id: Uuid,
+    /// Resolved display name for the channel.
+    pub channel_name: Option<String>,
+    /// When the call started (created_at for active, started_at for archived).
+    pub started_at: DateTime<Utc>,
+    /// When the call ended (None if still active).
+    pub ended_at: Option<DateTime<Utc>>,
+}
+
+/// Maximum number of call ids accepted in a single batch preview request.
+///
+/// Requests exceeding this limit are rejected with `400 Bad Request` so that
+/// DB work and response size remain bounded per call.
+pub const MAX_BATCH_CALL_IDS: usize = 100;
+
+/// Request body for `POST /call/record/preview`.
+///
+/// The `call_ids` list is bounded at [`MAX_BATCH_CALL_IDS`]; the handler
+/// rejects anything larger with a 400 before touching the database.
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GetBatchCallRecordPreviewRequest {
+    /// The call ids to preview. Duplicate ids are deduplicated server-side.
+    /// Capped at [`MAX_BATCH_CALL_IDS`] entries.
+    pub call_ids: Vec<Uuid>,
+}
+
+/// Response body for `POST /call/record/preview`.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GetBatchCallRecordPreviewResponse {
+    /// One entry per deduplicated input id.
+    pub previews: Vec<CallRecordPreview>,
+}
+
 /// Request to fetch recent call records for a user (used by Soup).
 #[derive(Debug)]
 pub struct GetCallRecordsRequest {
@@ -233,6 +303,22 @@ pub struct GetCallRecordsRequest {
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<CallLiteral>>,
 }
 
+/// Errors that can occur when adding a participant to a call at the
+/// repository boundary. Splitting the "already-active-elsewhere" case into
+/// a typed variant lets the service handle it without looking at the
+/// underlying database error type.
+#[derive(Debug, thiserror::Error)]
+pub enum AddParticipantError {
+    /// The user is already an active participant in another call, as
+    /// enforced by the DB-level partial unique index on
+    /// `call_participants (user_id) WHERE left_at IS NULL`.
+    #[error("user is already an active participant in another call")]
+    UserAlreadyActive,
+    /// Any other repository/infrastructure error.
+    #[error(transparent)]
+    Repository(anyhow::Error),
+}
+
 /// Errors that can occur during call operations.
 #[derive(Debug, thiserror::Error)]
 pub enum CallError {
@@ -242,9 +328,17 @@ pub enum CallError {
     /// User is not in the call.
     #[error("user not in call")]
     NotInCall,
+    /// User is already an active participant in another call. The inner
+    /// string is the `channel_id` of that other call, so clients can show
+    /// a targeted message (and optionally deep-link to leave it).
+    #[error("user is already in a call in channel {0}")]
+    AlreadyInCall(String),
     /// Authentication or signature validation failed.
     #[error("authentication failed")]
     Auth,
+    /// The request body violates an API contract (e.g. exceeds a size cap).
+    #[error("{0}")]
+    InvalidRequest(String),
     /// An internal error occurred.
     #[error(transparent)]
     Internal(#[from] anyhow::Error),

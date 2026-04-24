@@ -582,3 +582,49 @@ fn test_sql_injection_thread_id_not_in_raw_sql() {
     assert!(result.has_bind_uuid(&id));
     assert!(result.has_no_raw_containing(&id.to_string()));
 }
+
+#[test]
+fn test_build_thread_email_filter_calendar_only_true_emits_ics_exists() {
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
+    let result = build_thread_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("EXISTS"));
+    assert!(debug.contains("email_attachments"));
+    assert!(debug.contains("m_cal.thread_id = t.id"));
+    assert!(debug.contains("a_cal.filename ILIKE '%.ics'"));
+    assert!(debug.contains("a_cal.mime_type = 'text/calendar'"));
+    assert!(debug.contains("a_cal.mime_type = 'application/ics'"));
+}
+
+#[test]
+fn test_build_thread_email_filter_calendar_only_false_maps_to_true() {
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
+    let result = build_thread_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("TRUE"));
+    assert!(!debug.contains("email_attachments"));
+}
+
+#[test]
+fn test_build_message_email_filter_maps_calendar_only_to_true() {
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
+    let result = build_message_email_filter(&expr);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("TRUE"));
+    assert!(!debug.contains("email_attachments"));
+}
+
+#[test]
+fn test_has_thread_literals_true_when_calendar_only_present() {
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
+    assert!(has_thread_literals(&expr));
+}
+
+#[test]
+fn test_has_message_literals_false_when_only_calendar_only() {
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
+    assert!(!has_message_literals(&expr));
+}

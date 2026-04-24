@@ -15,9 +15,11 @@ import type {
   PostMessageRequest,
 } from '@service-comms/generated/models';
 import type { Attachment, Message } from '@service-comms/generated/models';
+import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { channelKeys, ChannelNonceKeys } from './keys';
+import { ChannelNonceKeys } from './keys';
+import { getChannelMessagesQueryKeyPrefix } from './channel-messages';
 import { createMutationNonce, registerNonce } from '../nonce';
 import {
   captureDeleteSnapshotForTarget,
@@ -156,9 +158,6 @@ function makeOptimisticThreadReply(
 export function optimisticInsertChannelMessage(
   vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>
 ): InsertMessageContext | undefined {
-  const queryKey = channelKeys.withID(vars.channelId).queryKey;
-  queryClient.cancelQueries({ queryKey });
-
   const now = new Date().toISOString();
   const newAttachments = makeOptimisticAttachments(
     vars.channelId,
@@ -281,6 +280,7 @@ export function optimisticUpdateChannelMessage(
   vars: WithChannelId<
     Pick<ChannelMessage, 'message_id' | 'content'> & {
       attachment_ids_to_delete?: string[];
+      attachments_to_add?: NewAttachment[];
     }
   >
 ): UpdateMessageContext | undefined {
@@ -310,13 +310,25 @@ export function optimisticUpdateChannelMessage(
   }
 
   if (context) {
+    const kept = context.previousAttachments.filter(
+      (attachment) => !deletedAttachmentIDs.has(attachment.id)
+    );
+    const added: Attachment[] = (vars.attachments_to_add ?? []).map((a) => ({
+      id: crypto.randomUUID(),
+      channel_id: vars.channelId,
+      message_id: vars.message_id,
+      entity_id: a.entity_id,
+      entity_type: a.entity_type,
+      width: a.width,
+      height: a.height,
+      created_at: now,
+    }));
+
     replaceTargetMessageState(vars.channelId, target, {
       content: vars.content,
       editedAt: now,
       updatedAt: now,
-      attachments: context.previousAttachments.filter(
-        (attachment) => !deletedAttachmentIDs.has(attachment.id)
-      ),
+      attachments: [...kept, ...added],
     });
   }
 
@@ -376,14 +388,13 @@ export function useSendMessageMutation(
     ...withCallbacks<IdResponse, Error, SendMessageParams, SendMessageContext>(
       {
         onMutate: async (vars) => {
-          await queryClient.cancelQueries({
-            queryKey: channelKeys.withID(vars.channelID).queryKey,
-          });
-          // Register nonces for deduplication when WebSocket events arrive
           registerMessageNonces(
             vars.optimisticId,
             vars.message.attachments.length > 0
           );
+          await queryClient.cancelQueries({
+            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelID),
+          });
           return optimisticInsertChannelMessage({
             channelId: vars.channelID,
             optimisticId: vars.optimisticId,
@@ -466,10 +477,10 @@ export function useDeleteMessageMutation(
     ...withCallbacks<void, Error, DeleteMessageParams, DeleteMutationContext>(
       {
         onMutate: async (vars) => {
-          await queryClient.cancelQueries({
-            queryKey: channelKeys.withID(vars.channelID).queryKey,
-          });
           deleteNonce.prepare(vars);
+          await queryClient.cancelQueries({
+            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelID),
+          });
           return optimisticDeleteChannelMessage({
             channelId: vars.channelID,
             message_id: vars.messageID,
@@ -505,6 +516,7 @@ type PatchMessageParams = {
   messageID: string;
   content: string;
   attachmentIDsToDelete?: string[];
+  attachmentsToAdd?: NewAttachment[];
 };
 
 type PatchMutationContext = UpdateMessageContext | undefined;
@@ -535,6 +547,7 @@ export function usePatchMessageMutation(
             message_id: vars.messageID,
             content: vars.content,
             attachment_ids_to_delete: vars.attachmentIDsToDelete,
+            attachments_to_add: vars.attachmentsToAdd,
             nonce: patchNonce.use(vars),
           })
       );
@@ -547,15 +560,16 @@ export function usePatchMessageMutation(
     >(
       {
         onMutate: async (vars) => {
-          await queryClient.cancelQueries({
-            queryKey: channelKeys.withID(vars.channelID).queryKey,
-          });
           patchNonce.prepare(vars);
+          await queryClient.cancelQueries({
+            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelID),
+          });
           return optimisticUpdateChannelMessage({
             channelId: vars.channelID,
             message_id: vars.messageID,
             content: vars.content,
             attachment_ids_to_delete: vars.attachmentIDsToDelete,
+            attachments_to_add: vars.attachmentsToAdd,
           });
         },
         onError(error, vars, context) {

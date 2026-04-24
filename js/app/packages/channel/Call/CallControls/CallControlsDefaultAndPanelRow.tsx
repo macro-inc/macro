@@ -9,9 +9,15 @@ import Users from '@icon/regular/users.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { Show, type Accessor } from 'solid-js';
 import { cn } from '@ui/utils/classname';
+import {
+  MenuGroup,
+  MenuItem,
+  MenuSeparator,
+} from '@core/component/Menu';
 import type { CallControlVariant } from './CallControlButton';
 import { CallControlButton } from './CallControlButton';
 import { CallControlButtonWithDropdown } from './CallControlButtonWithDropdown';
+import { menuGroupLabelClass, menuItemClass } from './call-controls-menu-styles';
 import { CallDeviceList } from '../CallDeviceList';
 import { useCallContext } from '../CallContext';
 
@@ -20,6 +26,31 @@ export type CallControlsDefaultAndPanelRowProps = {
   class?: string;
   onLeave: () => void | Promise<void>;
 };
+
+// Mirrors @livekit/track-processors' supportsBackgroundProcessors()
+// so this menu can render without statically importing heavy processor bundles.
+function isBackgroundBlurSupported(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (
+    !('OffscreenCanvas' in window) ||
+    !('VideoFrame' in window) ||
+    !('createImageBitmap' in window)
+  ) {
+    return false;
+  }
+  try {
+    if (!document.createElement('canvas').getContext('webgl2')) return false;
+  } catch {
+    return false;
+  }
+  const hasStreamProcessor =
+    'MediaStreamTrackProcessor' in window &&
+    'MediaStreamTrackGenerator' in window;
+  const hasFallback =
+    typeof HTMLCanvasElement !== 'undefined' &&
+    'captureStream' in HTMLCanvasElement.prototype;
+  return hasStreamProcessor || hasFallback;
+}
 
 export function CallControlsDefaultAndPanelRow(
   props: CallControlsDefaultAndPanelRowProps
@@ -62,7 +93,7 @@ export function CallControlsDefaultAndPanelRow(
               onSelect={(id) => callCtx.switchAudioInput(id)}
             />
             <Show when={callCtx.audioOutputDevices().length > 0}>
-              <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
+              <MenuSeparator />
               <CallDeviceList
                 label="Speaker"
                 devices={callCtx.audioOutputDevices()}
@@ -87,12 +118,30 @@ export function CallControlsDefaultAndPanelRow(
         active={!callCtx.isVideoMuted()}
         disabled={isConnecting()}
         dropdownContent={() => (
-          <CallDeviceList
-            label="Camera"
-            devices={callCtx.videoInputDevices()}
-            activeDeviceId={callCtx.activeVideoInputDeviceId()}
-            onSelect={(id) => callCtx.switchVideoInput(id)}
-          />
+          <>
+            <CallDeviceList
+              label="Camera"
+              devices={callCtx.videoInputDevices()}
+              activeDeviceId={callCtx.activeVideoInputDeviceId()}
+              onSelect={(id) => callCtx.switchVideoInput(id)}
+            />
+            <Show when={isBackgroundBlurSupported()}>
+              <MenuSeparator />
+              <MenuGroup>
+                <DropdownMenu.GroupLabel class={menuGroupLabelClass}>
+                  Effects
+                </DropdownMenu.GroupLabel>
+                <MenuItem
+                  class={menuItemClass}
+                  text="Blur background"
+                  selectorType="checkbox"
+                  checked={callCtx.isBackgroundBlurred()}
+                  closeOnSelect={false}
+                  onClick={() => callCtx.toggleBackgroundBlur()}
+                />
+              </MenuGroup>
+            </Show>
+          </>
         )}
       >
         <Show

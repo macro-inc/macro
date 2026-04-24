@@ -6,8 +6,8 @@
 
 /// Domain layer: models, ports, and service.
 pub mod domain;
-/// Inbound layer: axum handler and router.
-#[cfg(feature = "inbound")]
+/// Inbound layer: axum handler, router, and AI toolset.
+#[cfg(any(feature = "inbound", feature = "ai_tools"))]
 pub mod inbound;
 /// Outbound layer: LiveKit RTC client adapter.
 #[cfg(feature = "outbound")]
