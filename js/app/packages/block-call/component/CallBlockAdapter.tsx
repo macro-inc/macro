@@ -3,9 +3,12 @@ import Unauthorized from '@core/component/AccessErrorViews/Unauthorized';
 import { MaybeResultError } from '@core/util/maybeResult';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { UserIcon } from '@core/component/UserIcon';
 import { useCallRecordQuery } from '@queries/call/call';
 import type { Accessor } from 'solid-js';
 import {
+  For,
   Match,
   Show,
   Switch,
@@ -21,6 +24,11 @@ import Eye from '@phosphor-icons/core/assets/regular/eye.svg';
 import EyeSlash from '@phosphor-icons/core/assets/regular/eye-slash.svg';
 import { cn } from '@ui/utils/classname';
 import { formatCallDuration } from '../utils';
+import { idToEmail } from '@core/user';
+import { ParticipantsEmptyState } from '@channel/Participants/ParticipantsEmptyState';
+import { ParticipantsSearchInput } from '@channel/Participants/ParticipantsSearchInput';
+import { commsServiceClient } from '@service-comms/client';
+import { isOk } from '@core/util/maybeResult';
 import {
   getActiveTranscriptSequenceNum,
   sortTranscriptSegments,
@@ -69,6 +77,98 @@ function CallSplitHeader(props: { record: Accessor<CallRecord> }) {
         </div>
       </div>
     </SplitHeaderLeft>
+  );
+}
+
+function CallParticipantsSection(props: { record: Accessor<CallRecord> }) {
+  const { replaceOrInsertSplit } = useSplitLayout();
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const participants = createMemo(() => {
+    const unique = new Map<
+      string,
+      { userId: string; joinedAt: string; role: 'organizer' | 'participant' }
+    >();
+    for (const participant of props.record().participants) {
+      const prev = unique.get(participant.userId);
+      if (!prev || participant.joinedAt < prev.joinedAt) {
+        unique.set(participant.userId, {
+          userId: participant.userId,
+          joinedAt: participant.joinedAt,
+          role:
+            participant.userId === props.record().createdBy
+              ? 'organizer'
+              : 'participant',
+        });
+      }
+    }
+    return Array.from(unique.values()).sort((a, b) =>
+      a.joinedAt.localeCompare(b.joinedAt)
+    );
+  });
+  const filteredParticipants = createMemo(() => {
+    const query = searchQuery().trim().toLowerCase();
+    if (query.length === 0) return participants();
+    return participants().filter((participant) => {
+      const email = idToEmail(participant.userId).toLowerCase();
+      return (
+        email.includes(query) ||
+        participant.userId.toLowerCase().includes(query) ||
+        participant.role.includes(query)
+      );
+    });
+  });
+
+  const openDirectMessage = async (participantId: string) => {
+    const result = await commsServiceClient.getOrCreateDirectMessage({
+      recipient_id: participantId,
+    });
+    const channelId = isOk(result) && result[1]?.channel_id;
+    if (!channelId) return;
+    replaceOrInsertSplit({
+      type: 'channel',
+      id: channelId,
+    });
+  };
+
+  return (
+    <div class="px-4 pb-4">
+      <div class="rounded-sm border border-edge-muted bg-menu py-3">
+        <div class="px-3 pb-3 text-sm font-medium text-ink">Participants</div>
+        <div class="border-b border-edge-muted" />
+        <div class="px-3 pt-3 flex flex-col gap-2">
+          <ParticipantsSearchInput
+            value={searchQuery()}
+            onInput={setSearchQuery}
+          />
+          <Show
+            when={filteredParticipants().length > 0}
+            fallback={<ParticipantsEmptyState searchQuery={searchQuery()} />}
+          >
+            <div class="flex flex-col">
+              <For each={filteredParticipants()}>
+                {(participant) => (
+                  <button
+                    type="button"
+                    class="flex items-center gap-2 min-h-10 px-2 py-2 text-sm w-full border-b border-edge-muted/50 last:border-b-0 hover:bg-hover/30 rounded-xs text-left cursor-pointer"
+                    onClick={() => openDirectMessage(participant.userId)}
+                  >
+                    <div class="shrink-0">
+                      <UserIcon id={participant.userId} size="xs" isDeleted={false} />
+                    </div>
+                    <span class="font-semibold truncate flex-1 text-ink">
+                      {idToEmail(participant.userId)}
+                    </span>
+                    <span class="text-xs font-mono text-ink-extra-muted uppercase font-light shrink-0">
+                      {participant.role}
+                    </span>
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -262,6 +362,7 @@ function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
               </div>
             </Show>
           </Show>
+          <CallParticipantsSection record={record} />
         </div>
 
         <div class="relative min-h-0 min-w-0 overflow-hidden border-edge-muted/50 border-t @[860px]:border-t-0 @[860px]:border-l">
