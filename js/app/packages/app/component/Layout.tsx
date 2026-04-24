@@ -52,6 +52,7 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
   `${ROUTER_BASE_CONCAT}welcome`,
+  `${ROUTER_BASE_CONCAT}team-invite`,
 ];
 
 export const [sidebarState, setSidebarState] = makePersisted(
