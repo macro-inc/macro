@@ -25,7 +25,6 @@ pub(crate) struct CallRecordIndex {
 pub(crate) struct CallRecordSearchConfig;
 
 impl SearchQueryConfig for CallRecordSearchConfig {
-    const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "channel_name";
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::CallRecords;
 }
