@@ -5,7 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * When the segment ended (nullable — some segments have no end time).
- */
 export type CallRecordSearchResultEndedAt = string | null;

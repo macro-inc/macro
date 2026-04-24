@@ -6,11 +6,7 @@
  */
 import type { CallRecordMetadataChannelName } from './callRecordMetadataChannelName';
 
-/**
- * Metadata for a call record fetched from the database.
- */
 export interface CallRecordMetadata {
-  /** Whether the requesting user was a participant on the call. */
   attended: boolean;
   channel_name?: CallRecordMetadataChannelName;
   created_by: string;

@@ -5,7 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * Position of the segment within the call.
- */
 export type CallRecordSearchResultSequenceNum = number | null;

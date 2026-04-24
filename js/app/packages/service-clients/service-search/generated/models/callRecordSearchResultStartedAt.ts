@@ -5,7 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * When the segment started being spoken.
- */
 export type CallRecordSearchResultStartedAt = string | null;

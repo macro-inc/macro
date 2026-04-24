@@ -5183,9 +5183,7 @@ export const postItemsSoupBody = zod
         speaker_ids: zod
           .array(zod.string())
           .optional()
-          .describe(
-            'Macro user ids of speakers to filter transcript-segment hits by.\nMirrors `ChannelFilters::sender_ids` for channel-message hits.\nEmpty to include all speakers.'
-          ),
+          .describe('Speaker macro user ids. Empty to include all.'),
       })
       .optional()
       .describe('Filters for call records.'),

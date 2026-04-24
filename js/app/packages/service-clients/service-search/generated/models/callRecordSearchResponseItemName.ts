@@ -5,7 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * Display name for the call — falls back to the channel name when available.
- */
 export type CallRecordSearchResponseItemName = string | null;

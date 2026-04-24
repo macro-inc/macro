@@ -5,7 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * The score of the match.
- */
 export type CallRecordSearchResultScore = number | null;

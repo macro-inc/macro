@@ -5,9 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * The best-effort channel name
- */
 export type SimpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName =
   | string
   | null;

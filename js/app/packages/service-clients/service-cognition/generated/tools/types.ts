@@ -581,21 +581,9 @@ export interface SearchToolResponse {
         updated_at: string;
       }
     | {
-        /**
-         * The id of the call record.
-         */
         call_id: string;
-        /**
-         * Hits for this call record (content matches).
-         */
         call_search_results: {
-          /**
-           * When the segment ended (nullable — some segments have no end time).
-           */
           ended_at?: string | null;
-          /**
-           * The highlight fragments from the segment's text.
-           */
           highlight: {
             /**
              * The highlight match on the bcc (email only)
@@ -626,43 +614,18 @@ export interface SearchToolResponse {
              */
             user_id?: string | null;
           };
-          /**
-           * The score of the match.
-           */
           score?: number | null;
-          /**
-           * Position of the segment within the call.
-           */
           sequence_num?: number | null;
-          /**
-           * The macro user id of the speaker for the matched segment.
-           */
           speaker_id?: string | null;
-          /**
-           * When the segment started being spoken.
-           */
           started_at?: string | null;
-          /**
-           * Primary key of the matched `call_record_transcripts` row.
-           * Present when the hit came from segment content.
-           */
           transcript_id?: string | null;
         }[];
-        /**
-         * The id of the channel the call belongs to.
-         */
         channel_id: string;
-        /**
-         * Aligned identifier across response item shapes.
-         */
         id: string;
         /**
-         * Metadata from the database; `None` if the call record has since been deleted.
+         * `None` if the call has been deleted.
          */
         metadata?: {
-          /**
-           * Whether the requesting user was a participant on the call.
-           */
           attended: boolean;
           channel_name?: string | null;
           created_by: string;
@@ -671,17 +634,8 @@ export interface SearchToolResponse {
           started_at: string;
           updated_at: string;
         } | null;
-        /**
-         * Display name for the call — falls back to the channel name when available.
-         */
         name?: string | null;
-        /**
-         * The macro user id of the call creator.
-         */
         owner_id: string;
-        /**
-         * The macro user ids of call participants.
-         */
         participant_ids: string[];
         type: 'callRecord';
       }

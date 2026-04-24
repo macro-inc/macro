@@ -7,8 +7,5 @@
 import type { CallRecordSearchResponseItem } from './callRecordSearchResponseItem';
 import type { CallRecordSearchResponseItemWithMetadataAllOf } from './callRecordSearchResponseItemWithMetadataAllOf';
 
-/**
- * CallRecordSearchResponseItem with metadata fetched from macrodb.
- */
 export type CallRecordSearchResponseItemWithMetadata =
   CallRecordSearchResponseItem & CallRecordSearchResponseItemWithMetadataAllOf;

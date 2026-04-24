@@ -193,13 +193,12 @@
             "items": {
               "type": "string"
             },
-            "description": "Macro user ids of speakers to filter transcript-segment hits by.\nMirrors `ChannelFilters::sender_ids` for channel-message hits.\nEmpty to include all speakers."
+            "description": "Speaker macro user ids. Empty to include all."
           }
         }
       },
       "CallRecordMetadata": {
         "type": "object",
-        "description": "Metadata for a call record fetched from the database.",
         "required": [
           "created_by",
           "started_at",
@@ -210,8 +209,7 @@
         ],
         "properties": {
           "attended": {
-            "type": "boolean",
-            "description": "Whether the requesting user was a participant on the call."
+            "type": "boolean"
           },
           "channel_name": {
             "type": ["string", "null"]
@@ -239,7 +237,6 @@
       },
       "CallRecordSearchResponseItem": {
         "type": "object",
-        "description": "A single response item, part of the CallRecordSearchResponse object.",
         "required": [
           "id",
           "owner_id",
@@ -251,40 +248,33 @@
         "properties": {
           "call_id": {
             "type": "string",
-            "format": "uuid",
-            "description": "The id of the call record."
+            "format": "uuid"
           },
           "call_search_results": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CallRecordSearchResult"
-            },
-            "description": "Hits for this call record (content matches)."
+            }
           },
           "channel_id": {
             "type": "string",
-            "format": "uuid",
-            "description": "The id of the channel the call belongs to."
+            "format": "uuid"
           },
           "id": {
             "type": "string",
-            "format": "uuid",
-            "description": "Aligned identifier across response item shapes."
+            "format": "uuid"
           },
           "name": {
-            "type": ["string", "null"],
-            "description": "Display name for the call — falls back to the channel name when available."
+            "type": ["string", "null"]
           },
           "owner_id": {
-            "type": "string",
-            "description": "The macro user id of the call creator."
+            "type": "string"
           },
           "participant_ids": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "The macro user ids of call participants."
+            }
           }
         }
       },
@@ -303,52 +293,43 @@
                   },
                   {
                     "$ref": "#/components/schemas/CallRecordMetadata",
-                    "description": "Metadata from the database; `None` if the call record has since been deleted."
+                    "description": "`None` if the call has been deleted."
                   }
                 ]
               }
             }
           }
-        ],
-        "description": "CallRecordSearchResponseItem with metadata fetched from macrodb."
+        ]
       },
       "CallRecordSearchResult": {
         "type": "object",
-        "description": "A match on a specific transcript segment within a call record.\nModelled after `ChannelSearchResult` — one of these per matched segment,\nwith all the metadata a frontend needs to navigate to and highlight it.",
         "required": ["highlight"],
         "properties": {
           "ended_at": {
             "type": ["string", "null"],
-            "format": "date-time",
-            "description": "When the segment ended (nullable — some segments have no end time)."
+            "format": "date-time"
           },
           "highlight": {
-            "$ref": "#/components/schemas/SearchHighlight",
-            "description": "The highlight fragments from the segment's text."
+            "$ref": "#/components/schemas/SearchHighlight"
           },
           "score": {
             "type": ["number", "null"],
-            "format": "double",
-            "description": "The score of the match."
+            "format": "double"
           },
           "sequence_num": {
             "type": ["integer", "null"],
-            "format": "int32",
-            "description": "Position of the segment within the call."
+            "format": "int32"
           },
           "speaker_id": {
-            "type": ["string", "null"],
-            "description": "The macro user id of the speaker for the matched segment."
+            "type": ["string", "null"]
           },
           "started_at": {
             "type": ["string", "null"],
-            "format": "date-time",
-            "description": "When the segment started being spoken."
+            "format": "date-time"
           },
           "transcript_id": {
             "type": ["string", "null"],
-            "format": "uuid",
-            "description": "Primary key of the matched `call_record_transcripts` row.\nPresent when the hit came from segment content."
+            "format": "uuid"
           }
         }
       },
@@ -2489,56 +2470,39 @@
         ],
         "properties": {
           "call_id": {
-            "type": "string",
-            "description": "The call record id"
+            "type": "string"
           },
           "channel_id": {
-            "type": "string",
-            "description": "The channel id"
+            "type": "string"
           },
           "channel_name": {
-            "type": ["string", "null"],
-            "description": "The best-effort channel name"
+            "type": ["string", "null"]
           },
           "duration_ms": {
             "type": "integer",
-            "format": "int64",
-            "description": "The duration in milliseconds"
+            "format": "int64"
           },
           "ended_at": {
-            "oneOf": [
-              {
-                "type": "string",
-                "format": "date-time",
-                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
-              }
-            ],
-            "description": "The call end time"
+            "type": "string",
+            "format": "date-time",
+            "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
           },
           "highlight": {
-            "$ref": "#/components/schemas/SearchHighlight",
-            "description": "The highlights on the call record"
+            "$ref": "#/components/schemas/SearchHighlight"
           },
           "participant_ids": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "Participants on the call"
+            }
           },
           "started_at": {
-            "oneOf": [
-              {
-                "type": "string",
-                "format": "date-time",
-                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
-              }
-            ],
-            "description": "The call start time"
+            "type": "string",
+            "format": "date-time",
+            "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
           },
           "user_id": {
-            "type": "string",
-            "description": "The macro user id of the creator"
+            "type": "string"
           }
         }
       },

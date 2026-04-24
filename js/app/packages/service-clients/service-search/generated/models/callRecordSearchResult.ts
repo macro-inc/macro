@@ -12,25 +12,12 @@ import type { CallRecordSearchResultStartedAt } from './callRecordSearchResultSt
 import type { CallRecordSearchResultTranscriptId } from './callRecordSearchResultTranscriptId';
 import type { SearchHighlight } from './searchHighlight';
 
-/**
- * A match on a specific transcript segment within a call record.
-Modelled after `ChannelSearchResult` — one of these per matched segment,
-with all the metadata a frontend needs to navigate to and highlight it.
- */
 export interface CallRecordSearchResult {
-  /** When the segment ended (nullable — some segments have no end time). */
   ended_at?: CallRecordSearchResultEndedAt;
-  /** The highlight fragments from the segment's text. */
   highlight: SearchHighlight;
-  /** The score of the match. */
   score?: CallRecordSearchResultScore;
-  /** Position of the segment within the call. */
   sequence_num?: CallRecordSearchResultSequenceNum;
-  /** The macro user id of the speaker for the matched segment. */
   speaker_id?: CallRecordSearchResultSpeakerId;
-  /** When the segment started being spoken. */
   started_at?: CallRecordSearchResultStartedAt;
-  /** Primary key of the matched `call_record_transcripts` row.
-Present when the hit came from segment content. */
   transcript_id?: CallRecordSearchResultTranscriptId;
 }

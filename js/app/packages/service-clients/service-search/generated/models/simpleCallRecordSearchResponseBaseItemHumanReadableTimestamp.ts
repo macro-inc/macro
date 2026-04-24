@@ -9,22 +9,15 @@ import type { SearchHighlight } from './searchHighlight';
 import type { SimpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName } from './simpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName';
 
 export interface SimpleCallRecordSearchResponseBaseItemHumanReadableTimestamp {
-  /** The call record id */
   call_id: string;
-  /** The channel id */
   channel_id: string;
-  /** The best-effort channel name */
   channel_name?: SimpleCallRecordSearchResponseBaseItemHumanReadableTimestampChannelName;
-  /** The duration in milliseconds */
   duration_ms: number;
-  /** The call end time */
+  /** DateTime<Utc> ts_seconds deserialization + RFC3339 serialization */
   ended_at: string;
-  /** The highlights on the call record */
   highlight: SearchHighlight;
-  /** Participants on the call */
   participant_ids: string[];
-  /** The call start time */
+  /** DateTime<Utc> ts_seconds deserialization + RFC3339 serialization */
   started_at: string;
-  /** The macro user id of the creator */
   user_id: string;
 }

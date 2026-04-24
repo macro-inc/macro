@@ -5,8 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * Primary key of the matched `call_record_transcripts` row.
-Present when the hit came from segment content.
- */
 export type CallRecordSearchResultTranscriptId = string | null;

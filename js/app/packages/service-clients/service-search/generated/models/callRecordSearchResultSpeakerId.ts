@@ -5,7 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * The macro user id of the speaker for the matched segment.
- */
 export type CallRecordSearchResultSpeakerId = string | null;

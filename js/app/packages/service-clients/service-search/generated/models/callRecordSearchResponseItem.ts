@@ -8,22 +8,12 @@
 import type { CallRecordSearchResponseItemName } from './callRecordSearchResponseItemName';
 import type { CallRecordSearchResult } from './callRecordSearchResult';
 
-/**
- * A single response item, part of the CallRecordSearchResponse object.
- */
 export interface CallRecordSearchResponseItem {
-  /** The id of the call record. */
   call_id: string;
-  /** Hits for this call record (content matches). */
   call_search_results: CallRecordSearchResult[];
-  /** The id of the channel the call belongs to. */
   channel_id: string;
-  /** Aligned identifier across response item shapes. */
   id: string;
-  /** Display name for the call — falls back to the channel name when available. */
   name?: CallRecordSearchResponseItemName;
-  /** The macro user id of the call creator. */
   owner_id: string;
-  /** The macro user ids of call participants. */
   participant_ids: string[];
 }
