@@ -1,5 +1,5 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
-import { focusInput } from '@core/directive/focusInput';
+import { focusInput, triggerFocusInput } from '@core/directive/focusInput';
 import { InlineEntity } from '@entity';
 import { cn } from '@ui/utils/classname';
 import { For, Show } from 'solid-js';
@@ -72,16 +72,15 @@ export function SoupEntityActionDrawer() {
                           'flex items-center gap-3 px-4 py-3 text-sm hover:bg-hover hover-transition-bg text-left not-last:border-b border-page',
                           action.destructive ? 'text-failure-ink' : 'text-ink'
                         )}
-                        use:focusInput={{
-                          getTarget: () =>
-                            action.id === 'share'
-                              ? document.querySelector<HTMLElement>(
-                                  '[data-share-drawer-recipient] input'
-                                )
-                              : null,
-                        }}
                         onClick={async () => {
                           await action.onClick();
+                          if (action.id === 'share') {
+                            triggerFocusInput(() =>
+                              document.querySelector<HTMLElement>(
+                                '[data-share-drawer-recipient] input'
+                              )
+                            );
+                          }
                           drawerState.close();
                         }}
                       >

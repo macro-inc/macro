@@ -1,8 +1,8 @@
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
 import Drawer from '@corvu/drawer';
 import { cn } from '@ui/utils/classname';
 import {
-  createSignal,
   onCleanup,
   splitProps,
   type ComponentProps,
@@ -49,7 +49,6 @@ export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
  */
 function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
   const [local, rest] = splitProps(props, ['class']);
-  const [inputFocused, setInputFocused] = createSignal(false);
 
   onCleanup(() => {
     clearTimeout(scrollTimer);
@@ -59,20 +58,11 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
   return (
     <Drawer.Content
       onFocusIn={(e: FocusEvent) => {
-        if (isEditableInput(e.target as Element)) setInputFocused(true);
         scrollToFocusedInput(e);
-      }}
-      onFocusOut={(e: FocusEvent) => {
-        if (
-          isEditableInput(e.target as Element) &&
-          !isEditableInput(e.relatedTarget as Element | null)
-        ) {
-          setInputFocused(false);
-        }
       }}
       class={cn(
         'bottom-(--virtual-keyboard-height) fixed left-0 right-0 z-modal bg-page rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
-        inputFocused()
+        virtualKeyboardVisible()
           ? 'pb-0 max-h-[calc(80vh-var(--virtual-keyboard-height))] overflow-y-auto'
           : 'pb-(--safe-bottom)',
         local.class
@@ -114,7 +104,13 @@ function MobileDrawerSection<T extends ValidComponent = 'div'>(
  */
 export const MobileDrawer = Object.assign(
   (props: ComponentProps<typeof Drawer>) => (
-    <Drawer breakPoints={[0.8]} {...props} />
+    <Drawer
+      breakPoints={[0.8]}
+      closeOnOutsideFocus={false}
+      noOutsidePointerEvents={false}
+      restoreFocus={false}
+      {...props}
+    />
   ),
   {
     Trigger: Drawer.Trigger,

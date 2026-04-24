@@ -1,3 +1,6 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
+import { useChannelParticipants } from '@channel/use-channel-participants';
 import { useIsAuthenticated } from '@core/auth';
 import {
   type BlockAlias,
@@ -9,12 +12,17 @@ import {
   useBlockId,
   useBlockName,
 } from '@core/block';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { DropdownMenuContent } from '@core/component/Menu';
+import { type TabItem, Tabs } from '@core/component/Tabs';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
+import { useReferralCode, useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import {
   blockEditPermissionEnabledSignal,
@@ -24,8 +32,8 @@ import {
   useGetPermissions,
   useIsDocumentOwner,
 } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { idToEmail } from '@core/user';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import {
   isErr,
   isOk,
@@ -34,20 +42,20 @@ import {
 } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/bold/check-bold.svg';
-import IconLink from '@icon/regular/link.svg';
-import UserCircle from '@macro-icons/wide/user-circle.svg';
-import WideCopy from '@macro-icons/wide/copy.svg';
-import WideUsers from '@macro-icons/wide/users.svg';
 import IconX from '@icon/bold/x-bold.svg';
-import IconShared from '@macro-icons/wide/share.svg';
-import IconComment from '@macro-icons/wide/comment.svg';
-import IconEdit from '@macro-icons/wide/edit.svg';
-import IconEye from '@macro-icons/wide/eye.svg';
+import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import IconLink from '@icon/regular/link.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import IconComment from '@macro-icons/wide/comment.svg';
+import WideCopy from '@macro-icons/wide/copy.svg';
+import IconEdit from '@macro-icons/wide/edit.svg';
+import IconEye from '@macro-icons/wide/eye.svg';
+import IconShared from '@macro-icons/wide/share.svg';
+import UserCircle from '@macro-icons/wide/user-circle.svg';
+import WideUsers from '@macro-icons/wide/users.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
-import { useReferralCode, useUserId } from '@core/context/user';
 import {
   blockNameToItemType,
   type ItemType,
@@ -57,10 +65,11 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
   createContext,
-  createEffect,
   createMemo,
   createResource,
   createSignal,
@@ -73,27 +82,16 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
-import { EntityIcon } from '@core/component/EntityIcon';
-import { isMobile } from '@core/mobile/isMobile';
-import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
-import { Tabs, type TabItem } from '@core/component/Tabs';
-import { cn } from '@ui/utils/classname';
-import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { ClippedPanel } from '../ClippedPanel';
 import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
 import { Tooltip } from '../Tooltip';
-import { openLoginModal } from './LoginButton';
-import { focusInput } from '@core/directive/focusInput';
 import { ScrollIndicators } from '../VerticalScrollIndicators';
-import { useChannelParticipants } from '@channel/use-channel-participants';
-import { useAnalytics } from '@app/component/analytics-context';
-import { Button } from '@ui/components/Button';
-import { Dynamic } from 'solid-js/web';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import { openLoginModal } from './LoginButton';
 
 false && clickOutside;
 
@@ -284,6 +282,13 @@ interface MobileShareDrawerProps {
 function MobileShareDrawer(props: MobileShareDrawerProps) {
   const [activeTab, setActiveTab] = createSignal('share');
 
+  const wrappedSetOpen = (open: boolean) => {
+    props.setIsOpen(open);
+    if (!open) {
+      setActiveTab('share');
+    }
+  };
+
   const mobileTabs = createMemo((): TabItem[] => {
     const tabs: TabItem[] = [{ value: 'share', label: 'Share' }];
     if ((props.recipients?.length ?? 0) > 0 || !!props.owner)
@@ -309,10 +314,12 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
   return (
     <MobileDrawer
       open={props.isOpen}
-      onOpenChange={props.setIsOpen}
-      side="bottom"
-      preventScroll={false}
-      preventScrollbarShift={false}
+      onOpenChange={wrappedSetOpen}
+      initialFocusEl={
+        document.querySelector<HTMLElement>(
+          '[data-share-drawer-recipient] input'
+        ) ?? undefined
+      }
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
