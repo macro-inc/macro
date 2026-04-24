@@ -869,6 +869,10 @@ export const SetEntityPropertyResponse = z.object({
   success: z.boolean(),
 });
 
+export const Subagent = z.object({ task: z.string() }).strict();
+
+export const SubagentResponse = z.object({ result: z.string() });
+
 export const TextEditorCodeExecutionToolCall = z.object({
   command: z.string(),
   file_text: z.union([z.string(), z.null()]).optional(),

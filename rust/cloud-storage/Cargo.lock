@@ -109,6 +109,7 @@ dependencies = [
  "entity_access",
  "entity_access_management",
  "frecency",
+ "futures",
  "item_filters",
  "lazy_static",
  "lexical_client",
