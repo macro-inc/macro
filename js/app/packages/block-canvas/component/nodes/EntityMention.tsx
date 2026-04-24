@@ -203,7 +203,7 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
                 >
                   <div
                     ref={setFileRef}
-                    class={`w-full h-full bg-panel rounded-lg shadow-md flex items-center`}
+                    class="w-full h-full bg-panel rounded-lg shadow-md flex items-center"
                   >
                     <div class="flex flex-row p-2 truncate">
                       <div

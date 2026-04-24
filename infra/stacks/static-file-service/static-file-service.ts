@@ -141,6 +141,107 @@ export class StaticFileService extends pulumi.ComponentResource {
       tags: this.tags,
     });
 
+    // Image optimizer Lambda — secondary origin in CloudFront origin group.
+    // On cache miss for transformed image URLs (e.g. /file/{uuid}/format=webp,width=300),
+    // the primary S3 origin returns 403 and CloudFront fails over to this Lambda.
+    // The Lambda fetches the original from S3, transforms it, stores the result
+    // back in the same bucket, and returns the image.
+    const imageOptimizerRole = new aws.iam.Role(
+      `${SERVICE_NAME}-image-optimizer-role`,
+      {
+        name: `${SERVICE_NAME}-image-optimizer-role-${stack}`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: { Service: 'lambda.amazonaws.com' },
+            },
+          ],
+        }),
+        managedPolicyArns: [aws.iam.ManagedPolicy.AWSLambdaBasicExecutionRole],
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    new aws.iam.RolePolicy(
+      `${SERVICE_NAME}-image-optimizer-s3-policy`,
+      {
+        role: imageOptimizerRole.id,
+        policy: staticFilesBucket.arn.apply((bucketArn) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: 's3:GetObject',
+                Resource: `${bucketArn}/*`,
+              },
+              {
+                Effect: 'Allow',
+                Action: 's3:PutObject',
+                Resource: `${bucketArn}/file/*/*`,
+              },
+            ],
+          })
+        ),
+      },
+      { parent: this }
+    );
+
+    const imageOptimizerLambda = new aws.lambda.Function(
+      `${SERVICE_NAME}-image-optimizer`,
+      {
+        name: `${SERVICE_NAME}-image-optimizer-${stack}`,
+        role: imageOptimizerRole.arn,
+        handler: 'bootstrap',
+        runtime: 'provided.al2023',
+        code: new pulumi.asset.FileArchive(
+          `${BASE_PATH}/target/lambda/image_optimizer/bootstrap.zip`
+        ),
+        timeout: 30,
+        memorySize: 1536,
+        environment: {
+          variables: {
+            BUCKET: STATIC_FILE_BUCKET,
+          },
+        },
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    new aws.iam.RolePolicy(
+      `${SERVICE_NAME}-image-optimizer-invoke-policy`,
+      {
+        role: imageOptimizerRole.id,
+        policy: imageOptimizerLambda.arn.apply((lambdaArn) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: 'lambda:InvokeFunction',
+                Resource: lambdaArn,
+              },
+            ],
+          })
+        ),
+      },
+      { parent: this }
+    );
+
+    const imageOptimizerUrl = new aws.lambda.FunctionUrl(
+      `${SERVICE_NAME}-image-optimizer-url`,
+      {
+        functionName: imageOptimizerLambda.name,
+        authorizationType: 'AWS_IAM',
+      },
+      { parent: this }
+    );
+
     const notFound = new aws.s3.BucketObject(
       'object',
       {
@@ -157,6 +258,8 @@ export class StaticFileService extends pulumi.ComponentResource {
       `static-files-${stack}`,
       {
         bucket: staticFilesBucket,
+        imageOptimizerUrl: imageOptimizerUrl.functionUrl,
+        imageOptimizerFunctionName: imageOptimizerLambda.name,
         api: lb,
         stackName: stack,
         customDomain: {

@@ -63,6 +63,41 @@ impl S3Client {
         Ok(macro_aws_config::transform_aws_url(presigned_url.uri()))
     }
 
+    #[tracing::instrument(skip(self), err)]
+    pub async fn delete_objects_by_prefix(&self, prefix: &str) -> Result<()> {
+        let mut continuation_token: Option<String> = None;
+
+        loop {
+            let mut req = self
+                .inner
+                .list_objects_v2()
+                .bucket(&self.storage_bucket)
+                .prefix(prefix);
+
+            if let Some(token) = &continuation_token {
+                req = req.continuation_token(token);
+            }
+
+            let response = req.send().await.context("failed to list objects")?;
+            let keys: Vec<String> = response
+                .contents()
+                .iter()
+                .filter_map(|obj| obj.key().map(String::from))
+                .collect();
+
+            if !keys.is_empty() {
+                self.bulk_hard_delete_objects(keys).await;
+            }
+
+            match response.next_continuation_token() {
+                Some(token) => continuation_token = Some(token.to_string()),
+                None => break,
+            }
+        }
+
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self), fields(count = keys.len()))]
     pub async fn bulk_hard_delete_objects(&self, keys: Vec<String>) -> Vec<Result<()>> {
         if keys.is_empty() {

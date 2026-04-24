@@ -4,6 +4,7 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { EmailFiltersCalendarOnly } from './emailFiltersCalendarOnly';
 import type { EmailFiltersImportance } from './emailFiltersImportance';
 import type { NotificationFilters } from './notificationFilters';
 import type { SharedEmailFilter } from './sharedEmailFilter';
@@ -14,6 +15,10 @@ import type { SharedEmailFilter } from './sharedEmailFilter';
 export interface EmailFilters {
   /** Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC. */
   bcc?: string[];
+  /** When `Some(true)`, only include threads that have at least one message
+with an iCalendar attachment (`.ics` filename or `application/ics` mime
+type). `Some(false)` and `None` apply no constraint. */
+  calendar_only?: EmailFiltersCalendarOnly;
   /** Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC. */
   cc?: string[];
   /** Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads. */

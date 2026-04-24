@@ -1,5 +1,7 @@
 import '../PdfViewer/pdf_viewer.css';
 
+import { cn } from '@ui/utils/classname';
+
 import type { PDFViewer } from '@block-pdf/PdfViewer';
 import { ZOOM_MAX, ZOOM_MIN } from '@block-pdf/PdfViewer/zoom';
 import {
@@ -662,7 +664,10 @@ export function Document() {
             setSize: setDocumentSize,
             setInitialized: setInitialized,
           }}
-          class={`${disableClick() ? 'noClickParse' : ''} w-full h-full relative outline-none`}
+          class={cn(
+            'w-full h-full relative outline-none',
+            disableClick() && 'noClickParse'
+          )}
           ref={(ref) => {
             mountRef = ref;
             setDocumentContainerRef(ref);

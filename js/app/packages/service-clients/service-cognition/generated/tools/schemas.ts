@@ -412,6 +412,31 @@ export const GetThreadResponse = z.object({
   threadId: z.string().uuid(),
 });
 
+export const ListCallRecords = z
+  .object({
+    attended: z.union([z.boolean(), z.null()]),
+    channelId: z.union([z.string().uuid(), z.null()]),
+  })
+  .strict();
+
+export const ListCallRecordsResponse = z.object({
+  records: z.array(
+    z.object({
+      callId: z.string().uuid(),
+      channelId: z.string().uuid(),
+      channelName: z.union([z.string(), z.null()]).optional(),
+      createdBy: z.string(),
+      durationMs: z.union([z.number().int(), z.null()]).optional(),
+      endedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      isActive: z.boolean(),
+      participants: z.array(z.string()),
+      startedAt: z.string().datetime({ offset: true }),
+    })
+  ),
+});
+
 export const ListEntities = z
   .object({
     includeTypes: z.union([
@@ -495,39 +520,97 @@ export const NameSearch = z
   })
   .strict();
 
+export const ReadCallRecord = z.object({ callId: z.string().uuid() }).strict();
+
+export const ReadCallRecordResponse = z.object({
+  callId: z.string().uuid(),
+  transcript: z.array(
+    z.object({
+      content: z.string(),
+      endedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      speakerId: z.string(),
+      startedAt: z.string().datetime({ offset: true }),
+    })
+  ),
+});
+
 export const ReadContent = z.object({ documentId: z.string().uuid() }).strict();
 
-export const ReadContentResponse = z.any().superRefine((x, ctx) => {
-  const schemas = [
-    z.object({ text: z.string() }).strict(),
-    z
-      .object({
-        markdown: z.array(
-          z.object({
-            content: z.string(),
-            nodeId: z.string(),
-            rawContent: z.string(),
-            type: z.string(),
-          })
-        ),
-      })
-      .strict(),
-  ];
-  const errors = schemas.reduce<z.ZodError[]>(
-    (errors, schema) =>
-      ((result) => (result.error ? [...errors, result.error] : errors))(
-        schema.safeParse(x)
+export const ReadContentResponse = z.object({
+  comments: z.array(
+    z.object({
+      comments: z.array(
+        z.object({
+          commentId: z.number().int(),
+          createdAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          deletedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          metadata: z.any().optional(),
+          order: z.union([z.number().int(), z.null()]).optional(),
+          owner: z.string(),
+          sender: z.union([z.string(), z.null()]).optional(),
+          text: z.string(),
+          threadId: z.number().int(),
+          updatedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+        })
       ),
-    []
-  );
-  if (schemas.length - errors.length !== 1) {
-    ctx.addIssue({
-      path: ctx.path,
-      code: 'invalid_union',
-      unionErrors: errors,
-      message: 'Invalid input: Should pass single schema',
-    });
-  }
+      thread: z.object({
+        createdAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        deletedAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        documentId: z.string(),
+        metadata: z.any().optional(),
+        owner: z.string(),
+        resolved: z.boolean(),
+        threadId: z.number().int(),
+        updatedAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+      }),
+    })
+  ),
+  content: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.object({ text: z.string() }).strict(),
+      z
+        .object({
+          markdown: z.array(
+            z.object({
+              content: z.string(),
+              nodeId: z.string(),
+              rawContent: z.string(),
+              type: z.string(),
+            })
+          ),
+        })
+        .strict(),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
 });
 
 export const ReadMetadata = z

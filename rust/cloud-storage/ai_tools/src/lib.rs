@@ -12,6 +12,7 @@ pub mod search;
 pub mod serde_utils;
 mod tool_context;
 pub mod web_fetch;
+use call::inbound::toolset::call_toolset;
 use code_execution::{
     anthropic_bash_code_execution_tool, anthropic_text_editor_code_execution_tool,
 };
@@ -48,7 +49,8 @@ pub fn all_tools() -> ToolSetWithPrompt {
         .add_tool::<read::ReadThread, Arc<ToolScribe>>()
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
-        .add_subtoolset::<ToolEmailToolContext>(email_toolset());
+        .add_subtoolset::<ToolEmailToolContext>(email_toolset())
+        .add_subtoolset::<ToolCallToolContext>(call_toolset());
     let prompt = prompts::TOOLS_PROMPT;
     let toolset = Arc::new(toolset);
     ToolSetWithPrompt { toolset, prompt }

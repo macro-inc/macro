@@ -1,6 +1,6 @@
 import { globalSplitManager } from "@app/signal/splitLayout";
 import { useHasPaidAccess } from "@core/auth";
-import { ClippedPanel } from "@core/component/ClippedPanel";
+import { RoundPanel } from "@core/component/RoundPanel";
 import { GlobalNotificationBell } from "@core/component/GlobalNotificationBell";
 import { Hotkey } from "@core/component/Hotkey";
 import { LabelAndHotKey } from "@core/component/Tooltip";
@@ -47,7 +47,7 @@ export function Dock() {
 					width: "100vw",
 				}}
 			>
-				<ClippedPanel bl br>
+				<RoundPanel>
 					<div
 						style={{
 							"grid-template-columns": "min-content 1fr min-content",
@@ -239,7 +239,7 @@ export function Dock() {
 							</Button>
 						</div>
 					</div>
-				</ClippedPanel>
+				</RoundPanel>
 			</div>
 
 			{/*<Show when={DEV_MODE_ENV}>
