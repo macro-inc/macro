@@ -11,7 +11,9 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { RoundPanel } from '@core/component/RoundPanel';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { Button } from '@ui/components/Button';
+import LogoIcon from '@macro-icons/macro-logo.svg';
 import UsersThreeIcon from '@icon/regular/users-three.svg';
+import EnvelopeIcon from '@icon/regular/envelope.svg';
 
 export function TeamInviteAcceptance() {
   const [searchParams] = useSearchParams();
@@ -100,34 +102,37 @@ export function TeamInviteAcceptance() {
       <div class="w-full max-w-[420px] invite-card">
         <RoundPanel>
           <div class="flex flex-col gap-6 py-6 px-6">
+            <div class="flex justify-center">
+              <LogoIcon class="size-10 text-accent" />
+            </div>
             <div class="flex flex-col items-center">
               <Switch>
-              <Match when={!inviteId()}>
-                <NoInviteId onNavigate={() => navigate('/')} />
-              </Match>
+                <Match when={!inviteId()}>
+                  <NoInviteId />
+                </Match>
 
-              <Match when={!userInfo()?.authenticated}>
-                <UnauthenticatedView onLogin={handleLogin} />
-              </Match>
+                <Match when={!userInfo()?.authenticated}>
+                  <UnauthenticatedView onLogin={handleLogin} />
+                </Match>
 
-              <Match when={isLoading()}>
-                <LoadingBlock />
-              </Match>
+                <Match when={isLoading()}>
+                  <LoadingBlock />
+                </Match>
 
-              <Match when={!invite()}>
-                <InviteNotFound onNavigate={() => navigate('/')} />
-              </Match>
+                <Match when={!invite()}>
+                  <InviteNotFound />
+                </Match>
 
-              <Match when={invite()}>
-                <InviteDetails
-                  teamName={teamName()}
-                  role={invite()!.team_role}
-                  invitedBy={invite()!.invited_by}
-                  onAccept={handleAccept}
-                  onDecline={handleDecline}
-                  isLoading={isMutating()}
-                />
-              </Match>
+                <Match when={invite()}>
+                  <InviteDetails
+                    teamName={teamName()}
+                    role={invite()!.team_role}
+                    invitedBy={invite()!.invited_by}
+                    onAccept={handleAccept}
+                    onDecline={handleDecline}
+                    isLoading={isMutating()}
+                  />
+                </Match>
               </Switch>
             </div>
           </div>
@@ -137,14 +142,20 @@ export function TeamInviteAcceptance() {
   );
 }
 
-function NoInviteId(props: { onNavigate: () => void }) {
+function NoInviteId() {
   return (
-    <div class="flex flex-col items-center gap-4 text-center">
+    <div class="w-full flex flex-col items-center gap-4 text-center">
       <h2 class="text-lg font-medium text-ink">Invalid Invite Link</h2>
       <p class="text-sm text-ink-muted">
         This invite link appears to be invalid or incomplete.
       </p>
-      <Button variant="primary" size="md" onClick={props.onNavigate}>
+      <Button
+        as="a"
+        href="/"
+        variant="primary"
+        size="md"
+        class="w-full rounded-xs"
+      >
         Go to Home
       </Button>
     </div>
@@ -153,18 +164,18 @@ function NoInviteId(props: { onNavigate: () => void }) {
 
 function UnauthenticatedView(props: { onLogin: () => void }) {
   return (
-    <div class="flex flex-col items-center gap-4 text-center">
-      <div class="p-3 rounded-full bg-accent/10">
-        <UsersThreeIcon class="size-8 text-accent" />
-      </div>
-      <h2 class="text-lg font-medium text-ink">You've Been Invited</h2>
+    <div class="w-full flex flex-col items-center gap-4 text-center">
+      <h2 class="flex items-center gap-2 text-lg font-medium text-ink">
+        <EnvelopeIcon class="size-5" />
+        You've Been Invited
+      </h2>
       <p class="text-sm text-ink-muted">
         Sign in or create an account to view and accept this team invitation.
       </p>
       <Button
         variant="primary"
         size="md"
-        class="w-full"
+        class="w-full rounded-xs"
         onClick={props.onLogin}
       >
         Sign In to Continue
@@ -173,15 +184,15 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
   );
 }
 
-function InviteNotFound(props: { onNavigate: () => void }) {
+function InviteNotFound() {
   return (
-    <div class="flex flex-col items-center gap-4 text-center">
+    <div class="w-full flex flex-col items-center gap-4 text-center">
       <h2 class="text-lg font-medium text-ink">Invite Not Found</h2>
       <p class="text-sm text-ink-muted">
         This invitation may have already been accepted, expired, or was sent to
         a different email address.
       </p>
-      <Button variant="primary" size="md" onClick={props.onNavigate}>
+      <Button as="a" href="/" variant="primary" size="md" class="rounded-xs">
         Go to Home
       </Button>
     </div>
@@ -204,23 +215,23 @@ function InviteDetails(props: {
 
   return (
     <div class="flex flex-col items-center gap-6 text-center w-full">
-      <div class="p-3 rounded-full bg-accent/10">
-        <UsersThreeIcon class="size-8 text-accent" />
-      </div>
-
       <div class="flex flex-col gap-2">
-        <h2 class="text-lg font-medium text-ink">Join {displayTeamName()}</h2>
+        <h2 class="flex items-center justify-center gap-2 text-lg font-medium text-ink">
+          <UsersThreeIcon class="size-5" />
+          Join {displayTeamName()}
+        </h2>
         <p class="text-sm text-ink-muted">
           <span class="text-ink">{props.invitedBy}</span> has invited you to
-          join as a <span class="font-medium">{roleDisplay()}</span>.
+          join as a <span class="font-medium text-accent">{roleDisplay()}</span>
+          .
         </p>
       </div>
 
-      <div class="flex flex-col gap-3 w-full">
+      <div class="flex flex-col gap-2 w-full">
         <Button
-          variant="accent"
+          variant="primary"
           size="md"
-          class="w-full"
+          class="w-full rounded-xs"
           onClick={props.onAccept}
           disabled={props.isLoading}
         >
@@ -229,7 +240,7 @@ function InviteDetails(props: {
         <Button
           variant="ghost"
           size="md"
-          class="w-full"
+          class="w-full rounded-xs"
           onClick={props.onDecline}
           disabled={props.isLoading}
         >
