@@ -34,7 +34,7 @@ use uuid::Uuid;
 use crate::domain::models::{
     CallActiveResponse, CallError, CallRecord, CallTokenResponse, EditCallRecordRequest,
     GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, LeaveCallResponse,
-    TranscriptSegmentRequest,
+    MAX_BATCH_CALL_IDS, TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallService;
 
@@ -440,6 +440,7 @@ pub async fn toggle_share_with_team_handler<S: CallService, Svc: EntityAccessSer
     request_body = GetBatchCallRecordPreviewRequest,
     responses(
         (status = 200, body = GetBatchCallRecordPreviewResponse),
+        (status = 400, body = ErrorResponse, description = "call_ids exceeds MAX_BATCH_CALL_IDS"),
         (status = 401, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
@@ -450,6 +451,12 @@ pub async fn get_batch_call_record_preview_handler<S: CallService, Svc: EntityAc
     user: MacroUserExtractor,
     Json(request): Json<GetBatchCallRecordPreviewRequest>,
 ) -> Result<Json<GetBatchCallRecordPreviewResponse>, CallError> {
+    if request.call_ids.len() > MAX_BATCH_CALL_IDS {
+        return Err(CallError::InvalidRequest(format!(
+            "call_ids exceeds maximum batch size of {MAX_BATCH_CALL_IDS}"
+        )));
+    }
+
     let response = state
         .service
         .get_batch_call_record_previews(request, user.macro_user_id)
@@ -568,6 +575,7 @@ impl IntoResponse for CallError {
             CallError::NotInCall => StatusCode::BAD_REQUEST,
             CallError::AlreadyInCall(_) => StatusCode::CONFLICT,
             CallError::Auth => StatusCode::UNAUTHORIZED,
+            CallError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             CallError::Internal(_) => {
                 tracing::error!(error=?self, "internal server error");
                 StatusCode::INTERNAL_SERVER_ERROR

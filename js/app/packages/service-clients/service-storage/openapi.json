@@ -621,6 +621,16 @@
               }
             }
           },
+          "400": {
+            "description": "call_ids exceeds MAX_BATCH_CALL_IDS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
             "description": "",
             "content": {
@@ -8855,7 +8865,7 @@
       },
       "GetBatchCallRecordPreviewRequest": {
         "type": "object",
-        "description": "Request body for `POST /call/record/preview`.",
+        "description": "Request body for `POST /call/record/preview`.\n\nThe `call_ids` list is bounded at [`MAX_BATCH_CALL_IDS`]; the handler\nrejects anything larger with a 400 before touching the database.",
         "required": ["callIds"],
         "properties": {
           "callIds": {
@@ -8864,7 +8874,7 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "The call ids to preview. Duplicate ids are deduplicated server-side."
+            "description": "The call ids to preview. Duplicate ids are deduplicated server-side.\nCapped at [`MAX_BATCH_CALL_IDS`] entries."
           }
         }
       },

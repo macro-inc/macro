@@ -264,12 +264,22 @@ pub struct CallRecordPreviewData {
     pub ended_at: Option<DateTime<Utc>>,
 }
 
+/// Maximum number of call ids accepted in a single batch preview request.
+///
+/// Requests exceeding this limit are rejected with `400 Bad Request` so that
+/// DB work and response size remain bounded per call.
+pub const MAX_BATCH_CALL_IDS: usize = 100;
+
 /// Request body for `POST /call/record/preview`.
+///
+/// The `call_ids` list is bounded at [`MAX_BATCH_CALL_IDS`]; the handler
+/// rejects anything larger with a 400 before touching the database.
 #[derive(Debug, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct GetBatchCallRecordPreviewRequest {
     /// The call ids to preview. Duplicate ids are deduplicated server-side.
+    /// Capped at [`MAX_BATCH_CALL_IDS`] entries.
     pub call_ids: Vec<Uuid>,
 }
 
@@ -326,6 +336,9 @@ pub enum CallError {
     /// Authentication or signature validation failed.
     #[error("authentication failed")]
     Auth,
+    /// The request body violates an API contract (e.g. exceeds a size cap).
+    #[error("{0}")]
+    InvalidRequest(String),
     /// An internal error occurred.
     #[error(transparent)]
     Internal(#[from] anyhow::Error),

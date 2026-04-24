@@ -822,10 +822,12 @@ export const getBatchCallRecordPreviewBody = zod
     callIds: zod
       .array(zod.string().uuid())
       .describe(
-        'The call ids to preview. Duplicate ids are deduplicated server-side.'
+        'The call ids to preview. Duplicate ids are deduplicated server-side.\nCapped at [`MAX_BATCH_CALL_IDS`] entries.'
       ),
   })
-  .describe('Request body for `POST \/call\/record\/preview`.');
+  .describe(
+    'Request body for `POST \/call\/record\/preview`.\n\nThe `call_ids` list is bounded at [`MAX_BATCH_CALL_IDS`]; the handler\nrejects anything larger with a 400 before touching the database.'
+  );
 
 export const getBatchCallRecordPreviewResponse = zod
   .object({
