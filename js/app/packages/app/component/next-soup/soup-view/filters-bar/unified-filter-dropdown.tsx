@@ -1,4 +1,5 @@
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { match } from 'ts-pattern';
 import { cn } from '@ui/utils/classname';
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -821,22 +822,25 @@ export const UnifiedFilterDropdown = () => {
                   <Show when={isSearchView()}>
                     <For each={INDEX_OPTIONS}>
                       {(option) => {
-                        const subContent =
-                          option.value === 'channels' ? (
+                        const subContent = match(option.value)
+                          .with('channels', () => (
                             <ChannelSearchSubContent
                               channel={channel}
                               channelOptions={inChannelOptions}
                               senderOptions={fromSenderOptions}
                             />
-                          ) : option.value === 'email' ? (
+                          ))
+                          .with('email', () => (
                             <EmailSearchSubContent email={email} />
-                          ) : option.value === 'calls' ? (
+                          ))
+                          .with('calls', () => (
                             <CallSearchSubContent
                               call={call}
                               channelOptions={inChannelOptions}
                               senderOptions={fromSenderOptions}
                             />
-                          ) : undefined;
+                          ))
+                          .otherwise(() => undefined);
                         return (
                           <SearchIndexRow
                             option={option}
