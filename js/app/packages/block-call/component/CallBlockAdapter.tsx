@@ -174,7 +174,7 @@ function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
         </div>
 
         <div class="relative min-h-0 min-w-0 overflow-hidden border-edge-muted/50 border-t @[860px]:border-t-0 @[860px]:border-l">
-          <div class="bg-panel flex h-full min-h-0 w-full min-w-0 flex-col @[860px]:min-w-[40cqw]">
+          <div class="flex h-full min-h-0 w-full min-w-0 flex-col @[860px]:min-w-[40cqw]">
             <Show
               when={hasTranscripts()}
               fallback={

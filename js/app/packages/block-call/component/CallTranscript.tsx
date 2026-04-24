@@ -86,11 +86,8 @@ function GroupedTranscriptSegmentRow(props: {
     <Thread.Row message={message()}>
       <Message.Root message={message()}>
         <Message.Layout>
-          <Message.Slot placement="icon" class="relative self-stretch h-full">
-            <div
-              class="absolute inset-y-0 border-l border-edge-muted z-1"
-              style={{ left: 'calc(var(--user-icon-width) / 2)' }}
-            />
+          <Message.Slot placement="icon">
+            <Message.SenderIcon hidden />
           </Message.Slot>
           <Message.Slot placement="content">
             <div class="whitespace-pre-wrap break-words text-sm">
@@ -135,7 +132,7 @@ export function CallTranscript(props: {
           <p class="font-semibold text-ink select-none text-sm shrink-0">Transcript</p>
         </div>
 
-        <div class="flex flex-col p-4 pt-2 @[860px]:pt-4">
+        <div class="flex flex-col p-4 pt-0 ">
           <For each={items()}>
             {(item) => (
               <Show
