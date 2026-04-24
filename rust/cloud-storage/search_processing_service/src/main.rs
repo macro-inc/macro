@@ -3,6 +3,11 @@ use std::sync::Arc;
 
 use crate::{
     api::context::ApiContext,
+    domain::service::BackfillOrchestrator,
+    outbound::backfill::{
+        calls::PgCallBackfill, channels::PgChannelBackfill, chats::PgChatBackfill,
+        documents::PgDocumentBackfill, emails::PgEmailBackfill,
+    },
     process::{context::SearchProcessingContext, worker::run_search_processing_workers},
 };
 use anyhow::Context;
@@ -13,12 +18,51 @@ use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use opensearch_client::OpensearchClient;
 use rust_embed::RustEmbed;
 use secretsmanager_client::{LocalOrRemoteSecret, SecretManager};
+use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
 mod api;
 mod config;
+mod domain;
+mod outbound;
 mod parsers;
 mod process;
+
+/// Resolve a read-replica macrodb URL — literal in `Local`, SM-fetched
+/// otherwise — and build a small pool. Returns `None` when the replica URL
+/// is missing, blank, or unreachable; callers then fall back to the primary
+/// pool. Failures are intentionally warning-level rather than fatal: the
+/// readonly pool is a contention optimisation, not a correctness requirement
+/// (e.g. local laptop dev cannot reach the VPC-gated read replica).
+async fn resolve_readonly_pool(
+    raw: Option<&String>,
+    environment: Environment,
+    secrets: &secretsmanager_client::SecretsManager,
+) -> Option<PgPool> {
+    let raw = raw.filter(|s| !s.is_empty())?;
+    let url = match environment {
+        Environment::Local => raw.clone(),
+        _ => match secrets.get_secret_value(raw).await {
+            Ok(v) => v.to_string(),
+            Err(e) => {
+                tracing::warn!(error=?e, "unable to fetch readonly db secret; backfills will use primary");
+                return None;
+            }
+        },
+    };
+    match PgPoolOptions::new()
+        .min_connections(1)
+        .max_connections(10)
+        .connect(&url)
+        .await
+    {
+        Ok(pool) => Some(pool),
+        Err(e) => {
+            tracing::warn!(error=?e, "could not connect to readonly macrodb; backfills will use primary");
+            None
+        }
+    }
+}
 
 #[allow(dead_code)]
 #[derive(RustEmbed)]
@@ -95,6 +139,37 @@ async fn main() -> anyhow::Result<()> {
 
     let internal_auth_key = LocalOrRemoteSecret::Local(InternalApiSecretKey::new()?);
 
+    // Backfills run against the read-replica when available so they don't
+    // contend with writes on the primary. Queue workers always read from the
+    // primary because replica lag would cause them to miss rows they are
+    // meant to index.
+    let backfill_db = match resolve_readonly_pool(
+        config.database_url_readonly.as_ref(),
+        config.environment,
+        &secretsmanager_client,
+    )
+    .await
+    {
+        Some(pool) => {
+            tracing::info!("using read-replica pool for backfill reads");
+            pool
+        }
+        None => {
+            tracing::info!("backfills will read from the primary pool");
+            db.clone()
+        }
+    };
+
+    let sqs_client = Arc::new(sqs_client);
+
+    let backfill_service = Arc::new(BackfillOrchestrator::new(
+        PgCallBackfill::new(backfill_db.clone(), sqs_client.clone()),
+        PgChatBackfill::new(backfill_db.clone(), sqs_client.clone()),
+        PgChannelBackfill::new(backfill_db.clone(), sqs_client.clone()),
+        PgDocumentBackfill::new(backfill_db.clone(), sqs_client.clone()),
+        PgEmailBackfill::new(backfill_db, sqs_client.clone()),
+    ));
+
     #[cfg(feature = "processing")]
     {
         use std::sync::Arc;
@@ -139,10 +214,11 @@ async fn main() -> anyhow::Result<()> {
 
     api::setup_and_serve(ApiContext {
         db,
-        sqs_client: Arc::new(sqs_client),
+        sqs_client,
         opensearch_client: Arc::new(opensearch_client),
         internal_auth_key,
         config: Arc::new(config),
+        backfill_service,
     })
     .await?;
     Ok(())

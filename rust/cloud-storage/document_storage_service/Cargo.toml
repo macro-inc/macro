@@ -10,10 +10,6 @@ name = "document_storage_service"
 path = "src/main.rs"
 
 [[bin]]
-name = "backfill_document_search"
-path = "src/bin/backfill_search.rs"
-
-[[bin]]
 name = "document_storage_service_openapi"
 path = "src/openapi.rs"
 

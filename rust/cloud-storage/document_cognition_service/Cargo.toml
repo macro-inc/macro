@@ -10,10 +10,6 @@ name = "document_cognition_service"
 path = "src/main.rs"
 
 [[bin]]
-name = "backfill_dcs_search"
-path = "src/bin/backfill_search.rs"
-
-[[bin]]
 name = "document_cognition_service_openapi"
 path = "src/openapi.rs"
 

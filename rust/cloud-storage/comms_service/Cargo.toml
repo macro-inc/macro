@@ -9,11 +9,6 @@ name = "comms_service"
 path = "src/lib.rs"
 
 [[bin]]
-name = "backfill_comms_search"
-path = "src/bin/backfill_search.rs"
-required-features = []
-
-[[bin]]
 name = "comms_service_openapi"
 path = "src/openapi.rs"
 

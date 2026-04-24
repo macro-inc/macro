@@ -6,6 +6,14 @@ pub struct Config {
     /// For deployed applications, this is a secret stored in AWS Secrets Manager.
     pub database_url: String,
 
+    /// Optional connection URL (or SM secret id when `environment != Local`)
+    /// for the macrodb read-replica. When present, backfill reads run against
+    /// the replica so they do not contend with writes on the primary; queue
+    /// workers always read from the primary because replica lag would cause
+    /// them to miss rows they are meant to index. When absent, backfills fall
+    /// back to the primary.
+    pub database_url_readonly: Option<String>,
+
     /// The port to listen for HTTP requests on.
     pub port: usize,
 
@@ -43,6 +51,8 @@ impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let database_url =
             std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
+
+        let database_url_readonly = std::env::var("DATABASE_URL_READONLY").ok();
 
         let port: usize = std::env::var("PORT")
             .unwrap_or("8080".to_string())
@@ -87,6 +97,7 @@ impl Config {
 
         Ok(Config {
             database_url,
+            database_url_readonly,
             port,
             search_event_queue,
             queue_max_messages,
