@@ -670,6 +670,8 @@ export function ComposeTask(props: ComposeTaskProps) {
               <PropertyGrid
                 properties={properties()}
                 columns={2}
+                withDelete={false}
+                withPin={false}
               ></PropertyGrid>
               <Modals />
             </div>
