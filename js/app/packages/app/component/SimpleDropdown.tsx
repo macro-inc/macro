@@ -277,6 +277,19 @@ export type DropdownMenuLike = {
   Item: Component<any>;
 };
 
+// On desktop: use Kobalte's root/trigger/portal/content (for keyboard nav and
+// focus management) but replace Item with the wrapped KobalteItem so that
+// callers can use the text/icon/onClick interface.
+const DesktopDropdown = Object.assign(
+  (props: any) => <DropdownMenu {...props} />,
+  {
+    Trigger: DropdownMenu.Trigger,
+    Portal: DropdownMenu.Portal,
+    Content: DropdownMenu.Content,
+    Item: KobalteItem,
+  }
+);
+
 export const ResponsiveDropdown: DropdownMenuLike = isTouchDevice()
   ? (SimpleDropdown as unknown as DropdownMenuLike)
-  : (DropdownMenu as unknown as DropdownMenuLike);
+  : (DesktopDropdown as unknown as DropdownMenuLike);
