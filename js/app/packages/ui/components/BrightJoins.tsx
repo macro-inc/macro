@@ -79,7 +79,9 @@ export function BrightJoinsProgressMeter(props: {
         '-top-px left-[2px] absolute bg-gradient-to-r from-edge to-ink w-[calc(var(--onboarding-progress)-4px)] h-px transition-[width] duration-1000',
         props.class
       )}
-      style={`--onboarding-progress: ${props.progress}%`}
+      style={{
+        '--onboarding-progress': `${props.progress}%`,
+      }}
     ></div>
   );
 }
