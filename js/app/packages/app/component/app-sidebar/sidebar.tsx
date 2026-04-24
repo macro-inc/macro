@@ -485,7 +485,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-ink/5" />
+        <hr class="border-edge-muted" />
       </div>
 
       <div class="w-full px-2 my-[4.5px]">
@@ -499,7 +499,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-ink/5 mb-[8px]" />
+        <hr class="border-edge-muted mb-[8px]" />
       </div>
 
       <nav>
@@ -519,7 +519,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </nav>
 
       <div class="px-2">
-        <hr class="border-ink/5 my-[8px]" />
+        <hr class="border-edge-muted my-[8px]" />
       </div>
 
       <div class="block max-h-[clamp(10%,60%,20rem)]">
