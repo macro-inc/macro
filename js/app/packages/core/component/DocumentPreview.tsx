@@ -10,7 +10,7 @@ import {
   useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
-import { itemToBlockName } from '@core/constant/allBlocks';
+import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { RoundPanel } from '@core/component/RoundPanel';
 import { toast } from '@core/component/Toast/Toast';
@@ -589,7 +589,7 @@ export function PopupPreview(props: {
     const orchestrator = splitManager.getOrchestrator();
     const handle = await orchestrator.getBlockHandle(
       props.documentInfo.id,
-      type
+      resolveBlockAlias(type)
     );
 
     await handle?.goToLocationFromParams(props.documentInfo.params);

@@ -245,44 +245,40 @@ export function EmojiMenu(props: EmojiMenuProps) {
           }}
           ref={menuRef}
         >
-          <RoundPanel active>
-            <div class="flex flex-col gap-1 px-2 w-full">
-              <Show
-                when={emojiOptions().length > 0}
-                fallback={
-                  <div class="px-2 text text-ink-muted">No results</div>
-                }
+          <RoundPanel active class="flex flex-col gap-1 p-2 w-full">
+            <Show
+              when={emojiOptions().length > 0}
+              fallback={<div class="px-2 text text-ink-muted">No results</div>}
+            >
+              <VList
+                data={emojiOptions()}
+                ref={setVirtualHandle}
+                class="scrollbar-hidden"
+                style={{
+                  height:
+                    contentMaxHeight() !== undefined
+                      ? `${contentMaxHeight()}px`
+                      : '200px',
+                  'max-height': '100%',
+                  width: '100%',
+                }}
               >
-                <VList
-                  data={emojiOptions()}
-                  ref={setVirtualHandle}
-                  class="scrollbar-hidden"
-                  style={{
-                    height:
-                      contentMaxHeight() !== undefined
-                        ? `${contentMaxHeight()}px`
-                        : '200px',
-                    'max-height': '100%',
-                    width: '100%',
-                  }}
-                >
-                  {(emojiItem, index) => (
-                    <EmojiItem
-                      emoji={emojiItem.emoji}
-                      name={emojiItem.slug}
-                      selected={selectedIndex() === index()}
-                      onSelect={() => {
-                        insertEmoji(emojiItem.emoji);
-                        props.menu.setIsOpen(false);
-                      }}
-                      setIndex={setSelectedIndexFromMouse}
-                      setOpen={props.menu.setIsOpen}
-                      index={index()}
-                    />
-                  )}
-                </VList>
-              </Show>
-            </div>
+                {(emojiItem, index) => (
+                  <EmojiItem
+                    emoji={emojiItem.emoji}
+                    name={emojiItem.slug}
+                    selected={selectedIndex() === index()}
+                    onSelect={() => {
+                      insertEmoji(emojiItem.emoji);
+                      props.menu.setIsOpen(false);
+                    }}
+                    setIndex={setSelectedIndexFromMouse}
+                    setOpen={props.menu.setIsOpen}
+                    index={index()}
+                  />
+                )}
+              </VList>
+            </Show>
           </RoundPanel>
         </div>
       </ScopedPortal>

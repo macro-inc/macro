@@ -24,6 +24,7 @@ import {
 } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock } from '@core/orchestrator';
+import { formatDate } from '@core/util/date';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -39,6 +40,7 @@ import {
   type ItemEntity,
   isAccessiblePreviewItem,
   type PreviewItemNoAccess,
+  useItemPreview,
 } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -262,6 +264,16 @@ function InlinePreview(props: {
                 data-document-name={accessibleItem().name}
               >
                 {accessibleItem().name.replaceAll('\n', ' ').trim()}
+                {accessibleItem().type === 'call' &&
+                  accessibleItem().updatedAt && (
+                    <>
+                      {' '}
+                      -{' '}
+                      {formatDate(accessibleItem().updatedAt, {
+                        showTime: true,
+                      })}
+                    </>
+                  )}
                 <span class="relative text-[0.8em] text-current/50 rounded-xs">
                   {(() => {
                     const accessories = mentionsAccessories(
@@ -385,7 +397,7 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return baseEntity;
   };
 
-  const { item } = useItemPreviewData(itemEntity);
+  const [item] = useItemPreview(itemEntity);
 
   const isSelectedAsNode = createMemo(() => {
     const sel = selection();

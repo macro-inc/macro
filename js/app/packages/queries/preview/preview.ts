@@ -9,10 +9,9 @@ import { defaultNameTransform, fetchMessageContext } from './fetchers';
 import { previewKeys } from './keys';
 import type { AccessiblePreviewItem, ItemEntity, PreviewItem } from './types';
 
-// Artificial delay (in ms) to simulate backend propagation lag for testing
-// Set to 0 to disable. Recommended: 2000-5000ms to reliably reproduce race conditions
-const SIMULATE_BACKEND_DELAY_MS = 4000;
-const SIMULATE_FAILURE = true;
+// DEBUG VARS
+const SIMULATE_BACKEND_DELAY_MS = 0;
+const SIMULATE_FAILURE = false;
 
 const PREVIEW_STALE_TIME = 60 * 1000 * 60 * 24; // 24 hours
 
@@ -35,6 +34,7 @@ function itemPreviewQueryOptions(item: ItemEntity) {
           loading: false,
         } as PreviewItem);
       }
+
       return previewDataLoader.load(item);
     },
     staleTime: PREVIEW_STALE_TIME,
@@ -47,7 +47,9 @@ export async function getItemPreview(item: ItemEntity): Promise<PreviewItem> {
 }
 
 export function useItemPreview(item: Accessor<ItemEntity>) {
+  console.log('## useItemPreview', item());
   const previewQuery = useQuery(() => itemPreviewQueryOptions(item()));
+  console.log('##', { previewQuery });
 
   const maybeChannelMessageQuery = useQuery(() => {
     const item_ = item();

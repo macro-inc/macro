@@ -16,7 +16,7 @@ const PORT_COLORS = [
 ];
 
 export const [gitBranch, setGitBranch] = createSignal<string>(
-  (typeof window !== 'undefined' && window.__GIT_BRANCH__) || ''
+  import.meta.env.__GIT_BRANCH__ ?? ''
 );
 
 if (import.meta.env.DEV && import.meta.hot) {
