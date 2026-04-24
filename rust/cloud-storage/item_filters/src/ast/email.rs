@@ -37,6 +37,10 @@ pub enum EmailLiteral {
     NotificationSeen(bool),
     /// Controls whether shared email threads are included in results.
     Shared(SharedEmailFilter),
+    /// When true, only include threads that have at least one message with an
+    /// `.ics` calendar attachment (filename or `application/ics` mime type).
+    /// When false, no constraint is applied.
+    CalendarOnly(bool),
 }
 
 impl ExpandFrame<EmailLiteral> for EmailFilters {
@@ -54,6 +58,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             include_labels: _,
             exclude_labels: _,
             shared,
+            calendar_only,
         } = input;
 
         fn map_email(s: String) -> Email {
@@ -101,6 +106,9 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
         } else {
             Some(Expr::Literal(EmailLiteral::Shared(shared)))
         };
+        let calendar_only_node = calendar_only
+            .filter(|v| *v)
+            .map(|v| Expr::Literal(EmailLiteral::CalendarOnly(v)));
 
         Ok([
             sender_nodes,
@@ -113,6 +121,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             notification_done_node,
             notification_seen_node,
             shared_node,
+            calendar_only_node,
         ]
         .into_iter()
         .fold_with(Expr::and))

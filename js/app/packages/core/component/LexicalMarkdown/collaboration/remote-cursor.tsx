@@ -3,6 +3,7 @@ import {
   isAwarenessWithSelection,
   type PeerAwareness,
 } from '@core/collab/awareness';
+import { cn } from '@ui/utils/classname';
 import type { LoroManager } from '@core/collab/manager';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { idToEmail } from '@core/user';
@@ -302,8 +303,10 @@ function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
 
                     return (
                       <div
-                        class={`m-0 text-transparent absolute top-0 -left-[.5px] pointer-events-none`}
-                        id={`remote-cursor`}
+                        class={cn(
+                          'm-0 text-transparent absolute top-0 -left-[.5px] pointer-events-none'
+                        )}
+                        id="remote-cursor"
                         style={{
                           ...rest,
                           opacity: isSelection ? 1 : 1,
@@ -316,7 +319,9 @@ function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
               </Portal>
               <Show when={shouldShow()}>
                 <div
-                  class={`m-0 text-transparent absolute pointer-events-none w-auto! p-2 flex items-center`}
+                  class={cn(
+                    'm-0 text-transparent absolute pointer-events-none w-auto! p-2 flex items-center'
+                  )}
                   style={{
                     ...startStyle,
                     top: `-${userTagHeight + 2}px`,

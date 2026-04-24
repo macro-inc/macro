@@ -5,6 +5,7 @@
 
 import type { CodeNode } from '@lexical/code';
 import { PrismTokenizer } from '@lexical/code';
+import { cn } from '@ui/utils/classname';
 import type { LinkNode } from '@lexical/link';
 import { $getListDepth, type ListItemNode, type ListNode } from '@lexical/list';
 import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
@@ -433,7 +434,7 @@ const List: RenderableElement<ListNode> = {
     }
     if (type === 'check') {
       return (
-        <ul class={`${props.theme.list?.ul} ${props.theme.list?.checklist}`}>
+        <ul class={cn(props.theme.list?.ul, props.theme.list?.checklist)}>
           {props.children}
         </ul>
       );
@@ -615,9 +616,9 @@ const DocumentCard: RenderableEntity<DocumentCardNode> = {
 const Table: RenderableElement<TableNode> = {
   guard: (node: LexicalNode): node is TableNode => node.__type === 'table',
   render: (props) => (
-    <div class={`${props.theme?.static?.['table-container'] || ''}`}>
+    <div class={cn(props.theme?.static?.['table-container'])}>
       <table
-        class={`${props.theme.table} min-w-full table-auto`}
+        class={cn(props.theme.table, 'min-w-full table-auto')}
         style="width: max-content;"
       >
         {props.children}
@@ -632,7 +633,7 @@ const TableRow: RenderableElement<TableRowNode> = {
   render: (props) => {
     const isFirstRow = props.node.getIndexWithinParent() === 0;
     return (
-      <tr class={`${props.theme.tableRow} ${isFirstRow ? 'font-bold' : ''}`}>
+      <tr class={cn(props.theme.tableRow, isFirstRow && 'font-bold')}>
         {props.children}
       </tr>
     );
@@ -646,7 +647,7 @@ const TableCell: RenderableElement<TableCellNode> = {
     return (
       <Dynamic
         component={'td'}
-        class={`${props.theme.tableCell} min-w-[100px] max-w-[350px]`}
+        class={cn(props.theme.tableCell, 'min-w-[100px] max-w-[350px]')}
         colspan={props.node.__colSpan}
         rowspan={props.node.__rowSpan}
       >
@@ -755,7 +756,7 @@ function Document(props: {
 }): JSX.Element {
   return (
     <div
-      class={`markdown-content ${props.theme.root ?? ''} break-words max-w-full`}
+      class={cn('markdown-content', props.theme.root, 'break-words max-w-full')}
       ref={props.rootRef}
     >
       <MapRender children={props.rootNode.getChildren()} theme={props.theme} />

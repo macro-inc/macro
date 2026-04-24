@@ -4,6 +4,7 @@ import {
   EntityIcon,
   getEntityIconConfig,
 } from '@core/component/EntityIcon';
+import { cn } from '@ui/utils/classname';
 import { ExplorerSpacer } from '@core/component/FileList/ExplorerSpacer';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import Fragment from '@core/util/Fragment';
@@ -377,7 +378,7 @@ export const MoveToProjectView = (props: {
             <div class="size-5 flex items-center justify-center">
               <Dynamic
                 component={getIcon().icon}
-                class={`flex size-full ${getIcon().foreground}`}
+                class={cn('flex size-full', getIcon().foreground)}
               />
             </div>
 
@@ -491,7 +492,10 @@ export const MoveToProjectView = (props: {
                           }}
                         >
                           <CaretRight
-                            class={`w-3 h-3 transition-transform duration-150 ${isExpanded() && !searchQuery() ? 'rotate-90' : ''}`}
+                            class={cn(
+                              'w-3 h-3 transition-transform duration-150',
+                              isExpanded() && !searchQuery() && 'rotate-90'
+                            )}
                           />
                         </div>
 

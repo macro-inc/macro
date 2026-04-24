@@ -450,7 +450,7 @@ export function MarkdownPopup(props: {
             </p>
             <div class="flex flex-row items-center space-x-2 w-full px-2">
               <textarea
-                class={`resize-none rounded-xs w-full p-2 my-3 text-sm h-max-[800px] overflow-hidden ring-1 ring-edge/50 bg-hover`}
+                class="resize-none rounded-xs w-full p-2 my-3 text-sm h-max-[800px] overflow-hidden ring-1 ring-edge/50 bg-hover"
                 ref={setRewriteInputRef}
                 rows={1}
                 onSubmit={(e) => e.preventDefault()}
@@ -468,7 +468,7 @@ export function MarkdownPopup(props: {
                 }}
               />
               <button
-                class={`bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center py-1`}
+                class="bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center py-1"
                 onClick={() => {
                   handleRewrite(inputVal());
                 }}
@@ -477,7 +477,7 @@ export function MarkdownPopup(props: {
                   width={20}
                   height={20}
                   color="var(--color-accent)"
-                  class={`text-accent-ink !fill-accent`}
+                  class="text-accent-ink !fill-accent"
                 />
               </button>
             </div>

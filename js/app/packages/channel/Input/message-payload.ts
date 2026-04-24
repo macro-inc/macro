@@ -5,10 +5,10 @@ import type { SimpleMention } from '@service-comms/generated/models/simpleMentio
 import type { InputAttachmentData, InputSnapshot } from './types';
 import { match } from 'ts-pattern';
 
-function attachmentEntityType(
-  attachment: Pick<InputAttachmentData, 'kind'>
+export function attachmentEntityType(
+  kind: InputAttachmentData['kind']
 ): string {
-  switch (attachment.kind) {
+  switch (kind) {
     case 'image':
       return STATIC_IMAGE;
     case 'video':
@@ -86,7 +86,7 @@ export function buildPostMessageRequest(
     mentions: expandMentions(snapshot.mentions, participantIds ?? []),
     attachments: snapshot.attachments.map((attachment) => ({
       entity_id: attachment.id,
-      entity_type: attachmentEntityType(attachment),
+      entity_type: attachmentEntityType(attachment.kind),
       width: attachment.width ?? null,
       height: attachment.height ?? null,
     })),

@@ -1,5 +1,6 @@
 import { useAlign } from '@block-canvas/signal/align';
 import { clamp } from '@block-canvas/util/math';
+import { cn } from '@ui/utils/classname';
 import { vec2 } from '@block-canvas/util/vector2';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
@@ -115,7 +116,9 @@ export function SwatchColorPicker(props: {
 
   // SCUFFED THEMING TODO: we need to handle canvas color selection? this checks if we are in a darkish or lightish theme but that is janky?
   return (
-    <div class={`flex flex-wrap gap-1 ${isMobileWidth() ? 'w-20' : 'w-full'}`}>
+    <div
+      class={cn('flex flex-wrap gap-1', isMobileWidth() ? 'w-20' : 'w-full')}
+    >
       <For each={isMobileWidth() ? mobileColorOptions : colorOptions}>
         {(opt) => (
           <Swatch
@@ -179,7 +182,11 @@ function ReverseEdgeButton() {
   return (
     <Tooltip tooltip="Reverse connection">
       <button
-        class={`${themeColors['base']} ${themeStyles['base']} h-6 w-6 flex border-0 rounded-md justify-center items-center`}
+        class={cn(
+          themeColors['base'],
+          themeStyles['base'],
+          'h-6 w-6 flex border-0 rounded-md justify-center items-center'
+        )}
         onClick={() => {
           edges.batchUpdate(
             () => {
@@ -470,13 +477,19 @@ export function FloatingMenu() {
 
   return (
     <div
-      class={`absolute flex flex-row top-4 z-5 cursor-auto ${!isMobileWidth() && 'right-4'}`}
+      class={cn(
+        'absolute flex flex-row top-4 z-5 cursor-auto',
+        !isMobileWidth() && 'right-4'
+      )}
     >
       <div
-        class={`flex
-          ${isMobileWidth() ? 'flex-row p-2 mr-2' : 'flex-col w-54 p-3'}
-          bg-menu rounded-lg shadow-lg ring ring-edge
-          ${selectedNodes().length + selectedEdges().length <= 1 && validMenus().size === 0 && 'hidden'}`}
+        class={cn(
+          'flex bg-menu rounded-lg shadow-lg ring ring-edge',
+          isMobileWidth() ? 'flex-row p-2 mr-2' : 'flex-col w-54 p-3',
+          selectedNodes().length + selectedEdges().length <= 1 &&
+            validMenus().size === 0 &&
+            'hidden'
+        )}
         ref={ref}
         oncontextmenu={(e) => {
           e.preventDefault();
@@ -485,7 +498,14 @@ export function FloatingMenu() {
       >
         <Show when={validMenus().has('strokeColor')}>
           <div
-            class={`flex justify-center items-center ${isMobileWidth() && (validMenus().has('strokeWidth') || validMenus().has('textSize') || selectedNodes().length + selectedEdges().length > 1) && 'mr-4'}`}
+            class={cn(
+              'flex justify-center items-center',
+              isMobileWidth() &&
+                (validMenus().has('strokeWidth') ||
+                  validMenus().has('textSize') ||
+                  selectedNodes().length + selectedEdges().length > 1) &&
+                'mr-4'
+            )}
           >
             <SwatchColorPicker
               onClick={(color) => applyUnfiedColor(color)}
@@ -495,7 +515,7 @@ export function FloatingMenu() {
           </div>
         </Show>
 
-        <div class={`flex w-full grow flex-col`}>
+        <div class="flex w-full grow flex-col">
           <Show
             when={
               !isMobileWidth() &&
@@ -643,11 +663,17 @@ export function FloatingMenu() {
             <Divider />
           </Show>
           <div
-            class={`flex ${isMobileWidth() ? 'flex-row' : 'flex-col'} ${isMobileWidth() && selectedNodes().length + selectedEdges().length > 1 && 'hidden'}`}
+            class={cn(
+              'flex',
+              isMobileWidth() ? 'flex-row' : 'flex-col',
+              isMobileWidth() &&
+                selectedNodes().length + selectedEdges().length > 1 &&
+                'hidden'
+            )}
           >
             <div class="flex flex-row">
               <Show when={validMenus().has('strokeWidth')}>
-                <div class={`${!isMobileWidth() && 'mr-3.5'}`}>
+                <div class={cn(!isMobileWidth() && 'mr-3.5')}>
                   <SlidableNumberInput
                     label={'Line weight'}
                     labelPosition="top"
@@ -740,7 +766,12 @@ export function FloatingMenu() {
             <Show when={validMenus().has('textSize')}>
               <Divider />
               <div
-                class={`${isMobileWidth() && (validMenus().has('strokeWidth') || validMenus().has('cornerRadius')) && 'ml-2'}`}
+                class={cn(
+                  isMobileWidth() &&
+                    (validMenus().has('strokeWidth') ||
+                      validMenus().has('cornerRadius')) &&
+                    'ml-2'
+                )}
               >
                 <SlidableNumberInput
                   label={'Font size'}

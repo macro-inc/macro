@@ -8,9 +8,9 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
     ast.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
         filter_ast::ExprFrame::Not(a) => a,
-        filter_ast::ExprFrame::Literal(EmailLiteral::ThreadId(_) | EmailLiteral::ProjectId(_)) => {
-            true
-        }
+        filter_ast::ExprFrame::Literal(
+            EmailLiteral::ThreadId(_) | EmailLiteral::ProjectId(_) | EmailLiteral::CalendarOnly(_),
+        ) => true,
         filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => false,
         filter_ast::ExprFrame::Literal(_) => false,
     })
@@ -21,7 +21,10 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
         filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
         filter_ast::ExprFrame::Not(a) => a,
         filter_ast::ExprFrame::Literal(
-            EmailLiteral::ThreadId(_) | EmailLiteral::ProjectId(_) | EmailLiteral::Shared(_),
+            EmailLiteral::ThreadId(_)
+            | EmailLiteral::ProjectId(_)
+            | EmailLiteral::Shared(_)
+            | EmailLiteral::CalendarOnly(_),
         ) => false,
         filter_ast::ExprFrame::Literal(_) => true,
     })
@@ -215,6 +218,7 @@ pub(super) fn build_message_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragmen
             SqlFragment::raw("TRUE")
         }
         filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => SqlFragment::raw("TRUE"),
+        filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(_)) => SqlFragment::raw("TRUE"),
     });
 
     fragment.with_and_prefix()
@@ -237,6 +241,24 @@ pub(super) fn build_thread_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragment
             let mut f = SqlFragment::raw("t.project_id = ");
             f.extend(SqlFragment::bind_string(id));
             f
+        }
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(true)) => SqlFragment::raw(
+            r#"EXISTS (
+                    SELECT 1
+                    FROM email_messages m_cal
+                    JOIN email_attachments a_cal ON a_cal.message_id = m_cal.id
+                    WHERE m_cal.thread_id = t.id
+                      AND (
+                        a_cal.filename ILIKE '%.ics'
+                        OR a_cal.mime_type = 'text/calendar'
+                        OR a_cal.mime_type = 'application/ics'
+                      )
+                )"#,
+        ),
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(false)) => {
+            SqlFragment::raw("TRUE")
         }
 
         filter_ast::ExprFrame::Literal(

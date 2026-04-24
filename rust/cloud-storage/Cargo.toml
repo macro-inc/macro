@@ -54,6 +54,7 @@ members = [
   "fusionauth",
   "github",
   "gmail_client",
+  "image_optimizer",
   "image_proxy_service",
   "integration_tests/*",
   "invite_email",
@@ -178,6 +179,7 @@ hex = "0.4.3"
 hmac = "0.12.1"
 http = "1"
 http-body-util = "0.1.2"
+image = "0.25"
 inquire = "0.7"
 itertools = "0.14"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
@@ -264,5 +266,6 @@ once_cell = "1.21.3"
 scraper = "0.18"
 strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
+serde_urlencoded = "0.7.1"
 url = "2.5.0"
 zip = "=2.4.2"

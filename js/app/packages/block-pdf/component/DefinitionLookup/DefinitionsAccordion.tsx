@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { Accordion } from '@kobalte/core/accordion';
 import Scrollbars from 'solid-custom-scrollbars';
 import { createMemo, createSignal, For, type JSX } from 'solid-js';
@@ -164,7 +165,7 @@ export function DefinitionsAccordion(props: IProps) {
                       : '#EC008C'
                 }
                 onClick={props.onClick}
-                class={`pinned-terms-section ${className}`}
+                class={cn('pinned-terms-section', className)}
                 style={{
                   // TODO: Remove following "fake" strikeouts, underlines setting and properly pull from backend
                   'text-decoration-line': determineFormat(colorArray[index]),
@@ -204,7 +205,7 @@ export function DefinitionsAccordion(props: IProps) {
             color={isSection ? '#00A400' : '#1447A6'}
             hoverColor={isSection ? '#014f01' : '#EC008C'}
             onClick={props.onClick}
-            class={`pinned-terms-section ${className}`}
+            class={cn('pinned-terms-section', className)}
           >
             {decodedString}
           </HoverText>

@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { fileSelector } from '@core/directive/fileSelector';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import {
@@ -192,7 +193,7 @@ function RecipientDropRow(props: {
 
   return (
     <div
-      class={`flex flex-row items-center ${props.class ?? ''}`}
+      class={cn('flex flex-row items-center', props.class)}
       classList={{ 'bg-accent/10': isDragOver() }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -1426,7 +1427,10 @@ export function BaseInput(props: {
         </Show>
       </div>
       <div
-        class={`${props.isEditingExisting || props.newMessage ? 'flex' : 'hidden'} flex-row items-center`}
+        class={cn(
+          'flex-row items-center',
+          props.isEditingExisting || props.newMessage ? 'flex' : 'hidden'
+        )}
       >
         <div class="text-sm min-w-16 pl-4">Subject</div>
         <input
@@ -1496,7 +1500,7 @@ export function BaseInput(props: {
           }}
         >
           <div
-            class={`${!isDragging() && 'hidden'} absolute size-full inset-0`}
+            class={cn('absolute size-full inset-0', !isDragging() && 'hidden')}
           >
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
@@ -1505,7 +1509,10 @@ export function BaseInput(props: {
               setEditor(editor);
               form().setCapturedEditor(editor);
             }}
-            class={`ph-no-capture cursor-text text-sm break-words text-ink ${isDragging() && 'blur'}`}
+            class={cn(
+              'ph-no-capture cursor-text text-sm break-words text-ink',
+              isDragging() && 'blur'
+            )}
             editable={() => !sendMutation.isPending}
             initialValue={props.preloadedBody}
             initialHtml={restoredSnapshot?.bodyHtml ?? props.preloadedHtml}

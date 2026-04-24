@@ -25,11 +25,19 @@ type ToolParserMap = {
     response: types.GetEntityPropertiesResponse;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
+  ListCallRecords: {
+    call: types.ListCallRecords;
+    response: types.ListCallRecordsResponse;
+  };
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
+  ReadCallRecord: {
+    call: types.ReadCallRecord;
+    response: types.ReadCallRecordResponse;
+  };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadMetadata: {
     call: types.ReadMetadata;
@@ -74,6 +82,10 @@ const toolParserMap = {
     response: schemas.GetEntityPropertiesResponse,
   },
   GetThread: { call: schemas.GetThread, response: schemas.GetThreadResponse },
+  ListCallRecords: {
+    call: schemas.ListCallRecords,
+    response: schemas.ListCallRecordsResponse,
+  },
   ListEntities: {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
@@ -81,6 +93,10 @@ const toolParserMap = {
   NameSearch: {
     call: schemas.NameSearch,
     response: schemas.SearchToolResponse,
+  },
+  ReadCallRecord: {
+    call: schemas.ReadCallRecord,
+    response: schemas.ReadCallRecordResponse,
   },
   ReadContent: {
     call: schemas.ReadContent,
@@ -140,11 +156,19 @@ type ToolDataMap = {
     response: types.GetEntityPropertiesResponse;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
+  ListCallRecords: {
+    call: types.ListCallRecords;
+    response: types.ListCallRecordsResponse;
+  };
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
+  ReadCallRecord: {
+    call: types.ReadCallRecord;
+    response: types.ReadCallRecordResponse;
+  };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadMetadata: {
     call: types.ReadMetadata;

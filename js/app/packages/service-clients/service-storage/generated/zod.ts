@@ -811,6 +811,87 @@ export const createCommentResponse = zod
   );
 
 /**
+ * Batch-fetches lightweight previews for a list of call ids. Mirrors the
+`POST /documents/preview` endpoint: no per-id access checks, duplicate
+ids are deduplicated server-side, and missing ids come back as
+`CallRecordPreview::DoesNotExist` rather than producing an error.
+ * @summary Handler for `POST /call/record/preview`.
+ */
+export const getBatchCallRecordPreviewBody = zod
+  .object({
+    callIds: zod
+      .array(zod.string().uuid())
+      .describe(
+        'The call ids to preview. Duplicate ids are deduplicated server-side.\nCapped at [`MAX_BATCH_CALL_IDS`] entries.'
+      ),
+  })
+  .describe(
+    'Request body for `POST \/call\/record\/preview`.\n\nThe `call_ids` list is bounded at [`MAX_BATCH_CALL_IDS`]; the handler\nrejects anything larger with a 400 before touching the database.'
+  );
+
+export const getBatchCallRecordPreviewResponse = zod
+  .object({
+    previews: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                callId: zod.string().uuid().describe('The call identifier.'),
+                channelId: zod
+                  .string()
+                  .uuid()
+                  .describe('The channel this call belongs to.'),
+                channelName: zod
+                  .string()
+                  .nullish()
+                  .describe('Resolved display name for the channel.'),
+                endedAt: zod
+                  .string()
+                  .datetime({})
+                  .nullish()
+                  .describe('When the call ended (None if still active).'),
+                startedAt: zod
+                  .string()
+                  .datetime({})
+                  .describe(
+                    'When the call started (created_at for active, started_at for archived).'
+                  ),
+              })
+              .describe('Preview payload returned for each found call id.')
+              .and(
+                zod.object({
+                  type: zod.enum(['exists']),
+                })
+              )
+              .describe(
+                'The call exists (in either the active or archived table).'
+              ),
+            zod
+              .object({
+                callId: zod.string().uuid().describe('The call identifier.'),
+              })
+              .describe(
+                'Wrapper carrying just a call id. Used by the [`CallRecordPreview::DoesNotExist`]\nvariant.'
+              )
+              .and(
+                zod.object({
+                  type: zod.enum(['does_not_exist']),
+                })
+              )
+              .describe(
+                'No call with this id exists in either the active or archived tables.'
+              ),
+          ])
+          .describe(
+            'Lightweight preview of a call record, returned by the batch preview endpoint.\n\nEach requested id resolves to one of two outcomes: the call exists\n(`Exists`) or it does not (`DoesNotExist`). The endpoint does not perform\naccess checks, so there is no separate \"not authorized\" variant.'
+          )
+      )
+      .describe('One entry per deduplicated input id.'),
+  })
+  .describe('Response body for `POST \/call\/record\/preview`.');
+
+/**
  * Returns the full [`CallRecord`] (metadata + participants + transcript)
 for a call identified by its own id. Covers both active and archived calls.
 Access is validated via channel membership (MemberParticipantRole).
@@ -5294,6 +5375,12 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             "Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC."
+          ),
+        calendar_only: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'When `Some(true)`, only include threads that have at least one message\nwith an iCalendar attachment (`.ics` filename or `application\/ics` mime\ntype). `Some(false)` and `None` apply no constraint.'
           ),
         cc: zod
           .array(zod.string())

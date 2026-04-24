@@ -816,7 +816,7 @@ function GlyphEditor(props: GlyphEditorProps) {
               <div class="flex flex-col items-center gap-6">
                 <div
                   class="relative border border-edge"
-                  style={`width: 280px; height: 280px;`}
+                  style="width: 280px; height: 280px;"
                 >
                   <svg
                     viewBox={`0 0 280 280`}

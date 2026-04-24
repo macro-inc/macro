@@ -5,7 +5,10 @@ export { createInputAttachmentTracker } from './attachment-tracker';
 export { createInputState } from './create-input-state';
 export { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 export { createMentionsTracker } from './mentions-tracker';
-export { buildPostMessageRequest } from './message-payload';
+export {
+  buildPostMessageRequest,
+  attachmentEntityType,
+} from './message-payload';
 export { uploadInputAttachments } from './upload-attachments';
 
 export { Root } from './Root';

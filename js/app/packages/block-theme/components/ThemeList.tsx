@@ -111,10 +111,10 @@ export function ThemeList() {
                 }}
                 style="
                   grid-template-columns: min-content 1fr min-content;
+                  cursor: var(--cursor-pointer);
                   background-color: var(--b1);
                   align-items: center;
                   padding: 10px 20px;
-                  cursor: var(--cursor-pointer);
                   display: grid;
                   gap: 20px;
                 "

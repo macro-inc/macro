@@ -3,6 +3,7 @@ import { isInBlock } from '@core/block';
 import clickOutside from '@core/directive/clickOutside';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { Dialog } from '@kobalte/core/dialog';
+import { cn } from '@ui/utils/classname';
 import type { ComponentProps } from 'solid-js';
 import {
   type Accessor,
@@ -33,11 +34,12 @@ export const EntityModalActionFooter = (props: {
         Cancel
       </button>
       <button
-        class={`uppercase py-1 px-3 font-mono text-sm ${
+        class={cn(
+          'uppercase py-1 px-3 font-mono text-sm',
           props.isDisabled
             ? 'bg-edge/20 text-ink-placeholder cursor-not-allowed'
             : 'bg-accent text-menu'
-        }`}
+        )}
         onClick={props.onConfirm}
         disabled={props.isDisabled}
       >
