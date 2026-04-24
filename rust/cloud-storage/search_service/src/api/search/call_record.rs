@@ -87,11 +87,11 @@ pub(in crate::api::search) async fn enrich_call_records(
     let result = hits_by_call_id
         .into_iter()
         .map(|(call_id, hits)| {
-            let metadata = metadata_by_id.get(&call_id).cloned();
             let (channel_id, participant_ids) = call_context
                 .get(&call_id)
                 .cloned()
-                .unwrap_or((call_id, Vec::new()));
+                .expect("CallRecords hit missing SearchGotoCallRecord");
+            let metadata = metadata_by_id.get(&call_id).cloned();
 
             CallRecordSearchResponseItemWithMetadata {
                 extra: CallRecordSearchResponseItem {
