@@ -8,17 +8,13 @@ version = "0.1.0"
 axum = [
   "dep:axum",
   "dep:axum-extra",
-  "dep:http-body-util",
   "dep:macro_auth",
-  "dep:macro_cors",
   "dep:macro_middleware",
   "dep:macro_user_id",
   "dep:model_user",
   "dep:rate_limit",
   "dep:redis",
-  "dep:tower",
   "dep:utoipa",
-  "dep:utoipa-swagger-ui",
 ]
 
 [dependencies]
@@ -28,9 +24,7 @@ axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
 contacts_db_client = { path = "../contacts_db_client" }
-http-body-util = { workspace = true, optional = true }
 macro_auth = { path = "../macro_auth", optional = true }
-macro_cors = { path = "../macro_cors", optional = true }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
 ], optional = true }
@@ -44,10 +38,8 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 sqs_worker = { path = "../sqs_worker" }
 tokio = { workspace = true }
-tower = { workspace = true, optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
-utoipa-swagger-ui = { workspace = true, optional = true }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
