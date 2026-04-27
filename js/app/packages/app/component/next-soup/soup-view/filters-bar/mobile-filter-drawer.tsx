@@ -25,7 +25,6 @@ import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
 import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
-import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   DEFAULT_SORT_OPTIONS,
@@ -36,7 +35,10 @@ import {
   type SystemSortOption,
   type SortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
-import type { FilterContext } from '@app/component/next-soup/filters';
+import {
+  NO_ASSIGNEE,
+  type FilterContext,
+} from '@app/component/next-soup/filters';
 
 function scrollAccordionItemToTop(
   e: MouseEvent,

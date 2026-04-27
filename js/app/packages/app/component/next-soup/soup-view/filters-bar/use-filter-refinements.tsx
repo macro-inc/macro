@@ -3,10 +3,13 @@ import {
   getViewPreset,
   VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID, FilterContext } from '@app/component/next-soup/filters';
+import {
+  type FilterID,
+  type FilterContext,
+  NO_ASSIGNEE,
+} from '@app/component/next-soup/filters';
 import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';

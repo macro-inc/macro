@@ -31,10 +31,12 @@ import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
 import type { FilterID } from '@app/component/next-soup/filters';
-import type { FilterContext } from '@app/component/next-soup/filters/configs/';
+import {
+  NO_ASSIGNEE,
+  type FilterContext,
+} from '@app/component/next-soup/filters/configs/';
 import type { PropertyFilter } from '@app/component/next-soup/filters/filter-store';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import {
@@ -745,6 +747,13 @@ export const UnifiedFilterDropdown = () => {
 
     batch(() => {
       setAssigneeFilter(ids);
+
+      // Activate/deactivate the assignee predicate based on selection
+      const shouldBeActive = ids.length > 0;
+      if (shouldBeActive !== soup.predicates.isActive('assignee')) {
+        soup.predicates.toggle({ and: ['assignee'] });
+      }
+
       const removeProps = toProps(toRemove);
       const addProps = toProps(toAdd);
       if (removeProps.length)

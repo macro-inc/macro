@@ -2,7 +2,7 @@ import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import type { Query, PropertyFilter } from '../filter-store';
 
-export const NO_ASSIGNEE = '__no_assignee__';
+export const NO_ASSIGNEE = 'NO_ASSIGNEE';
 
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
