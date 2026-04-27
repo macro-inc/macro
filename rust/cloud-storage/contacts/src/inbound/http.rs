@@ -15,9 +15,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::instrument;
 use utoipa::{OpenApi, ToSchema};
-use utoipa_swagger_ui::SwaggerUi;
-
-mod health;
 
 /// Response body for GET /contacts.
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
@@ -171,30 +168,8 @@ pub fn contacts_router<R: RateLimitService + Clone, S: ContactsServicePort>(
         .merge(post_route)
 }
 
-/// Sets up and serves the HTTP application.
-pub async fn setup_and_serve<S: ContactsServicePort>(
-    state: AppState<S>,
-) -> anyhow::Result<()> {
-    let cors = macro_cors::cors_layer();
-
-    let port = state.port;
-    let app = api_router(state)
-        .layer(cors.clone())
-        .merge(health::router().layer(cors))
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", ApiDoc::openapi()));
-
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
-        .await
-        .unwrap();
-
-    tracing::info!("contacts service is up and running on port {}", &port);
-
-    axum::serve(listener, app.into_make_service())
-        .await
-        .map_err(|e| anyhow::anyhow!("error starting service: {}", e))
-}
-
-fn api_router<S: ContactsServicePort>(app_state: AppState<S>) -> Router {
+/// Builds the full API router with JWT auth middleware and rate limiting.
+pub fn api_router<S: ContactsServicePort>(app_state: AppState<S>) -> Router {
     contacts_router(app_state.rate_limit_service.clone())
         .layer(axum::middleware::from_fn_with_state(
             app_state.jwt_args.clone(),

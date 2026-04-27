@@ -1,12 +1,13 @@
 #![recursion_limit = "256"]
 mod config;
+mod health;
 use std::sync::Arc;
 
 use anyhow::Context;
 use config::{Config, Environment};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts::domain::service::ContactsDomainService;
-use contacts::inbound::http::AppState;
+use contacts::inbound::http::{ApiDoc, AppState};
 use contacts::inbound::worker::ContactsWorker;
 use contacts::outbound::gateway::ConnectionGatewayNotifier;
 use contacts::outbound::repository::DbContactsRepository;
@@ -16,6 +17,8 @@ use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use sqs_worker::SQSWorker;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 async fn connect_to_database(config: &Config) -> anyhow::Result<sqlx::PgPool> {
     let (min_connections, max_connections): (u32, u32) = match config.environment {
@@ -99,12 +102,27 @@ async fn main() -> anyhow::Result<()> {
         },
     };
 
-    contacts::inbound::http::setup_and_serve(AppState {
-        port: config.port,
+    let cors = macro_cors::cors_layer();
+    let port = config.port;
+
+    let app = contacts::inbound::http::api_router(AppState {
+        port,
         jwt_args,
         contacts_service: service,
         rate_limit_service,
     })
-    .await?;
+    .layer(cors.clone())
+    .merge(health::router().layer(cors))
+    .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", ApiDoc::openapi()));
+
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
+
+    tracing::info!("contacts service is up and running on port {}", &port);
+
+    axum::serve(listener, app.into_make_service())
+        .await
+        .context("error starting service")?;
     Ok(())
 }

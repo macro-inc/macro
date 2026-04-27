@@ -2382,7 +2382,6 @@ dependencies = [
  "contacts_db_client",
  "http-body-util",
  "macro_auth",
- "macro_cors",
  "macro_middleware",
  "macro_user_id",
  "model",
@@ -2398,7 +2397,6 @@ dependencies = [
  "tower 0.5.2",
  "tracing",
  "utoipa",
- "utoipa-swagger-ui",
 ]
 
 [[package]]
@@ -2419,10 +2417,13 @@ dependencies = [
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
+ "axum",
  "connection_gateway_client",
  "contacts",
+ "http-body-util",
  "macro_auth",
  "macro_aws_config",
+ "macro_cors",
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
@@ -2435,8 +2436,10 @@ dependencies = [
  "sqlx",
  "sqs_worker",
  "tokio",
+ "tower 0.5.2",
  "tracing",
  "utoipa",
+ "utoipa-swagger-ui",
 ]
 
 [[package]]
