@@ -16,6 +16,7 @@ import type {
   EmailEntity,
   ProjectEntity,
   DocumentEntity,
+  CallEntity,
 } from '@entity/types/entity';
 import type { ContentHitData, SearchData } from '@entity/types/search';
 
@@ -198,6 +199,49 @@ function searchResultsToEntities(
         }
         break;
       }
+      case 'callRecord': {
+        if (!result.metadata) continue;
+        key = result.call_id;
+        const channelName =
+          result.metadata.channel_name ??
+          channelsById[result.channel_id]?.name ??
+          undefined;
+        entity = {
+          id: result.call_id,
+          type: 'call',
+          name: result.name ?? channelName ?? 'Call',
+          channelId: result.channel_id,
+          channelName,
+          ownerId: result.owner_id,
+          createdAt: result.metadata.started_at,
+          updatedAt: result.metadata.updated_at,
+          isActive: false,
+          attended: result.metadata.attended,
+          durationMs: result.metadata.duration_ms,
+          participantIds: result.participant_ids,
+        } satisfies CallEntity;
+
+        for (const sr of result.call_search_results) {
+          if (sr.highlight.name) nameHighlight = sr.highlight.name;
+          if (sr.highlight.content?.length && sr.transcript_id) {
+            for (const content of sr.highlight.content) {
+              contentHits.push({
+                type: 'call_record',
+                id: sr.transcript_id,
+                content,
+                senderId: sr.speaker_id ?? '',
+                sentAt: sr.started_at ?? result.metadata.started_at,
+                location: {
+                  type: 'call_record',
+                  callId: result.call_id,
+                  transcriptId: sr.transcript_id,
+                },
+              });
+            }
+          }
+        }
+        break;
+      }
       default:
         continue;
     }
@@ -250,6 +294,8 @@ const UnifiedSearchToolResponse = (props: {
         return () => replaceOrInsertSplit({ type: 'channel', id: entity.id });
       case 'project':
         return () => replaceOrInsertSplit({ type: 'project', id: entity.id });
+      case 'call':
+        return () => replaceOrInsertSplit({ type: 'call', id: entity.id });
       default:
         return undefined;
     }
