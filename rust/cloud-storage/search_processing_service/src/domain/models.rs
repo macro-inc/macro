@@ -1,12 +1,34 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqs_client::search::SearchQueueMessage;
 use thiserror::Error;
 
 /// Reply returned by every backfill port.
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct BackfillReceipt {
-    /// Total number of search-event messages placed on the queue.
+    /// Total number of source rows the backfill processed.
     pub enqueued: usize,
+}
+
+/// One page of work produced by a [`super::ports`] source. Holding the
+/// messages and `rows_consumed` together lets the orchestrator advance its
+/// offset by the number of *rows* the source consumed even when the source
+/// batches many rows into fewer SQS messages (see the email source).
+pub struct SourcePage {
+    pub messages: Vec<SearchQueueMessage>,
+    /// Number of source rows the page covered. Drives the orchestrator's
+    /// `offset += rows_consumed` and its termination check (`rows_consumed
+    /// == 0` means the source is exhausted).
+    pub rows_consumed: usize,
+}
+
+impl SourcePage {
+    pub fn empty() -> Self {
+        Self {
+            messages: Vec::new(),
+            rows_consumed: 0,
+        }
+    }
 }
 
 #[derive(Debug, Error)]

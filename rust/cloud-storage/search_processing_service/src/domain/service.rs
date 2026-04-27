@@ -9,8 +9,6 @@
 
 use std::future::Future;
 
-use sqs_client::search::SearchQueueMessage;
-
 use crate::outbound::backfill::{
     calls::PgCallSource, channels::PgChannelSource, chats::PgChatSource,
     documents::PgDocumentSource, emails::PgEmailSource,
@@ -19,7 +17,7 @@ use crate::outbound::publisher::SqsSearchEventPublisher;
 
 use super::models::{
     BackfillError, BackfillReceipt, CallBackfillRequest, ChannelBackfillRequest,
-    ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest,
+    ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest, SourcePage,
 };
 use super::ports::{
     CallBackfillSource, ChannelBackfillSource, ChatBackfillSource, DocumentBackfillSource,
@@ -100,17 +98,17 @@ where
 }
 
 /// Drive a source by repeatedly calling `fetch_page(offset)`, publishing each
-/// non-empty page, and stopping when the source returns an empty page. The
-/// offset advances by the page length the source actually returned, so a
-/// short last page doesn't cause an extra fetch — but a source that returns
-/// `page_size` items on the final boundary will see one extra empty fetch
-/// before termination, which is intentional and cheap.
+/// page's messages, and stopping when the source reports zero rows consumed.
+/// Offset advances by `rows_consumed`, *not* by message count — sources are
+/// free to fold many rows into a smaller batch of messages (see
+/// [`crate::outbound::backfill::emails::PgEmailSource`]) without confusing
+/// the loop into re-reading rows.
 async fn drain_source<Fut, P>(
     publisher: &P,
     fetch: impl Fn(usize) -> Fut,
 ) -> Result<BackfillReceipt, BackfillError>
 where
-    Fut: Future<Output = Result<Vec<SearchQueueMessage>, BackfillError>>,
+    Fut: Future<Output = Result<SourcePage, BackfillError>>,
     P: SearchEventPublisher + ?Sized,
 {
     let mut offset = 0usize;
@@ -118,13 +116,12 @@ where
 
     loop {
         let page = fetch(offset).await?;
-        if page.is_empty() {
+        if page.rows_consumed == 0 {
             break;
         }
-        let n = page.len();
-        publisher.publish(page).await?;
-        enqueued += n;
-        offset += n;
+        publisher.publish(page.messages).await?;
+        enqueued += page.rows_consumed;
+        offset += page.rows_consumed;
     }
 
     Ok(BackfillReceipt { enqueued })

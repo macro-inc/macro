@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use sqs_client::search::{SearchQueueMessage, channel::ChannelMessageUpdate};
 
-use crate::domain::models::{BackfillError, ChannelBackfillRequest};
+use crate::domain::models::{BackfillError, ChannelBackfillRequest, SourcePage};
 use crate::domain::ports::ChannelBackfillSource;
 
 /// Postgres-backed [`ChannelBackfillSource`] against macrodb.
@@ -21,7 +21,7 @@ impl ChannelBackfillSource for PgChannelSource {
         &self,
         _req: &ChannelBackfillRequest,
         offset: usize,
-    ) -> Result<Vec<SearchQueueMessage>, BackfillError> {
+    ) -> Result<SourcePage, BackfillError> {
         let batch = comms_db_client::messages::get_messages::get_channel_messages(
             &self.db,
             self.page_size as i64,
@@ -30,7 +30,8 @@ impl ChannelBackfillSource for PgChannelSource {
         .await
         .map_err(BackfillError::Source)?;
 
-        Ok(batch
+        let rows_consumed = batch.len();
+        let messages: Vec<SearchQueueMessage> = batch
             .into_iter()
             .map(|(channel_id, message_id)| {
                 SearchQueueMessage::ChannelMessageUpdate(ChannelMessageUpdate {
@@ -38,6 +39,11 @@ impl ChannelBackfillSource for PgChannelSource {
                     message_id: message_id.to_string(),
                 })
             })
-            .collect())
+            .collect();
+
+        Ok(SourcePage {
+            messages,
+            rows_consumed,
+        })
     }
 }

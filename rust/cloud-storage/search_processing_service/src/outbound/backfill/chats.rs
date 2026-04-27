@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use sqs_client::search::{SearchQueueMessage, chat::ChatMessage};
 
-use crate::domain::models::{BackfillError, ChatBackfillRequest};
+use crate::domain::models::{BackfillError, ChatBackfillRequest, SourcePage};
 use crate::domain::ports::ChatBackfillSource;
 
 /// Postgres-backed [`ChatBackfillSource`] against macrodb.
@@ -21,7 +21,7 @@ impl ChatBackfillSource for PgChatSource {
         &self,
         req: &ChatBackfillRequest,
         offset: usize,
-    ) -> Result<Vec<SearchQueueMessage>, BackfillError> {
+    ) -> Result<SourcePage, BackfillError> {
         let chat_ids = (!req.chat_ids.is_empty()).then(|| req.chat_ids.clone());
         let user_ids = (!req.user_ids.is_empty()).then(|| req.user_ids.clone());
 
@@ -35,7 +35,8 @@ impl ChatBackfillSource for PgChatSource {
         .await
         .map_err(BackfillError::Source)?;
 
-        Ok(batch
+        let rows_consumed = batch.len();
+        let messages: Vec<SearchQueueMessage> = batch
             .into_iter()
             .map(|chat| {
                 SearchQueueMessage::ChatMessage(ChatMessage {
@@ -46,6 +47,11 @@ impl ChatBackfillSource for PgChatSource {
                     updated_at: chat.updated_at,
                 })
             })
-            .collect())
+            .collect();
+
+        Ok(SourcePage {
+            messages,
+            rows_consumed,
+        })
     }
 }

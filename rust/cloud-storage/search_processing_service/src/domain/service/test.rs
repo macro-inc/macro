@@ -3,19 +3,19 @@ use std::sync::Mutex;
 use sqs_client::search::{SearchQueueMessage, call::CallRecordMessage};
 
 use super::*;
-use crate::domain::models::CallBackfillRequest;
+use crate::domain::models::{CallBackfillRequest, SourcePage};
 use crate::domain::ports::{CallBackfillSource, SearchEventPublisher};
 
 /// Programmable source. Each `fetch_page` call returns the next entry from
-/// `pages`; after that, returns empty (so the orchestrator stops).
+/// `pages`; after that, returns an empty page so the orchestrator stops.
 struct FakeSource {
-    pages: Mutex<std::collections::VecDeque<Vec<SearchQueueMessage>>>,
+    pages: Mutex<std::collections::VecDeque<SourcePage>>,
     /// Records the offsets `fetch_page` was called with, in order.
     offsets: Mutex<Vec<usize>>,
 }
 
 impl FakeSource {
-    fn new(pages: Vec<Vec<SearchQueueMessage>>) -> Self {
+    fn new(pages: Vec<SourcePage>) -> Self {
         Self {
             pages: Mutex::new(pages.into_iter().collect()),
             offsets: Mutex::new(Vec::new()),
@@ -32,9 +32,14 @@ impl CallBackfillSource for FakeSource {
         &self,
         _req: &CallBackfillRequest,
         offset: usize,
-    ) -> Result<Vec<SearchQueueMessage>, BackfillError> {
+    ) -> Result<SourcePage, BackfillError> {
         self.offsets.lock().unwrap().push(offset);
-        Ok(self.pages.lock().unwrap().pop_front().unwrap_or_default())
+        Ok(self
+            .pages
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or_else(SourcePage::empty))
     }
 }
 
@@ -46,7 +51,7 @@ impl CallBackfillSource for ExplodingSource {
         &self,
         _req: &CallBackfillRequest,
         _offset: usize,
-    ) -> Result<Vec<SearchQueueMessage>, BackfillError> {
+    ) -> Result<SourcePage, BackfillError> {
         Err(BackfillError::Source(anyhow::anyhow!("source down")))
     }
 }
@@ -94,13 +99,23 @@ fn msg(id: &str) -> SearchQueueMessage {
     })
 }
 
+/// Build a 1:1 page where messages.len() == rows_consumed (the typical case
+/// for non-batching sources like calls/chats/channels/documents).
+fn page(messages: Vec<SearchQueueMessage>) -> SourcePage {
+    let rows_consumed = messages.len();
+    SourcePage {
+        messages,
+        rows_consumed,
+    }
+}
+
 #[tokio::test]
 async fn drains_source_across_full_pages() {
     // Three full pages of 5; loop terminates on the empty fourth fetch.
     let source = FakeSource::new(vec![
-        (0..5).map(|i| msg(&format!("p1-{i}"))).collect(),
-        (0..5).map(|i| msg(&format!("p2-{i}"))).collect(),
-        (0..5).map(|i| msg(&format!("p3-{i}"))).collect(),
+        page((0..5).map(|i| msg(&format!("p1-{i}"))).collect()),
+        page((0..5).map(|i| msg(&format!("p2-{i}"))).collect()),
+        page((0..5).map(|i| msg(&format!("p3-{i}"))).collect()),
     ]);
     let publisher = RecordingPublisher::default();
     let req = CallBackfillRequest::default();
@@ -113,19 +128,18 @@ async fn drains_source_across_full_pages() {
     assert_eq!(publisher.batch_count(), 3);
     assert_eq!(publisher.total_messages(), 15);
     assert_eq!(publisher.batch_sizes(), vec![5, 5, 5]);
-    // Source probed at offsets 0, 5, 10, 15 — last returns empty.
+    // Probed at offsets 0, 5, 10, 15 — last returns empty.
     assert_eq!(source.observed_offsets(), vec![0, 5, 10, 15]);
 }
 
 #[tokio::test]
 async fn short_final_page_short_circuits() {
-    // Pages of 5, 5, 2. After the 2-item page the loop continues with offset
-    // 12 and gets empty, then stops. We don't try to short-circuit on
-    // partial pages — the loop just trusts the source's emptiness signal.
+    // Pages of 5, 5, 2. The 2-row page advances offset to 12; the next fetch
+    // returns empty and the loop stops.
     let source = FakeSource::new(vec![
-        (0..5).map(|i| msg(&format!("a{i}"))).collect(),
-        (0..5).map(|i| msg(&format!("b{i}"))).collect(),
-        (0..2).map(|i| msg(&format!("c{i}"))).collect(),
+        page((0..5).map(|i| msg(&format!("a{i}"))).collect()),
+        page((0..5).map(|i| msg(&format!("b{i}"))).collect()),
+        page((0..2).map(|i| msg(&format!("c{i}"))).collect()),
     ]);
     let publisher = RecordingPublisher::default();
     let req = CallBackfillRequest::default();
@@ -137,6 +151,41 @@ async fn short_final_page_short_circuits() {
     assert_eq!(receipt.enqueued, 12);
     assert_eq!(publisher.batch_sizes(), vec![5, 5, 2]);
     assert_eq!(source.observed_offsets(), vec![0, 5, 10, 12]);
+}
+
+#[tokio::test]
+async fn batched_source_advances_by_rows_not_messages() {
+    // Mimics the email source: each page consumes 100 source rows but
+    // produces only 3 batched messages. The loop must advance offset by
+    // `rows_consumed` (100), not by `messages.len()` (3) — otherwise the
+    // next fetch would re-read 97 rows we just processed.
+    let source = FakeSource::new(vec![
+        SourcePage {
+            messages: (0..3).map(|i| msg(&format!("p1-{i}"))).collect(),
+            rows_consumed: 100,
+        },
+        SourcePage {
+            messages: (0..3).map(|i| msg(&format!("p2-{i}"))).collect(),
+            rows_consumed: 100,
+        },
+        SourcePage {
+            messages: (0..2).map(|i| msg(&format!("p3-{i}"))).collect(),
+            rows_consumed: 40,
+        },
+    ]);
+    let publisher = RecordingPublisher::default();
+    let req = CallBackfillRequest::default();
+
+    let receipt = drain_source(&publisher, |offset| source.fetch_page(&req, offset))
+        .await
+        .unwrap();
+
+    // enqueued = sum of rows_consumed (the meaningful unit), not message count.
+    assert_eq!(receipt.enqueued, 240);
+    // The publisher saw the message-count-shaped batches: 3, 3, 2.
+    assert_eq!(publisher.batch_sizes(), vec![3, 3, 2]);
+    // Offsets advance by rows_consumed: 0 → 100 → 200 → 240 → empty.
+    assert_eq!(source.observed_offsets(), vec![0, 100, 200, 240]);
 }
 
 #[tokio::test]
@@ -170,7 +219,7 @@ async fn source_error_propagates_without_partial_publish() {
 
 #[tokio::test]
 async fn publish_error_propagates_after_first_fetch() {
-    let source = FakeSource::new(vec![vec![msg("only")]]);
+    let source = FakeSource::new(vec![page(vec![msg("only")])]);
     let publisher = ExplodingPublisher;
     let req = CallBackfillRequest::default();
 

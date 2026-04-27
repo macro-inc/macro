@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use sqs_client::search::{SearchQueueMessage, call::CallRecordMessage};
 
-use crate::domain::models::{BackfillError, CallBackfillRequest};
+use crate::domain::models::{BackfillError, CallBackfillRequest, SourcePage};
 use crate::domain::ports::CallBackfillSource;
 
 /// Postgres-backed [`CallBackfillSource`] reading archived calls out of
@@ -22,14 +22,14 @@ impl CallBackfillSource for PgCallSource {
         &self,
         req: &CallBackfillRequest,
         offset: usize,
-    ) -> Result<Vec<SearchQueueMessage>, BackfillError> {
+    ) -> Result<SourcePage, BackfillError> {
         // Caller passed an explicit set of ids: emit them all on the first
-        // page; subsequent pages are empty so the orchestrator's loop stops.
+        // page; subsequent pages report 0 rows so the orchestrator stops.
         if !req.call_ids.is_empty() {
             if offset > 0 {
-                return Ok(vec![]);
+                return Ok(SourcePage::empty());
             }
-            return Ok(req
+            let messages: Vec<SearchQueueMessage> = req
                 .call_ids
                 .iter()
                 .map(|id| {
@@ -37,7 +37,12 @@ impl CallBackfillSource for PgCallSource {
                         call_id: id.clone(),
                     })
                 })
-                .collect());
+                .collect();
+            let rows_consumed = messages.len();
+            return Ok(SourcePage {
+                messages,
+                rows_consumed,
+            });
         }
 
         let batch = macro_db_client::call_record::get::get_call_records_for_search_backfill(
@@ -48,13 +53,19 @@ impl CallBackfillSource for PgCallSource {
         .await
         .map_err(BackfillError::Source)?;
 
-        Ok(batch
+        let rows_consumed = batch.len();
+        let messages: Vec<SearchQueueMessage> = batch
             .into_iter()
             .map(|r| {
                 SearchQueueMessage::CallRecord(CallRecordMessage {
                     call_id: r.call_id.to_string(),
                 })
             })
-            .collect())
+            .collect();
+
+        Ok(SourcePage {
+            messages,
+            rows_consumed,
+        })
     }
 }

@@ -3,12 +3,16 @@ use std::collections::HashMap;
 use sqlx::PgPool;
 use sqs_client::search::{SearchQueueMessage, email::EmailThreadBatchMessage};
 
-use crate::domain::models::{BackfillError, EmailBackfillRequest};
+use crate::domain::models::{BackfillError, EmailBackfillRequest, SourcePage};
 use crate::domain::ports::EmailBackfillSource;
 
 const DEFAULT_BATCH_SIZE: usize = 50;
 
-/// Postgres-backed [`EmailBackfillSource`] against macrodb.
+/// Postgres-backed [`EmailBackfillSource`] against macrodb. The number of
+/// SQS messages produced is much smaller than the row count because we
+/// chunk a user's thread ids into per-user batches before publishing — the
+/// orchestrator advances its DB offset by [`SourcePage::rows_consumed`]
+/// (the row count), not by message count, so this batching is safe.
 pub struct PgEmailSource {
     db: PgPool,
     page_size: usize,
@@ -25,7 +29,7 @@ impl EmailBackfillSource for PgEmailSource {
         &self,
         req: &EmailBackfillRequest,
         offset: usize,
-    ) -> Result<Vec<SearchQueueMessage>, BackfillError> {
+    ) -> Result<SourcePage, BackfillError> {
         let batch_size = req
             .batch_size
             .filter(|n| *n > 0)
@@ -51,8 +55,9 @@ impl EmailBackfillSource for PgEmailSource {
             .map_err(BackfillError::Source)?,
         };
 
-        if rows.is_empty() {
-            return Ok(vec![]);
+        let rows_consumed = rows.len();
+        if rows_consumed == 0 {
+            return Ok(SourcePage::empty());
         }
 
         let mut by_user: HashMap<String, Vec<String>> = HashMap::new();
@@ -63,7 +68,7 @@ impl EmailBackfillSource for PgEmailSource {
                 .push(thread_id.to_string());
         }
 
-        Ok(by_user
+        let messages: Vec<SearchQueueMessage> = by_user
             .into_iter()
             .flat_map(|(macro_user_id, thread_ids)| {
                 thread_ids
@@ -77,6 +82,11 @@ impl EmailBackfillSource for PgEmailSource {
                     })
                     .collect::<Vec<_>>()
             })
-            .collect())
+            .collect();
+
+        Ok(SourcePage {
+            messages,
+            rows_consumed,
+        })
     }
 }

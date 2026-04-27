@@ -2,7 +2,7 @@ use model::document::FileType;
 use sqlx::PgPool;
 use sqs_client::search::SearchQueueMessage;
 
-use crate::domain::models::{BackfillError, DocumentBackfillRequest};
+use crate::domain::models::{BackfillError, DocumentBackfillRequest, SourcePage};
 use crate::domain::ports::DocumentBackfillSource;
 
 /// Postgres-backed [`DocumentBackfillSource`] against macrodb.
@@ -22,7 +22,7 @@ impl DocumentBackfillSource for PgDocumentSource {
         &self,
         req: &DocumentBackfillRequest,
         offset: usize,
-    ) -> Result<Vec<SearchQueueMessage>, BackfillError> {
+    ) -> Result<SourcePage, BackfillError> {
         let batch = macro_db_client::document::get_documents_search::get_documents_for_search(
             &self.db,
             self.page_size as i64,
@@ -35,7 +35,8 @@ impl DocumentBackfillSource for PgDocumentSource {
         .await
         .map_err(BackfillError::Source)?;
 
-        Ok(batch
+        let rows_consumed = batch.len();
+        let messages: Vec<SearchQueueMessage> = batch
             .iter()
             .map(|d| {
                 if d.file_type == FileType::Md {
@@ -44,6 +45,11 @@ impl DocumentBackfillSource for PgDocumentSource {
                     SearchQueueMessage::ExtractDocumentText(d.into())
                 }
             })
-            .collect())
+            .collect();
+
+        Ok(SourcePage {
+            messages,
+            rows_consumed,
+        })
     }
 }
