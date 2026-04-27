@@ -275,53 +275,24 @@ function fetchIfItems(
   ids: string[]
 ) {
   if (ids.length > 0) return fetcher(ids);
-  return [];
+  return new Promise<PreviewItem[]>((resolve) => resolve([]));
 }
 
 export async function fetchPreviewBatch(
   items: ItemEntity[]
 ): Promise<Map<string, PreviewItem>> {
-  const chats = fetchIfItems(fetchChatPreviews, filterMapToId(items, 'chat'));
-  const calls = fetchIfItems(fetchCallPreviews, filterMapToId(items, 'call'));
-  const documents = fetchIfItems(
-    fetchDocumentPreviews,
-    filterMapToId(items, 'document')
-  );
-  const channels = fetchIfItems(
-    fetchChannelPreviews,
-    filterMapToId(items, 'channel')
-  );
-  const projects = fetchIfItems(
-    fetchProjectPreviews,
-    filterMapToId(items, 'project')
-  );
-  const emails = fetchIfItems(
-    fetchEmailPreviews,
-    filterMapToId(items, 'email')
-  );
-
   const results = await Promise.all([
-    chats,
-    calls,
-    documents,
-    channels,
-    projects,
-    emails,
+    fetchIfItems(fetchChatPreviews, filterMapToId(items, 'chat')),
+    fetchIfItems(fetchCallPreviews, filterMapToId(items, 'call')),
+    fetchIfItems(fetchChannelPreviews, filterMapToId(items, 'channel')),
+    fetchIfItems(fetchDocumentPreviews, filterMapToId(items, 'document')),
+    fetchIfItems(fetchProjectPreviews, filterMapToId(items, 'project')),
+    fetchIfItems(fetchEmailPreviews, filterMapToId(items, 'email')),
   ]);
-
   const resultMap = new Map<string, PreviewItem>();
-
-  [
-    ...results[0],
-    ...results[1],
-    ...results[2],
-    ...results[3],
-    ...results[4],
-    ...results[5],
-  ].forEach((result) => {
+  results.flat().forEach((result) => {
     resultMap.set(result.id, result);
   });
-
   return resultMap;
 }
 
