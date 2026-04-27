@@ -77,7 +77,7 @@ export function UserMessage(props: {
     );
 
   return (
-    <div class="flex flex-col space-y-2 group">
+    <div class="flex flex-col group">
       <Show when={quote()}>
         <div class="relative w-full text-xs flex flex-row space-x-2 items-start text-ink-muted">
           <div class="flex flex-row items-center space-x-3">
@@ -87,7 +87,7 @@ export function UserMessage(props: {
         </div>
       </Show>
       <Show when={props.message.attachments.length > 0}>
-        <div class="flex flex-col space-y-2 w-full px-1 pb-1 mb-2">
+        <div class="flex flex-col flex-wrap justify-end items-end gap-1 w-full px-1 mb-2">
           <For each={imageAttachments()}>
             {(attachment) => (
               <ImagePreview
