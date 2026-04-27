@@ -5371,3 +5371,281 @@ async fn test_dyn_filter_by_not_document_sub_type_task(db: PgPool) -> anyhow::Re
 
     Ok(())
 }
+
+// ---- Date literal filter tests ----
+// Uses `entity_filter_tests` fixture which has:
+//   Docs (accessible): aaaa(10:00), bbbb(11:00), cccc(12:00), dddd(13:00), eeee(14:00) on 2023-01-05
+//   Chats (accessible): a1a1(10:00), b2b2(11:00), c3c3(12:00), d4d4(13:00) on 2023-01-06
+//   Projects (accessible): 1111(Jan-01 10:00), 2222(11:00), 3333(12:00), 4444(Jan-02 10:00)
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_date_filter_document_created_at_gt(db: PgPool) -> anyhow::Result<()> {
+    use chrono::DateTime;
+    use filter_ast::Expr;
+    use item_filters::ast::{date::DateLiteral, document::DocumentLiteral};
+    use std::sync::Arc;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    // cutoff between bbbb(11:00) and cccc(12:00) → expect cccc, dddd, eeee = 3 docs
+    let cutoff = DateTime::parse_from_rfc3339("2023-01-05T11:30:00Z")?.into();
+    let ast = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::CreatedAt(
+            DateLiteral::GreaterThan(cutoff),
+        )))),
+        project_filter: None,
+        chat_filter: None,
+        email_filter: None,
+        channel_filter: None,
+        call_filter: None,
+        properties_filter: None,
+    };
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let mut doc_count = 0;
+    let mut chat_count = 0;
+    let mut project_count = 0;
+    for item in &items {
+        match item {
+            SoupItem::Document(d) => {
+                assert!(
+                    d.created_at > cutoff,
+                    "doc {} created_at {:?} should be > cutoff",
+                    d.id,
+                    d.created_at
+                );
+                doc_count += 1;
+            }
+            SoupItem::Chat(_) => chat_count += 1,
+            SoupItem::Project(_) => project_count += 1,
+            _ => unimplemented!(),
+        }
+    }
+
+    assert_eq!(doc_count, 3, "expected 3 docs with createdAt after cutoff");
+    assert_eq!(chat_count, 4, "chats unaffected by document date filter");
+    assert_eq!(
+        project_count, 4,
+        "projects unaffected by document date filter"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_date_filter_document_created_at_lt(db: PgPool) -> anyhow::Result<()> {
+    use chrono::DateTime;
+    use filter_ast::Expr;
+    use item_filters::ast::{date::DateLiteral, document::DocumentLiteral};
+    use std::sync::Arc;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    // cutoff between bbbb(11:00) and cccc(12:00) → expect aaaa, bbbb = 2 docs
+    let cutoff = DateTime::parse_from_rfc3339("2023-01-05T11:30:00Z")?.into();
+    let ast = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::CreatedAt(
+            DateLiteral::LessThan(cutoff),
+        )))),
+        project_filter: None,
+        chat_filter: None,
+        email_filter: None,
+        channel_filter: None,
+        call_filter: None,
+        properties_filter: None,
+    };
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let mut doc_count = 0;
+    let mut chat_count = 0;
+    let mut project_count = 0;
+    for item in &items {
+        match item {
+            SoupItem::Document(d) => {
+                assert!(
+                    d.created_at < cutoff,
+                    "doc {} created_at {:?} should be < cutoff",
+                    d.id,
+                    d.created_at
+                );
+                doc_count += 1;
+            }
+            SoupItem::Chat(_) => chat_count += 1,
+            SoupItem::Project(_) => project_count += 1,
+            _ => unimplemented!(),
+        }
+    }
+
+    assert_eq!(doc_count, 2, "expected 2 docs with createdAt before cutoff");
+    assert_eq!(chat_count, 4, "chats unaffected by document date filter");
+    assert_eq!(
+        project_count, 4,
+        "projects unaffected by document date filter"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_date_filter_chat_created_at_gt(db: PgPool) -> anyhow::Result<()> {
+    use chrono::DateTime;
+    use filter_ast::Expr;
+    use item_filters::ast::{chat::ChatLiteral, date::DateLiteral};
+    use std::sync::Arc;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    // cutoff between b2b2(11:00) and c3c3(12:00) → expect c3c3, d4d4 = 2 chats
+    let cutoff = DateTime::parse_from_rfc3339("2023-01-06T11:30:00Z")?.into();
+    let ast = EntityFilterAst {
+        document_filter: None,
+        project_filter: None,
+        chat_filter: Some(Arc::new(Expr::Literal(ChatLiteral::CreatedAt(
+            DateLiteral::GreaterThan(cutoff),
+        )))),
+        email_filter: None,
+        channel_filter: None,
+        call_filter: None,
+        properties_filter: None,
+    };
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let mut doc_count = 0;
+    let mut chat_count = 0;
+    let mut project_count = 0;
+    for item in &items {
+        match item {
+            SoupItem::Document(_) => doc_count += 1,
+            SoupItem::Chat(c) => {
+                assert!(
+                    c.created_at > cutoff,
+                    "chat {} created_at {:?} should be > cutoff",
+                    c.id,
+                    c.created_at
+                );
+                chat_count += 1;
+            }
+            SoupItem::Project(_) => project_count += 1,
+            _ => unimplemented!(),
+        }
+    }
+
+    assert_eq!(doc_count, 5, "docs unaffected by chat date filter");
+    assert_eq!(
+        chat_count, 2,
+        "expected 2 chats with createdAt after cutoff"
+    );
+    assert_eq!(project_count, 4, "projects unaffected by chat date filter");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_date_filter_project_created_at_gt(db: PgPool) -> anyhow::Result<()> {
+    use chrono::DateTime;
+    use filter_ast::Expr;
+    use item_filters::ast::{date::DateLiteral, project::ProjectLiteral};
+    use std::sync::Arc;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    // cutoff between 2222(Jan-01 11:00) and 3333(Jan-01 12:00) → expect 3333, 4444 = 2 projects
+    let cutoff = DateTime::parse_from_rfc3339("2023-01-01T11:30:00Z")?.into();
+    let ast = EntityFilterAst {
+        document_filter: None,
+        project_filter: Some(Arc::new(Expr::Literal(ProjectLiteral::CreatedAt(
+            DateLiteral::GreaterThan(cutoff),
+        )))),
+        chat_filter: None,
+        email_filter: None,
+        channel_filter: None,
+        call_filter: None,
+        properties_filter: None,
+    };
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let mut doc_count = 0;
+    let mut chat_count = 0;
+    let mut project_count = 0;
+    for item in &items {
+        match item {
+            SoupItem::Document(_) => doc_count += 1,
+            SoupItem::Chat(_) => chat_count += 1,
+            SoupItem::Project(p) => {
+                assert!(
+                    p.created_at > cutoff,
+                    "project {} created_at {:?} should be > cutoff",
+                    p.id,
+                    p.created_at
+                );
+                project_count += 1;
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    assert_eq!(doc_count, 5, "docs unaffected by project date filter");
+    assert_eq!(chat_count, 4, "chats unaffected by project date filter");
+    assert_eq!(
+        project_count, 2,
+        "expected 2 projects with createdAt after cutoff"
+    );
+    Ok(())
+}
