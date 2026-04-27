@@ -104,7 +104,25 @@ const initialState: CallStoreState = {
 // simply ignores a stored value.
 const [persistedBackgroundEffect, setPersistedBackgroundEffect] = makePersisted(
   createSignal<BackgroundEffect>({ type: 'none' }),
-  { name: 'call.backgroundEffect' }
+  {
+    name: 'call.backgroundEffect',
+    // This custom deserialize is to handle the previous boolean format
+    deserialize(data) {
+      try {
+        const value = JSON.parse(data);
+
+        if (typeof value === 'boolean') {
+          return value
+            ? { type: 'blur', intensity: 'light' }
+            : { type: 'none' };
+        }
+
+        return value;
+      } catch {
+        return { type: 'none' };
+      }
+    },
+  }
 );
 
 // Persisted across reloads — users with hardware noise cancellation (e.g.
