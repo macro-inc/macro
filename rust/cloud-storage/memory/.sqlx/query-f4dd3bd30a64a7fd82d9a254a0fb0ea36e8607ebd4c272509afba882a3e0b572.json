@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, macro_id, fusionauth_user_id, email_address, provider as \"provider: _\",\n               is_sync_active, created_at, updated_at\n        FROM email_links\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "fusionauth_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "provider: _",
+        "type_info": {
+          "Custom": {
+            "name": "email_user_provider_enum",
+            "kind": {
+              "Enum": [
+                "GMAIL"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "is_sync_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f4dd3bd30a64a7fd82d9a254a0fb0ea36e8607ebd4c272509afba882a3e0b572"
+}

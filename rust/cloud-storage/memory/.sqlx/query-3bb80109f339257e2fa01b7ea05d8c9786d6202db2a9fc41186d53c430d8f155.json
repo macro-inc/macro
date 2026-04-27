@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT t.id as thread_id\n        FROM email_threads t\n        JOIN email_links l ON t.link_id = l.id\n        WHERE l.macro_id = $1\n          AND t.latest_outbound_message_ts IS NOT NULL\n        ORDER BY t.latest_outbound_message_ts DESC\n        LIMIT $2 OFFSET $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3bb80109f339257e2fa01b7ea05d8c9786d6202db2a9fc41186d53c430d8f155"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE \"UploadJob\" SET \"documentId\" = $1 WHERE \"jobId\" = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7ce336a58021f98fbb7c87b42ed827d0aee69ec593e923e41d2545b75d1def37"
+}

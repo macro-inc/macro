@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT a.owner, d.owner as document_owner\n        FROM \"PdfPlaceableCommentAnchor\" a\n        JOIN \"Thread\" t ON a.\"threadId\" = t.id\n        JOIN \"Document\" d ON a.\"documentId\" = d.id\n        WHERE a.uuid = $1 AND t.\"deletedAt\" IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "document_owner",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "53803816cc7149ffc49cd92a665229df9ec397fa2035c305d00133abeea39358"
+}

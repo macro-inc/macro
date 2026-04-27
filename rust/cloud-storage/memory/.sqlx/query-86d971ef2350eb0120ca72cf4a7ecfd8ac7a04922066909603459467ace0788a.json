@@ -1,0 +1,101 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                t.id as thread_id,\n                -- Return timestamps from the chosen messages directly\n                COALESCE(earliest_msg.sent_at, earliest_msg.updated_at) as \"first_message_ts!\",\n                COALESCE(latest_msg.sent_at, latest_msg.updated_at) as \"last_message_ts!\",\n                -- Last time user viewed this thread\n                uh.updated_at as \"viewed_at?\",\n                latest_msg.snippet,\n                earliest_msg.subject as \"subject?\",\n                l.macro_id,\n                latest_msg.sender as sender,\n                latest_msg.pretty_sender as \"pretty_sender!\",\n                latest_msg.trash_label as trash_label,\n                (\n                    SELECT m_latest.is_draft\n                    FROM email_messages m_latest\n                    WHERE m_latest.thread_id = t.id\n                      AND m_latest.link_id = $1\n                    ORDER BY m_latest.internal_date_ts DESC NULLS LAST\n                    LIMIT 1\n                ) AS \"is_draft!\",\n                t.is_read,\n                t.inbox_visible,\n                (\n                    SELECT EXISTS (\n                        SELECT 1\n                        FROM email_messages m_imp\n                        JOIN email_message_labels ml ON m_imp.id = ml.message_id\n                        JOIN email_labels l ON ml.label_id = l.id\n                        WHERE m_imp.thread_id = t.id\n                          AND l.link_id = t.link_id\n                          AND l.name = 'IMPORTANT'\n                    )\n                ) AS \"is_important!\"\n            FROM email_threads t\n            LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = $1\n            LEFT JOIN email_links l ON l.id = t.link_id\n            -- LATERAL join for LATEST message\n            -- JOIN (Inner) acts as a filter to ensure we only return threads that actually have messages\n            JOIN LATERAL (\n                SELECT\n                    m2.snippet,\n                    m2.sent_at,\n                    m2.updated_at,\n                    c.email_address as sender,\n                    COALESCE(c.name, c.email_address) as pretty_sender,\n                    EXISTS(\n                        SELECT 1 \n                        FROM email_message_labels eml \n                        JOIN email_labels el ON el.id = eml.label_id \n                        WHERE eml.message_id = m2.id \n                          AND el.provider_label_id = 'TRASH'\n                    ) as trash_label\n                FROM email_messages m2\n                LEFT JOIN email_contacts c ON c.id = m2.from_contact_id\n                WHERE m2.thread_id = t.id\n                  AND m2.link_id = $1\n                ORDER BY\n                    (CASE WHEN m2.is_draft = false AND m2.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,\n                    COALESCE(m2.sent_at, m2.updated_at) DESC NULLS LAST\n                LIMIT 1\n            ) latest_msg ON true\n            -- LATERAL join for EARLIEST message\n            LEFT JOIN LATERAL (\n                SELECT\n                    m3.subject,\n                    m3.sent_at,\n                    m3.updated_at\n                FROM email_messages m3\n                WHERE m3.thread_id = t.id\n                  AND m3.link_id = $1\n                ORDER BY\n                    -- 1. Priority: Non-drafts with valid sent_at come first (0), everything else is fallback (1)\n                    (CASE WHEN m3.is_draft = false AND m3.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,\n                    -- 2. Sort by time (Oldest first)\n                    COALESCE(m3.sent_at, m3.updated_at) ASC NULLS LAST\n                LIMIT 1\n            ) earliest_msg ON true\n            WHERE t.id = ANY($2)\n              AND t.link_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_message_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_message_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "viewed_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "snippet",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "subject?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "sender",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "pretty_sender!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "trash_label",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_draft!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "is_read",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "inbox_visible",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 13,
+        "name": "is_important!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      false,
+      true,
+      true,
+      false,
+      false,
+      null,
+      null,
+      null,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "86d971ef2350eb0120ca72cf4a7ecfd8ac7a04922066909603459467ace0788a"
+}

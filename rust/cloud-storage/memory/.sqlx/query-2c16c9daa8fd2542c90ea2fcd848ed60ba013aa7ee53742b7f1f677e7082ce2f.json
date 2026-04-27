@@ -1,0 +1,96 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            id, \n            link_id, \n            provider_label_id, \n            name, \n            created_at,\n            message_list_visibility as \"message_list_visibility: _\",\n            label_list_visibility as \"label_list_visibility: _\",\n            type as \"type_: _\"\n        FROM email_labels\n        WHERE id = $1 AND link_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_label_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "message_list_visibility: _",
+        "type_info": {
+          "Custom": {
+            "name": "email_message_list_visibility_enum",
+            "kind": {
+              "Enum": [
+                "Show",
+                "Hide"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "label_list_visibility: _",
+        "type_info": {
+          "Custom": {
+            "name": "email_label_list_visibility_enum",
+            "kind": {
+              "Enum": [
+                "LabelShow",
+                "LabelShowIfUnread",
+                "LabelHide"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "type_: _",
+        "type_info": {
+          "Custom": {
+            "name": "email_label_type_enum",
+            "kind": {
+              "Enum": [
+                "System",
+                "User"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2c16c9daa8fd2542c90ea2fcd848ed60ba013aa7ee53742b7f1f677e7082ce2f"
+}

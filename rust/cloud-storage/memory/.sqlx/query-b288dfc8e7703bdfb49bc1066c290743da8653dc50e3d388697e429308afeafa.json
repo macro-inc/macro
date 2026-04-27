@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.id\n        FROM comms_channels c\n        INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id \n        WHERE cp.user_id = $1 AND cp.left_at IS NULL\n        AND c.id = ANY($2::uuid[])\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b288dfc8e7703bdfb49bc1066c290743da8653dc50e3d388697e429308afeafa"
+}

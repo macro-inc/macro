@@ -1,0 +1,101 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            ml.message_id,\n            l.id,\n            l.link_id,\n            l.provider_label_id,\n            l.name,\n            l.created_at,\n            l.message_list_visibility as \"message_list_visibility: _\",\n            l.label_list_visibility as \"label_list_visibility: _\",\n            l.type as \"type_: _\"\n        FROM email_message_labels ml\n        JOIN email_labels l ON ml.label_id = l.id\n        WHERE\n            ml.message_id = ANY($1)\n        ORDER BY ml.message_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "provider_label_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "message_list_visibility: _",
+        "type_info": {
+          "Custom": {
+            "name": "email_message_list_visibility_enum",
+            "kind": {
+              "Enum": [
+                "Show",
+                "Hide"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "label_list_visibility: _",
+        "type_info": {
+          "Custom": {
+            "name": "email_label_list_visibility_enum",
+            "kind": {
+              "Enum": [
+                "LabelShow",
+                "LabelShowIfUnread",
+                "LabelHide"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "type_: _",
+        "type_info": {
+          "Custom": {
+            "name": "email_label_type_enum",
+            "kind": {
+              "Enum": [
+                "System",
+                "User"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1b8be86d6e9c1637d47b9ec156a1d8b010408005f7e12db26e1c3fc5b6d23c29"
+}
