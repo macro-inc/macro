@@ -270,24 +270,24 @@ function filterMapToId(items: Array<ItemEntity>, type: ItemEntity['type']) {
   return items.filter((i) => i.type === type).map(({ id }) => id);
 }
 
-function fetchIfItems(
+function doFetch(
   fetcher: (ids: string[]) => Promise<PreviewItem[]>,
   ids: string[]
 ) {
   if (ids.length > 0) return fetcher(ids);
-  return new Promise<PreviewItem[]>((resolve) => resolve([]));
+  return Promise.resolve([]);
 }
 
 export async function fetchPreviewBatch(
   items: ItemEntity[]
 ): Promise<Map<string, PreviewItem>> {
   const results = await Promise.all([
-    fetchIfItems(fetchChatPreviews, filterMapToId(items, 'chat')),
-    fetchIfItems(fetchCallPreviews, filterMapToId(items, 'call')),
-    fetchIfItems(fetchChannelPreviews, filterMapToId(items, 'channel')),
-    fetchIfItems(fetchDocumentPreviews, filterMapToId(items, 'document')),
-    fetchIfItems(fetchProjectPreviews, filterMapToId(items, 'project')),
-    fetchIfItems(fetchEmailPreviews, filterMapToId(items, 'email')),
+    doFetch(fetchChatPreviews, filterMapToId(items, 'chat')),
+    doFetch(fetchCallPreviews, filterMapToId(items, 'call')),
+    doFetch(fetchChannelPreviews, filterMapToId(items, 'channel')),
+    doFetch(fetchDocumentPreviews, filterMapToId(items, 'document')),
+    doFetch(fetchProjectPreviews, filterMapToId(items, 'project')),
+    doFetch(fetchEmailPreviews, filterMapToId(items, 'email')),
   ]);
   const resultMap = new Map<string, PreviewItem>();
   results.flat().forEach((result) => {
