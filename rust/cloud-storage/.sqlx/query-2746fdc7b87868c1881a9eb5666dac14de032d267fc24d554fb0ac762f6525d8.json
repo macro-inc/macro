@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO comms_messages\n            (id, channel_id, sender_id, content, thread_id, deleted_at)\n        VALUES\n            ($1, $2, 'sender', 'content', $3,\n             CASE WHEN $4 THEN NOW() ELSE NULL END)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2746fdc7b87868c1881a9eb5666dac14de032d267fc24d554fb0ac762f6525d8"
+}

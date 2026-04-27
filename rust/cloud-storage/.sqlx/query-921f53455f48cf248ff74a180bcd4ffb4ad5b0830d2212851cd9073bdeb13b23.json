@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO comms_channels (id, name, channel_type, org_id, owner_id)\n        VALUES ($1, 'test', 'public', NULL, 'owner')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "921f53455f48cf248ff74a180bcd4ffb4ad5b0830d2212851cd9073bdeb13b23"
+}

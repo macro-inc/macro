@@ -137,6 +137,24 @@ pub(super) async fn set_share_with_team(
     Ok(())
 }
 
+/// Set the user-supplied display name on an archived call record. No-op if
+/// no `call_records` row matches `call_id` (the call may still be active in
+/// the `calls` table — that table does not carry `custom_name`).
+pub(super) async fn set_custom_name(
+    transaction: &mut Transaction<'_, Postgres>,
+    call_id: &Uuid,
+    custom_name: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"UPDATE call_records SET custom_name = $2 WHERE id = $1"#,
+        call_id,
+        custom_name,
+    )
+    .execute(transaction.as_mut())
+    .await?;
+    Ok(())
+}
+
 /// Update the SharePermission row (isPublic, publicAccessLevel).
 async fn update_share_permission_row(
     transaction: &mut Transaction<'_, Postgres>,
