@@ -637,7 +637,7 @@ export interface SearchToolResponse {
         name?: string | null;
         owner_id: string;
         participant_ids: string[];
-        type: 'callRecord';
+        type: 'call';
       }
   )[];
 }
@@ -977,14 +977,7 @@ export interface ListEntities {
    * Filter to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails.
    */
   includeTypes:
-    | (
-        | 'document'
-        | 'ai_chat'
-        | 'project'
-        | 'email'
-        | 'channel'
-        | 'call_record'
-      )[]
+    | ('document' | 'ai_chat' | 'project' | 'email' | 'channel' | 'call')[]
     | null;
   /**
    * How to sort results: recently_viewed (default), recently_updated, or recently_created.
@@ -1029,7 +1022,7 @@ export interface ListEntitiesResponse {
     | {
         createdBy: string;
         id: string;
-        type: 'callRecord';
+        type: 'call';
       }
   )[];
   summary: string;

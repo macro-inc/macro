@@ -204,7 +204,7 @@ pub enum UnifiedSearchResponseItem {
     Email(EmailSearchResponseItemWithMetadata),
     Channel(ChannelSearchResponseItemWithMetadata),
     Project(ProjectSearchResponseItemWithMetadata),
-    CallRecord(CallRecordSearchResponseItemWithMetadata),
+    Call(CallRecordSearchResponseItemWithMetadata),
 }
 
 impl UnifiedSearchResponseItem {
@@ -215,7 +215,7 @@ impl UnifiedSearchResponseItem {
             Self::Email(item) => item.extra.id,
             Self::Channel(item) => item.extra.id,
             Self::Project(item) => item.extra.id,
-            Self::CallRecord(item) => item.extra.id,
+            Self::Call(item) => item.extra.id,
         }
     }
     /// Get the updated_at timestamp for each item
@@ -237,7 +237,7 @@ impl UnifiedSearchResponseItem {
                 max_result_updated_at.or_else(|| item.metadata.as_ref().map(|m| m.updated_at))
             }
             Self::Project(item) => item.metadata.as_ref().map(|m| m.updated_at),
-            Self::CallRecord(item) => item.metadata.as_ref().map(|m| m.updated_at),
+            Self::Call(item) => item.metadata.as_ref().map(|m| m.updated_at),
         }
     }
 }
@@ -258,7 +258,7 @@ pub enum SimpleUnifiedSearchResponseBaseItem<T> {
     Email(SimpleEmailSearchResponseBaseItem<T>),
     Channel(SimpleChannelSearchReponseBaseItem<T>),
     Project(SimpleProjectSearchResponseBaseItem<T>),
-    CallRecord(SimpleCallRecordSearchResponseBaseItem<T>),
+    Call(SimpleCallRecordSearchResponseBaseItem<T>),
 }
 
 pub type SimpleUnifiedSearchResponseItem =

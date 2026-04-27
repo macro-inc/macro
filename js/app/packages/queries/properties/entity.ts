@@ -87,7 +87,7 @@ function optimisticUpdateSoupEntityProperty(
   if (
     !current ||
     current.tag === 'channel' ||
-    current.tag === 'callRecord' ||
+    current.tag === 'call' ||
     !current.data.properties
   ) {
     return undefined;

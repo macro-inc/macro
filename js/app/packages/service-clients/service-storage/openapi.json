@@ -11448,7 +11448,7 @@
               },
               "tag": {
                 "type": "string",
-                "enum": ["callRecord"]
+                "enum": ["call"]
               }
             }
           }

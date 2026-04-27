@@ -358,7 +358,7 @@ export const useSearchResponseItemMapper = () => {
         ];
       }
 
-      case 'callRecord': {
+      case 'call': {
         if (!result.metadata) return [];
         const search = getSearchData({
           type: 'call_record',
@@ -507,7 +507,7 @@ export const mapSoupPageToEntityList: (
           };
         }
 
-        if (item.tag === 'callRecord') {
+        if (item.tag === 'call') {
           return {
             type: 'call',
             id: item.data.callId,

@@ -74,7 +74,7 @@ export function filterSoupItemByRequestBody(
         !isIdFilteredOut(body.email_filters?.email_thread_ids, data.id)
     )
     .with(
-      { tag: 'callRecord' },
+      { tag: 'call' },
       ({ data }) =>
         !isIdFilteredOut(body.call_filters?.channel_ids, data.channelId) &&
         !isAttendedFilteredOut(body.call_filters?.attended, data.attended)
