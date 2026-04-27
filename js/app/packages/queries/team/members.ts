@@ -70,7 +70,10 @@ export function usePatchTeamUserTierMutation(
           const userInfo = queryClient.getQueryData<{ userId: string }>(
             authKeys.userInfo.queryKey
           );
-          if (userInfo?.userId === request.team_user_id) {
+          if (
+            userInfo?.id === request.team_user_id ||
+            userInfo?.userId === request.team_user_id
+          ) {
             queryClient.invalidateQueries({
               queryKey: authKeys.userInfo.queryKey,
             });

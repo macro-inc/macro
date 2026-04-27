@@ -511,7 +511,7 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                   onRemove={() => setShowRemoveModal(member)}
                   onTierChange={(newTier) => {
                     if (!props.teamId) return;
-                    toast.promise(
+                    void toast.promise(
                       patchTierMutation.mutateAsync({
                         teamId: props.teamId,
                         request: {
