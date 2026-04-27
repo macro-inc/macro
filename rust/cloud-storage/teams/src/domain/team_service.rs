@@ -21,14 +21,50 @@ use notification::domain::{models::SendNotificationRequestBuilder, service::Noti
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, PatchTeamRequest,
-        PatchTeamUserTierRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
-        RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
-        TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamUserTier,
-        TeamWithMembers,
+        AcceptedTeamInvite, CreateTeamError, CustomerError, DeleteTeamError,
+        InviteUsersToTeamError, JoinTeamError, PatchTeamRequest, PatchTeamUserTierRequest,
+        RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
+        RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
+        TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
     },
     team_repo::{TeamChannelsRepository, TeamRepository, TeamService},
 };
+
+#[derive(Debug, thiserror::Error)]
+enum GetTeamSubscriptionError {
+    #[error(transparent)]
+    Team(#[from] TeamError),
+    #[error(transparent)]
+    Customer(#[from] CustomerError),
+    #[error(transparent)]
+    Storage(#[from] anyhow::Error),
+}
+
+impl GetTeamSubscriptionError {
+    fn into_join_team_error(self) -> JoinTeamError {
+        match self {
+            Self::Team(e) => JoinTeamError::TeamError(e),
+            Self::Customer(e) => JoinTeamError::CustomerError(e),
+            Self::Storage(e) => JoinTeamError::StorageLayerError(e),
+        }
+    }
+
+    fn into_remove_user_from_team_error(self) -> RemoveUserFromTeamError {
+        match self {
+            Self::Team(e) => RemoveUserFromTeamError::TeamError(e),
+            Self::Customer(e) => RemoveUserFromTeamError::CustomerError(e),
+            Self::Storage(e) => RemoveUserFromTeamError::StorageLayerError(e),
+        }
+    }
+
+    fn into_team_error(self) -> TeamError {
+        match self {
+            Self::Team(e) => e,
+            Self::Customer(e) => TeamError::StorageLayerError(e.into()),
+            Self::Storage(e) => TeamError::StorageLayerError(e),
+        }
+    }
+}
 
 /// Implementation of the TeamService using a TeamRepository
 #[derive(Debug)]
@@ -111,11 +147,12 @@ where
     async fn get_team_subscription(
         &self,
         team_id: &uuid::Uuid,
-    ) -> anyhow::Result<stripe::SubscriptionId> {
+    ) -> Result<stripe::SubscriptionId, GetTeamSubscriptionError> {
         let subscription_id = self
             .team_repository
             .get_team_subscription_id(team_id)
-            .await?;
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?;
 
         // stripe subscription is already tracked for team
         if let Some(subscription_id) = subscription_id {
@@ -125,28 +162,37 @@ where
         tracing::info!("no subscription found for team");
 
         // Get the team to get owner
-        let team = self.team_repository.get_team_by_id(team_id).await?;
+        let team = self
+            .team_repository
+            .get_team_by_id(team_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?;
 
         let customer_id = self
             .team_repository
             .get_stripe_customer_id(&team.team.owner_id)
-            .await?
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?
             .context("expected customer id")?;
 
         let customer_subscription_id = self
             .customer_repository
             .get_subscription_id_for_customer(&customer_id)
-            .await?;
+            .await
+            .map_err(GetTeamSubscriptionError::Customer)?;
 
-        // update the customers subscription to a team sub
-        self.team_repository
-            .update_team_subscription(team_id, &customer_subscription_id)
-            .await?;
-
-        // convert the customers subscription to a team subscription
+        // Convert the customer's subscription to a team subscription before storing it locally,
+        // so a customer failure cannot leave a local subscription_id pointing at an unconverted
+        // personal subscription.
         self.customer_repository
             .convert_subscription_to_team(&customer_subscription_id, team_id, &team.team.owner_id)
-            .await?;
+            .await
+            .map_err(GetTeamSubscriptionError::Customer)?;
+
+        self.team_repository
+            .update_team_subscription(team_id, &customer_subscription_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?;
 
         Ok(customer_subscription_id)
     }
@@ -175,6 +221,67 @@ where
             .map_err(|e| anyhow::anyhow!("failed to send notification: {}", e))?;
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self, accepted_invite))]
+    async fn rollback_join_team(
+        &self,
+        accepted_invite: &AcceptedTeamInvite<'_>,
+        roles_added: bool,
+        channels_added: bool,
+    ) {
+        if channels_added {
+            self.team_channels_repository
+                .remove_team_member_from_channels(
+                    &accepted_invite.member.team_id,
+                    &accepted_invite.member.user_id,
+                )
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, "failed to roll back team channel membership after customer error"))
+                .ok();
+        }
+
+        if roles_added {
+            let roles_to_remove = vec![
+                RoleId::TeamSubscriber,
+                RoleId::from(accepted_invite.member.tier),
+            ];
+            self.user_roles_and_permissions_service
+                .dangerous_remove_roles_from_user(
+                    &accepted_invite.member.user_id,
+                    &non_empty::NonEmpty::new(roles_to_remove.as_slice()).unwrap(),
+                )
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, "failed to roll back team roles after customer error"))
+                .ok();
+        }
+
+        self.team_repository
+            .rollback_accept_team_invite(accepted_invite)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to roll back accepted team invite after customer error"))
+            .ok();
+    }
+
+    #[tracing::instrument(skip(self, removed_member))]
+    async fn rollback_remove_user_from_team(
+        &self,
+        removed_member: &TeamMember<'_>,
+        channels_removed: bool,
+    ) {
+        self.team_repository
+            .rollback_remove_user_from_team(removed_member)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to roll back removed team member after customer error"))
+            .ok();
+
+        if channels_removed {
+            self.team_channels_repository
+                .add_team_member_to_channels(&removed_member.team_id, &removed_member.user_id)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, "failed to restore team channel membership after customer error"))
+                .ok();
+        }
     }
 }
 
@@ -269,36 +376,48 @@ where
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), RemoveUserFromTeamError> {
-        let tier = self
+        let removed_member = self
             .team_repository
             .remove_user_from_team(team_id, user_id)
-            .await;
+            .await?;
 
-        // The user was part of the team and was removed
-        if let Ok(tier) = tier {
-            self.team_channels_repository
-                .remove_team_member_from_channels(team_id, user_id)
-                .await?;
+        self.team_channels_repository
+            .remove_team_member_from_channels(team_id, user_id)
+            .await?;
+        let channels_removed = true;
 
-            let subscription_id = self.get_team_subscription(team_id).await?;
+        let subscription_id = match self.get_team_subscription(team_id).await {
+            Ok(subscription_id) => subscription_id,
+            Err(GetTeamSubscriptionError::Customer(e)) => {
+                self.rollback_remove_user_from_team(&removed_member, channels_removed)
+                    .await;
+                return Err(RemoveUserFromTeamError::CustomerError(e));
+            }
+            Err(e) => return Err(e.into_remove_user_from_team_error()),
+        };
 
-            // Decrement the quantity of the subscription
-            self.customer_repository
-                .decrease_subscription_quantity(&subscription_id, tier)
-                .await?;
-
-            let roles_to_remove = vec![RoleId::TeamSubscriber, RoleId::from(tier)];
-
-            self.user_roles_and_permissions_service
-                .dangerous_remove_roles_from_user(
-                    user_id,
-                    &non_empty::NonEmpty::new(roles_to_remove.as_slice()).unwrap(),
-                )
-                .await
-                .map_err(RemoveUserFromTeamError::RemoveRolesFromUserError)?;
+        // Decrement the quantity of the subscription
+        if let Err(e) = self
+            .customer_repository
+            .decrease_subscription_quantity(&subscription_id, removed_member.tier)
+            .await
+        {
+            self.rollback_remove_user_from_team(&removed_member, channels_removed)
+                .await;
+            return Err(RemoveUserFromTeamError::CustomerError(e));
         }
 
-        tier.map(|_| ())
+        let roles_to_remove = vec![RoleId::TeamSubscriber, RoleId::from(removed_member.tier)];
+
+        self.user_roles_and_permissions_service
+            .dangerous_remove_roles_from_user(
+                user_id,
+                &non_empty::NonEmpty::new(roles_to_remove.as_slice()).unwrap(),
+            )
+            .await
+            .map_err(RemoveUserFromTeamError::RemoveRolesFromUserError)?;
+
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -385,32 +504,49 @@ where
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<TeamMember<'_>, JoinTeamError> {
         // This will fail if the user is already in another team
-        let team_member = self
+        let accepted_invite = self
             .team_repository
             .accept_team_invite(team_invite_id, user_id)
             .await
             .map_err(JoinTeamError::TeamError)?;
 
-        // subscribe the user to professional features from the TeamSubscriber role and the role associated with their tier
-        let roles = vec![RoleId::TeamSubscriber, RoleId::from(team_member.tier)];
+        let team_member = accepted_invite.member.clone();
 
-        let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
+        // subscribe the user to professional features from the TeamSubscriber role and the role associated with their tier
+        let roles_to_add = vec![RoleId::TeamSubscriber, RoleId::from(team_member.tier)];
+        let roles = non_empty::NonEmpty::new(roles_to_add.as_slice()).unwrap();
 
         self.user_roles_and_permissions_service
             .dangerous_upsert_roles_for_user(user_id, roles)
             .await
             .map_err(JoinTeamError::AddRolesToUserError)?;
+        let roles_added = true;
 
         self.team_channels_repository
             .add_team_member_to_channels(&team_member.team_id, user_id)
             .await?;
+        let channels_added = true;
 
-        let subscription_id = self.get_team_subscription(&team_member.team_id).await?;
+        let subscription_id = match self.get_team_subscription(&team_member.team_id).await {
+            Ok(subscription_id) => subscription_id,
+            Err(GetTeamSubscriptionError::Customer(e)) => {
+                self.rollback_join_team(&accepted_invite, roles_added, channels_added)
+                    .await;
+                return Err(JoinTeamError::CustomerError(e));
+            }
+            Err(e) => return Err(e.into_join_team_error()),
+        };
 
         // Increment the quantity of the subscription by the number of emails
-        self.customer_repository
+        if let Err(e) = self
+            .customer_repository
             .increase_subscription_quantity(&subscription_id, team_member.tier)
-            .await?;
+            .await
+        {
+            self.rollback_join_team(&accepted_invite, roles_added, channels_added)
+                .await;
+            return Err(JoinTeamError::CustomerError(e));
+        }
 
         Ok(team_member)
     }
@@ -564,7 +700,10 @@ where
             ));
         }
 
-        let team_subscription_id = self.get_team_subscription(team_id).await?;
+        let team_subscription_id = self
+            .get_team_subscription(team_id)
+            .await
+            .map_err(GetTeamSubscriptionError::into_team_error)?;
 
         self.team_repository
             .patch_team_tier(team_id, &request.team_user_id, request.new_tier)

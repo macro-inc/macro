@@ -259,6 +259,36 @@ impl TeamInvite<'static> {
     }
 }
 
+/// Snapshot of a team invite before it is accepted.
+#[derive(Debug, Clone)]
+pub struct TeamInviteSnapshot<'a> {
+    /// The invite id
+    pub id: uuid::Uuid,
+    /// The team id
+    pub team_id: uuid::Uuid,
+    /// The invited email
+    pub email: Email<Lowercase<'a>>,
+    /// The role being invited as
+    pub team_role: TeamRole,
+    /// The user who sent the invitation
+    pub invited_by: MacroUserIdStr<'a>,
+    /// When the invite was created
+    pub created_at: DateTime<Utc>,
+    /// When the invite was last sent
+    pub last_sent_at: DateTime<Utc>,
+    /// The tier being invited as
+    pub tier: TeamUserTier,
+}
+
+/// Result of accepting a team invite, including the data needed to roll it back.
+#[derive(Debug, Clone)]
+pub struct AcceptedTeamInvite<'a> {
+    /// The accepted team member
+    pub member: TeamMember<'a>,
+    /// Snapshot of the invite before it was accepted
+    pub invite: TeamInviteSnapshot<'a>,
+}
+
 /// Errors for team
 #[derive(Debug, thiserror::Error)]
 pub enum TeamError {

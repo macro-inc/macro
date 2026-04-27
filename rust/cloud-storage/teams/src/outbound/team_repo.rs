@@ -1,16 +1,16 @@
 //! Implementation for TeamRepository using MacroDB.
 use crate::domain::{
     model::{
-        CreateTeamError, InviteUsersToTeamError, PatchTeamRequest, RemoveTeamInviteError,
-        RemoveUserFromTeamError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember,
-        TeamRole, TeamUserTier, TeamWithMembers,
+        AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
+        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
+        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
     },
     team_repo::TeamRepository,
 };
 use macro_user_id::{
     cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
 };
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::str::FromStr;
 
 /// utility fn for queries to create a sqlx err
@@ -357,7 +357,7 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<TeamUserTier, RemoveUserFromTeamError> {
+    ) -> Result<TeamMember<'static>, RemoveUserFromTeamError> {
         let owner_id = self.get_team_owner(team_id).await?;
 
         if user_id.as_ref().eq(owner_id.as_ref()) {
@@ -366,27 +366,34 @@ impl TeamRepository for TeamRepositoryImpl {
 
         let mut transaction = self.pool.begin().await?;
 
-        let row = sqlx::query!(
+        let row = sqlx::query(
             r#"
             DELETE FROM team_user
             WHERE team_id = $1 AND user_id = $2
-            RETURNING tier AS "tier!: TeamUserTier"
+            RETURNING team_role, tier
             "#,
-            team_id,
-            user_id.as_ref(),
         )
+        .bind(team_id)
+        .bind(user_id.as_ref())
         .fetch_optional(&mut *transaction)
         .await?;
 
-        let tier = row
-            .map(|r| r.tier)
-            .ok_or(RemoveUserFromTeamError::UserNotInTeam)?;
+        let Some(row) = row else {
+            return Err(RemoveUserFromTeamError::UserNotInTeam);
+        };
+
+        let removed_member = TeamMember {
+            team_id: *team_id,
+            user_id: user_id.clone().into_owned(),
+            role: row.try_get("team_role")?,
+            tier: row.try_get("tier")?,
+        };
 
         TeamRepositoryImpl::bump_seat_count(&mut transaction, team_id, -1).await?;
 
         transaction.commit().await?;
 
-        Ok(tier)
+        Ok(removed_member)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -536,63 +543,176 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         team_invite_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<TeamMember<'static>, TeamError> {
+    ) -> Result<AcceptedTeamInvite<'static>, TeamError> {
         let mut transaction = self.pool.begin().await?;
 
         let user_email = user_id.email_part().lowercase();
 
-        // Get user role from team invite
-        let invite = sqlx::query!(
+        // Get invite data before deleting it so the accept can be rolled back later.
+        let invite = sqlx::query(
             r#"
-            SELECT team_role as "team_role!: TeamRole", team_id, tier as "tier!: TeamUserTier"
+            SELECT id, email, team_role, team_id, invited_by, created_at, last_sent_at, tier
             FROM team_invite
             WHERE id = $1 AND email = $2
             "#,
-            team_invite_id,
-            user_email.as_ref(),
         )
+        .bind(team_invite_id)
+        .bind(user_email.as_ref())
         .fetch_one(&mut *transaction)
         .await?;
 
+        let invite_snapshot = TeamInviteSnapshot {
+            id: invite.try_get("id")?,
+            team_id: invite.try_get("team_id")?,
+            email: Email::parse_from_str(invite.try_get::<String, _>("email")?.as_str())
+                .map(|e| e.into_owned().lowercase())
+                .map_err(|e| TeamError::StorageLayerError(e.into()))?,
+            team_role: invite.try_get("team_role")?,
+            invited_by: MacroUserIdStr::parse_from_str(
+                invite.try_get::<String, _>("invited_by")?.as_str(),
+            )
+            .map(|id| id.into_owned())
+            .map_err(|e| TeamError::StorageLayerError(e.into()))?,
+            created_at: chrono::DateTime::from_naive_utc_and_offset(
+                invite.try_get("created_at")?,
+                chrono::Utc,
+            ),
+            last_sent_at: chrono::DateTime::from_naive_utc_and_offset(
+                invite.try_get("last_sent_at")?,
+                chrono::Utc,
+            ),
+            tier: invite.try_get("tier")?,
+        };
+
         // Assign user to team_user
-        let team_member = sqlx::query!(
+        let team_member = sqlx::query(
             r#"
             INSERT INTO team_user (team_id, user_id, team_role, tier)
             VALUES ($1, $2, $3, $4)
-            RETURNING user_id, team_role as "role!: TeamRole", tier as "tier!: TeamUserTier", team_id
+            RETURNING user_id, team_role, tier, team_id
             "#,
-            &invite.team_id,
-            user_id.as_ref(),
-            invite.team_role as _,
-            invite.tier as _,
         )
+        .bind(invite_snapshot.team_id)
+        .bind(user_id.as_ref())
+        .bind(invite_snapshot.team_role)
+        .bind(invite_snapshot.tier)
         .fetch_one(&mut *transaction)
         .await?;
 
         // bump seat count
-        TeamRepositoryImpl::bump_seat_count(&mut transaction, &team_member.team_id, 1).await?;
+        let team_id: uuid::Uuid = team_member.try_get("team_id")?;
+        TeamRepositoryImpl::bump_seat_count(&mut transaction, &team_id, 1).await?;
 
         // Remove team invite
-        sqlx::query!(
+        sqlx::query(
             r#"
             DELETE FROM team_invite
             WHERE id = $1
             "#,
-            team_invite_id,
         )
+        .bind(team_invite_id)
         .execute(&mut *transaction)
         .await?;
 
         transaction.commit().await?;
 
-        let team_member: TeamMember = TeamMember {
-            user_id: user_id.clone().into_owned(),
-            role: team_member.role,
-            team_id: invite.team_id,
-            tier: team_member.tier,
+        let member = TeamMember {
+            user_id: MacroUserIdStr::parse_from_str(
+                team_member.try_get::<String, _>("user_id")?.as_str(),
+            )
+            .map(|id| id.into_owned())
+            .map_err(|e| TeamError::StorageLayerError(e.into()))?,
+            role: team_member.try_get("team_role")?,
+            team_id,
+            tier: team_member.try_get("tier")?,
         };
 
-        Ok(team_member)
+        Ok(AcceptedTeamInvite {
+            member,
+            invite: invite_snapshot,
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn rollback_accept_team_invite(
+        &self,
+        accepted_invite: &AcceptedTeamInvite<'_>,
+    ) -> Result<(), TeamError> {
+        let mut transaction = self.pool.begin().await?;
+
+        let deleted = sqlx::query(
+            r#"
+            DELETE FROM team_user
+            WHERE team_id = $1 AND user_id = $2
+            "#,
+        )
+        .bind(accepted_invite.member.team_id)
+        .bind(accepted_invite.member.user_id.as_ref())
+        .execute(&mut *transaction)
+        .await?;
+
+        if deleted.rows_affected() > 0 {
+            TeamRepositoryImpl::bump_seat_count(
+                &mut transaction,
+                &accepted_invite.member.team_id,
+                -1,
+            )
+            .await?;
+        }
+
+        sqlx::query(
+            r#"
+            INSERT INTO team_invite
+                (id, team_id, email, team_role, invited_by, created_at, last_sent_at, tier)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT DO NOTHING
+            "#,
+        )
+        .bind(accepted_invite.invite.id)
+        .bind(accepted_invite.invite.team_id)
+        .bind(accepted_invite.invite.email.as_ref())
+        .bind(accepted_invite.invite.team_role)
+        .bind(accepted_invite.invite.invited_by.as_ref())
+        .bind(accepted_invite.invite.created_at.naive_utc())
+        .bind(accepted_invite.invite.last_sent_at.naive_utc())
+        .bind(accepted_invite.invite.tier)
+        .execute(&mut *transaction)
+        .await?;
+
+        transaction.commit().await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn rollback_remove_user_from_team(
+        &self,
+        removed_member: &TeamMember<'_>,
+    ) -> Result<(), TeamError> {
+        let mut transaction = self.pool.begin().await?;
+
+        let inserted = sqlx::query(
+            r#"
+            INSERT INTO team_user (team_id, user_id, team_role, tier)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT DO NOTHING
+            "#,
+        )
+        .bind(removed_member.team_id)
+        .bind(removed_member.user_id.as_ref())
+        .bind(removed_member.role)
+        .bind(removed_member.tier)
+        .execute(&mut *transaction)
+        .await?;
+
+        if inserted.rows_affected() > 0 {
+            TeamRepositoryImpl::bump_seat_count(&mut transaction, &removed_member.team_id, 1)
+                .await?;
+        }
+
+        transaction.commit().await?;
+
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]
