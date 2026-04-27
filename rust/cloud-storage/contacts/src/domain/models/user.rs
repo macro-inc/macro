@@ -1,7 +1,6 @@
 use crate::domain::models::graph;
 use crate::domain::models::graph::{Edge, Vertex};
-use crate::domain::models::messages::ConnectionsMessage;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// A user identifier.
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
@@ -53,74 +52,6 @@ impl Group {
         }
         self
     }
-}
-
-/// Converts a group and its connections into a [`ConnectionsMessage`].
-pub fn create_connections_message(group: &Group, connections: &[Connection]) -> ConnectionsMessage {
-    let mut users = vec![];
-    let mut user_to_index: HashMap<String, usize> = HashMap::new();
-
-    for user in &group.participants {
-        let id = user.data.id.clone();
-        let pos = users.len();
-        users.push(id);
-        user_to_index.insert(users[pos].clone(), pos);
-    }
-
-    let mut connection_references = vec![];
-
-    for con in connections {
-        let user_a = &con.a.data.id;
-        let user_b = &con.b.data.id;
-
-        // TODO: error handling
-        let user_a_index = if let Some(idx) = user_to_index.get(user_a) {
-            idx
-        } else {
-            panic!("Could not find user '{}'", user_a);
-        };
-        let user_b_index = user_to_index.get(user_b).unwrap();
-        connection_references.push((*user_a_index, *user_b_index));
-    }
-
-    ConnectionsMessage {
-        users,
-        connections: connection_references,
-    }
-}
-
-/// Unpacks a [`ConnectionsMessage`] into a list of user vertices.
-pub async fn unpack_users(msg: &ConnectionsMessage) -> Vec<Vertex<User>> {
-    let mut vertex_list = vec![];
-
-    for user in &msg.users {
-        let vtx = Vertex::new(User {
-            id: user.to_string(),
-        });
-        vertex_list.push(vtx);
-    }
-
-    vertex_list
-}
-
-/// Unpacks the connections from a [`ConnectionsMessage`] using the given user vertices.
-pub async fn unpack_connections<'a, 'b>(
-    msg: &'a ConnectionsMessage,
-    users: &'b [Vertex<User>],
-) -> Vec<Connection<'b>>
-where
-    'a: 'b,
-{
-    let mut connections = vec![];
-
-    for con in &msg.connections {
-        connections.push(Connection {
-            a: &users[con.0],
-            b: &users[con.1],
-        })
-    }
-
-    connections
 }
 
 impl UserVertex {

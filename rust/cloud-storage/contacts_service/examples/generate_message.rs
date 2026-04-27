@@ -1,29 +1,9 @@
 // Small utility to generate a sample connections message to send to the SQS service
-use contacts::domain::models::messages::{
-    AddParticipantsMessageBody, CreateGroupMessageBody, Message,
-};
-use contacts::domain::service::add_user_to_group;
+use contacts::domain::models::messages::ContactsMessage;
 use std::env;
 
-pub async fn create_group(group: &[String]) -> String {
-    let body: CreateGroupMessageBody = CreateGroupMessageBody {
-        group: group.to_vec(),
-    };
-    let msg = Message::CreateGroup(body);
-    serde_json::to_string(&msg).unwrap()
-}
-
-pub async fn add_participants(participants: &[String], group: &[String]) -> String {
-    let body = AddParticipantsMessageBody {
-        participants: participants.to_vec(),
-        group: group.to_vec(),
-    };
-    let msg = Message::AddParticipants(body);
-    serde_json::to_string(&msg).unwrap()
-}
-
 async fn genmsg_add_user_to_group() {
-    let group: Vec<String> = [
+    let mut users: Vec<String> = [
         "FF038D36-1AEF-461A-8AA8-34001FA1ABAD",
         "5AB8C770-F2CB-4C6C-BC08-AE64569E324C",
         "D44CAADA-98C0-49EB-AB20-6851B824983A",
@@ -35,15 +15,13 @@ async fn genmsg_add_user_to_group() {
     .iter()
     .map(|s| s.to_string())
     .collect();
+    users.push("AE2C090C-E478-4454-A001-3DF458BF1FE4".to_string());
 
-    let new_user = "AE2C090C-E478-4454-A001-3DF458BF1FE4";
-
-    let msg = add_user_to_group(&group, new_user).await;
-    println!("{}", msg);
+    println!("{}", serde_json::to_string(&ContactsMessage { users }).unwrap());
 }
 
 async fn genmsg_add_paul() {
-    let group: Vec<String> = [
+    let mut users: Vec<String> = [
         "fake|zeus@olympus.mountain",
         "fake|athena@olympus.mountain",
         "fake|apollo@olympus.mountain",
@@ -53,15 +31,13 @@ async fn genmsg_add_paul() {
     .iter()
     .map(|s| s.to_string())
     .collect();
+    users.push("macro|paul@macro.com".to_string());
 
-    let new_user = "macro|paul@macro.com";
-
-    let msg = add_user_to_group(&group, new_user).await;
-    println!("{}", msg);
+    println!("{}", serde_json::to_string(&ContactsMessage { users }).unwrap());
 }
 
 async fn genmsg_create_group() {
-    let group: Vec<String> = [
+    let users: Vec<String> = [
         "fake|jupiter@olympus.mountain",
         "fake|athena@olympus.mountain",
         "fake|mercury@olympus.mountain",
@@ -72,28 +48,23 @@ async fn genmsg_create_group() {
     .map(|s| s.to_string())
     .collect();
 
-    let msg = create_group(&group).await;
-    println!("{}", msg);
+    println!("{}", serde_json::to_string(&ContactsMessage { users }).unwrap());
 }
 
 async fn genmsg_add_participants() {
-    let group: Vec<String> = [
+    let users: Vec<String> = [
         "fake|an@uruk.place",
         "fake|enlil@nippur.place",
         "fake|enki@eridu.place",
         "fake|marduk@babylon.place",
+        "macro|paul@macro.com",
+        "fake|poseidon@olympus.mountain",
     ]
     .iter()
     .map(|s| s.to_string())
     .collect();
 
-    let participants: Vec<String> = ["macro|paul@macro.com", "fake|poseidon@olympus.mountain"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-
-    let msg = add_participants(&participants, &group).await;
-    println!("{}", msg);
+    println!("{}", serde_json::to_string(&ContactsMessage { users }).unwrap());
 }
 
 #[tokio::main]
