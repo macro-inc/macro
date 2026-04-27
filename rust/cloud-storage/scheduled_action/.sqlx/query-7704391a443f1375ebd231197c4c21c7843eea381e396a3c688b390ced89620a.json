@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                c.id as id,\n                c.name as name,\n                c.\"userId\" as user_id,\n                c.model as \"model?\",\n                c.\"projectId\" as \"project_id?\",\n                c.\"tokenCount\" as token_count,\n                c.\"createdAt\"::timestamptz as created_at,\n                c.\"updatedAt\"::timestamptz as updated_at,\n                c.\"deletedAt\"::timestamptz as deleted_at,\n                c.\"isPersistent\" as is_persistent\n            FROM\n                \"Chat\" c\n            WHERE c.\"projectId\" = $1 AND c.\"deletedAt\" IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "model?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "project_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "token_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_persistent",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      null,
+      null,
+      null,
+      false
+    ]
+  },
+  "hash": "7704391a443f1375ebd231197c4c21c7843eea381e396a3c688b390ced89620a"
+}

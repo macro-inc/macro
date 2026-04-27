@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level FROM (\n            -- Source 1: entity_access source_id match\n            SELECT\n                access_level::text FROM entity_access\n            WHERE entity_id = $1\n            AND entity_type = 'call'\n            AND source_id = ANY($2)\n\n            UNION ALL\n            -- Source 2: items share permission\n            SELECT\n                \"publicAccessLevel\"::text AS access_level\n            FROM \"SharePermission\"\n            WHERE id in (\n                SELECT share_permission_id\n                FROM calls\n                WHERE id = $1\n                UNION ALL\n                SELECT share_permission_id\n                FROM call_records\n                WHERE id = $1\n                LIMIT 1\n            )\n            AND \"isPublic\" = true\n            AND \"publicAccessLevel\" IS NOT NULL\n        ) AS combined_access\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "357682d4dddfaa980129c516f38c4176352fa9b44242cdd5abe8b4ee18a62f8e"
+}

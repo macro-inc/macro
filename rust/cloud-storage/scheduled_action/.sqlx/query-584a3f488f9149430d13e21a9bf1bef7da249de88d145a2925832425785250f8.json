@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            LENGTH(REGEXP_REPLACE(d.\"content\", '\\s', '', 'g')) AS content_length\n        FROM\n            \"DocumentText\" d\n        WHERE\n            d.\"documentId\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "content_length",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "584a3f488f9149430d13e21a9bf1bef7da249de88d145a2925832425785250f8"
+}

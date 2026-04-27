@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT\n                        sp.id as id\n                    FROM\n                        \"ChatPermission\" cp\n                    JOIN \"SharePermission\" sp ON cp.\"sharePermissionId\" = sp.id\n                    WHERE\n                        cp.\"chatId\" = $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d0150fe28f8fe11bbc69c475a6fc3277a1ced2c563a2e2bc98a742ef71da40fc"
+}

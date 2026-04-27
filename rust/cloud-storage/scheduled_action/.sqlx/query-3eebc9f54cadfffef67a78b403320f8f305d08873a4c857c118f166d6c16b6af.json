@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO comms_activity (\n            id,\n            user_id,\n            channel_id,\n            created_at,\n            updated_at\n        )\n        VALUES (\n            $1, $2, $3, NOW(), NOW()\n        )\n        RETURNING \n            id as \"id!: Uuid\",\n            user_id as \"user_id!: String\",\n            channel_id as \"channel_id!: Uuid\",\n            created_at as \"created_at!: DateTime<Utc>\",\n            updated_at as \"updated_at!: DateTime<Utc>\",\n            viewed_at as \"viewed_at?: DateTime<Utc>\",\n            interacted_at as \"interacted_at?: DateTime<Utc>\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_id!: Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at!: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at!: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 5,
+        "name": "viewed_at?: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "interacted_at?: DateTime<Utc>",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "3eebc9f54cadfffef67a78b403320f8f305d08873a4c857c118f166d6c16b6af"
+}

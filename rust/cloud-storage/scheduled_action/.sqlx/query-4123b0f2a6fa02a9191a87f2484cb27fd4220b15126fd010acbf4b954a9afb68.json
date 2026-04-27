@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT elem->>'entity_id' as \"subtask_id!\"\n        FROM entity_properties,\n             jsonb_array_elements(values->'value') elem\n        WHERE entity_id = $1\n          AND entity_type = 'TASK'\n          AND property_definition_id = $2\n          AND values IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subtask_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4123b0f2a6fa02a9191a87f2484cb27fd4220b15126fd010acbf4b954a9afb68"
+}

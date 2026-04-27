@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO frecency_aggregates (\n                    entity_id,\n                    entity_type,\n                    user_id,\n                    event_count,\n                    frecency_score,\n                    first_event,\n                    recent_events\n                )\n                VALUES ($1, $2, $3, $4, $5, $6, $7)\n                ON CONFLICT (user_id, entity_type, entity_id)\n                DO UPDATE SET\n                    event_count = EXCLUDED.event_count,\n                    frecency_score = EXCLUDED.frecency_score,\n                    recent_events = EXCLUDED.recent_events\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Float8",
+        "Timestamptz",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8a219d75e22ca3b14ed3bfc1fbf218e2e69f540f69d0ab223170a52ac92af43c"
+}
