@@ -4,9 +4,14 @@ macos_features := if os == "macos" { "--features macos" } else { "" }
 export DATABASE_URL := 'postgres://user:password@localhost:5432/macrodb'
 
 mod ci '../ci.just'
+mod sqlx '../sqlx.just'
 
 deploy-dev:
     just ci::deploy-dev document-text-extractor
+
+# Prepare database (standard recipe used by sqlx refresh tooling)
+prepare_db:
+    just sqlx::prepare_db {{ DATABASE_URL }}
 
 # Prepare database
 prepare:
