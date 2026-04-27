@@ -77,7 +77,7 @@ fn frontend_host(env: Environment) -> Url {
 }
 
 fn signup_url(env: Environment) -> Url {
-    let mut url = frontend_host(env)
+    let mut url = frontend_host(env);
     url.set_path("/app/signup");
     url
 }
