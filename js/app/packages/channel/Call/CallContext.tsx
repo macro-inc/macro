@@ -49,11 +49,10 @@ export const BLUR_RADIUS: Record<BlurIntensity, number> = {
   heavy: 20,
 };
 
-export const BACKGROUND_IMAGES = [
-  { id: 'macro', label: 'Macro', path: '/backgrounds/macro.svg' },
-  { id: 'office', label: 'Office', path: '/backgrounds/office.jpg' },
-  { id: 'nature', label: 'Nature', path: '/backgrounds/nature.jpg' },
-] as const;
+type ImageBackgroundEffect = Extract<BackgroundEffect, { type: 'image' }>;
+
+export const BACKGROUND_IMAGES: (ImageBackgroundEffect & { label: string })[] =
+  [];
 
 type CallStoreState = {
   connectionState: ConnectionState;

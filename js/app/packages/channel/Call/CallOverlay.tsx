@@ -236,20 +236,38 @@ function BackgroundEffectSelector() {
   const handleChange = (value: string) => {
     if (value === 'none') {
       callCtx.setBackgroundEffect({ type: 'none' });
-    } else if (value.startsWith('blur-')) {
-      const intensity = value.replace('blur-', '') as 'light' | 'medium' | 'heavy';
+      return;
+    }
+
+    if (value.startsWith('blur-')) {
+      const intensity = value.replace('blur-', '') as
+        | 'light'
+        | 'medium'
+        | 'heavy';
+
       callCtx.setBackgroundEffect({ type: 'blur', intensity });
-    } else if (value.startsWith('image-')) {
+      return;
+    }
+
+    if (value.startsWith('image-')) {
       const id = value.replace('image-', '');
       const bg = BACKGROUND_IMAGES.find((b) => b.id === id);
-      if (bg) {
-        callCtx.setBackgroundEffect({ type: 'image', id: bg.id, path: bg.path });
-      }
+
+      if (!bg) return;
+
+      callCtx.setBackgroundEffect({
+        type: 'image',
+        id: bg.id,
+        path: bg.path,
+      });
     }
   };
 
   return (
-    <DropdownMenu.RadioGroup value={currentEffectValue()} onChange={handleChange}>
+    <DropdownMenu.RadioGroup
+      value={currentEffectValue()}
+      onChange={handleChange}
+    >
       <MenuGroup>
         <GroupLabel>Background</GroupLabel>
         <MenuItem
@@ -280,19 +298,21 @@ function BackgroundEffectSelector() {
           groupValue={currentEffectValue()}
         />
       </MenuGroup>
-      <MenuGroup>
-        <GroupLabel>Image</GroupLabel>
-        <For each={BACKGROUND_IMAGES}>
-          {(bg) => (
-            <MenuItem
-              text={bg.label}
-              selectorType="radio"
-              value={`image-${bg.id}`}
-              groupValue={currentEffectValue()}
-            />
-          )}
-        </For>
-      </MenuGroup>
+      <Show when={BACKGROUND_IMAGES.length}>
+        <MenuGroup>
+          <GroupLabel>Image</GroupLabel>
+          <For each={BACKGROUND_IMAGES}>
+            {(bg) => (
+              <MenuItem
+                text={bg.label}
+                selectorType="radio"
+                value={`image-${bg.id}`}
+                groupValue={currentEffectValue()}
+              />
+            )}
+          </For>
+        </MenuGroup>
+      </Show>
     </DropdownMenu.RadioGroup>
   );
 }
