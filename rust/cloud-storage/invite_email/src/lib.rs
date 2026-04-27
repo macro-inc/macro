@@ -73,7 +73,7 @@ fn frontend_host(env: Environment) -> Url {
         }
     };
 
-    return Url::parse(&host).expect("all the inputs are static, valid values");
+    Url::parse(&host).expect("all the inputs are static, valid values")
 }
 
 fn signup_url(env: Environment) -> Url {
