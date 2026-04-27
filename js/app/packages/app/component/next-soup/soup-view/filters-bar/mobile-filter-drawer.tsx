@@ -36,7 +36,7 @@ import {
   type SystemSortOption,
   type SortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
-import { FilterContext } from '@app/component/next-soup/filters';
+import type { FilterContext } from '@app/component/next-soup/filters';
 
 function scrollAccordionItemToTop(
   e: MouseEvent,
