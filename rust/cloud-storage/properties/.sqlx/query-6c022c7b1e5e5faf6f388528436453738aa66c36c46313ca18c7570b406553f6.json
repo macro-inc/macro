@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_threads\n        SET\n            inbox_visible = $1,\n            is_read = $2,\n            latest_inbound_message_ts = $3,\n            latest_outbound_message_ts = $4,\n            latest_non_spam_message_ts = $5,\n            updated_at = NOW()\n        WHERE\n            id = $6 AND\n            link_id = $7\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Bool",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6c022c7b1e5e5faf6f388528436453738aa66c36c46313ca18c7570b406553f6"
+}

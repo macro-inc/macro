@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT gh.history_id\n        FROM email_links l\n        LEFT JOIN email_gmail_histories gh ON l.id = gh.link_id\n        WHERE l.email_address = $1 AND l.provider = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "history_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        {
+          "Custom": {
+            "name": "email_user_provider_enum",
+            "kind": {
+              "Enum": [
+                "GMAIL"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2ba42e1b8b6e432c5cbe966076ca05523a4b1f4be0798ae362a325c172b19a43"
+}

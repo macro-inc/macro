@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.id as message_id,\n            c.email_address as \"sender!\",\n            COALESCE(c.name, c.email_address) as \"pretty_sender!\"\n        FROM email_messages m\n        LEFT JOIN email_contacts c ON c.id = m.from_contact_id\n        WHERE m.id = ANY($1)\n        AND m.link_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sender!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "pretty_sender!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "c4a1f6b77f876941ec74751bb5813c1328a3716c1d7adc6464b60ff6a3c3e932"
+}

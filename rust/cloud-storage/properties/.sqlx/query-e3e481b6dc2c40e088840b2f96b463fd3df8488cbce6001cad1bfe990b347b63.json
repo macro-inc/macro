@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    INSERT INTO email_contacts (id, link_id, email_address, name, original_photo_url, sfs_photo_url, updated_at)\n    SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::varchar[], $4::varchar[], $5::text[], $6::text[]), NOW()\n    ON CONFLICT (link_id, email_address)\n    DO UPDATE SET\n        -- Overwrite existing name - contact names take precedence over names included with emails\n        name = COALESCE(EXCLUDED.name, email_contacts.name),\n        original_photo_url = COALESCE(EXCLUDED.original_photo_url, email_contacts.original_photo_url),\n        sfs_photo_url = COALESCE(EXCLUDED.sfs_photo_url, email_contacts.sfs_photo_url),\n        updated_at = NOW()\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "VarcharArray",
+        "VarcharArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e3e481b6dc2c40e088840b2f96b463fd3df8488cbce6001cad1bfe990b347b63"
+}
