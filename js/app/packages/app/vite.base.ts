@@ -1,7 +1,7 @@
 import { execSync, exec } from 'node:child_process';
+import { unwatchFile, watchFile } from 'node:fs';
 import { resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
-import chokidar from 'chokidar';
 import { Features } from 'lightningcss';
 import type { Plugin, UserConfigFn } from 'vite';
 import solid from 'vite-plugin-solid';
@@ -51,20 +51,7 @@ function gitBranchHmrPlugin(): Plugin {
         return;
       }
       const headPath = resolve(gitDir, 'HEAD');
-      const watcher = chokidar.watch(headPath, {
-        ignoreInitial: true,
-        persistent: false,
-        usePolling: true,
-        interval: 100,
-      });
-      watcher.on('all', () => {
-        server.ws.send({
-          type: 'custom',
-          event: 'git-branch:update',
-          data: readGitBranch(),
-        });
-      });
-      server.ws.on('connection', () => {
+      const emit = () => {
         readGitBranchAsync().then((branch) => {
           server.ws.send({
             type: 'custom',
@@ -72,8 +59,10 @@ function gitBranchHmrPlugin(): Plugin {
             data: branch,
           });
         });
-      });
-      server.httpServer?.once('close', () => void watcher.close());
+      };
+      watchFile(headPath, { interval: 100 }, emit);
+      server.ws.on('connection', emit);
+      server.httpServer?.once('close', () => unwatchFile(headPath));
     },
   };
 }
