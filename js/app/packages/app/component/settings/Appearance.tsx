@@ -9,12 +9,12 @@ export function Appearance() {
   return (
     <div
       style={{
-        'grid-template-rows': 'min-content min-content 1fr',
+        'grid-template-rows': 'min-content 1fr',
         'grid-template-columns': '1fr',
-        'position': 'absolute',
         'overflow': 'hidden',
         'display': 'grid',
         'padding': '20px',
+        'height': '100%',
         'gap': '20px',
       }}
     >
@@ -26,8 +26,11 @@ export function Appearance() {
 
       <div style={{
         'grid-template-columns': isMobile() ? '1fr' : '1fr 1fr',
+        'overflow': 'hidden',
         'display': 'grid',
+        'min-height': '0',
         'gap': '20px',
+
       }}>
         <Panel>
           <ThemeList />
