@@ -31,6 +31,18 @@ mod outbound;
 mod parsers;
 mod process;
 
+/// Concrete [`BackfillOrchestrator`] wired to the production Postgres sources
+/// and the SQS publisher. Lives in the wiring module so the domain stays
+/// agnostic of which adapters back it.
+pub type BackfillServiceImpl = BackfillOrchestrator<
+    PgCallSource,
+    PgChatSource,
+    PgChannelSource,
+    PgDocumentSource,
+    PgEmailSource,
+    SqsSearchEventPublisher,
+>;
+
 /// Resolve a read-replica macrodb URL — literal in `Local`, SM-fetched
 /// otherwise — and build a small pool. Returns `None` when the replica URL
 /// is missing, blank, or unreachable; callers then fall back to the primary

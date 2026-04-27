@@ -16,12 +16,13 @@ use axum::{
     routing::post,
 };
 
+use crate::BackfillServiceImpl;
 use crate::api::context::ApiContext;
 use crate::domain::models::{
     BackfillError, BackfillReceipt, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest,
 };
-use crate::domain::service::{BackfillService, BackfillServiceImpl};
+use crate::domain::service::BackfillService;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()

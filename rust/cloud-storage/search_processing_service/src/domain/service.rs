@@ -9,12 +9,6 @@
 
 use std::future::Future;
 
-use crate::outbound::backfill::{
-    calls::PgCallSource, channels::PgChannelSource, chats::PgChatSource,
-    documents::PgDocumentSource, emails::PgEmailSource,
-};
-use crate::outbound::publisher::SqsSearchEventPublisher;
-
 use super::models::{
     BackfillError, BackfillReceipt, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest, SourcePage,
@@ -23,17 +17,6 @@ use super::ports::{
     CallBackfillSource, ChannelBackfillSource, ChatBackfillSource, DocumentBackfillSource,
     EmailBackfillSource, SearchEventPublisher,
 };
-
-/// Concrete [`BackfillService`] wired to the production Postgres sources and
-/// the SQS publisher.
-pub type BackfillServiceImpl = BackfillOrchestrator<
-    PgCallSource,
-    PgChatSource,
-    PgChannelSource,
-    PgDocumentSource,
-    PgEmailSource,
-    SqsSearchEventPublisher,
->;
 
 /// Inbound contract for all backfill HTTP routes.
 pub trait BackfillService: Send + Sync + 'static {

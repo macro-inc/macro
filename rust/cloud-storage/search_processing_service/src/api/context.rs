@@ -3,8 +3,8 @@ use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use secretsmanager_client::LocalOrRemoteSecret;
 use std::sync::Arc;
 
+use crate::BackfillServiceImpl;
 use crate::config::Config;
-use crate::domain::service::BackfillServiceImpl;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
