@@ -185,6 +185,8 @@ interface LayoutProps {
   hasNotifications: boolean;
   showContentHits: boolean;
   streamState?: StreamEvent;
+  setSnippetContainerRef: (el: HTMLElement) => void;
+  chars: number;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
@@ -668,11 +670,6 @@ function NarrowInboxLayout(props: LayoutProps) {
     isChannelEntity(props.entity) &&
     props.entity.channelType === 'direct_message';
 
-  const [emailSnippetContainerRef, setEmailSnippetContainerRef] = createSignal<
-    HTMLElement | undefined
-  >();
-  const chars = useCharacterCount(emailSnippetContainerRef);
-
   const mostRecentMessageSenderName =
     isChannelEntity(props.entity) && props.entity.latestMessage?.senderId
       ? useDisplayNameParts(tryMacroId(props.entity.latestMessage?.senderId))
@@ -788,9 +785,9 @@ function NarrowInboxLayout(props: LayoutProps) {
           {(entity) => (
             <EmailNarrowBody
               entity={entity()}
-              chars={chars()}
+              chars={props.chars}
               showContentHits={props.showContentHits}
-              setContainerRef={setEmailSnippetContainerRef}
+              setContainerRef={props.setSnippetContainerRef}
             />
           )}
         </Match>
@@ -818,10 +815,6 @@ function NarrowInboxLayout(props: LayoutProps) {
 }
 
 function WideLayout(props: LayoutProps) {
-  const [emailSnippetContainerRef, setEmailSnippetContainerRef] = createSignal<
-    HTMLElement | undefined
-  >();
-  const chars = useCharacterCount(emailSnippetContainerRef);
   const soupView = useMaybeSoupView();
 
   return (
@@ -865,9 +858,9 @@ function WideLayout(props: LayoutProps) {
             {(entity) => (
               <EmailWideContent
                 entity={entity()}
-                chars={chars()}
+                chars={props.chars}
                 showContentHits={props.showContentHits}
-                setContainerRef={setEmailSnippetContainerRef}
+                setContainerRef={props.setSnippetContainerRef}
               />
             )}
           </Match>
@@ -973,8 +966,29 @@ export function ListEntity(props: ListEntityProps) {
     );
   };
 
+  const [snippetContainerRef, setSnippetContainerRef] = createSignal<
+    HTMLElement | undefined
+  >();
+  const chars = useCharacterCount(snippetContainerRef);
+
+  // For email entities with a single content hit, the snippet
+  // (windowSearchMatch over the hit's content) already renders that hit's
+  // content in full whenever windowing didn't truncate it. Expanding "show
+  // more" in that case shows the same text — hide the section entirely.
+  const isContentHitsRedundant = () => {
+    if (!isEmailEntity(props.entity)) return false;
+    if (!isSearchEntity(props.entity)) return false;
+    const hits = props.entity.search.contentHitData;
+    if (!hits || hits.length !== 1) return false;
+    const content = hits[0].content;
+    const rendered = windowSearchMatch(content, chars());
+    return visibleLength(rendered) >= visibleLength(content);
+  };
+
   const showContentHits = () =>
-    !props.hideContentHits && hasSearchContentHits(props.entity);
+    !props.hideContentHits &&
+    hasSearchContentHits(props.entity) &&
+    !isContentHitsRedundant();
 
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
@@ -985,6 +999,8 @@ export function ListEntity(props: ListEntityProps) {
     hasNotifications: hasNotifications(),
     showContentHits: showContentHits(),
     streamState: streamState(),
+    setSnippetContainerRef,
+    chars: chars(),
     onProjectClick: props.onProjectClick,
   });
 
