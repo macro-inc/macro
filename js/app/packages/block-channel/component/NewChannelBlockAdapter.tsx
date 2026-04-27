@@ -41,6 +41,10 @@ import {
   useCall,
 } from '@channel/Call';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import {
+  ChatWithAgentButton,
+  toChatChannelType,
+} from '@app/component/ChatWithAgentButton';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -71,6 +75,7 @@ function NewTop(props: { channelId: string }) {
   const { activeTab, setActiveTab } = useChannelTab();
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
+  const chatChannelType = () => toChatChannelType(channelType());
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const call = useCall(() => props.channelId);
   const participants = () =>
@@ -103,9 +108,25 @@ function NewTop(props: { channelId: string }) {
         activeTab={activeTab()}
         onTabChange={setActiveTab}
       />
-      <Show when={ENABLE_CALLS()}>
+      <Show when={chatChannelType() || ENABLE_CALLS()}>
         <SplitHeaderRight>
-          <ChannelCallButton channelId={props.channelId} />
+          <div class="flex items-center gap-1.5">
+            <Show when={chatChannelType()}>
+              {(type) => (
+                <ChatWithAgentButton
+                  entity={{
+                    type: 'channel',
+                    id: props.channelId,
+                    name: channelName() ?? 'Channel',
+                    channelType: type(),
+                  }}
+                />
+              )}
+            </Show>
+            <Show when={ENABLE_CALLS()}>
+              <ChannelCallButton channelId={props.channelId} />
+            </Show>
+          </div>
         </SplitHeaderRight>
       </Show>
       <ChannelTopBarLiveIndicators />

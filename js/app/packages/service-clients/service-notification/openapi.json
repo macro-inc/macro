@@ -1502,7 +1502,7 @@
       "InviteToTeamMetadata": {
         "type": "object",
         "description": "Metadata for when a user is invited to a team.",
-        "required": ["teamName", "teamId", "invitedBy"],
+        "required": ["teamName", "teamId", "teamInviteId", "invitedBy"],
         "properties": {
           "invitedBy": {
             "type": "string",
@@ -1520,6 +1520,11 @@
             "type": "string",
             "format": "uuid",
             "description": "The unique identifier of the team"
+          },
+          "teamInviteId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The unique identifier of the team invite"
           },
           "teamName": {
             "type": "string",

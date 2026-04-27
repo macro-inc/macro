@@ -34,4 +34,5 @@ export type MessageActions = {
   onEdit?: MessageActionHandler;
   onDelete?: MessageActionHandler;
   onCreateTask?: MessageActionHandler;
+  onChat?: MessageActionHandler;
 };

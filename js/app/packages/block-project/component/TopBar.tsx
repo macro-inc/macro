@@ -1,5 +1,10 @@
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import {
+  ChatWithAgentButton,
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/component/ChatWithAgentButton';
+import {
   type BlockTool,
   ResponsivePermissionsBadge,
   ToolButton,
@@ -111,10 +116,19 @@ export function TopBar() {
       buttonComponent: () => <ProjectPropertiesButton buttonSize="sm" />,
     },
     {
+      label: 'Chat',
+      icon: ChatWithAgentIcon,
+      action: () => openChatWithAgent({ type: 'project', id, name: name() }),
+      condition: () => !isSpecialProject,
+      divideAbove: true,
+      buttonComponent: () => (
+        <ChatWithAgentButton entity={{ type: 'project', id, name: name() }} />
+      ),
+    },
+    {
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
-      divideAbove: true,
       condition: () => ENABLE_PROJECT_SHARING && !isSpecialProject,
       buttonComponent: () => <ShareTrigger copyLink={handleCopyLink} />,
     },

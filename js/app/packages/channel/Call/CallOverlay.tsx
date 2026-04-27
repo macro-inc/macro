@@ -21,7 +21,11 @@ import {
 } from '@core/component/Menu';
 import { Tooltip } from '@core/component/Tooltip';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { useCallContext, type MediaDeviceInfo } from './CallContext';
+import {
+  useCallContext,
+  type MediaDeviceInfo,
+  BACKGROUND_IMAGES,
+} from './CallContext';
 
 // Mirrors @livekit/track-processors' supportsBackgroundProcessors() =
 // BackgroundProcessor.isSupported && ProcessorWrapper.isSupported. Kept local so the
@@ -220,6 +224,100 @@ function DeviceList(props: {
   );
 }
 
+function BackgroundEffectSelector() {
+  const callCtx = useCallContext();
+
+  const currentEffectValue = () => {
+    const effect = callCtx.backgroundEffect();
+    if (effect.type === 'none') return 'none';
+    if (effect.type === 'blur') return `blur-${effect.intensity}`;
+    return `image-${effect.id}`;
+  };
+
+  const handleChange = (value: string) => {
+    if (value === 'none') {
+      callCtx.setBackgroundEffect({ type: 'none' });
+      return;
+    }
+
+    if (value.startsWith('blur-')) {
+      const intensity = value.replace('blur-', '') as
+        | 'light'
+        | 'medium'
+        | 'heavy';
+
+      callCtx.setBackgroundEffect({ type: 'blur', intensity });
+      return;
+    }
+
+    if (value.startsWith('image-')) {
+      const id = value.replace('image-', '');
+      const bg = BACKGROUND_IMAGES.find((b) => b.id === id);
+
+      if (!bg) return;
+
+      callCtx.setBackgroundEffect({
+        type: 'image',
+        id: bg.id,
+        path: bg.path,
+      });
+    }
+  };
+
+  return (
+    <DropdownMenu.RadioGroup
+      value={currentEffectValue()}
+      onChange={handleChange}
+    >
+      <MenuGroup>
+        <GroupLabel>Background</GroupLabel>
+        <MenuItem
+          text="None"
+          selectorType="radio"
+          value="none"
+          groupValue={currentEffectValue()}
+        />
+      </MenuGroup>
+      <MenuGroup>
+        <GroupLabel>Blur</GroupLabel>
+        <MenuItem
+          text="Light"
+          selectorType="radio"
+          value="blur-light"
+          groupValue={currentEffectValue()}
+        />
+        <MenuItem
+          text="Medium"
+          selectorType="radio"
+          value="blur-medium"
+          groupValue={currentEffectValue()}
+        />
+        <MenuItem
+          text="Heavy"
+          selectorType="radio"
+          value="blur-heavy"
+          groupValue={currentEffectValue()}
+        />
+      </MenuGroup>
+      <Show when={BACKGROUND_IMAGES.length}>
+        <MenuGroup>
+          <GroupLabel>Image</GroupLabel>
+          <For each={BACKGROUND_IMAGES}>
+            {(bg) => (
+              <MenuItem
+                text={bg.label}
+                selectorType="radio"
+                value={`image-${bg.id}`}
+                groupValue={currentEffectValue()}
+              />
+            )}
+          </For>
+        </MenuGroup>
+      </Show>
+    </DropdownMenu.RadioGroup>
+  );
+}
+
 function ScreenShareTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
@@ -404,16 +502,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
               />
               <Show when={isBackgroundBlurSupported()}>
                 <MenuSeparator />
-                <MenuGroup>
-                  <GroupLabel>Effects</GroupLabel>
-                  <MenuItem
-                    text="Blur background"
-                    selectorType="checkbox"
-                    checked={callCtx.isBackgroundBlurred()}
-                    closeOnSelect={false}
-                    onClick={() => callCtx.toggleBackgroundBlur()}
-                  />
-                </MenuGroup>
+                <BackgroundEffectSelector />
               </Show>
             </>
           }

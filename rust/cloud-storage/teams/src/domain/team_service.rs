@@ -340,6 +340,7 @@ where
                             invite.team_invite_id,
                             InviteToTeamMetadata {
                                 team_id: *team_id,
+                                team_invite_id: invite.team_invite_id,
                                 invited_by: invited_by_owned.clone(),
                                 team_name: team_name.clone(),
                                 role: None,

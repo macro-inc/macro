@@ -63,7 +63,7 @@ impl Notification for InviteToMacro {
 
 const MINUTES_PER_WEEK: u64 = 60 * 24 * 7;
 
-fn signup_url(env: Environment) -> Url {
+fn frontend_host(env: Environment) -> Url {
     let host = match env {
         Environment::Production => "https://macro.com".to_string(),
         Environment::Develop => "https://dev.macro.com".to_string(),
@@ -72,7 +72,12 @@ fn signup_url(env: Environment) -> Url {
             format!("http://localhost:{port}")
         }
     };
-    let mut url = Url::parse(&host).expect("all the inputs are static, valid values");
+
+    Url::parse(&host).expect("all the inputs are static, valid values")
+}
+
+fn signup_url(env: Environment) -> Url {
+    let mut url = frontend_host(env);
     url.set_path("/app/signup");
     url
 }
@@ -245,6 +250,9 @@ pub struct InviteToTeamMetadata {
     /// The unique identifier of the team
     #[serde(alias = "team_id")]
     pub team_id: Uuid,
+    /// The unique identifier of the team invite
+    #[serde(alias = "team_invite_id")]
+    pub team_invite_id: Uuid,
     /// The user who sent the invitation
     #[serde(alias = "invited_by")]
     #[schema(value_type = String)]
@@ -259,9 +267,16 @@ pub struct InviteToTeamMetadata {
 }
 
 impl InviteToTeamMetadata {
-    /// Returns the signup URL for the current environment.
-    pub fn signup_url(&self) -> Url {
-        signup_url(Environment::new_or_prod())
+    /// Returns the team invite URL for the current environment.
+    pub fn invite_url(&self) -> Url {
+        let env = Environment::new_or_prod();
+
+        let mut url = frontend_host(env);
+        url.set_path("/app/team-invite");
+        url.query_pairs_mut()
+            .append_pair("id", &self.team_invite_id.to_string());
+
+        url
     }
 }
 
