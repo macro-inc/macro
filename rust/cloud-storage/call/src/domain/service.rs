@@ -1071,6 +1071,7 @@ impl<
 
             if let Err(e) = repo.insert_call_summary(&call_id, &summary).await {
                 tracing::error!(error=?e, %call_id, "failed to persist call summary");
+                return;
             }
 
             if record.custom_name.is_none() {

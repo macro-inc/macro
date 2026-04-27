@@ -137,24 +137,26 @@ impl CallSummarizer for AiCallSummarizer {
 #[cfg(test)]
 mod test;
 
-/// Trim quotes/whitespace and clamp to [`CALL_NAME_MAX_CHARS`] at a word
-/// boundary so the persisted name is well-formed regardless of model output.
+/// Trim quotes/whitespace, normalize internal whitespace, and clamp to
+/// [`CALL_NAME_MAX_CHARS`] at a word boundary so the persisted name is
+/// well-formed regardless of model output.
 fn sanitize_call_name(raw: &str) -> String {
     let trimmed = raw
         .trim()
         .trim_matches(|c: char| c == '"' || c == '\'' || c == '`')
         .trim();
+    let normalized = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
 
-    if trimmed.is_empty() {
+    if normalized.is_empty() {
         return "Untitled Call".to_string();
     }
 
-    if trimmed.chars().count() <= CALL_NAME_MAX_CHARS {
-        return trimmed.to_string();
+    if normalized.chars().count() <= CALL_NAME_MAX_CHARS {
+        return normalized;
     }
 
     let mut taken = String::with_capacity(CALL_NAME_MAX_CHARS);
-    for ch in trimmed.chars().take(CALL_NAME_MAX_CHARS) {
+    for ch in normalized.chars().take(CALL_NAME_MAX_CHARS) {
         taken.push(ch);
     }
     // Cut back to the last whitespace so we don't end mid-word.
