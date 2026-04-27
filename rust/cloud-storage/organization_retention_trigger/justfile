@@ -1,4 +1,10 @@
 lambda_name := file_name(justfile_directory())
+DATABASE_URL := "postgres://user:password@localhost:5432/macrodb"
+
+mod sqlx '../sqlx.just'
+
+prepare_db:
+    just sqlx::prepare_db {{ DATABASE_URL }}
 
 test:
     cargo test --all-features
