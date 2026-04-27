@@ -97,7 +97,7 @@ impl AnalyticsSink for AnalyticsClientSink {
 
         self.client
             .track_meta(
-                "Lead",
+                "CompleteRegistration",
                 &user_data,
                 MetaActionSource::Website,
                 Some(&booking.uid),
