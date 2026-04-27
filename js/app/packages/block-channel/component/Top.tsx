@@ -14,7 +14,7 @@ import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
-import { type JSX, Show, type Component } from 'solid-js';
+import { type JSX, Show, type Component, createMemo } from 'solid-js';
 import { Tabs, type TabItem } from '@core/component/Tabs';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
 
@@ -42,7 +42,7 @@ function TopIcon(props: TopIconProps) {
   return (
     <Show
       when={props.channelType === ChannelTypeEnum.DirectMessage && recipient()}
-      fallback={<HashIcon class="w-4 h-4" />}
+      fallback={<HashIcon class="w-4 h-4 shrink-0" />}
     >
       {(recipient) => {
         return (
@@ -73,6 +73,12 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
     blockId,
     props.channelName ?? 'New Channel'
   );
+  const truncatedChannelName = createMemo(() => {
+    const name = channelName();
+    if (!name) return name;
+    if (name.length <= 36) return name;
+    return name.slice(0, 33) + '...';
+  });
 
   const iconTabList = () =>
     (props.tabs ?? []).map((tab) => {
@@ -86,13 +92,13 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
   return (
     <SplitHeaderLeft>
       <div class="h-full my-auto flex gap-3 justify-start items-center min-w-0">
-        <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink min-w-0">
+        <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink min-w-15">
           <TopIcon
             channelType={props.channelType}
             participants={props.participants}
           />
           <SplitLabel
-            label={channelName() ?? 'New Channel'}
+            label={truncatedChannelName() ?? 'New Channel'}
             lockRename={props.lockRename}
             renameOverrides={{ channelType: props.channelType }}
           />
