@@ -196,8 +196,6 @@ function alert(message: string, subtext?: string, duration?: number) {
   createToast(message, ToastType.ALERT, subtext, undefined, duration);
 }
 
-// ─── Shared actions row ──────────────────────────────────────────────────────
-
 function ActionButtons(props: { actions: ToastAction[] }) {
   return (
     <For each={props.actions}>
@@ -216,8 +214,6 @@ function ActionButtons(props: { actions: ToastAction[] }) {
     </For>
   );
 }
-
-// ─── Toast content ───────────────────────────────────────────────────────────
 
 function ToastContent(props: {
   toastId: number;
