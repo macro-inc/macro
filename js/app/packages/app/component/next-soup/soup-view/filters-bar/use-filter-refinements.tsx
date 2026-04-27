@@ -142,7 +142,7 @@ export function useFilterRefinements() {
       field: 'callChannelId' | 'callSpeakerId' | 'channelId' | 'channelSenderId'
     ) =>
     (ids: string[]) =>
-      queryFilters.add({
+      queryFilters.set({
         include: {
           [field]: ids,
         },

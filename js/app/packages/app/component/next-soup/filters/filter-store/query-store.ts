@@ -21,13 +21,18 @@ const emptyQueryState = (): QueryState => ({
   emailView: undefined,
 });
 
-const filterEmpty = (obj: FieldFilters | undefined): FieldFilters => {
-  if (!obj) return {};
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value === undefined) continue;
-    if (Array.isArray(value) && value.length === 0) continue;
-    result[key] = value;
+const mergeFields = (
+  prev: FieldFilters,
+  updates: FieldFilters | undefined
+): FieldFilters => {
+  if (!updates) return prev;
+  const result: Record<string, unknown> = { ...prev };
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === undefined || (Array.isArray(value) && value.length === 0)) {
+      delete result[key];
+    } else {
+      result[key] = value;
+    }
   }
   return result as FieldFilters;
 };
@@ -68,20 +73,21 @@ export function createQueryStore(options: QueryStoreOptions = {}) {
       return;
     }
     setState({
-      include: filterEmpty(query.include),
-      exclude: filterEmpty(query.exclude),
+      include: mergeFields({}, query.include),
+      exclude: mergeFields({}, query.exclude),
       emailView: query.emailView,
     });
   };
 
   const set = (queryOrFn: Query | ((prev: QueryState) => Query)) => {
     batch(() => {
-      const query = typeof queryOrFn === 'function' ? queryOrFn(state) : queryOrFn;
+      const query =
+        typeof queryOrFn === 'function' ? queryOrFn(state) : queryOrFn;
       if (query.include) {
-        setState('include', (prev) => ({ ...prev, ...filterEmpty(query.include) }));
+        setState('include', (prev) => mergeFields(prev, query.include));
       }
       if (query.exclude) {
-        setState('exclude', (prev) => ({ ...prev, ...filterEmpty(query.exclude) }));
+        setState('exclude', (prev) => mergeFields(prev, query.exclude));
       }
       if (query.emailView !== undefined) {
         setState('emailView', query.emailView);
