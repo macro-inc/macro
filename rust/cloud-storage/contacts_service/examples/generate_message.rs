@@ -1,12 +1,13 @@
 // Small utility to generate a sample connections message to send to the SQS service
+use contacts::domain::models::messages::{
+    AddParticipantsMessageBody, CreateGroupMessageBody, Message,
+};
 use contacts::domain::service::add_user_to_group;
-use model::contacts::{AddParticipantsMessageBody, CreateGroupMessageBody, Message};
 use std::env;
 
 pub async fn create_group(group: &[String]) -> String {
     let body: CreateGroupMessageBody = CreateGroupMessageBody {
         group: group.to_vec(),
-        group_id: None,
     };
     let msg = Message::CreateGroup(body);
     serde_json::to_string(&msg).unwrap()
@@ -16,7 +17,6 @@ pub async fn add_participants(participants: &[String], group: &[String]) -> Stri
     let body = AddParticipantsMessageBody {
         participants: participants.to_vec(),
         group: group.to_vec(),
-        group_id: None,
     };
     let msg = Message::AddParticipants(body);
     serde_json::to_string(&msg).unwrap()

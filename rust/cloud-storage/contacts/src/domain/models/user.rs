@@ -1,11 +1,14 @@
 use crate::domain::models::graph;
 use crate::domain::models::graph::{Edge, Vertex};
-use model::contacts::ConnectionsMessage;
-use model::document::ID;
+use crate::domain::models::messages::ConnectionsMessage;
 use std::collections::{HashMap, HashSet};
 
-/// A user identifier, aliased from the model document ID type.
-pub type User = ID;
+/// A user identifier.
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+pub struct User {
+    /// The string ID for this user.
+    pub id: String,
+}
 
 /// Creates a [`User`] from a string identifier.
 pub fn create_user(id: &str) -> User {

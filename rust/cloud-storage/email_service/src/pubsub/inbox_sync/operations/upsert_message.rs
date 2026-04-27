@@ -9,7 +9,7 @@ use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment}
 use email_db_client::threads;
 use email_utils::dedupe_emails;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::contacts::ConnectionsMessage;
+use contacts::domain::models::messages::ConnectionsMessage;
 use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
 use models_email::db::address::EmailRecipientType;
