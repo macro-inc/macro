@@ -47,10 +47,7 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { createEffect, createSignal, getOwner, Show } from 'solid-js';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
+import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { Button } from '@ui/components/Button';
 import ChatDebugIcon from '@icon/regular/chat-text.svg';
 
