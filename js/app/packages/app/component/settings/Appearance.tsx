@@ -2,7 +2,7 @@ import { ThemeEditorAdvanced } from '@theme/components/ThemeEditorAdvanced';
 import { ThemeEditorBasic } from '@theme/components/ThemeEditorBasic';
 import ThemeTools from '@theme/components/ThemeTools';
 import ThemeList from '@theme/components/ThemeList';
-import { isMobile } from '@core/mobile/isMobile';
+
 import { Panel } from '@ui';
 
 export function Appearance() {
@@ -24,13 +24,7 @@ export function Appearance() {
         <ThemeEditorBasic />
       </Panel>
 
-      <div style={{
-        'grid-template-columns': isMobile() ? '1fr' : '1fr 1fr',
-        'overflow': 'hidden',
-        'display': 'grid',
-        'min-height': '0',
-        'gap': '20px',
-      }}>
+      <div class="@container grid grid-cols-1 @[700px]:grid-cols-2 gap-5 overflow-hidden min-h-0">
         <Panel><ThemeList /></Panel>
         <Panel><ThemeEditorAdvanced /></Panel>
       </div>
