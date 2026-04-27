@@ -183,7 +183,7 @@ export function Thread(props: {
           <div
             // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
             // pointer-events: none vs. all inside the .pdfOverlayInner div.
-            class="flex-shrink-0 bg-panel p-2 ring-1 ring-edge-muted rounded-sm portal-scope pointer-events-auto pdf-pointer-event-reset"
+            class="shrink-0 bg-panel p-2 ring-1 ring-edge-muted rounded-sm portal-scope pointer-events-auto pdf-pointer-event-reset"
             classList={{
               'transition-transform duration-100': true,
               '-translate-x-8': props.isActive,

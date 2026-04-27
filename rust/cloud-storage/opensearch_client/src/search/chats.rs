@@ -22,7 +22,7 @@ pub(crate) struct ChatIndex {
 pub(crate) struct ChatSearchConfig;
 
 impl SearchQueryConfig for ChatSearchConfig {
-    const USER_ID_KEY: &'static str = "user_id";
+    const USER_ID_KEY: Option<&'static str> = Some("user_id");
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Chats;
 }

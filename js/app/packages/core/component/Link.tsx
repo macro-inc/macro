@@ -72,7 +72,7 @@ export function UnfurledLinkCollection(props: UnfurledLinkCollection) {
   const [isCollapsed, setIsCollapsed] = createSignal(props.collapsed ?? true);
 
   return (
-    <div class="border-1 border-edge rounded-lg w-full text-sm cursor-default select-none">
+    <div class="border border-edge rounded-lg w-full text-sm cursor-default select-none">
       <div
         class={cn(
           'flex justify-between items-center hover:bg-hover transition-colors hover:transition-none py-1 px-2',
@@ -119,7 +119,7 @@ export function UnfurledLinkCollection(props: UnfurledLinkCollection) {
       >
         <For each={props.links}>
           {(link) => (
-            <div class="first:border-edge first:border-t-1 last:rounded-b-md overflow-clip">
+            <div class="first:border-edge first:border-t last:rounded-b-md overflow-clip">
               <UnfurlLink unfurled={link} />
             </div>
           )}

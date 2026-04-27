@@ -230,7 +230,7 @@ export function FloatingEquationMenu() {
         <div class="flex flex-col gap-3">
           <h3 class="text-sm font-medium text-ink">LaTeX Expression</h3>
           <div class="flex flex-col items-start gap-4">
-            <div class="w-full flex-grow">
+            <div class="w-full grow">
               {inline() ? (
                 <input
                   tabIndex={2}

@@ -352,10 +352,10 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     return (
       <div class="p-2">
         <div class="flex center gap-2 items-center h-4">
-          <div class="flex-shrink-0">
+          <div class="shrink-0">
             <ItemEntityIcon size="sm" />
           </div>
-          <div class="text-sm font-semibold truncate grow-1">
+          <div class="text-sm font-semibold truncate grow">
             <BlockLink id={props.item.id} blockOrFileName={props.blockName}>
               <span class="hover:underline">{props.item.name}</span>
             </BlockLink>

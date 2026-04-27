@@ -1,4 +1,9 @@
-import type { BlockAlias, BlockName } from '@core/block';
+import {
+  BlockAliasRegistry,
+  BlockRegistry,
+  type BlockAlias,
+  type BlockName,
+} from '@core/block';
 import { mergeRegister } from '@lexical/utils';
 import { parseThemeV1Json } from '@theme/utils/themeValidation';
 import {
@@ -19,12 +24,16 @@ type MacroAppUrlParsed = {
   block: BlockName | BlockAlias | undefined;
   params: Record<string, string> | undefined;
 };
+
 const Hosts = {
   Prod: 'macro.com',
   Dev: 'dev.macro.com',
-  Staging: 'staging.macro.com',
   Localhost: 'localhost',
 } as const;
+
+const IgnoredParams = new Set(['referral_code']);
+
+const ValidBlockNames = [...BlockRegistry, ...BlockAliasRegistry];
 
 function cleanHostname(hostname: string): string {
   return hostname.replace('www.', '').toLowerCase();
@@ -70,21 +79,8 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
       };
     }
 
-    const validTypes: Array<BlockName | BlockAlias> = [
-      'chat',
-      'write',
-      'pdf',
-      'md',
-      'task',
-      'code',
-      'image',
-      'canvas',
-      'channel',
-      'project',
-      'email',
-    ];
     const _block: string = pathParts[1];
-    if (!validTypes.includes(_block as any)) {
+    if (!ValidBlockNames.includes(_block as any)) {
       return {
         isValid: false,
         id: undefined,
@@ -108,6 +104,7 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
     const id: string = pathParts[2];
     const params: Record<string, string> = {};
     url.searchParams.forEach((value, key) => {
+      if (IgnoredParams.has(key)) return;
       params[key] = value;
     });
 

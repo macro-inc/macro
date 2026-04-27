@@ -52,7 +52,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
               disabled={props.disabled}
               class={cn(
                 showExpanded() &&
-                  'size-auto gap-1 bg-accent/20 text-accent-ink hover:!bg-accent/15 hover:!text-accent-ink'
+                  'size-auto gap-1 bg-accent/20 text-accent-ink hover:bg-accent/15! hover:text-accent-ink!'
               )}
             >
               <ClockIcon

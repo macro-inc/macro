@@ -1,5 +1,10 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
+  ChatWithAgentButton,
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/component/ChatWithAgentButton';
+import {
   type BlockTool,
   ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
@@ -231,10 +236,31 @@ export function TopBar() {
       buttonComponent: () => <DispatchAgentButton />,
     },
     {
+      label: 'Chat',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: blockId,
+          name: name(),
+          fileType: 'md',
+        }),
+      divideAbove: true,
+      buttonComponent: () => (
+        <ChatWithAgentButton
+          entity={{
+            type: 'document',
+            id: blockId,
+            name: name(),
+            fileType: 'md',
+          }}
+        />
+      ),
+    },
+    {
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
-      divideAbove: true,
       buttonComponent: () => <ShareTrigger />,
     },
     {

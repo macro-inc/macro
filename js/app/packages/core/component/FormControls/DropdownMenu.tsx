@@ -101,7 +101,7 @@ const DropdownMenu: ParentComponent<
         size={props.size}
         active={open()}
         classList={{
-          '!block': true,
+          'block!': true,
         }}
         as={DeprecatedButton}
         theme={props.theme}
@@ -139,9 +139,9 @@ const DropdownMenu: ParentComponent<
                   '--dropdown-cutout': `${props.dropdownCutout ?? 4}px`,
                 }}
                 classList={{
-                  '-left-[var(--dropdown-cutout)] -right-[var(--dropdown-cutout)] -top-[var(--dropdown-cutout)] -bottom-[var(--dropdown-cutout)]':
+                  '-left-(--dropdown-cutout) -right-(--dropdown-cutout) -top-(--dropdown-cutout) -bottom-(--dropdown-cutout)':
                     popoverPosition() === 'top-right',
-                  '-right-[var(--dropdown-cutout)] -top-[var(--dropdown-cutout)] -bottom-[var(--dropdown-cutout)]':
+                  '-right-(--dropdown-cutout) -top-(--dropdown-cutout) -bottom-(--dropdown-cutout)':
                     popoverPosition() === 'top-left',
                 }}
               />
@@ -168,7 +168,7 @@ const DropdownMenu: ParentComponent<
           <div
             class="relative bg-panel"
             classList={{
-              'border-accent border-[2px]': props.shadowAccent ?? true,
+              'border-accent border-2': props.shadowAccent ?? true,
             }}
             ref={popoverBorderEl}
           >

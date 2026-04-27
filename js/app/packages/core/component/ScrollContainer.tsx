@@ -42,9 +42,9 @@ export function ScrollContainer(props: ScrollContainerProps) {
         {props.children}
       </div>
       {/* SCUFFED: how do we want to handle this color? */}
-      <div class="absolute top-0 right-0 w-[1px] h-full bg-[transparent]">
+      <div class="absolute top-0 right-0 w-px h-full bg-transparent">
         <div
-          class="absolute right-0 w-[1px] bg-[oklch(0.577_0.245_27.325)]"
+          class="absolute right-0 w-px bg-[oklch(0.577_0.245_27.325)]"
           style={{
             height: `${thumbSize}px`,
             top: `${thumbTop()}px`,

@@ -38,7 +38,7 @@ export const SegmentedControl: ParentComponent<
                 class="border-r border-edge-muted last:border-r-0"
               >
                 <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
-                <KSegmentedControl.ItemLabel class="relative text-ink-muted/70 size-full mobile:min-h-11 flex items-center justify-center px-2.5 py-1 text-xs font-medium data-[checked]:text-ink data-[checked]:bg-edge/50 hover:text-ink hover:bg-ink/6 data-[checked]:hover:bg-edge/60 transition-colors duration-150">
+                <KSegmentedControl.ItemLabel class="relative text-ink-muted/70 size-full mobile:min-h-11 flex items-center justify-center px-2.5 py-1 text-xs font-medium data-checked:text-ink data-checked:bg-edge/50 hover:text-ink hover:bg-ink/6 data-checked:hover:bg-edge/60 transition-colors duration-150">
                   {item.label}
                 </KSegmentedControl.ItemLabel>
               </KSegmentedControl.Item>

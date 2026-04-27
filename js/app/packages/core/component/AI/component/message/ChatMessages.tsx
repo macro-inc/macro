@@ -203,7 +203,10 @@ export function ChatMessages(props: ChatMessagesProps) {
 
   return (
     <StaticMarkdownContext theme={aiChatTheme}>
-      <div class="relative flex flex-col w-full px-2 gap-y-2" ref={messagesRef}>
+      <div
+        class="relative flex flex-col w-full px-2 pt-2 gap-y-6 text-sm"
+        ref={messagesRef}
+      >
         <Show
           when={isEmptyChat()}
           fallback={
@@ -212,7 +215,7 @@ export function ChatMessages(props: ChatMessagesProps) {
                 {(msg) => (
                   <div
                     id={'chat-' + msg.id}
-                    class="w-full transition-colors duration-300 flex flex-col gap-y-2"
+                    class="w-full transition-colors duration-300 flex flex-col gap-y-4"
                     classList={{
                       'bg-accent': activeIdSelector(msg.id),
                     }}
@@ -234,7 +237,7 @@ export function ChatMessages(props: ChatMessagesProps) {
 
               <Show when={isStream() || chat.isWaiting() || lastPair()}>
                 <div
-                  class="shrink-0 flex flex-col gap-y-2"
+                  class="shrink-0 flex flex-col gap-y-4"
                   style={{
                     'min-height': `${parentHeight()}px`,
                   }}

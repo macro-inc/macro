@@ -13,7 +13,7 @@ export const FileDropOverlay = (props: ParentProps<{ valid?: boolean }>) => {
         'pattern-failure-bg': !valid(),
       }}
     >
-      <div class="bg-menu border-1 border-edge px-8 py-4 text-xs text-ink-muted shadow-md font-mono">
+      <div class="bg-menu border border-edge px-8 py-4 text-xs text-ink-muted shadow-md font-mono">
         {props.children}
       </div>
     </div>

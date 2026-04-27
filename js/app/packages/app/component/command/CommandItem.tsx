@@ -135,7 +135,7 @@ export function CommandItem(props: CommandItemProps) {
       class={cn(
         'group flex items-center h-10 px-2 text-sm font-semibold relative',
         {
-          'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px]':
+          'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1':
             props.selected,
           'hover:bg-hover/30': !props.selected,
         }

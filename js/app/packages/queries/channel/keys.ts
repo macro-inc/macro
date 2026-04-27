@@ -13,8 +13,8 @@ export const channelKeys = createQueryKeys('channel', {
   messagesByIds: (channelID: string, messageIds: string[]) => ({
     queryKey: [channelID, { messageIds }],
   }),
-  attachments: (channelID: string) => ({
-    queryKey: [channelID],
+  attachments: (channelID: string, attachmentType?: string) => ({
+    queryKey: attachmentType ? [channelID, { attachmentType }] : [channelID],
   }),
   participants: (channelID: string) => ({
     queryKey: [channelID],

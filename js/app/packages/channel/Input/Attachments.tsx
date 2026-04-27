@@ -93,7 +93,7 @@ function MediaAttachmentItem(props: {
             <RemoveButton
               attachment={props.attachment}
               onRemove={props.onRemove}
-              class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+              class="absolute -top-2 -right-2 z-10 rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
             />
           </Show>
         }
@@ -112,7 +112,7 @@ function MediaAttachmentItem(props: {
           <RemoveButton
             attachment={props.attachment}
             onRemove={props.onRemove}
-            class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+            class="absolute -top-2 -right-2 z-10 rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
           />
         </MediaImage.Root>
       </Show>
@@ -205,7 +205,7 @@ export function Attachments(props: AttachmentsProps) {
         class={cn(
           'flex flex-row w-full px-2 py-2 gap-2 flex-wrap',
           // On mobile, attachments scroll horizontally
-          'mobile:flex-nowrap mobile:[&>*]:shrink-0 mobile:overflow-x-auto mobile:scrollbar-hidden',
+          'mobile:flex-nowrap mobile:*:shrink-0 mobile:overflow-x-auto mobile:scrollbar-hidden',
           local.class
         )}
         data-input-attachments={local.kind ?? 'all'}

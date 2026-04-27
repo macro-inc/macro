@@ -53,7 +53,7 @@ export function DocumentBlockContainer(
 
 function ContainerWithTopBar(props: FlowProps<{ usesCenterBar?: boolean }>) {
   return (
-    <div class="relative flex flex-col grow-1 select-none size-full">
+    <div class="relative flex flex-col grow select-none size-full">
       <div class="overflow-hidden size-full">{props.children}</div>
     </div>
   );

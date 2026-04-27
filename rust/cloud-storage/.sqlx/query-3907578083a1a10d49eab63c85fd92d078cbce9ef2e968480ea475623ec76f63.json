@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            cr.id AS \"call_id!\",\n            cr.channel_id AS \"channel_id!\",\n            cr.created_by AS \"created_by!\",\n            cc.name AS \"channel_name?\"\n        FROM call_records cr\n        LEFT JOIN comms_channels cc ON cc.id = cr.channel_id\n        WHERE cr.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_by!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "channel_name?",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3907578083a1a10d49eab63c85fd92d078cbce9ef2e968480ea475623ec76f63"
+}

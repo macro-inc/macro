@@ -102,7 +102,7 @@ export const BulkRenameEntitiesView = (props: {
 
   return (
     <>
-      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
         <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
           <CloseIcon />
         </Dialog.CloseButton>
@@ -157,7 +157,7 @@ export const BulkRenameEntitiesView = (props: {
             value={editValue()}
             onInput={(e) => setEditValue(e.currentTarget.value)}
             onKeyDown={handleKeyDown}
-            class="w-full p-2 text-sm border-1 border-edge/20 bg-menu text-ink
+            class="w-full p-2 text-sm border border-edge/20 bg-menu text-ink
                    placeholder:text-ink-placeholder focus:outline-none
                    selection:bg-ink selection:text-panel"
             placeholder="Enter new text..."

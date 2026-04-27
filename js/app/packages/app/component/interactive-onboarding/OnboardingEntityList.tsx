@@ -48,7 +48,7 @@ export function OnboardingEntityList(props: OnboardingEntityListProps) {
                 class={cn(
                   'relative w-full min-h-10 flex items-center gap-2 px-5 text-sm font-semibold',
                   {
-                    'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px]':
+                    'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1':
                       isFocused(),
                     'hover:bg-hover/30': !isFocused(),
                     'onboarding-entity-removing': isRemoving(),

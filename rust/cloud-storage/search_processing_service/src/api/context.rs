@@ -7,6 +7,7 @@ use crate::config::Config;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub db: sqlx::Pool<sqlx::Postgres>,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub opensearch_client: Arc<opensearch_client::OpensearchClient>,
     pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,

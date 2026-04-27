@@ -16,7 +16,7 @@ import {
   on,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { RoundPanel } from '../RoundPanel';
+import { Panel } from '@ui';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
 
@@ -118,7 +118,7 @@ export interface ToastAction {
 /**
  * Config for a fully custom toast.
  * Replaces the icon, title, and accent color of the standard layout while
- * still using the shared RoundPanel chrome and progress/dismiss machinery.
+ * still using the shared Panel chrome and progress/dismiss machinery.
  */
 export interface CustomToastConfig {
   title: string;
@@ -196,8 +196,6 @@ function alert(message: string, subtext?: string, duration?: number) {
   createToast(message, ToastType.ALERT, subtext, undefined, duration);
 }
 
-// ─── Shared actions row ──────────────────────────────────────────────────────
-
 function ActionButtons(props: { actions: ToastAction[] }) {
   return (
     <For each={props.actions}>
@@ -216,8 +214,6 @@ function ActionButtons(props: { actions: ToastAction[] }) {
     </For>
   );
 }
-
-// ─── Toast content ───────────────────────────────────────────────────────────
 
 function ToastContent(props: {
   toastId: number;
@@ -297,13 +293,13 @@ function ToastContent(props: {
     <Toast
       toastId={props.toastId}
       class={`relative overflow-visible pointer-events-auto shadow-md rounded
-        data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
+        data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
         data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
       persistent={true}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <RoundPanel
+      <Panel
         highlightColor={accentColor()}
         active
         class="relative w-[90vw] sm:w-md px-2 sm:p-3"
@@ -314,7 +310,7 @@ function ToastContent(props: {
             {(embed) => (
               <>
                 <Dynamic component={embed()} />
-                <Toast.CloseButton class="absolute top-2 right-2 z-1">
+                <Toast.CloseButton class="absolute top-2 right-2 z-user-highlight">
                   <Button variant="ghost" size="icon-sm" class="rounded-xs">
                     <XIcon />
                   </Button>
@@ -405,7 +401,7 @@ function ToastContent(props: {
             }}
           />
         </Show>
-      </RoundPanel>
+      </Panel>
     </Toast>
   );
 }
@@ -549,7 +545,7 @@ function embed(
 
 /**
  * Show a toast with a fully custom title, icon, accent color, body content,
- * and actions row — while still using the shared RoundPanel chrome and
+ * and actions row — while still using the shared Panel chrome and
  * progress/dismiss machinery.
  */
 function custom(

@@ -54,6 +54,8 @@ fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
     match expr {
         Expr::Literal(CallLiteral::ChannelId(id)) => ids.push(*id),
         Expr::Literal(CallLiteral::Attended(_)) => {}
+        // Speaker is transcript-segment-only; soup's call list ignores it.
+        Expr::Literal(CallLiteral::Speaker(_)) => {}
         Expr::And(a, b) | Expr::Or(a, b) => {
             collect_channel_ids(a, ids);
             collect_channel_ids(b, ids);
@@ -75,6 +77,7 @@ fn find_attended(expr: &Expr<CallLiteral>) -> Option<bool> {
     match expr {
         Expr::Literal(CallLiteral::Attended(b)) => Some(*b),
         Expr::Literal(CallLiteral::ChannelId(_)) => None,
+        Expr::Literal(CallLiteral::Speaker(_)) => None,
         Expr::And(a, b) | Expr::Or(a, b) => find_attended(a).or_else(|| find_attended(b)),
         Expr::Not(inner) => find_attended(inner).map(|b| !b),
     }

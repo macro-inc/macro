@@ -33,6 +33,7 @@ import {
   WEEKDAY_OPTIONS,
 } from './automationUtils';
 import type { ScheduleDraft } from './types';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 
 type HistoryRecord = {
   id?: string | null;
@@ -232,7 +233,7 @@ export function Automation() {
       {(d) => (
         <>
           <SplitHeaderLeft>
-            <div class="z-3 relative flex h-full w-screen max-w-full shrink items-center gap-2">
+            <div class="z-page-overlay relative flex h-full w-screen max-w-full shrink items-center gap-2">
               <EntityIcon class="shrink-0" targetType="automation" size="xs" />
               <span
                 class="inline-block min-w-0 flex-1 truncate text-sm"
@@ -242,7 +243,7 @@ export function Automation() {
                   setRenameOpen(true);
                 }}
               >
-                {d().name || 'Untitled automation'}
+                {d().name || blockNameToDefaultFile('automation')}
               </span>
             </div>
           </SplitHeaderLeft>

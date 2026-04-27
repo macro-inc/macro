@@ -53,7 +53,7 @@ export function ThemeTools() {
         'width': '100%',
       }}
     >
-      <div style="width: 18px; height: 18px; flex-shrink: 0; color: var(--color-text-muted)">
+      <div style="width: 18px; height: 18px; shrink: 0; color: var(--color-text-muted)">
         <IconPaintbrush />
       </div>
 

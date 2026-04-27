@@ -62,6 +62,8 @@ export type ActiveFilter = {
    */
   isPopupOpen?: Accessor<boolean>;
   setPopupOpen?: (v: boolean) => void;
+  /** Per-chip override for the container-level `hideCategoryLabel`. */
+  hideCategoryLabel?: boolean;
 };
 
 interface ActiveFilterChipsProps {
@@ -128,7 +130,11 @@ const SearchableFilterChip = (props: {
             )}
           </Show>
           <span class="font-medium">
-            <Show when={!props.hideCategoryLabel}>
+            <Show
+              when={
+                !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
+              }
+            >
               {props.filter.categoryLabel}:{' '}
             </Show>
             {props.filter.optionLabel()}
@@ -188,7 +194,11 @@ const FilterChip = (props: {
               )}
             </Show>
             <span class="font-medium">
-              <Show when={!props.hideCategoryLabel}>
+              <Show
+                when={
+                  !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
+                }
+              >
                 {props.filter.categoryLabel}:{' '}
               </Show>
               {props.filter.optionLabel()}
@@ -211,7 +221,11 @@ const FilterChip = (props: {
               )}
             </Show>
             <span class="font-medium">
-              <Show when={!props.hideCategoryLabel}>
+              <Show
+                when={
+                  !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
+                }
+              >
                 {props.filter.categoryLabel}:{' '}
               </Show>
               {props.filter.optionLabel()}
@@ -229,7 +243,7 @@ const FilterChip = (props: {
                   const isSingleSelect = () => props.filter.multiple === false;
                   return (
                     <DropdownMenu.Item
-                      class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-[highlighted]:bg-ink/5 cursor-default"
+                      class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-highlighted:bg-ink/5 cursor-default"
                       onSelect={() => {
                         if (active()) return;
                         if (props.filter.onReplace) {

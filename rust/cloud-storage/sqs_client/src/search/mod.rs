@@ -1,6 +1,7 @@
 use crate::{
     SQS,
     search::{
+        call::{CallRecordMessage, RemoveCallRecord},
         channel::{ChannelMessageUpdate, RemoveChannelMessage},
         chat::{ChatMessage, RemoveChatMessage},
         document::{DocumentId, SearchExtractorMessage},
@@ -12,6 +13,7 @@ use aws_sdk_sqs::{self as sqs, types::SendMessageBatchRequestEntry};
 use futures::StreamExt;
 use strum::Display;
 
+pub mod call;
 pub mod channel;
 pub mod chat;
 pub mod document;
@@ -80,6 +82,9 @@ pub enum SearchQueueMessage {
     // Channel
     ChannelMessageUpdate(ChannelMessageUpdate),
     RemoveChannelMessage(RemoveChannelMessage),
+    // Call
+    CallRecord(CallRecordMessage),
+    RemoveCallRecord(RemoveCallRecord),
 
     // User
     RemoveUserProfile(String),
@@ -109,6 +114,12 @@ impl PrimaryId for SearchQueueMessage {
                     message.message_id.clone().unwrap_or_default()
                 )
             }
+            SearchQueueMessage::CallRecord(message) => message.call_id.clone(),
+            SearchQueueMessage::RemoveCallRecord(message) => format!(
+                "{}{}",
+                message.channel_id,
+                message.call_id.clone().unwrap_or_default()
+            ),
 
             SearchQueueMessage::RemoveUserProfile(message) => message.clone(),
         }
@@ -134,6 +145,9 @@ impl SearchQueueMessage {
             // Channels
             SearchQueueMessage::ChannelMessageUpdate(_) => Operation::ExtractText,
             SearchQueueMessage::RemoveChannelMessage(_) => Operation::Remove,
+            // Calls
+            SearchQueueMessage::CallRecord(_) => Operation::ExtractText,
+            SearchQueueMessage::RemoveCallRecord(_) => Operation::Remove,
             // Users
             SearchQueueMessage::RemoveUserProfile(_) => Operation::Remove,
         }

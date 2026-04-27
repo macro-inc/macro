@@ -30,7 +30,7 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
 
   const content = (
     <div class="flex items-center gap-2">
-      <div class="flex-shrink-0">{icon()}</div>
+      <div class="shrink-0">{icon()}</div>
       <span class="truncate">{name()}</span>
     </div>
   );
@@ -75,7 +75,7 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
           }
         >
           <div
-            class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-gradient-to-r from-transparent to-hover to-40%"
+            class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-linear-to-r from-transparent to-hover to-40%"
             onClick={(e: MouseEvent) => e.stopPropagation()}
           >
             <Show when={props.onRemove}>

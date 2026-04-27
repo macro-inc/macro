@@ -18,11 +18,11 @@ const IMAGE_PROCESS_QUALITY: Option<ImageDetail> = Some(ImageDetail::High);
 impl From<ImageData> for ImageUrl {
     fn from(value: ImageData) -> Self {
         match value {
-            ImageData::Url(url) => Self {
+            ImageData::StaticUrl(url) => Self {
                 url,
                 detail: IMAGE_PROCESS_QUALITY,
             },
-            ImageData::Bytes(base_64_image) => Self {
+            ImageData::Base64(base_64_image) => Self {
                 url: base_64_image.to_string(),
                 detail: IMAGE_PROCESS_QUALITY,
             },
@@ -480,7 +480,7 @@ mod tests {
         let original = ChatMessage {
             role: Role::User,
             content: ChatMessageContent::Text("What's in this image?".to_string()),
-            image_urls: Some(vec![ImageData::Url(
+            image_urls: Some(vec![ImageData::StaticUrl(
                 "https://example.com/image.jpg".to_string(),
             )]),
         };
@@ -652,8 +652,8 @@ mod tests {
             role: Role::User,
             content: ChatMessageContent::Text("Compare these images".to_string()),
             image_urls: Some(vec![
-                ImageData::Url("https://example.com/image1.jpg".to_string()),
-                ImageData::Url("https://example.com/image2.jpg".to_string()),
+                ImageData::StaticUrl("https://example.com/image1.jpg".to_string()),
+                ImageData::StaticUrl("https://example.com/image2.jpg".to_string()),
             ]),
         };
 

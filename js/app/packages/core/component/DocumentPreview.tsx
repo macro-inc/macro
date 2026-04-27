@@ -1,4 +1,3 @@
-// URL params constants
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useOpenChatForAttachment } from '@block-chat/client';
@@ -11,9 +10,9 @@ import {
   useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
-import { itemToBlockName } from '@core/constant/allBlocks';
-// Components
-import { RoundPanel } from '@core/component/RoundPanel';
+import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { Panel } from '@ui';
 import { toast } from '@core/component/Toast/Toast';
 import {
   isAccessiblePreviewItem,
@@ -24,7 +23,6 @@ import { blockNameToItemType } from '@service-storage/client';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { matches } from '@core/util/match';
-// Icon imports
 import CollapseInlinePreview from '@icon/regular/arrows-in-line-horizontal.svg';
 import OpenIcon from '@icon/regular/arrows-out.svg';
 import ExpandInlinePreview from '@icon/regular/arrows-out-line-horizontal.svg';
@@ -66,7 +64,6 @@ import { Dynamic } from 'solid-js/web';
 import { useEntityProperties } from '@core/component/Properties/hooks';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
-
 import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
@@ -436,6 +433,7 @@ export function PopupPreview(props: {
     date: string;
     characterCount?: number;
   };
+  useFallbackData?: boolean;
 }) {
   // Hooks
   const navigate = useNavigate();
@@ -591,7 +589,7 @@ export function PopupPreview(props: {
     const orchestrator = splitManager.getOrchestrator();
     const handle = await orchestrator.getBlockHandle(
       props.documentInfo.id,
-      type
+      resolveBlockAlias(type)
     );
 
     await handle?.goToLocationFromParams(props.documentInfo.params);
@@ -720,7 +718,7 @@ export function PopupPreview(props: {
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <RoundPanel active>
+      <Panel active>
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>
@@ -747,7 +745,7 @@ export function PopupPreview(props: {
               return (
                 <div class="w-full flex flex-col">
                   {/* Header: icon + filename + action buttons */}
-                  <div class="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+                  <div class="flex items-center justify-between gap-2 p-2">
                     <div class="flex items-center gap-2 min-w-0">
                       <ItemEntityIcon size="sm" />
                       <div class="text-sm font-semibold select-text min-w-0">
@@ -764,7 +762,7 @@ export function PopupPreview(props: {
                     <div class="flex shrink-0">{renderActionButtons()}</div>
                   </div>
 
-                  <div class="line-clamp-2 break-words px-2 mb-2">
+                  <div class="line-clamp-2 wrap-break-word px-2 mb-2">
                     {props.documentInfo.name || accessibleItem().name}
                   </div>
 
@@ -799,7 +797,7 @@ export function PopupPreview(props: {
                       <Show when={messageContext()}>
                         {(context) => (
                           <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
-                            <div class="line-clamp-3 break-words">
+                            <div class="line-clamp-3 wrap-break-word">
                               <StaticMarkdown
                                 markdown={context().content}
                                 theme={channelTheme}
@@ -871,17 +869,41 @@ export function PopupPreview(props: {
           {/* No access / does not exist errors */}
           <Match when={matches(item(), isPreviewItemNoAccess)}>
             {(noAccessItem) => (
-              <div class="text-sm p-4">
-                {noAccessItem().access === 'no_access' ? (
-                  <Unauthorized />
-                ) : (
-                  <NotFound />
-                )}
-              </div>
+              <Show
+                when={
+                  noAccessItem().access === 'does_not_exist' &&
+                  props.useFallbackData &&
+                  props.documentInfo.name
+                }
+                fallback={
+                  <div class="text-sm p-4">
+                    {noAccessItem().access === 'no_access' ? (
+                      <Unauthorized />
+                    ) : (
+                      <NotFound />
+                    )}
+                  </div>
+                }
+              >
+                <div class="w-full flex flex-col">
+                  <div class="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <EntityIcon
+                        targetType={props.documentInfo.type}
+                        size="sm"
+                      />
+                    </div>
+                    <div class="flex shrink-0">{renderActionButtons()}</div>
+                  </div>
+                  <div class="line-clamp-2 break-words px-2 mb-2">
+                    {props.documentInfo.name}
+                  </div>
+                </div>
+              </Show>
             )}
           </Match>
         </Switch>
-      </RoundPanel>
+      </Panel>
     </div>
   );
 }

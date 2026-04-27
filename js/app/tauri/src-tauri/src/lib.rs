@@ -1,5 +1,5 @@
 use logger::Logger;
-use macro_bundle_updater_plugin::inbound::plugin::PluginService;
+use macro_bundle_updater_plugin::inbound::plugin::{PluginService, apply_completed_update};
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
 use reqwest::cookie::CookieStore;
@@ -7,7 +7,7 @@ use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
 use serde::Serialize;
 use tauri::http::{HeaderMap, HeaderValue};
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
 
 mod tauri_protocol;
 use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
@@ -180,17 +180,17 @@ pub fn run() {
         ])
         .setup(|app| {
             // Restore persisted bundle root on startup
-            if let Ok(cache_dir) = app.path().app_cache_dir() {
-                if let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>() {
-                    tauri::async_runtime::block_on(async {
-                        let mut service = s.lock().await;
-                        service.load_bundle_root(&cache_dir).await;
-                        tracing::info!(
-                            "Setup: restored bundle root to {:?}",
-                            service.bundle_root_path()
-                        );
-                    });
-                }
+            if let Ok(cache_dir) = app.path().app_cache_dir()
+                && let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>()
+            {
+                tauri::async_runtime::block_on(async {
+                    let mut service = s.lock().await;
+                    service.load_bundle_root(&cache_dir).await;
+                    tracing::info!(
+                        "Setup: restored bundle root to {:?}",
+                        service.bundle_root_path()
+                    );
+                });
             }
 
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
@@ -206,8 +206,24 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let RunEvent::Resumed = event {
+                let app = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    match apply_completed_update(&app).await {
+                        Ok(true) => {
+                            tracing::info!("auto-applied pending bundle update on foreground");
+                        }
+                        Ok(false) => {}
+                        Err(e) => {
+                            tracing::error!("failed to auto-apply bundle update: {e}");
+                        }
+                    }
+                });
+            }
+        });
 }
 
 /// fn to merge the headers from the http cookie store into the initial

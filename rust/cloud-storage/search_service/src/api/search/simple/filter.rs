@@ -3,15 +3,16 @@
 
 use comms_db_client::model::SimpleMention;
 use opensearch_client::search::unified::{
-    UnifiedChannelMessageSearchArgs, UnifiedChatSearchArgs, UnifiedDocumentSearchArgs,
-    UnifiedEmailSearchArgs,
+    UnifiedCallRecordSearchArgs, UnifiedChannelMessageSearchArgs, UnifiedChatSearchArgs,
+    UnifiedDocumentSearchArgs, UnifiedEmailSearchArgs,
 };
 
 use crate::api::{
     context::SearchHandlerState,
     search::simple::{
-        SearchError, simple_channel::filter_channels, simple_chat::filter_chats,
-        simple_document::filter_documents, simple_project::filter_projects,
+        SearchError, simple_call_record::filter_calls, simple_channel::filter_channels,
+        simple_chat::filter_chats, simple_document::filter_documents,
+        simple_project::filter_projects,
     },
 };
 
@@ -172,5 +173,31 @@ impl FilterVariantToSearchArgs for item_filters::EmailFilters {
                 ..Default::default()
             })
         }
+    }
+}
+
+impl FilterVariantToSearchArgs for item_filters::CallFilters {
+    type Output = UnifiedCallRecordSearchArgs;
+
+    async fn filter_to_search_args(
+        &self,
+        ctx: &SearchHandlerState,
+        user_id: &str,
+        _user_organization_id: Option<i32>,
+        should_include: bool,
+    ) -> Result<Self::Output, SearchError> {
+        if !should_include {
+            return Ok(UnifiedCallRecordSearchArgs::default());
+        }
+
+        let response = filter_calls(ctx, user_id, self).await?;
+
+        Ok(UnifiedCallRecordSearchArgs {
+            call_ids: response.call_ids,
+            channel_ids: response.channel_ids,
+            speaker_ids: self.speaker_ids.clone(),
+            ids_only: true,
+            ..Default::default()
+        })
     }
 }

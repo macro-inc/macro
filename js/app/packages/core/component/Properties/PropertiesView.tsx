@@ -121,7 +121,7 @@ function PropertiesViewContent(props: {
       />
 
       <Show when={props.canEdit}>
-        <div class="flex-shrink-0 p-4">
+        <div class="shrink-0 p-4">
           <AddPropertyButton onClick={openPropertySelector} />
         </div>
       </Show>

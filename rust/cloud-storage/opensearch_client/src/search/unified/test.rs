@@ -449,6 +449,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             role: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
         },
+        call_record_search_args: UnifiedCallRecordSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor {
             entity_id,
             updated_at: time,
@@ -834,6 +835,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             role: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
         },
+        call_record_search_args: UnifiedCallRecordSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor {
             entity_id,
             updated_at: time,

@@ -14,17 +14,17 @@ use std::sync::Arc;
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. This tool finds items based on what they're called, not their content.",
+    description = "Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. For call records, this searches the channel name the call took place in. This tool finds items based on what they're called, not their content.",
     title = "NameSearch"
 )]
 pub struct NameSearch {
     #[schemars(
-        description = "The name or title to search for. For emails, this is the subject line. For channels, this can be the channel name or participant names."
+        description = "The name or title to search for. For emails, this is the subject line. For channels, this can be the channel name or participant names. For call records, this is the channel name the call belongs to."
     )]
     pub name: String,
 
     #[schemars(
-        description = "Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels']"
+        description = "Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']"
     )]
     #[serde(default)]
     pub entity_types: Vec<UnifiedSearchIndex>,

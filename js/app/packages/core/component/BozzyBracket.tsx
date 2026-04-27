@@ -52,7 +52,7 @@ export function BozzyBracketInnerSibling(props: {
       setTimeout(() => setBig(false));
     });
   }
-  /* TEST BEFORE REMOVING left-[-1px] top-[-1px] w-[calc(100%+2px)] h-[calc(100%+2px)] */
+  /* TEST BEFORE REMOVING -left-px -top-px w-[calc(100%+2px)] h-[calc(100%+2px)] */
   return (
     <div
       class="pointer-events-none absolute -left-px -top-1 w-[calc(100%+2px)] h-[calc(100%+2px)] bracket-offset-2"

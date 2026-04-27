@@ -61,6 +61,13 @@ function useStoreChatState() {
 
 export const storeChatState = useStoreChatState();
 
+export function storeChatStateImmediate(
+  id: string,
+  state: Partial<StoredStuff>
+) {
+  setPersistentChatState(id, { ...state, used_at: Date.now() });
+}
+
 export function getChatInputStoredState(id: string): Partial<StoredStuff> {
   const storedStuff = untrack(() => persistentChatState[id]);
   if (!storedStuff) return {};

@@ -23,6 +23,7 @@ type MarkDoneVariables = {
   entities: EntityData[];
   emailIds: string[];
   notificationIds: string[];
+  restoreFocus?: () => void;
 };
 
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
@@ -95,7 +96,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
                 handle.undo({
                   onError: () => toast.failure('Failed to undo'),
                 });
-                restoreSoupFocus(firstEntityId, inPreview);
               },
             },
           ],
@@ -109,6 +109,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       return {
         onUndone: () => {
           if (toastId !== undefined) toast.dismiss(toastId);
+          variables.restoreFocus?.();
+          restoreSoupFocus(firstEntityId, inPreview);
         },
         onRedone: showToast,
       };
@@ -131,12 +133,17 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     return false;
   };
 
-  const execute = async (entities: EntityData[]) => {
+  const execute = async (entities: EntityData[], restoreFocus?: () => void) => {
     const { emailIds, notificationIds } = resolveMarkEntitiesDoneVariables({
       entities,
       notificationSource: notificationSource(),
     });
-    await mutation.mutateAsync({ entities, emailIds, notificationIds });
+    await mutation.mutateAsync({
+      entities,
+      emailIds,
+      notificationIds,
+      restoreFocus,
+    });
   };
 
   const executeWithSoup = async (
@@ -145,6 +152,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     onNavigate?: (entity: EntityData) => void
   ) => {
     const currentIndex = soup.focus.index();
+    const focusedIdBeforeMarkDone = soup.focus.id();
     const nextEntity =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
 
@@ -155,7 +163,11 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       }
     }
 
-    await execute(entities);
+    const restoreFocus = focusedIdBeforeMarkDone
+      ? () => soup.focus.set(focusedIdBeforeMarkDone)
+      : undefined;
+
+    await execute(entities, restoreFocus);
 
     soup.selection.clear();
 

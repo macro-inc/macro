@@ -456,7 +456,10 @@ async fn main() -> anyhow::Result<()> {
         call_service_builder = call_service_builder.with_egress(config);
     }
 
-    let call_service = Arc::new(call_service_builder);
+    let call_search_indexer = crate::service::call_search_indexer::SqsCallSearchIndexer::new(
+        Arc::new(sqs_client.clone()),
+    );
+    let call_service = Arc::new(call_service_builder.with_search_indexer(call_search_indexer));
 
     let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
     let call_webhook_state = WebhookRouterState::new(call_service.clone());

@@ -154,7 +154,7 @@ export function DeprecatedTextButton(props: TextButtonProps) {
             'flex flex-row',
             props.height ?? 'h-8',
             'px-2',
-            props.outline && 'border-1 border-edge',
+            props.outline && 'border border-edge',
             'justify-center items-center w-full',
             props.disabled && 'opacity-50 cursor-not-allowed'
           )}
@@ -212,7 +212,7 @@ export function DeprecatedTextButton(props: TextButtonProps) {
           class={cn(
             themeStyles[props.theme],
             'flex h-full px-2 border-l-0 justify-center items-center',
-            props.outline && 'border-1 border-edge'
+            props.outline && 'border border-edge'
           )}
           onClick={props.onOptionClick}
           disabled={props.disabled}

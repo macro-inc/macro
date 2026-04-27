@@ -4,7 +4,6 @@ import { CircleSpinner } from '@core/component/CircleSpinner';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { Hotkey } from '@core/component/Hotkey';
-
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
@@ -59,7 +58,7 @@ import {
 } from '../util/taskComposerStorage';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import CheckIcon from '@icon/regular/check.svg';
+import CheckIcon from '@icon/bold/check-bold.svg';
 
 // Show these props in the composer.
 const COMPOSER_PROPERTIES = [
@@ -362,25 +361,39 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     toast.custom(
       {
-        title:
-          taskTitle ||
-          itemToSafeName({ type: 'document', subType: { type: 'task' } }),
-        icon: TaskEntityIcon,
-        color: 'var(--color-task)',
+        title: 'Task Created',
+        icon: () => <CheckIcon class="text-success size-5" />,
+        color: 'var(--color-success)',
         content: () => (
-          <div class="text-xs text-ink-extra-muted line-clamp-2 mb-4">
-            <StaticMarkdown
-              markdown={taskContent}
-              theme={unifiedListMarkdownTheme}
-              singleLine
-            />
+          <>
+            <div class="bg-hover p-2 rounded-sm line-clamp-3 space-y-2">
+              <div class="flex gap-2 items-center">
+                <TaskEntityIcon class="size-4" />
+                <h1 class="text-base font-semibold mb-1 truncate">
+                  {taskTitle ||
+                    itemToSafeName({
+                      type: 'document',
+                      subType: { type: 'task' },
+                    })}
+                </h1>
+              </div>
+              <Show when={taskContent.length > 0}>
+                <div class="truncate">
+                  <StaticMarkdown
+                    markdown={taskContent}
+                    theme={unifiedListMarkdownTheme}
+                    singleLine
+                  />
+                </div>
+              </Show>
+            </div>
             <Show when={linkCopied}>
-              <div class="bg-hover/50 flex items-center gap-1 rounded-xs p-1">
-                <CheckIcon class="size-3" />
-                <span>Link copied to clipboard</span>
+              <div class="mt-1 flex items-center gap-1 rounded-sm p-1 bg-success-bg text-success-ink">
+                <LinkIcon class="size-3" />
+                <span>Link auto-copied to clipboard</span>
               </div>
             </Show>
-          </div>
+          </>
         ),
         actions: [
           {
@@ -394,20 +407,13 @@ export function ComposeTask(props: ComposeTaskProps) {
             },
           },
           {
-            label: 'Open in New Split',
+            label: 'Open (New Split)',
             icon: SplitIcon,
             onClick: () => {
               openWithSplit(
                 { type: 'task', id: documentId },
                 { referredFrom: null, preferNewSplit: true }
               );
-            },
-          },
-          {
-            label: 'Copy Link',
-            icon: LinkIcon,
-            onClick: () => {
-              navigator.clipboard.writeText(url);
             },
           },
         ],
@@ -653,7 +659,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           }
           placeholder={props.placeholder ?? 'Add description...'}
           portalScope={splitPanel.handle.isPopover() ? 'local' : 'block'}
-          class="shrink-1 min-h-0 h-[unset] text-base px-2 overflow-y-auto"
+          class="shrink min-h-0 h-[unset] text-base px-2 overflow-y-auto"
         />
 
         <Suspense>
@@ -670,6 +676,8 @@ export function ComposeTask(props: ComposeTaskProps) {
               <PropertyGrid
                 properties={properties()}
                 columns={2}
+                withDelete={false}
+                withPin={false}
               ></PropertyGrid>
               <Modals />
             </div>
@@ -685,7 +693,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       </Show>
 
       <div class="w-full border-b border-edge-muted/50" />
-      <div class="flex-shrink-0 flex justify-between items-center p-2 gap-2">
+      <div class="shrink-0 flex justify-between items-center p-2 gap-2">
         <MiniToggleSwitch
           size="SM"
           label="Create More"
@@ -706,7 +714,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             <CircleSpinner width={16} height={16} />
           </Show>
           Create Task
-          <div class="text-[0.625rem] text-ink-extra-muted ml-auto border border-edge-muted/50 px-1.5 py-1 font-sans rounded-xs">
+          <div class="text-xxs text-ink-extra-muted ml-auto border border-edge-muted/50 px-1.5 py-1 font-sans rounded-xs">
             <Hotkey shortcut="cmd+enter" />
           </div>
         </Button>

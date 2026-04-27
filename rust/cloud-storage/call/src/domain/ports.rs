@@ -468,3 +468,29 @@ impl CallRecordQueryService for NoOpCallRecordQueryService {
         Ok(Vec::new())
     }
 }
+
+/// Propagates call record lifecycle events to the search index.
+pub trait CallSearchIndexer: Send + Sync + 'static {
+    /// Enqueue an upsert.
+    fn enqueue_upsert(&self, call_id: &Uuid) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Enqueue a removal.
+    fn enqueue_remove(
+        &self,
+        channel_id: &Uuid,
+        call_id: &Uuid,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// No-op for services without search.
+pub struct NoOpCallSearchIndexer;
+
+impl CallSearchIndexer for NoOpCallSearchIndexer {
+    async fn enqueue_upsert(&self, _call_id: &Uuid) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn enqueue_remove(&self, _channel_id: &Uuid, _call_id: &Uuid) -> anyhow::Result<()> {
+        Ok(())
+    }
+}

@@ -78,22 +78,10 @@ function gitBranchHmrPlugin(): Plugin {
   };
 }
 
-const PLATFORMS = ['web', 'desktop', 'ios', 'android'] as const;
-
-export type AppPlatform = (typeof PLATFORMS)[number];
-
-export interface CreateAppViteConfigOptions {
-  platform: AppPlatform;
-}
-
-export const createAppViteConfig = ({
-  platform,
-}: CreateAppViteConfigOptions): UserConfigFn => {
+export const createAppViteConfig = (): UserConfigFn => {
   return ({ command, mode }) => {
     const ENV_MODE = process.env.MODE ?? mode;
     const NO_MINIFY = process.env.NO_MINIFY === 'true';
-    const isLegacyTauriBuild = process.env.VITE_TAURI === 'true';
-    const _isTauriPlatform = platform !== 'web' || isLegacyTauriBuild;
 
     return {
       base: command === 'serve' ? '/' : '/app',
@@ -116,7 +104,7 @@ export const createAppViteConfig = ({
         }),
         gitBranchHmrPlugin(),
       ],
-      define: defineEnv(ENV_MODE, command, platform),
+      define: defineEnv(ENV_MODE, command),
       clearScreen: false,
       worker: {
         format: 'es',
@@ -234,10 +222,9 @@ function getAssetsPath(mode: string, command: string): string {
   }
 }
 
-function defineEnv(mode: string, command: string, platform: AppPlatform) {
+function defineEnv(mode: string, command: string) {
   return {
     'import.meta.env.__APP_VERSION__': JSON.stringify(appVersion),
-    'import.meta.env.VITE_PLATFORM': JSON.stringify(platform),
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
     'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',
     'import.meta.env.__LOCAL_JWT__': JSON.stringify(process.env.LOCAL_JWT),

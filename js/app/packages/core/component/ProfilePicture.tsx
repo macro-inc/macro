@@ -55,7 +55,7 @@ export function ProfilePicture(props: ProfilePictureProps) {
 
   if (!ENABLE_PROFILE_PICTURES) {
     return (
-      <div class={cn('flex-shrink-0', props.sizeClass.text)}>
+      <div class={cn('shrink-0', props.sizeClass.text)}>
         {email().substring(0, 1).toUpperCase()}
       </div>
     );
@@ -87,7 +87,7 @@ export function ProfilePicture(props: ProfilePictureProps) {
         return (
           <div
             class={cn(
-              'flex-shrink-0 overflow-hidden rounded-full',
+              'shrink-0 overflow-hidden rounded-full',
               props.sizeClass.container
             )}
           >

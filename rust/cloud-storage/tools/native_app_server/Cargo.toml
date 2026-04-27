@@ -1,13 +1,15 @@
 [package]
-name = "native_app_server"
-version = "0.1.0"
 edition = "2024"
+name = "native_app_server"
 publish = false
+version = "0.1.0"
 
 [dependencies]
 axum = { workspace = true }
 native_app_service = { path = "../../native_app_service" }
+rootcause = { workspace = true }
 semver = { workspace = true }
+sha2 = { workspace = true }
 tokio = { workspace = true }
 tower-http = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }

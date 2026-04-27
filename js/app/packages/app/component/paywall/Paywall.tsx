@@ -98,7 +98,7 @@ export function Paywall() {
 
         <Dialog.Content>
           <div
-            class="fixed top-0 left-0 w-full h-full bg-dialog font-sans z-[9999]"
+            class="fixed top-0 left-0 w-full h-full bg-dialog font-sans z-9999"
             ref={paywallContentEl}
             tabIndex={-1}
           >

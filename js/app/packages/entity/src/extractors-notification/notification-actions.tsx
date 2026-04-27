@@ -8,10 +8,12 @@ import {
 } from '@notifications';
 import { useUndoableMutation } from '@queries/undo';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useMaybeSoup } from '@app/component/next-soup/soup-context';
 import { restoreSoupFocus } from '@app/component/next-soup/utils';
 
 interface NotificationActionsProps {
   stack: NotificationStack;
+  entityId?: string;
   onMarkAsDone?: () => void;
   onMarkAsRead?: () => void;
 }
@@ -26,6 +28,7 @@ type MarkStackDoneVariables = { notificationIds: string[] };
 
 export function useNotificationStackActions(props: NotificationActionsProps) {
   const notificationSource = useGlobalNotificationSource();
+  const soup = useMaybeSoup();
 
   const mutation = useUndoableMutation<void, Error, MarkStackDoneVariables>(
     () => ({
@@ -51,7 +54,8 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
                   handle.undo({
                     onError: () => toast.failure('Failed to undo'),
                   });
-                  restoreSoupFocus();
+                  if (props.entityId) soup?.focus.set(props.entityId);
+                  restoreSoupFocus(props.entityId);
                 },
               },
             ],

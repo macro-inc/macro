@@ -10,6 +10,16 @@ use serde_json::Value;
 /// SHA256 hash of an empty string — used for empty markdown documents (tasks).
 pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
+/// Assignee property id
+pub const ASSIGNEES_PROPERTY_ID: &str = "00000001-0000-0000-0000-000000000001";
+
+/// Status property id
+pub const STATUS_PROPERTY_ID: &str = "00000001-0000-0000-0000-000000000002";
+
+/// Not started status option
+pub const NOT_STARTED_STATUS_OPTION_ID: uuid::Uuid =
+    uuid::uuid!("00000001-0000-0000-0002-000000000001");
+
 /// Errors that can occur during document operations.
 #[derive(Debug, thiserror::Error)]
 pub enum DocumentError {

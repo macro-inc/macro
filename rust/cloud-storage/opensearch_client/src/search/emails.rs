@@ -12,7 +12,7 @@ use opensearch_query_builder::{BoolQuery, BoolQueryBuilder, QueryType, SimpleQue
 pub(crate) struct EmailSearchConfig;
 
 impl SearchQueryConfig for EmailSearchConfig {
-    const USER_ID_KEY: &'static str = "user_id";
+    const USER_ID_KEY: Option<&'static str> = Some("user_id");
     const TITLE_KEY: &'static str = "subject";
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Emails;
 }

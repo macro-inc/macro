@@ -72,6 +72,7 @@ import {
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { Login } from './auth/Login';
 import { Signup } from './auth/Signup';
+import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 import { setCookie } from './auth/Shared';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
@@ -307,6 +308,10 @@ const ROUTES: RouteDefinition[] = [
         <InteractiveOnboarding />
       </div>
     ),
+  },
+  {
+    path: '/team-invite',
+    component: TeamInviteAcceptance,
   },
   {
     // This splat route must be last to catch all unmatched routes

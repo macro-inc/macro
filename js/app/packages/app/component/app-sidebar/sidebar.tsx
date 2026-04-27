@@ -342,7 +342,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       </span>
       <Show when={props.hotkeyToken}>
         {(token) => (
-          <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+          <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:invisible">
             <Hotkey token={token()} class="flex gap-1" />
           </div>
         )}
@@ -466,7 +466,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 ">
             <LogoIcon class="size-6" />
           </div>
-          <div class="grow-1 shrink-10 min-w-0" />
+          <div class="grow shrink-10 min-w-0" />
           <Button
             class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-page [&_svg]:size-4"
             onClick={() => props.onOpenChange(!isExpanded())}
@@ -499,7 +499,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-edge-muted mb-[8px]" />
+        <hr class="border-edge-muted mb-2" />
       </div>
 
       <nav>
@@ -519,7 +519,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </nav>
 
       <div class="px-2">
-        <hr class="border-edge-muted my-[8px]" />
+        <hr class="border-edge-muted my-2" />
       </div>
 
       <div class="block max-h-[clamp(10%,60%,20rem)]">
@@ -527,7 +527,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2 mt-auto w-full">
-        <hr class="border-edge-muted mb-[8px]" />
+        <hr class="border-edge-muted mb-2" />
       </div>
 
       <div class=" w-full px-2 flex flex-col">
@@ -705,18 +705,18 @@ const SidebarLink = (props: SidebarLinkProps) => {
 
           <Show when={isHovering() && !props.hotkeyVisible}>
             <div class="group-data-[slim=true]/sidebar:invisible ml-auto">
-              <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-[0.625rem]">
+              <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
                 <Show when={!props.standaloneHotkey}>
-                  <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={GO_TO_LEADER_KEY} />
                   </div>
                   then
-                  <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={props.hotkey} />
                   </div>
                 </Show>
                 <Show when={props.standaloneHotkey}>
-                  <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={props.hotkey} />
                   </div>
                 </Show>
