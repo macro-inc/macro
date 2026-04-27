@@ -3,7 +3,10 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{ProjectFilters, ast::ExpandErr};
+use crate::{
+    ProjectFilters,
+    ast::{ExpandErr, date::DateLiteral},
+};
 
 /// the literal ast types for a project
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -18,6 +21,12 @@ pub enum ProjectLiteral {
     NotificationDone(bool),
     /// this node value filters by notification seen state for projects.
     NotificationSeen(bool),
+    /// this node value filters by project createdAt timestamp
+    #[serde(rename = "ca")]
+    CreatedAt(DateLiteral),
+    /// this node value filters by project updatedAt timestamp
+    #[serde(rename = "ua")]
+    UpdatedAt(DateLiteral),
 }
 
 impl ExpandFrame<ProjectLiteral> for ProjectFilters {

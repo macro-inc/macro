@@ -9,6 +9,7 @@ use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst,
     chat::ChatLiteral,
+    date::DateLiteral,
     document::DocumentLiteral,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyMatchValue},
@@ -346,6 +347,18 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
             r#"NOT EXISTS(SELECT 1 FROM document_email WHERE document_id = d.id)"#
                 .to_string()
         }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::CreatedAt(DateLiteral::GreaterThan(dt))) => {
+            format!(r#"d."createdAt" > '{}'::timestamptz"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::CreatedAt(DateLiteral::LessThan(dt))) => {
+            format!(r#"d."createdAt" < '{}'::timestamptz"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::UpdatedAt(DateLiteral::GreaterThan(dt))) => {
+            format!(r#"d."updatedAt" > '{}'::timestamptz"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::UpdatedAt(DateLiteral::LessThan(dt))) => {
+            format!(r#"d."updatedAt" < '{}'::timestamptz"#, dt.to_rfc3339())
+        }
     });
     if formatting.is_empty() {
         String::new()
@@ -380,6 +393,18 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ChatLiteral::NotificationSeen(seen)) => {
             build_notification_seen_clause("c.id", "chat", seen)
         }
+        filter_ast::ExprFrame::Literal(ChatLiteral::CreatedAt(DateLiteral::GreaterThan(dt))) => {
+            format!(r#"c."createdAt" > '{}'::timestamptz"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(ChatLiteral::CreatedAt(DateLiteral::LessThan(dt))) => {
+            format!(r#"c."createdAt" < '{}'::timestamptz"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(ChatLiteral::UpdatedAt(DateLiteral::GreaterThan(dt))) => {
+            format!(r#"c."updatedAt" > '{}'::timestamptz"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(ChatLiteral::UpdatedAt(DateLiteral::LessThan(dt))) => {
+            format!(r#"c."updatedAt" < '{}'::timestamptz"#, dt.to_rfc3339())
+        }
     });
     if formatting.is_empty() {
         String::new()
@@ -410,6 +435,18 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationSeen(seen)) => {
             build_notification_seen_clause("p.id", "project", seen)
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::CreatedAt(DateLiteral::GreaterThan(dt))) => {
+            format!(r#"p."createdAt" > '{}'::timestamptz"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::CreatedAt(DateLiteral::LessThan(dt))) => {
+            format!(r#"p."createdAt" < '{}'::timestamptz"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::UpdatedAt(DateLiteral::GreaterThan(dt))) => {
+            format!(r#"p."updatedAt" > '{}'::timestamptz"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::UpdatedAt(DateLiteral::LessThan(dt))) => {
+            format!(r#"p."updatedAt" < '{}'::timestamptz"#, dt.to_rfc3339())
         }
     });
     if formatting.is_empty() {

@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{
     ChatFilters,
-    ast::{ExpandErr, ParseFromStr, UnknownValue},
+    ast::{ExpandErr, ParseFromStr, UnknownValue, date::DateLiteral},
 };
 
 /// the literal ast type for the chat entity
@@ -25,6 +25,12 @@ pub enum ChatLiteral {
     NotificationDone(bool),
     /// this node value filters by notification seen state for chats.
     NotificationSeen(bool),
+    /// this node value filters by chat createdAt timestamp
+    #[serde(rename = "ca")]
+    CreatedAt(DateLiteral),
+    /// this node value filters by chat updatedAt timestamp
+    #[serde(rename = "ua")]
+    UpdatedAt(DateLiteral),
 }
 
 /// the possible roles for a chat
