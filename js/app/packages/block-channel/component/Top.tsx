@@ -14,7 +14,7 @@ import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
-import { type JSX, Show, type Component, createMemo } from 'solid-js';
+import { type JSX, Show, type Component } from 'solid-js';
 import { Tabs, type TabItem } from '@core/component/Tabs';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
 
