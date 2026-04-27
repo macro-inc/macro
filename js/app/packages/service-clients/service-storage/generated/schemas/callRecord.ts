@@ -11,6 +11,7 @@ import type { CallRecordEgressId } from './callRecordEgressId';
 import type { CallRecordEndedAt } from './callRecordEndedAt';
 import type { CallRecordParticipant } from './callRecordParticipant';
 import type { CallRecordRecordingUrl } from './callRecordRecordingUrl';
+import type { CallRecordSummary } from './callRecordSummary';
 import type { CallRecordTranscriptSegment } from './callRecordTranscriptSegment';
 
 /**
@@ -45,6 +46,9 @@ archived `call_records`; active calls always return `None`. */
   roomName: string;
   /** When the call started (created_at for active, started_at for archived). */
   startedAt: string;
+  /** AI-generated summary of the call. Only set on archived `call_records`
+once summarization has run; active calls always return `None`. */
+  summary?: CallRecordSummary;
   /** Transcript segments ordered by `sequence_num`. */
   transcript: CallRecordTranscriptSegment[];
 }

@@ -6298,6 +6298,10 @@
             "format": "date-time",
             "description": "When the call started (created_at for active, started_at for archived)."
           },
+          "summary": {
+            "type": ["string", "null"],
+            "description": "AI-generated summary of the call. Only set on archived `call_records`\nonce summarization has run; active calls always return `None`."
+          },
           "transcript": {
             "type": "array",
             "items": {
