@@ -487,8 +487,14 @@ export function useFilterRefinements() {
     const oldQuery = getFilterQuery(oldOptionId);
     const newQuery = getFilterQuery(newOptionId);
     batch(() => {
-      soup.predicates.toggle({ or: [oldOptionId as FilterID] });
-      soup.predicates.toggle({ or: [newOptionId as FilterID] });
+      if (soup.predicates.isActive(oldOptionId)) {
+        soup.predicates.toggle({ or: [oldOptionId as FilterID] });
+      }
+
+      if (!soup.predicates.isActive(newOptionId)) {
+        soup.predicates.toggle({ or: [newOptionId as FilterID] });
+      }
+
       if (oldQuery) queryFilters.remove(oldQuery);
       if (newQuery) queryFilters.add(newQuery);
     });
