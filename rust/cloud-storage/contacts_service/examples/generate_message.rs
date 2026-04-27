@@ -1,5 +1,5 @@
 // Small utility to generate a sample connections message to send to the SQS service
-use contacts_service::queue::add_user_to_group;
+use contacts::domain::service::add_user_to_group;
 use model::contacts::{AddParticipantsMessageBody, CreateGroupMessageBody, Message};
 use std::env;
 
