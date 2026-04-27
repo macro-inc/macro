@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT t.id, l.macro_id\n        FROM email_threads t\n        JOIN email_links l ON t.link_id = l.id\n        WHERE t.updated_at >= $3\n        ORDER BY t.latest_inbound_message_ts DESC NULLS LAST\n        LIMIT $1 OFFSET $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1fa9e2989967fe9d44ee4e7c7db0091aebd9369c066fde6ccfe090bc97271e71"
+}

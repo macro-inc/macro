@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO user_mute_notification (user_id) VALUES ($1)\n        ON CONFLICT (user_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "63a5819e9b22bf76402a3afcdfb6bc6cd3a96d84e15909c85c8e6ec4a8b69e42"
+}

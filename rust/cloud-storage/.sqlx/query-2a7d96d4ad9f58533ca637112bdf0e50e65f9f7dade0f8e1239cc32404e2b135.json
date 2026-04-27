@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT l.macro_id, t.id as thread_id\n        FROM UNNEST($1::text[], $2::uuid[]) AS inp(macro_id, thread_id)\n        JOIN email_links l ON l.macro_id = inp.macro_id\n        JOIN email_threads t ON t.link_id = l.id AND t.id = inp.thread_id\n        WHERE t.latest_outbound_message_ts IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "2a7d96d4ad9f58533ca637112bdf0e50e65f9f7dade0f8e1239cc32404e2b135"
+}

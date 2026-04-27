@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_attachments_fwd (message_id, attachment_id)\n            SELECT $1, $2\n            FROM email_messages m\n            WHERE m.id = $1 AND m.link_id = $3\n        ON CONFLICT DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8b8194993cc2ec93b2db6104da98fe3569d973d3d2a3f723c70414c04cc574ef"
+}

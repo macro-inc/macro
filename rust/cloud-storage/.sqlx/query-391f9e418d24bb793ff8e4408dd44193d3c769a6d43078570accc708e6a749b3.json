@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE user_notification un SET seen_at = NOW()\n        WHERE un.user_id = $1\n        AND un.notification_id = ANY($2)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "391f9e418d24bb793ff8e4408dd44193d3c769a6d43078570accc708e6a749b3"
+}

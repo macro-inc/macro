@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT link_id, contacts_sync_token, other_contacts_sync_token\n        FROM email_sync_tokens\n        WHERE link_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "contacts_sync_token",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "other_contacts_sync_token",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "4aeb58db6713bcb7ba53c394a0cde88693c45f2184b1d9553a9baa36cbef6380"
+}

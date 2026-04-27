@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            c.id\n        FROM \"Chat\" c\n        JOIN \"ItemLastAccessed\" ila ON c.id = ila.item_id\n        AND ila.item_type = 'chat'\n        AND ila.last_accessed < NOW() - ($2 || ' days')::INTERVAL\n        WHERE c.\"userId\" IN (\n            SELECT \n                u.\"id\"\n            FROM \"User\" u\n            WHERE u.\"organizationId\" = $1\n        );\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1c6ee06fa02288f263d5b51c30d3cd5280f4596a359328c00b1b3e2ce74c0234"
+}

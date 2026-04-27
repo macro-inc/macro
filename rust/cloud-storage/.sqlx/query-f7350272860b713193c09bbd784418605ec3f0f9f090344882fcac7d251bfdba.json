@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO referral_tracking (id, referrer_id, referred_id, status, created_at) VALUES ($1, $2, $3, 'incomplete', NOW())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f7350272860b713193c09bbd784418605ec3f0f9f090344882fcac7d251bfdba"
+}

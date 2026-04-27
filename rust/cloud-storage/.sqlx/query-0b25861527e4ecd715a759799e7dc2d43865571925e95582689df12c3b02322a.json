@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id,\n            link_id,\n            fusionauth_user_id,\n            threads_requested_limit,\n            total_threads,\n            threads_retrieved_count,\n            status as \"status: db::backfill::BackfillJobStatus\",\n            created_at,\n            updated_at\n        FROM email_backfill_jobs\n        WHERE fusionauth_user_id = $1\n        AND created_at > NOW() - INTERVAL '24 hours'\n        ORDER BY created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "fusionauth_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "threads_requested_limit",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_threads",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "threads_retrieved_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "status: db::backfill::BackfillJobStatus",
+        "type_info": {
+          "Custom": {
+            "name": "email_backfill_job_status",
+            "kind": {
+              "Enum": [
+                "Init",
+                "InProgress",
+                "Complete",
+                "Cancelled",
+                "Failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0b25861527e4ecd715a759799e7dc2d43865571925e95582689df12c3b02322a"
+}

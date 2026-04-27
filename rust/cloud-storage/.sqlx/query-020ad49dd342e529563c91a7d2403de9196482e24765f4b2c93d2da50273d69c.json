@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            eaf.attachment_id,\n            eaf.message_id AS draft_id,\n            ea.provider_attachment_id,\n            orig_msg.provider_id AS \"message_provider_id!\",\n            ea.filename,\n            ea.mime_type,\n            ea.size_bytes\n        FROM email_attachments_fwd eaf\n        JOIN email_messages draft_msg ON eaf.message_id = draft_msg.id\n        JOIN email_attachments ea ON eaf.attachment_id = ea.id\n        JOIN email_messages orig_msg ON ea.message_id = orig_msg.id\n        WHERE eaf.message_id = $1 AND draft_msg.link_id = $2\n        ORDER BY ea.filename ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attachment_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "draft_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_attachment_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "message_provider_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "filename",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "mime_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "size_bytes",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "020ad49dd342e529563c91a7d2403de9196482e24765f4b2c93d2da50273d69c"
+}

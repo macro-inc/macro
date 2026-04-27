@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.owner, t.id as thread_id, d.owner as document_owner, d.id as document_id, ta.\"anchorId\" as \"anchor_id?\", ta.\"anchorTableName\" as \"anchor_table_name?: AnchorTableName\"\n        FROM \"Comment\" c\n        JOIN \"Thread\" t ON c.\"threadId\" = t.id\n        JOIN \"Document\" d ON t.\"documentId\" = d.id\n        LEFT JOIN \"ThreadAnchor\" ta ON ta.\"threadId\" = t.id\n        WHERE c.id = $1 AND c.\"deletedAt\" IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "thread_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "document_owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "document_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "anchor_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "anchor_table_name?: AnchorTableName",
+        "type_info": {
+          "Custom": {
+            "name": "anchor_table_name",
+            "kind": {
+              "Enum": [
+                "PdfPlaceableCommentAnchor",
+                "PdfHighlightAnchor"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8a4688fb6685c28f7fc9f48487b2fe1ce97205a1574fcedd7e87596c63d6dab0"
+}

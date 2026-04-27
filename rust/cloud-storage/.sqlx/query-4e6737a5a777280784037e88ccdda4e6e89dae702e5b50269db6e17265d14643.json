@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT \n                    m.channel_id                     AS \"channel_id: uuid::Uuid\",\n                    c.name                           AS \"channel_name?\",            -- Option<String>\n                    m.id                             AS \"message_id: uuid::Uuid\",\n                    m.thread_id                      AS \"thread_id?: uuid::Uuid\",\n                    m.sender_id                      AS \"sender_id!\",               -- String\n                    m.content                        AS \"message_content!\",         -- String\n                    m.created_at                     AS \"message_created_at!: chrono::DateTime<chrono::Utc>\",\n                    em.created_at                    AS \"attachment_created_at!: chrono::DateTime<chrono::Utc>\"\n                FROM comms_entity_mentions em\n                JOIN comms_messages m ON (em.source_entity_id = m.id::text AND em.source_entity_type = 'message')\n                JOIN comms_channels c ON m.channel_id = c.id\n                JOIN comms_channel_participants cp ON cp.channel_id = c.id\n                WHERE em.entity_type = $1\n                  AND em.entity_id  = $2\n                  AND cp.user_id   = $3\n                  AND cp.left_at  IS NULL\n                  AND m.deleted_at IS NULL\n                ORDER BY em.created_at DESC\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id: uuid::Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "message_id: uuid::Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "thread_id?: uuid::Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "sender_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "message_content!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "message_created_at!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "attachment_created_at!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4e6737a5a777280784037e88ccdda4e6e89dae702e5b50269db6e17265d14643"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_sfs_mappings (source, destination)\n        SELECT * FROM UNNEST($1::text[], $2::text[])\n        ON CONFLICT (source) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "994b928d690be53173114c3aa76a66231fc7b960744db3830385a13a45a3ce8f"
+}

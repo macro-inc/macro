@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at)\n            SELECT cc.id, $2, 'member'::comms_participant_role, NOW()\n            FROM comms_channels cc\n            WHERE cc.team_id = $1\n            ON CONFLICT (channel_id, user_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7d4385b8207bd320c290edc420c68c86028ac0ecb586a78fe55438f5e13b9106"
+}

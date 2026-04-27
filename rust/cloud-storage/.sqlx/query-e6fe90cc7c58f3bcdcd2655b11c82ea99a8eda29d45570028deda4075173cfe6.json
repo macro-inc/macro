@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT t.email as \"email!\", \n               EXISTS(SELECT 1 FROM notification_email_unsubscribe u WHERE u.email = t.email) as \"is_unsubscribed!\"\n        FROM UNNEST($1::text[]) AS t(email)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_unsubscribed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "e6fe90cc7c58f3bcdcd2655b11c82ea99a8eda29d45570028deda4075173cfe6"
+}

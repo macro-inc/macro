@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO team_invite (id, team_id, email, team_role, invited_by, created_at, last_sent_at)\n            SELECT \n                t.id,\n                $1::uuid,\n                t.email,\n                $2,\n                $3::text,\n                NOW(),\n                NOW()\n            FROM UNNEST($4::uuid[], $5::text[], $6::text[]) AS t(id, email, user_id)\n            WHERE NOT EXISTS (\n                SELECT 1 FROM team_invite ti \n                WHERE ti.team_id = $1 AND ti.email = t.email\n            )\n            AND NOT EXISTS (\n                SELECT 1 FROM team_user tu \n                WHERE tu.team_id = $1 AND tu.user_id = t.user_id\n            )\n            RETURNING id, team_id, email\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Text",
+        "UuidArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "bf8718d9bd46c2640cdd32ef2b2b2a0cf9a01f27f82076efe47059029af0d753"
+}

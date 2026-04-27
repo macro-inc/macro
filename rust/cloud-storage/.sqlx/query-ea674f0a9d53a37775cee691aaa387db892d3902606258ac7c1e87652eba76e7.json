@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n           UPDATE saved_view\n           SET \n               name = COALESCE($2, name),\n               config = CASE \n                   WHEN $3::jsonb IS NOT NULL THEN config || $3 \n                   ELSE config \n               END,\n               updated_at = NOW()\n           WHERE id = $1\n           ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ea674f0a9d53a37775cee691aaa387db892d3902606258ac7c1e87652eba76e7"
+}

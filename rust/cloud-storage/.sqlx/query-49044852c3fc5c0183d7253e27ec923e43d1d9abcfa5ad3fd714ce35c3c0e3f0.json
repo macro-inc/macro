@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT u.user_id\n        FROM user_notification_item_unsubscribe u\n        WHERE u.item_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "49044852c3fc5c0183d7253e27ec923e43d1d9abcfa5ad3fd714ce35c3c0e3f0"
+}
