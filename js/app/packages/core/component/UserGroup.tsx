@@ -82,7 +82,7 @@ export function UserGroup(props: UserGroupProps) {
         )}
       </For>
       <Show when={remaining()}>
-        <div class="z-4">
+        <div class="z-placeable">
           <div
             class={cn(
               'bg-menu text-ink border-panel rounded-full flex flex-col justify-center items-center',

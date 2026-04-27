@@ -336,10 +336,6 @@ if (LOCAL_ONLY) {
     )
   );
   registerComponent(
-    'custom-cursor',
-    lazy(() => import('@app/component/CustomCursorTest'))
-  );
-  registerComponent(
     'resize',
     lazy(() => import('@core/internal/ResizeDemo'))
   );
@@ -366,6 +362,11 @@ if (LOCAL_ONLY) {
   registerComponent(
     'quick-access-list',
     lazy(() => import('@core/context/quickAccess/debug/QuickAccessAll'))
+  );
+
+  registerComponent(
+    'hotkey-debugger',
+    lazy(() => import('@app/component/HotkeyDebugger'))
   );
 }
 

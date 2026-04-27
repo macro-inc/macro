@@ -1,6 +1,7 @@
 import { activeTextEditorSignal } from '@block-canvas/signal/toolManager';
 import { clamp } from '@block-canvas/util/math';
 import { type Vector2, vec2 } from '@block-canvas/util/vector2';
+import { cn } from '@ui/utils/classname';
 import CaretDown from '@icon/regular/caret-down.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {
@@ -146,35 +147,39 @@ export function SlidableNumberInput(props: SlidableNumberInputProps) {
 
   return (
     <div
-      class={`flex ${
-        props.labelPosition === 'top' ? `flex-col` : `flex-row items-center`
-      } justify-items-center`}
+      class={cn(
+        'flex justify-items-center',
+        props.labelPosition === 'top' ? 'flex-col' : 'flex-row items-center'
+      )}
     >
       <Show when={props.label}>
         <div
-          class={`text-[0.67rem] opacity-75 truncate ${
-            props.labelPosition === 'left' && `w-28 truncate`
-          } mb-1`}
+          class={cn(
+            'text-[0.67rem] opacity-75 truncate mb-1',
+            props.labelPosition === 'left' && 'w-28'
+          )}
         >
           {props.label}&nbsp
         </div>
       </Show>
       <OptionalTooltipWrapper tooltip={props.tooltip}>
         <div
-          class={`${
+          class={cn(
+            'flex flex-row items-center bg-input rounded px-1.5 h-8',
             props.labelPosition === 'top' &&
-            (props.width === 'sm'
-              ? `w-22`
-              : props.width === 'lg'
-                ? `w-48`
-                : `w-32`)
-          } flex flex-row items-center bg-input rounded px-1.5 h-8`}
+              (props.width === 'sm'
+                ? 'w-22'
+                : props.width === 'lg'
+                  ? 'w-48'
+                  : 'w-32')
+          )}
         >
           <Dynamic
             component={props.icon}
-            class={`fill-ink-muted 'ml-.5 mr-1 min-w-5 ${
+            class={cn(
+              'fill-ink-muted ml-.5 mr-1 min-w-5',
               props.isSlidable && 'cursor-ew-resize'
-            }`}
+            )}
             style={{
               'overflow-clip-margin': 'content-box',
               transform: props.flip ? 'rotateY(180deg)' : '',
@@ -191,15 +196,16 @@ export function SlidableNumberInput(props: SlidableNumberInputProps) {
           />
           <Show when={!props.fullIcon}>
             <div
-              class={`${
+              class={cn(
+                'text-ink text-nowrap overflow-hidden cursor-text',
                 props.labelPosition === 'top'
                   ? props.width === 'sm'
-                    ? `w-18`
+                    ? 'w-18'
                     : props.width === 'lg'
-                      ? `w-44`
-                      : `w-28`
-                  : `max-w-18`
-              } text-ink text-nowrap overflow-hidden cursor-text`}
+                      ? 'w-44'
+                      : 'w-28'
+                  : 'max-w-18'
+              )}
               contenteditable
               onFocus={() => {
                 setActiveTextEditor(true);

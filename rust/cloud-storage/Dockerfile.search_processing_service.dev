@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM rust:latest AS chef
 ENV SQLX_OFFLINE=true
+ENV CARGO_PROFILE_DEV_DEBUG=0
 RUN cargo install cargo-strip
 WORKDIR /app
 

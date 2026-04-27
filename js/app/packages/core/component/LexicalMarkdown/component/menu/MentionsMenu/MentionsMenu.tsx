@@ -32,7 +32,7 @@ import type {
   UserMentionRecord,
 } from '../../../utils/mentionsUtils';
 import type { HistoryItem as Item } from '@queries/history/history';
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { Panel } from '@ui';
 import { debouncedDependent } from '@core/util/debounce';
 import type { BucketConfig, MentionBucketId } from './MentionsMenuController';
 import { useMentionsMenuController } from './MentionsMenuController';
@@ -71,7 +71,7 @@ const mobileAllSearch = createFreshSearch<MentionItem>({
 
 const MAX_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
-// Height consumed by ClippedPanel's p-px border (2px) + py-2 padding (16px)
+// Height consumed by Panel's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
 
 export type MentionsMenuProps = {
@@ -491,7 +491,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     number | undefined
   >(undefined);
 
-  // Height available for scrollable content after subtracting ClippedPanel decorations.
+  // Height available for scrollable content after subtracting Panel decorations.
   // Capped at 256px (16rem) to preserve desktop behavior, and floored at 0.
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
@@ -528,7 +528,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             clickOutside(el, () => clickOutsideHandler);
           }}
         >
-          <ClippedPanel active class="py-2 bg-panel" cornerRadius={'4px'}>
+          <Panel active class="py-2">
             <Show
               when={controller.combinedItems().length > 0}
               fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
@@ -541,7 +541,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                       {(bucket, idx) => (
                         <>
                           <Show when={idx() > 0}>
-                            <div class="w-full mt-4 border-b-1 border-edge-muted mb-2" />
+                            <div class="w-full mt-4 border-b border-edge-muted mb-2" />
                           </Show>
                           <ItemBin
                             label={bucket.config.label}
@@ -612,7 +612,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 />
               </Show>
             </Show>
-          </ClippedPanel>
+          </Panel>
         </div>
       </ScopedPortal>
     </Show>

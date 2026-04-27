@@ -11,6 +11,7 @@ import {
   KrispNoiseFilter,
   isKrispNoiseFilterSupported,
 } from '@livekit/krisp-noise-filter';
+import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
 import {
   createContext,
   createSignal,
@@ -19,6 +20,7 @@ import {
   type ParentProps,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { makePersisted } from '@solid-primitives/storage';
 import type { CallTokenResponse } from '@service-call/client';
 
 export type CallParticipantInfo = {
@@ -37,6 +39,7 @@ export type MediaDeviceInfo = {
 type CallStoreState = {
   connectionState: ConnectionState;
   activeChannelId: string | null;
+  activeCallId: string | null;
   remoteParticipants: Map<string, RemoteParticipant>;
   isAudioMuted: boolean;
   isVideoMuted: boolean;
@@ -50,11 +53,17 @@ type CallStoreState = {
   activeAudioOutputDeviceId: string | null;
   activeVideoInputDeviceId: string | null;
   isNoiseSuppressed: boolean;
+  isBackgroundBlurred: boolean;
+  // Mirrors the call's `share_with_team` flag. Defaults to true to match the
+  // server-side default for newly-created calls; synced from the toggle
+  // endpoint's response on each flip.
+  isSharedWithTeam: boolean;
 };
 
 const initialState: CallStoreState = {
   connectionState: ConnectionState.Disconnected,
   activeChannelId: null,
+  activeCallId: null,
   remoteParticipants: new Map(),
   isAudioMuted: false,
   isVideoMuted: true,
@@ -68,7 +77,25 @@ const initialState: CallStoreState = {
   activeAudioOutputDeviceId: null,
   activeVideoInputDeviceId: null,
   isNoiseSuppressed: false,
+  isBackgroundBlurred: false,
+  isSharedWithTeam: true,
 };
+
+// Persisted across reloads — blur is a privacy preference users expect to
+// stick. Feature-detect at attach time; an unsupported browser simply
+// ignores a truthy stored value.
+const [persistedBlurPref, setPersistedBlurPref] = makePersisted(
+  createSignal<boolean>(false),
+  { name: 'call.backgroundBlur' }
+);
+
+// Persisted across reloads — users with hardware noise cancellation (e.g.
+// AirPods Pro, Bose) need to disable app-side NS to avoid cascading filters
+// that attenuate voice. Defaults to on to match existing behavior.
+const [persistedNoiseSuppressionPref, setPersistedNoiseSuppressionPref] =
+  makePersisted(createSignal<boolean>(true), {
+    name: 'call.noiseSuppression',
+  });
 
 export type CallState = {
   /** The LiveKit Room instance, null when not in a call */
@@ -79,6 +106,8 @@ export type CallState = {
   isInCall: () => boolean;
   /** Channel ID of the active call */
   activeChannelId: () => string | null;
+  /** Call ID of the active call (from CallTokenResponse) */
+  activeCallId: () => string | null;
   /** Remote participants in the call */
   remoteParticipants: () => Map<string, RemoteParticipant>;
   /** Incremented when track subscription/mute state changes */
@@ -125,6 +154,14 @@ export type CallState = {
   isNoiseSuppressed: () => boolean;
   /** Toggle Krisp noise suppression on/off */
   toggleNoiseSuppression: () => Promise<void>;
+  /** Whether background blur is active on the local camera track */
+  isBackgroundBlurred: () => boolean;
+  /** Toggle background blur on/off for the local camera track */
+  toggleBackgroundBlur: () => Promise<void>;
+  /** Whether the call is currently shared with the creator's team */
+  isSharedWithTeam: () => boolean;
+  /** Update the locally-cached share-with-team flag (call after a toggle RPC) */
+  setSharedWithTeam: (value: boolean) => void;
 };
 
 const CallContext = createContext<CallState>();
@@ -147,10 +184,16 @@ export function useCallContextOptional(): CallState | undefined {
  */
 function createCallState() {
   const [room, setRoom] = createSignal<Room | null>(null);
-  const [store, setStore] = createStore<CallStoreState>({ ...initialState });
+  const [store, setStore] = createStore<CallStoreState>({
+    ...initialState,
+    isBackgroundBlurred: persistedBlurPref(),
+    isNoiseSuppressed: persistedNoiseSuppressionPref(),
+  });
   const [krispFilter, setKrispFilter] = createSignal<ReturnType<
     typeof KrispNoiseFilter
   > | null>(null);
+  const [blurProcessor, setBlurProcessor] =
+    createSignal<BackgroundProcessorWrapper | null>(null);
 
   // --- internal helpers ---
 
@@ -183,6 +226,84 @@ function createCallState() {
     }
   }
 
+  /** Stop + destroy the Krisp processor on the current mic track. */
+  async function detachKrispFromMicTrack(r: Room) {
+    const prev = krispFilter();
+    if (prev) {
+      try {
+        const micPub = r.localParticipant.getTrackPublication(
+          Track.Source.Microphone
+        );
+        if (micPub?.track) {
+          await (micPub.track as LocalTrack).stopProcessor();
+        }
+        prev.destroy();
+      } catch (e) {
+        console.error('failed to detach Krisp noise filter', e);
+      }
+      setKrispFilter(null);
+    }
+  }
+
+  /**
+   * (Re-)attach the background blur processor to the current camera track.
+   * Dynamic-imports @livekit/track-processors so the MediaPipe WASM/model
+   * payload is only fetched when the user actually enables blur.
+   *
+   * Returns true on success or when there's no live camera track yet (the
+   * processor will be attached later by the video-(un)mute / device-switch
+   * paths). Returns false when the browser does not actually support the
+   * processor at runtime, or attachment throws — callers that set
+   * `isBackgroundBlurred` optimistically should revert it in that case.
+   */
+  async function ensureBlurOnCameraTrack(r: Room): Promise<boolean> {
+    if (!store.isBackgroundBlurred) return true;
+
+    const camPub = r.localParticipant.getTrackPublication(Track.Source.Camera);
+    if (!camPub?.track) return true;
+
+    try {
+      // Destroy the old instance — processors are bound to a specific
+      // MediaStreamTrack instance, so a fresh track needs a fresh processor.
+      const prev = blurProcessor();
+      if (prev) await prev.destroy();
+
+      const { BackgroundProcessor, ProcessorWrapper } = await import(
+        '@livekit/track-processors'
+      );
+      if (!ProcessorWrapper.isSupported) return false;
+
+      const processor = BackgroundProcessor({
+        mode: 'background-blur',
+        blurRadius: 10,
+      });
+      await (camPub.track as LocalTrack).setProcessor(processor);
+      setBlurProcessor(processor);
+      return true;
+    } catch (e) {
+      console.error('failed to attach background blur processor', e);
+      return false;
+    }
+  }
+
+  async function detachBlurFromCameraTrack(r: Room) {
+    const prev = blurProcessor();
+    if (prev) {
+      try {
+        const camPub = r.localParticipant.getTrackPublication(
+          Track.Source.Camera
+        );
+        if (camPub?.track) {
+          await (camPub.track as LocalTrack).stopProcessor();
+        }
+        await prev.destroy();
+      } catch (e) {
+        console.error('failed to detach background blur processor', e);
+      }
+      setBlurProcessor(null);
+    }
+  }
+
   function bumpTrackVersion() {
     setStore('trackVersion', (v) => v + 1);
   }
@@ -193,7 +314,11 @@ function createCallState() {
   }
 
   function resetState() {
-    setStore({ ...initialState });
+    setStore({
+      ...initialState,
+      isBackgroundBlurred: persistedBlurPref(),
+      isNoiseSuppressed: persistedNoiseSuppressionPref(),
+    });
   }
 
   function attachRoomListeners(r: Room) {
@@ -227,6 +352,14 @@ function createCallState() {
     if (krisp) {
       krisp.destroy();
       setKrispFilter(null);
+    }
+    const blur = blurProcessor();
+    if (blur) {
+      // Fire and forget — we're tearing down the room regardless.
+      blur.destroy().catch((e) => {
+        console.error('failed to destroy background blur processor', e);
+      });
+      setBlurProcessor(null);
     }
     const r = room();
     if (r) {
@@ -368,6 +501,8 @@ function createCallState() {
         await r.localParticipant.setCameraEnabled(true, {
           deviceId: { exact: deviceId },
         });
+        // New track was created — re-attach the blur processor if enabled.
+        await ensureBlurOnCameraTrack(r);
       }
     } catch (e) {
       console.error('failed to switch video input device', e);
@@ -398,7 +533,11 @@ function createCallState() {
     } else {
       targetRoom = new Room({
         audioCaptureDefaults: {
-          noiseSuppression: true,
+          // Browser NS is off — Krisp is the sole software NS layer (see
+          // ensureKrispOnMicTrack). Stacking the two cascaded and
+          // attenuated quiet voice segments, particularly for users whose
+          // headphones already do hardware noise cancellation.
+          noiseSuppression: false,
           echoCancellation: true,
           autoGainControl: true,
         },
@@ -408,6 +547,8 @@ function createCallState() {
     }
 
     setStore('activeChannelId', tokenResponse.channelId);
+    setStore('activeCallId', tokenResponse.callId);
+    setStore('isSharedWithTeam', true);
 
     try {
       await targetRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
@@ -430,11 +571,9 @@ function createCallState() {
     setStore('isAudioMuted', false);
     setStore('isVideoMuted', true);
 
-    // Register Krisp noise filter on the mic track
-    if (isKrispNoiseFilterSupported()) {
-      setStore('isNoiseSuppressed', true);
-      await ensureKrispOnMicTrack(targetRoom);
-    }
+    // Attach Krisp if the user's NS pref is on and the runtime supports it.
+    // ensureKrispOnMicTrack is a no-op otherwise.
+    await ensureKrispOnMicTrack(targetRoom);
 
     // Enumerate available devices and track active ones
     await enumerateDevices();
@@ -482,6 +621,8 @@ function createCallState() {
     try {
       if (newMuted) {
         await r.localParticipant.setCameraEnabled(false);
+        // Track is gone — drop our processor ref so the next enable starts clean.
+        setBlurProcessor(null);
       } else {
         const deviceId = store.activeVideoInputDeviceId;
         await r.localParticipant.setCameraEnabled(
@@ -500,6 +641,8 @@ function createCallState() {
             setStore('activeVideoInputDeviceId', settings.deviceId);
           }
         }
+        // New camera track was created — attach blur processor if preference is on.
+        await ensureBlurOnCameraTrack(r);
       }
       setStore('isVideoMuted', newMuted);
     } catch (e) {
@@ -519,15 +662,47 @@ function createCallState() {
     }
   }
 
+  function setSharedWithTeam(value: boolean) {
+    setStore('isSharedWithTeam', value);
+  }
+
   async function toggleNoiseSuppression() {
-    const krisp = krispFilter();
-    if (!krisp) return;
+    const newEnabled = !store.isNoiseSuppressed;
+    setStore('isNoiseSuppressed', newEnabled);
+    setPersistedNoiseSuppressionPref(newEnabled);
+
+    const r = room();
+    if (!r) return;
+
     try {
-      const newEnabled = !store.isNoiseSuppressed;
-      await krisp.setEnabled(newEnabled);
-      setStore('isNoiseSuppressed', newEnabled);
+      if (newEnabled) {
+        await ensureKrispOnMicTrack(r);
+      } else {
+        await detachKrispFromMicTrack(r);
+      }
     } catch (e) {
       console.error('failed to toggle noise suppression', e);
+    }
+  }
+
+  async function toggleBackgroundBlur() {
+    const newEnabled = !store.isBackgroundBlurred;
+    setStore('isBackgroundBlurred', newEnabled);
+    setPersistedBlurPref(newEnabled);
+
+    const r = room();
+    if (!r) return;
+
+    if (newEnabled) {
+      const attached = await ensureBlurOnCameraTrack(r);
+      if (!attached) {
+        // Processor is unsupported or failed to attach — revert so the UI
+        // doesn't show "blur on" with no processor actually active.
+        setStore('isBackgroundBlurred', false);
+        setPersistedBlurPref(false);
+      }
+    } else {
+      await detachBlurFromCameraTrack(r);
     }
   }
 
@@ -562,6 +737,7 @@ function createCallState() {
     connectionState: () => store.connectionState,
     isInCall: () => store.connectionState === ConnectionState.Connected,
     activeChannelId: () => store.activeChannelId,
+    activeCallId: () => store.activeCallId,
     remoteParticipants: () => store.remoteParticipants,
     trackVersion: () => store.trackVersion,
     isLocalSpeaking: () => {
@@ -595,6 +771,10 @@ function createCallState() {
     switchVideoInput,
     isNoiseSuppressed: () => store.isNoiseSuppressed,
     toggleNoiseSuppression,
+    isBackgroundBlurred: () => store.isBackgroundBlurred,
+    toggleBackgroundBlur,
+    isSharedWithTeam: () => store.isSharedWithTeam,
+    setSharedWithTeam,
   };
 
   return state;

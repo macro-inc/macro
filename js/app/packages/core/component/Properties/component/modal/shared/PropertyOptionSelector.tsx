@@ -1,4 +1,5 @@
 import { Hotkey } from '@core/component/Hotkey';
+import { cn } from '@ui/utils/classname';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
@@ -130,9 +131,9 @@ const DropdownSelectableRow: ParentComponent<DropdownSelectableRowProps> = (
       onMouseEnter={props.onMouseEnter}
     >
       <div class="flex items-center gap-2 flex-1 min-w-0">{props.children}</div>
-      <div class="flex items-center gap-2 flex-shrink-0">
+      <div class="flex items-center gap-2 shrink-0">
         <Show when={props.showHotkey && props.hotkeyShortcut}>
-          <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
+          <div class="text-xxs px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
             <Hotkey shortcut={props.hotkeyShortcut!} />
           </div>
         </Show>
@@ -283,12 +284,13 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const AddOptionButton = (props: { isSelected: boolean }) => (
     <div
       onClick={handleAddOption}
-      class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
-        props.isSelected ? 'bg-hover' : ''
-      }`}
+      class={cn(
+        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2',
+        props.isSelected && 'bg-hover'
+      )}
     >
       <div class="flex items-center gap-2 flex-1 text-left">
-        <div class="size-3 flex-shrink-0">
+        <div class="size-3 shrink-0">
           <Show
             when={!isAddingOption()}
             fallback={

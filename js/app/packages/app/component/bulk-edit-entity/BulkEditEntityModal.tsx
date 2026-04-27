@@ -20,6 +20,7 @@ const BulkEditEntityModalContent = (props: {
   entities: EntityData[];
   onFinish?: () => void;
   onCancel?: () => void;
+  onError?: (error: unknown) => void;
 }) => {
   const handleFinish = () => {
     props.setIsOpen(false);
@@ -28,6 +29,9 @@ const BulkEditEntityModalContent = (props: {
   const handleCancel = () => {
     props.setIsOpen(false);
     props.onCancel?.();
+  };
+  const handleError = (error: unknown) => {
+    props.onError?.(error);
   };
 
   return (
@@ -49,6 +53,7 @@ const BulkEditEntityModalContent = (props: {
                 entities={props.entities}
                 onFinish={handleFinish}
                 onCancel={handleCancel}
+                onError={handleError}
               />
             </Show>
             <Show when={props.view === 'moveToProject'}>
@@ -56,6 +61,7 @@ const BulkEditEntityModalContent = (props: {
                 entities={props.entities}
                 onFinish={handleFinish}
                 onCancel={handleCancel}
+                onError={handleError}
               />
             </Show>
             <Show when={props.view === 'delete'}>
@@ -99,6 +105,7 @@ const [globalModalProps, setGlobalModalProps] = createSignal<{
   entities: EntityData[];
   onFinish?: () => void;
   onCancel?: () => void;
+  onError?: (error: unknown) => void;
 } | null>(null);
 const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
   id: 'entity-edit',
@@ -109,6 +116,7 @@ export const openBulkEditModal = (props: {
   entities: EntityData[];
   onFinish?: () => void;
   onCancel?: () => void;
+  onError?: (error: unknown) => void;
 }) => {
   setModalOpen(true);
   setGlobalModalProps(props);
@@ -133,6 +141,10 @@ export const GlobalBulkEditEntityModal = () => {
     }
   };
 
+  const handleError = (error: unknown) => {
+    globalModalProps()?.onError?.(error);
+  };
+
   return (
     <Show when={modalProps()}>
       {(props) => (
@@ -143,6 +155,7 @@ export const GlobalBulkEditEntityModal = () => {
           entities={props().entities}
           onFinish={handleFinish}
           onCancel={handleCancel}
+          onError={handleError}
         />
       )}
     </Show>

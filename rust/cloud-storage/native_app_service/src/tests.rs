@@ -10,6 +10,7 @@ use crate::{
     outbound::DefaultBundleFetcher,
 };
 use reqwest::Url;
+use rootcause::Report;
 
 use cool_asserts::assert_matches;
 use semver::Version;
@@ -18,13 +19,14 @@ use strum::IntoEnumIterator;
 #[test]
 fn all_urls_work() {
     let fetcher = DefaultBundleFetcher::new("https://macro.com".parse().unwrap());
-    let _url = fetcher.get_app_bundle_path();
+    let url = fetcher.get_app_bundle_path();
+    assert_eq!(url.as_str(), "https://macro.com/app/app-archive.zip");
 }
 
 struct MockBundleFetcher;
 
 impl GetJsBundleSemver for MockBundleFetcher {
-    async fn get_app_semver(&self) -> Result<semver::Version, UpdateErr> {
+    async fn get_app_semver(&self) -> Result<semver::Version, Report<UpdateErr>> {
         Ok("1.1.1".parse().unwrap())
     }
 
@@ -35,7 +37,7 @@ impl GetJsBundleSemver for MockBundleFetcher {
     async fn get_app_bundle_checksum(
         &self,
         _version: &semver::Version,
-    ) -> Result<String, UpdateErr> {
+    ) -> Result<String, Report<UpdateErr>> {
         Ok("abc123".to_string())
     }
 }
@@ -220,7 +222,7 @@ fn needs_update_should_not_downgrade() {
 struct MockBundleFetcherWithBuild;
 
 impl GetJsBundleSemver for MockBundleFetcherWithBuild {
-    async fn get_app_semver(&self) -> Result<semver::Version, UpdateErr> {
+    async fn get_app_semver(&self) -> Result<semver::Version, Report<UpdateErr>> {
         Ok("1.1.1+abc1234".parse().unwrap())
     }
 
@@ -231,7 +233,7 @@ impl GetJsBundleSemver for MockBundleFetcherWithBuild {
     async fn get_app_bundle_checksum(
         &self,
         _version: &semver::Version,
-    ) -> Result<String, UpdateErr> {
+    ) -> Result<String, Report<UpdateErr>> {
         Ok("abc123".to_string())
     }
 }

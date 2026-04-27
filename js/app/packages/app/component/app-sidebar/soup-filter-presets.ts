@@ -43,6 +43,7 @@ const INBOX_SIGNAL_FILTERS = defineQueryFilters({
     channelDone: false,
     chatDone: false,
     folderDone: false,
+    emailShared: 'exclude',
   },
   emailView: 'inbox',
 });
@@ -56,6 +57,7 @@ const INBOX_NOISE_FILTERS = defineQueryFilters({
     channelDone: false,
     chatDone: false,
     folderDone: false,
+    emailShared: 'exclude',
   },
   emailView: 'inbox',
 });
@@ -130,16 +132,35 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     tabs: {
       important: () => ({
         filters: defineQueryFilters({
-          include: { emailImportance: true },
+          include: {
+            emailImportance: true,
+
+            emailShared: 'exclude',
+          },
           emailView: 'inbox',
         }),
         clientFilters: { and: ['email', 'no-drafts'] },
       }),
       noise: () => ({
         filters: defineQueryFilters({
-          include: { emailImportance: false },
+          include: {
+            emailImportance: false,
+
+            emailShared: 'exclude',
+          },
           emailView: 'inbox',
         }),
+        clientFilters: { and: ['email', 'no-drafts'] },
+      }),
+      calendar: () => ({
+        filters: defineQueryFilters({
+          include: {
+            emailShared: 'exclude',
+            emailCalendarOnly: true,
+          },
+          emailView: 'inbox',
+        }),
+
         clientFilters: { and: ['email', 'no-drafts'] },
       }),
       drafts: () => ({

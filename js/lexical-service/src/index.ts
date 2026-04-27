@@ -1,13 +1,13 @@
-// biome-ignore assist/source/organizeImports: <This has to be import manually first>
 import './polyfills/prism';
 
 import { fromHono } from 'chanfana';
 import { Hono } from 'hono';
-import { PlaintextEndpoint } from './endpoints/plaintext';
-import { CognitionTextEndpoint } from './endpoints/cognition-text';
 import { CognitionPresignedEndpoint } from './endpoints/cognition-presigned';
-import { SearchTextEndpoint } from './endpoints/search-text';
+import { CognitionTextEndpoint } from './endpoints/cognition-text';
+import { CognitionV2Endpoint } from './endpoints/cognition-v2';
 import { MarkdownEndpoint } from './endpoints/markdown';
+import { PlaintextEndpoint } from './endpoints/plaintext';
+import { SearchTextEndpoint } from './endpoints/search-text';
 
 type Bindings = {
   INTERNAL_AUTH_KEY: string;
@@ -28,9 +28,17 @@ app.use('/plaintext/*', async (c, next) => {
 });
 
 app.use('/cognition/*', async (c, next) => {
-  const authKey = c.req.header("x-internal-auth-key");
+  const authKey = c.req.header('x-internal-auth-key');
   if (!authKey || authKey !== c.env.INTERNAL_AUTH_KEY) {
-  	return c.json({ error: "Unauthorized" }, 401);
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  await next();
+});
+
+app.use('/cognitionv2/*', async (c, next) => {
+  const authKey = c.req.header('x-internal-auth-key');
+  if (!authKey || authKey !== c.env.INTERNAL_AUTH_KEY) {
+    return c.json({ error: 'Unauthorized' }, 401);
   }
   await next();
 });
@@ -74,6 +82,7 @@ openapi.get('/health', (c) => c.json({ message: 'Healthy' }));
 openapi.get('/plaintext/:docId', PlaintextEndpoint);
 openapi.get('/cognition/presigned', CognitionPresignedEndpoint);
 openapi.get('/cognition/:docId', CognitionTextEndpoint);
+openapi.get('/cognitionv2/:docId', CognitionV2Endpoint);
 openapi.get('/search/:docId', SearchTextEndpoint);
 openapi.get('/markdown/:docId', MarkdownEndpoint);
 openapi.get('/internal/health', (c) => c.json({ status: 'healthy' }));

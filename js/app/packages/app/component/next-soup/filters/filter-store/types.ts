@@ -25,6 +25,7 @@ export type ArrayFieldFilters = {
   folderId?: string[];
   folderOwnerId?: string[];
   callChannelId?: string[];
+  callSpeakerId?: string[];
   properties?: PropertyFilter[];
 };
 
@@ -36,6 +37,7 @@ export type ScalarFieldFilters = {
   emailDone?: boolean;
   emailImportance?: boolean;
   emailShared?: 'exclude' | 'include' | 'only';
+  emailCalendarOnly?: boolean;
   channelSeen?: boolean;
   channelDone?: boolean;
   channelImportance?: boolean;

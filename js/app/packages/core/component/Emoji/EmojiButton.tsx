@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import type { Component } from 'solid-js';
 import { renderEmoji } from './EmojiSelector';
 import type { SimpleEmoji } from './emojis';
@@ -16,7 +17,10 @@ const sizeClasses = {
 export const EmojiButton: Component<EmojiButtonProps> = (props) => {
   return (
     <span
-      class={`inline-flex items-center justify-center ${sizeClasses[props.size ?? 'md']}`}
+      class={cn(
+        'inline-flex items-center justify-center',
+        sizeClasses[props.size ?? 'md']
+      )}
     >
       {renderEmoji(props.emoji?.emoji)}
     </span>

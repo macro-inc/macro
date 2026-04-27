@@ -1,7 +1,7 @@
 import { Dialog } from '@kobalte/core';
 import { cn } from '@ui/utils/classname';
 import type { JSXElement, Ref } from 'solid-js';
-import { ClippedPanel } from './ClippedPanel';
+import { Panel } from '@ui';
 
 export interface DialogWrapperProps {
   children: JSXElement;
@@ -30,18 +30,18 @@ export function DialogWrapper(props: DialogWrapperProps) {
       <div class="z-modal fixed inset-0">
         <Dialog.Content
           class={cn(
-            'max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-hidden portal-scope'
+            'max-w-[calc(100vw-16px)] mt-40 mx-auto overflow-hidden portal-scope'
           )}
           style={{ width: width }}
         >
-          <ClippedPanel active cornerRadius={'4px'}>
+          <Panel active>
             <div
-              class={cn('[&>*]:max-h-[75vh]', props.class)}
+              class={cn('*:max-h-[75vh]', props.class)}
               ref={props.contentRef}
             >
               {props.children}
             </div>
-          </ClippedPanel>
+          </Panel>
         </Dialog.Content>
       </div>
     </>

@@ -1,5 +1,10 @@
+import { cn } from '@ui/utils/classname';
 import { fileSelector } from '@core/directive/fileSelector';
-import { FormatRibbon } from '@block-channel/component/DeprecatedChannelInput/FormatRibbon';
+import { FormatButtons } from '@channel/Input/FormatButtons';
+import {
+  applyInlineFormat,
+  applyNodeFormat,
+} from '@channel/Input/utils/formatting';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import {
@@ -60,19 +65,11 @@ import { Button } from '@ui/components/Button';
 import {
   defaultSelectionData,
   lazyRegister,
+  type NodeTransformType,
   type SelectionData,
 } from 'core/component/LexicalMarkdown/plugins';
-import {
-  NODE_TRANSFORM,
-  type NodeTransformType,
-} from 'core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import {
-  $getRoot,
-  FORMAT_TEXT_COMMAND,
-  type LexicalEditor,
-  type TextFormatType,
-} from 'lexical';
+import { $getRoot, type LexicalEditor } from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -196,7 +193,7 @@ function RecipientDropRow(props: {
 
   return (
     <div
-      class={`flex flex-row items-center ${props.class ?? ''}`}
+      class={cn('flex flex-row items-center', props.class)}
       classList={{ 'bg-accent/10': isDragOver() }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -1249,7 +1246,7 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px] max-w-full"
+      class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] mb-[-7px] max-w-full"
     >
       {/* Top Bar */}
       <div class="relative flex items-start gap-2 p-2">
@@ -1430,7 +1427,10 @@ export function BaseInput(props: {
         </Show>
       </div>
       <div
-        class={`${props.isEditingExisting || props.newMessage ? 'flex' : 'hidden'} flex-row items-center`}
+        class={cn(
+          'flex-row items-center',
+          props.isEditingExisting || props.newMessage ? 'flex' : 'hidden'
+        )}
       >
         <div class="text-sm min-w-16 pl-4">Subject</div>
         <input
@@ -1446,15 +1446,26 @@ export function BaseInput(props: {
       </div>
       <div class="w-full h-full flex flex-col">
         <Show when={showFormatRibbon()}>
-          <FormatRibbon
-            state={formatState}
-            inlineFormat={(format: TextFormatType) => {
-              editor()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
-            }}
-            nodeFormat={(transform: NodeTransformType) => {
-              editor()?.dispatchCommand(NODE_TRANSFORM, transform);
-            }}
-          />
+          <div class="flex flex-row w-full gap-2 items-center p-2">
+            <FormatButtons
+              selectionState={() => formatState}
+              includeQuote
+              onInlineFormat={(format) => {
+                const editor_ = editor();
+                if (!editor_) return;
+                applyInlineFormat(editor_, format);
+              }}
+              onNodeFormat={(transform) => {
+                const editor_ = editor();
+                if (!editor_) return;
+                const isActive = formatState.elementsInRange.has(transform);
+                const targetTransform: NodeTransformType = isActive
+                  ? 'paragraph'
+                  : transform;
+                applyNodeFormat(editor_, targetTransform);
+              }}
+            />
+          </div>
         </Show>
         <div
           class="max-h-80 overflow-y-scroll w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-3"
@@ -1489,7 +1500,7 @@ export function BaseInput(props: {
           }}
         >
           <div
-            class={`${!isDragging() && 'hidden'} absolute size-full inset-0`}
+            class={cn('absolute size-full inset-0', !isDragging() && 'hidden')}
           >
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
@@ -1498,7 +1509,10 @@ export function BaseInput(props: {
               setEditor(editor);
               form().setCapturedEditor(editor);
             }}
-            class={`ph-no-capture cursor-text text-sm break-words text-ink ${isDragging() && 'blur'}`}
+            class={cn(
+              'ph-no-capture cursor-text text-sm wrap-break-word text-ink',
+              isDragging() && 'blur'
+            )}
             editable={() => !sendMutation.isPending}
             initialValue={props.preloadedBody}
             initialHtml={restoredSnapshot?.bodyHtml ?? props.preloadedHtml}
@@ -1683,7 +1697,7 @@ export function BaseInput(props: {
                 }
               >
                 <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+                  <ArrowUp class="group-hover:text-input! group-hover:fill-input! text-accent-ink! fill-accent! size-4 transition ease-in-out" />
                 </div>
               </Show>
             </button>

@@ -1,18 +1,17 @@
 import { match } from 'ts-pattern';
-import type { ContentHitData } from '../types/search';
+import { type ContentHitData, hitHasSender } from '../types/search';
 import FileTextIcon from '@icon/regular/file-text.svg';
 import FilePdfIcon from '@icon/regular/file-pdf.svg';
 import HashIcon from '@icon/regular/hash.svg';
 import EnvelopeIcon from '@icon/regular/envelope.svg';
+import PhoneCallIcon from '@macro-icons/wide/call.svg';
 
 /**
  * Gets the sender ID from a content hit, if applicable
  * @internal
  */
 export function getSenderId(hit: ContentHitData): string | undefined {
-  if (hit.type === 'channel' || hit.type === 'email') {
-    return hit.senderId;
-  }
+  return hitHasSender(hit) ? hit.senderId : undefined;
 }
 
 /**
@@ -25,5 +24,6 @@ export function getSearchIcon(hit: ContentHitData) {
     .with({ type: 'pdf' }, () => FilePdfIcon)
     .with({ type: 'channel' }, () => HashIcon)
     .with({ type: 'email' }, () => EnvelopeIcon)
+    .with({ type: 'call_record' }, () => PhoneCallIcon)
     .otherwise(() => FileTextIcon);
 }

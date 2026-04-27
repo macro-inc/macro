@@ -193,9 +193,7 @@ export default function BlockPdf() {
             <TopBar />
             <Show when={showTabBar()}>
               <div class="flex px-2 justify-between min-h-11 items-center gap-2">
-                <div
-                  class={`overflow-x-auto overflow-y-hidden grow customScrollbar w-0`}
-                >
+                <div class="overflow-x-auto overflow-y-hidden grow customScrollbar w-0">
                   <Tabs />
                 </div>
               </div>

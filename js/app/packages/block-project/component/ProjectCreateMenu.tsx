@@ -1,4 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { cn } from '@ui/utils/classname';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
@@ -260,7 +261,10 @@ function MenuItem(props: MenuItemProps) {
 
   return (
     <DropdownMenu.Item
-      class={`flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-click duration-200 text-ink-extra-muted data-highlighted:${selectedColor} data-highlighted:bracket-offset-4`}
+      class={cn(
+        'flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-click duration-200 text-ink-extra-muted data-highlighted:bracket-offset-4',
+        `data-highlighted:${selectedColor}`
+      )}
       onSelect={props.action}
     >
       <div class="flex items-center gap-1">

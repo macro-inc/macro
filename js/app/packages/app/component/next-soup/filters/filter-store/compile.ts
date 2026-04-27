@@ -72,6 +72,7 @@ const FIELD_CONFIG: Record<
     formatValue: (v) => ({ Partial: v }),
   },
   emailShared: { target: 'ef', field: 'Shared' },
+  emailCalendarOnly: { target: 'ef', field: 'CalendarOnly' },
   channelId: { target: 'chanf', field: 'ChannelId' },
   channelType: { target: 'chanf', field: 'ChannelType' },
   channelSeen: { target: 'chanf', field: 'NotificationSeen' },
@@ -88,6 +89,7 @@ const FIELD_CONFIG: Record<
   folderSeen: { target: 'pf', field: 'NotificationSeen' },
   folderDone: { target: 'pf', field: 'NotificationDone' },
   callChannelId: { target: 'callf', field: 'ChannelId' },
+  callSpeakerId: { target: 'callf', field: 'Speaker' },
   callAttended: { target: 'callf', field: 'Attended' },
 };
 

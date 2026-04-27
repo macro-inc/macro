@@ -7,7 +7,7 @@ import { markdownMentionsLesson } from './markdown-mentions';
 // import { composersPreviewLesson } from './composers-preview';
 import { aboutUsLesson } from './about-us';
 import { choosePlanLesson } from './choose-plan';
-import { appStoreLesson } from './app-store';
+import { inviteTeamLesson } from './invite-team';
 import { launchLesson } from './launch';
 
 export const LESSONS: LessonDefinition[] = [
@@ -19,6 +19,6 @@ export const LESSONS: LessonDefinition[] = [
   // composersPreviewLesson,
   aboutUsLesson,
   choosePlanLesson,
-  appStoreLesson,
+  inviteTeamLesson,
   launchLesson,
 ];

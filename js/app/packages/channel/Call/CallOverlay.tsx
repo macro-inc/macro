@@ -1,13 +1,16 @@
 import { Track, type RemoteParticipant } from 'livekit-client';
 import { For, Show, createSignal, type Component, type JSX } from 'solid-js';
+import { cn } from '@ui/utils/classname';
 import { TrackView } from './TrackView';
 import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
-import Microphone from '@icon/regular/microphone.svg';
-import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
-import VideoCamera from '@icon/regular/video-camera.svg';
-import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
-import Screencast from '@icon/regular/screencast.svg';
+import Microphone from '@macro-icons/wide/microphone.svg';
+import MicrophoneSlash from '@macro-icons/wide/microphone-slash.svg';
+import VideoCamera from '@macro-icons/wide/video.svg';
+import VideoCameraSlash from '@macro-icons/wide/video-slash.svg';
+import Screencast from '@macro-icons/wide/screencast.svg';
+import Users from '@macro-icons/wide/users.svg';
 import CaretDown from '@icon/regular/caret-down.svg';
+import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import {
   DropdownMenuContent,
@@ -16,8 +19,38 @@ import {
   GroupLabel,
   MenuSeparator,
 } from '@core/component/Menu';
+import { Tooltip } from '@core/component/Tooltip';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useCallContext, type MediaDeviceInfo } from './CallContext';
+
+// Mirrors @livekit/track-processors' supportsBackgroundProcessors() =
+// BackgroundProcessor.isSupported && ProcessorWrapper.isSupported. Kept local so the
+// toggle renders without statically importing the WASM/MediaPipe-bearing package.
+function isBackgroundBlurSupported(): boolean {
+  if (typeof window === 'undefined') return false;
+  // BackgroundProcessor.isSupported: OffscreenCanvas, VideoFrame, createImageBitmap, WebGL2.
+  if (
+    !('OffscreenCanvas' in window) ||
+    !('VideoFrame' in window) ||
+    !('createImageBitmap' in window)
+  ) {
+    return false;
+  }
+  try {
+    if (!document.createElement('canvas').getContext('webgl2')) return false;
+  } catch {
+    return false;
+  }
+  // ProcessorWrapper.isSupported: modern MediaStreamTrackProcessor API OR canvas
+  // captureStream() fallback (Firefox 126+).
+  const hasStreamProcessor =
+    'MediaStreamTrackProcessor' in window &&
+    'MediaStreamTrackGenerator' in window;
+  const hasFallback =
+    typeof HTMLCanvasElement !== 'undefined' &&
+    'captureStream' in HTMLCanvasElement.prototype;
+  return hasStreamProcessor || hasFallback;
+}
 
 function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
@@ -209,6 +242,14 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
 
 export function CallOverlay(props: { onLeave: () => void }) {
   const callCtx = useCallContext();
+  const toggleShareWithTeam = useToggleShareWithTeamMutation();
+
+  const handleToggleShareWithTeam = async () => {
+    const callId = callCtx.activeCallId();
+    if (!callId) return;
+    const newValue = await toggleShareWithTeam.mutateAsync(callId);
+    callCtx.setSharedWithTeam(newValue);
+  };
 
   const participants = () =>
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
@@ -271,7 +312,11 @@ export function CallOverlay(props: { onLeave: () => void }) {
 
       {/* Participants grid */}
       <div
-        class={`${hasAnyScreenShare() ? 'h-[140px] shrink-0' : 'flex-1 min-h-0'} grid ${gridCols()} gap-2 p-2 auto-rows-fr overflow-hidden`}
+        class={cn(
+          'grid gap-2 p-2 auto-rows-fr overflow-hidden',
+          hasAnyScreenShare() ? 'h-[140px] shrink-0' : 'flex-1 min-h-0',
+          gridCols()
+        )}
       >
         {/* Local participant */}
         <div
@@ -324,6 +369,17 @@ export function CallOverlay(props: { onLeave: () => void }) {
                   onSelect={(id) => callCtx.switchAudioOutput(id)}
                 />
               </Show>
+              <MenuSeparator />
+              <MenuGroup>
+                <GroupLabel>Effects</GroupLabel>
+                <MenuItem
+                  text="Noise suppression"
+                  selectorType="checkbox"
+                  checked={callCtx.isNoiseSuppressed()}
+                  closeOnSelect={false}
+                  onClick={() => callCtx.toggleNoiseSuppression()}
+                />
+              </MenuGroup>
             </>
           }
         >
@@ -339,12 +395,27 @@ export function CallOverlay(props: { onLeave: () => void }) {
           onClick={() => callCtx.toggleVideo()}
           active={!callCtx.isVideoMuted()}
           dropdownContent={
-            <DeviceList
-              label="Camera"
-              devices={callCtx.videoInputDevices()}
-              activeDeviceId={callCtx.activeVideoInputDeviceId()}
-              onSelect={(id) => callCtx.switchVideoInput(id)}
-            />
+            <>
+              <DeviceList
+                label="Camera"
+                devices={callCtx.videoInputDevices()}
+                activeDeviceId={callCtx.activeVideoInputDeviceId()}
+                onSelect={(id) => callCtx.switchVideoInput(id)}
+              />
+              <Show when={isBackgroundBlurSupported()}>
+                <MenuSeparator />
+                <MenuGroup>
+                  <GroupLabel>Effects</GroupLabel>
+                  <MenuItem
+                    text="Blur background"
+                    selectorType="checkbox"
+                    checked={callCtx.isBackgroundBlurred()}
+                    closeOnSelect={false}
+                    onClick={() => callCtx.toggleBackgroundBlur()}
+                  />
+                </MenuGroup>
+              </Show>
+            </>
           }
         >
           <Show
@@ -361,6 +432,15 @@ export function CallOverlay(props: { onLeave: () => void }) {
         >
           <Screencast class="w-5 h-5" />
         </ControlButton>
+
+        <Tooltip tooltip={<span class="text-xs">Toggle share with team</span>}>
+          <ControlButton
+            onClick={handleToggleShareWithTeam}
+            active={callCtx.isSharedWithTeam()}
+          >
+            <Users class="w-5 h-5" />
+          </ControlButton>
+        </Tooltip>
 
         <ControlButton onClick={props.onLeave} danger>
           <PhoneDisconnect class="w-5 h-5" />

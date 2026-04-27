@@ -23,7 +23,7 @@ http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_auth = { path = "../macro_auth", features = ["testing"] }
 serde_json = { workspace = true }
-serde_urlencoded = "0.7"
+serde_urlencoded = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 tower = { workspace = true }
 url = { workspace = true }

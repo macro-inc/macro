@@ -153,8 +153,8 @@
     },
     "mcp-server": {
       "source_paths": [
-        "rust/cloud-storage/document_cognition_service/src/bin/mcp_server.rs",
-        "rust/cloud-storage/document_cognition_service/src/mcp_oauth/**"
+        "rust/cloud-storage/mcp_service/**",
+        "rust/cloud-storage/ai_tools/**"
       ],
       "stack_path": "infra/stacks/mcp-server/**"
     }

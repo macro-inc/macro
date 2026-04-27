@@ -53,7 +53,7 @@ function PanelCard(
           )}
         </div>
       </div>
-      <div class="grow-1 p-2 overflow-auto">
+      <div class="grow p-2 overflow-auto">
         <MarkdownTextarea
           initialValue={props.markdown}
           editable={() => true}
@@ -110,7 +110,7 @@ function VerticalPanelCard(
           )}
         </div>
       </div>
-      <div class="grow-1 overflow-hidden">
+      <div class="grow overflow-hidden">
         <Resize.Zone gutter={0} direction="vertical">
           <Resize.Panel id={`${props.id}-top`} minSize={100}>
             <div class="size-full p-2 overflow-auto border-b border-edge">

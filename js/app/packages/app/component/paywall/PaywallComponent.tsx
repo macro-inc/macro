@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
@@ -214,11 +215,12 @@ const PaywallComponent = (props: PaywallComponent) => {
           fallback={
             <button
               onClick={handleContinue}
-              class={`w-full px-4 py-2 sm:px-6 sm:py-3 font-medium transition-none hover:transition text-sm sm:text-base border border-transparent ${
+              class={cn(
+                'w-full px-4 py-2 sm:px-6 sm:py-3 font-medium transition-none hover:transition text-sm sm:text-base border border-transparent',
                 hasPaid()
                   ? 'bg-active text-ink border-edge hover:bg-hover hover:border-edge'
                   : 'bg-accent text-page hover:bg-accent-ink'
-              }`}
+              )}
             >
               <Show when={!hasPaid()} fallback={'Manage Subscription'}>
                 Get {PLANS.find((p) => p.tier === selectedTier())?.name}

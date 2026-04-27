@@ -1,4 +1,6 @@
-import { useChannelMarkdownArea } from '@block-channel/component/DeprecatedChannelInput/MarkdownArea';
+import { cn } from '@ui/utils/classname';
+import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useIsAuthenticated } from '@core/auth';
 import {
@@ -27,7 +29,7 @@ import {
 } from 'solid-js';
 import { Button } from '@ui/components/Button';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { getDestinationFromOptions } from './NewMessage';
+import { getDestinationFromOptions } from '@core/util/destination';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
 import { ScrollIndicators } from './VerticalScrollIndicators';
@@ -70,11 +72,18 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
   const [mdScrollRef, setMdScrollRef] = createSignal<HTMLElement>();
 
-  const {
-    focus: focusMarkdownArea,
-    state: markdownState,
-    MarkdownArea,
-  } = useChannelMarkdownArea();
+  const [markdown, setMarkdown] = createSignal('');
+  const markdownEditor = createConfiguredChannelMarkdownEditor({
+    namespace: 'forward-to-channel-markdown',
+    enableMentions: true,
+    onChange: setMarkdown,
+    onEnter: (e) => {
+      handleSubmit();
+      e.preventDefault();
+      return true;
+    },
+  });
+  markdownEditor.buildHandle();
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
 
@@ -170,7 +179,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         sendToUsers({
           attachments: [asAttachment()],
           users: destination_.users,
-          content: markdownState(),
+          content: markdown(),
           mentions: [],
         }).then((res) => {
           if (!res) {
@@ -200,7 +209,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             submitChannelPermissions(option.id),
             sendToChannel({
               attachments: [asAttachment()],
-              content: markdownState(),
+              content: markdown(),
               channelId: option.id,
               mentions: [],
             }).then((res) => {
@@ -227,7 +236,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           // handles option.kind of user, custom, and contact (gmail)
           sendToUsers({
             attachments: [asAttachment()],
-            content: markdownState(),
+            content: markdown(),
             users: [option.id],
             mentions: [],
           }).then((res) => {
@@ -292,7 +301,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             options={destinationOptions}
             triggerMode="input"
             noBrackets
-            class="border-1 border-edge-muted/50 p-1"
+            class="border border-edge-muted/50 p-1"
             focusOnMount
             mobileHorizontalScroll
           />
@@ -321,27 +330,20 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       </div>
 
       {/* Row 2: Optional message */}
-      <div class="grow-1 shrink-1 min-h-0 flex flex-col w-full border-t-1 border-edge-muted/50">
-        <div class="relative grow-1 shrink-1 min-h-0 flex flex-col">
+      <div class="grow shrink min-h-0 flex flex-col w-full border-t border-edge-muted/50">
+        <div class="relative grow shrink min-h-0 flex flex-col">
           <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
           <CustomScrollbar scrollContainer={mdScrollRef} />
           <div
-            class="grow-1 shrink-1 min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-[12px] py-[6px] w-full text-sm"
-            onClick={() => focusMarkdownArea()}
+            class="grow shrink min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-[12px] py-[6px] w-full text-sm"
+            onClick={() => markdownEditor.controls.focus()}
             ref={setMdScrollRef}
           >
-            <MarkdownArea
+            <MarkdownShell
+              config={markdownEditor}
               placeholder="Optional message"
-              onEnter={(e: KeyboardEvent) => {
-                handleSubmit();
-                e.preventDefault();
-                return true;
-              }}
-              initialValue={markdownState()}
-              onTab={() => false}
-              useBlockBoundary={false}
               portalScope="local"
-              dontFocusOnMount
+              class="text-sm"
             />
           </div>
         </div>
@@ -350,7 +352,10 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         <div class="shrink-0 flex w-full items-center p-3 gap-3 flex-wrap">
           <Show when={canSendAsGroup()}>
             <label
-              class={`flex items-start gap-2 ${!canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-default'}`}
+              class={cn(
+                'flex items-start gap-2',
+                !canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-default'
+              )}
             >
               <div class="relative mt-0.5">
                 <input
@@ -363,11 +368,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   type="checkbox"
                 />
                 <div
-                  class={`w-4 h-4 border ${
+                  class={cn(
+                    'w-4 h-4 border',
                     !canSendAsGroup()
                       ? 'border-edge/30 peer-checked:bg-menu/20'
                       : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
-                  }`}
+                  )}
                 >
                   <Show when={sendAsGroupMessage() && canSendAsGroup()}>
                     <CheckIcon class="w-full h-full text-accent p-0.5" />
@@ -375,11 +381,19 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 </div>
               </div>
               <div
-                class={`flex flex-col text-sm ${!canSendAsGroup() ? 'text-ink-disabled/50' : ''}`}
+                class={cn(
+                  'flex flex-col text-sm',
+                  !canSendAsGroup() && 'text-ink-disabled/50'
+                )}
               >
                 <span class="font-medium">Send As Group Message</span>
                 <span
-                  class={`text-xs mt-0.5 ${!canSendAsGroup() ? 'text-ink-disabled/50' : 'text-ink-muted'}`}
+                  class={cn(
+                    'text-xs mt-0.5',
+                    !canSendAsGroup()
+                      ? 'text-ink-disabled/50'
+                      : 'text-ink-muted'
+                  )}
                 >
                   {sendAsGroupMessage() && canSendAsGroup()
                     ? 'Creates a new group message with all recipients'

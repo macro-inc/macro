@@ -200,7 +200,7 @@ function ChannelGroupItem(props: {
         navigateToLatestNotification(e.shiftKey);
       }}
     >
-      <div class="relative flex items-center justify-center flex-shrink-0 size-5">
+      <div class="relative flex items-center justify-center shrink-0 size-5">
         <Show
           when={isDM() && senderId()}
           fallback={<ChannelLetterIcon letters={props.channelLetters ?? '?'} />}
@@ -223,7 +223,7 @@ function ChannelGroupItem(props: {
         </span>
 
         <Show when={count() > 0}>
-          <span class="flex-shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded ml-auto">
+          <span class="shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded ml-auto">
             {count()}
           </span>
         </Show>

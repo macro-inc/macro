@@ -44,6 +44,7 @@ import type { ApiChannelMessagesPage } from '@service-storage/generated/schemas/
 import type { ApiChannelAttachmentsPage } from '@service-storage/generated/schemas/apiChannelAttachmentsPage';
 import type { ApiChannelParticipant } from '@service-storage/generated/schemas/apiChannelParticipant';
 import type { ApiThreadReply } from '@service-storage/generated/schemas';
+import type { ChannelMessageFilters } from '@service-storage/generated/schemas/channelMessageFilters';
 
 export type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 export type { ApiChannelMessagesPage as ChannelMessagesPage } from '@service-storage/generated/schemas/apiChannelMessagesPage';
@@ -80,6 +81,7 @@ type WithChannelId = { channel_id: string };
 type WithMessageId = { message_id: string };
 type WithMentionId = { mention_id: string };
 type WithEntity = { entity_type: string; entity_id: string };
+export type ChannelAttachmentType = 'static' | 'dss';
 
 export const ChannelTypeEnum = {
   Public: ChannelType.public,
@@ -177,14 +179,25 @@ export const commsServiceClient = {
       WithChannelId &
       WithMessageId & { nonce?: string }
   ) {
-    const { channel_id, content, message_id, attachment_ids_to_delete, nonce } =
-      args;
+    const {
+      channel_id,
+      content,
+      message_id,
+      attachment_ids_to_delete,
+      attachments_to_add,
+      nonce,
+    } = args;
     return mapOk(
       await commsFetch<MessageResponse>(
         `/comms/channels/${channel_id}/message/${message_id}`,
         {
           method: 'PATCH',
-          body: JSON.stringify({ content, attachment_ids_to_delete, nonce }),
+          body: JSON.stringify({
+            content,
+            attachment_ids_to_delete,
+            attachments_to_add,
+            nonce,
+          }),
         }
       ),
       (result) => result
@@ -404,17 +417,41 @@ export const commsServiceClient = {
       (result) => result
     );
   },
-  async getChannelAttachments(
-    args: WithChannelId & { limit: number; cursor: string | null }
+  async postChannelMessages(
+    args: WithChannelId & { filters: ChannelMessageFilters; limit?: number }
   ) {
-    const { channel_id, limit, cursor } = args;
+    const { channel_id, filters, limit } = args;
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.append('limit', limit.toString());
+    const query = params.toString();
+    return mapOk(
+      await commsFetch<ApiChannelMessagesPage>(
+        `/channels/${channel_id}/messages${query ? `?${query}` : ''}`,
+        {
+          method: 'POST',
+          body: JSON.stringify(filters),
+        }
+      ),
+      (result) => result
+    );
+  },
+  async getChannelAttachments(
+    args: WithChannelId & {
+      limit: number;
+      cursor: string | null;
+      attachment_type?: ChannelAttachmentType;
+      signal?: AbortSignal;
+    }
+  ) {
+    const { channel_id, limit, cursor, attachment_type, signal } = args;
     const params = new URLSearchParams();
     params.append('limit', limit.toString());
     if (cursor) params.append('cursor', cursor);
+    if (attachment_type) params.append('attachment_type', attachment_type);
     return mapOk(
       await commsFetch<ApiChannelAttachmentsPage>(
         `/channels/${channel_id}/attachments?${params.toString()}`,
-        { method: 'GET' }
+        { method: 'GET', signal }
       ),
       (result) => result
     );

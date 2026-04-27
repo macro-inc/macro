@@ -63,7 +63,7 @@ export const ScrollIndicators = (props: {
       {/* Start scroll boundary indicator */}
       <div
         class={cn(
-          'absolute pointer-events-none z-2 pattern-diagonal-4 pattern-edge',
+          'absolute pointer-events-none z-annotation-layer pattern-diagonal-4 pattern-edge',
           isHorizontal()
             ? cn(
                 'top-px bottom-px left-0 w-3 mask-r-from-0%',
@@ -79,7 +79,7 @@ export const ScrollIndicators = (props: {
       {/* End scroll boundary indicator */}
       <div
         class={cn(
-          'absolute pointer-events-none z-2 pattern-diagonal-4 pattern-edge',
+          'absolute pointer-events-none z-annotation-layer pattern-diagonal-4 pattern-edge',
           isHorizontal()
             ? cn(
                 'top-px bottom-px right-0 w-3 mask-l-from-0%',

@@ -3,13 +3,18 @@ import LogoIcon from '@macro-icons/macro-logo.svg';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
 import { getWebOrigin } from '@core/util/webOrigin';
+import { MOBILE_WEB_SIGNUP_LEAD_VALUE } from '@app/lib/analytics/leadValues';
 
 export default function MobileWebSignupSent() {
   const analytics = useAnalytics();
 
   onMount(() => {
     analytics.track('mobile_web_signup_sent_viewed');
-    analytics.trackMeta('Lead', { content_name: 'mobile_web_signup' });
+    analytics.trackMeta('Lead', {
+      content_name: 'mobile_web_signup',
+      value: MOBILE_WEB_SIGNUP_LEAD_VALUE,
+      currency: 'USD',
+    });
   });
 
   return (

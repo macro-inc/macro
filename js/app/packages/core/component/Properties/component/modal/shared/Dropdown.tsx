@@ -79,7 +79,7 @@ export const Dropdown = <T extends string | number>(
   const defaultRenderValue = (option: DropdownOption<T> | undefined) => (
     <>
       <Show when={option?.icon}>
-        <span class="flex-shrink-0">{option!.icon}</span>
+        <span class="shrink-0">{option!.icon}</span>
       </Show>
       <span class="flex-1 truncate">
         {option?.label ?? props.placeholder ?? 'Select...'}
@@ -94,7 +94,7 @@ export const Dropdown = <T extends string | number>(
     <>
       <div class="flex items-center gap-2 flex-1 min-w-0">
         <Show when={option.icon}>
-          <span class="flex-shrink-0">{option.icon}</span>
+          <span class="shrink-0">{option.icon}</span>
         </Show>
         <div class="flex-1 min-w-0">
           <div class="truncate">{option.label}</div>
@@ -106,7 +106,7 @@ export const Dropdown = <T extends string | number>(
         </div>
       </div>
       <Show when={isSelected}>
-        <CheckIcon class="w-3 h-3 flex-shrink-0" />
+        <CheckIcon class="w-3 h-3 shrink-0" />
       </Show>
     </>
   );
@@ -121,7 +121,7 @@ export const Dropdown = <T extends string | number>(
       >
         {props.renderValue?.(selectedOption()) ??
           defaultRenderValue(selectedOption())}
-        <ChevronDownIcon class="w-3 h-3 text-ink-muted flex-shrink-0" />
+        <ChevronDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
       </button>
       <Show when={isOpen()}>
         <ScopedPortal scope="local">

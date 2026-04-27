@@ -113,7 +113,8 @@ const renameDssSetData = (
     } else if (
       itemType !== 'email' &&
       itemType !== 'channel_message' &&
-      itemType !== 'automation'
+      itemType !== 'automation' &&
+      itemType !== 'call'
     ) {
       txns.set(
         id,

@@ -308,11 +308,11 @@ export const MobileFilterDrawer = () => {
                                 </span>
                                 <div class="flex items-center gap-2">
                                   <Show when={activeCount() > 0}>
-                                    <span class="group-data-[expanded]:hidden size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
+                                    <span class="group-data-expanded:hidden size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
                                       {activeCount()}
                                     </span>
                                   </Show>
-                                  <ChevronDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-[expanded]:rotate-180" />
+                                  <ChevronDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-expanded:rotate-180" />
                                 </div>
                               </Accordion.Trigger>
                             </Accordion.Header>
@@ -379,11 +379,11 @@ export const MobileFilterDrawer = () => {
                           <span class="font-medium">Assignee</span>
                           <div class="flex items-center gap-2">
                             <Show when={assigneeFilter().length > 0}>
-                              <span class="group-data-[expanded]:hidden size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
+                              <span class="group-data-expanded:hidden size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
                                 {assigneeFilter().length}
                               </span>
                             </Show>
-                            <ChevronDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-[expanded]:rotate-180" />
+                            <ChevronDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-expanded:rotate-180" />
                           </div>
                         </Accordion.Trigger>
                       </Accordion.Header>

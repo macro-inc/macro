@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useChannelMarkdownArea } from '@block-channel/component/DeprecatedChannelInput/MarkdownArea';
+import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { formatDate } from '@core/util/date';
@@ -29,6 +30,9 @@ import {
   type PlatformNotificationState,
   usePlatformNotificationState,
 } from './PlatformNotificationProvider';
+
+const PLAYGROUND_INITIAL_VALUE =
+  "Hey! Check out this **cool feature** we just shipped.\n\nHere's a code example:\n```typescript\nconst notify = () => {\n  console.log('Hello!');\n};\n```\n\nLet me know what you think!";
 
 type NotificationsByType = Map<string, UnifiedNotification[]>;
 
@@ -247,7 +251,7 @@ function PermissionButton(props: { platformNotif: any }) {
 }
 
 function CustomBuilder(props: {
-  markdownArea: ReturnType<typeof useChannelMarkdownArea>;
+  markdownEditor: ReturnType<typeof createConfiguredChannelMarkdownEditor>;
   customNotification: UnifiedNotification;
   onTest: (notification: UnifiedNotification) => void;
 }) {
@@ -266,11 +270,10 @@ function CustomBuilder(props: {
             Message Content
           </label>
           <div class="border border-edge-muted rounded-lg p-3 bg-menu min-h-64 max-h-96 overflow-auto">
-            <props.markdownArea.MarkdownArea
+            <MarkdownShell
+              config={props.markdownEditor}
               placeholder="Type your markdown message here... (use @ for mentions)"
-              initialValue="Hey! Check out this **cool feature** we just shipped.\n\nHere's a code example:\n```typescript\nconst notify = () => {\n  console.log('Hello!');\n};\n```\n\nLet me know what you think!"
-              users={() => []}
-              history={() => []}
+              initialValue={PLAYGROUND_INITIAL_VALUE}
             />
           </div>
           <p class="text-xs text-ink-muted mt-2">
@@ -454,7 +457,14 @@ function EmptyState(props: { title: string; description: string }) {
 function PlaygroundContent() {
   const { ws } = createMockWebsocket();
   const platformNotif = usePlatformNotificationState();
-  const markdownArea = useChannelMarkdownArea();
+  const [markdown, setMarkdown] = createSignal(PLAYGROUND_INITIAL_VALUE);
+  const markdownEditor = createConfiguredChannelMarkdownEditor({
+    namespace: 'notifications-playground-markdown',
+    enableMentions: true,
+    users: () => [],
+    onChange: setMarkdown,
+  });
+  markdownEditor.buildHandle();
 
   const notificationSource = createNotificationSource(ws);
 
@@ -488,7 +498,7 @@ function PlaygroundContent() {
       notification_event_type: 'channel_message_send',
       notification_metadata: {
         sender: 'user-custom',
-        messageContent: markdownArea.state(),
+        messageContent: markdown(),
         messageId: 'msg-custom',
         channelType: 'direct_message',
         channelName: 'test-channel',
@@ -641,7 +651,7 @@ function PlaygroundContent() {
           }
         >
           <CustomBuilder
-            markdownArea={markdownArea}
+            markdownEditor={markdownEditor}
             customNotification={customNotification()}
             onTest={handleTestNotification}
           />
@@ -695,7 +705,7 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
     <div class="w-full bg-[#1a1a1a] rounded-lg shadow-2xl overflow-hidden">
       <div class="flex items-start gap-3 p-4">
         {/* Icon with optional badge */}
-        <div class="relative flex-shrink-0">
+        <div class="relative shrink-0">
           <div class="w-10 h-10 rounded-lg overflow-hidden bg-[oklch(0.278_0.033_256.848)] flex items-center justify-center">
             <Show
               when={props.icon}
@@ -707,7 +717,7 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
             </Show>
           </div>
           <Show when={props.badge}>
-            <div class="absolute -top-1 -left-1 w-5 h-5 bg-[oklch(0.637_0.237_25.331)] rounded-full flex items-center justify-center">
+            <div class="absolute -top-1 -left-1 w-5 h-5 bg-failure rounded-full flex items-center justify-center">
               <img src={props.badge} alt="" class="w-3 h-3" />
             </div>
           </Show>
@@ -726,7 +736,7 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
         {/* Close button */}
         <button
           onClick={props.onClose}
-          class="flex-shrink-0 text-[oklch(0.551_0.027_264.364)] hover:text-[oklch(0.872_0.01_258.338)] transition-colors"
+          class="shrink-0 text-[oklch(0.551_0.027_264.364)] hover:text-[oklch(0.872_0.01_258.338)] transition-colors"
         >
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
             <path

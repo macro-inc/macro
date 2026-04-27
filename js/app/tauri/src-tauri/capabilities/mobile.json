@@ -13,6 +13,7 @@
     "haptics:allow-selection-feedback",
     "haptics:allow-vibrate",
     "log:default",
-    "auth:allow-authenticate"
+    "auth:allow-authenticate",
+    "device-info:default"
   ]
 }

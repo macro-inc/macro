@@ -114,7 +114,7 @@ import {
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
@@ -323,7 +323,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       clientY: currentPos.y,
     };
     const item = event.draggable.data;
-    const blockName = fileTypeToBlockName(item.fileType ?? item.type);
+    const blockName = itemToBlockName(item);
     if (!blockName) return;
     let id = event.draggable.data.id as string;
     if (event.draggable.data.type === 'channel_message') {
@@ -377,6 +377,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         blockName: res.blockName,
         blockParams,
         mentionUuid: mentionId,
+        createdAt: Date.now(),
       });
 
       if (position === 'before') {
@@ -915,7 +916,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       {/* SCUFFED: are these the right transparency values? */}
       <Show when={editorError()}>
         {(error) => (
-          <div class="pointer-events-none text-alert-ink p-2 bg-alert-bg w-full border-alert/30 border-1 mb-2 flex items-center gap-2">
+          <div class="pointer-events-none text-alert-ink p-2 bg-alert-bg w-full border-alert/30 border mb-2 flex items-center gap-2">
             <WarningIcon class="size-6 shrink-0" />
             {getErrorDescription(error())}
           </div>

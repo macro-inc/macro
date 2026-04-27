@@ -8,6 +8,8 @@ import { PropertyRow } from './PropertyRow';
 interface PropertiesListProps {
   properties: Property[];
   columns?: number;
+  withDelete?: boolean;
+  withPin?: boolean;
 }
 
 export const PropertyGrid: Component<PropertiesListProps> = (props) => {
@@ -86,7 +88,6 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
               <PropertyRow
                 property={property}
                 onValueClick={handleValueClick}
-                withDelete
                 withPin
               />
             )}
@@ -100,7 +101,6 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
               <PropertyRow
                 property={property}
                 onValueClick={handleValueClick}
-                withDelete
                 withPin
               />
             )}
@@ -119,8 +119,8 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
               <PropertyRow
                 property={property}
                 onValueClick={handleValueClick}
-                withDelete
-                withPin
+                withDelete={props.withDelete}
+                withPin={props.withPin}
               />
             )}
           </For>

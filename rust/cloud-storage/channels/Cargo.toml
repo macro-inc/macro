@@ -23,6 +23,7 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["inbound"] }
 model-error-response = { path = "../model-error-response", optional = true }
+macro_user_id = { path = "../macro_user_id" }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
 serde = { workspace = true }
@@ -36,7 +37,6 @@ uuid = { workspace = true }
 [dev-dependencies]
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
-macro_user_id = { path = "../macro_user_id" }
 mockall = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

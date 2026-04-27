@@ -112,7 +112,7 @@ export function DebugSlider(props: SliderProps) {
         {props.label}
       </label>
 
-      <div class="w-full shrink-1">
+      <div class="w-full shrink">
         <div
           ref={sliderRef}
           class="relative h-6 bg-message cursor-pointer select-none w-full focus:ring focus:ring-edge"
@@ -128,7 +128,7 @@ export function DebugSlider(props: SliderProps) {
           {/* Fill */}
           <div
             class="absolute inset-y-0 left-0 bg-accent pointer-events-none"
-            style={`width: ${percentage()}%`}
+            style={{ width: `${percentage()}%` }}
           />
         </div>
 

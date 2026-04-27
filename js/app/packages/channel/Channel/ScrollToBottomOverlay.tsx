@@ -1,4 +1,5 @@
 import { Show, type Accessor } from 'solid-js';
+import { cn } from '@ui/utils/classname';
 import type { ThreadListScrollState } from './ThreadList';
 
 export function shouldShowScrollToBottomButton(
@@ -24,7 +25,10 @@ export function ScrollToBottomOverlay(props: ScrollToBottomOverlayProps) {
     <Show when={shouldShowScrollToBottomButton(props.scrollState())}>
       <button
         type="button"
-        class={`absolute top-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 text-xs bg-menu border border-edge-muted hover:bg-hover hover-transition-bg ${props.class ?? ''}`}
+        class={cn(
+          'absolute top-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 text-xs bg-menu border border-edge-muted hover:bg-hover hover-transition-bg',
+          props.class
+        )}
         onClick={() => {
           props.onScrollToBottom();
         }}

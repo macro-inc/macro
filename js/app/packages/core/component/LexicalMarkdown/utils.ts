@@ -23,6 +23,7 @@ import {
 } from '@lexical/utils';
 import {
   $isDocumentMentionNode,
+  $isMentionNode,
   $isWatermarkNode,
   ALL_TRANSFORMERS,
   EXTERNAL_TRANSFORMERS,
@@ -72,7 +73,7 @@ import type { Setter } from 'solid-js';
 import {
   $getId,
   INITIALIZE_DOCUMENT_IDS,
-} from '../../../lexical-core/plugins/nodeIdPlugin';
+} from '@lexical-core/plugins/nodeIdPlugin';
 import { MarkdownEditorErrors } from './constants';
 import {
   $applyDocumentMetadataFromSerialized,
@@ -413,6 +414,10 @@ export function $isEmpty() {
       if (!$isParagraphNode(firstChild)) {
         return false;
       }
+      // Early return on pasted mentions before preview can fetch their names.
+      $traverseNodes(child, (n) => {
+        if ($isMentionNode(n)) return false;
+      });
     }
 
     if (child.getTextContent() !== '') return false;

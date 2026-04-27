@@ -1,4 +1,5 @@
 import type { ChatMessageStream } from '@service-connection/stream';
+import { cn } from '@ui/utils/classname';
 import { Match, Switch } from 'solid-js';
 
 type Props = {
@@ -35,7 +36,10 @@ export function StreamStatus(props: Props) {
 function Dot(props: { active: boolean }) {
   return (
     <div
-      class={`w-3 h-3 rounded-full border border-edge ${props.active ? 'bg-accent' : ''}`}
+      class={cn(
+        'w-3 h-3 rounded-full border border-edge',
+        props.active && 'bg-accent'
+      )}
     />
   );
 }

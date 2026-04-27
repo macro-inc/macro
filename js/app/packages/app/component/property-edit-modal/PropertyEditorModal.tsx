@@ -506,7 +506,7 @@ function SelectPropertyEditor(props: {
                 <p class="text-sm font-medium">{String(option.value.value)}</p>
               </div>
               <Show when={shouldShowHotkeys() && index() < 9}>
-                <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
+                <div class="text-xxs px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
                   <Hotkey shortcut={`${index() + 1}`} />
                 </div>
               </Show>

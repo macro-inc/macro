@@ -1,5 +1,9 @@
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
+use cal::{
+    domain::service::CalWebhookServiceImpl, inbound::cal_webhook_router::CalWebhookRouterState,
+    outbound::analytics_client::AnalyticsClientSink,
+};
 use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
@@ -191,6 +195,8 @@ pub(crate) type DssCallService = CallServiceImpl<
     EntityAccessService,
     NotificationIngressType,
     Option<call::outbound::s3_recording_storage::S3RecordingStorage>,
+    call::outbound::ai_call_summarizer::AiCallSummarizer,
+    crate::service::call_search_indexer::SqsCallSearchIndexer,
 >;
 
 /// Type alias for the call router state.
@@ -205,6 +211,12 @@ pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType =
     GithubSyncServiceImpl<DocumentService, PgGithubSyncRepo, GithubSyncClientImpl>;
+
+/// Type alias for the cal.com webhook service.
+pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSink>;
+
+/// Type alias for the cal.com webhook router state.
+pub(crate) type DssCalWebhookState = CalWebhookRouterState<CalWebhookServiceType>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
@@ -237,6 +249,7 @@ pub(crate) struct ApiContext {
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
     pub call_internal_state: DssCallInternalState,
+    pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
 }
 

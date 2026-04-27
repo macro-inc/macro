@@ -4,6 +4,7 @@ use uuid::Uuid;
 #[non_exhaustive]
 pub struct Contact {
     pub id: Uuid,
+    #[allow(unused)]
     pub(crate) thread_id: Uuid,
     pub link_id: Uuid,
     pub name: Option<String>,

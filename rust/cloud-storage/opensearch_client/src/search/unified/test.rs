@@ -449,6 +449,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             role: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
         },
+        call_record_search_args: UnifiedCallRecordSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor {
             entity_id,
             updated_at: time,
@@ -647,10 +648,24 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                 ],
                 "must": [
                   {
-                    "simple_query_string": {
-                      "default_operator": "AND",
-                      "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
-                      "query": "(test | test@*)"
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "should": [
+                        {
+                          "simple_query_string": {
+                            "default_operator": "AND",
+                            "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
+                            "query": "(test | test@*)"
+                          }
+                        },
+                        {
+                          "simple_query_string": {
+                            "default_operator": "AND",
+                            "fields": ["subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
+                            "query": "test*"
+                          }
+                        }
+                      ]
                     }
                   }
                 ]
@@ -820,6 +835,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             role: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
         },
+        call_record_search_args: UnifiedCallRecordSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor {
             entity_id,
             updated_at: time,

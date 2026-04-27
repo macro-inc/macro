@@ -270,7 +270,7 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
         <span class="truncate flex-1 text-ink">{title()}</span>
       </button>
       <Show when={props.canEdit && isHovered() && !props.isRemoving}>
-        <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-gradient-to-r from-transparent to-hover to-40%">
+        <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-linear-to-r from-transparent to-hover to-40%">
           <button
             onClick={handleRemoveClick}
             disabled={props.isRemoving}

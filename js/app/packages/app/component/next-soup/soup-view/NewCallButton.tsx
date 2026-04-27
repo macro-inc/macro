@@ -1,6 +1,6 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { getDestinationFromOptions } from '@core/component/NewMessage';
+import { getDestinationFromOptions } from '@core/util/destination';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
@@ -101,7 +101,7 @@ export function NewCallButton() {
       <Dialog.Portal>
         <DialogWrapper width="512px">
           <div class="flex flex-col text-ink">
-            <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b-1 border-b-edge-muted h-[40px]">
+            <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
               <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                 <XIcon />
               </Dialog.CloseButton>

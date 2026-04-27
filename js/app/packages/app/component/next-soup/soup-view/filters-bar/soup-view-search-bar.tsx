@@ -6,7 +6,7 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Hotkey } from '@core/component/Hotkey';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
+import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { COMMAND_PRIORITY_HIGH, KEY_ARROW_DOWN_COMMAND } from 'lexical';
 import { createSignal, createEffect, on, onCleanup, Show } from 'solid-js';
@@ -116,6 +116,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     <div
       class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2"
       data-search-bar-wrapper
+      data-no-focus-restore
     >
       <div
         class={cn(
@@ -126,13 +127,13 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         <SearchIcon class="size-4 shrink-0" />
         <div
           data-soup-search
-          class="flex-1 min-w-0 [&_[contenteditable]]:outline-none [&_[contenteditable]]:p-0 [&_p]:my-0"
+          class="flex-1 min-w-0 **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 [&_p]:my-0"
         >
           <MarkdownShell
             config={editor}
             placeholder={props.placeholder ?? 'Search'}
             autofocus={props.autoFocus}
-            class="!min-h-0 !overflow-visible"
+            class="min-h-0! overflow-visible!"
           />
         </div>
         <Show when={!hasContent() && !props.onDismiss}>

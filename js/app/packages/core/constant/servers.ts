@@ -130,3 +130,21 @@ export const SYNC_PERMISSION_TOKEN_DSS_HOST =
 export function staticFileIdEndpoint(id: string): string {
   return `${SERVER_HOSTS['static-file']}/file/${id}`;
 }
+
+type StaticFileSize = 'small' | 'medium';
+
+const staticFileSizes: Record<StaticFileSize, number> = {
+  small: 320,
+  medium: 1080,
+};
+
+export function staticFileSizedEndpoint(
+  id: string,
+  size: StaticFileSize
+): string {
+  return `${staticFileIdEndpoint(id)}?size=${staticFileSizes[size]}`;
+}
+
+export function staticFileSizedUrl(url: string, size: StaticFileSize): string {
+  return `${url}?size=${staticFileSizes[size]}`;
+}

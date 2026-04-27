@@ -475,7 +475,7 @@ export function EntityRow(
     <div
       data-swipe-row
       data-swipe-entity-id={props.entityId}
-      class="grow w-full grid grid-cols-1 relative overflow-hidden transition-[grid-template-rows] duration-[250ms] ease-in-out"
+      class="grow w-full grid grid-cols-1 relative overflow-hidden transition-[grid-template-rows] duration-250 ease-in-out"
       classList={{
         'bg-transparent': rowState()?.phase === 'idle',
         [props.swipeLeftColor ?? 'bg-edge-muted']:
@@ -487,7 +487,7 @@ export function EntityRow(
     >
       {/* Swipe Right Revealed Component */}
       <div
-        class="absolute top-0 left-0 h-full flex items-center justify-center z-[1]"
+        class="absolute top-0 left-0 h-full flex items-center justify-center z-user-highlight"
         style={{
           width: `${SWIPE_ACTIVATION_DISTANCE}px`,
         }}
@@ -507,7 +507,7 @@ export function EntityRow(
 
       {/* Swipe Left Revealed Component */}
       <div
-        class="absolute top-0 right-0 h-full flex items-center justify-center z-[1]"
+        class="absolute top-0 right-0 h-full flex items-center justify-center z-user-highlight"
         style={{
           width: `${SWIPE_ACTIVATION_DISTANCE}px`,
         }}
@@ -528,7 +528,7 @@ export function EntityRow(
       {/* Swipe Surface */}
       <div
         data-swipe-surface
-        class="relative min-h-0 h-full z-[2] w-full select-none [touch-action:pan-y]"
+        class="relative min-h-0 h-full z-annotation-layer w-full select-none [touch-action:pan-y]"
       >
         {/* Swipe Content */}
         <div

@@ -111,6 +111,35 @@ env_var! {
     pub struct GithubSyncAppPemSecretKey;
 }
 
+env_var! {
+    pub struct CalWebhookSecretKey;
+}
+
+env_var! {
+    /// Secrets Manager secret name holding the JSON map from cal.com
+    /// `eventTypeId` to Meta `content_name`.
+    pub struct CalEventTypeContentNamesKey;
+}
+
+env_var! {
+    /// Meta (Facebook) Conversions API pixel id. Required — pair with
+    /// [`MetaAccessToken`] for cal → Meta Lead tracking. Set to a dummy
+    /// value locally; it's only exercised when a cal webhook fires.
+    pub struct MetaPixelId;
+}
+
+env_var! {
+    /// Meta (Facebook) Conversions API access token. Required — see
+    /// [`MetaPixelId`].
+    pub struct MetaAccessToken;
+}
+
+maybe_env_var! {
+    /// Optional Meta test event code — routes events to Meta's test events
+    /// view instead of production tracking.
+    pub struct MetaTestEventCode;
+}
+
 impl Config {
     pub fn from_env(
         document_storage_service_cloudfront_signer_private_key: LocalOrRemoteSecret<
