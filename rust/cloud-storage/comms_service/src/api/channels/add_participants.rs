@@ -131,7 +131,7 @@ pub async fn handler(
             .collect();
         let sqs_client = &ctx.sqs_client;
         sqs_client
-            .enqueue_contacts_add_participants(participants.clone(), channel_participants)
+            .enqueue_contacts([participants.clone(), channel_participants].concat())
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to create 'add participant' SQS message");

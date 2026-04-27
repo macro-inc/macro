@@ -1,5 +1,4 @@
 use crate::pubsub::context::PubSubContext;
-use contacts::domain::models::messages::ConnectionsMessage;
 use models_email::db::address::EmailRecipientType;
 use models_email::service::attachment::{
     AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
@@ -157,19 +156,12 @@ async fn handle_contacts_sync(ctx: &PubSubContext, link: &Link) -> Result<(), Pr
         link.macro_id
     );
 
-    let mut users = vec![link.macro_id.to_string()];
-    users.extend(
-        email_addresses
-            .iter()
-            .map(|email| format!("macro|{}", email)),
-    );
-
-    let connections = (1..users.len()).map(|i| (0, i)).collect::<Vec<_>>();
-
-    let connections_message = ConnectionsMessage { users, connections };
+    let users = std::iter::once(link.macro_id.to_string())
+        .chain(email_addresses.iter().map(|email| format!("macro|{}", email)))
+        .collect();
 
     ctx.sqs_client
-        .enqueue_contacts_add_connection(connections_message)
+        .enqueue_contacts(users)
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {

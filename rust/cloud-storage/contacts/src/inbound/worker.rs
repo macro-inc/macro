@@ -1,6 +1,6 @@
 use crate::domain::ports::{ContactsNotifier, ContactsRepository};
 use crate::domain::service::ContactsDomainService;
-use crate::domain::models::messages::Message;
+use crate::domain::models::messages::ContactsMessage;
 use sqs_worker::SQSWorker;
 use tracing::instrument;
 
@@ -75,12 +75,12 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
     }
 }
 
-/// Parses a JSON string into a contacts [`Message`].
-pub fn message_from_json(body: &str) -> Option<Message> {
+/// Parses a JSON string into a [`ContactsMessage`].
+pub fn message_from_json(body: &str) -> Option<ContactsMessage> {
     serde_json::from_str(body).ok()
 }
 
 /// Extracts and parses the body from an SQS message.
-pub fn message_from_sqs(msg: &aws_sdk_sqs::types::Message) -> Option<Message> {
+pub fn message_from_sqs(msg: &aws_sdk_sqs::types::Message) -> Option<ContactsMessage> {
     msg.body.as_ref().and_then(|body| message_from_json(body))
 }
