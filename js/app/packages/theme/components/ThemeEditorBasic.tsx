@@ -276,15 +276,15 @@ export function ThemeEditorBasic(){
 
       <div
         style="
-        font-family: var(--font-sans);
-        background-color: var(--b1);
-        box-sizing: border-box;
-        height: min-content;
-        font-weight: 500;
-        font-size: 12px;
-        display: grid;
-        padding: 20px;
-        gap: 20px;
+          font-family: var(--font-sans);
+          background-color: var(--b1);
+          box-sizing: border-box;
+          height: min-content;
+          font-weight: 500;
+          font-size: 12px;
+          display: grid;
+          padding: 20px;
+          gap: 20px;
         "
       >
         <div
@@ -292,6 +292,7 @@ export function ThemeEditorBasic(){
           ref={canvasContainerRef}
           style="
             border: 1px solid var(--color-edge-muted);
+            border-radius: 2px;
             position: relative;
             height: 250px;
             width: 100%;
@@ -300,6 +301,7 @@ export function ThemeEditorBasic(){
           <canvas
             ref={canvasRef}
             style="
+              border-radius: 1px;
               touch-action: none;
               user-select: none;
               display: block;
@@ -314,6 +316,7 @@ export function ThemeEditorBasic(){
               transform: translate(-50%, -50%);
               background-color: var(--a0);
               box-sizing: border-box;
+              border-radius: 2px;
               position: absolute;
               height: 18px;
               width: 18px;
@@ -325,9 +328,9 @@ export function ThemeEditorBasic(){
           style="
             grid-template-columns: 11ch 1fr;
             height: min-content;
+            gap: 20px 10px;
             display: grid;
             width: 100%;
-            gap: 20px 10px;
           "
         >
           <div style="position: relative;">

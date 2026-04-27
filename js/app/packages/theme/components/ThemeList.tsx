@@ -90,7 +90,14 @@ export function ThemeList() {
                 z-index: 1;
               "
             >
-              <div style="font-size: var(--text-xs);">Theme List</div>
+              <div
+                style={{
+                  'font-size': '0.875rem',
+                  'font-weight': '600'
+                }}
+              >
+                Theme List
+              </div>
             </div>
             <div style="height: 41px;" />
           <For each={themes()}>
