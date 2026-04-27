@@ -1,9 +1,10 @@
 import {
-  BlockAliasRegistry,
-  BlockRegistry,
   type BlockAlias,
+  BlockAliasRegistry,
   type BlockName,
+  BlockRegistry,
 } from '@core/block';
+import { isTauri } from '@core/util/platform';
 import { mergeRegister } from '@lexical/utils';
 import { parseThemeV1Json } from '@theme/utils/themeValidation';
 import {
@@ -50,6 +51,12 @@ function isValidMentionHostname(hostname: string): boolean {
     (target === Hosts.Localhost && current === Hosts.Dev)
   ) {
     return true;
+  }
+  // On Tauri, window.location.hostname is 'localhost', but Macro links are
+  // built with the real web origin (macro.com or dev.macro.com). Accept any
+  // recognized Macro host when running inside the native Tauri app.
+  if (isTauri() && current === Hosts.Localhost) {
+    return target === Hosts.Prod || target === Hosts.Dev;
   }
   return false;
 }
