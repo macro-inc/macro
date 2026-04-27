@@ -11,10 +11,6 @@ deploy-dev:
 check:
     SQLX_OFFLINE=true cargo check
 
-# # Prepare DB for offline cache for docker image
-prepare_db:
-    just sqlx::prepare_db {{ DATABASE_URL }}
-
 run:
     cargo run --features local_auth
 
