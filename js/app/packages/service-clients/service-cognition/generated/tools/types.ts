@@ -100,11 +100,11 @@ export interface BashCodeExecutionToolError {
  */
 
 /**
- * Search for items by their content. For documents, this searches the document body text. For emails, this searches the email message body. For chats, this searches the message content. This tool finds items based on what's inside them, not their titles or names.
+ * Search for items by their content. For documents, this searches the document body text. For emails, this searches the email message body. For chats, this searches the message content. For call records, this searches the call transcript text. This tool finds items based on what's inside them, not their titles or names.
  */
 export interface ContentSearch {
   /**
-   * Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels']
+   * Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']
    */
   entityTypes: (
     | 'documents'
@@ -115,7 +115,7 @@ export interface ContentSearch {
     | 'call_records'
   )[];
   /**
-   * The text content to search for. This searches within the body of documents, emails, and messages.
+   * The text content to search for. This searches within the body of documents, emails, messages, and call transcripts.
    */
   query: string;
 }
@@ -1043,11 +1043,11 @@ export interface ListEntitiesResponse {
  */
 
 /**
- * Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. This tool finds items based on what they're called, not their content.
+ * Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. For call records, this searches the channel name the call took place in. This tool finds items based on what they're called, not their content.
  */
 export interface NameSearch {
   /**
-   * Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels']
+   * Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']
    */
   entityTypes: (
     | 'documents'
@@ -1058,7 +1058,7 @@ export interface NameSearch {
     | 'call_records'
   )[];
   /**
-   * The name or title to search for. For emails, this is the subject line. For channels, this can be the channel name or participant names.
+   * The name or title to search for. For emails, this is the subject line. For channels, this can be the channel name or participant names. For call records, this is the channel name the call belongs to.
    */
   name: string;
 }
