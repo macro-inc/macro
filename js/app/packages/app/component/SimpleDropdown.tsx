@@ -286,7 +286,10 @@ export type DropdownMenuLike = {
 // focus management) but replace Item with the wrapped KobalteItem so that
 // callers can use the text/icon/onClick interface.
 const DesktopDropdown = Object.assign(
-  ({ boundary: _boundary, ...props }: any) => <DropdownMenu {...props} />,
+  (props: any) => {
+    const [, others] = splitProps(props, ['boundary']);
+    return <DropdownMenu {...others} />;
+  },
   {
     Trigger: DropdownMenu.Trigger,
     Portal: DropdownMenu.Portal,
