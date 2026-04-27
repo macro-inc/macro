@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CallRecordChannelName } from './callRecordChannelName';
+import type { CallRecordCustomName } from './callRecordCustomName';
 import type { CallRecordDurationMs } from './callRecordDurationMs';
 import type { CallRecordEgressId } from './callRecordEgressId';
 import type { CallRecordEndedAt } from './callRecordEndedAt';
@@ -25,6 +26,9 @@ export interface CallRecord {
   channelName?: CallRecordChannelName;
   /** User who created the call. */
   createdBy: string;
+  /** User-supplied or AI-generated display name for the call. Only set on
+archived `call_records`; active calls always return `None`. */
+  customName?: CallRecordCustomName;
   /** Call duration in milliseconds (None if still active). */
   durationMs?: CallRecordDurationMs;
   /** Recording egress ID, if any. */

@@ -6256,6 +6256,10 @@
             "type": "string",
             "description": "User who created the call."
           },
+          "customName": {
+            "type": ["string", "null"],
+            "description": "User-supplied or AI-generated display name for the call. Only set on\narchived `call_records`; active calls always return `None`."
+          },
           "durationMs": {
             "type": ["integer", "null"],
             "format": "int64",
@@ -7822,6 +7826,10 @@
         "type": "object",
         "description": "Edit call request",
         "properties": {
+          "customName": {
+            "type": ["string", "null"],
+            "description": "Updated user-supplied display name for the call. `None` is a no-op;\n`Some(s)` overwrites `call_records.custom_name` with `s`. Only the\narchived `call_records` row carries this column — patching while the\ncall is still active is a no-op for this field."
+          },
           "sharePermission": {
             "oneOf": [
               {
@@ -10986,6 +10994,10 @@
           "createdBy": {
             "type": "string",
             "description": "User who created the call."
+          },
+          "customName": {
+            "type": ["string", "null"],
+            "description": "User-supplied or AI-generated display name for the call."
           },
           "durationMs": {
             "type": ["integer", "null"],
