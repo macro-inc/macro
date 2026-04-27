@@ -25,7 +25,7 @@ pub fn attrs<'a>(pairs: &[(&'a str, &'a str)]) -> Vec<Attr<'a>> {
 pub struct Indent<T>(pub T);
 
 /// XmlTag
-pub struct XmlTag<'a, T: Sized> {
+pub struct XmlTag<'a, T> {
     /// Tag name.
     pub name: &'a str,
     /// Attributes as `(key, value)` pairs. Rendered in order, space-separated.
@@ -63,8 +63,11 @@ fn self_closing_tag(name: &str, attrs: &[Attr<'_>]) -> String {
     format!("<{name} {}/>", format_attrs(attrs))
 }
 
-fn indent_line(line: &str) -> String {
-    format!("{INDENT}{line}")
+fn indent_text(text: &str) -> String {
+    text.lines()
+        .map(|line| format!("{INDENT}{line}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 impl<'a, T: Attachable> Attachable for XmlTag<'a, T> {
@@ -73,6 +76,7 @@ impl<'a, T: Attachable> Attachable for XmlTag<'a, T> {
             .into_formatted_parts()
             .prepend(TextOrImage::Text(open_tag(self.name, &self.attrs)))
             .append(TextOrImage::Text(close_tag(self.name)))
+            .compact()
     }
 }
 
@@ -80,15 +84,15 @@ impl<T: Attachable> Attachable for Indent<T> {
     fn into_formatted_parts(self) -> FormattedParts {
         self.0.into_formatted_parts().map(|p| match p {
             img @ TextOrImage::Image(_) => img,
-            TextOrImage::Text(t) => TextOrImage::Text(indent_line(&t)),
+            TextOrImage::Text(t) => TextOrImage::Text(indent_text(&t)),
         })
     }
 }
 
-impl<'a> Attachable for ClosedXmlTag<'a> {
+impl Attachable for ClosedXmlTag<'_> {
     fn into_formatted_parts(self) -> FormattedParts {
         let tag = self_closing_tag(self.name, &self.attrs);
-        FormattedParts::new(NonEmpty::new(vec![TextOrImage::Text(tag)]).expect("one tag"))
+        FormattedParts::new(NonEmpty::one(TextOrImage::Text(tag)))
     }
 }
 

@@ -364,25 +364,33 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         all_tools: all_tools_toolset,
         all_tools_prompt,
         entity_access_service: entity_access_service.clone(),
-        attachment_provider: Arc::new(attachment::provider::AttachmentProvider {
-            document: documents::inbound::attachment::DocumentAttachmentService::new(
-                document_tool_context.service.clone(),
-                document_tool_context.entity_access_service.clone(),
-                document_tool_context.lexical_client.clone(),
-            ),
-            email_thread: email::inbound::attachment::EmailAttachmentService::new(
-                email_service_for_tools.clone(),
-                entity_access_service.clone(),
-            ),
-            chat: chat::inbound::attachment::ChatAttachmentService::new(
-                Arc::new(chat::outbound::postgres::PgChatRepo::new(pool.clone())),
-                entity_access_service.clone(),
-            ),
-            channel: comms::inbound::attachment::CommsAttachmentService::new(
-                Arc::new(PgCommsRepo::new(readonly_pool::ReadOnlyPool(pool.clone()))),
-                entity_access_service.clone(),
-            ),
-        }),
+        message_service: Arc::new(chat::domain::service::MessageServiceImpl::new(
+            chat::outbound::postgres::PgChatRepo::new(pool.clone()),
+            attachment::provider::AttachmentProvider {
+                document: documents::inbound::attachment::DocumentAttachmentService::new(
+                    document_tool_context.service.clone(),
+                    document_tool_context.entity_access_service.clone(),
+                    document_tool_context.lexical_client.clone(),
+                ),
+                email_thread: email::inbound::attachment::EmailAttachmentService::new(
+                    email_service_for_tools.clone(),
+                    entity_access_service.clone(),
+                ),
+                chat: chat::inbound::attachment::ChatAttachmentService::new(
+                    Arc::new(chat::outbound::postgres::PgChatRepo::new(pool.clone())),
+                    entity_access_service.clone(),
+                ),
+                channel: comms::inbound::attachment::CommsAttachmentService::new(
+                    Arc::new(PgCommsRepo::new(readonly_pool::ReadOnlyPool(pool.clone()))),
+                    entity_access_service.clone(),
+                ),
+                static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(
+                    Arc::new(static_file::outbound::CdnStaticFileRepo::new(
+                        "http://localhost".into(),
+                    )),
+                ),
+            },
+        )),
         ai_stream_registry: crate::service::ai_stream_registry::AiStreamRegistry::new(Arc::new(
             redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"),
         )),

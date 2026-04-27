@@ -219,7 +219,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let document_repo = PgDocumentRepo::new(db.clone());
     let cloudfront_private_key = match config.environment {
-        Environment::Local => config.cloudfront_signer_private_key.clone(),
+        Environment::Local => config.cloudfront_signer_private_key.replace("\\n", "\n"),
         _ => secretsmanager_client
             .get_secret_value(&config.cloudfront_signer_private_key)
             .await
@@ -253,7 +253,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized document tool context");
 
-    let attachment_provider = Arc::new(attachment::provider::AttachmentProvider {
+    let attachment_provider = attachment::provider::AttachmentProvider {
         document: documents::inbound::attachment::DocumentAttachmentService::new(
             document_tool_context.service.clone(),
             document_tool_context.entity_access_service.clone(),
@@ -271,7 +271,14 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(PgCommsRepo::new(ReadOnlyPool(db.clone()))),
             entity_access_service.clone(),
         ),
-    });
+        static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(Arc::new(
+            static_file::outbound::CdnStaticFileRepo::new(config.static_file_service_url.clone()),
+        )),
+    };
+    let message_service = Arc::new(chat::domain::service::MessageServiceImpl::new(
+        chat::outbound::postgres::PgChatRepo::new(db.clone()),
+        attachment_provider,
+    ));
 
     tracing::info!("initialized attachment provider");
 
@@ -409,7 +416,7 @@ async fn main() -> anyhow::Result<()> {
         all_tools: all_tools_toolset,
         all_tools_prompt,
         entity_access_service,
-        attachment_provider,
+        message_service,
         ai_stream_registry: service::ai_stream_registry::AiStreamRegistry::new(
             redis_client.clone(),
         ),

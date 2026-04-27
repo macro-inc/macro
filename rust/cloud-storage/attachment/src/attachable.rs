@@ -1,5 +1,8 @@
 //! impls for Attachable
 
+#[cfg(test)]
+mod test;
+
 use std::borrow::Cow;
 
 use crate::fmt::{ClosedXmlTag, XmlTag};
@@ -30,8 +33,8 @@ impl Attachable for Attachments<'_> {
 impl Attachable for ResolutionError {
     fn into_formatted_parts(self) -> FormattedParts {
         XmlTag {
-            name: "unavailable_attachment",
-            attrs: vec![(Cow::Borrowed("id"), Cow::Owned(self.id))],
+            name: "attachment",
+            attrs: self.reference.attributes(),
             body: self.error,
         }
         .into_formatted_parts()
@@ -72,7 +75,7 @@ impl Attachable for NonEmpty<Vec<AttachmentPart<'_>>> {
                 acc
             });
 
-        FormattedParts::new(NonEmpty::new(parts).expect("this will not be empty"))
+        FormattedParts::new(NonEmpty::new(parts).expect("attachments is non empty"))
     }
 }
 

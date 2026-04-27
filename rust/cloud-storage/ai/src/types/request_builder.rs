@@ -57,15 +57,14 @@ pub struct RequestBuilder<ChatModel, Messages, Prompt> {
 /// the build method only works if we have model, messages, and system prompt
 impl RequestBuilder<Model, Vec<ChatMessage>, String> {
     pub fn build(mut self) -> ChatCompletionRequest {
-        if let Some(attachments) = self.attachments.take() {
-            if let Some(message) = self
+        if let Some(attachments) = self.attachments.take()
+            && let Some(message) = self
                 .messages
                 .iter_mut()
                 .rev()
                 .find(|message| message.role == Role::User)
-            {
-                message.attachments = Some(attachments);
-            }
+        {
+            message.attachments = Some(attachments);
         }
 
         ChatCompletionRequest {

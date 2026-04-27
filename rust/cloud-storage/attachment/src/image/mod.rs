@@ -5,7 +5,7 @@ mod base_64_image;
 pub use base_64_image::*;
 
 /// An image that can be included in an attachment.
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum ImageData {
     /// A base64-encoded image, potentially re-encoded as WebP.
     Base64(Base64Image),
@@ -16,7 +16,7 @@ pub enum ImageData {
 impl ImageData {
     /// Compress and re-encode raw image bytes into a downscaled WebP.
     pub fn try_from_bytes(bytes: Vec<u8>) -> Result<Self, anyhow::Error> {
-        Base64Image::compress_and_reencode(bytes).map(Self::Base64)
+        Base64Image::downscale_and_reencode(bytes).map(Self::Base64)
     }
 
     /// try to parse a string as a base64 image

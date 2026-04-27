@@ -8,10 +8,7 @@ use attachment::{
     AttachmentContent, AttachmentError, AttachmentPart, AttachmentService, Attachments,
     ResolutionError,
 };
-use entity_access::domain::{
-    models::{AccessError, MemberParticipantRole},
-    ports::EntityAccessService,
-};
+use entity_access::domain::{models::MemberParticipantRole, ports::EntityAccessService};
 use futures::future::join_all;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
@@ -47,9 +44,14 @@ impl<C: CommsRepo, E: EntityAccessService> AttachmentService for CommsAttachment
     ) -> Attachments<'a> {
         let user_id = &user_id;
         let results = join_all(ids.iter().map(|entity| async move {
-            self.resolve_one(user_id, entity)
-                .await
-                .map_err(|error| ResolutionError::new(entity.entity_id.to_string(), error))
+            self.resolve_one(user_id, entity).await.map_err(|error| {
+                ResolutionError::new(
+                    entity
+                        .entity_type
+                        .with_entity_string(entity.entity_id.to_string()),
+                    error,
+                )
+            })
         }))
         .await;
         Attachments::new(NonEmpty::new(results).expect("ids was non-empty"))
@@ -75,12 +77,7 @@ impl<C: CommsRepo, E: EntityAccessService> CommsAttachmentService<C, E> {
                 EntityType::Channel,
             )
             .await
-            .map_err(|e| match e {
-                AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
-                    AttachmentError::PermissionDenied { id: id.to_string() }
-                }
-                other => AttachmentError::Internal(anyhow::anyhow!("{other:#}")),
-            })?;
+            .map_err(|e| AttachmentError::PermissionDenied(Box::new(e)))?;
 
         let (name, messages) = tokio::join!(
             self.comms_repo.get_channel_name(channel_id),

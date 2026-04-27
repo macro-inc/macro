@@ -71,20 +71,12 @@ pub async fn generate_patches(
     file_name: String,
 ) -> Result<AIDiffResponse, Error> {
     let attachment_content = attachment::AttachmentContent {
-        reference: model_entity::EntityType::Document
-            .with_entity_string(request.markdown_file_id),
+        reference: model_entity::EntityType::Document.with_entity_string(request.markdown_file_id),
         name: Some(file_name),
-        content: non_empty::NonEmpty::new(vec![attachment::AttachmentPart::Content(
-            markdown_text,
-        )])
-        .ok()
-        .expect("single element"),
+        content: non_empty::NonEmpty::one(attachment::AttachmentPart::Content(markdown_text)),
     };
-    let attachments = attachment::Attachments::new(
-        non_empty::NonEmpty::new(vec![Ok(attachment_content)])
-            .ok()
-            .expect("single element"),
-    );
+    let attachments =
+        attachment::Attachments::new(non_empty::NonEmpty::one(Ok(attachment_content)));
 
     let request = RequestBuilder::new()
         .max_tokens(32_000)

@@ -67,7 +67,6 @@ dependencies = [
  "serde_json",
  "strum",
  "thiserror 2.0.17",
- "tiktoken-rs",
  "tokio",
  "tracing",
  "utoipa",
@@ -602,6 +601,7 @@ dependencies = [
  "model-entity",
  "model_file_type",
  "non_empty",
+ "serde",
  "thiserror 2.0.17",
  "webp",
 ]
@@ -3145,6 +3145,7 @@ dependencies = [
  "soup",
  "sqlx",
  "sqs_client",
+ "static_file",
  "static_file_service_client",
  "stream",
  "strum",
@@ -4592,6 +4593,7 @@ dependencies = [
  "macro_uuid",
  "mockall",
  "model",
+ "model-entity",
  "model-error-response",
  "models_permissions",
  "redis",
@@ -7205,6 +7207,9 @@ dependencies = [
 [[package]]
 name = "non_empty"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "noop_proc_macro"
@@ -10709,6 +10714,21 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
+name = "static_file"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "attachment",
+ "futures",
+ "macro_user_id",
+ "mime",
+ "model-entity",
+ "non_empty",
+ "reqwest",
+ "tracing",
+]
 
 [[package]]
 name = "static_file_service"

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \"content\"\n        FROM \"ResolvedUserMessage\"\n        WHERE \"messageId\" = $1\n        ",
+  "query": "\n        SELECT \"content\"\n        FROM resolved_message_content\n        WHERE \"messageId\" = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "9d4d5ca7dabf44edb8f9a26632ef7d34fb095b819a4203ed62cbc770f94f459c"
+  "hash": "9021780763850e636cf944f6171ce2253c39d7532a38bcda72c8a6da965310f9"
 }

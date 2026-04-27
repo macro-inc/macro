@@ -9,6 +9,7 @@ provider = ["dep:futures"]
 
 [dependencies]
 anyhow = { workspace = true }
+serde = { workspace = true }
 thiserror = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 non_empty = { path = "../non_empty" }

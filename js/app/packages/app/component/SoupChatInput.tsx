@@ -12,7 +12,6 @@ import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { Hotkey } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
 import { useHasPaidAccess } from '@core/auth/license';
-import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -43,7 +42,6 @@ function SoupChatInputInner() {
     },
     block: 'chat',
     showOpenTabs: true,
-    useSnapshotForDocuments: ENABLE_SNAPSHOT_NODE,
   });
 
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');

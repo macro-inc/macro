@@ -1,5 +1,6 @@
 //! Wrapper around types that implement IsEmpty trait to ensure they are non-empty.
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::ops::Deref;
 
@@ -45,9 +46,17 @@ impl std::error::Error for EmptyError {}
 /// // Can use HashMap methods directly via Deref
 /// assert_eq!(non_empty_map["key"], "value");
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct NonEmpty<T> {
     inner: T,
+}
+
+impl<T> NonEmpty<Vec<T>> {
+    /// Create a new `NonEmpty` wrapper with one element
+    pub fn one(value: T) -> Self {
+        Self { inner: vec![value] }
+    }
 }
 
 impl<T> NonEmpty<T>

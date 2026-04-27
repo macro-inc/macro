@@ -6,10 +6,7 @@ use attachment::{
     AttachmentContent, AttachmentError, AttachmentPart, AttachmentService, Attachments,
     ResolutionError,
 };
-use entity_access::domain::{
-    models::ViewAccessLevel,
-    ports::EntityAccessService,
-};
+use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use futures::future::join_all;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
@@ -50,9 +47,14 @@ impl<Svc: EmailService, ESvc: EntityAccessService> AttachmentService
     ) -> Attachments<'a> {
         let user_id = &user_id;
         let results = join_all(ids.iter().map(|entity| async move {
-            self.resolve_one(user_id, entity)
-                .await
-                .map_err(|error| ResolutionError::new(entity.entity_id.to_string(), error))
+            self.resolve_one(user_id, entity).await.map_err(|error| {
+                ResolutionError::new(
+                    entity
+                        .entity_type
+                        .with_entity_string(entity.entity_id.to_string()),
+                    error,
+                )
+            })
         }))
         .await;
 
@@ -80,7 +82,7 @@ impl<Svc: EmailService, ESvc: EntityAccessService> EmailAttachmentService<Svc, E
                 EntityType::EmailThread,
             )
             .await
-            .map_err(|_| AttachmentError::PermissionDenied { id: id.to_string() })?;
+            .map_err(|e| AttachmentError::PermissionDenied(Box::new(e)))?;
 
         let thread = self
             .service

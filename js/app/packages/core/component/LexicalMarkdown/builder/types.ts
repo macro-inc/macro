@@ -29,7 +29,6 @@ export interface MentionsOptions {
   onCreate?: (mention: ItemMention) => void;
   block?: string;
   showOpenTabs?: boolean;
-  useSnapshotForDocuments?: boolean;
   sourceDocumentId?: string;
   /** Override entity data source (e.g. sandbox data for onboarding). Bypasses quickAccess. */
   entities?: () => import('@core/context/quickAccess').EntityItem[];

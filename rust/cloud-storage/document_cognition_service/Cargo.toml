@@ -118,6 +118,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "gmail",
   "search",
 ] }
+static_file = { path = "../static_file", features = ["attachment"] }
 static_file_service_client = { path = "../static_file_service_client" }
 stream = { path = "../stream" }
 strum = { workspace = true }

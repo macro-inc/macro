@@ -7,6 +7,7 @@ use ai_tools::{
 };
 use attachment::provider::AttachmentProvider;
 use axum::extract::FromRef;
+use chat::domain::service::MessageServiceImpl;
 use chat::inbound::attachment::ChatAttachmentService;
 use chat::outbound::postgres::PgChatRepo;
 use comms::inbound::attachment::CommsAttachmentService;
@@ -27,6 +28,8 @@ use scribe::{
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
+use static_file::inbound::attachment::StaticFileAttachmentService;
+use static_file::outbound::CdnStaticFileRepo;
 use std::sync::{Arc, OnceLock};
 use stream::domain::StreamRepo;
 
@@ -39,7 +42,11 @@ pub type DcsAttachmentProvider = AttachmentProvider<
     EmailAttachmentService<ToolEmailService, ToolEntityAccessService>,
     ChatAttachmentService<PgChatRepo, ToolEntityAccessService>,
     CommsAttachmentService<PgCommsRepo, ToolEntityAccessService>,
+    StaticFileAttachmentService<CdnStaticFileRepo>,
 >;
+
+/// Type alias for the message service wired to concrete DCS services.
+pub type DcsMessageService = MessageServiceImpl<PgChatRepo, DcsAttachmentProvider>;
 
 #[cfg(test)]
 mod test;
@@ -80,7 +87,7 @@ pub struct ApiContext {
     pub all_tools: Arc<AiToolSet>,
     pub all_tools_prompt: &'static str,
     pub entity_access_service: Arc<DcsEntityAccessService>,
-    pub attachment_provider: Arc<DcsAttachmentProvider>,
+    pub message_service: Arc<DcsMessageService>,
     pub ai_stream_registry: AiStreamRegistry,
 }
 

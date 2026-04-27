@@ -567,13 +567,12 @@ mod tests {
     fn test_assistant_with_tool_error_roundtrip() {
         let tool_call_id = "call_123".to_string();
         let tool_name = "get_weather".to_string();
-        let expected_content = ChatMessageContent::AssistantMessageParts(vec![
-            AssistantMessagePart::ToolCallErr {
+        let expected_content =
+            ChatMessageContent::AssistantMessageParts(vec![AssistantMessagePart::ToolCallErr {
                 name: tool_name.clone(),
                 description: "<Error message here>".to_string(),
                 id: tool_call_id.clone(),
-            },
-        ]);
+            }]);
 
         let msg = ChatMessage {
             role: Role::Assistant,

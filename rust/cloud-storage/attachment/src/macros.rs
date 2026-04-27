@@ -14,7 +14,7 @@ macro_rules! non_empty_collection {
             }
             /// Build from a single item.
             $vis fn one(part: $item) -> Self {
-                Self(NonEmpty::new(vec![part]).expect("single element is non-empty"))
+                Self(NonEmpty::one(part))
             }
             /// Borrow the underlying parts.
             $vis fn parts(&self) -> &NonEmpty<Vec<$item>> {

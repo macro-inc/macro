@@ -40,9 +40,14 @@ impl<R: ChatRepo, ESvc: EntityAccessService> AttachmentService for ChatAttachmen
     ) -> Attachments<'a> {
         let user_id = &user_id;
         let results = join_all(ids.iter().map(|entity| async move {
-            self.resolve_one(user_id, entity)
-                .await
-                .map_err(|error| ResolutionError::new(entity.entity_id.to_string(), error))
+            self.resolve_one(user_id, entity).await.map_err(|error| {
+                ResolutionError::new(
+                    entity
+                        .entity_type
+                        .with_entity_string(entity.entity_id.to_string()),
+                    error,
+                )
+            })
         }))
         .await;
 
@@ -73,11 +78,8 @@ impl<R: ChatRepo, ESvc: EntityAccessService> ChatAttachmentService<R, ESvc> {
             .await
             .map_err(|e| AttachmentError::Internal(e.into()))?;
 
-        let parts: Vec<AttachmentPart<'static>> = chat
-            .messages
-            .iter()
-            .filter_map(format_message)
-            .collect();
+        let parts: Vec<AttachmentPart<'static>> =
+            chat.messages.iter().filter_map(format_message).collect();
 
         let content = NonEmpty::new(parts).map_err(|_| AttachmentError::NoContent)?;
 

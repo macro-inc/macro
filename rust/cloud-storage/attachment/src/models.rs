@@ -8,12 +8,9 @@ use thiserror::Error;
 /// Errors that can occur while resolving attachments.
 #[derive(Debug, Error)]
 pub enum AttachmentError {
-    /// The caller does not have read access to the referenced document.
-    #[error("no read access to document {id}")]
-    PermissionDenied {
-        /// The id of the document the user lacks access to.
-        id: String,
-    },
+    /// The caller does not have access to the referenced entity.
+    #[error(transparent)]
+    PermissionDenied(Box<dyn std::error::Error + Send + Sync>),
     /// The referenced document has no file type recorded.
     #[error("unknown file type")]
     UnknownFileType,
@@ -31,19 +28,19 @@ pub enum AttachmentError {
     RoutingError(String, EntityType),
 }
 
-/// An attachment or attachment part that failed to resolve with its id
+/// An attachment that failed to resolve.
 #[derive(Debug)]
 pub struct ResolutionError {
-    /// Id of attachment that failed to resolve
-    pub id: String,
-    /// Reason
+    /// The entity that could not be resolved.
+    pub reference: Entity<'static>,
+    /// Reason for the failure.
     pub error: AttachmentError,
 }
 
 impl ResolutionError {
     /// Create a new resolution error.
-    pub fn new(id: String, error: AttachmentError) -> Self {
-        Self { id, error }
+    pub fn new(reference: Entity<'static>, error: AttachmentError) -> Self {
+        Self { reference, error }
     }
 }
 
@@ -103,6 +100,7 @@ crate::non_empty_collection! {
 }
 
 /// The primitive form of attachment data sent to AI providers
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum TextOrImage {
     /// All non-image dats is represented as text
     Text(String),
@@ -112,6 +110,7 @@ pub enum TextOrImage {
 
 crate::non_empty_collection! {
     /// A collection of attachment data constructed from one or more attachments
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     pub struct FormattedParts(TextOrImage);
 }
 

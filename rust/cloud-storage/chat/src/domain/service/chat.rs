@@ -1,7 +1,7 @@
 //! Default [`ChatService`] implementation backed by a [`ChatRepo`].
 
 use crate::domain::{
-    models::{ChatErr, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs},
+    models::{ChatErr, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs, Result},
     ports::{ChatRepo, ChatService},
 };
 use ai::types::{AssistantMessagePart, ChatMessageContent};
@@ -59,7 +59,7 @@ where
         &self,
         user_id: MacroUserIdStr<'static>,
         args: CreateChatArgs,
-    ) -> Result<String, ChatErr> {
+    ) -> Result<String> {
         if args.name.graphemes(true).count() > 100 {
             return Err(ChatErr::BadRequest("name too long".to_string()));
         }
@@ -91,7 +91,7 @@ where
     async fn get_chat(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<GetChatResponse, ChatErr> {
+    ) -> Result<GetChatResponse> {
         let user_id = entity_access_receipt.get_authenticated_user()?;
         let chat_id = &entity_access_receipt.entity().entity_id;
 
@@ -110,7 +110,7 @@ where
     async fn copy_chat(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<String, ChatErr> {
+    ) -> Result<String> {
         let user_id = entity_access_receipt.get_authenticated_user()?;
         let chat_id = &entity_access_receipt.entity().entity_id;
 
@@ -131,7 +131,7 @@ where
     async fn delete(
         &self,
         entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         let chat_id = &entity_access_receipt.entity().entity_id;
         let project_id = self
             .repo
@@ -165,7 +165,7 @@ where
     async fn permanently_delete(
         &self,
         entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         let chat_id = &entity_access_receipt.entity().entity_id;
         let project_id = self
             .repo
@@ -200,7 +200,7 @@ where
         &self,
         entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         args: PatchChatArgs,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         if let Some(name) = args.name.as_ref()
             && name.graphemes(true).count() > 100
         {
@@ -265,7 +265,7 @@ where
     async fn revert_delete(
         &self,
         entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         let chat_id = &entity_access_receipt.entity().entity_id;
         let chat = self.repo.get_metadata(chat_id).await?;
         self.repo
@@ -277,7 +277,7 @@ where
     async fn get_permissions(
         &self,
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<SharePermissionV2, ChatErr> {
+    ) -> Result<SharePermissionV2> {
         let chat_id = &entity_access_receipt.entity().entity_id;
         self.repo.get_permissions(chat_id).await
     }
@@ -289,7 +289,7 @@ where
         message_id: &str,
         tool_call_id: &str,
         new_args: serde_json::Value,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         let chat_id = &entity_access_receipt.entity().entity_id;
 
         let mut parts = self
@@ -319,7 +319,7 @@ where
         message_id: &str,
         tool_call_id: &str,
         response: UserToolResponse<serde_json::Value>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         let chat_id = &entity_access_receipt.entity().entity_id;
         let mut parts = self
             .get_tool_call_parts(chat_id, message_id, tool_call_id)
@@ -341,7 +341,7 @@ where
         message_id: &str,
         tool_call_id: &str,
         args: Option<serde_json::Value>,
-    ) -> Result<serde_json::Value, ChatErr> {
+    ) -> Result<serde_json::Value> {
         let user_id = entity_access_receipt.get_authenticated_user()?.to_owned();
         let chat_id = entity_access_receipt.entity().entity_id.clone();
 
@@ -404,7 +404,7 @@ where
         entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         message_id: &str,
         tool_call_id: &str,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         let rejected_json =
             serde_json::to_value(UserToolResponse::Rejected::<()>).map_err(anyhow::Error::from)?;
 
@@ -434,7 +434,7 @@ where
         chat_id: &str,
         message_id: &str,
         tool_call_id: &str,
-    ) -> Result<Vec<AssistantMessagePart>, ChatErr> {
+    ) -> Result<Vec<AssistantMessagePart>> {
         let content = self.repo.get_message_content(chat_id, message_id).await?;
         match content {
             ChatMessageContent::AssistantMessageParts(parts) => {

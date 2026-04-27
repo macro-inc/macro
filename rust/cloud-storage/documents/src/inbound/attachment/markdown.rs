@@ -52,14 +52,14 @@ async fn resolve_dss_image<DSvc: DocumentService, ESvc: EntityAccessService>(
     image_id: &str,
 ) -> AttachmentPart<'static> {
     let reference = EntityType::Document.with_entity_string(image_id.to_string());
-    let result = try_resolve_dss_image(svc, user_id, image_id)
-        .await
-        .map(|data| AttachmentContent {
+    let result = match try_resolve_dss_image(svc, user_id, image_id).await {
+        Ok(data) => Ok(AttachmentContent {
             reference,
             name: None,
-            content: NonEmpty::new(vec![AttachmentPart::Image(data)]).expect("single element"),
-        })
-        .map_err(|error| ResolutionError::new(image_id.to_string(), error));
+            content: NonEmpty::one(AttachmentPart::Image(data)),
+        }),
+        Err(error) => Err(ResolutionError::new(reference, error)),
+    };
     AttachmentPart::Child(Box::new(result))
 }
 
@@ -85,14 +85,14 @@ async fn try_resolve_dss_image<DSvc: DocumentService, ESvc: EntityAccessService>
 
 async fn resolve_static_image(url: &str) -> AttachmentPart<'static> {
     let reference = EntityType::StaticFile.with_entity_string(url.to_string());
-    let result = try_resolve_static_image(url)
-        .await
-        .map(|data| AttachmentContent {
+    let result = match try_resolve_static_image(url).await {
+        Ok(data) => Ok(AttachmentContent {
             reference,
             name: None,
-            content: NonEmpty::new(vec![AttachmentPart::Image(data)]).expect("single element"),
-        })
-        .map_err(|error| ResolutionError::new(url.to_string(), error));
+            content: NonEmpty::one(AttachmentPart::Image(data)),
+        }),
+        Err(error) => Err(ResolutionError::new(reference, error)),
+    };
     AttachmentPart::Child(Box::new(result))
 }
 
