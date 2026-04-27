@@ -21,7 +21,6 @@ members = [
   "connection_gateway_client",
   "connection_gateway_models",
   "contacts",
-  "contacts_db_client",
   "contacts_service",
   "convert_service",
   "cowlike",
