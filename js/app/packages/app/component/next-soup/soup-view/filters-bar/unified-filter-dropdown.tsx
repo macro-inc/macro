@@ -733,19 +733,24 @@ export const UnifiedFilterDropdown = () => {
     const toAdd = ids.filter((id) => !current.includes(id));
     const toRemove = current.filter((id) => !ids.includes(id));
 
+    // Exclude NO_ASSIGNEE from backend queries - it's handled client-side only
     const toProps = (list: string[]): PropertyFilter[] =>
-      list.map((id) => ({
-        propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-        type: 'entity',
-        value: id,
-      }));
+      list
+        .filter((id) => id !== NO_ASSIGNEE)
+        .map((id) => ({
+          propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+          type: 'entity',
+          value: id,
+        }));
 
     batch(() => {
       setAssigneeFilter(ids);
-      if (toRemove.length)
-        queryFilters.remove({ include: { properties: toProps(toRemove) } });
-      if (toAdd.length)
-        queryFilters.add({ include: { properties: toProps(toAdd) } });
+      const removeProps = toProps(toRemove);
+      const addProps = toProps(toAdd);
+      if (removeProps.length)
+        queryFilters.remove({ include: { properties: removeProps } });
+      if (addProps.length)
+        queryFilters.add({ include: { properties: addProps } });
     });
   };
 
