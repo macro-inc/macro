@@ -33,9 +33,9 @@ impl SourcePage {
 
 #[derive(Debug, Error)]
 pub enum BackfillError {
-    #[error("failed reading backfill source: {0}")]
+    #[error("failed reading backfill source")]
     Source(#[source] anyhow::Error),
-    #[error("failed publishing to search event queue: {0}")]
+    #[error("failed publishing to search event queue")]
     Publish(#[source] anyhow::Error),
 }
 
