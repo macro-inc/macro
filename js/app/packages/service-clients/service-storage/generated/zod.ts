@@ -965,6 +965,12 @@ export const getCallRecordResponse = zod
       .describe(
         'When the call started (created_at for active, started_at for archived).'
       ),
+    summary: zod
+      .string()
+      .nullish()
+      .describe(
+        'AI-generated summary of the call. Only set on archived `call_records`\nonce summarization has run; active calls always return `None`.'
+      ),
     transcript: zod
       .array(
         zod

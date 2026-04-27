@@ -840,6 +840,7 @@ impl CallRepository for PgCallRepo {
                 recording_url: None,
                 channel_name: None,
                 custom_name: None,
+                summary: None,
                 is_active: true,
                 participants,
                 transcript,
@@ -849,7 +850,7 @@ impl CallRepository for PgCallRepo {
         // Fall back to archived `call_records`.
         let Some(archived) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, custom_name
+            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, custom_name, summary
             FROM call_records
             WHERE id = $1
             "#,
@@ -918,6 +919,7 @@ impl CallRepository for PgCallRepo {
             recording_url: None,
             channel_name: None,
             custom_name: archived.custom_name,
+            summary: archived.summary,
             is_active: false,
             participants,
             transcript,
@@ -1146,6 +1148,7 @@ impl CallRepository for PgCallRepo {
                 recording_url: None,
                 channel_name: None,
                 custom_name: row.custom_name,
+                summary: None,
                 is_active: row.is_active,
                 participants,
                 transcript: Vec::new(),

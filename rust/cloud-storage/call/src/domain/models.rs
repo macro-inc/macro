@@ -232,6 +232,9 @@ pub struct CallRecord {
     /// User-supplied or AI-generated display name for the call. Only set on
     /// archived `call_records`; active calls always return `None`.
     pub custom_name: Option<String>,
+    /// AI-generated summary of the call. Only set on archived `call_records`
+    /// once summarization has run; active calls always return `None`.
+    pub summary: Option<String>,
     /// Whether the call is currently active (from `calls` table).
     pub is_active: bool,
     /// Participants (both active and historic).

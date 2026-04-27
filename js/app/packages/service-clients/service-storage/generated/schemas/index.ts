@@ -98,6 +98,7 @@ export * from './callRecordPreviewOneOfFour';
 export * from './callRecordPreviewOneOfFourAllOf';
 export * from './callRecordPreviewOneOfFourAllOfType';
 export * from './callRecordRecordingUrl';
+export * from './callRecordSummary';
 export * from './callRecordTranscriptSegment';
 export * from './callRecordTranscriptSegmentDiarizedSpeakerId';
 export * from './callRecordTranscriptSegmentEndedAt';
