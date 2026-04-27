@@ -16,6 +16,7 @@ pub mod entity_name;
 pub mod experiment;
 pub mod experiment_log;
 pub mod history;
+pub mod id_mapping;
 pub mod in_progress_email_link;
 pub mod in_progress_user_link;
 pub mod instructions;

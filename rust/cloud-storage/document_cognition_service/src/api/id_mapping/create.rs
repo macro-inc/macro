@@ -1,6 +1,6 @@
 //! Handler for creating ID mappings.
 
-use crate::service::id_mapping::create_id_mapping;
+use macro_db_client::id_mapping::create_id_mapping;
 use axum::{
     Json,
     extract::{Path, State},

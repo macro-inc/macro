@@ -1,6 +1,6 @@
 //! Handler for retrieving ID mappings.
 
-use crate::service::id_mapping::get_id_mapping;
+use macro_db_client::id_mapping::get_id_mapping;
 use axum::{
     Json,
     extract::{Path, State},
