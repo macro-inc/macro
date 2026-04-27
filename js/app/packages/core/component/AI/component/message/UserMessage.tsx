@@ -79,7 +79,7 @@ export function UserMessage(props: {
   return (
     <div class="flex flex-col space-y-2 group">
       <Show when={quote()}>
-        <div class="relative w-full text-xs flex flex-row space-x-2 justify-end items-start text-ink-muted">
+        <div class="relative w-full text-xs flex flex-row space-x-2 items-start text-ink-muted">
           <div class="flex flex-row items-center space-x-3">
             <QuoteIcon class="w-3 h-3 shrink-0" />
             <p>"{quote()?.substring(0, 300)}..."</p>
@@ -87,7 +87,7 @@ export function UserMessage(props: {
         </div>
       </Show>
       <Show when={props.message.attachments.length > 0}>
-        <div class="flex flex-col space-y-2 items-end justify-end w-auto px-1 pb-1 pl-4 mb-2">
+        <div class="flex flex-col space-y-2 w-full px-1 pb-1 mb-2">
           <For each={imageAttachments()}>
             {(attachment) => (
               <ImagePreview
@@ -115,21 +115,23 @@ export function UserMessage(props: {
       </Show>
 
       <Show when={content()}>
-        <div class="flex flex-row justify-end w-auto items-center">
+        <div class="flex flex-row w-full items-center">
           <Switch>
             <Match when={!isEditing()}>
-              <Show when={props.edit}>
-                <DeprecatedIconButton
-                  icon={PencilIcon}
-                  theme="clear"
-                  onClick={() => setIsEditing(true)}
-                />
-              </Show>
-              <div class="text-align-right! bg-message sender-message px-3.5 w-auto max-w-[80%] py-1.5 whitespace-pre-line relative">
+              <div class="bg-message sender-message rounded-md px-3 py-1 my-px ring ring-edge-muted whitespace-pre-line relative ml-auto max-w-[calc(100%-8rem)]">
                 <ChatMessageMarkdown
                   generating={() => false}
                   text={content()!}
                 />
+                <Show when={props.edit}>
+                  <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <DeprecatedIconButton
+                      icon={PencilIcon}
+                      theme="clear"
+                      onClick={() => setIsEditing(true)}
+                    />
+                  </div>
+                </Show>
               </div>
             </Match>
             <Match when={isEditing()}>
