@@ -46,6 +46,7 @@ import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { openChatWithInput } from '@app/component/ChatWithAgentButton';
 import { useChannelName, useChannelActivity } from '@core/context/channels';
 import { buildMentionMarkdownString, markdownToPlainText } from '@lexical-core';
 import { createActivityTracker } from '@channel/activity-tracker';
@@ -250,6 +251,21 @@ export function Channel(props: ChannelProps) {
           }),
         },
       });
+    },
+    onChat: (ctx) => {
+      const messageMention = buildMentionMarkdownString({
+        type: 'document',
+        documentId: props.channelId,
+        documentName: channelName() ?? '',
+        blockName: 'channel',
+        blockParams: {
+          channel_message_id: ctx.message.id,
+          ...(ctx.message.thread_id && {
+            channel_thread_id: ctx.message.thread_id,
+          }),
+        },
+      });
+      openChatWithInput(`${messageMention}\n\n`);
     },
   });
 

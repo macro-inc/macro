@@ -78,6 +78,24 @@ function buildAttachment(entity: ChatWithAgentEntity): Attachment | undefined {
   }
 }
 
+async function createAndOpenChat(seed: {
+  input?: string;
+  attachments?: Attachment[];
+}) {
+  const result = await createChat();
+  if ('error' in result || !result.chatId) {
+    console.warn('createAndOpenChat: createChat failed', result);
+    toast.failure('Unable to start chat');
+    return;
+  }
+
+  storeChatStateImmediate(result.chatId, seed);
+  globalSplitManager()?.openWithSplit(
+    { type: 'chat', id: result.chatId },
+    { activate: true, preferNewSplit: true }
+  );
+}
+
 export async function openChatWithAgent(entity: ChatWithAgentEntity) {
   const attachment = buildAttachment(entity);
   if (!attachment) {
@@ -85,19 +103,11 @@ export async function openChatWithAgent(entity: ChatWithAgentEntity) {
     toast.failure("Can't attach this item to a chat");
     return;
   }
+  await createAndOpenChat({ attachments: [attachment] });
+}
 
-  const result = await createChat();
-  if ('error' in result || !result.chatId) {
-    console.warn('openChatWithAgent: createChat failed', result);
-    toast.failure('Unable to start chat');
-    return;
-  }
-
-  storeChatStateImmediate(result.chatId, { attachments: [attachment] });
-  globalSplitManager()?.openWithSplit(
-    { type: 'chat', id: result.chatId },
-    { activate: true, preferNewSplit: true }
-  );
+export async function openChatWithInput(initialInput: string) {
+  await createAndOpenChat({ input: initialInput });
 }
 
 export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
