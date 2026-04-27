@@ -214,6 +214,21 @@ export function Channel(props: ChannelProps) {
   const channelName = useChannelName(props.channelId);
   const { popoverSplit } = useSplitLayout();
 
+  const buildChannelMessageMention = (message: {
+    id: string;
+    thread_id?: string | null;
+  }) =>
+    buildMentionMarkdownString({
+      type: 'document',
+      documentId: props.channelId,
+      documentName: channelName() ?? '',
+      blockName: 'channel',
+      blockParams: {
+        channel_message_id: message.id,
+        ...(message.thread_id && { channel_thread_id: message.thread_id }),
+      },
+    });
+
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
@@ -237,35 +252,12 @@ export function Channel(props: ChannelProps) {
         id: 'task-compose',
         params: {
           initialTitle: title,
-          initialContent: buildMentionMarkdownString({
-            type: 'document',
-            documentId: props.channelId,
-            documentName: channelName() ?? '',
-            blockName: 'channel',
-            blockParams: {
-              channel_message_id: ctx.message.id,
-              ...(ctx.message.thread_id && {
-                channel_thread_id: ctx.message.thread_id,
-              }),
-            },
-          }),
+          initialContent: buildChannelMessageMention(ctx.message),
         },
       });
     },
     onChat: (ctx) => {
-      const messageMention = buildMentionMarkdownString({
-        type: 'document',
-        documentId: props.channelId,
-        documentName: channelName() ?? '',
-        blockName: 'channel',
-        blockParams: {
-          channel_message_id: ctx.message.id,
-          ...(ctx.message.thread_id && {
-            channel_thread_id: ctx.message.thread_id,
-          }),
-        },
-      });
-      openChatWithInput(`${messageMention}\n\n`);
+      openChatWithInput(`${buildChannelMessageMention(ctx.message)}\n\n`);
     },
   });
 
