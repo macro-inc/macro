@@ -109,7 +109,7 @@ async fn drain_source<Fut, P>(
 ) -> Result<BackfillReceipt, BackfillError>
 where
     Fut: Future<Output = Result<SourcePage, BackfillError>>,
-    P: SearchEventPublisher + ?Sized,
+    P: SearchEventPublisher,
 {
     let mut offset = 0usize;
     let mut enqueued = 0usize;
