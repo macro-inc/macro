@@ -43,11 +43,13 @@ export function ThemeEditorAdvanced(){
       <div
         style="
         background-color: var(--b1);
-        font-family: var(--font-sans);
+        font-family: var(--font-mono);
         scrollbar-width: none;
         position: relative;
         overflow: hidden;
-        font-size: 14px;
+        font-size: var(--text-xs);
+        font-weight: 300;
+        color: var(--color-ink-extra-muted);
         display: block;
         height: 100%;
       "
@@ -167,6 +169,11 @@ export function ThemeEditorAdvanced(){
                             outline: none;
                             border: none;
                             width: 100%;
+                            font-family: var(--font-mono);
+                            font-size: var(--text-xs);
+                            font-weight: 300;
+                            color: var(--color-ink-extra-muted);
+                            background: transparent;
                           "
                         />
                       </div>
