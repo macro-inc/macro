@@ -441,7 +441,7 @@ function InteractiveOnboardingInner() {
   return (
     <div
       ref={shellRef}
-      class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative"
+      class="flex items-center justify-center h-full w-full p-6 sm:p-8 overflow-hidden relative"
       tabIndex={-1}
     >
       {/* Scoped keyframes */}
