@@ -138,15 +138,15 @@ export function useFilterRefinements() {
   };
 
   const setFilterIds =
-    (filterKey: 'channel_filters' | 'call_filters', field: string) =>
+    (
+      field: 'callChannelId' | 'callSpeakerId' | 'channelId' | 'channelSenderId'
+    ) =>
     (ids: string[]) =>
-      setQueryFilters((prev) => ({
-        ...prev,
-        [filterKey]: {
-          ...(prev[filterKey] ?? {}),
-          [field]: ids.length > 0 ? ids : undefined,
+      queryFilters.add({
+        include: {
+          [field]: ids,
         },
-      }));
+      });
 
   /**
    * Cache of chip objects keyed by a stable id derived from the chip's category
@@ -310,7 +310,7 @@ export function useFilterRefinements() {
         ),
       searchableOptions: channelOptions,
       labelMap: channelLabelMap,
-      onChange: setFilterIds('channel_filters', 'channel_ids'),
+      onChange: setFilterIds('channelId'),
       searchPlaceholder: 'Search channels...',
     });
 
@@ -321,12 +321,12 @@ export function useFilterRefinements() {
       getIds: () => queryFilters.state.include.channelSenderId ?? [],
       searchableOptions: senderOptions,
       labelMap: senderLabelMap,
-      onChange: setFilterIds('channel_filters', 'sender_ids'),
+      onChange: setFilterIds('channelSenderId'),
       searchPlaceholder: 'Search senders...',
     });
 
     if (currentView() === 'search') {
-      if (soup.filters.isActive('calls')) {
+      if (soup.predicates.isActive('calls')) {
         pushSearchableChip({
           key: 'CallIn',
           categoryLabel: 'In',
@@ -337,7 +337,7 @@ export function useFilterRefinements() {
             ),
           searchableOptions: channelOptions,
           labelMap: channelLabelMap,
-          onChange: setFilterIds('call_filters', 'channel_ids'),
+          onChange: setFilterIds('callChannelId'),
           searchPlaceholder: 'Search channels...',
         });
 
@@ -348,7 +348,7 @@ export function useFilterRefinements() {
           getIds: () => queryFilters.state.include.callSpeakerId ?? [],
           searchableOptions: senderOptions,
           labelMap: senderLabelMap,
-          onChange: setFilterIds('call_filters', 'speaker_ids'),
+          onChange: setFilterIds('callSpeakerId'),
           searchPlaceholder: 'Search speakers...',
         });
 
@@ -399,7 +399,7 @@ export function useFilterRefinements() {
 
       // undefined importance means "All" — no chip.
       if (
-        soup.filters.isActive('email') &&
+        soup.predicates.isActive('email') &&
         queryFilters.state.include.emailImportance !== undefined
       ) {
         const IMPORTANCE_SIGNAL = 'importance:signal';

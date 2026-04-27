@@ -7,6 +7,7 @@ import { isListViewID } from '@app/constants/list-views';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import {
   type Accessor,
+  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -750,8 +751,6 @@ export const UnifiedFilterDropdown = () => {
 
   const isTasksView = () => currentView() === 'tasks';
   const isSearchView = () => currentView() === 'search';
-  const isChannelsIndexActive = () => soup.predicates.isActive('channels');
-  const isEmailIndexActive = () => soup.predicates.isActive('email');
   const hasActiveIndex = () =>
     INDEX_OPTIONS.some((opt) => soup.predicates.isActive(opt.value));
 

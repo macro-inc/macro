@@ -22,7 +22,6 @@ import {
   createMemo,
   type JSX,
 } from 'solid-js';
-import type { Option } from './filter-primitives';
 import type {
   ChannelFilters,
   EmailFilters,
@@ -227,7 +226,7 @@ export function useChannelSearchFilter(opts: SearchFilterHookOpts) {
   const { soup, queryFilters } = useSoupView();
   const { changeIndex } = useSearchIndexController();
 
-  const isActive = () => soup.filters.isActive('channels');
+  const isActive = () => soup.predicates.isActive('channels');
 
   const channelIds = createMemo(
     () => queryFilters.state.include.channelId ?? []
@@ -273,7 +272,7 @@ export function useEmailSearchFilter(opts: SearchFilterHookOpts) {
   const { soup, queryFilters } = useSoupView();
   const { changeIndex } = useSearchIndexController();
 
-  const isActive = () => soup.filters.isActive('email');
+  const isActive = () => soup.predicates.isActive('email');
   const importance = createMemo(
     () => queryFilters.state.include.emailImportance
   );
@@ -310,7 +309,7 @@ export function useCallSearchFilter(opts: SearchFilterHookOpts) {
   const { soup, queryFilters } = useSoupView();
   const { changeIndex } = useSearchIndexController();
 
-  const isActive = () => soup.filters.isActive('calls');
+  const isActive = () => soup.predicates.isActive('calls');
   const mutate = <K extends keyof CallFieldMap>(
     field: K,
     value: CallFieldMap[K]
@@ -363,8 +362,8 @@ export function useSearchIndexController() {
   const changeIndex = (newValue: string) => {
     batch(() => {
       for (const opt of INDEX_OPTIONS) {
-        if (soup.filters.isActive(opt.value)) {
-          soup.filters.toggle({ or: [opt.value as FilterID] });
+        if (soup.predicates.isActive(opt.value)) {
+          soup.predicates.toggle({ or: [opt.value as FilterID] });
         }
       }
 
@@ -376,43 +375,43 @@ export function useSearchIndexController() {
 
       const opt = INDEX_OPTIONS.find((o) => o.value === newValue);
       if (!opt) return;
-      soup.filters.toggle({ or: [opt.value as FilterID] });
+      soup.predicates.toggle({ or: [opt.value as FilterID] });
 
       if (opt.value === 'channels') {
         const cached = getCachedChannelSubFilters(contentId);
 
         queryFilters.set({
           include: {
-            ...opt.filterData.include,
+            ...opt.queryFilters.include,
             channelId: cached.channel_ids,
             channelSenderId: cached.sender_ids,
           },
-          exclude: opt.filterData.exclude,
+          exclude: opt.queryFilters.exclude,
         });
       } else if (opt.value === 'email') {
         const cached = getCachedEmailSubFilters(contentId);
         const importance =
           'importance' in cached
             ? (cached.importance ?? undefined)
-            : opt.filterData.include?.emailImportance;
+            : opt.queryFilters.include?.emailImportance;
 
         queryFilters.set({
           include: {
-            ...opt.filterData.include,
+            ...opt.queryFilters.include,
             emailImportance: importance,
           },
-          exclude: opt.filterData.exclude,
+          exclude: opt.queryFilters.exclude,
         });
       } else if (opt.value === 'calls') {
         const cached = getCachedCallSubFilters(contentId);
         const attended =
           'attended' in cached
             ? (cached.attended ?? undefined)
-            : opt.filterData.include?.callAttended;
+            : opt.queryFilters.include?.callAttended;
 
         queryFilters.set({
           include: {
-            ...opt.filterData.include,
+            ...opt.queryFilters.include,
             callChannelId: cached.channel_ids,
             callSpeakerId: cached.speaker_ids,
             callAttended: attended,
@@ -420,8 +419,8 @@ export function useSearchIndexController() {
         });
       } else {
         queryFilters.set({
-          include: opt.filterData.include,
-          exclude: opt.filterData.exclude,
+          include: opt.queryFilters.include,
+          exclude: opt.queryFilters.exclude,
         });
       }
     });
@@ -430,32 +429,37 @@ export function useSearchIndexController() {
   return { changeIndex };
 }
 
-export const INDEX_OPTIONS: (Option & { filterData: Query })[] = [
+export const INDEX_OPTIONS: {
+  label: string;
+  value: string;
+  icon: () => JSX.Element;
+  queryFilters: Query;
+}[] = [
   {
     value: 'channels',
     label: 'Channels',
     icon: () => (
       <EntityIcon targetType="channel" size="xs" theme="monochrome" />
     ),
-    filterData: defineQueryFilters({ exclude: { channelId: [NIL_UUID] } }),
+    queryFilters: defineQueryFilters({ exclude: { channelId: [NIL_UUID] } }),
   },
   {
     value: 'document-or-file',
     label: 'Documents',
     icon: () => <EntityIcon targetType="md" size="xs" theme="monochrome" />,
-    filterData: defineQueryFilters({ exclude: { subType: ['task'] } }),
+    queryFilters: defineQueryFilters({ exclude: { subType: ['task'] } }),
   },
   {
     value: 'task',
     label: 'Tasks',
     icon: () => <EntityIcon targetType="task" size="xs" theme="monochrome" />,
-    filterData: defineQueryFilters({ include: { subType: ['task'] } }),
+    queryFilters: defineQueryFilters({ include: { subType: ['task'] } }),
   },
   {
     value: 'email',
     label: 'Email',
     icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
-    filterData: defineQueryFilters({
+    queryFilters: defineQueryFilters({
       exclude: { threadId: [NIL_UUID] },
       include: { emailImportance: true },
     }),
@@ -464,7 +468,9 @@ export const INDEX_OPTIONS: (Option & { filterData: Query })[] = [
     value: 'calls',
     label: 'Calls',
     icon: () => <EntityIcon targetType="call" size="xs" theme="monochrome" />,
-    filterData: defineQueryFilters({ exclude: { callChannelId: [NIL_UUID] } }),
+    queryFilters: defineQueryFilters({
+      exclude: { callChannelId: [NIL_UUID] },
+    }),
   },
   {
     value: 'folders',
@@ -472,12 +478,12 @@ export const INDEX_OPTIONS: (Option & { filterData: Query })[] = [
     icon: () => (
       <EntityIcon targetType="project" size="xs" theme="monochrome" />
     ),
-    filterData: defineQueryFilters({ exclude: { folderId: [NIL_UUID] } }),
+    queryFilters: defineQueryFilters({ exclude: { folderId: [NIL_UUID] } }),
   },
   {
     value: 'agent',
     label: 'Agents',
     icon: () => <EntityIcon targetType="chat" size="xs" theme="monochrome" />,
-    filterData: defineQueryFilters({ exclude: { chatId: [NIL_UUID] } }),
+    queryFilters: defineQueryFilters({ exclude: { chatId: [NIL_UUID] } }),
   },
 ];
