@@ -41,6 +41,7 @@ tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 
 [dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
 http-body-util = { workspace = true }
 macro_auth = { path = "../macro_auth", features = ["testing"] }
 rate_limit = { path = "../rate_limit", features = ["axum", "testing"] }

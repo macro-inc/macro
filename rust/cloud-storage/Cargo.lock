@@ -2381,6 +2381,7 @@ dependencies = [
  "connection_gateway_client",
  "http-body-util",
  "macro_auth",
+ "macro_db_migrator",
  "macro_middleware",
  "macro_user_id",
  "model",

@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use crate::domain::ports::ContactsRepository;
 use sqlx::PgPool;
 
