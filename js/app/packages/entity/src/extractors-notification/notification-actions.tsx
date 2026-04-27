@@ -6,12 +6,14 @@ import {
   executeMarkNotificationsUndone,
   getAllNotificationsFromGroup,
 } from '@notifications';
-import { useMutationUndoContext, useUndoableMutation } from '@queries/undo';
+import { useUndoableMutation } from '@queries/undo';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useMaybeSoup } from '@app/component/next-soup/soup-context';
 import { restoreSoupFocus } from '@app/component/next-soup/utils';
 
 interface NotificationActionsProps {
   stack: NotificationStack;
+  entityId?: string;
   onMarkAsDone?: () => void;
   onMarkAsRead?: () => void;
 }
@@ -26,42 +28,52 @@ type MarkStackDoneVariables = { notificationIds: string[] };
 
 export function useNotificationStackActions(props: NotificationActionsProps) {
   const notificationSource = useGlobalNotificationSource();
-  const undoCtx = useMutationUndoContext();
+  const soup = useMaybeSoup();
 
   const mutation = useUndoableMutation<void, Error, MarkStackDoneVariables>(
     () => ({
-      mutationFn: async (vars) =>
-        await executeMarkNotificationsDone(vars.notificationIds),
-      onSuccess: () => {
-        const toastId = toast.success(
-          'Marked as done',
-          undefined,
-          [
-            {
-              label: 'Undo',
-              icon: ArrowCounterClockwise,
-              onClick: () => {
-                if (toastId != null) toast.dismiss(toastId);
-                undoCtx.undo({
-                  onError: () => toast.failure('Failed to undo'),
-                });
-                restoreSoupFocus();
-              },
-            },
-          ],
-          10_000,
-          true
-        );
-        props.onMarkAsDone?.();
-      },
+      mutationFn: (vars) => executeMarkNotificationsDone(vars.notificationIds),
       onError: () => {
         toast.failure('Failed to mark as done');
       },
-      undoFn: async (vars) =>
-        await executeMarkNotificationsUndone(vars.notificationIds),
-      redoFn: async (vars) =>
-        await executeMarkNotificationsDone(vars.notificationIds),
+      undoFn: (vars) => executeMarkNotificationsUndone(vars.notificationIds),
+      redoFn: (vars) => executeMarkNotificationsDone(vars.notificationIds),
       undoLabel: 'Mark Done',
+      onPushed: (handle) => {
+        let toastId: number | undefined;
+
+        const showToast = () => {
+          toastId = toast.success(
+            'Marked as done',
+            undefined,
+            [
+              {
+                label: 'Undo',
+                icon: ArrowCounterClockwise,
+                onClick: () => {
+                  handle.undo({
+                    onError: () => toast.failure('Failed to undo'),
+                  });
+                  if (props.entityId) soup?.focus.set(props.entityId);
+                  restoreSoupFocus(props.entityId);
+                },
+              },
+            ],
+            10_000,
+            true
+          );
+        };
+
+        showToast();
+        props.onMarkAsDone?.();
+
+        return {
+          onUndone: () => {
+            if (toastId !== undefined) toast.dismiss(toastId);
+          },
+          onRedone: showToast,
+        };
+      },
     })
   );
 

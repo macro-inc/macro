@@ -1,4 +1,5 @@
 import { blockElementSignal } from '@core/signal/blockElement';
+import { cn } from '@ui/utils/classname';
 import Dialog from '@corvu/dialog';
 import {
   type ComponentProps,
@@ -32,7 +33,10 @@ export function Overlay(props: ComponentProps<typeof Dialog.Overlay<'div'>>) {
   return (
     <Dialog.Overlay
       {...props}
-      class={`flex sm:max-h-full items-center justify-content z-modal-overlay fixed inset-0 bg-modal-overlay ${props.class}`}
+      class={cn(
+        'flex sm:max-h-full items-center justify-content z-modal-overlay fixed inset-0 bg-modal-overlay',
+        props.class
+      )}
       style={{
         'max-height': `calc(100dvh - env(safe-area-inset-top, 0px))`,
       }}
@@ -86,17 +90,19 @@ export function Content(props: ComponentProps<typeof Dialog.Content<'div'>>) {
   return (
     <Dialog.Content
       {...props}
-      class={`absolute z-modal min-w-[calc(100vw-2rem)]
-              @sm:min-w-96 p-3
-              bg-dialog shadow
-              rounded-lg border border-edge
-              flex-col justify-start inline-flex gap-3
-              duration-slow
-              data-open:animate-in
-              data-open:fade-in-0 data-open:zoom-in-95
-              data-closed:animate-out
-              data-closed:fade-out-0 data-closed:zoom-out-95
-              ${props.class}`}
+      class={cn(
+        'absolute z-modal min-w-[calc(100vw-2rem)]',
+        '@sm:min-w-96 p-3',
+        'bg-dialog shadow',
+        'rounded-lg border border-edge',
+        'flex-col justify-start inline-flex gap-3',
+        'duration-slow',
+        'data-open:animate-in',
+        'data-open:fade-in-0 data-open:zoom-in-95',
+        'data-closed:animate-out',
+        'data-closed:fade-out-0 data-closed:zoom-out-95',
+        props.class
+      )}
       style={positionStyle() as JSX.CSSProperties}
     >
       {props.children}
@@ -108,7 +114,10 @@ export function Header(props: ComponentProps<typeof Dialog.Label<'h2'>>) {
   return (
     <Dialog.Label
       {...props}
-      class={`text-ink text-lg font-semibold font-sans leading-7 ${props.class}`}
+      class={cn(
+        'text-ink text-lg font-semibold font-sans leading-7',
+        props.class
+      )}
     >
       {props.children}
     </Dialog.Label>
@@ -119,7 +128,10 @@ export function Message(props: ComponentProps<typeof Dialog.Description<'p'>>) {
   return (
     <Dialog.Description
       {...props}
-      class={`text-ink-muted text-sm font-normal font-sans leading-tight ${props.class}`}
+      class={cn(
+        'text-ink-muted text-sm font-normal font-sans leading-tight',
+        props.class
+      )}
     >
       {props.children}
     </Dialog.Description>
@@ -130,7 +142,10 @@ export function ButtonBar(props: ComponentProps<'div'>) {
   return (
     <div
       {...props}
-      class={`pt-3 justify-start items-start self-end gap-3 inline-flex ${props.class}`}
+      class={cn(
+        'pt-3 justify-start items-start self-end gap-3 inline-flex',
+        props.class
+      )}
     >
       {props.children}
     </div>

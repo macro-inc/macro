@@ -61,7 +61,7 @@ export const FilterValueBoolean: Component<FilterValueBooleanProps> = (
       <Show when={isOpen()}>
         <div
           ref={dropdownRef}
-          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[80px] z-1"
+          class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[80px] z-user-highlight"
         >
           <button
             type="button"

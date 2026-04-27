@@ -17,6 +17,7 @@ import {
 } from 'solid-js';
 import Banner from './banner/Banner';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
+import { DevStatusBar } from './DevStatusBar';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
 import { MacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
@@ -51,6 +52,7 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
   `${ROUTER_BASE_CONCAT}welcome`,
+  `${ROUTER_BASE_CONCAT}team-invite`,
 ];
 
 export const [sidebarState, setSidebarState] = makePersisted(
@@ -114,9 +116,9 @@ function LayoutInner(props: RouteSectionProps) {
   return (
     <div
       class={cn(
-        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pt-[var(--safe-top)] pl-[var(--safe-left)] pr-[var(--safe-right)]',
+        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pt-(--safe-top) pl-(--safe-left) pr-(--safe-right)',
         {
-          'pb-[var(--safe-bottom)]': !virtualKeyboardVisible(),
+          'pb-(--safe-bottom)': !virtualKeyboardVisible(),
         }
       )}
     >
@@ -152,7 +154,7 @@ function LayoutInner(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="max-h-full grow-1 flex">
+      <div class="max-h-full grow flex">
         <Show when={isSidebarVisible()}>
           <AppSidebar
             sidebarState={sidebarState()}
@@ -195,6 +197,7 @@ function LayoutInner(props: RouteSectionProps) {
           <AutomationComposer />
         </Show>
       </Suspense>
+      <DevStatusBar />
     </div>
   );
 }

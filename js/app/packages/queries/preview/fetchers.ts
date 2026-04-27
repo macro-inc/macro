@@ -120,6 +120,43 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
   });
 }
 
+async function fetchCallPreviews(ids: string[]): Promise<PreviewItem[]> {
+  const result = await storageServiceClient.getBatchCallPreviews({
+    call_ids: ids,
+  });
+
+  if (isErr(result)) {
+    console.error('Failed to fetch call previews');
+    return [];
+  }
+
+  const [, data] = result;
+  return data.previews.map((call) => {
+    const base = {
+      id: call.callId,
+      type: 'call',
+    } as const;
+
+    switch (call.type) {
+      case 'exists':
+        return {
+          ...base,
+          access: 'access' as const,
+          loading: false,
+          rawName: call.channelName ?? '',
+          name: call.channelName ?? 'Unknown Call',
+          updatedAt: call.startedAt,
+        };
+      case 'does_not_exist':
+        return {
+          ...base,
+          access: call.type,
+          loading: false,
+        };
+    }
+  });
+}
+
 async function fetchChatPreviews(ids: string[]): Promise<PreviewItem[]> {
   const result = await cognitionApiServiceClient.getBatchChatPreviews({
     chat_ids: ids,
@@ -252,6 +289,10 @@ export async function fetchPreviewBatch(
     .filter((i) => i.type === 'email' || !i.type)
     .map((i) => i.id);
 
+  const callItems = items
+    .filter((i) => i.type === 'call' || !i.type)
+    .map((i) => i.id);
+
   const [
     chatResults,
     documentResults,
@@ -260,6 +301,7 @@ export async function fetchPreviewBatch(
     emailResults,
   ] = await Promise.all([
     chatItems.length > 0 ? fetchChatPreviews(chatItems) : Promise.resolve([]),
+    callItems.length > 0 ? fetchCallPreviews(callItems) : Promise.resolve([]),
     documentItems.length > 0
       ? fetchDocumentPreviews(documentItems)
       : Promise.resolve([]),

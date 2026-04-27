@@ -12,13 +12,12 @@ import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
 /**
  * Resolves the user's device context for analytics enrichment.
  *
- * `getPlatform()` reads the build-time `VITE_PLATFORM` env var:
- *   - Tauri iOS/Android builds → 'ios' | 'android' → 'mobile-app'
- *   - Tauri desktop build → 'desktop' → 'desktop-app'
- *   - Web build → 'web' (used by both desktop and mobile browsers)
+ * `getPlatform()` runtime-detects via `isTauri()` + `@tauri-apps/plugin-os`:
+ *   - Tauri iOS/Android → 'ios' | 'android' → 'mobile-app'
+ *   - Tauri desktop OS → 'desktop' → 'desktop-app'
+ *   - Plain browser → 'web'
  *
- * Desktop and mobile browsers share the same web build, so we use
- * `isTouchDevice()` (checks `pointer: coarse` media query) to distinguish
+ * On web, `isTouchDevice()` (checks `pointer: coarse` media query) distinguishes
  * a phone/tablet browser ('mobile-web') from a desktop browser ('desktop-web').
  */
 const DEVICE_PROPERTY = 'macro_device' as const;

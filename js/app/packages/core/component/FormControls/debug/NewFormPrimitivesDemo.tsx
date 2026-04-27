@@ -78,7 +78,7 @@ const NewFormPrimitivesDemo = () => {
                 <ToggleSwitch size="SM" label="Monochrome" />
               </section>
             </div>
-            <div class="grid grid-flow-col w-full border-edge border-t-[2px]">
+            <div class="grid grid-flow-col w-full border-edge border-t-2">
               <DeprecatedButton
                 size="SM"
                 theme="secondary"
@@ -153,7 +153,7 @@ const NewFormPrimitivesDemo = () => {
                 <ToggleSwitch size="SM" label="Monochrome" />
               </section>
             </div>
-            <div class="grid grid-flow-col w-full border-edge border-t-[2px]">
+            <div class="grid grid-flow-col w-full border-edge border-t-2">
               <DeprecatedButton
                 size="SM"
                 theme="secondary"

@@ -115,7 +115,7 @@ export function AttachMenu(props: AttachMenuProps) {
               </VList>
             </Show>
           </div>
-          <div class="w-full h-px bg-edge mt-[1px]" />
+          <div class="w-full h-px bg-edge mt-px" />
           <div
             class="w-full"
             use:fileSelector={{

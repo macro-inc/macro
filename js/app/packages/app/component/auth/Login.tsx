@@ -24,7 +24,7 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { useAnalytics } from '@app/component/analytics-context';
 import { detect } from 'detect-browser';
 import { useUserInfo } from '@queries/auth';
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { Panel } from '@ui';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import { useEmailLinks } from '@core/email-link';
@@ -177,11 +177,8 @@ export function Login() {
           />
         </div>
 
-        <div class="w-full max-w-[420px] login-card">
-          <ClippedPanel
-            cornerRadius={'4px'}
-            class="bg-panel shadow-lg shadow-[#1111]"
-          >
+        <div class="w-full max-w-105 login-card">
+          <Panel>
             <div class="login-stagger">
               <div
                 class={cn(
@@ -205,7 +202,7 @@ export function Login() {
                 </Switch>
               </div>
             </div>
-          </ClippedPanel>
+          </Panel>
         </div>
       </div>
     </Show>

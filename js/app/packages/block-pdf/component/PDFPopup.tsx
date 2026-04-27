@@ -321,7 +321,7 @@ export function PDFPopup(props: PDFPopupProps) {
                   />
                 </div>
               </Show>
-              <div class="w-full border-t-1 border-edge">
+              <div class="w-full border-t border-edge">
                 <div class="flex flex-row w-full justify-end text-ink-muted mt-1">
                   <div class="w-fit mr-2">
                     <button

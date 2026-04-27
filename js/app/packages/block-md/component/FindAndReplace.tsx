@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import {
@@ -300,7 +301,12 @@ export function FindAndReplace() {
                 )}
               </Show>
               <MagnifyingGlass
-                class={`size-4 ${findAndReplaceStore.isSearching ? 'animate-pulse text-accent-ink' : 'text-ink '}`}
+                class={cn(
+                  'size-4',
+                  findAndReplaceStore.isSearching
+                    ? 'animate-pulse text-accent-ink'
+                    : 'text-ink'
+                )}
               />
             </div>
           </Tooltip>
@@ -381,7 +387,7 @@ export function FindAndReplace() {
                   onKeyDown={replaceKeyDownHandler}
                 />
               </div>
-              <div class="flex flex-grow justify-center ml-2">
+              <div class="flex grow justify-center ml-2">
                 <Tooltip tooltip={`Replace`}>
                   <div
                     class="flex items-center px-1 w-6 h-6 justify-center rounded-md hover:bg-hover hover-transition-bg"

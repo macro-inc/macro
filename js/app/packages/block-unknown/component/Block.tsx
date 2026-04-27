@@ -22,7 +22,7 @@ export default function BlockUnknown() {
           <div class="relative">
             <TopBar />
           </div>
-          <div class="w-full grow-1 relative overflow-hidden">
+          <div class="w-full grow relative overflow-hidden">
             <Unknown />
           </div>
         </ModalsProvider>

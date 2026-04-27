@@ -1,5 +1,55 @@
-import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
+import { useAnalytics } from '@app/component/analytics-context';
+import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
+import {
+  InviteModal,
+  setInviteModalOpen,
+} from '@app/component/app-sidebar/invite-modal';
+import { CommandState } from '@app/component/command';
+import { gitBranch, setDevStatusBarOpen } from '@app/component/DevStatusBar';
+import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import {
+  LIST_VIEW_ID,
+  LIST_VIEW_PATHS,
+  type ListView,
+} from '@app/constants/list-views';
+import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { Hotkey } from '@core/component/Hotkey';
+import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { ENABLE_CALLS, LOCAL_ONLY } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { clearPressedKeys } from '@core/hotkey/state';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
+import { activateClosestDOMScope } from '@core/hotkey/utils';
+import BellIcon from '@icon/regular/bell.svg';
+import TerminalIcon from '@icon/regular/terminal.svg';
+import { ContextMenu } from '@kobalte/core/context-menu';
+import LogoIcon from '@macro-icons/macro-logo.svg';
+import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
+import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
+import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
+import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
+import { AnimatedNewSplitIcon } from '@macro-icons/wide/animating/newSplit';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
+import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
+import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
+import { useNotificationSettings } from '@notifications';
+import { debounce } from '@solid-primitives/scheduled';
+import { useLocation } from '@solidjs/router';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import {
   type Component,
   createMemo,
@@ -9,54 +59,6 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
-import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
-import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
-import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import { AnimatedNewSplitIcon } from '@macro-icons/wide/animating/newSplit';
-import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
-import { useLocation } from '@solidjs/router';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import {
-  LIST_VIEW_ID,
-  LIST_VIEW_PATHS,
-  type ListView,
-} from '@app/constants/list-views';
-import { LabelAndHotKey } from '@core/component/Tooltip';
-import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
-import { CommandState } from '@app/component/command';
-import { cn } from '@ui/utils/classname';
-import { Button } from '@ui/components/Button';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { useSettingsState } from '@core/constant/SettingsState';
-import type { ValidHotkey } from '@core/hotkey/types';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { debounce } from '@solid-primitives/scheduled';
-import { Hotkey } from '@core/component/Hotkey';
-import { clearPressedKeys } from '@core/hotkey/state';
-import { activateClosestDOMScope } from '@core/hotkey/utils';
-import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
-import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-import { ContextMenu } from '@kobalte/core/context-menu';
-import { useAnalytics } from '@app/component/analytics-context';
-import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
-import {
-  InviteModal,
-  setInviteModalOpen,
-} from '@app/component/app-sidebar/invite-modal';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
-import BellIcon from '@icon/regular/bell.svg';
-import { useNotificationSettings } from '@notifications';
 
 interface SidebarItem {
   id: ListView;
@@ -332,9 +334,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      <div
-        class={`size-4 shrink-0 transition-colors duration-300 ${hovering() ? 'text-accent' : ''}`}
-      >
+      <div class="size-4 shrink-0">
         <Dynamic component={props.icon} triggerAnimation={hovering()} />
       </div>
       <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
@@ -342,7 +342,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       </span>
       <Show when={props.hotkeyToken}>
         {(token) => (
-          <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+          <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:invisible">
             <Hotkey token={token()} class="flex gap-1" />
           </div>
         )}
@@ -466,7 +466,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 ">
             <LogoIcon class="size-6" />
           </div>
-          <div class="grow-1 shrink-10 min-w-0" />
+          <div class="grow shrink-10 min-w-0" />
           <Button
             class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-page [&_svg]:size-4"
             onClick={() => props.onOpenChange(!isExpanded())}
@@ -485,7 +485,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-ink/5" />
+        <hr class="border-edge-muted" />
       </div>
 
       <div class="w-full px-2 my-[4.5px]">
@@ -499,7 +499,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-ink/5 mb-[8px]" />
+        <hr class="border-edge-muted mb-2" />
       </div>
 
       <nav>
@@ -519,7 +519,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </nav>
 
       <div class="px-2">
-        <hr class="border-ink/5 my-[8px]" />
+        <hr class="border-edge-muted my-2" />
       </div>
 
       <div class="block max-h-[clamp(10%,60%,20rem)]">
@@ -527,7 +527,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2 mt-auto w-full">
-        <hr class="border-edge-muted mb-[8px]" />
+        <hr class="border-edge-muted mb-2" />
       </div>
 
       <div class=" w-full px-2 flex flex-col">
@@ -571,6 +571,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
           onClick={toggleSettings}
           icon={AnimatedGearIcon}
         />
+
+        <Show when={LOCAL_ONLY && gitBranch()}>
+          <SidebarActionButton
+            label="Dev Toolbar"
+            isSlim={isSlim}
+            onClick={() => setDevStatusBarOpen((v) => !v)}
+            icon={TerminalIcon}
+          />
+        </Show>
       </div>
       <InviteModal />
     </div>
@@ -696,18 +705,18 @@ const SidebarLink = (props: SidebarLinkProps) => {
 
           <Show when={isHovering() && !props.hotkeyVisible}>
             <div class="group-data-[slim=true]/sidebar:invisible ml-auto">
-              <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-[0.625rem]">
+              <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
                 <Show when={!props.standaloneHotkey}>
-                  <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={GO_TO_LEADER_KEY} />
                   </div>
                   then
-                  <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={props.hotkey} />
                   </div>
                 </Show>
                 <Show when={props.standaloneHotkey}>
-                  <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={props.hotkey} />
                   </div>
                 </Show>

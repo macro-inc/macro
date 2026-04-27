@@ -130,9 +130,14 @@ export function VerifyForm(props: { setStage: (next: Stage) => void }) {
             }}
           />
           <button
-            class={`inline-block font-medium text-accent-ink hover:text-accent-ink/80 transition
-              ${showResendCode() ? 'opacity-100' : 'opacity-50 pointer-events-none'}
-              ${emailSubmission.pending || submission.pending ? 'opacity-50 pointer-events-none' : ''}`}
+            class={cn(
+              'inline-block font-medium text-accent-ink hover:text-accent-ink/80 transition',
+              showResendCode()
+                ? 'opacity-100'
+                : 'opacity-50 pointer-events-none',
+              (emailSubmission.pending || submission.pending) &&
+                'opacity-50 pointer-events-none'
+            )}
             disabled={
               emailSubmission.pending || submission.pending || !showResendCode()
             }

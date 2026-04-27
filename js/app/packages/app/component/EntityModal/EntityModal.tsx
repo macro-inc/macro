@@ -3,6 +3,7 @@ import { isInBlock } from '@core/block';
 import clickOutside from '@core/directive/clickOutside';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { Dialog } from '@kobalte/core/dialog';
+import { cn } from '@ui/utils/classname';
 import type { ComponentProps } from 'solid-js';
 import {
   type Accessor,
@@ -33,11 +34,12 @@ export const EntityModalActionFooter = (props: {
         Cancel
       </button>
       <button
-        class={`uppercase py-1 px-3 font-mono text-sm ${
+        class={cn(
+          'uppercase py-1 px-3 font-mono text-sm',
           props.isDisabled
             ? 'bg-edge/20 text-ink-placeholder cursor-not-allowed'
             : 'bg-accent text-menu'
-        }`}
+        )}
         onClick={props.onConfirm}
         disabled={props.isDisabled}
       >
@@ -138,8 +140,7 @@ function SplitModal(
           as="div"
           class="absolute z-modal"
           classList={{
-            'left-[1px] right-[1px] bottom-[1px] top-[1px]':
-              props.mode === 'split',
+            'left-px right-px bottom-px top-px': props.mode === 'split',
             'inset-0': props.mode !== 'split',
             'bg-modal-overlay': props.scrim !== false,
           }}
@@ -149,8 +150,7 @@ function SplitModal(
         <div
           class="absolute z-modal pointer-events-none px-2"
           classList={{
-            'left-[1px] right-[1px] bottom-[1px] top-[1px]':
-              props.mode === 'split',
+            'left-px right-px bottom-px top-px': props.mode === 'split',
             'inset-0': props.mode !== 'split',
           }}
         >

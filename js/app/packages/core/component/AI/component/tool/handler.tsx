@@ -8,16 +8,19 @@ import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { createDocumentHandler } from './CreateDocument';
 import { getThreadHandler } from './GetThread';
+import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
 import {
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
 } from './Properties';
+import { readCallRecordHandler } from './ReadCallRecord';
 import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
 import { readThreadHandler } from './ReadThread';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { sendEmailHandler } from './SendEmail';
+import { subagentHandler } from './Subagent';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
 import {
   ToolErrorContext,
@@ -32,17 +35,20 @@ import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   GetEntityProperties: getEntityPropertiesHandler,
+  ListCallRecords: listCallRecordsHandler,
   ListEntities: listEntitiesHandler,
   bash_code_execution: bashCodeExecutionHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
   GetThread: getThreadHandler,
   NameSearch: nameSearchHandler,
+  ReadCallRecord: readCallRecordHandler,
   ReadThread: readThreadHandler,
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
   SendEmail: sendEmailHandler,
   SetEntityProperty: setEntityPropertyHandler,
+  Subagent: subagentHandler,
   text_editor_code_execution: textEditorCodeExecutionHandler,
   UpdateThreadLabels: updateThreadLabelsHandler,
   web_fetch: webFetchHandler,

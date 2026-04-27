@@ -1,4 +1,3 @@
-import MacroJump from '@app/component/MacroJump';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -11,12 +10,8 @@ import {
 import { useSplitPanelOrThrow } from '../layoutUtils';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
-import { SplitModalProvider } from './SplitModalContext';
 import { SplitToolbar } from './SplitToolbar';
-import {
-  ClippedPanel,
-  type ClippedPanelProps,
-} from '@core/component/ClippedPanel';
+import { Panel } from '@ui';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobile } from '@core/mobile/isMobile';
 
@@ -60,59 +55,52 @@ export function SplitContainer(
     return Boolean(splits && splits.length > 1);
   }
 
-  function MaybeClippedPanel(props: ClippedPanelProps) {
-    return (
-      <Show when={!isMobile()} fallback={props.children}>
-        <ClippedPanel {...props} />
-      </Show>
-    );
-  }
-
   return (
-    <SplitModalProvider>
-      <SplitDrawerGroup
-        contentOffsetTop={offsetTop}
-        panelSize={panel.panelSize}
-      >
-        <Show when={panel.handle.isSpotLight()}>
-          <div
-            class="fixed inset-0 w-screen h-screen z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
-            onClick={() => panel.handle.toggleSpotlight(false)}
-          />
-          <div class="fixed inset-[4rem] bg-panel shadow-xl" />
-        </Show>
-
+    <SplitDrawerGroup contentOffsetTop={offsetTop} panelSize={panel.panelSize}>
+      <Show when={panel.handle.isSpotLight()}>
         <div
-          classList={{
-            'fixed inset-[4rem] z-modal-overlay isolate opacity-50':
-              panel.handle.isSpotLight(),
-            'opacity-100': panel.isPanelActive() || panel.handle.isSpotLight(),
-            'size-full': !panel.handle.isSpotLight(),
-            'opacity-85': !panel.isPanelActive() && !isMobile(),
-          }}
-          ref={(ref) => {
-            setRef(ref);
-            props.ref(ref);
-          }}
-          data-split-id={props.id}
-          class="bracket-never"
-          data-split-container
-          data-modal={panel.handle.isSpotLight()}
-          tabindex={-1}
+          class="fixed inset-0 w-screen h-screen z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
+          onClick={() => panel.handle.toggleSpotlight(false)}
+        />
+        <div class="fixed inset-16 bg-panel shadow-xl" />
+      </Show>
+
+      <div
+        classList={{
+          'fixed inset-16 z-modal-overlay isolate opacity-50':
+            panel.handle.isSpotLight(),
+          'opacity-100': panel.isPanelActive() || panel.handle.isSpotLight(),
+          'size-full': !panel.handle.isSpotLight(),
+          'opacity-85': !panel.isPanelActive() && !isMobile(),
+        }}
+        ref={(ref) => {
+          setRef(ref);
+          props.ref(ref);
+        }}
+        data-split-id={props.id}
+        class="bracket-never"
+        data-split-container
+        data-modal={panel.handle.isSpotLight()}
+        tabindex={-1}
+      >
+        <Show
+          when={!isMobile()}
+          fallback={
+            <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
+              <SplitHeader ref={setHeaderRef} />
+              <SplitToolbar ref={setToolbarRef} />
+              <div class="@container/split size-full overflow-hidden relative">
+                {props.children}
+              </div>
+            </div>
+          }
         >
-          <MaybeClippedPanel
+          <Panel
             active={
               panel.isPanelActive() &&
               multipleSplits() &&
               !panel.handle.isSpotLight()
             }
-            // TODO (seamus) temporary disabling split corners
-            // tl={props.tl}
-            // bl={props.bl}
-            // tr={props.tr}
-            // br={props.br}
-            // edgeColor="color-accent"
-            cornerRadius={'4px'}
           >
             <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
               <SplitHeader ref={setHeaderRef} />
@@ -120,13 +108,10 @@ export function SplitContainer(
               <div class="@container/split size-full overflow-hidden relative">
                 {props.children}
               </div>
-              <Show when={panel.handle.isSpotLight()}>
-                <MacroJump tabbableParent={ref} />
-              </Show>
             </div>
-          </MaybeClippedPanel>
-        </div>
-      </SplitDrawerGroup>
-    </SplitModalProvider>
+          </Panel>
+        </Show>
+      </div>
+    </SplitDrawerGroup>
   );
 }

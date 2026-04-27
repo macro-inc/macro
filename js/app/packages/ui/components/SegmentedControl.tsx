@@ -51,7 +51,7 @@ export const SegmentedControl = <T extends string | number | boolean>(
               size() === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm',
               option.disabled
                 ? 'opacity-50'
-                : 'text-ink-muted hover:text-ink hover:bg-ink/15 data-[checked]:text-ink data-[checked]:bg-ink/10 data-[checked]:hover:bg-ink/20'
+                : 'text-ink-muted hover:text-ink hover:bg-ink/15 data-checked:text-ink data-checked:bg-ink/10 data-checked:hover:bg-ink/20'
             )}
           >
             <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />

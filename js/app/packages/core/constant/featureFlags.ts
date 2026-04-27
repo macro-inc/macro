@@ -319,6 +319,12 @@ export const ENABLE_RAIL_CHAT_TASK_COMMENTS = resolveFeatureFlag(
   'RAIL_CHAT_TASK_COMMENTS',
   DEV_MODE_ENV
 );
+
+// skips over posthog and sets the ENABLE_TEAMS feature to true if we are in dev mode
+// can also be overridden via VITE_ENABLE_TEAMS env var
+export const ENABLE_TEAMS_OVERRIDE =
+  resolveFeatureFlag('ENABLE_TEAMS', DEV_MODE_ENV) || undefined;
+
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
 const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
@@ -329,3 +335,7 @@ export function ENABLE_CALLS(): boolean {
 
   return analytics.posthog.isFeatureEnabled('enable-calls') ?? false;
 }
+
+export const ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE = DEV_MODE_ENV
+  ? true
+  : undefined;

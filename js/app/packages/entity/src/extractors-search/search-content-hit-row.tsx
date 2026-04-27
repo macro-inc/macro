@@ -1,5 +1,9 @@
 import { Show } from 'solid-js';
-import type { ContentHitData, SearchLocation } from '../types/search';
+import {
+  type ContentHitData,
+  hitHasSender,
+  type SearchLocation,
+} from '../types/search';
 import { SearchContent } from './search-content';
 import { SearchSender } from './search-sender';
 import { SearchTimestamp } from './search-timestamp';
@@ -30,7 +34,7 @@ export function SearchContentHitRow(props: SearchContentHitRowProps) {
       role="button"
     >
       <div class="flex flex-col gap-3 min-w-0">
-        <Show when={props.hit.type === 'channel' || props.hit.type === 'email'}>
+        <Show when={hitHasSender(props.hit)}>
           <div class="flex items-center gap-1">
             <Show when={senderId()}>
               {(id) => <UserIcon id={id()} size="xs" />}

@@ -1,3 +1,5 @@
+set positional-arguments
+
 # Creates global networks that are shared across docker-compose files
 create_networks:
   docker network create databases 2>/dev/null || true -- db network
@@ -48,10 +50,84 @@ docker_up *ARGS:
   docker compose up {{ ARGS }}
 
 # Run all services locally using docker-compose
-# Requires .env file with dev environment variables
+# Requires .env file (from `just get_environment`) and FusionAuth setup (from `just setup`).
+# Automatically patches .env with local FusionAuth values before starting services.
 run_local *ARGS:
+  #!/usr/bin/env bash
+  set -euo pipefail
+
   just create_networks
-  just docker_up {{ ARGS }}
+  just patch_local_fusionauth_env
+
+  do_build=false
+  build_processors=false
+  filtered_args=()
+  expecting_profile_name=false
+  for arg in "$@"; do
+    if [ "$expecting_profile_name" = true ]; then
+      if [ "$arg" = "processors" ]; then
+        build_processors=true
+      fi
+      expecting_profile_name=false
+      filtered_args+=("$arg")
+      continue
+    fi
+
+    if [ "$arg" = "--build" ]; then
+      do_build=true
+    elif [ "$arg" = "--profile" ]; then
+      expecting_profile_name=true
+      filtered_args+=("$arg")
+    elif [ "$arg" = "search_processing_service" ]; then
+      build_processors=true
+      filtered_args+=("$arg")
+    else
+      filtered_args+=("$arg")
+    fi
+  done
+
+  docker compose build rust_services_image
+
+  if [ "$do_build" = true ]; then
+    docker compose build websocket_service sync_service lexical_service
+    if [ "$build_processors" = true ]; then
+      docker compose build search_processing_service
+    fi
+  fi
+
+  echo "startup docker compose"
+  if [ "${#filtered_args[@]}" -gt 0 ]; then
+    docker compose up "${filtered_args[@]}"
+  else
+    docker compose up
+  fi
+
+# Patches .env with local FusionAuth values if the Pulumi stack exists.
+# Requires FusionAuth to be running — starts it temporarily if needed.
+patch_local_fusionauth_env:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [ ! -f .env ]; then
+    echo "Error: .env not found. Run 'just get_environment' first."
+    exit 1
+  fi
+  if ! pulumi stack output macroApplicationClientId -s local -C infra/stacks/fusionauth-instance &>/dev/null; then
+    echo "Warning: Pulumi local stack not found — skipping FusionAuth env patching."
+    echo "         Run 'just setup' if this is a fresh checkout."
+    exit 0
+  fi
+  # FusionAuth must be running to read the client secret
+  NEEDS_STOP=false
+  if ! curl -s http://localhost:9011/api/status 2>/dev/null | grep -q '"Ok"'; then
+    echo "Starting FusionAuth temporarily to read config..."
+    docker compose up fusionauth -d --wait
+    NEEDS_STOP=true
+  fi
+  just infra/stacks/fusionauth-instance/insert_local_fusionauth_variables
+  if [ "$NEEDS_STOP" = true ]; then
+    echo "Stopping temporary FusionAuth..."
+    docker compose stop fusionauth
+  fi
 
 # Stop all local services
 stop-local:

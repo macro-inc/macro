@@ -183,9 +183,11 @@ export async function deleteItem(args: {
       itemType === 'channel' ||
       itemType === 'email' ||
       itemType === 'channel_message' ||
-      itemType === 'automation'
+      itemType === 'automation' ||
+      itemType === 'call'
     )
       return false;
+
     const removed = await removeHistoryItem(itemType, id);
     if (!removed) return false;
   }

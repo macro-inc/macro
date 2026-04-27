@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChannelMessageFiltersLastActivity } from './channelMessageFiltersLastActivity';
+import type { NotificationFilters } from './notificationFilters';
 
 /**
  * Filters for channel message queries.
@@ -16,4 +17,8 @@ this time, or a thread reply was created after this time. */
   last_activity?: ChannelMessageFiltersLastActivity;
   /** When non-empty, only return messages with these IDs. */
   message_ids?: string[];
+  /** When set, only return top-level messages where the message itself or
+any active thread reply has a notification for the requesting user that
+matches these notification state constraints. */
+  notification_filters?: NotificationFilters;
 }

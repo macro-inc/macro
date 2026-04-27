@@ -1,5 +1,6 @@
 import { type Accessor, Show, type JSX } from 'solid-js';
 import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 
 export function AttachmentSection(props: {
@@ -11,16 +12,17 @@ export function AttachmentSection(props: {
 }) {
   return (
     <div
-      class={`rounded-sm border border-edge-muted bg-menu py-3 ${props.class ?? ''}`}
+      class={cn(
+        'rounded-sm border border-edge-muted bg-menu py-3',
+        props.class
+      )}
     >
       <div class="flex items-center justify-between px-3 pb-3">
         <h3 class="text-sm font-medium text-ink">{props.label}</h3>
         <div class="shrink-0">{props.action}</div>
       </div>
       <div class="border-b border-edge-muted" />
-      <div class={`px-3 pt-3 ${props.contentClass ?? ''}`}>
-        {props.children}
-      </div>
+      <div class={cn('px-3 pt-3', props.contentClass)}>{props.children}</div>
     </div>
   );
 }

@@ -75,7 +75,16 @@ export const BashCodeExecutionResponse = z.object({
 export const ContentSearch = z
   .object({
     entityTypes: z
-      .array(z.enum(['documents', 'chats', 'emails', 'channels', 'projects']))
+      .array(
+        z.enum([
+          'documents',
+          'chats',
+          'emails',
+          'channels',
+          'projects',
+          'call_records',
+        ])
+      )
       .default([]),
     query: z.string(),
   })
@@ -301,6 +310,52 @@ export const SearchToolResponse = z.object({
           type: z.literal('project'),
           updated_at: z.string().datetime({ offset: true }),
         }),
+        z.object({
+          call_id: z.string().uuid(),
+          call_search_results: z.array(
+            z.object({
+              ended_at: z
+                .union([z.string().datetime({ offset: true }), z.null()])
+                .optional(),
+              highlight: z.object({
+                bcc: z.array(z.string()).optional(),
+                cc: z.array(z.string()).optional(),
+                content: z.array(z.string()).optional(),
+                name: z.union([z.string(), z.null()]).optional(),
+                recipients: z.array(z.string()).optional(),
+                sender: z.union([z.string(), z.null()]).optional(),
+                user_id: z.union([z.string(), z.null()]).optional(),
+              }),
+              score: z.union([z.number(), z.null()]).optional(),
+              sequence_num: z.union([z.number().int(), z.null()]).optional(),
+              speaker_id: z.union([z.string(), z.null()]).optional(),
+              started_at: z
+                .union([z.string().datetime({ offset: true }), z.null()])
+                .optional(),
+              transcript_id: z.union([z.string().uuid(), z.null()]).optional(),
+            })
+          ),
+          channel_id: z.string().uuid(),
+          id: z.string().uuid(),
+          metadata: z
+            .union([
+              z.object({
+                attended: z.boolean(),
+                channel_name: z.union([z.string(), z.null()]).optional(),
+                created_by: z.string(),
+                duration_ms: z.number().int(),
+                ended_at: z.string().datetime({ offset: true }),
+                started_at: z.string().datetime({ offset: true }),
+                updated_at: z.string().datetime({ offset: true }),
+              }),
+              z.null(),
+            ])
+            .optional(),
+          name: z.union([z.string(), z.null()]).optional(),
+          owner_id: z.string(),
+          participant_ids: z.array(z.string()),
+          type: z.literal('callRecord'),
+        }),
       ];
       const errors = schemas.reduce<z.ZodError[]>(
         (errors, schema) =>
@@ -344,6 +399,7 @@ export const GetEntityProperties = z
       'chat',
       'thread',
       'channel',
+      'user',
     ]),
   })
   .strict();
@@ -409,6 +465,31 @@ export const GetThreadResponse = z.object({
   ),
   summary: z.string(),
   threadId: z.string().uuid(),
+});
+
+export const ListCallRecords = z
+  .object({
+    attended: z.union([z.boolean(), z.null()]),
+    channelId: z.union([z.string().uuid(), z.null()]),
+  })
+  .strict();
+
+export const ListCallRecordsResponse = z.object({
+  records: z.array(
+    z.object({
+      callId: z.string().uuid(),
+      channelId: z.string().uuid(),
+      channelName: z.union([z.string(), z.null()]).optional(),
+      createdBy: z.string(),
+      durationMs: z.union([z.number().int(), z.null()]).optional(),
+      endedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      isActive: z.boolean(),
+      participants: z.array(z.string()),
+      startedAt: z.string().datetime({ offset: true }),
+    })
+  ),
 });
 
 export const ListEntities = z
@@ -488,45 +569,113 @@ export const ListEntitiesResponse = z.object({
 export const NameSearch = z
   .object({
     entityTypes: z
-      .array(z.enum(['documents', 'chats', 'emails', 'channels', 'projects']))
+      .array(
+        z.enum([
+          'documents',
+          'chats',
+          'emails',
+          'channels',
+          'projects',
+          'call_records',
+        ])
+      )
       .default([]),
     name: z.string(),
   })
   .strict();
 
+export const ReadCallRecord = z.object({ callId: z.string().uuid() }).strict();
+
+export const ReadCallRecordResponse = z.object({
+  callId: z.string().uuid(),
+  transcript: z.array(
+    z.object({
+      content: z.string(),
+      diarizedSpeakerId: z.union([z.string(), z.null()]).optional(),
+      endedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      speakerId: z.string(),
+      startedAt: z.string().datetime({ offset: true }),
+    })
+  ),
+});
+
 export const ReadContent = z.object({ documentId: z.string().uuid() }).strict();
 
-export const ReadContentResponse = z.any().superRefine((x, ctx) => {
-  const schemas = [
-    z.object({ text: z.string() }).strict(),
-    z
-      .object({
-        markdown: z.array(
-          z.object({
-            content: z.string(),
-            nodeId: z.string(),
-            rawContent: z.string(),
-            type: z.string(),
-          })
-        ),
-      })
-      .strict(),
-  ];
-  const errors = schemas.reduce<z.ZodError[]>(
-    (errors, schema) =>
-      ((result) => (result.error ? [...errors, result.error] : errors))(
-        schema.safeParse(x)
+export const ReadContentResponse = z.object({
+  comments: z.array(
+    z.object({
+      comments: z.array(
+        z.object({
+          commentId: z.number().int(),
+          createdAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          deletedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          metadata: z.any().optional(),
+          order: z.union([z.number().int(), z.null()]).optional(),
+          owner: z.string(),
+          sender: z.union([z.string(), z.null()]).optional(),
+          text: z.string(),
+          threadId: z.number().int(),
+          updatedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+        })
       ),
-    []
-  );
-  if (schemas.length - errors.length !== 1) {
-    ctx.addIssue({
-      path: ctx.path,
-      code: 'invalid_union',
-      unionErrors: errors,
-      message: 'Invalid input: Should pass single schema',
-    });
-  }
+      thread: z.object({
+        createdAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        deletedAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        documentId: z.string(),
+        metadata: z.any().optional(),
+        owner: z.string(),
+        resolved: z.boolean(),
+        threadId: z.number().int(),
+        updatedAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+      }),
+    })
+  ),
+  content: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.object({ text: z.string() }).strict(),
+      z
+        .object({
+          markdown: z.array(
+            z.object({
+              content: z.string(),
+              nodeId: z.string(),
+              rawContent: z.string(),
+              type: z.string(),
+            })
+          ),
+        })
+        .strict(),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
 });
 
 export const ReadMetadata = z
@@ -736,6 +885,7 @@ export const SetEntityProperty = z
             'chat',
             'thread',
             'channel',
+            'user',
           ]),
         })
         .strict(),
@@ -753,6 +903,7 @@ export const SetEntityProperty = z
               'chat',
               'thread',
               'channel',
+              'user',
             ]),
           })
           .strict()
@@ -766,6 +917,7 @@ export const SetEntityProperty = z
       'chat',
       'thread',
       'channel',
+      'user',
     ]),
     link_url: z.union([z.string(), z.null()]).default(null),
     link_urls: z.union([z.array(z.string()), z.null()]).default(null),
@@ -781,6 +933,10 @@ export const SetEntityPropertyResponse = z.object({
   message: z.string(),
   success: z.boolean(),
 });
+
+export const Subagent = z.object({ task: z.string() }).strict();
+
+export const SubagentResponse = z.object({ result: z.string() });
 
 export const TextEditorCodeExecutionToolCall = z.object({
   command: z.string(),

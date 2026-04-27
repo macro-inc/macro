@@ -35,7 +35,7 @@ opt-level = 's'
 wasm-opt = true
 
 [dependencies]
-worker = { version = "0.7.4", features = ['d1'] }
+worker = { version = "0.8.1", features = ['d1'] }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = [
   'time',

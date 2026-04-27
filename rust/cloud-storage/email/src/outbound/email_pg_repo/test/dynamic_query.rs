@@ -1418,6 +1418,200 @@ async fn test_shared_include_returns_own_and_shared_threads(
     Ok(())
 }
 
+// ── calendar_only filter tests ──────────────────────────────────────
+//
+// The email_dynamic_query_calendar fixture attaches iCalendar and non-iCalendar
+// attachments to threads 1, 2, 4, 5, 7. Threads 1/2/4/5 should match the
+// calendar_only=true predicate; thread 7 and all unattached threads should not.
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_dynamic_query_calendar")
+    )
+)]
+async fn test_dynamic_query_calendar_only_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    let filter = Arc::new(Expr::Literal(EmailLiteral::CalendarOnly(true)));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query, "").await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(
+        result_ids.contains("20000001-0000-0000-0000-000000000001"),
+        "Thread 1 (.ics filename) should match"
+    );
+    assert!(
+        result_ids.contains("20000002-0000-0000-0000-000000000002"),
+        "Thread 2 (.ics filename) should match"
+    );
+    assert!(
+        result_ids.contains("20000004-0000-0000-0000-000000000004"),
+        "Thread 4 (application/ics mime) should match"
+    );
+    assert!(
+        result_ids.contains("20000005-0000-0000-0000-000000000005"),
+        "Thread 5 (one of two attachments is .ics) should match"
+    );
+
+    assert!(
+        !result_ids.contains("20000003-0000-0000-0000-000000000003"),
+        "Thread 3 (no attachments) should not match"
+    );
+    assert!(
+        !result_ids.contains("20000006-0000-0000-0000-000000000006"),
+        "Thread 6 (no attachments) should not match"
+    );
+    assert!(
+        !result_ids.contains("20000007-0000-0000-0000-000000000007"),
+        "Thread 7 (only a non-calendar pdf attachment) should not match"
+    );
+    assert!(
+        !result_ids.contains("20000008-0000-0000-0000-000000000008"),
+        "Thread 8 (no attachments) should not match"
+    );
+
+    assert_eq!(
+        results.len(),
+        4,
+        "Expected exactly 4 matching threads (1, 2, 4, 5), got: {:?}",
+        result_ids
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_dynamic_query_calendar")
+    )
+)]
+async fn test_dynamic_query_calendar_only_inbox_view(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let limit = 50;
+
+    let filter = Arc::new(Expr::Literal(EmailLiteral::CalendarOnly(true)));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query, "").await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    // Inbox view restricts to inbox_visible=true AND latest_inbound_message_ts IS NOT NULL.
+    // Of the calendar-matching threads (1, 2, 4, 5), only 1, 4, 5 are inbox-visible with an
+    // inbound ts. Thread 2 is sent (inbox_visible=false).
+    assert!(result_ids.contains("20000001-0000-0000-0000-000000000001"));
+    assert!(result_ids.contains("20000004-0000-0000-0000-000000000004"));
+    assert!(result_ids.contains("20000005-0000-0000-0000-000000000005"));
+    assert!(
+        !result_ids.contains("20000002-0000-0000-0000-000000000002"),
+        "Thread 2 is sent, not inbox-visible"
+    );
+    assert!(
+        !result_ids.contains("20000007-0000-0000-0000-000000000007"),
+        "Thread 7 is inbox but has no .ics attachment"
+    );
+    assert_eq!(results.len(), 3);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_dynamic_query_calendar")
+    )
+)]
+async fn test_dynamic_query_calendar_only_combined_with_sender(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    // calendar_only=true AND sender=john@example.com → {1, 2, 5}. Threads 1, 2, 5 are all
+    // from john with an .ics attachment; thread 4 has .ics but is from alice.
+    let filter = Arc::new(Expr::and(
+        Expr::Literal(EmailLiteral::CalendarOnly(true)),
+        Expr::Literal(EmailLiteral::Sender(Email::Complete(
+            EmailStr::parse_from_str("john@example.com")?.into_owned(),
+        ))),
+    ));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query, "").await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(result_ids.contains("20000001-0000-0000-0000-000000000001"));
+    assert!(result_ids.contains("20000002-0000-0000-0000-000000000002"));
+    assert!(result_ids.contains("20000005-0000-0000-0000-000000000005"));
+    assert!(
+        !result_ids.contains("20000004-0000-0000-0000-000000000004"),
+        "Thread 4 has .ics but is from alice, not john"
+    );
+    assert_eq!(results.len(), 3);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_dynamic_query_calendar")
+    )
+)]
+async fn test_dynamic_query_calendar_only_false_is_noop(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let limit = 50;
+
+    // calendar_only=false combined with a broad sender filter so the dynamic path is taken.
+    // Result set should match the sender filter alone with no additional calendar restriction.
+    let with_false = {
+        let filter = Arc::new(Expr::and(
+            Expr::Literal(EmailLiteral::CalendarOnly(false)),
+            Expr::Literal(EmailLiteral::Sender(Email::Partial(
+                "example.com".to_string(),
+            ))),
+        ));
+        let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query, "").await?
+    };
+    let baseline = {
+        let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+            "example.com".to_string(),
+        ))));
+        let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query, "").await?
+    };
+
+    let with_false_ids: std::collections::HashSet<_> = with_false.iter().map(|r| r.id).collect();
+    let baseline_ids: std::collections::HashSet<_> = baseline.iter().map(|r| r.id).collect();
+    assert_eq!(with_false_ids, baseline_ids);
+
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(

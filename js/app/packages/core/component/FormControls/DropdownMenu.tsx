@@ -1,4 +1,3 @@
-import MacroJump from '@app/component/MacroJump';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { Popover, type PopoverRootProps } from '@kobalte/core/popover';
 import { createMutationObserver } from '@solid-primitives/mutation-observer';
@@ -102,7 +101,7 @@ const DropdownMenu: ParentComponent<
         size={props.size}
         active={open()}
         classList={{
-          '!block': true,
+          'block!': true,
         }}
         as={DeprecatedButton}
         theme={props.theme}
@@ -140,9 +139,9 @@ const DropdownMenu: ParentComponent<
                   '--dropdown-cutout': `${props.dropdownCutout ?? 4}px`,
                 }}
                 classList={{
-                  '-left-[var(--dropdown-cutout)] -right-[var(--dropdown-cutout)] -top-[var(--dropdown-cutout)] -bottom-[var(--dropdown-cutout)]':
+                  '-left-(--dropdown-cutout) -right-(--dropdown-cutout) -top-(--dropdown-cutout) -bottom-(--dropdown-cutout)':
                     popoverPosition() === 'top-right',
-                  '-right-[var(--dropdown-cutout)] -top-[var(--dropdown-cutout)] -bottom-[var(--dropdown-cutout)]':
+                  '-right-(--dropdown-cutout) -top-(--dropdown-cutout) -bottom-(--dropdown-cutout)':
                     popoverPosition() === 'top-left',
                 }}
               />
@@ -169,14 +168,13 @@ const DropdownMenu: ParentComponent<
           <div
             class="relative bg-panel"
             classList={{
-              'border-accent border-[2px]': props.shadowAccent ?? true,
+              'border-accent border-2': props.shadowAccent ?? true,
             }}
             ref={popoverBorderEl}
           >
             {props.children}
           </div>
         </Popover.Content>
-        <MacroJump tabbableParent={() => popoverContentEl} />
       </Popover.Portal>
     </Popover>
   );

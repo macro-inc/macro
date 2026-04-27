@@ -109,7 +109,7 @@ function RegularMessageLayout(props: {
         <Message.SenderName />
         <Message.EditedIndicator />
         {/* On message hover, timestamp floats above actions. */}
-        <div class="grow-1 shrink-0 min-w-0 flex justify-end group-hover/message:absolute group-hover/message:right-1 group-hover/message:-top-9 group-hover/message:p-1">
+        <div class="grow shrink-0 min-w-0 flex justify-end group-hover/message:absolute group-hover/message:right-1 group-hover/message:-top-9 group-hover/message:p-1">
           <Message.Timestamp class="ml-auto shrink-0" format="dateAndTime" />
         </div>
       </Message.Slot>

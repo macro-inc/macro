@@ -82,6 +82,9 @@ pub async fn get_entity_name_and_owner(
         SearchEntityType::Projects => {
             anyhow::bail!("entity type not supported");
         }
+        SearchEntityType::CallRecords => {
+            anyhow::bail!("entity type not supported");
+        }
     };
 
     Ok(result)

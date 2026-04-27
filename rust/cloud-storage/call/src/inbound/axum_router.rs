@@ -19,7 +19,7 @@ use axum::{
 };
 use entity_access::{
     domain::{
-        models::{MemberParticipantRole, ViewAccessLevel},
+        models::{EditAccessLevel, MemberParticipantRole, ViewAccessLevel},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::{
@@ -33,7 +33,8 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     CallActiveResponse, CallError, CallRecord, CallTokenResponse, EditCallRecordRequest,
-    LeaveCallResponse, TranscriptSegmentRequest,
+    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, LeaveCallResponse,
+    MAX_BATCH_CALL_IDS, TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallService;
 
@@ -82,6 +83,7 @@ impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
 /// - `PATCH /record/{call_id}` — edit a call record (e.g. share permissions)
 /// - `DELETE /record/{call_id}` — delete a call record
 /// - `POST /record/{call_id}/share-with-team/toggle` — flip the call's share_with_team flag
+/// - `POST /record/preview` — batch-fetch lightweight previews for many call ids
 pub fn call_router<S, Svc, T>(state: CallRouterState<S, Svc>) -> Router<T>
 where
     S: CallService,
@@ -96,6 +98,10 @@ where
         .route(
             "/{channel_id}/active",
             get(check_active_call_handler::<S, Svc>),
+        )
+        .route(
+            "/record/preview",
+            post(get_batch_call_record_preview_handler::<S, Svc>),
         )
         .route(
             "/record/{call_id}",
@@ -350,7 +356,7 @@ pub async fn get_call_record_handler<S: CallService, Svc: EntityAccessService>(
 #[tracing::instrument(err, skip_all)]
 pub async fn delete_call_record_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<ViewAccessLevel, Svc>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
 ) -> Result<StatusCode, CallError> {
     state
         .service
@@ -381,7 +387,7 @@ pub async fn delete_call_record_handler<S: CallService, Svc: EntityAccessService
 #[tracing::instrument(err, skip_all)]
 pub async fn edit_call_record_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<ViewAccessLevel, Svc>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
     Json(request): Json<EditCallRecordRequest>,
 ) -> Result<StatusCode, CallError> {
     state
@@ -412,13 +418,50 @@ pub async fn edit_call_record_handler<S: CallService, Svc: EntityAccessService>(
 #[tracing::instrument(err, skip_all)]
 pub async fn toggle_share_with_team_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<ViewAccessLevel, Svc>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
 ) -> Result<Json<bool>, CallError> {
     let new_value = state
         .service
         .toggle_share_with_team(access.entity_access_receipt)
         .await?;
     Ok(Json(new_value))
+}
+
+/// Handler for `POST /call/record/preview`.
+///
+/// Batch-fetches lightweight previews for a list of call ids. Mirrors the
+/// `POST /documents/preview` endpoint: no per-id access checks, duplicate
+/// ids are deduplicated server-side, and missing ids come back as
+/// `CallRecordPreview::DoesNotExist` rather than producing an error.
+#[utoipa::path(
+    post,
+    operation_id = "get_batch_call_record_preview",
+    path = "/call/record/preview",
+    request_body = GetBatchCallRecordPreviewRequest,
+    responses(
+        (status = 200, body = GetBatchCallRecordPreviewResponse),
+        (status = 400, body = ErrorResponse, description = "call_ids exceeds MAX_BATCH_CALL_IDS"),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_batch_call_record_preview_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    user: MacroUserExtractor,
+    Json(request): Json<GetBatchCallRecordPreviewRequest>,
+) -> Result<Json<GetBatchCallRecordPreviewResponse>, CallError> {
+    if request.call_ids.len() > MAX_BATCH_CALL_IDS {
+        return Err(CallError::InvalidRequest(format!(
+            "call_ids exceeds maximum batch size of {MAX_BATCH_CALL_IDS}"
+        )));
+    }
+
+    let response = state
+        .service
+        .get_batch_call_record_previews(request, user.macro_user_id)
+        .await?;
+    Ok(Json(response))
 }
 
 /// Handler for `DELETE /call/{channel_id}`.
@@ -530,7 +573,9 @@ impl IntoResponse for CallError {
         let status_code = match &self {
             CallError::NotFound(_) => StatusCode::NOT_FOUND,
             CallError::NotInCall => StatusCode::BAD_REQUEST,
+            CallError::AlreadyInCall(_) => StatusCode::CONFLICT,
             CallError::Auth => StatusCode::UNAUTHORIZED,
+            CallError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             CallError::Internal(_) => {
                 tracing::error!(error=?self, "internal server error");
                 StatusCode::INTERNAL_SERVER_ERROR

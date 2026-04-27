@@ -111,7 +111,7 @@ export function ResizeHandle(props: ResizeHandleProps) {
   return (
     <div
       ref={handleRef}
-      class="w-4 absolute top-0 h-full cursor-col-resize z-1"
+      class="w-4 absolute top-0 h-full cursor-col-resize z-user-highlight"
       classList={{
         'right-0': props.side === 'right',
         'left-0': props.side === 'left',

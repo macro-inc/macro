@@ -811,6 +811,87 @@ export const createCommentResponse = zod
   );
 
 /**
+ * Batch-fetches lightweight previews for a list of call ids. Mirrors the
+`POST /documents/preview` endpoint: no per-id access checks, duplicate
+ids are deduplicated server-side, and missing ids come back as
+`CallRecordPreview::DoesNotExist` rather than producing an error.
+ * @summary Handler for `POST /call/record/preview`.
+ */
+export const getBatchCallRecordPreviewBody = zod
+  .object({
+    callIds: zod
+      .array(zod.string().uuid())
+      .describe(
+        'The call ids to preview. Duplicate ids are deduplicated server-side.\nCapped at [`MAX_BATCH_CALL_IDS`] entries.'
+      ),
+  })
+  .describe(
+    'Request body for `POST \/call\/record\/preview`.\n\nThe `call_ids` list is bounded at [`MAX_BATCH_CALL_IDS`]; the handler\nrejects anything larger with a 400 before touching the database.'
+  );
+
+export const getBatchCallRecordPreviewResponse = zod
+  .object({
+    previews: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                callId: zod.string().uuid().describe('The call identifier.'),
+                channelId: zod
+                  .string()
+                  .uuid()
+                  .describe('The channel this call belongs to.'),
+                channelName: zod
+                  .string()
+                  .nullish()
+                  .describe('Resolved display name for the channel.'),
+                endedAt: zod
+                  .string()
+                  .datetime({})
+                  .nullish()
+                  .describe('When the call ended (None if still active).'),
+                startedAt: zod
+                  .string()
+                  .datetime({})
+                  .describe(
+                    'When the call started (created_at for active, started_at for archived).'
+                  ),
+              })
+              .describe('Preview payload returned for each found call id.')
+              .and(
+                zod.object({
+                  type: zod.enum(['exists']),
+                })
+              )
+              .describe(
+                'The call exists (in either the active or archived table).'
+              ),
+            zod
+              .object({
+                callId: zod.string().uuid().describe('The call identifier.'),
+              })
+              .describe(
+                'Wrapper carrying just a call id. Used by the [`CallRecordPreview::DoesNotExist`]\nvariant.'
+              )
+              .and(
+                zod.object({
+                  type: zod.enum(['does_not_exist']),
+                })
+              )
+              .describe(
+                'No call with this id exists in either the active or archived tables.'
+              ),
+          ])
+          .describe(
+            'Lightweight preview of a call record, returned by the batch preview endpoint.\n\nEach requested id resolves to one of two outcomes: the call exists\n(`Exists`) or it does not (`DoesNotExist`). The endpoint does not perform\naccess checks, so there is no separate \"not authorized\" variant.'
+          )
+      )
+      .describe('One entry per deduplicated input id.'),
+  })
+  .describe('Response body for `POST \/call\/record\/preview`.');
+
+/**
  * Returns the full [`CallRecord`] (metadata + participants + transcript)
 for a call identified by its own id. Covers both active and archived calls.
 Access is validated via channel membership (MemberParticipantRole).
@@ -883,6 +964,12 @@ export const getCallRecordResponse = zod
         zod
           .object({
             content: zod.string().describe('The transcribed text content.'),
+            diarizedSpeakerId: zod
+              .string()
+              .nullish()
+              .describe(
+                "Stable per-speaker identifier produced by the STT provider's diarization\npass. Unique across tracks in the call. `None` when the provider didn't\nreturn a speaker label."
+              ),
             endedAt: zod
               .string()
               .datetime({})
@@ -1059,6 +1146,12 @@ export const ingestTranscriptParams = zod.object({
 export const ingestTranscriptBody = zod
   .object({
     content: zod.string().describe('The transcribed text content.'),
+    diarizedSpeakerId: zod
+      .string()
+      .nullish()
+      .describe(
+        "Stable per-speaker identifier produced by the STT provider's diarization\npass. Namespaced upstream by audio track so values are unique across all\ntracks in a call. `None` when the provider didn't return a speaker label."
+      ),
     endedAt: zod
       .string()
       .datetime({})
@@ -1098,6 +1191,12 @@ export const getChannelAttachmentsQueryParams = zod.object({
     .optional()
     .describe('Page size (1-500, default 50)'),
   cursor: zod.string().optional().describe('Base64 encoded cursor value'),
+  attachment_type: zod
+    .string()
+    .optional()
+    .describe(
+      "Filter by type: 'static' for images\/videos, 'dss' for documents"
+    ),
 });
 
 export const getChannelAttachmentsResponse = zod
@@ -1365,6 +1464,23 @@ export const postChannelMessagesBody = zod
       .array(zod.string().uuid())
       .optional()
       .describe('When non-empty, only return messages with these IDs.'),
+    notification_filters: zod
+      .object({
+        done: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
+          ),
+        seen: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+          ),
+      })
+      .optional()
+      .describe('Notification state filters for channel message queries.'),
   })
   .describe('Filters for channel message queries.');
 
@@ -5081,6 +5197,10 @@ export const postItemsSoupBody = zod
           .describe(
             'Channel IDs to filter calls by. Empty to include all calls.'
           ),
+        speaker_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe('Speaker macro user ids. Empty to include all.'),
       })
       .optional()
       .describe('Filters for call records.'),
@@ -5116,17 +5236,17 @@ export const postItemsSoupBody = zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
               ),
             seen: zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
               ),
           })
           .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
+          .describe('Notification state filters for channel message queries.'),
         org_id: zod
           .number()
           .nullish()
@@ -5176,17 +5296,17 @@ export const postItemsSoupBody = zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
               ),
             seen: zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
               ),
           })
           .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
+          .describe('Notification state filters for channel message queries.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -5242,17 +5362,17 @@ export const postItemsSoupBody = zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
               ),
             seen: zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
               ),
           })
           .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
+          .describe('Notification state filters for channel message queries.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -5295,6 +5415,12 @@ export const postItemsSoupBody = zod
           .describe(
             "Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC."
           ),
+        calendar_only: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'When `Some(true)`, only include threads that have at least one message\nwith an iCalendar attachment (`.ics` filename or `application\/ics` mime\ntype). `Some(false)` and `None` apply no constraint.'
+          ),
         cc: zod
           .array(zod.string())
           .optional()
@@ -5331,17 +5457,17 @@ export const postItemsSoupBody = zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
               ),
             seen: zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
               ),
           })
           .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
+          .describe('Notification state filters for channel message queries.'),
         project_ids: zod
           .array(zod.string())
           .optional()
@@ -5385,17 +5511,17 @@ export const postItemsSoupBody = zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications.'
+                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
               ),
             seen: zod
               .boolean()
               .nullish()
               .describe(
-                'Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications.'
+                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
               ),
           })
           .optional()
-          .describe('Notification-level filters that apply to an entity type.'),
+          .describe('Notification state filters for channel message queries.'),
         owners: zod
           .array(zod.string())
           .optional()

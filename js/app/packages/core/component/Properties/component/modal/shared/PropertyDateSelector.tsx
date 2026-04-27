@@ -1,6 +1,7 @@
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { useSearchInputFocus } from '@core/component/Properties/utils';
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
+import { cn } from '@ui/utils/classname';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { format } from 'date-fns';
 import {
@@ -207,9 +208,10 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                   {(option, index) => (
                     <div
                       data-date-index={index()}
-                      class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
-                        index() === selectedIndex() ? 'bg-hover' : ''
-                      }`}
+                      class={cn(
+                        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2',
+                        index() === selectedIndex() && 'bg-hover'
+                      )}
                       onClick={() => handleSelectDate(option.date)}
                       onMouseEnter={() => {
                         if (!keyboardMode()) {
@@ -234,9 +236,10 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
               <div class="border-t border-edge-muted mt-1 pt-1">
                 <div
                   data-date-index={dateOptions().length}
-                  class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
-                    selectedIndex() === dateOptions().length ? 'bg-hover' : ''
-                  }`}
+                  class={cn(
+                    'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2',
+                    selectedIndex() === dateOptions().length && 'bg-hover'
+                  )}
                   onClick={() => setMode('calendar')}
                   onMouseEnter={() => {
                     if (!keyboardMode()) {
@@ -249,7 +252,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                       <p class="text-sm font-medium truncate">Custom date...</p>
                     </div>
                   </div>
-                  <div class="flex items-center gap-2 flex-shrink-0">
+                  <div class="flex items-center gap-2 shrink-0">
                     <span class="text-xs text-ink-muted">
                       Pick from calendar
                     </span>

@@ -56,7 +56,7 @@ function MobileStackRowLayout(props: {
       >
         <Entity.Notification.Icon
           stack={props.stack}
-          class="size-3.5 flex-shrink-0"
+          class="size-3.5 shrink-0"
         />
         <span class="truncate min-w-0">
           <Entity.Notification.Description stack={props.stack} />
@@ -70,7 +70,7 @@ function MobileStackRowLayout(props: {
       </Entity.Slot>
       <Entity.Slot
         placement="body"
-        class={cn('text-ink-extra-muted pb-2 min-h-[1lh] pr-4', {
+        class={cn('text-ink-extra-muted pb-2 min-h-lh pr-4', {
           truncate: props.stack.type !== 'document_mention',
         })}
       >
@@ -89,6 +89,7 @@ function MobileStackRow(props: {
   const notificationSource = useGlobalNotificationSource();
   const { markStackAsDone } = useNotificationStackActions({
     stack: props.stack,
+    entityId: props.entity.id,
   });
   const stackEntityId = () => getMostRecentNotification(props.stack).id;
   const unread = () => isNotificationUnread(props.stack);
@@ -103,7 +104,17 @@ function MobileStackRow(props: {
     const mostRecent = getMostRecentNotification(props.stack);
     const splitManager = globalSplitManager();
     if (!splitManager) return;
-    await openNotification(mostRecent, splitManager, e.shiftKey);
+    const entity = props.entity;
+    const entityOverride = {
+      fileType: 'fileType' in entity ? entity.fileType : undefined,
+      subType: 'subType' in entity ? entity.subType : undefined,
+    };
+    await openNotification(
+      mostRecent,
+      splitManager,
+      e.shiftKey,
+      entityOverride
+    );
     await notificationSource.markAsRead(mostRecent);
   };
 

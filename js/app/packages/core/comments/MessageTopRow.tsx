@@ -1,6 +1,7 @@
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { UserIcon } from '@core/component/UserIcon';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { cn } from '@ui/utils/classname';
 import { idToDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import Check from '@phosphor-icons/core/regular/check.svg?component-solid';
@@ -75,11 +76,14 @@ export function MessageRowUI(
       }}
     >
       <div
-        class={`flex w-full flex-row gap-2 ${props.isActive ? 'truncate' : ''} group-hover:truncate`}
+        class={cn(
+          'flex w-full flex-row gap-2 group-hover:truncate',
+          props.isActive && 'truncate'
+        )}
       >
         {!props.hideBubble && (
           <div
-            class={`w-4 h-4 relative flex items-center justify-center flex-shrink-0 rounded-[2px]`}
+            class={`w-4 h-4 relative flex items-center justify-center shrink-0 rounded-[2px]`}
           >
             <div class="absolute">
               <UserIcon
@@ -91,14 +95,17 @@ export function MessageRowUI(
             </div>
           </div>
         )}
-        <div class="text-xs text-ink truncate grow-1">{displayName()}</div>
+        <div class="text-xs text-ink truncate grow">{displayName()}</div>
         <Show when={props.date}>
           <div class="text-xs text-ink-muted">{formatDate(props.date)}</div>
         </Show>
       </div>
       <Show when={props.children}>
         <div
-          class={`items-center space-x-1 ml-2 flex ${isMobileWidth() && props.isActive ? 'opacity-100' : 'opacity-0'} group-hover:opacity-100`}
+          class={cn(
+            'items-center space-x-1 ml-2 flex group-hover:opacity-100',
+            isMobileWidth() && props.isActive ? 'opacity-100' : 'opacity-0'
+          )}
         >
           {props.children}
         </div>
@@ -130,7 +137,7 @@ export function MessageTopRow(props: {
       hideBottomMargin={props.hideBottomMargin}
       isActive={props.isActive}
     >
-      <div class="absolute top-1 right-1 flex flex-row bg-menu border-1 border-edge z-1">
+      <div class="absolute top-1 right-1 flex flex-row bg-menu border border-edge z-user-highlight">
         <Show when={canComment()}>
           <Show when={props.isOwned}>
             {props.toggleResolve && (
