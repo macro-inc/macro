@@ -164,6 +164,10 @@ export const SoupViewContextProvider: FlowComponent<
       invalidateCache();
       store.set(query);
     },
+    replace: (query) => {
+      invalidateCache();
+      store.replace(query);
+    },
     add: (query) => {
       invalidateCache();
       store.add(query);
