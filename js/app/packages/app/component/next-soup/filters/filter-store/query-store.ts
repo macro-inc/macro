@@ -1,11 +1,7 @@
 import { batch } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { compileToAst, type TargetAstMap } from './compile';
-import {
-  addFieldValues,
-  removeFieldValues,
-  hasFieldValues,
-} from './field-values';
+import { addFieldValues, removeFieldValues } from './field-values';
 import type { FieldFilters, QueryState, Query } from './types';
 
 export type { TargetAstMap } from './compile';
@@ -79,10 +75,8 @@ export function createQueryStore(options: QueryStoreOptions = {}) {
     });
   };
 
-  const set = (queryOrFn: Query | ((prev: QueryState) => Query)) => {
+  const set = (query: Query) => {
     batch(() => {
-      const query =
-        typeof queryOrFn === 'function' ? queryOrFn(state) : queryOrFn;
       if (query.include) {
         setState('include', (prev) => mergeFields(prev, query.include));
       }
@@ -97,24 +91,12 @@ export function createQueryStore(options: QueryStoreOptions = {}) {
 
   const compile = (): TargetAstMap => compileToAst(state);
 
-  const has = (query: Query | undefined): boolean => {
-    if (!query) return false;
-
-    const includeMatch = hasFieldValues(state.include, query.include);
-    const excludeMatch = hasFieldValues(state.exclude, query.exclude);
-    const emailViewMatch =
-      !query.emailView || state.emailView === query.emailView;
-
-    return includeMatch && excludeMatch && emailViewMatch;
-  };
-
   return {
     state,
     set,
     replace,
     add,
     remove,
-    has,
     compile,
   };
 }

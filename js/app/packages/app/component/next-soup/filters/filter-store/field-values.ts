@@ -1,34 +1,6 @@
 import { deepEqual } from '@core/util/compareUtils';
 import type { FieldFilters, FieldName } from './types';
 
-export const hasFieldValues = (
-  target: FieldFilters,
-  source: FieldFilters | undefined
-): boolean => {
-  if (!source) return true;
-
-  for (const key of Object.keys(source) as FieldName[]) {
-    const value = source[key];
-    if (value === undefined) continue;
-
-    const existing = target[key];
-
-    if (!Array.isArray(value)) {
-      if (existing !== value) return false;
-      continue;
-    }
-
-    if (!value.length) continue;
-    if (!Array.isArray(existing)) return false;
-
-    for (const v of value) {
-      if (!existing.some((e) => deepEqual(e, v))) return false;
-    }
-  }
-
-  return true;
-};
-
 export const addFieldValues = (
   target: FieldFilters,
   source: FieldFilters | undefined
