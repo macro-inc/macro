@@ -15,10 +15,12 @@ type PatchTeamUserTierArgs = {
   teamId: string;
   request: PatchTeamUserTierRequest;
 };
+type PatchTeamUserTierContext = { previousTeam: TeamWithMembers | undefined };
 type PatchTeamUserTierCallbacks = MutationCallbacks<
   void,
   Error,
-  PatchTeamUserTierArgs
+  PatchTeamUserTierArgs,
+  PatchTeamUserTierContext
 >;
 
 export function usePatchTeamUserTierMutation(
@@ -31,16 +33,53 @@ export function usePatchTeamUserTierMutation(
       );
     },
 
-    ...withCallbacks<void, Error, PatchTeamUserTierArgs>(
+    ...withCallbacks<
+      void,
+      Error,
+      PatchTeamUserTierArgs,
+      PatchTeamUserTierContext
+    >(
       {
+        onMutate: async ({ teamId, request }) => {
+          const queryKey = teamKeys.detail(teamId).queryKey;
+          await queryClient.cancelQueries({ queryKey });
+
+          const previousTeam =
+            queryClient.getQueryData<TeamWithMembers>(queryKey);
+
+          queryClient.setQueryData<TeamWithMembers>(queryKey, (old) =>
+            old
+              ? {
+                  ...old,
+                  members: old.members.map((member) =>
+                    member.user_id === request.team_user_id
+                      ? { ...member, tier: request.new_tier }
+                      : member
+                  ),
+                }
+              : undefined
+          );
+
+          console.log('Tier change');
+
+          return { previousTeam: structuredClone(previousTeam) };
+        },
+
         onSuccess: (_data, { teamId }) => {
           invalidateTeam(teamId);
           toast.success('Member tier updated');
         },
 
-        onError: (error) => {
+        onError: (error, { teamId }, context) => {
           console.error('Failed to update team member tier', error);
           toast.failure('Failed to update team member tier');
+
+          if (context?.previousTeam) {
+            queryClient.setQueryData(
+              teamKeys.detail(teamId).queryKey,
+              context.previousTeam
+            );
+          }
         },
       },
       callbacks
