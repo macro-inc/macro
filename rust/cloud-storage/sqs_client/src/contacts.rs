@@ -1,7 +1,5 @@
 use crate::SQS;
-use model::contacts::{
-    AddParticipantsMessageBody, ConnectionsMessage, CreateGroupMessageBody, Message,
-};
+use contacts::domain::models::messages::{AddParticipantsMessageBody, ConnectionsMessage, CreateGroupMessageBody, Message};
 
 impl SQS {
     pub fn contacts_queue(mut self, contacts_queue: &str) -> Self {
@@ -14,7 +12,6 @@ impl SQS {
         &self,
         new_participants: Vec<String>,
         channel_participants: Vec<String>,
-        channel_id: &str,
     ) -> anyhow::Result<()> {
         if let Some(contacts_queue) = &self.contacts_queue {
             return enqueue_contacts_add_participants(
@@ -22,7 +19,6 @@ impl SQS {
                 contacts_queue,
                 new_participants,
                 channel_participants,
-                channel_id,
             )
             .await;
         }
@@ -33,14 +29,12 @@ impl SQS {
     pub async fn enqueue_contacts_create_channel(
         &self,
         participants: Vec<String>,
-        channel_id: &str,
     ) -> anyhow::Result<()> {
         if let Some(contacts_queue) = &self.contacts_queue {
             return enqueue_contacts_create_channel(
                 &self.inner,
                 contacts_queue,
                 participants,
-                channel_id,
             )
             .await;
         }
@@ -70,11 +64,9 @@ pub async fn enqueue_contacts_create_channel(
     sqs_client: &aws_sdk_sqs::Client,
     queue_url: &str,
     participants: Vec<String>,
-    channel_id: &str,
 ) -> anyhow::Result<()> {
     let body = CreateGroupMessageBody {
         group: participants,
-        group_id: Some(channel_id.to_string()),
     };
     let message = Message::CreateGroup(body);
     let message_str = serde_json::to_string(&message)?;
@@ -93,12 +85,10 @@ pub async fn enqueue_contacts_add_participants(
     queue_url: &str,
     new_participants: Vec<String>,
     channel_participants: Vec<String>,
-    channel_id: &str,
 ) -> anyhow::Result<()> {
     let body = AddParticipantsMessageBody {
         group: channel_participants,
         participants: new_participants,
-        group_id: Some(channel_id.to_string()),
     };
     let message = Message::AddParticipants(body);
     let message_str = serde_json::to_string(&message)?;

@@ -28,7 +28,6 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "auth",
 ], optional = true }
 macro_user_id = { path = "../macro_user_id", optional = true }
-model = { path = "../model" }
 model_user = { path = "../model_user", features = ["axum"], optional = true }
 rate_limit = { path = "../rate_limit", features = ["axum"], optional = true }
 redis = { workspace = true, optional = true }

@@ -141,7 +141,7 @@ pub async fn create_channel_handler(
         // Contacts: send message create channel SQS message to Contacts Service
         let sqs_client = &ctx.sqs_client;
         sqs_client
-            .enqueue_contacts_create_channel(participants_copy.unwrap(), &id.to_string())
+            .enqueue_contacts_create_channel(participants_copy.unwrap())
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to create 'add participant' SQS message");
