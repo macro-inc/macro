@@ -1,75 +1,49 @@
-use std::sync::Arc;
-
 use model::document::FileType;
 use sqlx::PgPool;
 use sqs_client::search::SearchQueueMessage;
 
-use crate::domain::models::{BackfillError, BackfillReceipt, DocumentBackfillRequest};
-use crate::domain::ports::DocumentBackfill;
+use crate::domain::models::{BackfillError, DocumentBackfillRequest};
+use crate::domain::ports::DocumentBackfillSource;
 
-const PAGE: i64 = 1000;
-
-/// Postgres-backed [`DocumentBackfill`] adapter against macrodb.
-pub struct PgDocumentBackfill {
+/// Postgres-backed [`DocumentBackfillSource`] against macrodb.
+pub struct PgDocumentSource {
     db: PgPool,
-    sqs: Arc<sqs_client::SQS>,
+    page_size: usize,
 }
 
-impl PgDocumentBackfill {
-    pub fn new(db: PgPool, sqs: Arc<sqs_client::SQS>) -> Self {
-        Self { db, sqs }
+impl PgDocumentSource {
+    pub fn new(db: PgPool, page_size: usize) -> Self {
+        Self { db, page_size }
     }
 }
 
-impl DocumentBackfill for PgDocumentBackfill {
-    async fn enqueue(
+impl DocumentBackfillSource for PgDocumentSource {
+    async fn fetch_page(
         &self,
-        req: DocumentBackfillRequest,
-    ) -> Result<BackfillReceipt, BackfillError> {
-        let mut offset = 0i64;
-        let mut enqueued = 0usize;
+        req: &DocumentBackfillRequest,
+        offset: usize,
+    ) -> Result<Vec<SearchQueueMessage>, BackfillError> {
+        let batch = macro_db_client::document::get_documents_search::get_documents_for_search(
+            &self.db,
+            self.page_size as i64,
+            offset as i64,
+            &req.file_types,
+            &req.sub_type,
+            &req.created_after,
+            &req.created_before,
+        )
+        .await
+        .map_err(BackfillError::Source)?;
 
-        loop {
-            let batch = macro_db_client::document::get_documents_search::get_documents_for_search(
-                &self.db,
-                PAGE,
-                offset,
-                &req.file_types,
-                &req.sub_type,
-                &req.created_after,
-                &req.created_before,
-            )
-            .await
-            .map_err(BackfillError::Source)?;
-
-            if batch.is_empty() {
-                break;
-            }
-
-            let batch_len = batch.len();
-            let messages: Vec<SearchQueueMessage> = batch
-                .iter()
-                .map(|d| {
-                    if d.file_type == FileType::Md {
-                        SearchQueueMessage::ExtractSync(d.into())
-                    } else {
-                        SearchQueueMessage::ExtractDocumentText(d.into())
-                    }
-                })
-                .collect();
-
-            enqueued += messages.len();
-            self.sqs
-                .bulk_send_message_to_search_event_queue(messages)
-                .await
-                .map_err(BackfillError::Publish)?;
-
-            if (batch_len as i64) < PAGE {
-                break;
-            }
-            offset += PAGE;
-        }
-
-        Ok(BackfillReceipt { enqueued })
+        Ok(batch
+            .iter()
+            .map(|d| {
+                if d.file_type == FileType::Md {
+                    SearchQueueMessage::ExtractSync(d.into())
+                } else {
+                    SearchQueueMessage::ExtractDocumentText(d.into())
+                }
+            })
+            .collect())
     }
 }

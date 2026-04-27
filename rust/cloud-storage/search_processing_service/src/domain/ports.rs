@@ -1,50 +1,76 @@
-//! Ports (outbound trait contracts) for the backfill domain.
+//! Outbound trait contracts for the backfill domain.
 //!
-//! Each entity type has its own port because the filter shape differs, but
-//! every implementation has the same responsibility: given a filter, page
-//! through the source of truth and emit [`SearchQueueMessage`][msg]s onto the
-//! search event queue. The request/response types live in [`super::models`].
+//! Two kinds of ports:
 //!
-//! [msg]: sqs_client::search::SearchQueueMessage
+//! - **Sources** — one per entity type. Each knows how to read its source of
+//!   truth and shape the result into [`SearchQueueMessage`]s. The application
+//!   service drives sources through `fetch_page(req, offset)`; an empty page
+//!   signals the loop to stop.
+//! - **Publisher** — one trait, one job: deliver a batch of
+//!   [`SearchQueueMessage`]s onto the search-event queue.
+//!
+//! Splitting per-entity DB reads (sources) from the queue write (publisher)
+//! keeps each adapter single-concern and lets the application-level
+//! pagination loop be tested with in-memory fakes.
 
 use std::future::Future;
 
+use sqs_client::search::SearchQueueMessage;
+
 use super::models::{
-    BackfillError, BackfillReceipt, CallBackfillRequest, ChannelBackfillRequest,
-    ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest,
+    BackfillError, CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest,
+    DocumentBackfillRequest, EmailBackfillRequest,
 };
 
-pub trait CallBackfill: Send + Sync + 'static {
-    fn enqueue(
+/// Publishes batches of search-event messages. Entity-agnostic.
+pub trait SearchEventPublisher: Send + Sync + 'static {
+    fn publish(
         &self,
-        req: CallBackfillRequest,
-    ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
+        messages: Vec<SearchQueueMessage>,
+    ) -> impl Future<Output = Result<(), BackfillError>> + Send;
 }
 
-pub trait ChatBackfill: Send + Sync + 'static {
-    fn enqueue(
+/// Source for archived call records.
+pub trait CallBackfillSource: Send + Sync + 'static {
+    fn fetch_page(
         &self,
-        req: ChatBackfillRequest,
-    ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
+        req: &CallBackfillRequest,
+        offset: usize,
+    ) -> impl Future<Output = Result<Vec<SearchQueueMessage>, BackfillError>> + Send;
 }
 
-pub trait ChannelBackfill: Send + Sync + 'static {
-    fn enqueue(
+/// Source for chat messages.
+pub trait ChatBackfillSource: Send + Sync + 'static {
+    fn fetch_page(
         &self,
-        req: ChannelBackfillRequest,
-    ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
+        req: &ChatBackfillRequest,
+        offset: usize,
+    ) -> impl Future<Output = Result<Vec<SearchQueueMessage>, BackfillError>> + Send;
 }
 
-pub trait DocumentBackfill: Send + Sync + 'static {
-    fn enqueue(
+/// Source for channel messages.
+pub trait ChannelBackfillSource: Send + Sync + 'static {
+    fn fetch_page(
         &self,
-        req: DocumentBackfillRequest,
-    ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
+        req: &ChannelBackfillRequest,
+        offset: usize,
+    ) -> impl Future<Output = Result<Vec<SearchQueueMessage>, BackfillError>> + Send;
 }
 
-pub trait EmailBackfill: Send + Sync + 'static {
-    fn enqueue(
+/// Source for documents.
+pub trait DocumentBackfillSource: Send + Sync + 'static {
+    fn fetch_page(
         &self,
-        req: EmailBackfillRequest,
-    ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
+        req: &DocumentBackfillRequest,
+        offset: usize,
+    ) -> impl Future<Output = Result<Vec<SearchQueueMessage>, BackfillError>> + Send;
+}
+
+/// Source for email threads.
+pub trait EmailBackfillSource: Send + Sync + 'static {
+    fn fetch_page(
+        &self,
+        req: &EmailBackfillRequest,
+        offset: usize,
+    ) -> impl Future<Output = Result<Vec<SearchQueueMessage>, BackfillError>> + Send;
 }

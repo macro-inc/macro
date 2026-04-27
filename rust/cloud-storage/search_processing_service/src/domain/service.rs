@@ -1,31 +1,40 @@
 //! Application-level backfill service.
 //!
-//! [`BackfillService`] is the single inbound contract the HTTP layer talks to.
-//! [`BackfillOrchestrator`] wires one concrete adapter per entity behind that
-//! trait, so swapping an adapter (e.g. in-process → HTTP-proxied) is a wiring
-//! change rather than a handler rewrite.
+//! [`BackfillService`] is the inbound contract the HTTP layer talks to. The
+//! [`BackfillOrchestrator`] holds one source adapter per entity plus a single
+//! [`SearchEventPublisher`], and runs the shared paginate-and-publish loop
+//! that drains a source onto the publisher. The loop lives here (in the
+//! domain) so it can be tested with in-memory fakes — adapters stay
+//! single-concern.
 
 use std::future::Future;
 
+use sqs_client::search::SearchQueueMessage;
+
 use crate::outbound::backfill::{
-    calls::PgCallBackfill, channels::PgChannelBackfill, chats::PgChatBackfill,
-    documents::PgDocumentBackfill, emails::PgEmailBackfill,
+    calls::PgCallSource, channels::PgChannelSource, chats::PgChatSource,
+    documents::PgDocumentSource, emails::PgEmailSource,
 };
+use crate::outbound::publisher::SqsSearchEventPublisher;
 
 use super::models::{
     BackfillError, BackfillReceipt, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest,
 };
-use super::ports::{CallBackfill, ChannelBackfill, ChatBackfill, DocumentBackfill, EmailBackfill};
+use super::ports::{
+    CallBackfillSource, ChannelBackfillSource, ChatBackfillSource, DocumentBackfillSource,
+    EmailBackfillSource, SearchEventPublisher,
+};
 
-/// Concrete [`BackfillService`] wired to the production Postgres adapters, for
-/// use as a type parameter in axum state, etc.
+/// Concrete [`BackfillService`] wired to the production Postgres sources and
+/// the SQS publisher.
 pub type BackfillServiceImpl = BackfillOrchestrator<
-    PgCallBackfill,
-    PgChatBackfill,
-    PgChannelBackfill,
-    PgDocumentBackfill,
-    PgEmailBackfill,
+    PgCallSource,
+    PgChatSource,
+    PgChannelSource,
+    PgDocumentSource,
+    PgEmailSource,
+    SqsSearchEventPublisher,
 >;
 
 /// Inbound contract for all backfill HTTP routes.
@@ -52,74 +61,135 @@ pub trait BackfillService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
 }
 
-pub struct BackfillOrchestrator<Call, Chat, Channel, Doc, Email> {
+pub struct BackfillOrchestrator<Call, Chat, Channel, Doc, Email, Pub> {
     calls: Call,
     chats: Chat,
     channels: Channel,
     documents: Doc,
     emails: Email,
+    publisher: Pub,
 }
 
-impl<Call, Chat, Channel, Doc, Email> BackfillOrchestrator<Call, Chat, Channel, Doc, Email>
+impl<Call, Chat, Channel, Doc, Email, Pub>
+    BackfillOrchestrator<Call, Chat, Channel, Doc, Email, Pub>
 where
-    Call: CallBackfill,
-    Chat: ChatBackfill,
-    Channel: ChannelBackfill,
-    Doc: DocumentBackfill,
-    Email: EmailBackfill,
+    Call: CallBackfillSource,
+    Chat: ChatBackfillSource,
+    Channel: ChannelBackfillSource,
+    Doc: DocumentBackfillSource,
+    Email: EmailBackfillSource,
+    Pub: SearchEventPublisher,
 {
-    pub fn new(calls: Call, chats: Chat, channels: Channel, documents: Doc, emails: Email) -> Self {
+    pub fn new(
+        calls: Call,
+        chats: Chat,
+        channels: Channel,
+        documents: Doc,
+        emails: Email,
+        publisher: Pub,
+    ) -> Self {
         Self {
             calls,
             chats,
             channels,
             documents,
             emails,
+            publisher,
         }
     }
 }
 
-impl<Call, Chat, Channel, Doc, Email> BackfillService
-    for BackfillOrchestrator<Call, Chat, Channel, Doc, Email>
+/// Drive a source by repeatedly calling `fetch_page(offset)`, publishing each
+/// non-empty page, and stopping when the source returns an empty page. The
+/// offset advances by the page length the source actually returned, so a
+/// short last page doesn't cause an extra fetch — but a source that returns
+/// `page_size` items on the final boundary will see one extra empty fetch
+/// before termination, which is intentional and cheap.
+async fn drain_source<Fut, P>(
+    publisher: &P,
+    fetch: impl Fn(usize) -> Fut,
+) -> Result<BackfillReceipt, BackfillError>
 where
-    Call: CallBackfill,
-    Chat: ChatBackfill,
-    Channel: ChannelBackfill,
-    Doc: DocumentBackfill,
-    Email: EmailBackfill,
+    Fut: Future<Output = Result<Vec<SearchQueueMessage>, BackfillError>>,
+    P: SearchEventPublisher + ?Sized,
+{
+    let mut offset = 0usize;
+    let mut enqueued = 0usize;
+
+    loop {
+        let page = fetch(offset).await?;
+        if page.is_empty() {
+            break;
+        }
+        let n = page.len();
+        publisher.publish(page).await?;
+        enqueued += n;
+        offset += n;
+    }
+
+    Ok(BackfillReceipt { enqueued })
+}
+
+impl<Call, Chat, Channel, Doc, Email, Pub> BackfillService
+    for BackfillOrchestrator<Call, Chat, Channel, Doc, Email, Pub>
+where
+    Call: CallBackfillSource,
+    Chat: ChatBackfillSource,
+    Channel: ChannelBackfillSource,
+    Doc: DocumentBackfillSource,
+    Email: EmailBackfillSource,
+    Pub: SearchEventPublisher,
 {
     async fn backfill_calls(
         &self,
         req: CallBackfillRequest,
     ) -> Result<BackfillReceipt, BackfillError> {
-        self.calls.enqueue(req).await
+        drain_source(&self.publisher, |offset| {
+            self.calls.fetch_page(&req, offset)
+        })
+        .await
     }
 
     async fn backfill_chats(
         &self,
         req: ChatBackfillRequest,
     ) -> Result<BackfillReceipt, BackfillError> {
-        self.chats.enqueue(req).await
+        drain_source(&self.publisher, |offset| {
+            self.chats.fetch_page(&req, offset)
+        })
+        .await
     }
 
     async fn backfill_channels(
         &self,
         req: ChannelBackfillRequest,
     ) -> Result<BackfillReceipt, BackfillError> {
-        self.channels.enqueue(req).await
+        drain_source(&self.publisher, |offset| {
+            self.channels.fetch_page(&req, offset)
+        })
+        .await
     }
 
     async fn backfill_documents(
         &self,
         req: DocumentBackfillRequest,
     ) -> Result<BackfillReceipt, BackfillError> {
-        self.documents.enqueue(req).await
+        drain_source(&self.publisher, |offset| {
+            self.documents.fetch_page(&req, offset)
+        })
+        .await
     }
 
     async fn backfill_emails(
         &self,
         req: EmailBackfillRequest,
     ) -> Result<BackfillReceipt, BackfillError> {
-        self.emails.enqueue(req).await
+        drain_source(&self.publisher, |offset| {
+            self.emails.fetch_page(&req, offset)
+        })
+        .await
     }
 }
+
+#[cfg(test)]
+mod test;
