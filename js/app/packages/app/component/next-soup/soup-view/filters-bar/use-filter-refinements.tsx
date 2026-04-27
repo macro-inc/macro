@@ -94,9 +94,13 @@ export function useFilterRefinements() {
       expectedIds.size !== currentIds.size ||
       [...expectedIds].some((id) => !currentIds.has(id as FilterID));
 
-    // Check if there are any external filters set
+    // Check if there are any external filters set (normalize undefined vs {} for comparison)
     const currentFilterData = filterData();
-    const hasQueryFilterDiff = !deepEqual(currentFilterData, preset.filters);
+    const presetFilters = preset.filters;
+    const hasQueryFilterDiff =
+      !deepEqual(currentFilterData.include, presetFilters.include ?? {}) ||
+      !deepEqual(currentFilterData.exclude, presetFilters.exclude ?? {}) ||
+      currentFilterData.emailView !== presetFilters.emailView;
 
     const hasSubFilters = assigneeFilter().length > 0;
 
