@@ -385,6 +385,7 @@ function TaskNarrowBody(props: {
 function CallNarrowBody(props: {
   entity: CallEntity;
   showAttendanceBadge: boolean;
+  setContainerRef: (el: HTMLElement) => void;
 }) {
   const hit = () => firstContentHit(props.entity);
   return (
@@ -409,7 +410,10 @@ function CallNarrowBody(props: {
             <span class="shrink-0 text-ink-extra-muted text-xs whitespace-nowrap">
               <SearchSender hit={h()} />
             </span>
-            <span class="text-ink/50 font-normal truncate min-w-0 text-xs">
+            <span
+              ref={props.setContainerRef}
+              class="text-ink/50 font-normal truncate min-w-0 text-xs"
+            >
               <SearchContent hit={h()} singleLine />
             </span>
           </span>
@@ -515,7 +519,10 @@ function ChannelWideContent(props: {
   );
 }
 
-function CallWideContent(props: { entity: CallEntity }) {
+function CallWideContent(props: {
+  entity: CallEntity;
+  setContainerRef: (el: HTMLElement) => void;
+}) {
   const hit = () => firstContentHit(props.entity);
   return (
     <>
@@ -549,7 +556,10 @@ function CallWideContent(props: { entity: CallEntity }) {
                 <SearchSender hit={h()} />
               </span>
             </span>
-            <div class="text-ink/50 font-medium flex-1 min-w-0 overflow-hidden">
+            <div
+              ref={props.setContainerRef}
+              class="text-ink/50 font-medium flex-1 min-w-0 overflow-hidden"
+            >
               <SearchContent hit={h()} singleLine />
             </div>
           </>
@@ -802,6 +812,7 @@ function NarrowInboxLayout(props: LayoutProps) {
             <CallNarrowBody
               entity={entity()}
               showAttendanceBadge={(soupView?.activeTab() ?? 'all') === 'all'}
+              setContainerRef={props.setSnippetContainerRef}
             />
           )}
         </Match>
@@ -876,7 +887,12 @@ function WideLayout(props: LayoutProps) {
             )}
           </Match>
           <Match when={isCallEntity(props.entity) && props.entity}>
-            {(entity) => <CallWideContent entity={entity()} />}
+            {(entity) => (
+              <CallWideContent
+                entity={entity()}
+                setContainerRef={props.setSnippetContainerRef}
+              />
+            )}
           </Match>
           <Match when={isAutomationEntity(props.entity) && props.entity}>
             {(entity) => <AutomationWideContent entity={entity()} />}
@@ -971,18 +987,29 @@ export function ListEntity(props: ListEntityProps) {
   >();
   const chars = useCharacterCount(snippetContainerRef);
 
-  // For email entities with a single content hit, the snippet
-  // (windowSearchMatch over the hit's content) already renders that hit's
-  // content in full whenever windowing didn't truncate it. Expanding "show
-  // more" in that case shows the same text — hide the section entirely.
+  // With a single content hit, the parent already renders that hit's
+  // content as the snippet — expanding "show more" only adds value when the
+  // snippet was truncated and there is unrendered text left to reveal.
+  //
+  // chars is the half-width approximation used by useCharacterCount, so a
+  // single line of text fits roughly chars * 2 visible characters.
   const isContentHitsRedundant = () => {
-    if (!isEmailEntity(props.entity)) return false;
     if (!isSearchEntity(props.entity)) return false;
     const hits = props.entity.search.contentHitData;
     if (!hits || hits.length !== 1) return false;
     const content = hits[0].content;
-    const rendered = windowSearchMatch(content, chars());
-    return visibleLength(rendered) >= visibleLength(content);
+    if (isEmailEntity(props.entity)) {
+      // Email snippet is windowed via windowSearchMatch — compare against
+      // the actual rendered output to know whether windowing trimmed text.
+      const rendered = windowSearchMatch(content, chars());
+      return visibleLength(rendered) >= visibleLength(content);
+    }
+    if (isCallEntity(props.entity)) {
+      // Call snippet renders the full hit content with CSS truncation; the
+      // section is redundant only when the content fits on a single line.
+      return visibleLength(content) <= chars() * 2;
+    }
+    return false;
   };
 
   const showContentHits = () =>
