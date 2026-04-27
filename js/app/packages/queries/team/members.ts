@@ -67,9 +67,10 @@ export function usePatchTeamUserTierMutation(
         onSuccess: (_data, { teamId, request }) => {
           invalidateTeam(teamId);
 
-          const userInfo = queryClient.getQueryData<{ userId: string }>(
-            authKeys.userInfo.queryKey
-          );
+          const userInfo = queryClient.getQueryData<{
+            userId: string;
+            id: string;
+          }>(authKeys.userInfo.queryKey);
           if (
             userInfo?.id === request.team_user_id ||
             userInfo?.userId === request.team_user_id
