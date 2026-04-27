@@ -1,24 +1,7 @@
 use super::*;
 
-async fn unpack<'a, 'b>(
-    msg: &'a ConnectionsMessage,
-    users: &'b Vec<UserVertex>,
-) -> (Group, Vec<Connection<'b>>)
-where
-    'a: 'b,
-{
-    let mut group = Group::default();
-    for user in users {
-        group.participants.insert(user.clone());
-    }
-
-    let connections = unpack_connections(msg, users).await;
-
-    (group, connections)
-}
-
 fn generate_test_users() -> Vec<Vertex<User>> {
-    let ulist: Vec<Vertex<User>> = [
+    [
         ("oceanus", "ff038d36-1aef-461a-8aa8-34001fa1abad"),
         ("tethys", "5ab8c770-f2cb-4c6c-bc08-ae64569e324c"),
         ("hyperion", "d44caada-98c0-49eb-ab20-6851b824983a"),
@@ -33,14 +16,8 @@ fn generate_test_users() -> Vec<Vertex<User>> {
         ("iapetus", "6be3aef7-0701-4f0c-be6e-750f23ae953c"),
     ]
     .iter()
-    .map(|(_, uuid)| {
-        Vertex::new(User {
-            id: uuid.to_string(),
-        })
-    })
-    .collect();
-
-    ulist
+    .map(|(_, uuid)| Vertex::new(User { id: uuid.to_string() }))
+    .collect()
 }
 
 #[test]
@@ -52,12 +29,10 @@ fn test_group() {
     });
 
     let nusers = users.len();
-    // Populate group with some users
     for user in users {
         g.participants.insert(user);
     }
 
-    // append a new user
     let new_connections = g.append(&bob);
 
     assert_eq!(new_connections.len(), nusers);
@@ -71,7 +46,6 @@ fn test_group_generate() {
     let nusers = users.len();
     let nconnections = nusers * (nusers - 1) / 2;
 
-    // Populate group with some users
     for user in users {
         g.participants.insert(user);
     }
@@ -79,53 +53,4 @@ fn test_group_generate() {
     let connections = g.generate();
 
     assert_eq!(connections.len(), nconnections);
-}
-
-#[test]
-fn test_connections_message() {
-    let mut g = Group::default();
-    let users = generate_test_users();
-
-    let nusers = users.len();
-    let nconnections = nusers * (nusers - 1) / 2;
-
-    // Populate group with some users
-    for user in users {
-        g.participants.insert(user);
-    }
-    let connections = g.generate();
-    let msg = create_connections_message(&g, &connections);
-
-    assert_eq!(msg.users.len(), nusers);
-    assert_eq!(msg.connections.len(), nconnections);
-}
-
-#[tokio::test]
-async fn test_connections_message_unpack() {
-    let mut g = Group::default();
-    let users = generate_test_users();
-
-    let nusers = users.len();
-    let nconnections = nusers * (nusers - 1) / 2;
-
-    // Populate group with some users
-    for user in users {
-        g.participants.insert(user);
-    }
-    let connections = g.generate();
-    let msg = create_connections_message(&g, &connections);
-
-    let new_users = unpack_users(&msg).await;
-    let (new_group, new_connections) = unpack(&msg, &new_users).await;
-
-    // Make sure all participants are accounted for
-    for user in &g.participants {
-        assert!(
-            new_group.participants.contains(user),
-            "Could not find user {}",
-            user.data.id
-        );
-    }
-
-    assert_eq!(new_connections.len(), nconnections);
 }

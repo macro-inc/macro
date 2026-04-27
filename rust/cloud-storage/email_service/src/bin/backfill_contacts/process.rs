@@ -1,4 +1,3 @@
-use contacts::domain::models::messages::ConnectionsMessage;
 use sqs_client::SQS;
 
 /// Process contacts for a single macro ID
@@ -23,19 +22,12 @@ pub async fn process_macro_id(
         return Ok(());
     }
 
-    let mut users = vec![link.macro_id.to_string()];
-    users.extend(
-        contact_emails
-            .iter()
-            .map(|email| format!("macro|{}", email)),
-    );
-
-    let connections = (1..users.len()).map(|i| (0, i)).collect::<Vec<_>>();
-
-    let connections_message = ConnectionsMessage { users, connections };
+    let users = std::iter::once(link.macro_id.to_string())
+        .chain(contact_emails.iter().map(|email| format!("macro|{}", email)))
+        .collect();
 
     sqs_client
-        .enqueue_contacts_add_connection(connections_message)
+        .enqueue_contacts(users)
         .await?;
 
     Ok(())

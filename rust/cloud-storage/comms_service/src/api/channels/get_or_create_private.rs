@@ -114,7 +114,7 @@ pub async fn handler(
             let mut recipients = recipients.clone();
             recipients.push(user_id.clone());
             sqs_client
-                .enqueue_contacts_create_channel(recipients)
+                .enqueue_contacts(recipients)
                 .await
                 .map_err(|e| {
                     tracing::error!(error=?e, "unable to create 'add participant' SQS message");
