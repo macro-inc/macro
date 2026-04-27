@@ -19,6 +19,7 @@ import {
   GroupLabel,
   MenuSeparator,
 } from '@core/component/Menu';
+import { Tooltip } from '@core/component/Tooltip';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useCallContext, type MediaDeviceInfo } from './CallContext';
 
@@ -432,20 +433,14 @@ export function CallOverlay(props: { onLeave: () => void }) {
           <Screencast class="w-5 h-5" />
         </ControlButton>
 
-        <div
-          title={
-            callCtx.isSharedWithTeam()
-              ? 'Shared with team — click to make private'
-              : 'Not shared — click to share with team'
-          }
-        >
+        <Tooltip tooltip={<span class="text-xs">Toggle share with team</span>}>
           <ControlButton
             onClick={handleToggleShareWithTeam}
             active={callCtx.isSharedWithTeam()}
           >
             <Users class="w-5 h-5" />
           </ControlButton>
-        </div>
+        </Tooltip>
 
         <ControlButton onClick={props.onLeave} danger>
           <PhoneDisconnect class="w-5 h-5" />
