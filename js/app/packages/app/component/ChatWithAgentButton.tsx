@@ -8,6 +8,7 @@ import { createChat } from '@core/util/create';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 
 export { AnimatedStarIcon as ChatWithAgentIcon };
 
@@ -32,50 +33,47 @@ export type ChatWithAgentEntity =
   | { type: 'channel'; id: string; name: string; channelType: ChannelType };
 
 function buildAttachment(entity: ChatWithAgentEntity): Attachment | undefined {
-  switch (entity.type) {
-    case 'email':
-      return {
-        id: `${entity.id}-email-attachment`,
-        attachmentId: entity.id,
-        attachmentType: 'email',
-        metadata: {
-          type: 'email',
-          email_subject: entity.name || 'No Subject',
-        },
-      };
-    case 'document': {
-      const fileType = asFileType(entity.fileType);
+  return match(entity)
+    .with({ type: 'email' }, (e) => ({
+      id: `${e.id}-email-attachment`,
+      attachmentId: e.id,
+      attachmentType: 'email' as const,
+      metadata: {
+        type: 'email' as const,
+        email_subject: e.name || 'No Subject',
+      },
+    }))
+    .with({ type: 'document' }, (e) => {
+      const fileType = asFileType(e.fileType);
       if (!fileType) return undefined;
       return {
-        id: `${entity.id}-document-attachment`,
-        attachmentId: entity.id,
-        attachmentType: 'document',
+        id: `${e.id}-document-attachment`,
+        attachmentId: e.id,
+        attachmentType: 'document' as const,
         metadata: {
-          type: 'document',
+          type: 'document' as const,
           document_type: fileType,
-          document_name: entity.name,
+          document_name: e.name,
         },
       };
-    }
-    case 'project':
-      return {
-        id: `${entity.id}-project-attachment`,
-        attachmentId: entity.id,
-        attachmentType: 'project',
-        metadata: { type: 'project', project_name: entity.name },
-      };
-    case 'channel':
-      return {
-        id: `${entity.id}-channel-attachment`,
-        attachmentId: entity.id,
-        attachmentType: 'channel',
-        metadata: {
-          type: 'channel',
-          channel_type: entity.channelType,
-          channel_name: entity.name,
-        },
-      };
-  }
+    })
+    .with({ type: 'project' }, (e) => ({
+      id: `${e.id}-project-attachment`,
+      attachmentId: e.id,
+      attachmentType: 'project' as const,
+      metadata: { type: 'project' as const, project_name: e.name },
+    }))
+    .with({ type: 'channel' }, (e) => ({
+      id: `${e.id}-channel-attachment`,
+      attachmentId: e.id,
+      attachmentType: 'channel' as const,
+      metadata: {
+        type: 'channel' as const,
+        channel_type: e.channelType,
+        channel_name: e.name,
+      },
+    }))
+    .exhaustive();
 }
 
 async function createAndOpenChat(seed: {
