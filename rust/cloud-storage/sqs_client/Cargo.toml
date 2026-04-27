@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 chat = []
-contacts = ["model"]
+contacts = ["dep:contacts"]
 convert = ["model"]
 default = [
   "chat",
@@ -35,6 +35,7 @@ upload_extractor = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-sqs = { workspace = true }
+contacts = { path = "../contacts", optional = true }
 chrono = { workspace = true, optional = true }
 email = { path = "../email", features = ["ports"], optional = true }
 model = { path = "../model", optional = true }

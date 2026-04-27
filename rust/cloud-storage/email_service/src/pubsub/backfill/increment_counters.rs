@@ -1,5 +1,5 @@
 use crate::pubsub::context::PubSubContext;
-use model::contacts::ConnectionsMessage;
+use contacts::domain::models::messages::ConnectionsMessage;
 use models_email::db::address::EmailRecipientType;
 use models_email::service::attachment::{
     AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,

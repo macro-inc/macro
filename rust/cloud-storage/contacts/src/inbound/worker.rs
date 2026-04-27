@@ -1,6 +1,6 @@
 use crate::domain::ports::{ContactsNotifier, ContactsRepository};
 use crate::domain::service::ContactsDomainService;
-use model::contacts::Message;
+use crate::domain::models::messages::Message;
 use sqs_worker::SQSWorker;
 use tracing::instrument;
 

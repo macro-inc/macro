@@ -1,4 +1,4 @@
-use model::contacts::ConnectionsMessage;
+use contacts::domain::models::messages::ConnectionsMessage;
 use sqs_client::SQS;
 
 /// Process contacts for a single macro ID

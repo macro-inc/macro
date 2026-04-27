@@ -3,9 +3,7 @@ use crate::domain::models::user::{
     unpack_users,
 };
 use crate::domain::ports::{ContactsNotifier, ContactsRepository};
-use model::contacts::{
-    AddParticipantsMessageBody, ConnectionsMessage, CreateGroupMessageBody, Message,
-};
+use crate::domain::models::messages::{AddParticipantsMessageBody, ConnectionsMessage, CreateGroupMessageBody, Message};
 use std::collections::HashSet;
 use tracing::instrument;
 

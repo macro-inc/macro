@@ -1,5 +1,5 @@
 use super::*;
-use model::contacts::Message;
+use crate::domain::models::messages::Message;
 use std::collections::HashSet;
 
 fn message_from_json(body: &str) -> Option<Message> {
@@ -118,7 +118,6 @@ async fn test_add_participants_message_body() {
     let body = AddParticipantsMessageBody {
         group: group.into_iter().map(String::from).collect(),
         participants: participants.into_iter().map(String::from).collect(),
-        group_id: None,
     };
 
     let connections = add_participants(&body).await;
@@ -135,7 +134,6 @@ async fn test_create_group_message_body() {
 
     let body = CreateGroupMessageBody {
         group: group.into_iter().map(String::from).collect(),
-        group_id: None,
     };
 
     let connections = create_group(&body).await;
@@ -156,7 +154,6 @@ async fn test_add_participants_lowercase() {
     let body = AddParticipantsMessageBody {
         group: full_group.into_iter().map(String::from).collect(),
         participants: new_participants.into_iter().map(String::from).collect(),
-        group_id: None,
     };
 
     let expected_nconnections = 5;
@@ -176,7 +173,6 @@ async fn test_create_group_lowercase() {
 
     let body = CreateGroupMessageBody {
         group: group.into_iter().map(String::from).collect(),
-        group_id: None,
     };
 
     let connections = create_group(&body).await;
