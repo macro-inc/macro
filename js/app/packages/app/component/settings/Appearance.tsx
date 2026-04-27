@@ -18,8 +18,6 @@ export function Appearance() {
         'gap': '20px',
       }}
     >
-
-
       <Panel>
         <ThemeTools />
         <ThemeEditorBasic />
