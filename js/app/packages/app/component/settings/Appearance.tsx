@@ -30,14 +30,9 @@ export function Appearance() {
         'display': 'grid',
         'min-height': '0',
         'gap': '20px',
-
       }}>
-        <Panel>
-          <ThemeList />
-        </Panel>
-        <Panel>
-          <ThemeEditorAdvanced />
-        </Panel>
+        <Panel><ThemeList /></Panel>
+        <Panel><ThemeEditorAdvanced /></Panel>
       </div>
     </div>
   );

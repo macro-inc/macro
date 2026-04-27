@@ -64,12 +64,12 @@ export function ThemeEditorAdvanced(){
         >
           <div
             style="
-            background-color: var(--color-edge-muted);
-            box-sizing: border-box;
-            overflow-x: hidden;
-            display: grid;
-            gap: 1px;
-          "
+              background-color: var(--color-edge-muted);
+              box-sizing: border-box;
+              overflow-x: hidden;
+              display: grid;
+              gap: 1px;
+            "
           >
             <div
               style="
