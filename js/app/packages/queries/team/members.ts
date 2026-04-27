@@ -78,13 +78,10 @@ export function usePatchTeamUserTierMutation(
               queryKey: authKeys.userQuota.queryKey,
             });
           }
-
-          toast.success('Member tier updated');
         },
 
         onError: (error, { teamId }, context) => {
           console.error('Failed to update team member tier', error);
-          toast.failure('Failed to update team member tier');
 
           if (context?.previousTeam) {
             queryClient.setQueryData(

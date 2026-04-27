@@ -7,6 +7,7 @@ import XIcon from '@icon/regular/x.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import { DialogWrapper } from '@core/component/DialogWrapper';
+import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@kobalte/core/dialog';
@@ -510,13 +511,20 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                   onRemove={() => setShowRemoveModal(member)}
                   onTierChange={(newTier) => {
                     if (!props.teamId) return;
-                    patchTierMutation.mutate({
-                      teamId: props.teamId,
-                      request: {
-                        team_user_id: member.user_id,
-                        new_tier: newTier,
-                      },
-                    });
+                    toast.promise(
+                      patchTierMutation.mutateAsync({
+                        teamId: props.teamId,
+                        request: {
+                          team_user_id: member.user_id,
+                          new_tier: newTier,
+                        },
+                      }),
+                      {
+                        loading: 'Updating member tier...',
+                        success: 'Member tier updated',
+                        error: 'Failed to update member tier',
+                      }
+                    );
                   }}
                 />
               )}
