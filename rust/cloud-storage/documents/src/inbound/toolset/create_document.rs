@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use crate::domain::models::{CreateTaskRequest, PropertyInput};
+use crate::domain::models::CreateTaskRequest;
 use crate::domain::{models::CreateDocumentRepoArgs, ports::DocumentService};
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::Context;
@@ -11,8 +11,6 @@ use base64::Engine;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_file_type::FileType;
-use models_properties::EntityReference;
-use models_properties::api::SetPropertyValue;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
@@ -45,16 +43,6 @@ pub struct CreateDocument {
     #[serde(default)]
     pub is_task: bool,
 }
-
-/// Assignee property id
-const ASSIGNEES_PROPERTY_ID: &str = "00000001-0000-0000-0000-000000000001";
-
-/// Status property id
-const STATUS_PROPERTY_ID: &str = "00000001-0000-0000-0000-000000000002";
-
-/// Not started status option
-const NOT_STARTED_STATUS_OPTION_ID: uuid::Uuid =
-    uuid::uuid!("00000001-0000-0000-0002-000000000001");
 
 #[async_trait]
 impl<DSvc, ESvc> AsyncTool<DocumentToolContext<DSvc, ESvc>> for CreateDocument
@@ -130,24 +118,7 @@ where
                     &CreateTaskRequest {
                         task_name: self.document_name.clone(), // doesn't actually matter
                         project_id: None,
-                        property_values: Some(vec![
-                            PropertyInput {
-                                property_id: ASSIGNEES_PROPERTY_ID.to_string(),
-                                value: SetPropertyValue::MultiEntityReference {
-                                    references: vec![EntityReference {
-                                        entity_id: user_id.as_ref().to_string(),
-                                        entity_type: models_properties::EntityType::User,
-                                        specific_message_id: None,
-                                    }],
-                                },
-                            },
-                            PropertyInput {
-                                property_id: STATUS_PROPERTY_ID.to_string(),
-                                value: SetPropertyValue::SelectOption {
-                                    option_id: NOT_STARTED_STATUS_OPTION_ID,
-                                },
-                            },
-                        ]),
+                        property_values: None, // uses default properties
                         share_with_team: true,
                     },
                 )

@@ -5,6 +5,8 @@ mod tests;
 
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use model_entity::EntityType;
+use models_properties::EntityReference;
+use models_properties::api::SetPropertyValue;
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -30,6 +32,10 @@ use s3_key::{
     build_docx_to_pdf_converted_document_key,
 };
 use tracing;
+
+use crate::domain::models::{
+    ASSIGNEES_PROPERTY_ID, NOT_STARTED_STATUS_OPTION_ID, PropertyInput, STATUS_PROPERTY_ID,
+};
 
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
@@ -1042,30 +1048,53 @@ impl<
                 });
         }
 
-        if let Some(properties) = request.property_values.as_ref() {
-            for property_input in properties {
-                let Ok(property_uuid) = uuid::Uuid::parse_str(&property_input.property_id) else {
-                    tracing::warn!(property_id=?property_input.property_id, "invalid property_id UUID, skipping");
-                    continue;
-                };
+        // Use provided properties or assign default ones for task
+        let properties = if let Some(properties) = request.property_values.as_ref() {
+            properties
+        } else {
+            &vec![
+                PropertyInput {
+                    property_id: ASSIGNEES_PROPERTY_ID.to_string(),
+                    value: SetPropertyValue::MultiEntityReference {
+                        references: vec![EntityReference {
+                            entity_id: user_id.as_ref().to_string(),
+                            entity_type: models_properties::EntityType::User,
+                            specific_message_id: None,
+                        }],
+                    },
+                },
+                PropertyInput {
+                    property_id: STATUS_PROPERTY_ID.to_string(),
+                    value: SetPropertyValue::SelectOption {
+                        option_id: NOT_STARTED_STATUS_OPTION_ID,
+                    },
+                },
+            ]
+        };
 
-                let _ = self
-                    .task_properties_service
-                    .set_entity_property(
-                        user_id.as_ref(),
-                        document_id,
-                        property_uuid,
-                        Some(property_input.value.clone()),
-                    )
-                    .await
-                    .inspect_err(|e| {
-                        tracing::warn!(
+        for property_input in properties {
+            let Ok(property_uuid) = uuid::Uuid::parse_str(&property_input.property_id) else {
+                tracing::warn!(property_id=?property_input.property_id, "invalid property_id UUID, skipping");
+                continue;
+            };
+
+            let _ = self
+                .task_properties_service
+                .set_entity_property(
+                    user_id.as_ref(),
+                    document_id,
+                    property_uuid,
+                    Some(property_input.value.clone()),
+                )
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(
                             error=?e,
                             property_uuid=?property_uuid,
                             "unable to set entity property")
-                    });
-            }
+                });
         }
+
         Ok(())
     }
 }
