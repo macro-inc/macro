@@ -1339,4 +1339,12 @@ impl CallRepository for PgCallRepo {
         .await?;
         Ok(())
     }
+
+    #[tracing::instrument(skip(self, name), err)]
+    async fn set_custom_name_if_null(&self, call_id: &Uuid, name: &str) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        edit::set_custom_name_if_null(&mut tx, call_id, name).await?;
+        tx.commit().await?;
+        Ok(())
+    }
 }

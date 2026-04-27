@@ -155,6 +155,25 @@ pub(super) async fn set_custom_name(
     Ok(())
 }
 
+/// Set `call_records.custom_name` only when the existing value is `NULL`.
+///
+/// Used by the AI auto-naming flow so a user-set name is never overwritten.
+/// No-op if no `call_records` row matches.
+pub(super) async fn set_custom_name_if_null(
+    transaction: &mut Transaction<'_, Postgres>,
+    call_id: &Uuid,
+    custom_name: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"UPDATE call_records SET custom_name = $2 WHERE id = $1 AND custom_name IS NULL"#,
+        call_id,
+        custom_name,
+    )
+    .execute(transaction.as_mut())
+    .await?;
+    Ok(())
+}
+
 /// Update the SharePermission row (isPublic, publicAccessLevel).
 async fn update_share_permission_row(
     transaction: &mut Transaction<'_, Postgres>,

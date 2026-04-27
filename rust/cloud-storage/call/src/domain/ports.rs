@@ -229,6 +229,16 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
         summary: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Set `call_records.custom_name = $name` only when the existing value is
+    /// `NULL`. Used by the AI auto-naming flow so a user-set custom name is
+    /// never overwritten. No-op if no row matches or the column is already
+    /// populated.
+    fn set_custom_name_if_null(
+        &self,
+        call_id: &Uuid,
+        name: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Storage port for generating presigned recording URLs.
@@ -289,6 +299,15 @@ pub trait CallSummarizer: Send + Sync + 'static {
         &self,
         call_id: &Uuid,
         transcript: Vec<CallRecordTranscriptSegment>,
+    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+
+    /// Produce a short (typically 3–6 word) display name for the call from
+    /// its already-generated summary. Used by the auto-name flow only when
+    /// the call has no user-supplied `custom_name` yet.
+    fn generate_call_name(
+        &self,
+        call_id: &Uuid,
+        summary: &str,
     ) -> impl Future<Output = Result<String, Self::Err>> + Send;
 }
 

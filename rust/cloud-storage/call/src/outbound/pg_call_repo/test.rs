@@ -1824,6 +1824,73 @@ async fn patch_call_record_share_with_team_true_noop_when_creator_has_no_team(
     Ok(())
 }
 
+// -- set_custom_name_if_null --------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn set_custom_name_if_null_writes_when_column_is_null(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    repo.set_custom_name_if_null(&CALL_ARCHIVED, "AI Generated Name")
+        .await?;
+
+    let stored = sqlx::query_scalar!(
+        r#"SELECT custom_name FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(stored.as_deref(), Some("AI Generated Name"));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn set_custom_name_if_null_does_not_overwrite_existing_name(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    sqlx::query!(
+        r#"UPDATE call_records SET custom_name = $2 WHERE id = $1"#,
+        CALL_ARCHIVED,
+        "User Picked",
+    )
+    .execute(&pool)
+    .await?;
+
+    repo.set_custom_name_if_null(&CALL_ARCHIVED, "AI Generated")
+        .await?;
+
+    let stored = sqlx::query_scalar!(
+        r#"SELECT custom_name FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(stored.as_deref(), Some("User Picked"));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn set_custom_name_if_null_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    // Idempotent on missing rows — must not error.
+    repo.set_custom_name_if_null(&Uuid::now_v7(), "Whatever")
+        .await?;
+    Ok(())
+}
+
 // -- insert_call_summary ------------------------------------------------------
 
 #[sqlx::test(
