@@ -95,6 +95,11 @@ export type MetaStandardEvent = (typeof META_STANDARD_EVENT_NAMES)[number];
 
 const META_STANDARD_EVENTS: Set<string> = new Set(META_STANDARD_EVENT_NAMES);
 
+const IGNORABLE_ERRORS = [
+  // This error is reported very frequently but is not an actual issue.
+  'ResizeObserver loop completed with undelivered notifications',
+];
+
 const initializePosthog = (instance: PostHog) => {
   const key = import.meta.env.VITE_POSTHOG_API_KEY;
   if (!key) return;
@@ -103,6 +108,19 @@ const initializePosthog = (instance: PostHog) => {
     api_host: 'https://macro-prox.macroverse.workers.dev/i/ph',
     ui_host: 'https://us.posthog.com',
     defaults: '2026-01-30',
+    before_send: (cr) => {
+      if (cr?.event !== '$exception') return cr;
+
+      const exceptionValues = cr.properties.$exception_values;
+
+      if (!exceptionValues || !Array.isArray(exceptionValues)) return cr;
+
+      if (IGNORABLE_ERRORS.some((e) => exceptionValues.includes(e))) {
+        return null;
+      }
+
+      return cr;
+    },
   });
 };
 
