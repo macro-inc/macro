@@ -5,6 +5,7 @@ import type { PatchTeamUserTierRequest } from '@service-auth/generated/schemas/p
 import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
 import { useMutation } from '@tanstack/solid-query';
 
+import { authKeys } from '../auth';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 
@@ -60,13 +61,24 @@ export function usePatchTeamUserTierMutation(
               : undefined
           );
 
-          console.log('Tier change');
-
-          return { previousTeam: structuredClone(previousTeam) };
+          return { previousTeam };
         },
 
-        onSuccess: (_data, { teamId }) => {
+        onSuccess: (_data, { teamId, request }) => {
           invalidateTeam(teamId);
+
+          const userInfo = queryClient.getQueryData<{ userId: string }>(
+            authKeys.userInfo.queryKey
+          );
+          if (userInfo?.userId === request.team_user_id) {
+            queryClient.invalidateQueries({
+              queryKey: authKeys.userInfo.queryKey,
+            });
+            queryClient.invalidateQueries({
+              queryKey: authKeys.userQuota.queryKey,
+            });
+          }
+
           toast.success('Member tier updated');
         },
 
