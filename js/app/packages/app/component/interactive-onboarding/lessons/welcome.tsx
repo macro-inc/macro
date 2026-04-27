@@ -10,7 +10,7 @@ function WelcomeContent(props: LessonContentProps) {
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
       <p>
-        Macro is a unified system for work&NoBreak;—built for <strong>speed</strong>{' '}
+        Macro is a unified system for work{'\u2060'}—built for <strong>speed</strong>{' '}
         and <strong>focus</strong>.
         {!isTouchDevice() &&
           ' This short walk-through will introduce a few core features.'}
