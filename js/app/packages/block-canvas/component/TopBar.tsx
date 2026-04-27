@@ -25,6 +25,7 @@ import {
   REFERENCES_DRAWER_ID,
 } from '@core/component/ReferencesModal';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
@@ -158,10 +159,7 @@ export function TopBar() {
       divideAbove: true,
       condition: () => !!canvasFile(),
       buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
-      focusTarget: () =>
-        document.querySelector<HTMLElement>(
-          '[data-share-drawer-recipient] input'
-        ),
+      focusTarget: getShareDrawerRecipientInput,
     },
   ];
 

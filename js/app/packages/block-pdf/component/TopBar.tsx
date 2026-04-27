@@ -26,6 +26,7 @@ import {
 } from '@core/component/ReferencesModal';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
@@ -230,10 +231,7 @@ export function TopBar() {
       action: () => shareCtx.open(),
       divideAbove: true,
       buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
-      focusTarget: () =>
-        document.querySelector<HTMLElement>(
-          '[data-share-drawer-recipient] input'
-        ),
+      focusTarget: getShareDrawerRecipientInput,
     },
   ];
 

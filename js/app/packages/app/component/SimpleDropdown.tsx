@@ -36,6 +36,7 @@ function FloatingContent(props: {
   boundary: HTMLElement | null;
   onClose: () => void;
   children: JSX.Element;
+  class?: string;
 }) {
   let ref!: HTMLDivElement;
   const [pos, setPos] = createSignal({ x: 0, y: 0 });
@@ -92,7 +93,10 @@ function FloatingContent(props: {
     <div
       ref={ref}
       style={{ position: 'fixed', left: `${pos().x}px`, top: `${pos().y}px` }}
-      class="bg-menu w-fit p-1 border border-edge-muted rounded-xs shadow z-highlight-menu"
+      class={cn(
+        'bg-menu w-fit p-1 border border-edge-muted rounded-xs shadow z-highlight-menu',
+        props.class
+      )}
     >
       {props.children}
     </div>
@@ -125,7 +129,7 @@ function useSimpleDropdownContext() {
 export type DropdownItemProps = {
   text: string | JSX.Element;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
-  onClick?: () => void;
+  onClick?: (e?: MouseEvent) => void;
   disabled?: boolean;
   class?: string;
 };
@@ -151,7 +155,7 @@ function ItemInner(props: Pick<DropdownItemProps, 'icon' | 'text'>) {
 function TouchItem(props: DropdownItemProps) {
   return (
     <div
-      onClick={props.onClick}
+      onClick={(e) => props.onClick?.(e)}
       class={cn(
         ITEM_BASE_CLASS,
         props.disabled
@@ -225,6 +229,7 @@ function SimpleDropdownContent(props: {
           anchor={ctx.anchor()!}
           boundary={ctx.boundary()}
           onClose={() => ctx.onOpenChange(false)}
+          class={props.class}
         >
           {props.children}
         </FloatingContent>
@@ -281,7 +286,7 @@ export type DropdownMenuLike = {
 // focus management) but replace Item with the wrapped KobalteItem so that
 // callers can use the text/icon/onClick interface.
 const DesktopDropdown = Object.assign(
-  (props: any) => <DropdownMenu {...props} />,
+  ({ boundary: _boundary, ...props }: any) => <DropdownMenu {...props} />,
   {
     Trigger: DropdownMenu.Trigger,
     Portal: DropdownMenu.Portal,

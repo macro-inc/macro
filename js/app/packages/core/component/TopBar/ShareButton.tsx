@@ -172,6 +172,12 @@ export const refetchDocumentShareButtonResource = () => {
   refetchArray_.forEach((refetch) => refetch());
 };
 
+export function getShareDrawerRecipientInput(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(
+    '[data-share-drawer-recipient] input'
+  );
+}
+
 interface ShareModalProps {
   setIsSharePermOpen: (value: boolean) => void;
   userPermissions: Permissions;
@@ -315,11 +321,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
     <MobileDrawer
       open={props.isOpen}
       onOpenChange={wrappedSetOpen}
-      initialFocusEl={
-        document.querySelector<HTMLElement>(
-          '[data-share-drawer-recipient] input'
-        ) ?? undefined
-      }
+      initialFocusEl={getShareDrawerRecipientInput() ?? undefined}
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
