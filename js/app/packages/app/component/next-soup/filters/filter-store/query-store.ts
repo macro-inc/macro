@@ -1,3 +1,4 @@
+import { batch } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { compileToAst, type TargetAstMap } from './compile';
 import {
@@ -61,7 +62,7 @@ export function createQueryStore(options: QueryStoreOptions = {}) {
     }));
   };
 
-  const set = (query: Query | null) => {
+  const replace = (query: Query | null) => {
     if (query === null) {
       setState(emptyQueryState());
       return;
@@ -70,6 +71,21 @@ export function createQueryStore(options: QueryStoreOptions = {}) {
       include: filterEmpty(query.include),
       exclude: filterEmpty(query.exclude),
       emailView: query.emailView,
+    });
+  };
+
+  const set = (queryOrFn: Query | ((prev: QueryState) => Query)) => {
+    batch(() => {
+      const query = typeof queryOrFn === 'function' ? queryOrFn(state) : queryOrFn;
+      if (query.include) {
+        setState('include', (prev) => ({ ...prev, ...filterEmpty(query.include) }));
+      }
+      if (query.exclude) {
+        setState('exclude', (prev) => ({ ...prev, ...filterEmpty(query.exclude) }));
+      }
+      if (query.emailView !== undefined) {
+        setState('emailView', query.emailView);
+      }
     });
   };
 
@@ -89,6 +105,7 @@ export function createQueryStore(options: QueryStoreOptions = {}) {
   return {
     state,
     set,
+    replace,
     add,
     remove,
     has,

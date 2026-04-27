@@ -369,7 +369,7 @@ export function useSearchIndexController() {
 
       if (newValue === 'all') {
         cacheChannelSubFilters(contentId, {});
-        queryFilters.set({ include: { emailImportance: true } });
+        queryFilters.replace({ include: { emailImportance: true } });
         return;
       }
 
@@ -380,7 +380,7 @@ export function useSearchIndexController() {
       if (opt.value === 'channels') {
         const cached = getCachedChannelSubFilters(contentId);
 
-        queryFilters.set({
+        queryFilters.replace({
           include: {
             ...opt.queryFilters.include,
             channelId: cached.channel_ids,
@@ -395,7 +395,7 @@ export function useSearchIndexController() {
             ? (cached.importance ?? undefined)
             : opt.queryFilters.include?.emailImportance;
 
-        queryFilters.set({
+        queryFilters.replace({
           include: {
             ...opt.queryFilters.include,
             emailImportance: importance,
@@ -409,16 +409,17 @@ export function useSearchIndexController() {
             ? (cached.attended ?? undefined)
             : opt.queryFilters.include?.callAttended;
 
-        queryFilters.set({
+        queryFilters.replace({
           include: {
             ...opt.queryFilters.include,
             callChannelId: cached.channel_ids,
             callSpeakerId: cached.speaker_ids,
             callAttended: attended,
           },
+          exclude: opt.queryFilters.exclude,
         });
       } else {
-        queryFilters.set({
+        queryFilters.replace({
           include: opt.queryFilters.include,
           exclude: opt.queryFilters.exclude,
         });

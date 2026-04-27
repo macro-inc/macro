@@ -711,7 +711,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
           const persistedFilterData = isStale
             ? {}
             : (initialPersistedState.queryFilters ?? {});
-          queryFilters.set({
+          queryFilters.replace({
             include: persistedFilterData.include,
             exclude: persistedFilterData.exclude,
             emailView: persistedFilterData.emailView,

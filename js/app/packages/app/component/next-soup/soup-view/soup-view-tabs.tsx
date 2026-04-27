@@ -102,7 +102,7 @@ export const useApplyPreset = () => {
 
     batch(() => {
       setActiveTab(tabId);
-      queryFilters.set(preset.filters);
+      queryFilters.replace(preset.filters);
       soup.predicates.set(preset.clientFilters);
     });
     return true;

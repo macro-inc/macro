@@ -493,7 +493,7 @@ export function useFilterRefinements() {
 
     batch(() => {
       soup.predicates.set(preset.clientFilters);
-      queryFilters.set(preset.filters ?? null);
+      queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
     });
   };
