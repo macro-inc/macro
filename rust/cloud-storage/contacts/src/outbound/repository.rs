@@ -16,23 +16,44 @@ impl DbContactsRepository {
 
 impl ContactsRepository for DbContactsRepository {
     async fn get_contacts(&self, user_id: &str) -> Result<Vec<String>, anyhow::Error> {
-        let contacts = contacts_db_client::get_contacts(&self.db, user_id).await?;
-        Ok(contacts)
+        let rows = sqlx::query!(
+            "
+            SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
+            UNION
+            SELECT user2 AS contact FROM contacts_connections WHERE user1 = $1
+            ",
+            user_id
+        )
+        .fetch_all(&self.db)
+        .await?;
+
+        Ok(rows.into_iter().filter_map(|r| r.contact).collect())
     }
 
     async fn create_connections(
         &self,
         connections: Vec<(String, String)>,
     ) -> Result<(), anyhow::Error> {
-        let mut transaction = self.db.begin().await?;
-        contacts_db_client::create_connections(transaction.as_mut(), connections)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, "couldn't create connections");
-            })?;
-        transaction.commit().await.inspect_err(|e| {
-            tracing::error!(error=?e, "transaction error");
+        let (users1, users2): (Vec<String>, Vec<String>) = connections
+            .into_iter()
+            .map(|(a, b)| if a <= b { (a, b) } else { (b, a) })
+            .unzip();
+
+        sqlx::query!(
+            "
+            INSERT INTO contacts_connections(user1, user2)
+            SELECT * FROM unnest($1::text[], $2::text[])
+            ON CONFLICT(user1, user2) DO UPDATE SET updated_at = now()
+            ",
+            &users1,
+            &users2
+        )
+        .execute(&self.db)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, "couldn't create connections");
         })?;
+
         Ok(())
     }
 }

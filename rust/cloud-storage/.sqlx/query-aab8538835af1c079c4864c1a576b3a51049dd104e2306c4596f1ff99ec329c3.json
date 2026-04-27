@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1\n            UNION\n            SELECT user2 AS contact FROM contacts_connections WHERE user1 = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "aab8538835af1c079c4864c1a576b3a51049dd104e2306c4596f1ff99ec329c3"
+}
