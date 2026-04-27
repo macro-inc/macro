@@ -36,6 +36,7 @@ import {
   type SystemSortOption,
   type SortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
+import { FilterContext } from '@app/component/next-soup/filters';
 
 function scrollAccordionItemToTop(
   e: MouseEvent,
@@ -66,7 +67,8 @@ export const MobileFilterDrawer = () => {
     isOptionActive,
   } = useFilterRefinements();
 
-  const { soup, assigneeFilter, setAssigneeFilter } = useSoupView();
+  const { soup, queryFilters, assigneeFilter, setAssigneeFilter } =
+    useSoupView();
   const panel = useSplitPanelOrThrow();
   const contacts = useContacts();
   const userId = useUserId();
@@ -113,7 +115,24 @@ export const MobileFilterDrawer = () => {
     categories().length > 0 || isTasksView() || sortOptions().length > 0;
 
   const toggleFilter = (optionId: FilterOption['id']) => {
+    const wasActive = soup.predicates.isActive(optionId);
     soup.predicates.toggle({ or: [optionId] });
+
+    const filter = soup.predicates.getConfig(optionId);
+    if (!filter?.query) return;
+
+    const ctx: FilterContext = {
+      userId: userId(),
+      assignees: assigneeFilter(),
+    };
+    const query =
+      typeof filter.query === 'function' ? filter.query(ctx) : filter.query;
+
+    if (wasActive) {
+      queryFilters.remove(query);
+    } else {
+      queryFilters.add(query);
+    }
   };
 
   const toggleAssignee = (id: string) => {
