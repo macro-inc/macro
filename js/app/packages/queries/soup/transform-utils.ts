@@ -511,7 +511,10 @@ export const mapSoupPageToEntityList: (
           return {
             type: 'call',
             id: item.data.callId,
-            name: item.data.channelName ?? blockNameToDefaultFile('call'),
+            name:
+              item.data.customName ??
+              item.data.channelName ??
+              blockNameToDefaultFile('call'),
             channelId: item.data.channelId,
             channelName: item.data.channelName ?? undefined,
             ownerId: item.data.createdBy,

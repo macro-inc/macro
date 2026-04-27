@@ -26,7 +26,7 @@ function CallHeader(props: { record: CallRecord }) {
       <PhoneCallIcon class="size-5 text-ink-muted shrink-0" />
       <div class="flex flex-col min-w-0">
         <h2 class="text-sm font-medium text-ink truncate">
-          {props.record.channelName ?? 'Call'}
+          {props.record.customName ?? props.record.channelName ?? 'Call'}
         </h2>
         <div class="flex items-center gap-2 text-xs text-ink-muted">
           <Show when={props.record.endedAt}>
