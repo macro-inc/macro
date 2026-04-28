@@ -29,7 +29,7 @@ export function CallControlButtonWithDropdown(props: {
 
   const handleClick = () => {
     if (interactionDisabled()) return;
-    
+
     props.onClick();
   };
 
@@ -112,9 +112,7 @@ export function CallControlButtonWithDropdown(props: {
             callControlPressable,
             defaultVariant() &&
               cn(
-                !props.danger &&
-                  defaultActive() &&
-                  callControlPanelActive,
+                !props.danger && defaultActive() && callControlPanelActive,
                 !props.danger && !defaultActive() && callControlPanelIdle,
                 props.danger && callControlPanelDanger
               ),
@@ -123,9 +121,7 @@ export function CallControlButtonWithDropdown(props: {
         >
           <CaretDown
             class={
-              isPanelVariant()
-                ? 'w-2.5 h-2.5 shrink-0'
-                : 'w-3 h-3 shrink-0'
+              isPanelVariant() ? 'w-2.5 h-2.5 shrink-0' : 'w-3 h-3 shrink-0'
             }
           />
         </DropdownMenu.Trigger>

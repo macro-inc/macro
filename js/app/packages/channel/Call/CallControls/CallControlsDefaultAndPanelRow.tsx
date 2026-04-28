@@ -94,6 +94,7 @@ function BackgroundEffectSelector() {
 
   return (
     <DropdownMenu.RadioGroup
+      class="w-full"
       value={currentEffectValue()}
       onChange={handleChange}
     >
