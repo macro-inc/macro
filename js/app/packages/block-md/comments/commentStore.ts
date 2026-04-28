@@ -1,15 +1,8 @@
-import {
-  createBlockSignal,
-  createBlockStore,
-} from '@core/block';
+import { createBlockSignal, createBlockStore } from '@core/block';
 import { makePersisted } from '@solid-primitives/storage';
 import type { NodeKey } from 'lexical';
 import { createSignal } from 'solid-js';
-import type {
-  CommentStore,
-  MarkStore,
-  ThreadStore,
-} from './commentType';
+import type { CommentStore, MarkStore, ThreadStore } from './commentType';
 
 interface PendingComment {
   anchorKey: NodeKey;
@@ -23,7 +16,9 @@ export const markStore = createBlockStore<MarkStore>({});
 export const activeMarkIdsSignal = createBlockSignal<string[]>([]);
 
 export const activeCommentThreadSignal = createBlockSignal<number | null>(null);
-export const highlightedCommentIdSignal = createBlockSignal<number | null>(null);
+export const highlightedCommentIdSignal = createBlockSignal<number | null>(
+  null
+);
 
 export const commentsStore = createBlockStore<CommentStore>({});
 

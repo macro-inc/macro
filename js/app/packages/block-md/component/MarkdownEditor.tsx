@@ -2,6 +2,7 @@ import { CommentsProvider } from '@block-md/comments/CommentsProvider';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
+import { useUrlParams } from '@core/component/ParamsProvider';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
 import { useUserId } from '@core/context/user';
 import {
@@ -148,7 +149,6 @@ import {
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, throttle } from '@solid-primitives/scheduled';
-import { useSearchParams } from '@solidjs/router';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/normalize-enter/';
 import {
@@ -163,6 +163,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   Show,
   untrack,
@@ -205,23 +206,15 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const mdDocumentName = useBlockDocumentName('');
 
+  const blockHandle = blockHandleSignal.get;
   const saveMarkdownDocument = useSaveMarkdownDocument();
   const setMdStore = mdStore.set;
   const md = mdStore.get;
   const canEdit = useCanEdit();
   const canComment = useCanComment();
   const [blockElement] = blockElementSignal;
-  const [locationParams, setPendingLocationParams] =
-    createSignal<Record<string, string>>();
   const [findAndReplaceStore, setFindAndReplaceStore] = FindAndReplaceStore;
   const docSource = blockSourceSignal.get;
-
-  const blockHandle = blockHandleSignal.get;
-  createMethodRegistration(blockHandle, {
-    goToLocationFromParams: (params: Record<string, any>) => {
-      setPendingLocationParams({ ...params });
-    },
-  });
 
   const IS_SYNC = () => {
     return docSource() && isSourceSyncService(docSource()!);
@@ -422,41 +415,27 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   };
 
   const [highlightNodeId, setHighlightNodeId] = createSignal<string>();
-  const [activeCommentIdParam, setActiveCommentIdParam] = createSignal<string | undefined>(undefined, { equals: false });
-  const [searchParams] = useSearchParams();
-  const derivedSearchParams = createMemo(() => {
-    return {
-      ...searchParams,
-      ...locationParams(),
-    };
-  });
+  const [activeCommentIdParam, setActiveCommentIdParam] = createSignal<
+    string | undefined
+  >(undefined, { equals: false });
 
   const [activeLocation, setActiveLocation] =
     createSignal<PersistentLocation>();
   const [locationReady, setLocationReady] = createSignal(false);
 
-  createEffect(() => {
-    let nodeId = derivedSearchParams()[URL_PARAMS.nodeId];
-    if (Array.isArray(nodeId)) {
-      nodeId = nodeId.length > 0 ? nodeId[0] : undefined;
-    }
-    if (typeof nodeId === 'string' && nodeId) {
-      setHighlightNodeId(nodeId);
-    }
-
-    const location = derivedSearchParams()[URL_PARAMS.location];
-    if (location && typeof location === 'string') {
-      const locationObj = parsePersistentLocation(location);
-      if (locationObj) {
-        setActiveLocation(locationObj);
+  const { nodeId, location, commentId } = useUrlParams(URL_PARAMS);
+  createEffect(
+    on([nodeId, location, commentId], ([id, loc, comment]) => {
+      if (id) setHighlightNodeId(id);
+      if (comment) setActiveCommentIdParam(comment);
+      if (loc) {
+        const locationObj = parsePersistentLocation(loc);
+        if (locationObj) {
+          setActiveLocation(locationObj);
+        }
       }
-    }
-
-    const comment = derivedSearchParams()[URL_PARAMS.commentId];
-    if (comment && typeof comment === 'string') {
-      setActiveCommentIdParam(comment);
-    }
-  });
+    })
+  );
 
   plugins.use(
     locationPlugin({

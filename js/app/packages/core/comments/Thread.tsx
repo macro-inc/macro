@@ -71,6 +71,7 @@ export type CommentsContextType = {
   inComment: boolean;
   highlightedCommentId: Accessor<number | null>;
 };
+
 export const CommentsContext = createContext<CommentsContextType>({
   setActiveThread: () => {},
   setThreadHeight: () => {},
@@ -100,8 +101,13 @@ export function Thread(props: {
 }) {
   let measureContainerRef!: HTMLDivElement;
 
-  const { canComment, commentOperations, setActiveThread, ownedComment, highlightedCommentId } =
-    useContext(CommentsContext);
+  const {
+    canComment,
+    commentOperations,
+    setActiveThread,
+    ownedComment,
+    highlightedCommentId,
+  } = useContext(CommentsContext);
 
   const [textValue, setTextValue] = createSignal('');
   const [isEditingNewReply, setIsEditingNewReply] = createSignal(false);
@@ -189,7 +195,7 @@ export function Thread(props: {
           maxHeight={props.maxHeight}
           isActive={props.isActive}
           forceWidth={props.width}
-          transition={true}
+          transition={false}
         >
           <div
             // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes

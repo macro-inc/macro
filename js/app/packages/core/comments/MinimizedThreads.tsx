@@ -22,7 +22,7 @@ export function MinimizedThread(props: {
     setExpanded(true);
   }
 
-  const { highlightedCommentId } = useContext(CommentsContext);
+  const { highlightedCommentId, clearHighlightedComment } = useContext(CommentsContext);
   createEffect(() => {
     const hId = highlightedCommentId();
     if (hId === null) return;
@@ -39,6 +39,7 @@ export function MinimizedThread(props: {
         _expandedThreadRef &&
         !_expandedThreadRef.contains(e.target as Node)
       ) {
+        clearHighlightedComment();
         setExpanded(false);
       }
     }
@@ -86,7 +87,7 @@ export function MinimizedThread(props: {
         threadId={props.comment.threadId}
         maxHeight={props.maxHeight}
         isActive={props.isActive}
-        transition={true}
+        transition={false}
       >
         <div
           class={cn(

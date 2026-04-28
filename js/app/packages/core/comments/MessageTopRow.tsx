@@ -10,7 +10,6 @@ import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { type ParentProps, Show, useContext } from 'solid-js';
 import { CommentsContext } from './Thread';
 import { Button } from '@ui/components/Button';
-import { toast } from '@core/component/Toast/Toast';
 
 // SCUFFED: how should we define these tag colors?
 const NewTag = () => {
@@ -141,6 +140,17 @@ export function MessageTopRow(props: {
       isActive={props.isActive}
     >
       <div class="absolute top-0 right-0 flex flex-row bg-menu border border-edge-muted p-1 rounded-sm z-user-highlight">
+        <Show when={props.copyLink}>
+          <Button
+            tooltip="Copy link to comment"
+            size="icon-sm"
+            variant="ghost"
+            class="rounded-xs"
+            onClick={props.copyLink}
+          >
+            <Link />
+          </Button>
+        </Show>
         <Show when={canComment()}>
           <Show when={props.isOwned}>
             <Show when={props.toggleResolve}>
@@ -163,17 +173,6 @@ export function MessageTopRow(props: {
                 onClick={props.enableEditing}
               >
                 <NotePencil />
-              </Button>
-            </Show>
-            <Show when={props.copyLink}>
-              <Button
-                tooltip="Copy link to comment"
-                size="icon-sm"
-                variant="ghost"
-                class="rounded-xs"
-                onClick={props.copyLink}
-              >
-                <Link />
               </Button>
             </Show>
           </Show>

@@ -35,11 +35,16 @@ const CommentText = (props: { text: string; isThreaded?: boolean }) => {
 
 function CommentContainer(props: ParentProps<{ isThreaded?: boolean; isHighlighted?: boolean }>) {
   return (
-    <div class="relative isolate group">
+    <div
+      class="relative isolate group rounded-sm"
+      classList={{
+        'outline-1 outline-accent/20 -outline-offset-1': props.isHighlighted,
+      }}
+    >
       <div
-        class="absolute top-0 left-0 size-[calc(100%)] rounded-sm -z-1 transition-opacity duration-50"
+        class="absolute top-0 left-0 size-[calc(100%)] rounded-sm -z-1"
         classList={{
-          'bg-comment-bg opacity-100': props.isHighlighted,
+          'bg-accent/5 opacity-100': props.isHighlighted,
           'bg-hover opacity-0 group-hover:opacity-100': !props.isHighlighted,
         }}
       />

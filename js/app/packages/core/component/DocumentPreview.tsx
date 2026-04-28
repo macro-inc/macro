@@ -195,7 +195,7 @@ export const mentionsAccessories = (
     return;
   }
   // Md block handling
-  else if (blockName === 'md') {
+  else if (resolveBlockAlias(blockName) === 'md') {
     const id = params[URL_PARAMS_MD.nodeId];
     const loc = params[URL_PARAMS_MD.location];
     if (id?.trim() || loc?.trim()) {

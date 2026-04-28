@@ -83,7 +83,6 @@ const useCommentsContext = (): CommentsContextType => {
     inComment: true,
     highlightedCommentId: highlightedCommentIdSignal.get,
   };
-
   return commentsContext;
 };
 
