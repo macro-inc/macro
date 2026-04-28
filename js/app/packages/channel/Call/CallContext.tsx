@@ -331,10 +331,10 @@ function createCallState() {
       } else {
         await prev.destroy();
       }
+      setKrispFilter(null);
     } catch (e) {
       console.error('failed to detach Krisp noise filter', e);
     }
-    setKrispFilter(null);
   }
 
   /**
