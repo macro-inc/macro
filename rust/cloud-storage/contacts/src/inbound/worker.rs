@@ -1,6 +1,7 @@
 use crate::domain::models::messages::ContactsMessage;
 use crate::domain::ports::{ContactsNotifier, ContactsRepository};
 use crate::domain::service::ContactsDomainService;
+use rootcause::report;
 use sqs_worker::SQSWorker;
 use tracing::instrument;
 
@@ -43,14 +44,20 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
     }
 
     #[instrument(skip(self, message), err)]
-    async fn process_message(&self, message: &aws_sdk_sqs::types::Message) -> anyhow::Result<()> {
+    async fn process_message(
+        &self,
+        message: &aws_sdk_sqs::types::Message,
+    ) -> Result<(), rootcause::Report> {
         self.parse_message(message).await?;
         self.cleanup_message(message).await?;
         Ok(())
     }
 
     #[instrument(skip(sqs_message, self), err)]
-    async fn parse_message(&self, sqs_message: &aws_sdk_sqs::types::Message) -> anyhow::Result<()> {
+    async fn parse_message(
+        &self,
+        sqs_message: &aws_sdk_sqs::types::Message,
+    ) -> Result<(), rootcause::Report> {
         match message_from_sqs(sqs_message) {
             Some(message) => self.service.process_message(&message).await,
             None => tracing::warn!(
@@ -61,10 +68,16 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
         Ok(())
     }
 
-    async fn cleanup_message(&self, message: &aws_sdk_sqs::types::Message) -> anyhow::Result<()> {
+    async fn cleanup_message(
+        &self,
+        message: &aws_sdk_sqs::types::Message,
+    ) -> Result<(), rootcause::Report> {
         if let Some(receipt_handle) = message.receipt_handle.as_ref() {
             tracing::trace!(message_id=?message.message_id, message_receipt_handle=?receipt_handle, "deleting message");
-            self.sqs.delete_message(receipt_handle).await?;
+            self.sqs
+                .delete_message(receipt_handle)
+                .await
+                .map_err(|e| report!(e.into_boxed_dyn_error()))?;
         }
         Ok(())
     }

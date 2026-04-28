@@ -3,6 +3,7 @@ mod test;
 
 use crate::domain::ports::ContactsRepository;
 use macro_user_id::user_id::MacroUserIdStr;
+use rootcause::Report;
 use sqlx::PgPool;
 
 /// Database-backed implementation of [`ContactsRepository`].
@@ -19,7 +20,7 @@ impl DbContactsRepository {
 }
 
 impl ContactsRepository for DbContactsRepository {
-    async fn get_contacts(&self, user_id: &str) -> Result<Vec<String>, anyhow::Error> {
+    async fn get_contacts(&self, user_id: &str) -> Result<Vec<String>, Report> {
         let rows = sqlx::query!(
             "
             SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
@@ -37,7 +38,7 @@ impl ContactsRepository for DbContactsRepository {
     async fn create_connections(
         &self,
         connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Report> {
         let (users1, users2): (Vec<MacroUserIdStr<'static>>, Vec<MacroUserIdStr<'static>>) =
             connections
                 .into_iter()

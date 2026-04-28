@@ -67,10 +67,10 @@ async fn main() -> anyhow::Result<()> {
         let internal_api_secret = secretsmanager_client
             .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
             .await?;
-        Some(ConnectionGatewayNotifier::new(
-            internal_api_secret.as_ref().to_string(),
-            url.clone(),
-        )?)
+        Some(
+            ConnectionGatewayNotifier::new(internal_api_secret.as_ref().to_string(), url.clone())
+                .unwrap(),
+        )
     } else {
         None
     };

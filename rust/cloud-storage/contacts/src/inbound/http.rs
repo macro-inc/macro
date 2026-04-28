@@ -44,7 +44,7 @@ pub trait ContactsServicePort: Send + Sync + 'static {
         &self,
         caller: MacroUserIdStr<'_>,
         recipient: MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<(), anyhow::Error>> + Send;
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 
 impl<R: ContactsRepository, N: ContactsNotifier> ContactsServicePort
@@ -58,7 +58,7 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsServicePort
         &self,
         caller: MacroUserIdStr<'_>,
         recipient: MacroUserIdStr<'_>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), rootcause::Report> {
         self.add_contact(caller.as_ref(), recipient.as_ref()).await
     }
 }
