@@ -15,14 +15,16 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/Menu';
-import type { CallControlVariant } from './CallControlButton';
-import { CallControlButton } from './CallControlButton';
+import {
+  CallControlButton,
+  type CallControlButtonSize,
+} from './CallControlButton';
 import { CallControlButtonWithDropdown } from './CallControlButtonWithDropdown';
 import { CallDeviceList } from '../CallDeviceList';
 import { BACKGROUND_IMAGES, useCallContext } from '../CallContext';
 
 export type CallControlsDefaultAndPanelRowProps = {
-  variant: Accessor<CallControlVariant>;
+  size: Accessor<CallControlButtonSize>;
   class?: string;
   onLeave: () => void | Promise<void>;
 };
@@ -152,8 +154,8 @@ export function CallControlsDefaultAndPanelRow(
 ) {
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
-  const variant = () => props.variant();
-  const iconClass = () => (variant() === 'panel' ? 'w-4 h-4' : 'w-5 h-5');
+  const size = () => props.size();
+  const iconClass = () => (size() === 'panel' ? 'w-4 h-4' : 'w-5 h-5');
   const toggleShareWithTeam = useToggleShareWithTeamMutation();
 
   const handleToggleShareWithTeam = async () => {
@@ -168,14 +170,14 @@ export function CallControlsDefaultAndPanelRow(
       data-call-controls
       class={cn(
         'flex flex-row flex-wrap items-center',
-        variant() === 'default' && 'justify-center gap-3',
-        variant() === 'panel' &&
+        size() === 'default' && 'justify-center gap-3',
+        size() === 'panel' &&
           'justify-around gap-0 divide-x divide-edge-muted [&>*]:px-1 [&>*:first-child]:pl-0',
         props.class
       )}
     >
       <CallControlButtonWithDropdown
-        variant={variant()}
+        size={size()}
         onClick={() => callCtx.toggleAudio()}
         active={!callCtx.isAudioMuted()}
         disabled={isConnecting()}
@@ -208,7 +210,7 @@ export function CallControlsDefaultAndPanelRow(
       </CallControlButtonWithDropdown>
 
       <CallControlButtonWithDropdown
-        variant={variant()}
+        size={size()}
         onClick={() => callCtx.toggleVideo()}
         active={!callCtx.isVideoMuted()}
         disabled={isConnecting()}
@@ -236,7 +238,7 @@ export function CallControlsDefaultAndPanelRow(
       </CallControlButtonWithDropdown>
 
       <CallControlButton
-        variant={variant()}
+        size={size()}
         onClick={() => callCtx.toggleScreenShare()}
         active={callCtx.isScreenSharing()}
         disabled={isConnecting()}
@@ -245,7 +247,7 @@ export function CallControlsDefaultAndPanelRow(
       </CallControlButton>
 
       <CallControlButton
-        variant={variant()}
+        size={size()}
         onClick={handleToggleShareWithTeam}
         active={callCtx.isSharedWithTeam()}
         disabled={isConnecting()}
@@ -254,7 +256,7 @@ export function CallControlsDefaultAndPanelRow(
       </CallControlButton>
 
       <CallControlButton
-        variant={variant()}
+        size={size()}
         onClick={props.onLeave}
         disabled={isConnecting()}
         danger

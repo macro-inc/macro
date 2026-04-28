@@ -3,18 +3,10 @@ import { DropdownMenuContent } from '@core/component/Menu';
 import CaretDown from '@icon/regular/caret-down.svg';
 import { createMemo, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
-import type { CallControlVariant } from './CallControlButton';
 import {
-  callControlDefaultActive,
-  callControlDefaultDanger,
-  callControlDefaultIdle,
-  callControlDefaultSize,
-  callControlPanelActive,
-  callControlPanelDanger,
-  callControlPanelFlat,
-  callControlPanelIdle,
-  callControlPressable,
-} from './call-control-button-shared';
+  callControlButtonStyles,
+  type CallControlButtonSize,
+} from './CallControlButton';
 
 export function CallControlButtonWithDropdown(props: {
   onClick: () => Promise<void> | void;
@@ -23,51 +15,40 @@ export function CallControlButtonWithDropdown(props: {
   children?: JSX.Element;
   dropdownContent: () => JSX.Element;
   disabled?: boolean;
-  variant?: CallControlVariant;
+  size?: CallControlButtonSize;
 }) {
   const interactionDisabled = createMemo(() => !!props.disabled);
 
   const handleClick = () => {
     if (interactionDisabled()) return;
-
     props.onClick();
   };
 
-  const resolvedVariant = () => props.variant ?? 'default';
+  const size = () => props.size ?? 'default';
+  const isDefault = () => size() === 'default';
+  const isPanel = () => size() === 'panel';
 
-  const defaultVariant = createMemo(() => {
-    return resolvedVariant() === 'default';
-  });
-
-  const defaultActive = createMemo(() => {
-    return defaultVariant() && props.active;
-  });
-
-  const isPanelVariant = () => {
-    const v = resolvedVariant();
-    return v === 'panel' || v === 'panel-small';
+  const variantClass = () => {
+    const sizeVariant = callControlButtonStyles.variant[size()];
+    if (props.danger) return sizeVariant.danger;
+    if (props.active) return sizeVariant.active;
+    return sizeVariant.base;
   };
 
-  const panelChrome = () =>
-    cn(
-      props.danger && callControlPanelDanger,
-      !props.danger && !props.active && callControlPanelIdle,
-      !props.danger && props.active && callControlPanelActive
-    );
+  const panelVariantKey = () =>
+    props.danger ? 'danger' : props.active ? 'active' : 'base';
 
   return (
     <div
       class={cn(
         'isolate flex items-center transition-colors',
-        defaultVariant() &&
+        isDefault() &&
           cn(
             'rounded-lg gap-1 pr-2',
-            props.danger && callControlDefaultDanger,
-            !props.danger && defaultActive() && callControlDefaultActive,
-            !props.danger && !defaultActive() && callControlDefaultIdle,
+            variantClass(),
             interactionDisabled() && 'pointer-events-none opacity-50'
           ),
-        isPanelVariant() &&
+        isPanel() &&
           cn(
             'gap-0.5 border-0 bg-transparent pr-1 shadow-none outline-none',
             interactionDisabled() && 'pointer-events-none opacity-50'
@@ -79,25 +60,21 @@ export function CallControlButtonWithDropdown(props: {
         disabled={interactionDisabled()}
         class={cn(
           'relative isolate z-0',
-          defaultVariant() &&
+          isDefault() &&
             cn(
-              callControlPressable,
-              callControlDefaultSize,
-              callControlPanelFlat,
+              callControlButtonStyles.base,
+              callControlButtonStyles.size.default,
+              'border-0 bg-transparent shadow-none',
               "before:pointer-events-none before:absolute before:right-0 before:top-2 before:bottom-2 before:h-auto before:w-[1px] before:bg-ink-extra-muted/40 before:content-['']",
               '-translate-x-[3px]',
-              !props.danger &&
-                defaultActive() &&
-                cn('before:bg-accent-2', callControlPanelActive),
-              !props.danger && !defaultActive() && callControlPanelIdle,
-              props.danger && callControlPanelDanger
+              props.active && 'before:bg-success',
+              callControlButtonStyles.variant.panel[panelVariantKey()]
             ),
-          isPanelVariant() &&
+          isPanel() &&
             cn(
-              callControlPressable,
-              'h-8 w-5 rounded-md',
-              callControlPanelFlat,
-              panelChrome()
+              callControlButtonStyles.base,
+              'h-8 w-5 rounded-md border-0 bg-transparent shadow-none',
+              variantClass()
             )
         )}
       >
@@ -109,20 +86,12 @@ export function CallControlButtonWithDropdown(props: {
       <DropdownMenu>
         <DropdownMenu.Trigger
           class={cn(
-            callControlPressable,
-            defaultVariant() &&
-              cn(
-                !props.danger && defaultActive() && callControlPanelActive,
-                !props.danger && !defaultActive() && callControlPanelIdle,
-                props.danger && callControlPanelDanger
-              ),
-            isPanelVariant() && panelChrome()
+            callControlButtonStyles.base,
+            callControlButtonStyles.variant.panel[panelVariantKey()]
           )}
         >
           <CaretDown
-            class={
-              isPanelVariant() ? 'w-2.5 h-2.5 shrink-0' : 'w-3 h-3 shrink-0'
-            }
+            class={isPanel() ? 'w-2.5 h-2.5 shrink-0' : 'w-3 h-3 shrink-0'}
           />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>

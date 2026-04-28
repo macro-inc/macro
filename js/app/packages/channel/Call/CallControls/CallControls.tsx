@@ -1,12 +1,14 @@
 import { Match, Show, Switch, mergeProps, type Accessor } from 'solid-js';
-import type { CallControlVariant } from './CallControlButton';
+import type { CallControlButtonSize } from './CallControlButton';
 import { CallControlsDefaultAndPanelRow } from './CallControlsDefaultAndPanelRow';
 import { CallControlsPanelSmallRow } from './CallControlsPanelSmallRow';
+
+export type CallControlsVariant = 'default' | 'panel' | 'panel-small';
 
 export type CallControlsProps = {
   /** Leave / hang up — parent supplies tab switch, `leaveCall()`, etc. */
   onLeave: () => void | Promise<void>;
-  variant?: CallControlVariant;
+  variant?: CallControlsVariant;
   when?: boolean | Accessor<boolean>;
 };
 
@@ -23,26 +25,27 @@ function readWhen(
  */
 export function CallControls(rawProps: CallControlsProps) {
   const props = mergeProps(
-    { variant: 'default' as CallControlVariant },
+    { variant: 'default' as CallControlsVariant },
     rawProps
   );
 
   const variant = () => props.variant ?? 'default';
+
+  const buttonSize = (): CallControlButtonSize =>
+    variant() === 'default' ? 'default' : 'panel';
 
   return (
     <Show when={() => readWhen(props.when)}>
       <Switch
         fallback={
           <CallControlsDefaultAndPanelRow
-            variant={variant}
+            size={buttonSize}
             onLeave={props.onLeave}
           />
         }
       >
         <Match when={variant() === 'panel-small'}>
-          <CallControlsPanelSmallRow
-            onLeave={props.onLeave}
-          />
+          <CallControlsPanelSmallRow onLeave={props.onLeave} />
         </Match>
       </Switch>
     </Show>

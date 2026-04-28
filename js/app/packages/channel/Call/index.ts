@@ -7,8 +7,11 @@ export type { CallState } from './CallContext';
 export { useCall } from './use-call';
 export { CallOverlay } from './CallOverlay';
 export { CallControls } from './CallControls/CallControls';
-export type { CallControlsProps } from './CallControls/CallControls';
-export type { CallControlVariant } from './CallControls/CallControlButton';
+export type {
+  CallControlsProps,
+  CallControlsVariant,
+} from './CallControls/CallControls';
+export type { CallControlButtonSize } from './CallControls/CallControlButton';
 export { CallAudioSink } from './CallAudioSink';
 export { ChannelCallButton } from './ChannelCallButton';
 export { ChannelCallTab } from './ChannelCallTab';
