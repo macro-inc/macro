@@ -32,7 +32,7 @@ const CommentText = (props: { text: string; isThreaded?: boolean }) => {
 function CommentContainer(props: ParentProps<{ isThreaded?: boolean }>) {
   return (
     <div class="relative isolate group">
-      <div class="absolute top-0 left-0 size-[calc(100%)] bracket bg-menu/30 -z-1 transition-opacity duration-50 opacity-0 group-hover:opacity-100" />
+      <div class="absolute top-0 left-0 size-[calc(100%)] bg-hover rounded-sm -z-1 transition-opacity duration-50 opacity-0 group-hover:opacity-100" />
       <div
         class="supports-text-pretty:whitespace-normal wrap-break-word p-1"
         classList={{

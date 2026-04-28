@@ -201,6 +201,11 @@ export const mentionsAccessories = (
     if (id?.trim() || loc?.trim()) {
       return { icon: 'highlight', note: 'Snippet' };
     }
+
+    const comment = params[URL_PARAMS_MD.commentId];
+    if (comment?.trim()) {
+      return { icon: 'message', note: 'Comment' };
+    }
   }
 };
 
