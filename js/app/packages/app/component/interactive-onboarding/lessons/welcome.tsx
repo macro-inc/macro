@@ -10,8 +10,8 @@ function WelcomeContent(props: LessonContentProps) {
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
       <p>
-        Macro is a unified system for work – built for <strong>speed</strong>{' '}
-        and <strong>focus</strong>.
+        Macro is a unified system for work{'\u2060'}—built for{' '}
+        <strong>speed</strong> and <strong>focus</strong>.
         {!isTouchDevice() &&
           ' This short walk-through will introduce a few core features.'}
       </p>
@@ -24,11 +24,11 @@ function WelcomeSecondaryAction() {
 
   return (
     <>
-      <p class="text-sm text-ink/50 mt-10">Already have an account?</p>
+      <p class="text-sm text-ink-extra-muted mt-10">Already have an account?</p>
       <A
         href="/login"
         onClick={() => analytics.track('login_from_onboarding')}
-        class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between gap-2 bracket-never border-none bg-transparent text-ink/50 hover:bg-hover/60 ring-1 ring-edge-muted/50"
+        class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between gap-2 bracket-never border-none bg-transparent text-ink-extra-muted hover:bg-hover ring-1 ring-edge-muted"
       >
         Login
       </A>

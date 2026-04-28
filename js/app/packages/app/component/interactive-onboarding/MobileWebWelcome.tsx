@@ -45,8 +45,8 @@ export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
         <LogoIcon class="size-16 text-accent self-center" />
         <h2 class="text-3xl font-semibold text-ink mt-3">Welcome to Macro.</h2>
         <p class="text-base text-ink/60 mt-4">
-          Macro is a unified system for work – built for <strong>speed</strong>{' '}
-          and <strong>focus</strong>.
+          Macro is a unified system for work{'\u2060'}—built for{' '}
+          <strong>speed</strong> and <strong>focus</strong>.
         </p>
 
         <form

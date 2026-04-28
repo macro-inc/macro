@@ -1,7 +1,7 @@
 import { execSync, exec } from 'node:child_process';
+import { unwatchFile, watchFile } from 'node:fs';
 import { resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
-import chokidar from 'chokidar';
 import { Features } from 'lightningcss';
 import type { Plugin, UserConfigFn } from 'vite';
 import solid from 'vite-plugin-solid';
@@ -51,20 +51,7 @@ function gitBranchHmrPlugin(): Plugin {
         return;
       }
       const headPath = resolve(gitDir, 'HEAD');
-      const watcher = chokidar.watch(headPath, {
-        ignoreInitial: true,
-        persistent: false,
-        usePolling: true,
-        interval: 100,
-      });
-      watcher.on('all', () => {
-        server.ws.send({
-          type: 'custom',
-          event: 'git-branch:update',
-          data: readGitBranch(),
-        });
-      });
-      server.ws.on('connection', () => {
+      const emit = () => {
         readGitBranchAsync().then((branch) => {
           server.ws.send({
             type: 'custom',
@@ -72,28 +59,18 @@ function gitBranchHmrPlugin(): Plugin {
             data: branch,
           });
         });
-      });
-      server.httpServer?.once('close', () => void watcher.close());
+      };
+      watchFile(headPath, { interval: 100 }, emit);
+      server.ws.on('connection', emit);
+      server.httpServer?.once('close', () => unwatchFile(headPath));
     },
   };
 }
 
-const PLATFORMS = ['web', 'desktop', 'ios', 'android'] as const;
-
-export type AppPlatform = (typeof PLATFORMS)[number];
-
-export interface CreateAppViteConfigOptions {
-  platform: AppPlatform;
-}
-
-export const createAppViteConfig = ({
-  platform,
-}: CreateAppViteConfigOptions): UserConfigFn => {
+export const createAppViteConfig = (): UserConfigFn => {
   return ({ command, mode }) => {
     const ENV_MODE = process.env.MODE ?? mode;
     const NO_MINIFY = process.env.NO_MINIFY === 'true';
-    const isLegacyTauriBuild = process.env.VITE_TAURI === 'true';
-    const _isTauriPlatform = platform !== 'web' || isLegacyTauriBuild;
 
     return {
       base: command === 'serve' ? '/' : '/app',
@@ -116,7 +93,7 @@ export const createAppViteConfig = ({
         }),
         gitBranchHmrPlugin(),
       ],
-      define: defineEnv(ENV_MODE, command, platform),
+      define: defineEnv(ENV_MODE, command),
       clearScreen: false,
       worker: {
         format: 'es',
@@ -234,10 +211,9 @@ function getAssetsPath(mode: string, command: string): string {
   }
 }
 
-function defineEnv(mode: string, command: string, platform: AppPlatform) {
+function defineEnv(mode: string, command: string) {
   return {
     'import.meta.env.__APP_VERSION__': JSON.stringify(appVersion),
-    'import.meta.env.VITE_PLATFORM': JSON.stringify(platform),
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
     'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',
     'import.meta.env.__LOCAL_JWT__': JSON.stringify(process.env.LOCAL_JWT),

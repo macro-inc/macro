@@ -375,7 +375,7 @@ where
                     records.into_iter().map(move |record| {
                         let soup_record = SoupCallRecord::from_record_for_user(record, &user_id);
                         FrecencySoupItem {
-                            item: SoupItem::CallRecord(soup_record),
+                            item: SoupItem::Call(soup_record),
                             frecency_score: None,
                         }
                     })

@@ -48,7 +48,7 @@ pub enum ItemType {
     Project,
     Email,
     Channel,
-    CallRecord,
+    Call,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -65,7 +65,7 @@ pub enum EntityItem {
     #[serde(rename_all = "camelCase")]
     Channel { id: Uuid, name: Option<String> },
     #[serde(rename_all = "camelCase")]
-    CallRecord { id: Uuid, created_by: String },
+    Call { id: Uuid, created_by: String },
 }
 
 impl EntityItem {
@@ -76,7 +76,7 @@ impl EntityItem {
             EntityItem::Project { .. } => ItemType::Project,
             EntityItem::Email { .. } => ItemType::Email,
             EntityItem::Channel { .. } => ItemType::Channel,
-            EntityItem::CallRecord { .. } => ItemType::CallRecord,
+            EntityItem::Call { .. } => ItemType::Call,
         }
     }
 }
@@ -104,7 +104,7 @@ impl From<SoupItem> for EntityItem {
                 id: channel.channel.channel.id.0,
                 name: channel.channel.channel.name.clone(),
             },
-            SoupItem::CallRecord(record) => EntityItem::CallRecord {
+            SoupItem::Call(record) => EntityItem::Call {
                 id: record.call_id,
                 created_by: record.created_by,
             },
@@ -237,7 +237,7 @@ pub(super) fn build_summary(
             EntityItem::Project { .. } => projects += 1,
             EntityItem::Email { .. } => emails += 1,
             EntityItem::Channel { .. } => channels += 1,
-            EntityItem::CallRecord { .. } => call_records += 1,
+            EntityItem::Call { .. } => call_records += 1,
         }
     }
 

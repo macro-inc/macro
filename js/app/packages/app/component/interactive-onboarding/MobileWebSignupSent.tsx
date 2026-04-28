@@ -10,11 +10,16 @@ export default function MobileWebSignupSent() {
 
   onMount(() => {
     analytics.track('mobile_web_signup_sent_viewed');
-    analytics.trackMeta('Lead', {
+    // Fire as both Lead and CompleteRegistration: Meta's Maximize Value
+    // campaigns don't support Lead, so we duplicate to CompleteRegistration.
+    // The existing Lead event is used in a custom conversion we use in an ad campaign, so can't remove it
+    const leadPayload = {
       content_name: 'mobile_web_signup',
       value: MOBILE_WEB_SIGNUP_LEAD_VALUE,
       currency: 'USD',
-    });
+    };
+    analytics.trackMeta('Lead', leadPayload);
+    analytics.trackMeta('CompleteRegistration', leadPayload);
   });
 
   return (

@@ -42,7 +42,7 @@ function TopIcon(props: TopIconProps) {
   return (
     <Show
       when={props.channelType === ChannelTypeEnum.DirectMessage && recipient()}
-      fallback={<HashIcon class="w-4 h-4" />}
+      fallback={<HashIcon class="w-4 h-4 shrink-0" />}
     >
       {(recipient) => {
         return (
@@ -85,59 +85,52 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
 
   return (
     <SplitHeaderLeft>
-      <div class="h-full my-auto flex gap-3 justify-start items-center min-w-0">
-        <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink min-w-0">
-          <TopIcon
-            channelType={props.channelType}
-            participants={props.participants}
-          />
-          <SplitLabel
-            label={channelName() ?? 'New Channel'}
-            lockRename={props.lockRename}
-            renameOverrides={{ channelType: props.channelType }}
-          />
-        </div>
-        <Show when={props.tabs && props.activeTab && props.onTabChange}>
-          <Show
-            when={!isMobile()}
-            fallback={
-              <div class="ph-no-capture flex items-center min-w-0 shrink-0 h-full">
-                <Tabs
-                  list={iconTabList()}
-                  value={props.activeTab}
-                  onChange={(value) =>
-                    props.onTabChange?.(value as ChannelTabId)
-                  }
-                />
-              </div>
-            }
-          >
-            <CollapsibleHeaderItem
-              id="channel-tabs"
-              priority={1}
-              containerClass="ph-no-capture min-w-0 shrink-0 h-full"
-              expanded={() => (
-                <Tabs
-                  list={[...(props.tabs ?? [])]}
-                  value={props.activeTab}
-                  onChange={(value) =>
-                    props.onTabChange?.(value as ChannelTabId)
-                  }
-                />
-              )}
-              collapsed={() => (
-                <Tabs
-                  list={iconTabList()}
-                  value={props.activeTab}
-                  onChange={(value) =>
-                    props.onTabChange?.(value as ChannelTabId)
-                  }
-                />
-              )}
-            />
-          </Show>
-        </Show>
+      <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink min-w-15">
+        <TopIcon
+          channelType={props.channelType}
+          participants={props.participants}
+        />
+        <SplitLabel
+          label={channelName() ?? 'New Channel'}
+          lockRename={props.lockRename}
+          renameOverrides={{ channelType: props.channelType }}
+          maxDisplayLength={48}
+        />
       </div>
+      <Show when={props.tabs && props.activeTab && props.onTabChange}>
+        <Show
+          when={!isMobile()}
+          fallback={
+            <div class="ph-no-capture flex items-center min-w-0 shrink-0 h-full">
+              <Tabs
+                list={iconTabList()}
+                value={props.activeTab}
+                onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
+              />
+            </div>
+          }
+        >
+          <CollapsibleHeaderItem
+            id="channel-tabs"
+            priority={1}
+            containerClass="ph-no-capture min-w-0 shrink-0 h-full"
+            expanded={() => (
+              <Tabs
+                list={[...(props.tabs ?? [])]}
+                value={props.activeTab}
+                onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
+              />
+            )}
+            collapsed={() => (
+              <Tabs
+                list={iconTabList()}
+                value={props.activeTab}
+                onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
+              />
+            )}
+          />
+        </Show>
+      </Show>
     </SplitHeaderLeft>
   );
 }

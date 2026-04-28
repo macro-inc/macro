@@ -35,6 +35,25 @@ Rules:
   fabricating content.
 - Respond with only the summary text — no preamble, no sign-off.";
 
+/// System prompt for naming a call from its summary. Kept tight so the model
+/// returns a bare title instead of a sentence.
+const CALL_NAME_SYSTEM_PROMPT: &str = "\
+You write short titles for recorded calls based on their summary. \
+Output a single title — 3 to 6 words, Title Case, no punctuation, no \
+quotes, no preamble, no sign-off. The title should reflect the main \
+topic of the call; if the summary is empty or uninformative, respond \
+with `Untitled Call`.";
+
+/// Maximum characters of summary text we send to the naming model. The
+/// summary is already concise; this is a safety cap so a runaway summary
+/// does not blow up the prompt.
+const CALL_NAME_SUMMARY_CHAR_CAP: usize = 4_000;
+
+/// Hard cap on the title returned to callers. Anything longer is truncated
+/// at a word boundary — protects the DB column / UI from misbehaving model
+/// output regardless of the system prompt.
+const CALL_NAME_MAX_CHARS: usize = 80;
+
 /// AI-powered [`CallSummarizer`] that delegates to
 /// [`ai::chat_completion::get_chat_completion`].
 ///
@@ -75,6 +94,76 @@ impl CallSummarizer for AiCallSummarizer {
                 tracing::error!(error = ?e, %call_id, "ai call summarization failed");
             })
     }
+
+    #[tracing::instrument(skip(self, summary), fields(summary_len = summary.len()), err)]
+    async fn generate_call_name(&self, call_id: &Uuid, summary: &str) -> Result<String, Self::Err> {
+        let trimmed_summary = summary.trim();
+        if trimmed_summary.is_empty() {
+            return Ok("Untitled Call".to_string());
+        }
+
+        let summary_for_prompt: &str = if trimmed_summary.len() > CALL_NAME_SUMMARY_CHAR_CAP {
+            let mut end = CALL_NAME_SUMMARY_CHAR_CAP;
+            while end > 0 && !trimmed_summary.is_char_boundary(end) {
+                end -= 1;
+            }
+            &trimmed_summary[..end]
+        } else {
+            trimmed_summary
+        };
+
+        let user_message = format!(
+            "Call {call_id} summary follows. Produce a title per the rules in \
+             the system prompt.\n\n{summary_for_prompt}"
+        );
+
+        let request = RequestBuilder::new()
+            .model(SUMMARIZATION_MODEL)
+            .system_prompt(CALL_NAME_SYSTEM_PROMPT)
+            .user_message(user_message)
+            .build();
+
+        let raw = get_chat_completion(request)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, %call_id, "ai call naming failed");
+            })?;
+
+        Ok(sanitize_call_name(&raw))
+    }
+}
+
+#[cfg(test)]
+mod test;
+
+/// Trim quotes/whitespace, normalize internal whitespace, and clamp to
+/// [`CALL_NAME_MAX_CHARS`] at a word boundary so the persisted name is
+/// well-formed regardless of model output.
+fn sanitize_call_name(raw: &str) -> String {
+    let trimmed = raw
+        .trim()
+        .trim_matches(|c: char| c == '"' || c == '\'' || c == '`')
+        .trim();
+    let normalized = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    if normalized.is_empty() {
+        return "Untitled Call".to_string();
+    }
+
+    if normalized.chars().count() <= CALL_NAME_MAX_CHARS {
+        return normalized;
+    }
+
+    let mut taken = String::with_capacity(CALL_NAME_MAX_CHARS);
+    for ch in normalized.chars().take(CALL_NAME_MAX_CHARS) {
+        taken.push(ch);
+    }
+    // Cut back to the last whitespace so we don't end mid-word.
+    if let Some(idx) = taken.rfind(char::is_whitespace) {
+        taken.truncate(idx);
+    }
+    taken.trim_end().to_string()
 }
 
 /// Render the transcript as a chronological, speaker-labeled block suitable

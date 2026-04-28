@@ -90,7 +90,7 @@ export const MiniToggleSwitch: Component<
         <KSwitch.Input class="absolute inset-0 h-full! w-full! pointer-events-none" />
         <KSwitch.Control class="relative">
           <div
-            class="relative w-8 h-3 rounded-full transition-colors duration-80"
+            class="relative w-8 h-3 touch:w-12 touch:h-8 rounded-full transition-colors duration-80"
             classList={{
               'bg-edge': !checked(),
               'bg-accent': checked(),
@@ -99,10 +99,10 @@ export const MiniToggleSwitch: Component<
           >
             {/* Toggle thumb */}
             <div
-              class="absolute top-0.5 w-2 h-2 rounded-full bg-panel transition-transform duration-200 ease-click"
+              class="absolute top-0.5 size-2 touch:size-7 rounded-full bg-panel transition-transform duration-200 ease-click"
               classList={{
                 'translate-x-0.5': !checked(),
-                'translate-x-5.5': checked(),
+                'translate-x-5.5 touch:translate-x-4.5': checked(),
               }}
             />
           </div>

@@ -57,7 +57,7 @@ async fn sha256_hex(path: &Path) -> std::io::Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-const ADDR: &str = "127.0.0.1:3001";
+const ADDR: &str = "0.0.0.0:3001";
 const ARCHIVE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/app-archive.zip");
 
 #[tokio::main]

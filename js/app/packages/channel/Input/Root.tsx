@@ -1,8 +1,9 @@
-import { splitProps, type JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
-import { InputProvider } from './context';
-import { isReplyInput, type InputCommands, type InputData } from './types';
 import { isMobile } from '@core/mobile/isMobile';
+import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { cn } from '@ui/utils/classname';
+import { type JSX, splitProps } from 'solid-js';
+import { InputProvider } from './context';
+import { type InputCommands, type InputData, isReplyInput } from './types';
 
 const NoopInputCommands: InputCommands = {
   send: async () => false,
@@ -25,8 +26,14 @@ export function Root(props: RootProps) {
     'commands',
   ]);
 
+  let containerRef: HTMLDivElement | undefined;
+  useTouchOutsideToDismissKeyboard(() => containerRef);
+
   return (
     <div
+      ref={(el) => {
+        containerRef = el;
+      }}
       class={cn(
         'relative macro-message-width flex flex-col flex-1 items-center justify-between bg-input border border-edge-muted rounded-[5px]',
         isMobile() &&

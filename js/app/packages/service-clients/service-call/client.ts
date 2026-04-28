@@ -73,4 +73,17 @@ export const callServiceClient = {
     );
     return mapOk(result, (r) => r as unknown as boolean);
   },
+
+  async editCallRecord(params: { callId: string; customName: string }) {
+    return mapOk(
+      await fetchWithToken<Record<string, never>>(
+        `${host}/call/record/${params.callId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ customName: params.customName }),
+        }
+      ),
+      () => undefined
+    );
+  },
 };

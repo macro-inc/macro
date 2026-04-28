@@ -13,6 +13,21 @@ const slugify = (title: string): string =>
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
 
+const buildBranchName = (shortId: string, documentName: string): string => {
+  const suffix = `macro-${shortId}`;
+  const slug = slugify(documentName);
+  const maxSlugLength = MAX_BRANCH_LENGTH - suffix.length - 1;
+  let truncatedSlug = slug.slice(0, maxSlugLength);
+  if (truncatedSlug.length < slug.length) {
+    const lastBoundary = truncatedSlug.lastIndexOf('-');
+    if (lastBoundary > 0) {
+      truncatedSlug = truncatedSlug.slice(0, lastBoundary);
+    }
+  }
+  truncatedSlug = truncatedSlug.replace(/-+$/, '');
+  return truncatedSlug ? `${truncatedSlug}-${suffix}` : suffix;
+};
+
 export const copyBranchNameToClipboard = async (
   documentId: string,
   documentName: string
@@ -23,12 +38,12 @@ export const copyBranchNameToClipboard = async (
     return;
   }
   const shortId = result[1];
-  const slug = slugify(documentName);
-  const branchName = `macro-${shortId}${slug ? `-${slug}` : ''}`.slice(
-    0,
-    MAX_BRANCH_LENGTH
-  );
-  await navigator.clipboard.writeText(branchName);
-  analytics.track('task_copy_branch_name');
-  toast.success('Branch name copied to clipboard');
+  const branchName = buildBranchName(shortId, documentName);
+  try {
+    await navigator.clipboard.writeText(branchName);
+    analytics.track('task_copy_branch_name');
+    toast.success('Branch name copied to clipboard');
+  } catch {
+    toast.failure('Could not copy branch name');
+  }
 };

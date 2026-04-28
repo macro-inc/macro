@@ -29,8 +29,7 @@ import {
 } from '@app/component/next-soup/create-soup-state';
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
-import { NIL_UUID } from '@app/component/next-soup/filters/query-filters';
-import { SharedEmailFilter } from '@service-storage/generated/schemas';
+import { defineQueryFilters } from '@app/component/next-soup/filters/filter-store';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
@@ -112,14 +111,14 @@ const Block: Component = () => {
   }
 
   const projectSoup = createSoupState({
-    initialFilters: ['project-content'],
-    filterConfigs: [
+    initialPredicates: { and: ['project-content'] },
+    predicateConfigs: [
       {
         id: 'project-content',
-        predicate: (entity) => PROJECT_ENTITY_TYPES.includes(entity.type),
+        predicate: (entity: { type: string }) =>
+          PROJECT_ENTITY_TYPES.includes(entity.type),
       },
     ],
-    filterGroups: [],
   });
 
   const [attachHotkeys, projectViewScope] = useHotkeyDOMScope('project-view');
@@ -184,24 +183,18 @@ const ProjectEntityList = (props: {
     <SoupContextProvider soup={props.soup}>
       <SoupViewContextProvider
         soup={props.soup}
-        queryFilters={{
-          channel_filters: {
-            channel_ids: [NIL_UUID],
+        initialQuery={defineQueryFilters({
+          include: {
+            // Filter documents by project
+            projectId: [props.projectId],
+            // Filter chats by project
+            chatProjectId: [props.projectId],
+            // Filter projects by project (current project only)
+            folderId: [props.projectId],
+            // Filter emails by project
+            emailProjectId: [props.projectId],
           },
-          chat_filters: {
-            project_ids: [props.projectId],
-          },
-          project_filters: {
-            project_ids: [props.projectId],
-          },
-          document_filters: {
-            project_ids: [props.projectId],
-          },
-          email_filters: {
-            project_ids: [props.projectId],
-            shared: SharedEmailFilter.include,
-          },
-        }}
+        })}
       >
         <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />
       </SoupViewContextProvider>

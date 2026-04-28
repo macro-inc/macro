@@ -1,5 +1,4 @@
 import { UserIcon } from '@core/component/UserIcon';
-import LeaveIcon from '@icon/regular/sign-out.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import SpinnerIcon from '@icon/regular/spinner.svg';
@@ -8,6 +7,7 @@ import XIcon from '@icon/regular/x.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import { DialogWrapper } from '@core/component/DialogWrapper';
+import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@kobalte/core/dialog';
@@ -305,7 +305,6 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
   const inviteToTeamMutation = useInviteToTeamMutation();
   const deleteTeamMutation = useDeleteTeamMutation();
 
-  const [showLeaveModal, setShowLeaveModal] = createSignal(false);
   const [showDeleteTeamModal, setShowDeleteTeamModal] = createSignal(false);
   const [deleteConfirmation, setDeleteConfirmation] = createSignal('');
   const [showRemoveModal, setShowRemoveModal] = createSignal<TeamMember | null>(null);
@@ -331,11 +330,6 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
     return [...unsorted].sort((a, b) => (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3));
   });
 
-  const currentMember = createMemo(() => {
-    const currentUserId = userId();
-    return members().find((m) => m.user_id === currentUserId);
-  });
-
   const isOwner = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return false;
@@ -356,15 +350,6 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
     setEditingTeamName(undefined);
   };
 
-  const handleLeaveTeam = () => {
-    const currentUserId = userId();
-    if (!currentUserId || !props.teamId) return;
-
-    removeUserMutation.mutate(
-      { teamId: props.teamId, userId: currentUserId },
-      { onSuccess: () => setShowLeaveModal(false) }
-    );
-  };
 
   const handleDeleteTeam = () => {
     if (!props.teamId) return;
@@ -443,14 +428,6 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
           </div>
           <Show
             when={isOwner()}
-            fallback={
-              <Show when={currentMember()}>
-                <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowLeaveModal(true)}>
-                  <LeaveIcon class="size-4" />
-                  Leave
-                </Button>
-              </Show>
-            }
           >
             <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowDeleteTeamModal(true)}>
               <TrashIcon class="size-4" />
@@ -534,13 +511,20 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                   onRemove={() => setShowRemoveModal(member)}
                   onTierChange={(newTier) => {
                     if (!props.teamId) return;
-                    patchTierMutation.mutate({
-                      teamId: props.teamId,
-                      request: {
-                        team_user_id: member.user_id,
-                        new_tier: newTier,
-                      },
-                    });
+                    void toast.promise(
+                      patchTierMutation.mutateAsync({
+                        teamId: props.teamId,
+                        request: {
+                          team_user_id: member.user_id,
+                          new_tier: newTier,
+                        },
+                      }),
+                      {
+                        loading: 'Updating member tier...',
+                        success: 'Member tier updated',
+                        error: 'Failed to update member tier',
+                      }
+                    );
                   }}
                 />
               )}
@@ -566,45 +550,6 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
         </section>
       </Show>
 
-      <Dialog open={showLeaveModal()} onOpenChange={setShowLeaveModal}>
-        <Dialog.Portal>
-          <DialogWrapper>
-            <div class="flex flex-col text-ink">
-              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
-                <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-                  <XIcon />
-                </Dialog.CloseButton>
-                <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
-                  Leave Team
-                </Dialog.Title>
-              </div>
-              <div class="p-3 flex flex-col gap-3">
-                <p>Are you sure you want to leave {props.teamName}? You will lose access to team resources.</p>
-                <div class="flex justify-end gap-1 pt-2">
-                  <Button
-                    variant="ghost"
-                    class="rounded-xs"
-                    disabled={removeUserMutation.isPending}
-                    onClick={() => setShowLeaveModal(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    class="rounded-xs"
-                    disabled={removeUserMutation.isPending}
-                    onClick={handleLeaveTeam}
-                  >
-                    <Show when={removeUserMutation.isPending} fallback="Leave">
-                      <SpinnerIcon class="size-4 animate-spin" />
-                    </Show>
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </DialogWrapper>
-        </Dialog.Portal>
-      </Dialog>
 
       <Dialog open={showDeleteTeamModal()} onOpenChange={handleDeleteTeamModalClose}>
         <Dialog.Portal>

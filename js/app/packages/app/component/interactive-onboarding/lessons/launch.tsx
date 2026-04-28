@@ -21,10 +21,6 @@ function LaunchContent(props: LessonContentProps) {
     analytics.trackMeta('CompleteRegistration', {
       content_name: 'onboarding_launch',
       content_category: tier,
-    });
-    analytics.trackMeta('Lead', {
-      content_name: 'signup',
-      content_category: tier,
       value: SIGNUP_LEAD_VALUE_BY_TIER[tier] ?? SIGNUP_LEAD_VALUE_DEFAULT,
       currency: 'USD',
     });

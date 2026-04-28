@@ -12,6 +12,10 @@ export type ResizeSolver = {
   readonly direction: 'horizontal' | 'vertical';
   addPanel: (panel: PanelConfig, index?: number) => void;
   dropPanel: (id: PanelId) => void;
+  updatePanel: (
+    id: PanelId,
+    config: { minSize?: number; maxSize?: number }
+  ) => void;
   solve: () => LayoutResult;
   reset: () => void;
   moveHandle: (index: number, delta: number) => void;
@@ -303,6 +307,30 @@ export function createResizeSolver(params: {
     });
   }
 
+  function updatePanel(
+    id: PanelId,
+    config: { minSize?: number; maxSize?: number }
+  ) {
+    const panel = panelData[id];
+    if (!panel) return;
+    let changed = false;
+    if ('minSize' in config) {
+      const next = config.minSize ?? 0;
+      if (panel.minSize !== next) {
+        panel.minSize = next;
+        changed = true;
+      }
+    }
+    if ('maxSize' in config) {
+      const next = config.maxSize ?? Infinity;
+      if (panel.maxSize !== next) {
+        panel.maxSize = next;
+        changed = true;
+      }
+    }
+    if (changed) setDirty();
+  }
+
   function dropPanel(id: PanelId) {
     batch(() => {
       const ids = untrack(order);
@@ -452,6 +480,7 @@ export function createResizeSolver(params: {
     direction: params.direction,
     addPanel,
     dropPanel,
+    updatePanel,
     solve: layout,
     reset: () => {
       const panels = panelsInOrder();

@@ -2,14 +2,18 @@
 
 use super::*;
 use crate::domain::models::{AggregateId, FrecencyData};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
+use filter_ast::Expr;
+use item_filters::ast::{date::DateLiteral, document::DocumentLiteral};
 use item_filters::{
     ChatFilters, DocumentFilters, EntityFilters, NotificationFilters, ProjectFilters, TaskFilters,
+    ast::EntityFilterAst,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
 use std::collections::VecDeque;
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -693,4 +697,413 @@ async fn test_dynamic_filter_document_task_include_cbm_atm_nc(pool: PgPool) {
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].id.entity.entity_id, matching_task_id.to_string());
+}
+
+async fn setup_date_filter_user(pool: &PgPool, user_id: &MacroUserIdStr<'_>) {
+    let macro_user_uuid = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO "macro_user" ("id", "username", "email", "stripe_customer_id")
+        VALUES ($1, 'test', $2, 'stripe_test')
+        ON CONFLICT ("id") DO NOTHING
+        "#,
+    )
+    .bind(macro_user_uuid)
+    .bind("test@example.com")
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO "User" ("id", "email", "macro_user_id")
+        VALUES ($1, $2, $3)
+        ON CONFLICT ("id") DO NOTHING
+        "#,
+    )
+    .bind(user_id.as_ref())
+    .bind("test@example.com")
+    .bind(macro_user_uuid)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn insert_doc_with_timestamps(
+    pool: &PgPool,
+    id: Uuid,
+    owner: &str,
+    created_at: &str,
+    updated_at: &str,
+) {
+    sqlx::query(
+        r#"
+        INSERT INTO "Document" ("id", "name", "owner", "fileType", "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, 'txt', $4::timestamptz, $5::timestamptz)
+        "#,
+    )
+    .bind(id.to_string())
+    .bind(id.to_string())
+    .bind(owner)
+    .bind(created_at)
+    .bind(updated_at)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_dynamic_filter_document_date_created_at_gt(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    setup_date_filter_user(&pool, &user_id).await;
+
+    let doc_early = Uuid::new_v4();
+    let doc_mid = Uuid::new_v4();
+    let doc_late = Uuid::new_v4();
+
+    insert_doc_with_timestamps(
+        &pool,
+        doc_early,
+        user_id.as_ref(),
+        "2023-01-01T10:00:00Z",
+        "2023-01-01T10:00:00Z",
+    )
+    .await;
+    insert_doc_with_timestamps(
+        &pool,
+        doc_mid,
+        user_id.as_ref(),
+        "2023-01-01T12:00:00Z",
+        "2023-01-01T12:00:00Z",
+    )
+    .await;
+    insert_doc_with_timestamps(
+        &pool,
+        doc_late,
+        user_id.as_ref(),
+        "2023-01-01T14:00:00Z",
+        "2023-01-01T14:00:00Z",
+    )
+    .await;
+
+    for (id, score) in [
+        (doc_early.to_string(), 100.0),
+        (doc_mid.to_string(), 90.0),
+        (doc_late.to_string(), 80.0),
+    ] {
+        storage
+            .set_aggregate(AggregateFrecency {
+                id: AggregateId {
+                    entity: EntityType::Document.with_entity_string(id),
+                    user_id: user_id.clone(),
+                },
+                data: FrecencyData {
+                    event_count: 1,
+                    frecency_score: score,
+                    first_event: Utc::now(),
+                    recent_events: VecDeque::new(),
+                },
+            })
+            .await
+            .unwrap();
+    }
+
+    let cutoff: DateTime<Utc> = DateTime::parse_from_rfc3339("2023-01-01T11:00:00Z")
+        .unwrap()
+        .into();
+    let filter = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::CreatedAt(
+            DateLiteral::GreaterThan(cutoff),
+        )))),
+        project_filter: None,
+        chat_filter: None,
+        email_filter: None,
+        channel_filter: None,
+        call_filter: None,
+        properties_filter: None,
+    };
+
+    let results = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: Some(filter),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(results.len(), 2);
+    let ids: Vec<String> = results
+        .iter()
+        .map(|r| r.id.entity.entity_id.as_ref().to_string())
+        .collect();
+    assert!(ids.contains(&doc_mid.to_string()));
+    assert!(ids.contains(&doc_late.to_string()));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_dynamic_filter_document_date_created_at_lt(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    setup_date_filter_user(&pool, &user_id).await;
+
+    let doc_early = Uuid::new_v4();
+    let doc_mid = Uuid::new_v4();
+    let doc_late = Uuid::new_v4();
+
+    insert_doc_with_timestamps(
+        &pool,
+        doc_early,
+        user_id.as_ref(),
+        "2023-01-01T10:00:00Z",
+        "2023-01-01T10:00:00Z",
+    )
+    .await;
+    insert_doc_with_timestamps(
+        &pool,
+        doc_mid,
+        user_id.as_ref(),
+        "2023-01-01T12:00:00Z",
+        "2023-01-01T12:00:00Z",
+    )
+    .await;
+    insert_doc_with_timestamps(
+        &pool,
+        doc_late,
+        user_id.as_ref(),
+        "2023-01-01T14:00:00Z",
+        "2023-01-01T14:00:00Z",
+    )
+    .await;
+
+    for (id, score) in [
+        (doc_early.to_string(), 100.0),
+        (doc_mid.to_string(), 90.0),
+        (doc_late.to_string(), 80.0),
+    ] {
+        storage
+            .set_aggregate(AggregateFrecency {
+                id: AggregateId {
+                    entity: EntityType::Document.with_entity_string(id),
+                    user_id: user_id.clone(),
+                },
+                data: FrecencyData {
+                    event_count: 1,
+                    frecency_score: score,
+                    first_event: Utc::now(),
+                    recent_events: VecDeque::new(),
+                },
+            })
+            .await
+            .unwrap();
+    }
+
+    let cutoff: DateTime<Utc> = DateTime::parse_from_rfc3339("2023-01-01T11:00:00Z")
+        .unwrap()
+        .into();
+    let filter = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::CreatedAt(
+            DateLiteral::LessThan(cutoff),
+        )))),
+        project_filter: None,
+        chat_filter: None,
+        email_filter: None,
+        channel_filter: None,
+        call_filter: None,
+        properties_filter: None,
+    };
+
+    let results = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: Some(filter),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id.entity.entity_id, doc_early.to_string());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_dynamic_filter_document_date_updated_at_gt(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    setup_date_filter_user(&pool, &user_id).await;
+
+    let doc_early = Uuid::new_v4();
+    let doc_mid = Uuid::new_v4();
+    let doc_late = Uuid::new_v4();
+
+    // createdAt is old for all; updatedAt varies
+    insert_doc_with_timestamps(
+        &pool,
+        doc_early,
+        user_id.as_ref(),
+        "2023-01-01T10:00:00Z",
+        "2023-01-01T10:00:00Z",
+    )
+    .await;
+    insert_doc_with_timestamps(
+        &pool,
+        doc_mid,
+        user_id.as_ref(),
+        "2023-01-01T10:00:00Z",
+        "2023-01-01T12:00:00Z",
+    )
+    .await;
+    insert_doc_with_timestamps(
+        &pool,
+        doc_late,
+        user_id.as_ref(),
+        "2023-01-01T10:00:00Z",
+        "2023-01-01T14:00:00Z",
+    )
+    .await;
+
+    for (id, score) in [
+        (doc_early.to_string(), 100.0),
+        (doc_mid.to_string(), 90.0),
+        (doc_late.to_string(), 80.0),
+    ] {
+        storage
+            .set_aggregate(AggregateFrecency {
+                id: AggregateId {
+                    entity: EntityType::Document.with_entity_string(id),
+                    user_id: user_id.clone(),
+                },
+                data: FrecencyData {
+                    event_count: 1,
+                    frecency_score: score,
+                    first_event: Utc::now(),
+                    recent_events: VecDeque::new(),
+                },
+            })
+            .await
+            .unwrap();
+    }
+
+    let cutoff: DateTime<Utc> = DateTime::parse_from_rfc3339("2023-01-01T11:00:00Z")
+        .unwrap()
+        .into();
+    let filter = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::UpdatedAt(
+            DateLiteral::GreaterThan(cutoff),
+        )))),
+        project_filter: None,
+        chat_filter: None,
+        email_filter: None,
+        channel_filter: None,
+        call_filter: None,
+        properties_filter: None,
+    };
+
+    let results = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: Some(filter),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(results.len(), 2);
+    let ids: Vec<String> = results
+        .iter()
+        .map(|r| r.id.entity.entity_id.as_ref().to_string())
+        .collect();
+    assert!(ids.contains(&doc_mid.to_string()));
+    assert!(ids.contains(&doc_late.to_string()));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_dynamic_filter_document_date_updated_at_lt(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    setup_date_filter_user(&pool, &user_id).await;
+
+    let doc_early = Uuid::new_v4();
+    let doc_mid = Uuid::new_v4();
+    let doc_late = Uuid::new_v4();
+
+    // createdAt is old for all; updatedAt varies
+    insert_doc_with_timestamps(
+        &pool,
+        doc_early,
+        user_id.as_ref(),
+        "2023-01-01T10:00:00Z",
+        "2023-01-01T10:00:00Z",
+    )
+    .await;
+    insert_doc_with_timestamps(
+        &pool,
+        doc_mid,
+        user_id.as_ref(),
+        "2023-01-01T10:00:00Z",
+        "2023-01-01T12:00:00Z",
+    )
+    .await;
+    insert_doc_with_timestamps(
+        &pool,
+        doc_late,
+        user_id.as_ref(),
+        "2023-01-01T10:00:00Z",
+        "2023-01-01T14:00:00Z",
+    )
+    .await;
+
+    for (id, score) in [
+        (doc_early.to_string(), 100.0),
+        (doc_mid.to_string(), 90.0),
+        (doc_late.to_string(), 80.0),
+    ] {
+        storage
+            .set_aggregate(AggregateFrecency {
+                id: AggregateId {
+                    entity: EntityType::Document.with_entity_string(id),
+                    user_id: user_id.clone(),
+                },
+                data: FrecencyData {
+                    event_count: 1,
+                    frecency_score: score,
+                    first_event: Utc::now(),
+                    recent_events: VecDeque::new(),
+                },
+            })
+            .await
+            .unwrap();
+    }
+
+    let cutoff: DateTime<Utc> = DateTime::parse_from_rfc3339("2023-01-01T11:00:00Z")
+        .unwrap()
+        .into();
+    let filter = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::UpdatedAt(
+            DateLiteral::LessThan(cutoff),
+        )))),
+        project_filter: None,
+        chat_filter: None,
+        email_filter: None,
+        channel_filter: None,
+        call_filter: None,
+        properties_filter: None,
+    };
+
+    let results = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: Some(filter),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id.entity.entity_id, doc_early.to_string());
 }

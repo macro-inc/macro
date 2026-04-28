@@ -7,11 +7,6 @@ import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import type { EntityData } from '@entity';
 
-const DEFAULT_ENTITY_SIZE = 40;
-const CONTEXT_ENTITIES_COUNT = 3;
-
-const CONTEXT_OFFSET = DEFAULT_ENTITY_SIZE * CONTEXT_ENTITIES_COUNT;
-
 type UseSoupNavigationHotkeysOptions = {
   scopeId: string;
   soup: SoupState;
@@ -29,20 +24,7 @@ export const useSoupNavigationHotkeys = (
 
     if (!handle) return;
 
-    // We add some space between the top and bottom when scrolling up/down
-
-    const scrollOffset = handle.getItemOffset(index);
-
-    // How many items should we show above/below the index we want to scroll to
-    let contextOffset = CONTEXT_ENTITIES_COUNT;
-
-    // If we're going to end up scrolling out of the top of scroll area,
-    // we set our offset to be negative
-    if (scrollOffset - CONTEXT_OFFSET < handle.scrollOffset) {
-      contextOffset *= -1;
-    }
-
-    virtualizerHandle()?.scrollToIndex(index + contextOffset, {
+    virtualizerHandle()?.scrollToIndex(index, {
       align: 'nearest',
     });
   };

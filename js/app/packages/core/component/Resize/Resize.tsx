@@ -94,6 +94,10 @@ function Zone(props: ParentProps<ZoneProps>) {
     solver.dropPanel(id);
   }
 
+  function update(id: PanelId, config: { minSize?: number; maxSize?: number }) {
+    solver.updatePanel(id, config);
+  }
+
   const layouts = createMemo(() => {
     const solve = solver.solve();
     return solver.order().map((id) => ({
@@ -117,6 +121,7 @@ function Zone(props: ParentProps<ZoneProps>) {
     direction,
     register,
     unregister,
+    update,
     gutterSize: gutterPx,
     size: zoneSize,
     offsetOf,
@@ -231,6 +236,13 @@ function Panel(props: ParentProps<PanelProps>) {
       },
       props.index
     );
+  });
+
+  createEffect(() => {
+    ctx.update(props.id, {
+      minSize: props.minSize,
+      maxSize: props.maxSize ?? Infinity,
+    });
   });
 
   createEffect(() => {

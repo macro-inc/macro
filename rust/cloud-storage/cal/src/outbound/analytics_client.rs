@@ -83,7 +83,7 @@ impl AnalyticsSink for AnalyticsClientSink {
         // carrying the browser attribution signals. Only presence flags and
         // metadata key names are emitted — the raw email, fbp/fbc values,
         // and user_agent are deliberately not logged to avoid PII leakage.
-        // Enable with `RUST_LOG=cal=debug` when investigating match quality.
+        // Enable with `RUST_LOG=cal=debug` when investigating match quality
         tracing::debug!(
             uid = %booking.uid,
             content_name = %content_name,
@@ -97,7 +97,7 @@ impl AnalyticsSink for AnalyticsClientSink {
 
         self.client
             .track_meta(
-                "Lead",
+                "CompleteRegistration",
                 &user_data,
                 MetaActionSource::Website,
                 Some(&booking.uid),
