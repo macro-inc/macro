@@ -1030,7 +1030,7 @@ export const editCallRecordBody = zod
       .string()
       .nullish()
       .describe(
-        'Updated user-supplied display name for the call. `None` is a no-op;\n`Some("")` clears `call_records.custom_name`; any other `Some(s)`\noverwrites it with `s`. Only the archived `call_records` row carries\nthis column — patching while the call is still active is a no-op for\nthis field.'
+        'Updated user-supplied display name for the call. `None` is a no-op;\n`Some(\"\")` clears `call_records.custom_name`; any other `Some(s)`\noverwrites it with `s`. Only the archived `call_records` row carries\nthis column — patching while the call is still active is a no-op for\nthis field.'
       ),
     sharePermission: zod
       .union([
