@@ -1,5 +1,5 @@
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { DropdownMenuContent } from '@core/component/Menu';
+import { DropdownMenuContent, MENU_ITEM_CLASS } from '@core/component/Menu';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Microphone from '@icon/regular/microphone.svg';
 import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
@@ -13,11 +13,14 @@ import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { For, Show } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { useCallContext } from '../CallContext';
-import {
-  leaveItemClass,
-  menuGroupLabelClass,
-  menuItemClass,
-} from './call-controls-menu-styles';
+
+const menuStyles = {
+  item: cn(
+    MENU_ITEM_CLASS,
+    'cursor-pointer hover:bg-hover hover-transition-bg'
+  ),
+  groupLabel: cn(MENU_ITEM_CLASS, 'text-xs text-accent'),
+};
 
 const panelSmallIconClass = 'w-4 h-4';
 
@@ -26,7 +29,9 @@ export type CallControlsPanelSmallRowProps = {
   onLeave: () => void | Promise<void>;
 };
 
-export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps) {
+export function CallControlsPanelSmallRow(
+  props: CallControlsPanelSmallRowProps
+) {
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
   const toggleShareWithTeam = useToggleShareWithTeamMutation();
@@ -72,7 +77,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
         <DropdownMenu.Portal>
           <DropdownMenuContent class="mb-2 z-modal" width="lg">
             <DropdownMenu.Item
-              class={menuItemClass}
+              class={menuStyles.item}
               closeOnSelect={false}
               onSelect={() => void callCtx.toggleAudio()}
             >
@@ -94,16 +99,18 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
             <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
 
             <DropdownMenu.Group>
-              <DropdownMenu.GroupLabel class={menuGroupLabelClass}>
+              <DropdownMenu.GroupLabel class={menuStyles.groupLabel}>
                 Microphone
               </DropdownMenu.GroupLabel>
-              
+
               <For each={callCtx.audioInputDevices()}>
                 {(device) => (
                   <DropdownMenu.Item
-                    class={menuItemClass}
+                    class={menuStyles.item}
                     closeOnSelect={false}
-                    onSelect={() => void callCtx.switchAudioInput(device.deviceId)}
+                    onSelect={() =>
+                      void callCtx.switchAudioInput(device.deviceId)
+                    }
                   >
                     <div class="flex min-w-0 flex-1 items-baseline gap-2">
                       <span class="min-w-0 flex-1">{device.label}</span>
@@ -126,22 +133,20 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
             <Show when={callCtx.audioOutputDevices().length > 0}>
               <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
               <DropdownMenu.Group>
-                <DropdownMenu.GroupLabel class={menuGroupLabelClass}>
+                <DropdownMenu.GroupLabel class={menuStyles.groupLabel}>
                   Speaker
                 </DropdownMenu.GroupLabel>
                 <For each={callCtx.audioOutputDevices()}>
                   {(device) => (
                     <DropdownMenu.Item
-                      class={menuItemClass}
+                      class={menuStyles.item}
                       closeOnSelect={false}
                       onSelect={() =>
                         void callCtx.switchAudioOutput(device.deviceId)
                       }
                     >
                       <div class="flex min-w-0 flex-1 items-baseline gap-2">
-                        <span class="min-w-0 flex-1">
-                          {device.label}
-                        </span>
+                        <span class="min-w-0 flex-1">{device.label}</span>
                         <span class="inline-flex w-3 shrink-0 justify-center">
                           <Show
                             when={
@@ -162,7 +167,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
             <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
 
             <DropdownMenu.Item
-              class={menuItemClass}
+              class={menuStyles.item}
               closeOnSelect={false}
               onSelect={() => void callCtx.toggleVideo()}
             >
@@ -184,15 +189,17 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
             <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
 
             <DropdownMenu.Group class="w-full">
-              <DropdownMenu.GroupLabel class={menuGroupLabelClass}>
+              <DropdownMenu.GroupLabel class={menuStyles.groupLabel}>
                 Camera
               </DropdownMenu.GroupLabel>
               <For each={callCtx.videoInputDevices()}>
                 {(device) => (
                   <DropdownMenu.Item
-                    class={menuItemClass}
+                    class={menuStyles.item}
                     closeOnSelect={false}
-                    onSelect={() => void callCtx.switchVideoInput(device.deviceId)}
+                    onSelect={() =>
+                      void callCtx.switchVideoInput(device.deviceId)
+                    }
                   >
                     <div class="flex min-w-0 flex-1 items-baseline gap-2">
                       <span class="min-w-0 flex-1">{device.label}</span>
@@ -215,7 +222,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
             <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
 
             <DropdownMenu.Item
-              class={menuItemClass}
+              class={menuStyles.item}
               closeOnSelect={false}
               onSelect={() => void callCtx.toggleScreenShare()}
             >
@@ -232,7 +239,7 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
             <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
 
             <DropdownMenu.Item
-              class={menuItemClass}
+              class={menuStyles.item}
               closeOnSelect={false}
               onSelect={() => void handleToggleShareWithTeam()}
             >
@@ -249,7 +256,10 @@ export function CallControlsPanelSmallRow(props: CallControlsPanelSmallRowProps)
             <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
 
             <DropdownMenu.Item
-              class={leaveItemClass}
+              class={cn(
+                MENU_ITEM_CLASS,
+                'cursor-pointer text-failure hover:bg-failure/10 hover-transition-bg'
+              )}
               onSelect={() => void props.onLeave()}
             >
               <div class="flex min-w-0 flex-1 items-center gap-2">

@@ -9,15 +9,14 @@ import Users from '@icon/regular/users.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { Show, type Accessor } from 'solid-js';
 import { cn } from '@ui/utils/classname';
-import {
-  MenuGroup,
-  MenuItem,
-  MenuSeparator,
-} from '@core/component/Menu';
+import { MenuGroup, MenuItem, MenuSeparator } from '@core/component/Menu';
 import type { CallControlVariant } from './CallControlButton';
 import { CallControlButton } from './CallControlButton';
 import { CallControlButtonWithDropdown } from './CallControlButtonWithDropdown';
-import { menuGroupLabelClass, menuItemClass } from './call-controls-menu-styles';
+import {
+  menuGroupLabelClass,
+  menuItemClass,
+} from './call-controls-menu-styles';
 import { CallDeviceList } from '../CallDeviceList';
 import { useCallContext } from '../CallContext';
 
@@ -50,6 +49,101 @@ function isBackgroundBlurSupported(): boolean {
     typeof HTMLCanvasElement !== 'undefined' &&
     'captureStream' in HTMLCanvasElement.prototype;
   return hasStreamProcessor || hasFallback;
+}
+
+function BackgroundEffectSelector() {
+  const callCtx = useCallContext();
+
+  const currentEffectValue = () => {
+    const effect = callCtx.backgroundEffect();
+    if (effect.type === 'none') return 'none';
+    if (effect.type === 'blur') return `blur-${effect.intensity}`;
+    return `image-${effect.id}`;
+  };
+
+  const handleChange = (value: string) => {
+    if (value === 'none') {
+      callCtx.setBackgroundEffect({ type: 'none' });
+      return;
+    }
+
+    if (value.startsWith('blur-')) {
+      const intensity = value.replace('blur-', '') as
+        | 'light'
+        | 'medium'
+        | 'heavy';
+
+      callCtx.setBackgroundEffect({ type: 'blur', intensity });
+      return;
+    }
+
+    if (value.startsWith('image-')) {
+      const id = value.replace('image-', '');
+      const bg = BACKGROUND_IMAGES.find((b) => b.id === id);
+
+      if (!bg) return;
+
+      callCtx.setBackgroundEffect({
+        type: 'image',
+        id: bg.id,
+        path: bg.path,
+      });
+    }
+  };
+
+  return (
+    <DropdownMenu.RadioGroup
+      class="w-full"
+      value={currentEffectValue()}
+      onChange={handleChange}
+    >
+      <MenuGroup>
+        <GroupLabel>Background</GroupLabel>
+        <MenuItem
+          text="None"
+          selectorType="radio"
+          value="none"
+          groupValue={currentEffectValue()}
+        />
+      </MenuGroup>
+      <MenuGroup>
+        <GroupLabel>Blur</GroupLabel>
+        <MenuItem
+          text="Light"
+          selectorType="radio"
+          value="blur-light"
+          groupValue={currentEffectValue()}
+        />
+        <MenuItem
+          text="Medium"
+          selectorType="radio"
+          value="blur-medium"
+          groupValue={currentEffectValue()}
+        />
+        <MenuItem
+          text="Heavy"
+          selectorType="radio"
+          value="blur-heavy"
+          groupValue={currentEffectValue()}
+        />
+      </MenuGroup>
+      <Show when={BACKGROUND_IMAGES.length}>
+        <MenuGroup>
+          <GroupLabel>Image</GroupLabel>
+          <For each={BACKGROUND_IMAGES}>
+            {(bg) => (
+              <MenuItem
+                text={bg.label}
+                selectorType="radio"
+                value={`image-${bg.id}`}
+                groupValue={currentEffectValue()}
+              />
+            )}
+          </For>
+        </MenuGroup>
+      </Show>
+    </DropdownMenu.RadioGroup>
+  );
 }
 
 export function CallControlsDefaultAndPanelRow(
