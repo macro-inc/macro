@@ -1,10 +1,32 @@
 import { Track, type RemoteParticipant } from 'livekit-client';
-import { For, Show } from 'solid-js';
+import { For, Show, type JSXElement } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { TrackView } from './TrackView';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
+
+function VideoTag(props: { children: JSXElement, class?: string, variant?: 'default' | 'truncated' }) {
+  return (
+    <div class={cn("absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs", props.variant === 'truncated' ? 'truncate max-w-[80%]' : '', props.class)}>
+      {props.children}
+    </div>
+  );
+};
+
+function ParticipantTileWrapper(props: { isSpeaking: boolean, children: JSXElement, isConnecting?: boolean }) {
+  return (
+    <div
+      class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
+      classList={{ 
+        'ring-inset ring-2 ring-accent-2': props.isSpeaking,
+        'animate-pulse': props.isConnecting,
+      }}
+    >
+      {props.children}
+    </div>
+  );
+}
 
 function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
@@ -20,14 +42,11 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
   const isSpeaking = () => callCtx.isParticipantSpeaking(props.participant);
 
   return (
-    <div
-      class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
-      classList={{ 'ring-2 ring-accent-2': isSpeaking() }}
-    >
+    <ParticipantTileWrapper isSpeaking={isSpeaking()}>
       <Show
         when={cameraTrack()}
         fallback={
-          <div class="flex items-center justify-center w-full h-full p-4">
+          <div class="flex items-center justify-center w-full h-full p-4 ring-2 ring-accent-2">
             <div class="w-12 h-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
               {displayName().charAt(0).toUpperCase()}
             </div>
@@ -36,10 +55,9 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
       >
         <TrackView track={cameraTrack()} />
       </Show>
-      <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs truncate max-w-[80%]">
-        {displayName()}
-      </div>
-    </div>
+
+      <VideoTag variant='truncated'>{displayName()}</VideoTag>
+    </ParticipantTileWrapper>
   );
 }
 
@@ -54,11 +72,10 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
   };
 
   return (
-    <div class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2">
+    <div class="relative w-full h-full flex items-center justify-center rounded-lg overflow-hidden bg-surface-2">
       <TrackView track={screenTrack()} fit="contain" />
-      <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs truncate max-w-[80%]">
-        {displayName()}'s screen
-      </div>
+
+      <VideoTag variant="truncated">{displayName()}'s screen</VideoTag>
     </div>
   );
 }
@@ -91,7 +108,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
     callCtx.trackVersion();
     return participants().filter((p) => {
       const pub = p.getTrackPublication(Track.Source.ScreenShare);
-      return pub?.isSubscribed && !pub.isMuted;
+      return !!pub?.track && pub.isSubscribed && !pub.isMuted;
     });
   };
 
@@ -106,17 +123,16 @@ export function CallOverlay(props: { onLeave: () => void }) {
   };
 
   return (
-    <div class="flex flex-col h-full bg-surface-0">
+    <div class="flex flex-col h-full">
       {/* Screen share area */}
       <Show when={hasAnyScreenShare()}>
-        <div class="flex-1 min-h-0 p-2">
+        <div class="flex-1 min-h-0 pt-2">
           <div class="h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
             <Show when={callCtx.isScreenSharing()}>
               <div class="relative w-full h-full">
                 <TrackView track={localScreenTrack()} fit="contain" />
-                <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs">
-                  Your screen
-                </div>
+
+                <VideoTag>Your screen</VideoTag>
               </div>
             </Show>
             <For each={remoteScreenShares()}>
@@ -128,20 +144,10 @@ export function CallOverlay(props: { onLeave: () => void }) {
 
       {/* Participants grid */}
       <div
-        class={cn(
-          'grid gap-2 p-2 auto-rows-fr overflow-hidden',
-          hasAnyScreenShare() ? 'h-[140px] shrink-0' : 'flex-1 min-h-0',
-          gridCols()
-        )}
+        class={`${hasAnyScreenShare() ? 'h-[180px] shrink-0' : 'flex-1 min-h-0'} grid ${gridCols()} gap-2 py-2 auto-rows-fr overflow-hidden`}
       >
         {/* Local participant */}
-        <div
-          class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
-          classList={{
-            'ring-2 ring-accent-2': isLocalSpeaking(),
-            'animate-pulse': isConnecting(),
-          }}
-        >
+        <ParticipantTileWrapper isSpeaking={isLocalSpeaking()} isConnecting={isConnecting()}>
           <Show
             when={!isConnecting() && !callCtx.isVideoMuted()}
             fallback={
@@ -158,16 +164,14 @@ export function CallOverlay(props: { onLeave: () => void }) {
           <Show
             when={isConnecting()}
             fallback={
-              <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs">
-                You
-              </div>
+              <VideoTag>You</VideoTag>
             }
           >
             <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink-muted text-xs">
               Connecting...
             </div>
           </Show>
-        </div>
+        </ParticipantTileWrapper>
 
         <For each={participants()}>
           {(participant) => <ParticipantTile participant={participant} />}
@@ -175,7 +179,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
       </div>
 
       {/* Controls bar */}
-      <div class="flex items-center justify-center p-3 bg-surface-1 border-t border-edge">
+      <div class="flex items-center justify-center p-3 pt-1 bg-surface-1">
         <CallControls onLeave={props.onLeave} />
       </div>
     </div>
