@@ -470,6 +470,23 @@ export interface ChannelSearchResult {
   updated_at?: string | null;
 }
 /**
+ * A single message in the tool response.
+ */
+export interface ChatMessagePreview {
+  /**
+   * IDs of attachments referenced by this message.
+   */
+  attachmentIds: string[];
+  /**
+   * The text content of the message.
+   */
+  content: string;
+  /**
+   * The role of the message author (user, assistant, or system).
+   */
+  role: string;
+}
+/**
  * A chat match for a given message id
  */
 export interface ChatMessageSearchResult {
@@ -1170,6 +1187,32 @@ export interface TranscriptSegment {
    * When the speaker started this segment.
    */
   startedAt: string;
+}
+/**
+ * Retrieve a chat thread's message history by its ID. Returns the conversation title and messages with their roles, content, and attachment references.
+ */
+export interface ReadChat {
+  /**
+   * The id of the chat thread to read.
+   */
+  chatId: string;
+}
+/**
+ * Response for [`ReadChat`].
+ */
+export interface ReadChatResponse {
+  /**
+   * The chat id.
+   */
+  chatId: string;
+  /**
+   * The messages in the chat.
+   */
+  messages: ChatMessagePreview[];
+  /**
+   * The chat title.
+   */
+  title: string;
 }
 /**
  * Retrieve a documents content

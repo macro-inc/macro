@@ -13,7 +13,11 @@ import { ComposeTool } from './email/ChatCompose';
 type SendEmailResponse = NamedTool<'SendEmail', 'response'>['data'];
 
 function getRecipientsLabel(data: SendEmail) {
-  const recipients = [...data.to, ...(data.cc ?? []), ...(data.bcc ?? [])];
+  const recipients = [
+    ...(data.to ?? []),
+    ...(data.cc ?? []),
+    ...(data.bcc ?? []),
+  ];
   const labels = Array.from(
     new Map(
       recipients.map((recipient) => [

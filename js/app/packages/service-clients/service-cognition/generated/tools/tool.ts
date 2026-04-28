@@ -37,6 +37,7 @@ type ToolParserMap = {
     call: types.ReadCallRecord;
     response: types.ReadCallRecordResponse;
   };
+  ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadMetadata: {
     call: types.ReadMetadata;
@@ -98,6 +99,7 @@ const toolParserMap = {
     call: schemas.ReadCallRecord,
     response: schemas.ReadCallRecordResponse,
   },
+  ReadChat: { call: schemas.ReadChat, response: schemas.ReadChatResponse },
   ReadContent: {
     call: schemas.ReadContent,
     response: schemas.ReadContentResponse,
@@ -170,6 +172,7 @@ type ToolDataMap = {
     call: types.ReadCallRecord;
     response: types.ReadCallRecordResponse;
   };
+  ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadMetadata: {
     call: types.ReadMetadata;

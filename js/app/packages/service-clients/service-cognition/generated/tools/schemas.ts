@@ -529,6 +529,20 @@ export const ReadCallRecordResponse = z.object({
   ),
 });
 
+export const ReadChat = z.object({ chatId: z.string() });
+
+export const ReadChatResponse = z.object({
+  chatId: z.string(),
+  messages: z.array(
+    z.object({
+      attachmentIds: z.array(z.string()),
+      content: z.string(),
+      role: z.string(),
+    })
+  ),
+  title: z.string(),
+});
+
 export const ReadContent = z.object({ documentId: z.string().uuid() });
 
 export const ReadContentResponse = z.object({
@@ -636,54 +650,6 @@ export const ReadMetadataResponse = z.object({
       .optional(),
   }),
   userAccessLevel: z.enum(['view', 'comment', 'edit', 'owner']),
-});
-
-export const ReadResponse = z.object({
-  content: z.any().superRefine((x, ctx) => {
-    const schemas = [
-      z.object({
-        channel_id: z.string(),
-        channel_name: z.union([z.string(), z.null()]).optional(),
-        transcript: z.string(),
-        type: z.literal('channel'),
-      }),
-      z.object({
-        conversation: z.array(
-          z.object({
-            chat_id: z.string(),
-            messages: z.array(
-              z.object({
-                attachmentIds: z.array(z.string()),
-                content: z.string(),
-                date: z.string().datetime({ offset: true }),
-              })
-            ),
-            title: z.string(),
-          })
-        ),
-        type: z.literal('chat'),
-      }),
-      z.object({
-        formatted_preview: z.string(),
-        type: z.literal('itemPreviews'),
-      }),
-    ];
-    const errors = schemas.reduce<z.ZodError[]>(
-      (errors, schema) =>
-        ((result) => (result.error ? [...errors, result.error] : errors))(
-          schema.safeParse(x)
-        ),
-      []
-    );
-    if (schemas.length - errors.length !== 1) {
-      ctx.addIssue({
-        path: ctx.path,
-        code: 'invalid_union',
-        unionErrors: errors,
-        message: 'Invalid input: Should pass single schema',
-      });
-    }
-  }),
 });
 
 export const SendEmail = z.object({
@@ -1151,4 +1117,52 @@ export const TextEditorCodeExecutionResponse = z.object({
     }
   }),
   tool_use_id: z.string(),
+});
+
+export const ReadResponse = z.object({
+  content: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.object({
+        channel_id: z.string(),
+        channel_name: z.union([z.string(), z.null()]).optional(),
+        transcript: z.string(),
+        type: z.literal('channel'),
+      }),
+      z.object({
+        conversation: z.array(
+          z.object({
+            chat_id: z.string(),
+            messages: z.array(
+              z.object({
+                attachmentIds: z.array(z.string()),
+                content: z.string(),
+                date: z.string().datetime({ offset: true }),
+              })
+            ),
+            title: z.string(),
+          })
+        ),
+        type: z.literal('chat'),
+      }),
+      z.object({
+        formatted_preview: z.string(),
+        type: z.literal('itemPreviews'),
+      }),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
 });

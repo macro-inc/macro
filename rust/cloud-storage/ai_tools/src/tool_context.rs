@@ -5,6 +5,9 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
+use chat::domain::service::ChatServiceImpl;
+use chat::inbound::toolset::ChatToolContext;
+use chat::outbound::postgres::PgChatRepo;
 use connection::domain::ports::ConnectionService;
 use documents::{domain::ports::TaskPropertiesPort, inbound::toolset::DocumentToolContext};
 use email::{
@@ -255,6 +258,13 @@ pub type ToolCallRecordQueryService = CallRecordQueryServiceImpl<PgCallRepo>;
 pub type ToolCallToolContext =
     CallToolContext<ToolCallService, ToolCallRecordQueryService, ToolEntityAccessService>;
 
+/// Type alias for the chat service implementation used by AI tools.
+/// Uses an empty toolset — the read-only tool never invokes tool execution.
+pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManagementService>;
+
+/// Type alias for the chat tool context
+pub type ToolChatToolContext = ChatToolContext<ToolChatService, ToolEntityAccessService>;
+
 #[derive(Clone, Default)]
 pub struct NoOpScheduleContext;
 
@@ -276,6 +286,7 @@ pub struct ToolServiceContext {
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
+    pub chat_tool_context: ToolChatToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
 }
 

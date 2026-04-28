@@ -274,6 +274,18 @@ async fn build_tool_context(
         EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
     );
 
+    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
+        chat::domain::service::ChatServiceImpl::new(
+            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            Arc::new(ai_toolset::AsyncToolSet::new()),
+            (),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
+        ),
+        EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
+    );
+
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
@@ -303,6 +315,7 @@ async fn build_tool_context(
         properties_tool_context,
         email_tool_context,
         call_tool_context,
+        chat_tool_context,
         schedule_tool_context: NoOpScheduleContext,
     };
 

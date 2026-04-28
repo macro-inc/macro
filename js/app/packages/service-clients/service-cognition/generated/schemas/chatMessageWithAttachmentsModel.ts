@@ -7,5 +7,6 @@
 
 /**
  * The model used to generate the message
+kill
  */
 export type ChatMessageWithAttachmentsModel = string | null;

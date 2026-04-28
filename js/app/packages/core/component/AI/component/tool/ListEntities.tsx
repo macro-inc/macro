@@ -179,8 +179,7 @@ const handler = createToolRenderer({
               </span>{' '}
               ordered by{' '}
               <span class="text-accent">
-                {ctx.tool.data.sortBy?.split('_').join(' ') ??
-                  'recently viewed'}
+                {ctx.tool.data.sortBy?.split('_').join(' ') ?? 'default'}
               </span>
             </span>
           </div>

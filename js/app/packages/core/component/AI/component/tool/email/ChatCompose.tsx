@@ -167,9 +167,15 @@ export function ComposeTool(props: ComposeToolProps) {
   };
 
   const [recipients, setRecipients] = createSignal({
-    to: toEmailRecipients(props.initialData.to ?? []),
-    cc: toEmailRecipients(props.initialData.cc ?? []),
-    bcc: toEmailRecipients(props.initialData.bcc ?? []),
+    to: toEmailRecipients(
+      (props.initialData.to ?? []).map((r) => ({ ...r, name: r.name ?? null }))
+    ),
+    cc: toEmailRecipients(
+      (props.initialData.cc ?? []).map((r) => ({ ...r, name: r.name ?? null }))
+    ),
+    bcc: toEmailRecipients(
+      (props.initialData.bcc ?? []).map((r) => ({ ...r, name: r.name ?? null }))
+    ),
   });
   const [subject, setSubject] = createSignal(props.initialData.subject ?? '');
   const [isSending, setIsSending] = createSignal(false);

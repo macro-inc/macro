@@ -3,28 +3,22 @@
 use ai_toolset::AsyncToolSet;
 use ai_toolset::schema::{CombinedToolSchemas, ToolSchemaGenerator};
 mod build_context;
-pub mod code_execution;
 pub mod prompts;
-pub mod read;
-#[allow(dead_code)]
-mod rewrite;
+mod schemas;
 pub mod search;
 pub mod serde_utils;
 mod subagent;
 mod tool_context;
-pub mod web_fetch;
+
 use call::inbound::toolset::call_toolset;
-use code_execution::{
-    anthropic_bash_code_execution_tool, anthropic_text_editor_code_execution_tool,
-};
+use chat::inbound::toolset::chat_toolset;
 use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::email_toolset;
 use properties::inbound::toolset::properties_toolset;
-use search::web::anthropic_web_search::anthropic_web_search_tool;
+use schemas::{anthropic_tools, read};
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
 use subagent::Subagent;
-use web_fetch::anthropic_web_fetch_tool;
 
 pub use build_context::build_tool_service_context_from_env;
 pub use search::search_toolset;
@@ -56,10 +50,10 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
     AsyncToolSet::new()
         .add_toolset(search_toolset())
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
-        .add_tool::<read::ReadThread, Arc<ToolScribe>>()
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
         .add_subtoolset::<ToolCallToolContext>(call_toolset())
+        .add_subtoolset::<ToolChatToolContext>(chat_toolset())
 }
 
 /// These are actually sent to the AI provider
@@ -87,13 +81,16 @@ pub fn all_tool_combined_schema() -> CombinedToolSchemas {
 
     let mut tools = Vec::new();
     tools.extend(all_tools().register_schemas(&mut generator));
-    tools.extend(anthropic_web_search_tool.register_schemas(&mut generator));
-    tools.extend(anthropic_web_fetch_tool.register_schemas(&mut generator));
-    tools.extend(anthropic_bash_code_execution_tool.register_schemas(&mut generator));
-    tools.extend(anthropic_text_editor_code_execution_tool.register_schemas(&mut generator));
+    tools.extend(anthropic_tools::web_search().register_schemas(&mut generator));
+    tools.extend(anthropic_tools::web_fetch().register_schemas(&mut generator));
+    tools.extend(anthropic_tools::bash_code_execution().register_schemas(&mut generator));
+    tools.extend(anthropic_tools::text_editor_code_execution().register_schemas(&mut generator));
+    tools.extend(read::read_thread().register_schemas(&mut generator));
 
     let defs = generator.take_definitions(true);
-    CombinedToolSchemas { defs, tools }
+    let mut combined = CombinedToolSchemas { defs, tools };
+    combined.mangle_collisions();
+    combined
 }
 
 pub fn no_tools() -> ToolSetWithPrompt {
