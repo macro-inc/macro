@@ -183,7 +183,7 @@ interface LayoutProps {
   unread: boolean;
   isShared: boolean;
   hasNotifications: boolean;
-  showContentHits: boolean;
+  showHitSnippet: boolean;
   streamState?: StreamEvent;
   setSnippetContainerRef: (el: HTMLElement) => void;
   chars: number;
@@ -214,12 +214,12 @@ function EmailIdentity(props: { entity: EmailEntity }) {
 
 function EmailSnippet(props: {
   entity: EmailEntity;
-  showContentHits: boolean;
+  showHitSnippet: boolean;
   chars: number;
 }) {
   return (
     <Show
-      when={props.showContentHits && getBestContentHitContent(props.entity)}
+      when={props.showHitSnippet && getBestContentHitContent(props.entity)}
       fallback={props.entity.snippet}
     >
       {(content) => (
@@ -337,7 +337,7 @@ function ChannelLatestMessageNarrowBody(props: {
 function EmailNarrowBody(props: {
   entity: EmailEntity;
   chars: number;
-  showContentHits: boolean;
+  showHitSnippet: boolean;
   setContainerRef: (el: HTMLElement) => void;
 }) {
   return (
@@ -349,7 +349,7 @@ function EmailNarrowBody(props: {
       >
         <EmailSnippet
           entity={props.entity}
-          showContentHits={props.showContentHits}
+          showHitSnippet={props.showHitSnippet}
           chars={props.chars}
         />
       </span>
@@ -442,7 +442,7 @@ function CallNarrowBody(props: {
 function EmailWideContent(props: {
   entity: EmailEntity;
   chars: number;
-  showContentHits: boolean;
+  showHitSnippet: boolean;
   setContainerRef: (el: HTMLElement) => void;
 }) {
   return (
@@ -461,7 +461,7 @@ function EmailWideContent(props: {
       >
         <EmailSnippet
           entity={props.entity}
-          showContentHits={props.showContentHits}
+          showHitSnippet={props.showHitSnippet}
           chars={props.chars}
         />
       </span>
@@ -802,7 +802,7 @@ function NarrowInboxLayout(props: LayoutProps) {
             <EmailNarrowBody
               entity={entity()}
               chars={props.chars}
-              showContentHits={props.showContentHits}
+              showHitSnippet={props.showHitSnippet}
               setContainerRef={props.setSnippetContainerRef}
             />
           )}
@@ -877,7 +877,7 @@ function WideLayout(props: LayoutProps) {
               <EmailWideContent
                 entity={entity()}
                 chars={props.chars}
-                showContentHits={props.showContentHits}
+                showHitSnippet={props.showHitSnippet}
                 setContainerRef={props.setSnippetContainerRef}
               />
             )}
@@ -1009,10 +1009,13 @@ export function ListEntity(props: ListEntityProps) {
     return visibleLength(rendered) >= visibleLength(content);
   };
 
-  const showContentHits = () =>
-    !props.hideContentHits &&
-    hasSearchContentHits(props.entity) &&
-    !isContentHitsRedundant();
+  // Render the highlighted hit snippet whenever the entity has hits — even
+  // if the expandable panel is suppressed as redundant, the inline snippet
+  // should still highlight the match.
+  const showHitSnippet = () =>
+    !props.hideContentHits && hasSearchContentHits(props.entity);
+
+  const showContentHits = () => showHitSnippet() && !isContentHitsRedundant();
 
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
@@ -1021,7 +1024,7 @@ export function ListEntity(props: ListEntityProps) {
     unread: unread(),
     isShared: isShared(),
     hasNotifications: hasNotifications(),
-    showContentHits: showContentHits(),
+    showHitSnippet: showHitSnippet(),
     streamState: streamState(),
     setSnippetContainerRef,
     chars: chars(),
