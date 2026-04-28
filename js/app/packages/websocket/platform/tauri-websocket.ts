@@ -1,4 +1,5 @@
 import { isTauri } from '@core/util/platform';
+import { Channel, invoke } from '@tauri-apps/api/core';
 import TauriWebsocket, {
   type Message as TauriMessage,
 } from '@tauri-apps/plugin-websocket';
@@ -41,23 +42,19 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
     protocols?: string | string[]
   ) {
     try {
-      // Convert protocols to the format expected by Tauri (though not directly supported in config)
-      const config =
-        protocols && protocols.length > 0
-          ? {
-              // Tauri doesn't have direct protocol support in config, but we can add headers if needed
-            }
-          : undefined;
+      // Workaround for https://github.com/tauri-apps/plugins-workspace/issues/3152:
+      // TauriWebsocket.connect() only exposes the listeners Set after it resolves, so
+      // messages sent by the server immediately after the handshake can arrive via IPC
+      // before addListener() is called and get dropped. Instead, we call invoke()
+      // directly and pre-register our handler BEFORE the connection is made.
+      const listeners = new Set<(message: TauriMessage) => void>();
 
-      this.ws = await TauriWebsocket.connect(url, config);
-
-      // Set up message listener
-      this.removeListener = this.ws.addListener((message: TauriMessage) => {
+      const handleMessage = (message: TauriMessage) => {
         switch (message.type) {
           case 'Text':
             this.handleMessage(message.data);
             break;
-          case 'Binary':
+          case 'Binary': {
             // Convert number array back to Uint8Array/Blob based on binaryType
             const data =
               this._binaryType === 'arraybuffer'
@@ -65,7 +62,8 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
                 : new Blob([new Uint8Array(message.data)]);
             this.handleMessage(data);
             break;
-          case 'Close':
+          }
+          case 'Close': {
             this._readyState = this.CLOSED;
             const closeEvent = new CloseEvent('close', {
               code: message.data?.code || 1000,
@@ -74,6 +72,7 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
             });
             this.handleClose(closeEvent);
             break;
+          }
           case 'Ping':
             // Handle ping (usually automatic)
             break;
@@ -81,7 +80,39 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
             // Handle pong (usually automatic)
             break;
         }
+      };
+
+      // Register BEFORE invoke so any message that arrives during the handshake
+      // is dispatched to our handler rather than dropped into an empty Set.
+      listeners.add(handleMessage);
+
+      const onMessage = new Channel<TauriMessage>();
+      onMessage.onmessage = (message: TauriMessage) => {
+        listeners.forEach((l) => {
+          l(message);
+        });
+      };
+
+      const config = protocols && protocols.length > 0 ? {} : undefined;
+
+      const id = await invoke<number>('plugin:websocket|connect', {
+        url,
+        onMessage,
+        config,
       });
+
+      // Reconstruct a TauriWebsocket instance from the connection id and our
+      // pre-populated listeners Set, matching the internal shape of the plugin class.
+      this.ws = new (
+        TauriWebsocket as unknown as new (
+          id: number,
+          listeners: Set<(arg: TauriMessage) => void>
+        ) => TauriWebsocket
+      )(id, listeners);
+
+      this.removeListener = () => {
+        listeners.delete(handleMessage);
+      };
 
       this._readyState = this.OPEN;
       console.log(`initialized tauri websocket for ${url}`);
