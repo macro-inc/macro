@@ -63,13 +63,17 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
     );
 
-    let internal_api_secret = secretsmanager_client
-        .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
-        .await?;
-
-    let notifier = config.connection_gateway_url.as_ref().map(|url| {
-        ConnectionGatewayNotifier::new(internal_api_secret.as_ref().to_string(), url.clone())
-    });
+    let notifier = if let Some(url) = config.connection_gateway_url.as_ref() {
+        let internal_api_secret = secretsmanager_client
+            .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
+            .await?;
+        Some(ConnectionGatewayNotifier::new(
+            internal_api_secret.as_ref().to_string(),
+            url.clone(),
+        )?)
+    } else {
+        None
+    };
 
     let repository = DbContactsRepository::new(db.clone());
     let service = Arc::new(ContactsDomainService {

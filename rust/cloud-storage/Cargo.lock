@@ -2389,6 +2389,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_user_id",
  "model",
  "rate_limit",
  "redis",
