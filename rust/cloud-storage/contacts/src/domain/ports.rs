@@ -10,9 +10,9 @@ pub trait ContactsRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<String>, Report>> + Send;
 
     /// Creates connection pairs between users within a transaction.
-    fn create_connections(
+    fn create_connections<'a>(
         &self,
-        connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
+        connections: impl Iterator<Item = (MacroUserIdStr<'a>, MacroUserIdStr<'a>)> + Send,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -21,6 +21,6 @@ pub trait ContactsNotifier: Send + Sync + 'static {
     /// Invalidates cached contacts for the given user IDs.
     fn invalidate_contacts_for_users(
         &self,
-        user_ids: &[MacroUserIdStr<'static>],
+        user_ids: impl Iterator<Item = MacroUserIdStr<'static>> + Send,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
