@@ -1,4 +1,5 @@
 use crate::domain::ports::ContactsNotifier;
+use macro_user_id::user_id::MacroUserIdStr;
 
 /// Notifier that sends invalidation messages through the connection gateway.
 pub struct ConnectionGatewayNotifier {
@@ -12,7 +13,9 @@ impl ConnectionGatewayNotifier {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             "x-internal-auth-key",
-            internal_auth_key.parse().expect("invalid auth key header value"),
+            internal_auth_key
+                .parse()
+                .expect("invalid auth key header value"),
         );
         let client = reqwest::Client::builder()
             .default_headers(headers)
@@ -34,10 +37,10 @@ impl ConnectionGatewayNotifier {
 }
 
 impl ContactsNotifier for ConnectionGatewayNotifier {
-    async fn invalidate_contacts_for_users(&self, user_ids: &[String]) {
+    async fn invalidate_contacts_for_users(&self, user_ids: &[MacroUserIdStr<'static>]) {
         for user_id in user_ids {
-            if let Err(e) = self.invalidate_contacts(user_id).await {
-                tracing::error!(user_id = %user_id, error = ?e, "Failed to invalidate contacts");
+            if let Err(e) = self.invalidate_contacts(user_id.as_ref() as &str).await {
+                tracing::error!(user_id = %user_id.as_ref(), error = ?e, "Failed to invalidate contacts");
             }
         }
     }
@@ -46,7 +49,7 @@ impl ContactsNotifier for ConnectionGatewayNotifier {
 /// Implements [`ContactsNotifier`] for `Option<ConnectionGatewayNotifier>`,
 /// acting as a no-op when `None`.
 impl ContactsNotifier for Option<ConnectionGatewayNotifier> {
-    async fn invalidate_contacts_for_users(&self, user_ids: &[String]) {
+    async fn invalidate_contacts_for_users(&self, user_ids: &[MacroUserIdStr<'static>]) {
         if let Some(notifier) = self {
             notifier.invalidate_contacts_for_users(user_ids).await;
         }

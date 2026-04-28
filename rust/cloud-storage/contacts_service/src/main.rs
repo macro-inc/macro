@@ -82,12 +82,11 @@ async fn main() -> anyhow::Result<()> {
         worker.poll().await;
     });
 
-    let jwt_args =
-        macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
-            config.environment,
-            &secretsmanager_client,
-        )
-        .await?;
+    let jwt_args = macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
+        config.environment,
+        &secretsmanager_client,
+    )
+    .await?;
 
     let redis_client =
         redis::Client::open(config.redis_uri.as_str()).context("failed to create redis client")?;
