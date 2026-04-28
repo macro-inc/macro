@@ -10,4 +10,10 @@ pub enum DateLiteral {
     /// Matches entities whose date column is strictly before this timestamp.
     #[serde(rename = "lt")]
     LessThan(DateTime<Utc>),
+    /// Matches entities whose date column is at or after this timestamp.
+    #[serde(rename = "gte")]
+    GreaterThanOrEqual(DateTime<Utc>),
+    /// Matches entities whose date column is at or before this timestamp.
+    #[serde(rename = "lte")]
+    LessThanOrEqual(DateTime<Utc>),
 }

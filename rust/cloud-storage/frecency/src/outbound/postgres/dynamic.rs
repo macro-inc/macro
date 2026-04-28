@@ -198,11 +198,23 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(DocumentLiteral::CreatedAt(DateLiteral::LessThan(dt))) => {
             format!(r#"entity_id IN (SELECT id FROM "Document" WHERE "createdAt" < '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
         }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::CreatedAt(DateLiteral::GreaterThanOrEqual(dt))) => {
+            format!(r#"entity_id IN (SELECT id FROM "Document" WHERE "createdAt" >= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::CreatedAt(DateLiteral::LessThanOrEqual(dt))) => {
+            format!(r#"entity_id IN (SELECT id FROM "Document" WHERE "createdAt" <= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+        }
         filter_ast::ExprFrame::Literal(DocumentLiteral::UpdatedAt(DateLiteral::GreaterThan(dt))) => {
             format!(r#"entity_id IN (SELECT id FROM "Document" WHERE "updatedAt" > '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::UpdatedAt(DateLiteral::LessThan(dt))) => {
             format!(r#"entity_id IN (SELECT id FROM "Document" WHERE "updatedAt" < '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::UpdatedAt(DateLiteral::GreaterThanOrEqual(dt))) => {
+            format!(r#"entity_id IN (SELECT id FROM "Document" WHERE "updatedAt" >= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::UpdatedAt(DateLiteral::LessThanOrEqual(dt))) => {
+            format!(r#"entity_id IN (SELECT id FROM "Document" WHERE "updatedAt" <= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
         }
     });
     if formatting.is_empty() {
@@ -263,11 +275,23 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
             filter_ast::ExprFrame::Literal(ChatLiteral::CreatedAt(DateLiteral::LessThan(dt))) => {
                 format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "createdAt" < '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
             }
+            filter_ast::ExprFrame::Literal(ChatLiteral::CreatedAt(DateLiteral::GreaterThanOrEqual(dt))) => {
+                format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "createdAt" >= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+            }
+            filter_ast::ExprFrame::Literal(ChatLiteral::CreatedAt(DateLiteral::LessThanOrEqual(dt))) => {
+                format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "createdAt" <= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+            }
             filter_ast::ExprFrame::Literal(ChatLiteral::UpdatedAt(DateLiteral::GreaterThan(dt))) => {
                 format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "updatedAt" > '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
             }
             filter_ast::ExprFrame::Literal(ChatLiteral::UpdatedAt(DateLiteral::LessThan(dt))) => {
                 format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "updatedAt" < '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+            }
+            filter_ast::ExprFrame::Literal(ChatLiteral::UpdatedAt(DateLiteral::GreaterThanOrEqual(dt))) => {
+                format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "updatedAt" >= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+            }
+            filter_ast::ExprFrame::Literal(ChatLiteral::UpdatedAt(DateLiteral::LessThanOrEqual(dt))) => {
+                format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "updatedAt" <= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
             }
         });
     if formatting.is_empty() {
@@ -306,11 +330,23 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ProjectLiteral::CreatedAt(DateLiteral::LessThan(dt))) => {
             format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "createdAt" < '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
         }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::CreatedAt(DateLiteral::GreaterThanOrEqual(dt))) => {
+            format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "createdAt" >= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::CreatedAt(DateLiteral::LessThanOrEqual(dt))) => {
+            format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "createdAt" <= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+        }
         filter_ast::ExprFrame::Literal(ProjectLiteral::UpdatedAt(DateLiteral::GreaterThan(dt))) => {
             format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "updatedAt" > '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::UpdatedAt(DateLiteral::LessThan(dt))) => {
             format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "updatedAt" < '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::UpdatedAt(DateLiteral::GreaterThanOrEqual(dt))) => {
+            format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "updatedAt" >= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::UpdatedAt(DateLiteral::LessThanOrEqual(dt))) => {
+            format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "updatedAt" <= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
         }
     });
     if formatting.is_empty() {

@@ -3,7 +3,14 @@ use crate::outbound::pg_soup_repo::expanded::{
     by_ids::expanded_soup_by_ids,
     dynamic::{ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup},
 };
-use item_filters::{PropertyFilter, ast::EntityFilterAst};
+use filter_ast::Expr;
+use item_filters::{
+    PropertyFilter,
+    ast::{
+        EntityFilterAst, chat::ChatLiteral, date::DateLiteral, document::DocumentLiteral,
+        project::ProjectLiteral,
+    },
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
@@ -12,6 +19,7 @@ use models_pagination::{Frecency, PaginateOn, Query, SimpleSortMethod};
 use models_soup::item::SoupItem;
 use sqlx::{PgPool, Pool, Postgres};
 use std::collections::HashSet;
+use std::sync::Arc;
 use uuid::Uuid;
 
 macro_rules! unwrap_enum {
@@ -5378,6 +5386,68 @@ async fn test_dyn_filter_by_not_document_sub_type_task(db: PgPool) -> anyhow::Re
 //   Chats (accessible): a1a1(10:00), b2b2(11:00), c3c3(12:00), d4d4(13:00) on 2023-01-06
 //   Projects (accessible): 1111(Jan-01 10:00), 2222(11:00), 3333(12:00), 4444(Jan-02 10:00)
 
+fn mock_empty_ast() -> EntityFilterAst {
+    EntityFilterAst {
+        document_filter: None,
+        project_filter: None,
+        chat_filter: None,
+        email_filter: None,
+        channel_filter: None,
+        call_filter: None,
+        properties_filter: None,
+    }
+}
+
+fn doc_ast(lit: DocumentLiteral) -> EntityFilterAst {
+    EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::Literal(lit))),
+        ..mock_empty_ast()
+    }
+}
+
+fn chat_ast(lit: ChatLiteral) -> EntityFilterAst {
+    EntityFilterAst {
+        chat_filter: Some(Arc::new(Expr::Literal(lit))),
+        ..mock_empty_ast()
+    }
+}
+
+fn project_ast(lit: ProjectLiteral) -> EntityFilterAst {
+    EntityFilterAst {
+        project_filter: Some(Arc::new(Expr::Literal(lit))),
+        ..mock_empty_ast()
+    }
+}
+
+async fn run_and_count(
+    db: &PgPool,
+    ast: EntityFilterAst,
+) -> anyhow::Result<(Vec<SoupItem>, usize, usize, usize)> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let items = expanded_dynamic_cursor_soup(
+        db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+    let mut doc_count = 0usize;
+    let mut chat_count = 0usize;
+    let mut project_count = 0usize;
+    for item in &items {
+        match item {
+            SoupItem::Document(_) => doc_count += 1,
+            SoupItem::Chat(_) => chat_count += 1,
+            SoupItem::Project(_) => project_count += 1,
+            _ => {}
+        }
+    }
+    Ok((items, doc_count, chat_count, project_count))
+}
+
 #[sqlx::test(
     fixtures(
         path = "../../../../../macro_db_client/fixtures",
@@ -5387,56 +5457,24 @@ async fn test_dyn_filter_by_not_document_sub_type_task(db: PgPool) -> anyhow::Re
 )]
 async fn test_date_filter_document_created_at_gt(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{date::DateLiteral, document::DocumentLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     // cutoff between bbbb(11:00) and cccc(12:00) → expect cccc, dddd, eeee = 3 docs
-    let cutoff = DateTime::parse_from_rfc3339("2023-01-05T11:30:00Z")?.into();
-    let ast = EntityFilterAst {
-        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::CreatedAt(
-            DateLiteral::GreaterThan(cutoff),
-        )))),
-        project_filter: None,
-        chat_filter: None,
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
-    };
-
-    let items = expanded_dynamic_cursor_soup(
+    let cutoff: chrono::DateTime<chrono::Utc> =
+        DateTime::parse_from_rfc3339("2023-01-05T11:30:00Z")?.into();
+    let (items, doc_count, chat_count, project_count) = run_and_count(
         &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
+        doc_ast(DocumentLiteral::CreatedAt(DateLiteral::GreaterThan(cutoff))),
     )
     .await?;
-
-    let mut doc_count = 0;
-    let mut chat_count = 0;
-    let mut project_count = 0;
     for item in &items {
-        match item {
-            SoupItem::Document(d) => {
-                assert!(
-                    d.created_at > cutoff,
-                    "doc {} created_at {:?} should be > cutoff",
-                    d.id,
-                    d.created_at
-                );
-                doc_count += 1;
-            }
-            SoupItem::Chat(_) => chat_count += 1,
-            SoupItem::Project(_) => project_count += 1,
-            _ => unimplemented!(),
+        if let SoupItem::Document(d) = item {
+            assert!(
+                d.created_at > cutoff,
+                "doc {} created_at {:?} should be > cutoff",
+                d.id,
+                d.created_at
+            );
         }
     }
-
     assert_eq!(doc_count, 3, "expected 3 docs with createdAt after cutoff");
     assert_eq!(chat_count, 4, "chats unaffected by document date filter");
     assert_eq!(
@@ -5455,56 +5493,24 @@ async fn test_date_filter_document_created_at_gt(db: PgPool) -> anyhow::Result<(
 )]
 async fn test_date_filter_document_created_at_lt(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{date::DateLiteral, document::DocumentLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     // cutoff between bbbb(11:00) and cccc(12:00) → expect aaaa, bbbb = 2 docs
-    let cutoff = DateTime::parse_from_rfc3339("2023-01-05T11:30:00Z")?.into();
-    let ast = EntityFilterAst {
-        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::CreatedAt(
-            DateLiteral::LessThan(cutoff),
-        )))),
-        project_filter: None,
-        chat_filter: None,
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
-    };
-
-    let items = expanded_dynamic_cursor_soup(
+    let cutoff: chrono::DateTime<chrono::Utc> =
+        DateTime::parse_from_rfc3339("2023-01-05T11:30:00Z")?.into();
+    let (items, doc_count, chat_count, project_count) = run_and_count(
         &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
+        doc_ast(DocumentLiteral::CreatedAt(DateLiteral::LessThan(cutoff))),
     )
     .await?;
-
-    let mut doc_count = 0;
-    let mut chat_count = 0;
-    let mut project_count = 0;
     for item in &items {
-        match item {
-            SoupItem::Document(d) => {
-                assert!(
-                    d.created_at < cutoff,
-                    "doc {} created_at {:?} should be < cutoff",
-                    d.id,
-                    d.created_at
-                );
-                doc_count += 1;
-            }
-            SoupItem::Chat(_) => chat_count += 1,
-            SoupItem::Project(_) => project_count += 1,
-            _ => unimplemented!(),
+        if let SoupItem::Document(d) = item {
+            assert!(
+                d.created_at < cutoff,
+                "doc {} created_at {:?} should be < cutoff",
+                d.id,
+                d.created_at
+            );
         }
     }
-
     assert_eq!(doc_count, 2, "expected 2 docs with createdAt before cutoff");
     assert_eq!(chat_count, 4, "chats unaffected by document date filter");
     assert_eq!(
@@ -5523,56 +5529,24 @@ async fn test_date_filter_document_created_at_lt(db: PgPool) -> anyhow::Result<(
 )]
 async fn test_date_filter_chat_created_at_gt(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{chat::ChatLiteral, date::DateLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     // cutoff between b2b2(11:00) and c3c3(12:00) → expect c3c3, d4d4 = 2 chats
-    let cutoff = DateTime::parse_from_rfc3339("2023-01-06T11:30:00Z")?.into();
-    let ast = EntityFilterAst {
-        document_filter: None,
-        project_filter: None,
-        chat_filter: Some(Arc::new(Expr::Literal(ChatLiteral::CreatedAt(
-            DateLiteral::GreaterThan(cutoff),
-        )))),
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
-    };
-
-    let items = expanded_dynamic_cursor_soup(
+    let cutoff: chrono::DateTime<chrono::Utc> =
+        DateTime::parse_from_rfc3339("2023-01-06T11:30:00Z")?.into();
+    let (items, doc_count, chat_count, project_count) = run_and_count(
         &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
+        chat_ast(ChatLiteral::CreatedAt(DateLiteral::GreaterThan(cutoff))),
     )
     .await?;
-
-    let mut doc_count = 0;
-    let mut chat_count = 0;
-    let mut project_count = 0;
     for item in &items {
-        match item {
-            SoupItem::Document(_) => doc_count += 1,
-            SoupItem::Chat(c) => {
-                assert!(
-                    c.created_at > cutoff,
-                    "chat {} created_at {:?} should be > cutoff",
-                    c.id,
-                    c.created_at
-                );
-                chat_count += 1;
-            }
-            SoupItem::Project(_) => project_count += 1,
-            _ => unimplemented!(),
+        if let SoupItem::Chat(c) = item {
+            assert!(
+                c.created_at > cutoff,
+                "chat {} created_at {:?} should be > cutoff",
+                c.id,
+                c.created_at
+            );
         }
     }
-
     assert_eq!(doc_count, 5, "docs unaffected by chat date filter");
     assert_eq!(
         chat_count, 2,
@@ -5591,56 +5565,24 @@ async fn test_date_filter_chat_created_at_gt(db: PgPool) -> anyhow::Result<()> {
 )]
 async fn test_date_filter_project_created_at_gt(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{date::DateLiteral, project::ProjectLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     // cutoff between 2222(Jan-01 11:00) and 3333(Jan-01 12:00) → expect 3333, 4444 = 2 projects
-    let cutoff = DateTime::parse_from_rfc3339("2023-01-01T11:30:00Z")?.into();
-    let ast = EntityFilterAst {
-        document_filter: None,
-        project_filter: Some(Arc::new(Expr::Literal(ProjectLiteral::CreatedAt(
-            DateLiteral::GreaterThan(cutoff),
-        )))),
-        chat_filter: None,
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
-    };
-
-    let items = expanded_dynamic_cursor_soup(
+    let cutoff: chrono::DateTime<chrono::Utc> =
+        DateTime::parse_from_rfc3339("2023-01-01T11:30:00Z")?.into();
+    let (items, doc_count, chat_count, project_count) = run_and_count(
         &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
+        project_ast(ProjectLiteral::CreatedAt(DateLiteral::GreaterThan(cutoff))),
     )
     .await?;
-
-    let mut doc_count = 0;
-    let mut chat_count = 0;
-    let mut project_count = 0;
     for item in &items {
-        match item {
-            SoupItem::Document(_) => doc_count += 1,
-            SoupItem::Chat(_) => chat_count += 1,
-            SoupItem::Project(p) => {
-                assert!(
-                    p.created_at > cutoff,
-                    "project {} created_at {:?} should be > cutoff",
-                    p.id,
-                    p.created_at
-                );
-                project_count += 1;
-            }
-            _ => unimplemented!(),
+        if let SoupItem::Project(p) = item {
+            assert!(
+                p.created_at > cutoff,
+                "project {} created_at {:?} should be > cutoff",
+                p.id,
+                p.created_at
+            );
         }
     }
-
     assert_eq!(doc_count, 5, "docs unaffected by project date filter");
     assert_eq!(chat_count, 4, "chats unaffected by project date filter");
     assert_eq!(
@@ -5660,11 +5602,6 @@ async fn test_date_filter_project_created_at_gt(db: PgPool) -> anyhow::Result<()
 )]
 async fn test_date_filter_document_created_at_range(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{date::DateLiteral, document::DocumentLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     // lower after aaaa(10:00), upper before eeee(14:00) → bbbb, cccc, dddd = 3 docs
     let lower: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-05T10:30:00Z")?.into();
@@ -5679,47 +5616,21 @@ async fn test_date_filter_document_created_at_range(db: PgPool) -> anyhow::Resul
                 DateLiteral::LessThan(upper),
             ))),
         ))),
-        project_filter: None,
-        chat_filter: None,
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
+        ..mock_empty_ast()
     };
-
-    let items = expanded_dynamic_cursor_soup(
-        &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
-    )
-    .await?;
-
-    let mut doc_count = 0;
-    let mut chat_count = 0;
-    let mut project_count = 0;
+    let (items, doc_count, chat_count, project_count) = run_and_count(&db, ast).await?;
     for item in &items {
-        match item {
-            SoupItem::Document(d) => {
-                assert!(
-                    d.created_at > lower && d.created_at < upper,
-                    "doc {} created_at {:?} outside [{:?}, {:?}]",
-                    d.id,
-                    d.created_at,
-                    lower,
-                    upper
-                );
-                doc_count += 1;
-            }
-            SoupItem::Chat(_) => chat_count += 1,
-            SoupItem::Project(_) => project_count += 1,
-            _ => unimplemented!(),
+        if let SoupItem::Document(d) = item {
+            assert!(
+                d.created_at > lower && d.created_at < upper,
+                "doc {} created_at {:?} outside [{:?}, {:?}]",
+                d.id,
+                d.created_at,
+                lower,
+                upper
+            );
         }
     }
-
     assert_eq!(doc_count, 3, "expected 3 docs in range");
     assert_eq!(chat_count, 4, "chats unaffected");
     assert_eq!(project_count, 4, "projects unaffected");
@@ -5736,38 +5647,14 @@ async fn test_date_filter_document_created_at_range(db: PgPool) -> anyhow::Resul
 )]
 async fn test_date_filter_document_updated_at_gt(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{date::DateLiteral, document::DocumentLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     // fixture has updatedAt == createdAt; cutoff same as createdAt gt test → cccc, dddd, eeee = 3
     let cutoff: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-05T11:30:00Z")?.into();
-    let ast = EntityFilterAst {
-        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::UpdatedAt(
-            DateLiteral::GreaterThan(cutoff),
-        )))),
-        project_filter: None,
-        chat_filter: None,
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
-    };
-
-    let items = expanded_dynamic_cursor_soup(
+    let (items, doc_count, _, _) = run_and_count(
         &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
+        doc_ast(DocumentLiteral::UpdatedAt(DateLiteral::GreaterThan(cutoff))),
     )
     .await?;
-
-    let mut doc_count = 0;
     for item in &items {
         if let SoupItem::Document(d) = item {
             assert!(
@@ -5776,7 +5663,6 @@ async fn test_date_filter_document_updated_at_gt(db: PgPool) -> anyhow::Result<(
                 d.id,
                 d.updated_at
             );
-            doc_count += 1;
         }
     }
     assert_eq!(doc_count, 3, "expected 3 docs with updatedAt after cutoff");
@@ -5793,37 +5679,13 @@ async fn test_date_filter_document_updated_at_gt(db: PgPool) -> anyhow::Result<(
 )]
 async fn test_date_filter_document_updated_at_lt(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{date::DateLiteral, document::DocumentLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     let cutoff: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-05T11:30:00Z")?.into();
-    let ast = EntityFilterAst {
-        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::UpdatedAt(
-            DateLiteral::LessThan(cutoff),
-        )))),
-        project_filter: None,
-        chat_filter: None,
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
-    };
-
-    let items = expanded_dynamic_cursor_soup(
+    let (items, doc_count, _, _) = run_and_count(
         &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
+        doc_ast(DocumentLiteral::UpdatedAt(DateLiteral::LessThan(cutoff))),
     )
     .await?;
-
-    let mut doc_count = 0;
     for item in &items {
         if let SoupItem::Document(d) = item {
             assert!(
@@ -5832,7 +5694,6 @@ async fn test_date_filter_document_updated_at_lt(db: PgPool) -> anyhow::Result<(
                 d.id,
                 d.updated_at
             );
-            doc_count += 1;
         }
     }
     assert_eq!(doc_count, 2, "expected 2 docs with updatedAt before cutoff");
@@ -5849,11 +5710,6 @@ async fn test_date_filter_document_updated_at_lt(db: PgPool) -> anyhow::Result<(
 )]
 async fn test_date_filter_document_updated_at_range(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{date::DateLiteral, document::DocumentLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     let lower: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-05T10:30:00Z")?.into();
     let upper: chrono::DateTime<chrono::Utc> =
@@ -5867,26 +5723,9 @@ async fn test_date_filter_document_updated_at_range(db: PgPool) -> anyhow::Resul
                 DateLiteral::LessThan(upper),
             ))),
         ))),
-        project_filter: None,
-        chat_filter: None,
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
+        ..mock_empty_ast()
     };
-
-    let items = expanded_dynamic_cursor_soup(
-        &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
-    )
-    .await?;
-
-    let mut doc_count = 0;
+    let (items, doc_count, _, _) = run_and_count(&db, ast).await?;
     for item in &items {
         if let SoupItem::Document(d) = item {
             assert!(
@@ -5895,7 +5734,6 @@ async fn test_date_filter_document_updated_at_range(db: PgPool) -> anyhow::Resul
                 d.id,
                 d.updated_at
             );
-            doc_count += 1;
         }
     }
     assert_eq!(doc_count, 3, "expected 3 docs with updatedAt in range");
@@ -5912,38 +5750,14 @@ async fn test_date_filter_document_updated_at_range(db: PgPool) -> anyhow::Resul
 )]
 async fn test_date_filter_chat_created_at_lt(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{chat::ChatLiteral, date::DateLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     // cutoff between b2b2(11:00) and c3c3(12:00) → a1a1, b2b2 = 2 chats
     let cutoff: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-06T11:30:00Z")?.into();
-    let ast = EntityFilterAst {
-        document_filter: None,
-        project_filter: None,
-        chat_filter: Some(Arc::new(Expr::Literal(ChatLiteral::CreatedAt(
-            DateLiteral::LessThan(cutoff),
-        )))),
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
-    };
-
-    let items = expanded_dynamic_cursor_soup(
+    let (items, _, chat_count, _) = run_and_count(
         &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
+        chat_ast(ChatLiteral::CreatedAt(DateLiteral::LessThan(cutoff))),
     )
     .await?;
-
-    let mut chat_count = 0;
     for item in &items {
         if let SoupItem::Chat(c) = item {
             assert!(
@@ -5952,7 +5766,6 @@ async fn test_date_filter_chat_created_at_lt(db: PgPool) -> anyhow::Result<()> {
                 c.id,
                 c.created_at
             );
-            chat_count += 1;
         }
     }
     assert_eq!(
@@ -5972,19 +5785,12 @@ async fn test_date_filter_chat_created_at_lt(db: PgPool) -> anyhow::Result<()> {
 )]
 async fn test_date_filter_chat_created_at_range(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{chat::ChatLiteral, date::DateLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     // lower after a1a1(10:00), upper before d4d4(13:00) → b2b2, c3c3 = 2 chats
     let lower: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-06T10:30:00Z")?.into();
     let upper: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-06T12:30:00Z")?.into();
     let ast = EntityFilterAst {
-        document_filter: None,
-        project_filter: None,
         chat_filter: Some(Arc::new(Expr::And(
             Box::new(Expr::Literal(ChatLiteral::CreatedAt(
                 DateLiteral::GreaterThan(lower),
@@ -5993,24 +5799,9 @@ async fn test_date_filter_chat_created_at_range(db: PgPool) -> anyhow::Result<()
                 DateLiteral::LessThan(upper),
             ))),
         ))),
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
+        ..mock_empty_ast()
     };
-
-    let items = expanded_dynamic_cursor_soup(
-        &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
-    )
-    .await?;
-
-    let mut chat_count = 0;
+    let (items, _, chat_count, _) = run_and_count(&db, ast).await?;
     for item in &items {
         if let SoupItem::Chat(c) = item {
             assert!(
@@ -6019,7 +5810,6 @@ async fn test_date_filter_chat_created_at_range(db: PgPool) -> anyhow::Result<()
                 c.id,
                 c.created_at
             );
-            chat_count += 1;
         }
     }
     assert_eq!(chat_count, 2, "expected 2 chats in createdAt range");
@@ -6036,37 +5826,13 @@ async fn test_date_filter_chat_created_at_range(db: PgPool) -> anyhow::Result<()
 )]
 async fn test_date_filter_chat_updated_at_gt(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{chat::ChatLiteral, date::DateLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     let cutoff: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-06T11:30:00Z")?.into();
-    let ast = EntityFilterAst {
-        document_filter: None,
-        project_filter: None,
-        chat_filter: Some(Arc::new(Expr::Literal(ChatLiteral::UpdatedAt(
-            DateLiteral::GreaterThan(cutoff),
-        )))),
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
-    };
-
-    let items = expanded_dynamic_cursor_soup(
+    let (items, _, chat_count, _) = run_and_count(
         &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
+        chat_ast(ChatLiteral::UpdatedAt(DateLiteral::GreaterThan(cutoff))),
     )
     .await?;
-
-    let mut chat_count = 0;
     for item in &items {
         if let SoupItem::Chat(c) = item {
             assert!(
@@ -6075,7 +5841,6 @@ async fn test_date_filter_chat_updated_at_gt(db: PgPool) -> anyhow::Result<()> {
                 c.id,
                 c.updated_at
             );
-            chat_count += 1;
         }
     }
     assert_eq!(
@@ -6095,18 +5860,11 @@ async fn test_date_filter_chat_updated_at_gt(db: PgPool) -> anyhow::Result<()> {
 )]
 async fn test_date_filter_chat_updated_at_range(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{chat::ChatLiteral, date::DateLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     let lower: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-06T10:30:00Z")?.into();
     let upper: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-06T12:30:00Z")?.into();
     let ast = EntityFilterAst {
-        document_filter: None,
-        project_filter: None,
         chat_filter: Some(Arc::new(Expr::And(
             Box::new(Expr::Literal(ChatLiteral::UpdatedAt(
                 DateLiteral::GreaterThan(lower),
@@ -6115,24 +5873,9 @@ async fn test_date_filter_chat_updated_at_range(db: PgPool) -> anyhow::Result<()
                 DateLiteral::LessThan(upper),
             ))),
         ))),
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
+        ..mock_empty_ast()
     };
-
-    let items = expanded_dynamic_cursor_soup(
-        &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
-    )
-    .await?;
-
-    let mut chat_count = 0;
+    let (items, _, chat_count, _) = run_and_count(&db, ast).await?;
     for item in &items {
         if let SoupItem::Chat(c) = item {
             assert!(
@@ -6141,7 +5884,6 @@ async fn test_date_filter_chat_updated_at_range(db: PgPool) -> anyhow::Result<()
                 c.id,
                 c.updated_at
             );
-            chat_count += 1;
         }
     }
     assert_eq!(chat_count, 2, "expected 2 chats with updatedAt in range");
@@ -6158,38 +5900,14 @@ async fn test_date_filter_chat_updated_at_range(db: PgPool) -> anyhow::Result<()
 )]
 async fn test_date_filter_project_created_at_lt(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{date::DateLiteral, project::ProjectLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     // cutoff between 2222(Jan-01 11:00) and 3333(Jan-01 12:00) → 1111, 2222 = 2 projects
     let cutoff: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-01T11:30:00Z")?.into();
-    let ast = EntityFilterAst {
-        document_filter: None,
-        project_filter: Some(Arc::new(Expr::Literal(ProjectLiteral::CreatedAt(
-            DateLiteral::LessThan(cutoff),
-        )))),
-        chat_filter: None,
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
-    };
-
-    let items = expanded_dynamic_cursor_soup(
+    let (items, _, _, project_count) = run_and_count(
         &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
+        project_ast(ProjectLiteral::CreatedAt(DateLiteral::LessThan(cutoff))),
     )
     .await?;
-
-    let mut project_count = 0;
     for item in &items {
         if let SoupItem::Project(p) = item {
             assert!(
@@ -6198,7 +5916,6 @@ async fn test_date_filter_project_created_at_lt(db: PgPool) -> anyhow::Result<()
                 p.id,
                 p.created_at
             );
-            project_count += 1;
         }
     }
     assert_eq!(
@@ -6218,18 +5935,12 @@ async fn test_date_filter_project_created_at_lt(db: PgPool) -> anyhow::Result<()
 )]
 async fn test_date_filter_project_created_at_range(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{date::DateLiteral, project::ProjectLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     // lower after 1111(Jan-01 10:00), upper before 4444(Jan-02 10:00) → 2222, 3333 = 2 projects
     let lower: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-01T10:30:00Z")?.into();
     let upper: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-01T12:30:00Z")?.into();
     let ast = EntityFilterAst {
-        document_filter: None,
         project_filter: Some(Arc::new(Expr::And(
             Box::new(Expr::Literal(ProjectLiteral::CreatedAt(
                 DateLiteral::GreaterThan(lower),
@@ -6238,25 +5949,9 @@ async fn test_date_filter_project_created_at_range(db: PgPool) -> anyhow::Result
                 DateLiteral::LessThan(upper),
             ))),
         ))),
-        chat_filter: None,
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
+        ..mock_empty_ast()
     };
-
-    let items = expanded_dynamic_cursor_soup(
-        &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
-    )
-    .await?;
-
-    let mut project_count = 0;
+    let (items, _, _, project_count) = run_and_count(&db, ast).await?;
     for item in &items {
         if let SoupItem::Project(p) = item {
             assert!(
@@ -6265,7 +5960,6 @@ async fn test_date_filter_project_created_at_range(db: PgPool) -> anyhow::Result
                 p.id,
                 p.created_at
             );
-            project_count += 1;
         }
     }
     assert_eq!(
@@ -6285,37 +5979,13 @@ async fn test_date_filter_project_created_at_range(db: PgPool) -> anyhow::Result
 )]
 async fn test_date_filter_project_updated_at_gt(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{date::DateLiteral, project::ProjectLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     let cutoff: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-01T11:30:00Z")?.into();
-    let ast = EntityFilterAst {
-        document_filter: None,
-        project_filter: Some(Arc::new(Expr::Literal(ProjectLiteral::UpdatedAt(
-            DateLiteral::GreaterThan(cutoff),
-        )))),
-        chat_filter: None,
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
-    };
-
-    let items = expanded_dynamic_cursor_soup(
+    let (items, _, _, project_count) = run_and_count(
         &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
+        project_ast(ProjectLiteral::UpdatedAt(DateLiteral::GreaterThan(cutoff))),
     )
     .await?;
-
-    let mut project_count = 0;
     for item in &items {
         if let SoupItem::Project(p) = item {
             assert!(
@@ -6324,7 +5994,6 @@ async fn test_date_filter_project_updated_at_gt(db: PgPool) -> anyhow::Result<()
                 p.id,
                 p.updated_at
             );
-            project_count += 1;
         }
     }
     assert_eq!(
@@ -6344,17 +6013,11 @@ async fn test_date_filter_project_updated_at_gt(db: PgPool) -> anyhow::Result<()
 )]
 async fn test_date_filter_project_updated_at_range(db: PgPool) -> anyhow::Result<()> {
     use chrono::DateTime;
-    use filter_ast::Expr;
-    use item_filters::ast::{date::DateLiteral, project::ProjectLiteral};
-    use std::sync::Arc;
-
-    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     let lower: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-01T10:30:00Z")?.into();
     let upper: chrono::DateTime<chrono::Utc> =
         DateTime::parse_from_rfc3339("2023-01-01T12:30:00Z")?.into();
     let ast = EntityFilterAst {
-        document_filter: None,
         project_filter: Some(Arc::new(Expr::And(
             Box::new(Expr::Literal(ProjectLiteral::UpdatedAt(
                 DateLiteral::GreaterThan(lower),
@@ -6363,25 +6026,9 @@ async fn test_date_filter_project_updated_at_range(db: PgPool) -> anyhow::Result
                 DateLiteral::LessThan(upper),
             ))),
         ))),
-        chat_filter: None,
-        email_filter: None,
-        channel_filter: None,
-        call_filter: None,
-        properties_filter: None,
+        ..mock_empty_ast()
     };
-
-    let items = expanded_dynamic_cursor_soup(
-        &db,
-        ExpandedDynamicCursorArgs {
-            user_id: user_id.copied(),
-            limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
-            exclude_frecency: false,
-        },
-    )
-    .await?;
-
-    let mut project_count = 0;
+    let (items, _, _, project_count) = run_and_count(&db, ast).await?;
     for item in &items {
         if let SoupItem::Project(p) = item {
             assert!(
@@ -6390,7 +6037,6 @@ async fn test_date_filter_project_updated_at_range(db: PgPool) -> anyhow::Result
                 p.id,
                 p.updated_at
             );
-            project_count += 1;
         }
     }
     assert_eq!(
