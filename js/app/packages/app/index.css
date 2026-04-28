@@ -77,20 +77,6 @@
 
    --transition: 0s; /* defualt 0.15, used for transition jamming, currently disabled */
 
-  --theme-comment: oklch(from var(--a0) l c  90deg);
-  --theme-folder:  oklch(from var(--a0) l c 240deg);
-  --theme-canvas:  oklch(from var(--a0) l c  60deg);
-  --theme-image:   oklch(from var(--a0) l c  95deg);
-  --theme-write:   oklch(from var(--a0) l c 260deg);
-  --theme-video:   oklch(from var(--a0) l c 277deg);
-  --theme-note:    oklch(from var(--a0) l c 293deg);
-  --theme-code:    oklch(from var(--a0) l c 180deg);
-  --theme-chat:    oklch(from var(--a0) l c 220deg);
-  --theme-html:    oklch(from var(--a0) l c  47deg);
-  --theme-task:    oklch(from var(--a0) l c 150deg);
-  --theme-rss:     oklch(from var(--a0) l c 260deg);
-  --theme-pdf:     oklch(from var(--a0) l c  25deg);
-
   /* Semantic Color names, use these when writing tailwind */
   --color-accent-ink: var(--a0);
   --color-accent:     var(--a0);
@@ -131,57 +117,26 @@
   --color-alert-bg:    oklch(from var(--color-alert) l c h / 0.15);
   --color-alert-ink:   oklch(from var(--color-alert) var(--c1l) c h);
 
-  --color-comment:     var(--theme-comment);
+  --color-comment:     oklch(from var(--a0) l c 90deg);
   --color-comment-bg:  oklch(from var(--color-comment) l c h / 0.15);
   --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h);
 
-  --color-note:        var(--theme-note);
-  --color-note-bg:     color-mix(in srgb, var(--color-note), var(--color-panel) 90%);
-
-  --color-canvas:      var(--theme-canvas);
-  --color-canvas-bg:   color-mix(in srgb, var(--color-canvas), var(--color-panel) 90%);
-
-  --color-html:        var(--color-html);
-  --color-html-bg:     color-mix(in srgb, var(--color-html), var(--color-panel) 90%);
-
-  --color-folder:      var(--theme-folder);
-  --color-folder-bg:   color-mix(in srgb, var(--color-folder), var(--color-panel) 90%);
-
-  --color-email:       var(--theme-email);
-  --color-email-bg:    color-mix(in srgb, var(--color-email), var(--color-panel) 90%);
-
-  --color-code:        var(--theme-code);
-  --color-code-bg:     color-mix(in srgb, var(--color-code), var(--color-panel) 90%);
-
-  --color-pdf:         var(--theme-pdf);
-  --color-pdf-bg:      color-mix(in srgb, var(--color-pdf), var(--color-panel) 90%);
-
-  --color-image:       var(--theme-image);
-  --color-image-bg:    color-mix(in srgb, var(--color-image), var(--color-panel) 90%);
-
-  --color-write:       var(--theme-write);
-  --color-write-bg:    color-mix(in srgb, var(--color-write), var(--color-panel) 90%);
-
-  --color-chat:        var(--theme-chat);
-  --color-chat-bg:     color-mix(in srgb, var(--color-chat), var(--color-panel) 90%);
-
-  --color-video:       var(--theme-video);
-  --color-video-bg:    color-mix(in srgb, var(--color-video), var(--color-panel) 90%);
-
-  --color-rss:         var(--theme-rss);
-  --color-rss-bg:      color-mix(in srgb, var(--color-rss), var(--color-panel) 90%);
-
-  --color-calendar:    oklch(0.8159 0.2849 98.77);
-  --color-calendar-bg: color-mix(in srgb, var(--color-calendar), var(--color-panel) 90%);
-
-  --color-contact:     oklch(0.8617 0.1837 93.83);
-  --color-contact-bg:  color-mix(in srgb, var(--color-contact), var(--color-panel) 90%);
-
-  --color-default:     var(--color-ink-muted);
-  --color-default-bg:  color-mix(in srgb, var(--color-default), var(--color-panel) 90%);
-
-  --color-task:        var(--theme-task);
-  --color-task-bg:     color-mix(in srgb, var(--color-task), var(--color-panel) 90%);
+  --color-note:     oklch(from var(--a0) l c 293deg)
+  --color-canvas:   oklch(from var(--a0) l c  60deg);
+  --color-html:     oklch(from var(--a0) l c  47deg);
+  --color-folder:   oklch(from var(--a0) l c 240deg);
+  --color-code:     oklch(from var(--a0) l c 180deg);
+  --color-pdf:      oklch(from var(--a0) l c  25deg);
+  --color-image:    oklch(from var(--a0) l c  95deg);
+  --color-write:    oklch(from var(--a0) l c 260deg);
+  --color-chat:     oklch(from var(--a0) l c 220deg);
+  --color-video:    oklch(from var(--a0) l c 277deg);
+  --color-rss:      oklch(from var(--a0) l c 260deg);
+  --color-task:     oklch(from var(--a0) l c 150deg);
+  --color-calendar: oklch(0.8159 0.2849 98.77);
+  --color-contact:  oklch(0.8617 0.1837 93.83);
+  --color-email:    var(--theme-email);
+  --color-default:  var(--c1);
 
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */

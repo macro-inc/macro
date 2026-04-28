@@ -24,7 +24,7 @@ export function Appearance() {
       </Panel>
 
       <div class="@container grid grid-cols-1 @[700px]:grid-cols-2 gap-5 overflow-hidden min-h-0">
-        <Panel depth={0}>
+        <Panel depth={0.2}>
           <ThemeList />
         </Panel>
         <Panel depth={0}>

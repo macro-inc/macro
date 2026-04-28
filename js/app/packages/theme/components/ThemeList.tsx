@@ -68,9 +68,9 @@ export function ThemeList() {
         >
           <div
             style="
-              border-bottom: 1px solid var(--b3); /* temp remove when long */
+              border-bottom: 1px solid var(--color-edge-muted); /* temp remove when long */
               margin-bottom: -1px; /* temp remove when long */
-              background-color: var(--b3);
+              background-color: var(--color-edge-muted);
               box-sizing: border-box;
               overflow-x: hidden;
               display: grid;
@@ -79,7 +79,7 @@ export function ThemeList() {
           >
             <div
               style="
-                border-bottom: 1px solid var(--b3);
+                border-bottom: 1px solid var(--color-edge-muted);
                 background-color: var(--b1);
                 align-items: center;
                 position: absolute;
@@ -110,13 +110,12 @@ export function ThemeList() {
                 }}
                 style="
                   cursor: var(--cursor-pointer);
-                  background-color: var(--b1);
                 "
               >
                 <div
                   style="
+                    background-color: var(--color-edge-muted);
                     grid-template-columns: min-content 1fr;
-                    background-color: var(--b3);
                     align-items: center;
                     display: grid;
                     height: 41px;
