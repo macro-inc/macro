@@ -1,6 +1,7 @@
+use crate::domain::models::graph::{CompleteUndirectedGraph, UndirectedGraph, Vertex};
 use crate::domain::models::messages::ContactsMessage;
-use crate::domain::models::user::Group;
 use crate::domain::ports::{ContactsNotifier, ContactsRepository};
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 
@@ -34,8 +35,15 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
     /// Processes a contacts SQS message by computing all pairwise connections
     /// from the user list and persisting them.
     #[instrument(skip(self))]
-    pub async fn process_message(&self, msg: &ContactsMessage) {
-        let connections = Group::new(&msg.users).generate();
+    pub async fn process_message<'a>(&self, msg: &'a ContactsMessage) {
+        let iter = msg.users.iter().map(Vertex::new);
+        let graph: CompleteUndirectedGraph<'a, MacroUserIdStr<'static>> =
+            UndirectedGraph::new(iter).complete();
+        let connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)> = graph
+            .inner()
+            .edges()
+            .map(|e| ((*e.a()).data().copied(), (*e.b()).data().copied()))
+            .collect();
 
         if connections.is_empty() {
             return;
@@ -50,8 +58,9 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
             return;
         }
 
+        let users: Vec<_> = msg.users.iter().cloned().collect();
         self.notifier
-            .invalidate_contacts_for_users(&msg.users)
+            .invalidate_contacts_for_users(&users)
             .await
             .inspect_err(|e| tracing::error!(error=?e, "failed to invalidate contacts"))
             .ok();

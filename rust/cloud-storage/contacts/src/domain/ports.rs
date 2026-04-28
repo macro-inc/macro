@@ -12,7 +12,7 @@ pub trait ContactsRepository: Send + Sync + 'static {
     /// Creates connection pairs between users within a transaction.
     fn create_connections(
         &self,
-        connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
+        connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
