@@ -10,6 +10,8 @@ export function Layer(props: LayerProps) {
   return (
     <div
       style={{
+        'display': 'contents',
+
         '--b0': `oklch(calc(var(--b0l) + ${depth}) var(--b0c) var(--b0h))`,
         '--b1': `oklch(calc(var(--b1l) + ${depth}) var(--b1c) var(--b1h))`,
         '--b2': `oklch(calc(var(--b2l) + ${depth}) var(--b2c) var(--b2h))`,
@@ -20,7 +22,6 @@ export function Layer(props: LayerProps) {
         '--c2': `oklch(calc(var(--c2l) + ${depth}) var(--c2c) var(--c2h))`,
         '--c3': `oklch(calc(var(--c3l) + ${depth}) var(--c3c) var(--c3h))`,
         '--c4': `oklch(calc(var(--c4l) + ${depth}) var(--c4c) var(--c4h))`,
-        'display': 'contents',
 
         '--color-accent-ink':      'var(--a0)',
         '--color-accent':          'var(--a0)',
