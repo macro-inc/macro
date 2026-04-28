@@ -6,6 +6,7 @@ import {
   type RemoteParticipant,
   type LocalTrackPublication,
   type LocalTrack,
+  type AudioCaptureOptions,
 } from 'livekit-client';
 import {
   KrispNoiseFilter,
@@ -53,6 +54,53 @@ type ImageBackgroundEffect = Extract<BackgroundEffect, { type: 'image' }>;
 
 export const BACKGROUND_IMAGES: (ImageBackgroundEffect & { label: string })[] =
   [];
+
+type NativeAudioProcessingConstraints = MediaTrackConstraints & {
+  voiceIsolation?: ConstrainBoolean;
+};
+
+function microphoneCaptureOptions(
+  noiseSuppressionEnabled: boolean,
+  deviceId?: string | null
+): AudioCaptureOptions {
+  return {
+    autoGainControl: true,
+    echoCancellation: true,
+    noiseSuppression: noiseSuppressionEnabled,
+    voiceIsolation: noiseSuppressionEnabled,
+    ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+  };
+}
+
+function nativeNoiseSuppressionConstraints(
+  enabled: boolean
+): NativeAudioProcessingConstraints {
+  return {
+    noiseSuppression: enabled,
+    voiceIsolation: enabled,
+  };
+}
+
+function getLocalMicTrack(r: Room): LocalTrack | undefined {
+  return r.localParticipant.getTrackPublication(Track.Source.Microphone)
+    ?.track as LocalTrack | undefined;
+}
+
+async function applyNativeNoiseSuppressionToMicTrack(
+  r: Room,
+  enabled: boolean
+) {
+  const mediaStreamTrack = getLocalMicTrack(r)?.mediaStreamTrack;
+  if (!mediaStreamTrack || mediaStreamTrack.readyState === 'ended') return;
+
+  try {
+    await mediaStreamTrack.applyConstraints(
+      nativeNoiseSuppressionConstraints(enabled)
+    );
+  } catch (e) {
+    console.error('failed to update native mic noise suppression', e);
+  }
+}
 
 type CallStoreState = {
   connectionState: ConnectionState;
@@ -126,8 +174,8 @@ const [persistedBackgroundEffect, setPersistedBackgroundEffect] = makePersisted(
 );
 
 // Persisted across reloads — users with hardware noise cancellation (e.g.
-// AirPods Pro, Bose) need to disable app-side NS to avoid cascading filters
-// that attenuate voice. Defaults to on to match existing behavior.
+// AirPods Pro, Bose) need to disable app/browser-side NS to avoid cascading
+// filters that attenuate voice. Defaults to on to match existing behavior.
 const [persistedNoiseSuppressionPref, setPersistedNoiseSuppressionPref] =
   makePersisted(createSignal<boolean>(true), {
     name: 'call.noiseSuppression',
@@ -186,9 +234,9 @@ export type CallState = {
   switchAudioOutput: (deviceId: string) => Promise<void>;
   /** Switch active video input device */
   switchVideoInput: (deviceId: string) => Promise<void>;
-  /** Whether Krisp noise suppression is active */
+  /** Whether mic noise suppression (Krisp or native fallback) is enabled */
   isNoiseSuppressed: () => boolean;
-  /** Toggle Krisp noise suppression on/off */
+  /** Toggle mic noise suppression on/off */
   toggleNoiseSuppression: () => Promise<void>;
   /** Current background effect (none, blur, or image) */
   backgroundEffect: () => BackgroundEffect;
@@ -236,49 +284,57 @@ function createCallState() {
   /** (Re-)attach the Krisp processor to the current mic track. */
   async function ensureKrispOnMicTrack(r: Room) {
     if (!store.isNoiseSuppressed) return;
+
+    const micTrack = getLocalMicTrack(r);
+    if (!micTrack) return;
+
+    const existing = krispFilter();
+    if (existing && micTrack.getProcessor() === existing) {
+      await existing.setEnabled(true);
+      return;
+    }
+
+    // Keep native browser NS / voice isolation enabled as a fallback until
+    // Krisp is successfully attached. Krisp disables those native constraints
+    // in its own init path to avoid stacked software filters.
+    await applyNativeNoiseSuppressionToMicTrack(r, true);
+
     if (!isKrispNoiseFilterSupported()) return;
 
-    const micPub = r.localParticipant.getTrackPublication(
-      Track.Source.Microphone
-    );
-    if (!micPub?.track) return;
-
     try {
-      // Destroy the old instance — it's bound to the previous track.
-      const prev = krispFilter();
-      if (prev) prev.destroy();
+      await detachKrispFromMicTrack(r);
 
-      // `quality: 'high'` tells the Krisp model to filter more aggressively,
-      // which matters for noisy offices (cars, chairs, cans, etc.).
-      const krisp = KrispNoiseFilter({ quality: 'high' });
-      await (micPub.track as LocalTrack).setProcessor(krisp);
-      // `setProcessor` attaches the processor but does not activate filtering —
-      // per LiveKit's documented usage, `setEnabled(true)` must be called
-      // explicitly after attach for the filter to actually process audio.
+      // `quality` is model size/CPU cost, not suppression strength. The default
+      // medium model avoids the CPU pressure/dropouts that made voices sound
+      // muddy on busy machines while still enabling Krisp when supported.
+      const krisp = KrispNoiseFilter({ quality: 'medium' });
+      await micTrack.setProcessor(krisp);
       await krisp.setEnabled(true);
       setKrispFilter(krisp);
     } catch (e) {
       console.error('failed to re-attach Krisp noise filter', e);
+      // If Krisp failed after changing track constraints, leave browser NS on.
+      await applyNativeNoiseSuppressionToMicTrack(r, true);
     }
   }
 
   /** Stop + destroy the Krisp processor on the current mic track. */
   async function detachKrispFromMicTrack(r: Room) {
     const prev = krispFilter();
-    if (prev) {
-      try {
-        const micPub = r.localParticipant.getTrackPublication(
-          Track.Source.Microphone
-        );
-        if (micPub?.track) {
-          await (micPub.track as LocalTrack).stopProcessor();
-        }
-        prev.destroy();
-      } catch (e) {
-        console.error('failed to detach Krisp noise filter', e);
+    if (!prev) return;
+
+    try {
+      const micTrack = getLocalMicTrack(r);
+      if (micTrack?.getProcessor() === prev) {
+        // stopProcessor() calls the processor's destroy() internally.
+        await micTrack.stopProcessor();
+      } else {
+        await prev.destroy();
       }
-      setKrispFilter(null);
+    } catch (e) {
+      console.error('failed to detach Krisp noise filter', e);
     }
+    setKrispFilter(null);
   }
 
   /**
@@ -410,7 +466,9 @@ function createCallState() {
   function destroyRoom() {
     const krisp = krispFilter();
     if (krisp) {
-      krisp.destroy();
+      krisp.destroy().catch((e) => {
+        console.error('failed to destroy Krisp noise filter', e);
+      });
       setKrispFilter(null);
     }
     const blur = blurProcessor();
@@ -526,10 +584,11 @@ function createCallState() {
       // actually takes effect (switchActiveDevice alone can be unreliable).
       if (!store.isAudioMuted) {
         await r.localParticipant.setMicrophoneEnabled(false);
-        await r.localParticipant.setMicrophoneEnabled(true, {
-          deviceId: { exact: deviceId },
-        });
-        // New track was created — re-attach the Krisp processor
+        await r.localParticipant.setMicrophoneEnabled(
+          true,
+          microphoneCaptureOptions(store.isNoiseSuppressed, deviceId)
+        );
+        // The mic track may have changed — re-attach the Krisp processor.
         await ensureKrispOnMicTrack(r);
       }
     } catch (e) {
@@ -592,15 +651,7 @@ function createCallState() {
       targetRoom = room()!;
     } else {
       targetRoom = new Room({
-        audioCaptureDefaults: {
-          // Browser NS is off — Krisp is the sole software NS layer (see
-          // ensureKrispOnMicTrack). Stacking the two cascaded and
-          // attenuated quiet voice segments, particularly for users whose
-          // headphones already do hardware noise cancellation.
-          noiseSuppression: false,
-          echoCancellation: true,
-          autoGainControl: true,
-        },
+        audioCaptureDefaults: microphoneCaptureOptions(store.isNoiseSuppressed),
       });
       attachRoomListeners(targetRoom);
       setRoom(targetRoom);
@@ -624,15 +675,18 @@ function createCallState() {
 
     // Enable microphone by default, video off by default
     try {
-      await targetRoom.localParticipant.setMicrophoneEnabled(true);
+      await targetRoom.localParticipant.setMicrophoneEnabled(
+        true,
+        microphoneCaptureOptions(store.isNoiseSuppressed)
+      );
     } catch (e) {
       console.error('failed to enable microphone', e);
     }
     setStore('isAudioMuted', false);
     setStore('isVideoMuted', true);
 
-    // Attach Krisp if the user's NS pref is on and the runtime supports it.
-    // ensureKrispOnMicTrack is a no-op otherwise.
+    // Attach Krisp when supported; otherwise keep native browser NS enabled.
+    // ensureKrispOnMicTrack is a no-op when the user's NS pref is off.
     await ensureKrispOnMicTrack(targetRoom);
 
     // Enumerate available devices and track active ones
@@ -663,9 +717,9 @@ function createCallState() {
         const deviceId = store.activeAudioInputDeviceId;
         await r.localParticipant.setMicrophoneEnabled(
           true,
-          deviceId ? { deviceId: { exact: deviceId } } : undefined
+          microphoneCaptureOptions(store.isNoiseSuppressed, deviceId)
         );
-        // New track was created — re-attach the Krisp processor
+        // The mic track may have changed — re-attach the Krisp processor.
         await ensureKrispOnMicTrack(r);
       }
       setStore('isAudioMuted', newMuted);
@@ -739,6 +793,7 @@ function createCallState() {
         await ensureKrispOnMicTrack(r);
       } else {
         await detachKrispFromMicTrack(r);
+        await applyNativeNoiseSuppressionToMicTrack(r, false);
       }
     } catch (e) {
       console.error('failed to toggle noise suppression', e);
