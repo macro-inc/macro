@@ -3,6 +3,7 @@ import { Channel, invoke } from '@tauri-apps/api/core';
 import TauriWebsocket, {
   type Message as TauriMessage,
 } from '@tauri-apps/plugin-websocket';
+import { match } from 'ts-pattern';
 import type { MinimalWebSocket, WebSocketFactory } from './minimal-websocket';
 
 /**
@@ -42,6 +43,11 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
     protocols?: string | string[]
   ) {
     try {
+      // The Tauri websocket plugin does not support subprotocol negotiation, so
+      // we keep the shared factory signature for compatibility but do not
+      // forward `protocols` to the plugin connect call.
+      void protocols;
+
       // Workaround for https://github.com/tauri-apps/plugins-workspace/issues/3152:
       // TauriWebsocket.connect() only exposes the listeners Set after it resolves, so
       // messages sent by the server immediately after the handshake can arrive via IPC
@@ -50,36 +56,34 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
       const listeners = new Set<(message: TauriMessage) => void>();
 
       const handleMessage = (message: TauriMessage) => {
-        switch (message.type) {
-          case 'Text':
-            this.handleMessage(message.data);
-            break;
-          case 'Binary': {
-            // Convert number array back to Uint8Array/Blob based on binaryType
-            const data =
-              this._binaryType === 'arraybuffer'
-                ? new Uint8Array(message.data).buffer
-                : new Blob([new Uint8Array(message.data)]);
+        match(message)
+          .with({ type: 'Text' }, ({ data }) => {
             this.handleMessage(data);
-            break;
-          }
-          case 'Close': {
+          })
+          .with({ type: 'Binary' }, ({ data }) => {
+            // Convert number array back to Uint8Array/Blob based on binaryType
+            const messageData =
+              this._binaryType === 'arraybuffer'
+                ? new Uint8Array(data).buffer
+                : new Blob([new Uint8Array(data)]);
+            this.handleMessage(messageData);
+          })
+          .with({ type: 'Close' }, ({ data }) => {
             this._readyState = this.CLOSED;
             const closeEvent = new CloseEvent('close', {
-              code: message.data?.code || 1000,
-              reason: message.data?.reason || '',
+              code: data?.code || 1000,
+              reason: data?.reason || '',
               wasClean: true,
             });
             this.handleClose(closeEvent);
-            break;
-          }
-          case 'Ping':
+          })
+          .with({ type: 'Ping' }, () => {
             // Handle ping (usually automatic)
-            break;
-          case 'Pong':
+          })
+          .with({ type: 'Pong' }, () => {
             // Handle pong (usually automatic)
-            break;
-        }
+          })
+          .exhaustive();
       };
 
       // Register BEFORE invoke so any message that arrives during the handshake
@@ -93,12 +97,9 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
         });
       };
 
-      const config = protocols && protocols.length > 0 ? {} : undefined;
-
       const id = await invoke<number>('plugin:websocket|connect', {
         url,
         onMessage,
-        config,
       });
 
       // Reconstruct a TauriWebsocket instance from the connection id and our
