@@ -40,7 +40,7 @@ function CommandItemHotkey(props: { item: CommandMenuItem }) {
     Boolean(sequence()?.length);
 
   const StepHotkey = (step: HotkeySequenceStep) => (
-    <div class="p-2 py-0.5 border border-edge-muted/50 rounded-xs">
+    <div class="p-2 py-0.5 border border-edge-muted rounded-xs">
       <Hotkey
         token={step.token}
         shortcut={step.shortcut}
@@ -55,7 +55,7 @@ function CommandItemHotkey(props: { item: CommandMenuItem }) {
         <Show
           when={sequence()?.length}
           fallback={
-            <div class="p-2 py-0.5 border border-edge-muted/50 rounded-xs">
+            <div class="p-2 py-0.5 border border-edge-muted rounded-xs">
               <Hotkey
                 token={token()}
                 shortcut={shortcut()}

@@ -123,7 +123,7 @@ export function UserTooltip(props: UserTooltipProps) {
         </div>
 
         <Show when={props.email || props.id}>
-          <div class="border-t border-edge/20"></div>
+          <div class="border-t border-edge"></div>
           <div class="p-2 flex flex-col gap-0">
             <Show when={props.email}>
               <Button onClick={handleCopyEmail} class={buttonStyle}>

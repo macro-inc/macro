@@ -26,16 +26,19 @@ export function Layer(props: LayerProps) {
         '--color-accent-ink':      'var(--a0)',
         '--color-accent':          'var(--a0)',
         '--color-focus':           'var(--a0)',
+        '--color-accent-bg':       'oklch(from var(--a0) l c h / 0.15)',
 
+        '--color-panel':           'var(--b0)',
+        '--color-page':            'var(--b0)',
+        '--color-menu':            'var(--b0)',
         '--color-dialog':          'var(--b0)',
         '--color-input':           'var(--b0)',
-        '--color-menu':            'var(--b0)',
-        '--color-panel':           'var(--b0)',
-        '--color-button':          'var(--b1)',
-        '--color-active':          'var(--b2)',
+        '--color-button':          'var(--b0)',
+        '--color-message':         'var(--b0)',
+        '--color-active':          'var(--b1)',
         '--color-hover':           'var(--b2)',
-        '--color-message':         'var(--b3)',
-        '--color-page':            'var(--b3)',
+        '--color-overlay':         'oklch(from var(--b2) l c h / 0.5)',
+        '--color-edge-muted':      'var(--b3)',
         '--color-edge':            'var(--b4)',
 
         '--color-ink':             'var(--c0)',
@@ -43,10 +46,6 @@ export function Layer(props: LayerProps) {
         '--color-ink-extra-muted': 'var(--c2)',
         '--color-ink-disabled':    'var(--c3)',
         '--color-ink-placeholder': 'var(--c4)',
-
-        '--color-edge-muted': 'color-mix(in srgb, var(--b4), var(--b1) 50%)',
-        '--color-overlay':    'oklch(from var(--b2) l c h / 0.5)',
-        '--color-accent-bg':  'oklch(from (var(--a0)) / 0.15)',
       }}
     >
       {props.children}

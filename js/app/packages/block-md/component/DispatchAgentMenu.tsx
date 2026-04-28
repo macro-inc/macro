@@ -249,7 +249,7 @@ export function DispatchAgentButton() {
               setOpen(false);
             }}
           />
-          <div class="my-1 h-px bg-edge-muted/50" />
+          <div class="my-1 h-px bg-edge-muted" />
           <div class="px-2 py-1 text-xs text-ink-extra-muted font-medium">
             Open in
           </div>

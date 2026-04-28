@@ -331,7 +331,7 @@ function EditingEntityPreview(props: { entities: EntityData[] }) {
         {(entity) => {
           return (
             <div
-              class={cn('bg-edge/20 px-2 py-1 truncate text-xs rounded-xs', {
+              class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
                 'max-w-[50%]': props.entities.length === 2,
               })}
             >

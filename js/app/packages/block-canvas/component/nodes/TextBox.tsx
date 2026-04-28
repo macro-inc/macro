@@ -177,7 +177,7 @@ function TextBoxEditor(props: {
       <div
         class="w-full absolute m-0 top-0 left-0"
         classList={{
-          'bg-edge/15': props.editable(),
+          'bg-edge': props.editable(),
         }}
         style={{
           ...textwrapStyles(),

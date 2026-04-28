@@ -330,7 +330,7 @@ export function DSSMedia(props: { node: MediaNode; mode: RenderMode }) {
               <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex pointer-events-auto cursor-auto">
                 <div
                   onPointerDown={handleVideoRewind}
-                  class="text-panel bg-edge/50 rounded-full flex items-center justify-center"
+                  class="text-panel bg-edge rounded-full flex items-center justify-center"
                   style={{
                     'margin-right': 10 / currentScale() + 'px',
                     ...size(),
@@ -340,7 +340,7 @@ export function DSSMedia(props: { node: MediaNode; mode: RenderMode }) {
                 </div>
                 <div
                   onPointerDown={handleVideoClick}
-                  class="text-panel bg-edge/50 rounded-full flex items-center justify-center"
+                  class="text-panel bg-edge rounded-full flex items-center justify-center"
                   style={size()}
                 >
                   {controlIcon}

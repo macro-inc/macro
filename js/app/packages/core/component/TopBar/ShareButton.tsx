@@ -484,7 +484,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                       'px-2 rounded-xl border py-0.5 flex justify-center items-center',
                       props.publicAccessLevel != null
                         ? 'border-accent/30 bg-accent/10'
-                        : 'border-edge-muted bg-edge-muted/20'
+                        : 'border-edge-muted bg-edge-muted'
                     )}
                   >
                     <span
@@ -1140,7 +1140,7 @@ export function ShareModal(props: ShareModalProps) {
                             'px-2 rounded-xl border py-0.5 flex justify-center items-center',
                             publicAccessLevel() != null
                               ? 'border-accent/30 bg-accent/10'
-                              : 'border-edge-muted bg-edge-muted/20'
+                              : 'border-edge-muted bg-edge-muted'
                           )}
                         >
                           <span
