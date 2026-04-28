@@ -995,11 +995,10 @@ export function ListEntity(props: ListEntityProps) {
   >();
   const chars = useCharacterCount(snippetContainerRef);
 
-  // With a single content hit on an entity whose snippet is the windowed
-  // hit content (email/call), expanding "show more" only adds value when
-  // windowSearchMatch trimmed text — otherwise the snippet shows everything.
+  // When the visible snippet matches the full content for a singleton hit
   const isContentHitsRedundant = () => {
     if (!isSearchEntity(props.entity)) return false;
+    // only these entities show a hit snippet
     if (!isEmailEntity(props.entity) && !isCallEntity(props.entity))
       return false;
     const hits = props.entity.search.contentHitData;
