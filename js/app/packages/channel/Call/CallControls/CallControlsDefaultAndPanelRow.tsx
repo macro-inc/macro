@@ -14,18 +14,23 @@ import {
   MenuGroup,
   MenuItem,
   MenuSeparator,
+  MENU_ITEM_CLASS,
 } from '@core/component/Menu';
 import {
   CallControlButton,
   type CallControlButtonSize,
 } from './CallControlButton';
 import { CallControlButtonWithDropdown } from './CallControlButtonWithDropdown';
-import {
-  menuGroupLabelClass,
-  menuItemClass,
-} from './call-controls-menu-styles';
 import { CallDeviceList } from '../CallDeviceList';
 import { useCallContext } from '../CallContext';
+
+const menuStyles = {
+  item: cn(
+    MENU_ITEM_CLASS,
+    'cursor-pointer hover:bg-hover hover-transition-bg'
+  ),
+  groupLabel: cn(MENU_ITEM_CLASS, 'text-xs text-accent'),
+};
 
 export type CallControlsDefaultAndPanelRowProps = {
   size: Accessor<CallControlButtonSize>;
@@ -228,11 +233,11 @@ export function CallControlsDefaultAndPanelRow(
             <Show when={isBackgroundBlurSupported()}>
               <MenuSeparator />
               <MenuGroup>
-                <DropdownMenu.GroupLabel class={menuGroupLabelClass}>
+                <DropdownMenu.GroupLabel class={menuStyles.groupLabel}>
                   Effects
                 </DropdownMenu.GroupLabel>
                 <MenuItem
-                  class={menuItemClass}
+                  class={menuStyles.item}
                   text="Blur background"
                   selectorType="checkbox"
                   checked={callCtx.isBackgroundBlurred()}
