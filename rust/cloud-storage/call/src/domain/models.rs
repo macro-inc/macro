@@ -157,9 +157,10 @@ pub struct EditCallRecordRequest {
     /// The team is resolved from the call's `created_by`, not the acting user.
     pub share_with_team: Option<bool>,
     /// Updated user-supplied display name for the call. `None` is a no-op;
-    /// `Some(s)` overwrites `call_records.custom_name` with `s`. Only the
-    /// archived `call_records` row carries this column — patching while the
-    /// call is still active is a no-op for this field.
+    /// `Some("")` clears `call_records.custom_name`; any other `Some(s)`
+    /// overwrites it with `s`. Only the archived `call_records` row carries
+    /// this column — patching while the call is still active is a no-op for
+    /// this field.
     pub custom_name: Option<String>,
 }
 

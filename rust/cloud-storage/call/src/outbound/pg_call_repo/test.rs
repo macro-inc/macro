@@ -1551,6 +1551,43 @@ async fn patch_call_record_custom_name_overwrites_existing(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn patch_call_record_custom_name_empty_string_clears_existing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    sqlx::query!(
+        r#"UPDATE call_records SET custom_name = $2 WHERE id = $1"#,
+        CALL_ARCHIVED,
+        "Existing",
+    )
+    .execute(&pool)
+    .await?;
+
+    repo.patch_call_record(
+        &CALL_ARCHIVED,
+        &EditCallRecordRequest {
+            share_permission: None,
+            share_with_team: None,
+            custom_name: Some(String::new()),
+        },
+    )
+    .await?;
+
+    let stored = sqlx::query_scalar!(
+        r#"SELECT custom_name FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(stored, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn patch_call_record_custom_name_none_is_noop(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 

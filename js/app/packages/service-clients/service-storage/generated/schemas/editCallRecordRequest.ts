@@ -13,9 +13,10 @@ import type { EditCallRecordRequestShareWithTeam } from './editCallRecordRequest
  */
 export interface EditCallRecordRequest {
   /** Updated user-supplied display name for the call. `None` is a no-op;
-`Some(s)` overwrites `call_records.custom_name` with `s`. Only the
-archived `call_records` row carries this column — patching while the
-call is still active is a no-op for this field. */
+`Some("")` clears `call_records.custom_name`; any other `Some(s)`
+overwrites it with `s`. Only the archived `call_records` row carries
+this column — patching while the call is still active is a no-op for
+this field. */
   customName?: EditCallRecordRequestCustomName;
   sharePermission?: EditCallRecordRequestSharePermission;
   /** If `Some(true)`, grant the creator's team View access on the call.

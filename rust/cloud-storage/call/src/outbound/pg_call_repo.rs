@@ -1321,6 +1321,11 @@ impl CallRepository for PgCallRepo {
         }
 
         if let Some(custom_name) = request.custom_name.as_deref() {
+            let custom_name = if custom_name.is_empty() {
+                None
+            } else {
+                Some(custom_name)
+            };
             edit::set_custom_name(&mut tx, call_record_id, custom_name).await?;
         }
 
