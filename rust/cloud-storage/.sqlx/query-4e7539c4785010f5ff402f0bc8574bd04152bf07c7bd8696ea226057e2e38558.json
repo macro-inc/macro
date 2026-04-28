@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key\n            FROM call_records\n            WHERE id = $1\n            ",
+  "query": "\n            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, custom_name, summary\n            FROM call_records\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -47,6 +47,16 @@
         "ordinal": 8,
         "name": "recording_key",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "custom_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "summary",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -63,8 +73,10 @@
       false,
       false,
       true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "bff6b39be7dcea0033c8105a13952ab868eb03143e3132e63a868f516ca71646"
+  "hash": "4e7539c4785010f5ff402f0bc8574bd04152bf07c7bd8696ea226057e2e38558"
 }

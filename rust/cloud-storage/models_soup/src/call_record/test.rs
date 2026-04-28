@@ -17,6 +17,8 @@ fn record_with_participants(user_ids: &[&str]) -> CallRecord {
         recording_key: None,
         recording_url: None,
         channel_name: None,
+        custom_name: None,
+        summary: None,
         is_active: true,
         participants: user_ids
             .iter()

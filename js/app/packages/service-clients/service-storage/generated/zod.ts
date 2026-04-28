@@ -913,6 +913,12 @@ export const getCallRecordResponse = zod
       .nullish()
       .describe('Resolved display name for the channel.'),
     createdBy: zod.string().describe('User who created the call.'),
+    customName: zod
+      .string()
+      .nullish()
+      .describe(
+        'User-supplied or AI-generated display name for the call. Only set on\narchived `call_records`; active calls always return `None`.'
+      ),
     durationMs: zod
       .number()
       .nullish()
@@ -958,6 +964,12 @@ export const getCallRecordResponse = zod
       .datetime({})
       .describe(
         'When the call started (created_at for active, started_at for archived).'
+      ),
+    summary: zod
+      .string()
+      .nullish()
+      .describe(
+        'AI-generated summary of the call. Only set on archived `call_records`\nonce summarization has run; active calls always return `None`.'
       ),
     transcript: zod
       .array(
@@ -1014,6 +1026,12 @@ export const editCallRecordParams = zod.object({
 
 export const editCallRecordBody = zod
   .object({
+    customName: zod
+      .string()
+      .nullish()
+      .describe(
+        'Updated user-supplied display name for the call. `None` is a no-op;\n`Some(\"\")` clears `call_records.custom_name`; any other `Some(s)`\noverwrites it with `s`. Only the archived `call_records` row carries\nthis column — patching while the call is still active is a no-op for\nthis field.'
+      ),
     sharePermission: zod
       .union([
         zod.null(),
@@ -5116,6 +5134,12 @@ export const getItemsSoupResponse = zod.object({
                 .nullish()
                 .describe('Resolved display name for the channel.'),
               createdBy: zod.string().describe('User who created the call.'),
+              customName: zod
+                .string()
+                .nullish()
+                .describe(
+                  'User-supplied or AI-generated display name for the call.'
+                ),
               durationMs: zod
                 .number()
                 .nullish()
@@ -6813,6 +6837,12 @@ export const postItemsSoupResponse = zod.object({
                 .nullish()
                 .describe('Resolved display name for the channel.'),
               createdBy: zod.string().describe('User who created the call.'),
+              customName: zod
+                .string()
+                .nullish()
+                .describe(
+                  'User-supplied or AI-generated display name for the call.'
+                ),
               durationMs: zod
                 .number()
                 .nullish()
@@ -8154,6 +8184,12 @@ export const postItemsSoupAstResponse = zod.object({
                 .nullish()
                 .describe('Resolved display name for the channel.'),
               createdBy: zod.string().describe('User who created the call.'),
+              customName: zod
+                .string()
+                .nullish()
+                .describe(
+                  'User-supplied or AI-generated display name for the call.'
+                ),
               durationMs: zod
                 .number()
                 .nullish()

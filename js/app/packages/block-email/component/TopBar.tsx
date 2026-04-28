@@ -13,6 +13,7 @@ import {
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
@@ -208,6 +209,7 @@ export function TopBar(props: {
       action: () => shareCtx.open(),
       condition: () => ENABLE_EMAIL_SHARING,
       buttonComponent: () => <ShareTrigger />,
+      focusTarget: getShareDrawerRecipientInput,
     },
   ];
 

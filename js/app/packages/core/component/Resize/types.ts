@@ -36,6 +36,7 @@ export type ResizeZoneCtx = {
   direction: 'horizontal' | 'vertical';
   register: (panel: PanelConfig, index?: number) => void;
   unregister: (id: PanelId) => void;
+  update: (id: PanelId, config: { minSize?: number; maxSize?: number }) => void;
   gutterSize: () => number;
   size: () => number;
   sizeOf: (id: PanelId) => () => number;

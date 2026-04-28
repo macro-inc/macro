@@ -35,6 +35,7 @@ import { NOTIFICATIONS_DRAWER_ID } from '@core/component/NotificationsModal';
 import { ReferencesButton } from '@core/component/ReferencesModal';
 import { REFERENCES_DRAWER_ID } from '@core/component/ReferencesModal';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
@@ -262,6 +263,7 @@ export function TopBar() {
       icon: IconShared,
       action: () => shareCtx.open(),
       buttonComponent: () => <ShareTrigger />,
+      focusTarget: getShareDrawerRecipientInput,
     },
     {
       label: 'Copy Link',

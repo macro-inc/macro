@@ -732,7 +732,8 @@ html:not([data-touch-device="true"]) [data-message][data-highlighted] {
 }
 
 /* Keyboard selection accent bar can coexist with hover styles */
-[data-message][data-selected] > .message-accent-bar {
+/* Suppressed on touch devices */
+html:not([data-touch-device="true"]) [data-message][data-selected] > .message-accent-bar {
     @apply opacity-100;
 }
 

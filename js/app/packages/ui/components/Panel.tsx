@@ -14,7 +14,7 @@ export function Panel(props: PanelProps) {
       style={{
         'background-image': `linear-gradient(${props.active ? `${props.highlightColor || 'var(--color-accent)'}, var(--color-edge-muted) 80%` : 'var(--color-edge-muted)'})`,
       }}
-      class="p-px h-full w-full box-border rounded-md overflow-clip"
+      class="p-px h-full w-full box-border rounded-md overflow-clip min-h-0"
     >
       <div
         class={cn(

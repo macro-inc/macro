@@ -156,6 +156,12 @@ pub struct EditCallRecordRequest {
     /// If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
     /// The team is resolved from the call's `created_by`, not the acting user.
     pub share_with_team: Option<bool>,
+    /// Updated user-supplied display name for the call. `None` is a no-op;
+    /// `Some("")` clears `call_records.custom_name`; any other `Some(s)`
+    /// overwrites it with `s`. Only the archived `call_records` row carries
+    /// this column — patching while the call is still active is a no-op for
+    /// this field.
+    pub custom_name: Option<String>,
 }
 
 /// A transcript segment as returned in a [`CallRecord`].
@@ -224,6 +230,12 @@ pub struct CallRecord {
     pub recording_url: Option<String>,
     /// Resolved display name for the channel.
     pub channel_name: Option<String>,
+    /// User-supplied or AI-generated display name for the call. Only set on
+    /// archived `call_records`; active calls always return `None`.
+    pub custom_name: Option<String>,
+    /// AI-generated summary of the call. Only set on archived `call_records`
+    /// once summarization has run; active calls always return `None`.
+    pub summary: Option<String>,
     /// Whether the call is currently active (from `calls` table).
     pub is_active: bool,
     /// Participants (both active and historic).

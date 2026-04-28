@@ -31,6 +31,7 @@ import {
 } from '@core/component/ReferencesModal';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
@@ -256,6 +257,7 @@ export function TopBar() {
       icon: IconShared,
       action: () => shareCtx.open(),
       buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
+      focusTarget: getShareDrawerRecipientInput,
     },
   ];
 

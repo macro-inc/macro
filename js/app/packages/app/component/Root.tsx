@@ -304,7 +304,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/welcome',
     component: () => (
-      <div class="flex *:flex-1 w-full h-dvh overflow-y-hidden">
+      <div class="flex *:flex-1 w-full h-full overflow-y-hidden">
         <InteractiveOnboarding />
       </div>
     ),

@@ -28,6 +28,7 @@ import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
 import { useBlockId } from '@core/block';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
@@ -131,6 +132,7 @@ export function TopBar() {
       action: () => shareCtx.open(),
       condition: () => ENABLE_PROJECT_SHARING && !isSpecialProject,
       buttonComponent: () => <ShareTrigger copyLink={handleCopyLink} />,
+      focusTarget: getShareDrawerRecipientInput,
     },
   ];
 

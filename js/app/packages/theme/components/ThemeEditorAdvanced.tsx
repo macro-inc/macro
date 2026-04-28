@@ -42,15 +42,15 @@ export function ThemeEditorAdvanced(){
 
       <div
         style="
-        background-color: var(--b1);
-        font-family: var(--font-sans);
-        scrollbar-width: none;
-        position: relative;
-        overflow: hidden;
-        font-size: 14px;
-        display: block;
-        height: 100%;
-      "
+          background-color: var(--b1);
+          font-size: var(--text-xs);
+          scrollbar-width: none;
+          position: relative;
+          overflow: hidden;
+          font-weight: 300;
+          display: block;
+          height: 100%;
+          "
       >
         <div
           style="
@@ -64,27 +64,34 @@ export function ThemeEditorAdvanced(){
         >
           <div
             style="
-            background-color: var(--color-edge-muted);
-            box-sizing: border-box;
-            overflow-x: hidden;
-            display: grid;
-            gap: 1px;
-          "
+              background-color: var(--color-edge-muted);
+              box-sizing: border-box;
+              overflow-x: hidden;
+              display: grid;
+              gap: 1px;
+            "
           >
             <div
               style="
-              border-bottom: 1px solid var(--color-edge-muted);
-              background-color: var(--b1);
-              align-items: center;
-              position: absolute;
-              padding: 0 20px;
-              display: grid;
-              height: 42px;
-              width: 100%;
-              z-index: 1;
+                border-bottom: 1px solid var(--color-edge-muted);
+                background-color: var(--b1);
+                align-items: center;
+                position: absolute;
+                padding: 0 20px;
+                display: grid;
+                height: 42px;
+                width: 100%;
+                z-index: 1;
             "
             >
-              <div style="font-size: var(--text-xs);">Theme Tokens</div>
+              <div
+                style={{
+                  'font-size': '0.875rem',
+                  'font-weight': '600'
+                }}
+              >
+                Theme Tokens
+              </div>
             </div>
             <div style="height: 41px;" />
 
@@ -111,7 +118,12 @@ export function ThemeEditorAdvanced(){
                 });
 
                 return (
-                  <div style="background-color: var(--b1);">
+                  <div
+                    style="
+                      font-family: var(--font-mono);
+                      background-color: var(--b1);
+                    "
+                  >
                     <div
                       style="
                       background-color: var(--color-edge-muted);
@@ -167,6 +179,11 @@ export function ThemeEditorAdvanced(){
                             outline: none;
                             border: none;
                             width: 100%;
+                            font-family: var(--font-mono);
+                            font-size: var(--text-xs);
+                            font-weight: 300;
+                            color: var(--color-ink-extra-muted);
+                            background: transparent;
                           "
                         />
                       </div>
