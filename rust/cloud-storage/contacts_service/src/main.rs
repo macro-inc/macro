@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use config::{Config, Environment};
-use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts::domain::service::ContactsDomainService;
 use contacts::inbound::http::{ApiDoc, AppState};
 use contacts::inbound::worker::ContactsWorker;
@@ -69,10 +68,7 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     let notifier = config.connection_gateway_url.as_ref().map(|url| {
-        ConnectionGatewayNotifier::new(ConnectionGatewayClient::new(
-            internal_api_secret.as_ref().to_string(),
-            url.clone(),
-        ))
+        ConnectionGatewayNotifier::new(internal_api_secret.as_ref().to_string(), url.clone())
     });
 
     let repository = DbContactsRepository::new(db.clone());

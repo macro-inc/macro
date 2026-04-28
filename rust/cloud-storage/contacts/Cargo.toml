@@ -22,7 +22,7 @@ anyhow = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
-connection_gateway_client = { path = "../connection_gateway_client" }
+reqwest = { workspace = true }
 macro_auth = { path = "../macro_auth", optional = true }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
