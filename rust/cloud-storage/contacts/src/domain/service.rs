@@ -1,6 +1,7 @@
 use crate::domain::models::messages::ContactsMessage;
 use crate::domain::models::user::Group;
 use crate::domain::ports::{ContactsNotifier, ContactsRepository};
+
 use tracing::instrument;
 
 /// Domain service combining a repository and notifier to manage contacts.
@@ -29,11 +30,7 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
     #[instrument(skip(self))]
     pub async fn process_message(&self, msg: &ContactsMessage) {
         let users_lower: Vec<String> = msg.users.iter().map(|s| s.to_lowercase()).collect();
-        let connections: Vec<(String, String)> = Group::new(&users_lower)
-            .generate()
-            .into_iter()
-            .map(|e| (e.a.data.id.clone(), e.b.data.id.clone()))
-            .collect();
+        let connections = Group::new(&users_lower).generate();
 
         if connections.is_empty() {
             return;
