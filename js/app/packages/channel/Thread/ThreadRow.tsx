@@ -25,7 +25,7 @@ export function ThreadRow(props: ThreadRowProps) {
           createdAt={props.message.created_at}
           listMeta={props.listMeta}
         />
-        <div class="relative">
+        <div class="relative isolate">
           <ThreadRail newMessage={props.listMeta?.isNewMessage} />
           {props.children}
         </div>

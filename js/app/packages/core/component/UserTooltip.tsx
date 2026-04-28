@@ -83,7 +83,7 @@ export function UserTooltip(props: UserTooltipProps) {
     <Panel active>
       <div class="bg-panel text-ink box-border border-accent overflow-hidden max-w-lg">
         <div class="flex items-center gap-2 p-2">
-          <div class="size-10 shrink-0 rounded-full bg-ink-extra-muted pointer-events-none">
+          <div class="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted pointer-events-none">
             <Switch>
               <Match when={props.isDeleted}>
                 <div class="size-10 shrink-0 rounded-full bg-ink-extra-muted/50 flex items-center justify-center">
