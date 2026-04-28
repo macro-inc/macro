@@ -35,6 +35,8 @@ pub struct SoupCallRecord {
     pub duration_ms: Option<i64>,
     /// Resolved display name for the channel.
     pub channel_name: Option<String>,
+    /// User-supplied or AI-generated display name for the call.
+    pub custom_name: Option<String>,
     /// Whether the call is currently active.
     pub is_active: bool,
     /// Whether the requesting user attended this call (i.e. appears in the
@@ -58,6 +60,7 @@ impl SoupCallRecord {
             ended_at: record.ended_at,
             duration_ms: record.duration_ms,
             channel_name: record.channel_name,
+            custom_name: record.custom_name,
             is_active: record.is_active,
             attended,
             participants: record

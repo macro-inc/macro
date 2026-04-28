@@ -62,7 +62,7 @@ pub async fn enrich_search_response(
             let response = enrich_call_records(ctx, user_id, results).await?;
             Ok(response
                 .into_iter()
-                .map(UnifiedSearchResponseItem::CallRecord)
+                .map(UnifiedSearchResponseItem::Call)
                 .collect())
         }
     }

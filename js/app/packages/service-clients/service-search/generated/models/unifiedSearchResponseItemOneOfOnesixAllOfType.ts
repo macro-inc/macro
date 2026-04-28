@@ -10,5 +10,5 @@ export type UnifiedSearchResponseItemOneOfOnesixAllOfType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const UnifiedSearchResponseItemOneOfOnesixAllOfType = {
-  callRecord: 'callRecord',
+  call: 'call',
 } as const;

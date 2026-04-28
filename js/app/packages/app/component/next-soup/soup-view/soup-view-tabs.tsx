@@ -1,9 +1,8 @@
 import {
   VIEW_TAB_PRESETS,
   type PresetContext,
+  getViewPreset,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID } from '@app/component/next-soup/filters/configs';
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -89,7 +88,7 @@ const useCurrentListView = () => {
 
 export const useApplyPreset = () => {
   const soup = useSoup();
-  const { setQueryFilters, setActiveTab } = useSoupView();
+  const { queryFilters, setActiveTab } = useSoupView();
   const user = useUserContext();
 
   const getPresetContext = (): PresetContext => ({
@@ -97,27 +96,15 @@ export const useApplyPreset = () => {
     email: user.email(),
   });
 
-  const applyPreset = (preset: {
-    queryFilters: SoupItemsQueryFilters;
-    clientFilters: { and?: FilterID[]; or?: FilterID[] };
-  }) => {
-    batch(() => {
-      setQueryFilters(preset.queryFilters);
-      soup.filters.set(preset.clientFilters);
-    });
-  };
-
   const applyTabPreset = (view: ListView, tabId: string): boolean => {
-    const config = VIEW_TAB_PRESETS[view];
-    if (!config) return false;
-    const resolver = config.tabs[tabId];
-    if (!resolver) return false;
+    const preset = getViewPreset(view, tabId, getPresetContext());
+    if (!preset) return false;
 
-    const resolved = resolver(getPresetContext());
-    if (!resolved) return false;
-
-    setActiveTab(tabId);
-    applyPreset(resolved);
+    batch(() => {
+      setActiveTab(tabId);
+      queryFilters.replace(preset.filters);
+      soup.predicates.set(preset.clientFilters);
+    });
     return true;
   };
 

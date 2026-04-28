@@ -11,5 +11,5 @@ export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnesix
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnesixAllOfType =
   {
-    callRecord: 'callRecord',
+    call: 'call',
   } as const;

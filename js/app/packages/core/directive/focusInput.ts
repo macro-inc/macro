@@ -17,7 +17,72 @@ declare module 'solid-js' {
 }
 
 /**
- * Focuses a target input when the host element is clicked.
+ * Focuses a target input immediately or waits for it to appear via
+ * MutationObserver. Call this synchronously within a click handler so the iOS
+ * virtual keyboard opens within the user gesture.
+ *
+ * The `getTarget` callback need not return an element at call time — if the
+ * element is absent or hidden a MutationObserver will focus it once it appears.
+ */
+export function triggerFocusInput(
+  getTarget: () => HTMLElement | null | undefined,
+  anchor?: HTMLElement
+) {
+  const target = getTarget();
+  if (target && isVisible(target)) {
+    target.focus();
+    return;
+  }
+
+  let observer: MutationObserver | undefined;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let tempEl: HTMLInputElement | undefined;
+
+  function cleanup() {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+    if (tempEl && document.body.contains(tempEl))
+      document.body.removeChild(tempEl);
+    observer?.disconnect();
+    window.removeEventListener('beforeunload', cleanup);
+  }
+
+  function handleAppearance(el: HTMLElement) {
+    setTimeout(() => {
+      el.focus();
+      cleanup();
+    }, 0);
+  }
+
+  if ((isTouchDevice() && isIOS) || isPlatform('ios')) {
+    // iOS only: focus a hidden temporary input synchronously within the
+    // click gesture so the virtual keyboard opens, then transfer focus to
+    // the real target once it appears in the DOM.
+    tempEl = document.createElement('input');
+    // Use fixed positioning (viewport-relative) so focusing the temp element
+    // doesn't cause the page to scroll.
+    const anchorRect = anchor?.getBoundingClientRect();
+    tempEl.style.position = 'fixed';
+    tempEl.style.top = `${(anchorRect?.top ?? 0) + 7}px`;
+    tempEl.style.left = `${anchorRect?.left ?? 0}px`;
+    tempEl.style.height = '0';
+    tempEl.style.opacity = '0';
+    tempEl.style.fontSize = '16px';
+    document.body.appendChild(tempEl);
+    tempEl.focus();
+  }
+
+  observer = new MutationObserver(() => {
+    const current = getTarget();
+    if (current && isVisible(current)) handleAppearance(current);
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  timeoutId = setTimeout(cleanup, 5000);
+  window.addEventListener('beforeunload', cleanup, { once: true });
+}
+
+/**
+ * Directive: focuses a target input when the host element is clicked.
  *
  * Pass a callback to the target element — it need not exist in the DOM at click
  * time. If the element is already visible, it is focused immediately. Otherwise
@@ -39,53 +104,8 @@ export function focusInput(
 
   const handleClick = () => {
     const target = getTarget();
-    if (target && isVisible(target)) {
-      target.focus();
-      return;
-    }
-
-    let observer: MutationObserver | undefined;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    let tempEl: HTMLInputElement | undefined;
-
-    function cleanup() {
-      if (timeoutId !== undefined) clearTimeout(timeoutId);
-      if (tempEl && document.body.contains(tempEl))
-        document.body.removeChild(tempEl);
-      observer?.disconnect();
-      window.removeEventListener('beforeunload', cleanup);
-    }
-
-    function handleAppearance(target: HTMLElement) {
-      setTimeout(() => {
-        target.focus();
-        cleanup();
-      }, 0);
-    }
-
-    if ((isTouchDevice() && isIOS) || isPlatform('ios')) {
-      // iOS only: focus a hidden temporary input synchronously within the
-      // click gesture so the virtual keyboard opens, then transfer focus to
-      // the real target once it appears in the DOM.
-      tempEl = document.createElement('input');
-      tempEl.style.position = 'absolute';
-      tempEl.style.top = `${(anchor.offsetTop ?? 0) + 7}px`;
-      tempEl.style.left = `${anchor.offsetLeft ?? 0}px`;
-      tempEl.style.height = '0';
-      tempEl.style.opacity = '0';
-      tempEl.style.fontSize = '16px';
-      document.body.appendChild(tempEl);
-      tempEl.focus();
-    }
-
-    observer = new MutationObserver(() => {
-      const current = getTarget();
-      if (current && isVisible(current)) handleAppearance(current);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    timeoutId = setTimeout(cleanup, 5000);
-    window.addEventListener('beforeunload', cleanup, { once: true });
+    if (!target) return;
+    triggerFocusInput(getTarget, anchor);
   };
 
   el.addEventListener('click', handleClick);

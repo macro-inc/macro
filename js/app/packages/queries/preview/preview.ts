@@ -8,6 +8,7 @@ import { previewDataLoader } from './dataloader';
 import { defaultNameTransform, fetchMessageContext } from './fetchers';
 import { previewKeys } from './keys';
 import type { AccessiblePreviewItem, ItemEntity, PreviewItem } from './types';
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 
 // DEBUG VARS
 const SIMULATE_BACKEND_DELAY_MS = 0;
@@ -19,20 +20,22 @@ function itemPreviewQueryOptions(item: ItemEntity) {
   return {
     queryKey: previewKeys.item(item.id).queryKey,
     queryFn: async () => {
-      // Simulate backend propagation delay for testing race conditions
-      if (SIMULATE_BACKEND_DELAY_MS > 0) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, SIMULATE_BACKEND_DELAY_MS)
-        );
-      }
+      if (LOCAL_ONLY) {
+        // Simulate backend propagation delay for testing race conditions
+        if (SIMULATE_BACKEND_DELAY_MS > 0) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, SIMULATE_BACKEND_DELAY_MS)
+          );
+        }
 
-      if (SIMULATE_FAILURE) {
-        return Promise.resolve({
-          id: item.id,
-          type: item.type ?? DEFAULT_ITEM_TYPE,
-          access: 'does_not_exist',
-          loading: false,
-        } as PreviewItem);
+        if (SIMULATE_FAILURE) {
+          return Promise.resolve({
+            id: item.id,
+            type: item.type ?? DEFAULT_ITEM_TYPE,
+            access: 'does_not_exist',
+            loading: false,
+          } as PreviewItem);
+        }
       }
 
       return previewDataLoader.load(item);

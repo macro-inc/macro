@@ -142,7 +142,7 @@ export function AssistantMessage(props: {
     >
       <Switch>
         <Match when={!messageContentIsEmpty(props.message.content)}>
-          <div class="chat-markdown-container max-w-full px-2 w-full">
+          <div class="chat-markdown-container max-w-full px-4 w-full">
             <Switch>
               <Match
                 when={
@@ -182,7 +182,7 @@ export function AssistantMessage(props: {
             </Show>
           </div>
           <Show when={!props.isStreaming}>
-            <div class="flex flex-row w-full justify-start items-center h-[32px] px-2 space-x-2 ">
+            <div class="flex flex-row w-full justify-start items-center h-[32px] px-4 space-x-2 ">
               <div class="flex flex-row space-x-2 items-center text-xs text-ink-muted">
                 <div class="w-fit">
                   <button

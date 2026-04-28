@@ -718,7 +718,7 @@ export function PopupPreview(props: {
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <Panel active class="py-2">
+      <Panel active>
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>
@@ -745,7 +745,7 @@ export function PopupPreview(props: {
               return (
                 <div class="w-full flex flex-col">
                   {/* Header: icon + filename + action buttons */}
-                  <div class="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+                  <div class="flex items-center justify-between gap-2 p-2">
                     <div class="flex items-center gap-2 min-w-0">
                       <ItemEntityIcon size="sm" />
                       <div class="text-sm font-semibold select-text min-w-0">

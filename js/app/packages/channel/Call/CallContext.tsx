@@ -37,6 +37,24 @@ export type MediaDeviceInfo = {
   kind: MediaDeviceKind;
 };
 
+export type BlurIntensity = 'light' | 'medium' | 'heavy';
+
+export type BackgroundEffect =
+  | { type: 'none' }
+  | { type: 'blur'; intensity: BlurIntensity }
+  | { type: 'image'; id: string; path: string };
+
+export const BLUR_RADIUS: Record<BlurIntensity, number> = {
+  light: 5,
+  medium: 10,
+  heavy: 20,
+};
+
+type ImageBackgroundEffect = Extract<BackgroundEffect, { type: 'image' }>;
+
+export const BACKGROUND_IMAGES: (ImageBackgroundEffect & { label: string })[] =
+  [];
+
 type CallStoreState = {
   connectionState: ConnectionState;
   activeChannelId: string | null;
@@ -58,7 +76,7 @@ type CallStoreState = {
   joinError: string | null;
   /** Which channel block has the Call tab selected (synced from channel UI). */
   callPageChannelId: string | null;
-  isBackgroundBlurred: boolean;
+  backgroundEffect: BackgroundEffect;
   // Mirrors the call's `share_with_team` flag. Defaults to true to match the
   // server-side default for newly-created calls; synced from the toggle
   // endpoint's response on each flip.
@@ -85,16 +103,34 @@ const initialState: CallStoreState = {
   optimisticJoinChannelId: null,
   joinError: null,
   callPageChannelId: null,
-  isBackgroundBlurred: false,
+  backgroundEffect: { type: 'none' },
   isSharedWithTeam: true,
 };
 
-// Persisted across reloads — blur is a privacy preference users expect to
-// stick. Feature-detect at attach time; an unsupported browser simply
-// ignores a truthy stored value.
-const [persistedBlurPref, setPersistedBlurPref] = makePersisted(
-  createSignal<boolean>(false),
-  { name: 'call.backgroundBlur' }
+// Persisted across reloads — background effect is a privacy preference users
+// expect to stick. Feature-detect at attach time; an unsupported browser
+// simply ignores a stored value.
+const [persistedBackgroundEffect, setPersistedBackgroundEffect] = makePersisted(
+  createSignal<BackgroundEffect>({ type: 'none' }),
+  {
+    name: 'call.backgroundEffect',
+    // This custom deserialize is to handle the previous boolean format
+    deserialize(data) {
+      try {
+        const value = JSON.parse(data);
+
+        if (typeof value === 'boolean') {
+          return value
+            ? { type: 'blur', intensity: 'light' }
+            : { type: 'none' };
+        }
+
+        return value;
+      } catch {
+        return { type: 'none' };
+      }
+    },
+  }
 );
 
 // Persisted across reloads — users with hardware noise cancellation (e.g.
@@ -185,10 +221,10 @@ export type CallState = {
    * True when the active call and call-page channel match.
    */
   isCallPage: () => boolean;
-  /** Whether background blur is active on the local camera track */
-  isBackgroundBlurred: () => boolean;
-  /** Toggle background blur on/off for the local camera track */
-  toggleBackgroundBlur: () => Promise<void>;
+  /** Current background effect (none, blur, or image) */
+  backgroundEffect: () => BackgroundEffect;
+  /** Set the background effect (blur with intensity or image background) */
+  setBackgroundEffect: (effect: BackgroundEffect) => Promise<void>;
   /** Whether the call is currently shared with the creator's team */
   isSharedWithTeam: () => boolean;
   /** Update the locally-cached share-with-team flag (call after a toggle RPC) */
@@ -217,7 +253,7 @@ function createCallState() {
   const [room, setRoom] = createSignal<Room | null>(null);
   const [store, setStore] = createStore<CallStoreState>({
     ...initialState,
-    isBackgroundBlurred: persistedBlurPref(),
+    backgroundEffect: persistedBackgroundEffect(),
     isNoiseSuppressed: persistedNoiseSuppressionPref(),
   });
   const [krispFilter, setKrispFilter] = createSignal<ReturnType<
@@ -277,47 +313,71 @@ function createCallState() {
   }
 
   /**
-   * (Re-)attach the background blur processor to the current camera track.
+   * (Re-)attach the background effect processor to the current camera track.
    * Dynamic-imports @livekit/track-processors so the MediaPipe WASM/model
-   * payload is only fetched when the user actually enables blur.
+   * payload is only fetched when the user actually enables an effect.
+   *
+   * If a processor already exists and forceRecreate is false, uses switchTo()
+   * for seamless transitions. When the track changes (camera switch, video
+   * toggle), pass forceRecreate=true to destroy and recreate the processor.
    *
    * Returns true on success or when there's no live camera track yet (the
    * processor will be attached later by the video-(un)mute / device-switch
    * paths). Returns false when the browser does not actually support the
    * processor at runtime, or attachment throws — callers that set
-   * `isBackgroundBlurred` optimistically should revert it in that case.
+   * backgroundEffect optimistically should revert it in that case.
    */
-  async function ensureBlurOnCameraTrack(r: Room): Promise<boolean> {
-    if (!store.isBackgroundBlurred) return true;
+  async function ensureBackgroundEffectOnCameraTrack(
+    r: Room,
+    forceRecreate = false
+  ): Promise<boolean> {
+    const effect = store.backgroundEffect;
+    if (effect.type === 'none') return true;
 
     const camPub = r.localParticipant.getTrackPublication(Track.Source.Camera);
     if (!camPub?.track) return true;
 
-    try {
-      // Destroy the old instance — processors are bound to a specific
-      // MediaStreamTrack instance, so a fresh track needs a fresh processor.
-      const prev = blurProcessor();
-      if (prev) await prev.destroy();
+    const processorOptions =
+      effect.type === 'blur'
+        ? {
+            mode: 'background-blur' as const,
+            blurRadius: BLUR_RADIUS[effect.intensity],
+          }
+        : { mode: 'virtual-background' as const, imagePath: effect.path };
 
+    try {
+      const existing = blurProcessor();
+
+      // If we have a processor and the track hasn't changed, use switchTo()
+      // for a seamless transition without destroying and recreating.
+      if (existing && !forceRecreate) {
+        await existing.switchTo(processorOptions);
+        return true;
+      }
+
+      // Destroy old processor if it exists (track changed or force recreate)
+      if (existing) {
+        await existing.destroy();
+        setBlurProcessor(null);
+      }
+
+      // Create and attach a new processor.
       const { BackgroundProcessor, ProcessorWrapper } = await import(
         '@livekit/track-processors'
       );
       if (!ProcessorWrapper.isSupported) return false;
 
-      const processor = BackgroundProcessor({
-        mode: 'background-blur',
-        blurRadius: 10,
-      });
+      const processor = BackgroundProcessor(processorOptions);
       await (camPub.track as LocalTrack).setProcessor(processor);
       setBlurProcessor(processor);
       return true;
     } catch (e) {
-      console.error('failed to attach background blur processor', e);
+      console.error('failed to attach background effect processor', e);
       return false;
     }
   }
 
-  async function detachBlurFromCameraTrack(r: Room) {
+  async function detachBackgroundEffectFromCameraTrack(r: Room) {
     const prev = blurProcessor();
     if (prev) {
       try {
@@ -329,7 +389,7 @@ function createCallState() {
         }
         await prev.destroy();
       } catch (e) {
-        console.error('failed to detach background blur processor', e);
+        console.error('failed to detach background effect processor', e);
       }
       setBlurProcessor(null);
     }
@@ -351,7 +411,7 @@ function createCallState() {
     setStore({
       ...initialState,
       joinError: store.joinError,
-      isBackgroundBlurred: persistedBlurPref(),
+      backgroundEffect: persistedBackgroundEffect(),
       isNoiseSuppressed: persistedNoiseSuppressionPref(),
     });
   }
@@ -537,8 +597,8 @@ function createCallState() {
         await r.localParticipant.setCameraEnabled(true, {
           deviceId: { exact: deviceId },
         });
-        // New track was created — re-attach the blur processor if enabled.
-        await ensureBlurOnCameraTrack(r);
+        // New track was created — re-attach the background effect processor if enabled.
+        await ensureBackgroundEffectOnCameraTrack(r, true);
       }
     } catch (e) {
       console.error('failed to switch video input device', e);
@@ -680,8 +740,8 @@ function createCallState() {
             setStore('activeVideoInputDeviceId', settings.deviceId);
           }
         }
-        // New camera track was created — attach blur processor if preference is on.
-        await ensureBlurOnCameraTrack(r);
+        // New camera track was created — attach background effect processor if preference is on.
+        await ensureBackgroundEffectOnCameraTrack(r, true);
       }
       setStore('isVideoMuted', newMuted);
     } catch (e) {
@@ -748,24 +808,24 @@ function createCallState() {
     }
   }
 
-  async function toggleBackgroundBlur() {
-    const newEnabled = !store.isBackgroundBlurred;
-    setStore('isBackgroundBlurred', newEnabled);
-    setPersistedBlurPref(newEnabled);
+  async function setBackgroundEffect(effect: BackgroundEffect) {
+    const prevEffect = store.backgroundEffect;
+    setStore('backgroundEffect', effect);
+    setPersistedBackgroundEffect(effect);
 
     const r = room();
     if (!r) return;
 
-    if (newEnabled) {
-      const attached = await ensureBlurOnCameraTrack(r);
+    if (effect.type !== 'none') {
+      const attached = await ensureBackgroundEffectOnCameraTrack(r);
       if (!attached) {
         // Processor is unsupported or failed to attach — revert so the UI
-        // doesn't show "blur on" with no processor actually active.
-        setStore('isBackgroundBlurred', false);
-        setPersistedBlurPref(false);
+        // doesn't show an effect with no processor actually active.
+        setStore('backgroundEffect', prevEffect);
+        setPersistedBackgroundEffect(prevEffect);
       }
     } else {
-      await detachBlurFromCameraTrack(r);
+      await detachBackgroundEffectFromCameraTrack(r);
     }
   }
 
@@ -801,7 +861,8 @@ function createCallState() {
     isInCall: () =>
       store.connectionState === ConnectionState.Connected ||
       store.optimisticJoinChannelId !== null,
-    activeChannelId: () => store.activeChannelId ?? store.optimisticJoinChannelId,
+    activeChannelId: () =>
+      store.activeChannelId ?? store.optimisticJoinChannelId,
     activeCallId: () => store.activeCallId,
     remoteParticipants: () => store.remoteParticipants,
     trackVersion: () => store.trackVersion,
@@ -851,8 +912,8 @@ function createCallState() {
       const active = store.activeChannelId ?? store.optimisticJoinChannelId;
       return page !== null && active !== null && page === active;
     },
-    isBackgroundBlurred: () => store.isBackgroundBlurred,
-    toggleBackgroundBlur,
+    backgroundEffect: () => store.backgroundEffect,
+    setBackgroundEffect,
     isSharedWithTeam: () => store.isSharedWithTeam,
     setSharedWithTeam,
   };

@@ -209,6 +209,15 @@ impl DocumentService for StubDocumentService {
     ) -> Result<Vec<documents::domain::models::CommentThread>, DocumentError> {
         unimplemented!()
     }
+
+    async fn handle_task_properties(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _document_id: &str,
+        _request: &documents::domain::models::CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
+        unimplemented!()
+    }
 }
 
 /// Stateful stub repo that tracks task IDs per github key.

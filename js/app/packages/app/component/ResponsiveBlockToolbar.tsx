@@ -27,6 +27,7 @@ export type BlockTool = {
   condition?: () => boolean;
   isActive?: () => boolean;
   buttonComponent?: () => JSX.Element;
+  focusTarget?: () => HTMLElement | null;
   divideAbove?: boolean;
   hotkeyToken?: HotkeyToken;
 };

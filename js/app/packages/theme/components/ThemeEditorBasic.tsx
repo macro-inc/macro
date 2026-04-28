@@ -119,6 +119,9 @@ export function ThemeEditorBasic(){
   let canvasRef!: HTMLCanvasElement;
   let gl: WebGL2RenderingContext;
   let program: WebGLProgram;
+  let gridXLocation: WebGLUniformLocation;
+  let gridYLocation: WebGLUniformLocation;
+  let resizeObserver: ResizeObserver;
 
   function setupWebGL(){
     const context = canvasRef.getContext('webgl2', {colorSpace: 'display-p3'});
@@ -153,7 +156,10 @@ export function ThemeEditorBasic(){
       in vec2 vUV;
       out vec4 fragColor;
       uniform float chroma;
+      uniform float gridX;
+      uniform float gridY;
       const float PI = 3.14159265359;
+      const float radius = 0.135;
 
       vec3 OKLCH_to_OKLab(float L, float C, float h){
         return vec3(
@@ -185,7 +191,19 @@ export function ThemeEditorBasic(){
         vec3 lab = OKLCH_to_OKLab(L, C, h);
         vec3 rgb_linear = OKLab_to_linear_sRGB(lab);
         vec3 rgb = linear_to_sRGB(rgb_linear);
-        fragColor = vec4(rgb, 1.0);
+
+        /* DOT GRID */
+        float smoothing = gridY * 0.0013;
+        float offsetX = fract(gridX) * 0.5 / gridX;
+        float offsetY = fract(gridY) * 0.5 / gridY;
+        vec2 centeredUV = vUV - vec2(offsetX, offsetY);
+        float dist = 1.0 - smoothstep(
+          radius - smoothing,
+          radius + smoothing,
+          distance(vec2(mod(centeredUV.x * gridX, 1.0), mod(centeredUV.y * gridY, 1.0)), vec2(0.5))
+        );
+
+        fragColor = vec4(rgb * dist, dist);
       }
     `;
 
@@ -197,6 +215,8 @@ export function ThemeEditorBasic(){
     gl.useProgram(program);
 
     chromaLocation = gl.getUniformLocation(program, 'chroma')!;
+    gridXLocation = gl.getUniformLocation(program, 'gridX')!;
+    gridYLocation = gl.getUniformLocation(program, 'gridY')!;
   }
 
   function setCanvasColor(e: PointerEvent){
@@ -244,6 +264,21 @@ export function ThemeEditorBasic(){
   onMount(() => {
     setupWebGL();
 
+    function updateCanvasSize(){
+      const rect = canvasContainerRef.getBoundingClientRect();
+      canvasRef.width = rect.width * devicePixelRatio;
+      canvasRef.height = rect.height * devicePixelRatio;
+      gl.viewport(0, 0, canvasRef.width, canvasRef.height);
+      gl.uniform1f(gridXLocation, rect.width / 8.3);
+      gl.uniform1f(gridYLocation, rect.height / 8.3);
+      gl.uniform1f(chromaLocation, themeReactive.a0.c[0]());
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    resizeObserver = new ResizeObserver(updateCanvasSize);
+    resizeObserver.observe(canvasContainerRef);
+    updateCanvasSize();
+
     createEffect(() => {
       gl.uniform1f(chromaLocation, themeReactive.a0.c[0]());
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -259,6 +294,7 @@ export function ThemeEditorBasic(){
   });
 
   onCleanup(() => {
+    resizeObserver.disconnect();
     document.removeEventListener('pointermove', handlePointerMove);
     document.removeEventListener('pointerup', handlePointerUp);
   });
@@ -276,15 +312,15 @@ export function ThemeEditorBasic(){
 
       <div
         style="
-        font-family: var(--font-sans);
-        background-color: var(--b1);
-        box-sizing: border-box;
-        height: min-content;
-        font-weight: 500;
-        font-size: 12px;
-        display: grid;
-        padding: 20px;
-        gap: 20px;
+          font-family: var(--font-sans);
+          background-color: var(--b1);
+          box-sizing: border-box;
+          height: min-content;
+          font-weight: 500;
+          font-size: 12px;
+          display: grid;
+          padding: 20px;
+          gap: 20px;
         "
       >
         <div
@@ -292,32 +328,36 @@ export function ThemeEditorBasic(){
           ref={canvasContainerRef}
           style="
             border: 1px solid var(--color-edge-muted);
+            border-radius: 6px;
             position: relative;
             height: 250px;
             width: 100%;
           "
         >
           <canvas
-            ref={canvasRef}
             style="
+              background-color: #000c; /* scuffed */
+              border-radius: 5px;
               touch-action: none;
               user-select: none;
               display: block;
               height: 100%;
               width: 100%;
             "
+            ref={canvasRef}
           />
           <div
-            ref={canvasThumbRef}
             style="
               border: 1px solid var(--color-edge-muted);
               transform: translate(-50%, -50%);
               background-color: var(--a0);
               box-sizing: border-box;
+              border-radius: 2px;
               position: absolute;
               height: 18px;
               width: 18px;
             "
+            ref={canvasThumbRef}
           />
         </div>
 
@@ -325,9 +365,9 @@ export function ThemeEditorBasic(){
           style="
             grid-template-columns: 11ch 1fr;
             height: min-content;
+            gap: 20px 10px;
             display: grid;
             width: 100%;
-            gap: 20px 10px;
           "
         >
           <div style="position: relative;">
@@ -381,10 +421,8 @@ export function ThemeEditorBasic(){
             />
 
             <input
+              onInput={(e) => { handleChromaChange(e);}}
               value={themeReactive.a0.c[0]().toString()}
-              onInput={(e) => {
-                handleChromaChange(e);
-              }}
               class="theme-editor-basic-slider"
               style="
                 appearance: none;
@@ -474,9 +512,7 @@ export function ThemeEditorBasic(){
             />
 
             <input
-              onInput={(e) => {
-                handleSaturationChange(e);
-              }}
+              onInput={(e) => {handleSaturationChange(e);}}
               class="theme-editor-basic-slider"
               style="
                 appearance: none;

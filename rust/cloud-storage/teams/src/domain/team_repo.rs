@@ -5,8 +5,8 @@ use std::collections::HashSet;
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::model::{
-    CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, PatchTeamRequest,
-    PatchTeamUserTierRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
+    AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
+    PatchTeamRequest, PatchTeamUserTierRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
     RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
     TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
 };
@@ -71,7 +71,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<TeamUserTier, RemoveUserFromTeamError>> + Send;
+    ) -> impl Future<Output = Result<TeamMember<'static>, RemoveUserFromTeamError>> + Send;
 
     ///Gets a team invite by id
     fn get_team_invite_by_id(
@@ -105,12 +105,27 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<Vec<TeamMember<'_>>, TeamError>> + Send;
 
-    /// Accepts a team invite for a user
+    /// Accepts a team invite for a user.
+    ///
+    /// Returns the accepted member and a snapshot of the invite so the operation can be rolled
+    /// back if a later customer/billing side effect fails.
     fn accept_team_invite(
         &self,
         team_invite_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<TeamMember<'static>, TeamError>> + Send;
+    ) -> impl Future<Output = Result<AcceptedTeamInvite<'static>, TeamError>> + Send;
+
+    /// Rolls back a previously accepted team invite.
+    fn rollback_accept_team_invite(
+        &self,
+        accepted_invite: &AcceptedTeamInvite<'_>,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Rolls back a previously removed team member.
+    fn rollback_remove_user_from_team(
+        &self,
+        removed_member: &TeamMember<'_>,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
     /// Checks if a user is a member (not owner) of any team
     fn is_user_member_of_team(

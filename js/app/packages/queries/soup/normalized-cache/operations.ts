@@ -93,7 +93,7 @@ export function getSoupItemId(item: SoupApiItem): string {
   switch (item.tag) {
     case 'channel':
       return item.data.channel.id;
-    case 'callRecord':
+    case 'call':
       return item.data.callId;
     default:
       return item.data.id;
@@ -280,7 +280,7 @@ export function buildSingleEntityFilter(
       ...base,
       email_filters: { email_thread_ids: [entityId] },
     }))
-    .with('callRecord', () => null)
+    .with('call', () => null)
     .exhaustive();
 }
 
@@ -305,7 +305,7 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
       data: { channel: { id: itemId }, viewed_at: now },
       frecency_score: current.frecency_score,
     });
-  } else if (current.tag === 'callRecord') {
+  } else if (current.tag === 'call') {
     // Call records don't have viewedAt — skip.
     return;
   } else {
@@ -343,7 +343,7 @@ export function optimisticUpdateSoupItemUpdatedAt(
       data: { channel: { id: itemId, updated_at: updatedAt } },
       frecency_score: current.frecency_score,
     });
-  } else if (current.tag === 'callRecord') {
+  } else if (current.tag === 'call') {
     // Call records use endedAt/startedAt, not updatedAt — skip optimistic timestamp updates.
     return;
   } else {
@@ -376,7 +376,7 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
     .with({ type: 'channel' }, (r) => r.channel_id)
     .with({ type: 'email' }, (r) => r.thread_id)
     .with({ type: 'project' }, (r) => r.id)
-    .with({ type: 'callRecord' }, (r) => r.call_id)
+    .with({ type: 'call' }, (r) => r.call_id)
     .exhaustive();
 }
 

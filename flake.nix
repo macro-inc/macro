@@ -23,6 +23,7 @@
         packages = with pkgs; [
           parallel
           docker-compose
+          zip
           cargo-info
           cargo-udeps
           cargo-lambda

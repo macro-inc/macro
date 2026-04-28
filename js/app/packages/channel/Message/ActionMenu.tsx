@@ -3,6 +3,7 @@ import LinkIcon from '@macro-icons/square/link.svg';
 import EditIcon from '@macro-icons/square/edit.svg';
 import AddEmojiIcon from '@macro-icons/square/add-emoji.svg';
 import TrashIcon from '@macro-icons/square/trash.svg';
+import StarIcon from '@macro-icons/wide/star.svg';
 import TaskIcon from '@macro-icons/wide/task.svg';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, Show, type Component, type JSX } from 'solid-js';
@@ -14,7 +15,13 @@ import type { MessageActionEvent, MessageActionHandler } from './types';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '😂'] as const;
 
-type ActionId = 'reply' | 'copy-link' | 'create-task' | 'edit' | 'delete';
+type ActionId =
+  | 'reply'
+  | 'copy-link'
+  | 'create-task'
+  | 'chat'
+  | 'edit'
+  | 'delete';
 
 type ActionItem = {
   id: ActionId;
@@ -67,13 +74,21 @@ export function ActionMenu(props: ActionMenuProps) {
 
   const hasReactAction = () => actions?.onReact !== undefined;
 
-  const actionItems: ActionItem[] = [
+  const composeActions: ActionItem[] = [
     {
       id: 'create-task',
       label: 'Task',
       icon: TaskIcon,
       onClick: actions?.onCreateTask,
     },
+    {
+      id: 'chat',
+      label: 'Chat with Agent',
+      icon: StarIcon,
+      onClick: actions?.onChat,
+    },
+  ];
+  const otherActions: ActionItem[] = [
     {
       id: 'reply',
       label: 'Reply',
@@ -105,7 +120,9 @@ export function ActionMenu(props: ActionMenuProps) {
     },
   ];
 
-  const visibleActions = actionItems.filter((item) => item.onClick);
+  const visibleCompose = composeActions.filter((item) => item.onClick);
+  const visibleOther = otherActions.filter((item) => item.onClick);
+  const visibleActions = [...visibleCompose, ...visibleOther];
 
   return (
     <Show when={hasReactAction() || visibleActions.length > 0}>
@@ -154,7 +171,20 @@ export function ActionMenu(props: ActionMenuProps) {
             </Show>
           </Show>
 
-          <For each={visibleActions}>
+          <For each={visibleCompose}>
+            {(action) => (
+              <ActionButton
+                action={action}
+                onClick={(event) => {
+                  void action.onClick?.({ message: message(), event });
+                }}
+              />
+            )}
+          </For>
+          <Show when={visibleCompose.length > 0 && visibleOther.length > 0}>
+            <div class="w-px self-stretch bg-edge-muted mx-1" />
+          </Show>
+          <For each={visibleOther}>
             {(action) => (
               <ActionButton
                 action={action}

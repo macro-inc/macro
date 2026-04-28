@@ -48,6 +48,8 @@ pub enum EntityType {
     Team,
     /// The entity is a voice/video call
     Call,
+    /// A public file in the static file service
+    StaticFile,
 }
 
 impl EntityType {
@@ -65,6 +67,7 @@ impl EntityType {
             // Calls are handled by entity_access by resolving through the call's
             // owning channel (access is inherited from channel membership).
             EntityType::Call => true,
+            EntityType::StaticFile => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

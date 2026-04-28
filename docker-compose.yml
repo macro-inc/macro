@@ -60,8 +60,10 @@ services:
     depends_on:
       - redis
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - connection-gateway
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -79,8 +81,10 @@ services:
     ports:
       - "8083:8080"
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - contacts-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -102,8 +106,10 @@ services:
       - email_service
       - static_file_service
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - document-cognition-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -125,8 +131,10 @@ services:
       - connection_gateway
       - authentication-service
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - document-storage-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -150,8 +158,10 @@ services:
       - static_file_service
       - redis
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - email-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -175,8 +185,10 @@ services:
       - connection_gateway
       - document_storage_service
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - notification-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -203,8 +215,10 @@ services:
     depends_on:
       - email_service
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - search-processing-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -222,8 +236,10 @@ services:
     ports:
       - "8094:8080"
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - static-file-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -244,8 +260,10 @@ services:
     depends_on:
       - static_file_service
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - static-file-cdn
 
   # ============================================================================
   # unfurl_service (Port 8095)
@@ -257,7 +275,9 @@ services:
     ports:
       - "8095:8080"
     networks:
-      - services
+      services:
+        aliases:
+          - unfurl-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -275,7 +295,9 @@ services:
     ports:
       - "8097:8080"
     networks:
-      - services
+      services:
+        aliases:
+          - image-proxy-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -294,7 +316,9 @@ services:
     ports:
       - "6969:6969"
     networks:
-      - services
+      services:
+        aliases:
+          - websocket-service
 
   # ============================================================================
   # sync_service (Port 8787)
@@ -310,7 +334,9 @@ services:
     environment:
       - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
     networks:
-      - services
+      services:
+        aliases:
+          - sync-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
       interval: 30s
@@ -337,9 +363,11 @@ services:
       - PORT=8096
       - INTERNAL_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
       - SYNC_SERVICE_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
-      - SYNC_SERVICE_URL=http://sync_service:8787
+      - SYNC_SERVICE_URL=http://sync-service:8787
     networks:
-      - services
+      services:
+        aliases:
+          - lexical-service
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://localhost:8096/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
