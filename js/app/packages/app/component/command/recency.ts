@@ -15,6 +15,7 @@ export function trackCommandUsage(commandId: string): void {
   setRecencyStore(commandId, Date.now());
 }
 
-export function getCommandLastUsedAt(commandId: string): number | undefined {
-  return recencyStore[commandId];
+export function getCommandLastUsedAt(commandId: string): Date | null {
+  const timestamp = recencyStore[commandId];
+  return timestamp ? new Date(timestamp) : null;
 }

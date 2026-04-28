@@ -100,15 +100,14 @@ function commandsToItems(
         : command.description;
     const tags = command.tags?.join(' ') ?? '';
     const id = `command-${description.replaceAll(' ', '-')}`;
-    const lastUsedAtMs = getCommandLastUsedAt(id);
-    const lastUsedAt = lastUsedAtMs ? new Date(lastUsedAtMs) : null;
+    const lastUsedAt = getCommandLastUsedAt(id);
 
     return {
       id,
       kind: 'command',
       bucket: 'command',
       searchText: [tags, description].filter(Boolean).join(' '),
-      sortTimestamp: lastUsedAtMs ?? 0,
+      sortTimestamp: lastUsedAt?.getTime() ?? 0,
       timestamps: { viewedAt: lastUsedAt, updatedAt: lastUsedAt },
       data: command,
       displayHotkey: options?.displayHotkey?.(command),
