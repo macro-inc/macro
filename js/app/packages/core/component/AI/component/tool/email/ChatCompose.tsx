@@ -44,7 +44,7 @@ type SendEmailSnapshot = {
 };
 
 function toEmailRecipients(
-  items: Array<{ email: string; name: string | null }>
+  items: Array<{ email: string; name?: string | null }>
 ): EmailRecipient[] {
   return items.map(convertContactInfoToEmailRecipient);
 }

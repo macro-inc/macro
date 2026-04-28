@@ -1,7 +1,7 @@
 #![recursion_limit = "256"]
 
 use ai_toolset::AsyncToolSet;
-use ai_toolset::schema::{ToolSchemaGenerator, ToolSchemas};
+use ai_toolset::schema::{CombinedToolSchemas, ToolSchemaGenerator};
 mod build_context;
 pub mod code_execution;
 pub mod prompts;
@@ -41,6 +41,13 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
     fn generate_schemas(&self) -> ai_toolset::schema::ToolSchemas {
         self.toolset.generate_schemas()
     }
+
+    fn register_schemas(
+        &self,
+        generator: &mut schemars::SchemaGenerator,
+    ) -> Vec<ai_toolset::schema::CombinedToolEntry> {
+        self.toolset.register_schemas(generator)
+    }
 }
 
 /// Toolset available to subagents — everything except email and the Subagent
@@ -65,15 +72,28 @@ pub fn all_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt { toolset, prompt }
 }
 
-/// These are used to generate schemas for the frontend
-/// See [ai_toolset::schema::PhantomTool]
-pub fn all_tool_schemas() -> ToolSchemas {
-    all_tools()
-        .merge(&*anthropic_web_search_tool)
-        .merge(&*anthropic_web_fetch_tool)
-        .merge(&*anthropic_bash_code_execution_tool)
-        .merge(&*anthropic_text_editor_code_execution_tool)
-        .generate_schemas()
+/// Combined schema with shared, deduplicated `$defs`.
+///
+/// Uses a single [`schemars::SchemaGenerator`] so types referenced by
+/// multiple tools (e.g. `CodeExecutionErrorCode`) appear exactly once.
+pub fn all_tool_combined_schema() -> CombinedToolSchemas {
+    use ai_toolset::schema::NormaliseRefSiblings;
+    use schemars::transform::RecursiveTransform;
+
+    let mut generator = schemars::generate::SchemaSettings::draft2020_12()
+        .with(|s| s.meta_schema = None)
+        .with_transform(RecursiveTransform(NormaliseRefSiblings))
+        .into_generator();
+
+    let mut tools = Vec::new();
+    tools.extend(all_tools().register_schemas(&mut generator));
+    tools.extend(anthropic_web_search_tool.register_schemas(&mut generator));
+    tools.extend(anthropic_web_fetch_tool.register_schemas(&mut generator));
+    tools.extend(anthropic_bash_code_execution_tool.register_schemas(&mut generator));
+    tools.extend(anthropic_text_editor_code_execution_tool.register_schemas(&mut generator));
+
+    let defs = generator.take_definitions(true);
+    CombinedToolSchemas { defs, tools }
 }
 
 pub fn no_tools() -> ToolSetWithPrompt {

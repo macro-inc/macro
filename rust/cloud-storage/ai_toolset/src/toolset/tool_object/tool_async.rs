@@ -1,4 +1,4 @@
-use super::object::{ToolObject, ValidationError};
+use super::object::{SchemaRegistrar, ToolObject, ValidationError};
 use super::util::validate_tool_schema;
 use crate::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -173,12 +173,20 @@ where
         let output_schema_json =
             serde_json::to_value(&output_schema).map_err(ValidationError::JsonSerialization)?;
 
+        let schema_registrar: SchemaRegistrar =
+            Box::new(|generator: &mut schemars::SchemaGenerator| {
+                generator.subschema_for::<T>();
+                generator.subschema_for::<O>();
+                (T::schema_name().into_owned(), O::schema_name().into_owned())
+            });
+
         Ok(Self {
             name,
             input_schema: input_schema_json,
             output_schema: output_schema_json,
             description,
             deserializer,
+            schema_registrar,
         })
     }
 
@@ -260,6 +268,7 @@ where
             output_schema: self.output_schema,
             description: self.description,
             deserializer: new_deserializer,
+            schema_registrar: self.schema_registrar,
         }
     }
 }
