@@ -12,11 +12,6 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { NotificationType } from '@core/types';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import type { DateValue } from '@core/util/date';
-import {
-  HighlightRender,
-  visibleLength,
-  windowSearchMatch,
-} from '@core/util/searchHighlight';
 import { DisplayName } from '@entity/components/DisplayName';
 import { stackNotifications } from '@notifications';
 import type { StreamEvent } from '@service-connection/generated/schemas';
@@ -49,8 +44,14 @@ import { UnreadIndicator } from '../components/UnreadIndicator';
 import { Entity } from '../entity';
 import type { EntityRowConfig } from '../extractors-notification';
 import { getActionVerb } from '../extractors-notification/notification-description-helpers';
+import { HitSnippet } from '../extractors-search/HitSnippet';
 import { SearchContent } from '../extractors-search/search-content';
 import { SearchSender } from '../extractors-search/search-sender';
+import {
+  getSnippetHitContent,
+  isHitSnippetComplete,
+  isSnippetEntity,
+} from '../extractors-search/snippet-entity';
 import {
   type CallEntity,
   type ChannelEntity,
@@ -120,24 +121,6 @@ const useListLayout = () => useContext(ListLayoutContext);
 
 const hasSearchContentHits = (entity: EntityData) =>
   isSearchEntity(entity) && !!entity.search.contentHitData?.length;
-
-const getBestContentHitContent = (entity: EntityData) => {
-  if (!isSearchEntity(entity)) return undefined;
-  const hits = entity.search.contentHitData;
-  if (!hits?.length) return undefined;
-  if (hits.length === 1) return hits[0].content;
-
-  let bestIdx = 0;
-  let bestLen = visibleLength(hits[0].content);
-  for (let i = 1; i < hits.length; i++) {
-    const len = visibleLength(hits[i].content);
-    if (len > bestLen) {
-      bestLen = len;
-      bestIdx = i;
-    }
-  }
-  return hits[bestIdx].content;
-};
 
 function useCharacterCount(ref: Accessor<HTMLElement | undefined>) {
   const size = createElementSize(ref);
@@ -219,12 +202,10 @@ function EmailSnippet(props: {
 }) {
   return (
     <Show
-      when={props.showHitSnippet && getBestContentHitContent(props.entity)}
+      when={props.showHitSnippet && getSnippetHitContent(props.entity)}
       fallback={props.entity.snippet}
     >
-      {(content) => (
-        <HighlightRender text={windowSearchMatch(content(), props.chars)} />
-      )}
+      {(content) => <HitSnippet content={content()} chars={props.chars} />}
     </Show>
   );
 }
@@ -415,9 +396,7 @@ function CallNarrowBody(props: {
               ref={props.setContainerRef}
               class="text-ink/50 font-normal truncate min-w-0 text-xs"
             >
-              <HighlightRender
-                text={windowSearchMatch(h().content, props.chars)}
-              />
+              <HitSnippet content={h().content} chars={props.chars} />
             </span>
           </span>
         )}
@@ -564,9 +543,7 @@ function CallWideContent(props: {
               ref={props.setContainerRef}
               class="text-ink/50 font-medium flex-1 min-w-0 overflow-hidden"
             >
-              <HighlightRender
-                text={windowSearchMatch(h().content, props.chars)}
-              />
+              <HitSnippet content={h().content} chars={props.chars} />
             </div>
           </>
         )}
@@ -995,17 +972,15 @@ export function ListEntity(props: ListEntityProps) {
   >();
   const chars = useCharacterCount(snippetContainerRef);
 
-  // When the visible snippet matches the full content for a singleton hit
+  // For singleton hits on a SnippetEntity, expanding "show more" only adds
+  // value when windowSearchMatch trimmed text — otherwise the inline
+  // snippet already shows everything.
   const isContentHitsRedundant = () => {
+    if (!isSnippetEntity(props.entity)) return false;
     if (!isSearchEntity(props.entity)) return false;
-    // only these entities show a hit snippet
-    if (!isEmailEntity(props.entity) && !isCallEntity(props.entity))
-      return false;
     const hits = props.entity.search.contentHitData;
     if (!hits || hits.length !== 1) return false;
-    const content = hits[0].content;
-    const rendered = windowSearchMatch(content, chars());
-    return visibleLength(rendered) >= visibleLength(content);
+    return isHitSnippetComplete(hits[0].content, chars());
   };
 
   // Render the highlighted hit snippet whenever the entity has hits — even
