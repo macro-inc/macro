@@ -121,7 +121,7 @@
   --color-comment-bg:  oklch(from var(--color-comment) l c h / 0.15);
   --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h); /* scuffed */
 
-  --color-note:        oklch(from var(--a0) l c 293deg)
+  --color-note:        oklch(from var(--a0) l c 293deg);
   --color-canvas:      oklch(from var(--a0) l c  60deg);
   --color-html:        oklch(from var(--a0) l c  47deg);
   --color-folder:      oklch(from var(--a0) l c 240deg);
