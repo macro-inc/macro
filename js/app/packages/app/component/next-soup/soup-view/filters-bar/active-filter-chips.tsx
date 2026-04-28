@@ -233,7 +233,7 @@ const FilterChip = (props: {
           </DropdownMenu.Trigger>
 
           <DropdownMenu.Portal>
-            <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
+            <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
               <For each={props.filter.categoryOptions}>
                 {(option) => {
                   const active = () =>
