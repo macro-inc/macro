@@ -1,4 +1,5 @@
 use super::*;
+use macro_user_id::user_id::MacroUserIdStr;
 
 #[test]
 fn test_init() {
@@ -90,4 +91,24 @@ fn test_edge_dedup_in_hashset() {
     set.insert(Edge { a, b });
     set.insert(Edge { a: b, b: a });
     assert_eq!(set.len(), 1);
+}
+
+#[test]
+fn test_complete_graph_pairwise_count() {
+    let users: Vec<MacroUserIdStr<'static>> = (0..12)
+        .map(|i| MacroUserIdStr::try_from(format!("macro|user{i}@test.com")).unwrap())
+        .collect();
+    let n = users.len();
+    let graph = UndirectedGraph::new(users.iter().map(Vertex::new)).complete();
+    let edges: Vec<_> = graph.inner().edges().collect();
+    assert_eq!(edges.len(), n * (n - 1) / 2);
+    assert!(edges.iter().all(|e| e.a() != e.b()));
+}
+
+#[test]
+fn test_same_pointer_no_self_edge() {
+    let id = MacroUserIdStr::try_from("macro|dup@test.com".to_owned()).unwrap();
+    let graph = UndirectedGraph::new([Vertex::new(&id), Vertex::new(&id)]).complete();
+    let edges: Vec<_> = graph.inner().edges().collect();
+    assert!(edges.is_empty());
 }

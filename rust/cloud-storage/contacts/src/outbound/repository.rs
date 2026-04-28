@@ -37,19 +37,18 @@ impl ContactsRepository for DbContactsRepository {
 
     async fn create_connections(
         &self,
-        connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
+        connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
     ) -> Result<(), Report> {
-        let (users1, users2): (Vec<MacroUserIdStr<'static>>, Vec<MacroUserIdStr<'static>>) =
-            connections
-                .into_iter()
-                .map(|(a, b)| {
-                    if a.as_ref() <= b.as_ref() {
-                        (a, b)
-                    } else {
-                        (b, a)
-                    }
-                })
-                .unzip();
+        let (users1, users2): (Vec<MacroUserIdStr<'_>>, Vec<MacroUserIdStr<'_>>) = connections
+            .into_iter()
+            .map(|(a, b)| {
+                if a.as_ref() <= b.as_ref() {
+                    (a, b)
+                } else {
+                    (b, a)
+                }
+            })
+            .unzip();
 
         let u1: Vec<&str> = users1.iter().map(|u| u.as_ref()).collect();
         let u2: Vec<&str> = users2.iter().map(|u| u.as_ref()).collect();
