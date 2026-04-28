@@ -7,7 +7,7 @@ export type PanelProps = {
   children?: JSX.Element;
   active?: boolean;
   class?: string;
-  depth?: number;
+  depth?: 0 | 1 | 2 | 3 | 4 | 5;
 };
 
 export function Panel(props: PanelProps) {

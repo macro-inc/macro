@@ -2,11 +2,11 @@ import type { JSX } from 'solid-js';
 
 export type LayerProps = {
   children?: JSX.Element;
-  depth?: number;
+  depth?: 0 | 1 | 2 | 3 | 4 | 5;
 };
 
 export function Layer(props: LayerProps) {
-  const depth = props.depth ?? 0;
+  const depth = ((props.depth ?? 0) / 5) * 0.05;
   return (
     <div
       style={{
@@ -30,8 +30,8 @@ export function Layer(props: LayerProps) {
         '--color-dialog':          'var(--b0)',
         '--color-input':           'var(--b0)',
         '--color-menu':            'var(--b0)',
+        '--color-panel':           'var(--b0)',
         '--color-button':          'var(--b1)',
-        '--color-panel':           'var(--b1)',
         '--color-active':          'var(--b2)',
         '--color-hover':           'var(--b2)',
         '--color-message':         'var(--b3)',
