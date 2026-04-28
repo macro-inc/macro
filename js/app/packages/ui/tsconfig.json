@@ -4,9 +4,6 @@
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
     "composite": true,
-    "paths": {
-      "@ui/*": ["./*"]
-    },
     "moduleResolution": "bundler"
   }
 }
