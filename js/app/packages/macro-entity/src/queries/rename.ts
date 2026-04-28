@@ -115,7 +115,7 @@ const renameDssSetData = (
       txns.set(
         id,
         optimisticUpdateSoupEntity({
-          tag: 'callRecord',
+          tag: 'call',
           data: { callId: id, customName: newName },
           frecency_score: score,
         })
