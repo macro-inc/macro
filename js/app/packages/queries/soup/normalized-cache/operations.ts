@@ -120,8 +120,8 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
     {
       predicate: (query) => {
         const matchingKey =
-          partialMatchKey(soupKeys.astItems._def, query.queryKey) ||
-          partialMatchKey(soupKeys.items._def, query.queryKey);
+          partialMatchKey(query.queryKey, soupKeys.astItems._def) ||
+          partialMatchKey(query.queryKey, soupKeys.items._def);
 
         const filter = query.meta?.itemFilter as SoupApiItemFilter | undefined;
         if (!filter) return matchingKey;
@@ -158,8 +158,8 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
     {
       predicate(query) {
         return (
-          partialMatchKey(soupKeys.astItems._def, query.queryKey) ||
-          partialMatchKey(soupKeys.items._def, query.queryKey)
+          partialMatchKey(query.queryKey, soupKeys.astItems._def) ||
+          partialMatchKey(query.queryKey, soupKeys.items._def)
         );
       },
     },
