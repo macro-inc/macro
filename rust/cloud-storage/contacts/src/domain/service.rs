@@ -29,7 +29,9 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
     pub async fn add_contact(&self, caller: &str, recipient: &str) -> Result<(), Report> {
         let a = MacroUserIdStr::try_from(caller.to_owned())?;
         let b = MacroUserIdStr::try_from(recipient.to_owned())?;
-        self.repository.create_connections(vec![(a, b)]).await
+        self.repository
+            .create_connections(std::iter::once((a, b)))
+            .await
     }
 
     /// Processes a contacts SQS message by computing all pairwise connections
@@ -39,28 +41,22 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
         let iter = msg.users.iter().map(Vertex::new);
         let graph: CompleteUndirectedGraph<'a, MacroUserIdStr<'static>> =
             UndirectedGraph::new(iter).complete();
-        let connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)> = graph
+        let connections = graph
             .inner()
             .edges()
-            .map(|e| ((*e.a()).data().copied(), (*e.b()).data().copied()))
-            .collect();
-
-        if connections.is_empty() {
-            return;
-        }
+            .map(|e| ((*e.a()).data().copied(), (*e.b()).data().copied()));
 
         if self
             .repository
-            .create_connections(connections)
+            .create_connections(connections.into_iter())
             .await
             .is_err()
         {
             return;
         }
 
-        let users: Vec<_> = msg.users.iter().cloned().collect();
         self.notifier
-            .invalidate_contacts_for_users(&users)
+            .invalidate_contacts_for_users(msg.users.iter().cloned())
             .await
             .inspect_err(|e| tracing::error!(error=?e, "failed to invalidate contacts"))
             .ok();
