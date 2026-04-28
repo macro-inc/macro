@@ -1,3 +1,4 @@
+import { Panel } from '@ui/components/Panel';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { isMobile } from '@core/mobile/isMobile';
 import { isIOS } from '@solid-primitives/platform';
@@ -179,56 +180,58 @@ export function ChannelInput(props: ChannelInputProps) {
   });
 
   return (
-    <Input.Root input={inputState.view()} commands={inputState.commands}>
-      <Input.DropZone
-        onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
-        onDragEnd={() => inputState.setIsDraggedOver(false)}
-      >
-        <Input.Layout>
-          <Input.DropOverlay />
-          <Input.FormatRibbon>
-            <FormatButtons
-              selectionState={() => markdownEditor.selection}
-              onInlineFormat={(format) =>
-                applyInlineFormat(markdownEditor.lexical, format)
-              }
-              onNodeFormat={(format) =>
-                applyNodeFormat(markdownEditor.lexical, format)
-              }
-            />
-          </Input.FormatRibbon>
-          <Input.EditorShell
-            ref={setScrollContainer}
-            onClick={(event) => {
-              if (!isMobile()) {
-                event.stopPropagation();
-                markdownEditor.controls.focus();
-              }
-            }}
-          >
-            <Input.Editor>
-              <MarkdownShell
-                config={markdownEditor}
-                placeholder={inputState.view().placeholder}
-                initialValue={inputState.view().value}
-                autofocus={!isMobile() && (props.autofocus ?? true)}
-                class="text-sm"
-                refFn={attach}
+    <Panel depth={2}>
+      <Input.Root input={inputState.view()} commands={inputState.commands}>
+        <Input.DropZone
+          onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
+          onDragEnd={() => inputState.setIsDraggedOver(false)}
+        >
+          <Input.Layout>
+            <Input.DropOverlay />
+            <Input.FormatRibbon>
+              <FormatButtons
+                selectionState={() => markdownEditor.selection}
+                onInlineFormat={(format) =>
+                  applyInlineFormat(markdownEditor.lexical, format)
+                }
+                onNodeFormat={(format) =>
+                  applyNodeFormat(markdownEditor.lexical, format)
+                }
               />
-            </Input.Editor>
-          </Input.EditorShell>
-          <Input.Attachments kind="media" />
-          <Input.Attachments kind="document" />
-          <Input.Footer>
-            <Switch>
-              <Match when={props.children}>{props.children}</Match>
-              <Match when>
-                <DefaultActions input={inputState.view()} />
-              </Match>
-            </Switch>
-          </Input.Footer>
-        </Input.Layout>
-      </Input.DropZone>
-    </Input.Root>
+            </Input.FormatRibbon>
+            <Input.EditorShell
+              ref={setScrollContainer}
+              onClick={(event) => {
+                if (!isMobile()) {
+                  event.stopPropagation();
+                  markdownEditor.controls.focus();
+                }
+              }}
+            >
+              <Input.Editor>
+                <MarkdownShell
+                  config={markdownEditor}
+                  placeholder={inputState.view().placeholder}
+                  initialValue={inputState.view().value}
+                  autofocus={!isMobile() && (props.autofocus ?? true)}
+                  class="text-sm"
+                  refFn={attach}
+                />
+              </Input.Editor>
+            </Input.EditorShell>
+            <Input.Attachments kind="media" />
+            <Input.Attachments kind="document" />
+            <Input.Footer>
+              <Switch>
+                <Match when={props.children}>{props.children}</Match>
+                <Match when>
+                  <DefaultActions input={inputState.view()} />
+                </Match>
+              </Switch>
+            </Input.Footer>
+          </Input.Layout>
+        </Input.DropZone>
+      </Input.Root>
+    </Panel>
   );
 }
