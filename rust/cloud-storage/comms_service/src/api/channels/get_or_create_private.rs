@@ -1,5 +1,6 @@
 use crate::api::channels::create_channel::to_lowercase;
 use crate::api::context::AppState;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::iter;
 
 use anyhow::Result;
@@ -113,8 +114,16 @@ pub async fn handler(
             let sqs_client = &ctx.sqs_client;
             let mut recipients = recipients.clone();
             recipients.push(user_id.clone());
+            let contacts_users = recipients
+                .into_iter()
+                .map(MacroUserIdStr::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| {
+                    tracing::error!(error=?e, "invalid user id for contacts");
+                    (StatusCode::BAD_REQUEST, "invalid user id".to_string())
+                })?;
             sqs_client
-                .enqueue_contacts(recipients)
+                .enqueue_contacts(contacts_users)
                 .await
                 .map_err(|e| {
                     tracing::error!(error=?e, "unable to create 'add participant' SQS message");

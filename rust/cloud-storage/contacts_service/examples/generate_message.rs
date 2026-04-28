@@ -17,7 +17,10 @@ async fn genmsg_add_user_to_group() {
     .collect();
     users.push("AE2C090C-E478-4454-A001-3DF458BF1FE4".to_string());
 
-    println!("{}", serde_json::to_string(&ContactsMessage { users }).unwrap());
+    println!(
+        "{}",
+        serde_json::to_string(&ContactsMessage { users }).unwrap()
+    );
 }
 
 async fn genmsg_add_paul() {
@@ -33,7 +36,10 @@ async fn genmsg_add_paul() {
     .collect();
     users.push("macro|paul@macro.com".to_string());
 
-    println!("{}", serde_json::to_string(&ContactsMessage { users }).unwrap());
+    println!(
+        "{}",
+        serde_json::to_string(&ContactsMessage { users }).unwrap()
+    );
 }
 
 async fn genmsg_create_group() {
@@ -48,7 +54,10 @@ async fn genmsg_create_group() {
     .map(|s| s.to_string())
     .collect();
 
-    println!("{}", serde_json::to_string(&ContactsMessage { users }).unwrap());
+    println!(
+        "{}",
+        serde_json::to_string(&ContactsMessage { users }).unwrap()
+    );
 }
 
 async fn genmsg_add_participants() {
@@ -64,7 +73,10 @@ async fn genmsg_add_participants() {
     .map(|s| s.to_string())
     .collect();
 
-    println!("{}", serde_json::to_string(&ContactsMessage { users }).unwrap());
+    println!(
+        "{}",
+        serde_json::to_string(&ContactsMessage { users }).unwrap()
+    );
 }
 
 #[tokio::main]

@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 chat = []
-contacts = ["dep:contacts"]
+contacts = ["dep:contacts", "dep:macro_user_id"]
 convert = ["model"]
 default = [
   "chat",

@@ -6,6 +6,8 @@ use axum::{
     http::StatusCode,
 };
 use comms_db_client::channels::create_channel::{CreateChannelOptions, create_channel};
+use contacts::domain::ports::ContactsIngress;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::comms::ChannelType;
 use model::user::UserContext;
 use serde::{Deserialize, Serialize};
@@ -140,8 +142,17 @@ pub async fn create_channel_handler(
     if !participants.is_empty() && req.channel_type == ChannelType::Private {
         // Contacts: send message create channel SQS message to Contacts Service
         let sqs_client = &ctx.sqs_client;
+        let contacts_users = participants_copy
+            .unwrap()
+            .into_iter()
+            .map(MacroUserIdStr::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!(error=?e, "invalid user id for contacts");
+                (StatusCode::BAD_REQUEST, "invalid user id".to_string())
+            })?;
         sqs_client
-            .enqueue_contacts(participants_copy.unwrap())
+            .enqueue_contacts(contacts_users)
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to create 'add participant' SQS message");

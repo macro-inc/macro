@@ -1,6 +1,7 @@
 use crate::domain::models::messages::ContactsMessage;
 use crate::domain::models::user::Group;
 use crate::domain::ports::{ContactsNotifier, ContactsRepository};
+use macro_user_id::user_id::MacroUserIdStr;
 
 use tracing::instrument;
 
@@ -20,17 +21,16 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
 
     /// Adds a single contact connection between two users.
     pub async fn add_contact(&self, caller: &str, recipient: &str) -> Result<(), anyhow::Error> {
-        self.repository
-            .create_connections(vec![(caller.to_string(), recipient.to_string())])
-            .await
+        let a = MacroUserIdStr::try_from(caller.to_owned())?;
+        let b = MacroUserIdStr::try_from(recipient.to_owned())?;
+        self.repository.create_connections(vec![(a, b)]).await
     }
 
     /// Processes a contacts SQS message by computing all pairwise connections
     /// from the user list and persisting them.
     #[instrument(skip(self))]
     pub async fn process_message(&self, msg: &ContactsMessage) {
-        let users_lower: Vec<String> = msg.users.iter().map(|s| s.to_lowercase()).collect();
-        let connections = Group::new(&users_lower).generate();
+        let connections = Group::new(&msg.users).generate();
 
         if connections.is_empty() {
             return;
@@ -40,7 +40,9 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
             tracing::error!(error=?e, "couldn't create connections");
             return;
         }
-        self.notifier.invalidate_contacts_for_users(&users_lower).await;
+        self.notifier
+            .invalidate_contacts_for_users(&msg.users)
+            .await;
     }
 }
 

@@ -130,8 +130,17 @@ pub async fn handler(
             .map(|p| p.user_id.to_string())
             .collect();
         let sqs_client = &ctx.sqs_client;
+        let contacts_users = [participants.clone(), channel_participants]
+            .concat()
+            .into_iter()
+            .map(MacroUserIdStr::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!(error=?e, "invalid user id for contacts");
+                (StatusCode::BAD_REQUEST, "invalid user id".to_string())
+            })?;
         sqs_client
-            .enqueue_contacts([participants.clone(), channel_participants].concat())
+            .enqueue_contacts(contacts_users)
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to create 'add participant' SQS message");

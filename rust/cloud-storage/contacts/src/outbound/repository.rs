@@ -2,6 +2,7 @@
 mod test;
 
 use crate::domain::ports::ContactsRepository;
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
 /// Database-backed implementation of [`ContactsRepository`].
@@ -35,12 +36,22 @@ impl ContactsRepository for DbContactsRepository {
 
     async fn create_connections(
         &self,
-        connections: Vec<(String, String)>,
+        connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
     ) -> Result<(), anyhow::Error> {
-        let (users1, users2): (Vec<String>, Vec<String>) = connections
-            .into_iter()
-            .map(|(a, b)| if a <= b { (a, b) } else { (b, a) })
-            .unzip();
+        let (users1, users2): (Vec<MacroUserIdStr<'static>>, Vec<MacroUserIdStr<'static>>) =
+            connections
+                .into_iter()
+                .map(|(a, b)| {
+                    if a.as_ref() <= b.as_ref() {
+                        (a, b)
+                    } else {
+                        (b, a)
+                    }
+                })
+                .unzip();
+
+        let u1: Vec<&str> = users1.iter().map(|u| u.as_ref()).collect();
+        let u2: Vec<&str> = users2.iter().map(|u| u.as_ref()).collect();
 
         sqlx::query!(
             "
@@ -48,8 +59,8 @@ impl ContactsRepository for DbContactsRepository {
             SELECT * FROM unnest($1::text[], $2::text[])
             ON CONFLICT(user1, user2) DO UPDATE SET updated_at = now()
             ",
-            &users1,
-            &users2
+            &u1 as &[&str],
+            &u2 as &[&str]
         )
         .execute(&self.db)
         .await
