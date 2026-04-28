@@ -1,7 +1,7 @@
 import { type Accessor, Match, Show, Switch } from 'solid-js';
 import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
-import { useCall } from './useCall';
+import { useCall } from './use-call';
 import { CallOverlay } from './CallOverlay';
 
 export function ChannelCallTab(props: {
@@ -15,6 +15,7 @@ export function ChannelCallTab(props: {
   pendingJoin?: Accessor<boolean>;
 }) {
   const { setActiveTab } = useChannelTab();
+
   // Match ChannelCallButton / ChannelCallAutoJoin so leaving from the
   // overlay (or disconnect) switches back to Messages — not only when
   // the join was initiated from the header button.

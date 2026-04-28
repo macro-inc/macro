@@ -103,32 +103,32 @@ export function UserIcon(props: UserIconProps) {
     <div
       onMouseDown={props.suppressClick ? undefined : getOrCreateDm}
       class={cn(
-        'shrink-0 rounded-full bg-ink-extra-muted text-panel',
+        'relative inline-flex shrink-0 overflow-hidden rounded-full bg-ink-extra-muted text-panel leading-none',
         sizeClasses().container,
         props.class
       )}
     >
-      <Switch>
-        <Match when={props.isDeleted}>
-          <div
-            class={`${sizeClasses().container} shrink-0 rounded-full bg-ink-extra-muted/50 items-center`}
-          >
-            <Trash class={`${sizeClasses().icon} shrink-0`} />
-          </div>
-        </Match>
-        <Match when={props.id} keyed>
-          {(id) => <ProfilePicture id={id} sizeClass={sizeClasses()} />}
-        </Match>
-        <Match when={!props.id && props.email} keyed>
-          {(email) => (
-            <ProfilePicture
-              id={undefined}
-              email={email}
-              sizeClass={sizeClasses()}
-            />
-          )}
-        </Match>
-      </Switch>
+      <div class="absolute inset-0 flex min-h-0 min-w-0 items-center justify-center">
+        <Switch>
+          <Match when={props.isDeleted}>
+            <div class="flex size-full min-h-0 min-w-0 items-center justify-center rounded-full bg-ink-extra-muted/50">
+              <Trash class={cn(sizeClasses().icon, 'block shrink-0')} />
+            </div>
+          </Match>
+          <Match when={props.id} keyed>
+            {(id) => <ProfilePicture id={id} sizeClass={sizeClasses()} />}
+          </Match>
+          <Match when={!props.id && props.email} keyed>
+            {(email) => (
+              <ProfilePicture
+                id={undefined}
+                email={email}
+                sizeClass={sizeClasses()}
+              />
+            )}
+          </Match>
+        </Switch>
+      </div>
     </div>
   ));
 

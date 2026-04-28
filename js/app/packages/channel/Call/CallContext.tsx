@@ -122,6 +122,8 @@ type CallStoreState = {
   isNoiseSuppressed: boolean;
   optimisticJoinChannelId: string | null;
   joinError: string | null;
+  /** Which channel block has the Call tab selected (synced from channel UI). */
+  callPageChannelId: string | null;
   backgroundEffect: BackgroundEffect;
   // Mirrors the call's `share_with_team` flag. Defaults to true to match the
   // server-side default for newly-created calls; synced from the toggle
@@ -148,6 +150,7 @@ const initialState: CallStoreState = {
   isNoiseSuppressed: false,
   optimisticJoinChannelId: null,
   joinError: null,
+  callPageChannelId: null,
   backgroundEffect: { type: 'none' },
   isSharedWithTeam: true,
 };
@@ -253,6 +256,19 @@ export type CallState = {
   joinError: () => string | null;
   /** Set the join error message */
   setJoinError: (error: string | null) => void;
+  /**
+   * Which channel has the Call tab focused in a channel split. `null` when no
+   * channel block reports the Call tab.
+   */
+  callPageChannelId: () => string | null;
+  /**
+   * Channel blocks call this when the tab strip changes.
+   */
+  syncCallPageTab: (channelId: string, isCallTab: boolean) => void;
+  /**
+   * True when the active call and call-page channel match.
+   */
+  isCallPage: () => boolean;
   /** Current background effect (none, blur, or image) */
   backgroundEffect: () => BackgroundEffect;
   /** Set the background effect (blur with intensity or image background) */
@@ -466,6 +482,8 @@ function createCallState() {
 
     r.on(RoomEvent.TrackSubscribed, bumpTrackVersion);
     r.on(RoomEvent.TrackUnsubscribed, bumpTrackVersion);
+    r.on(RoomEvent.TrackPublished, bumpTrackVersion);
+    r.on(RoomEvent.TrackUnpublished, bumpTrackVersion);
     r.on(RoomEvent.TrackMuted, bumpTrackVersion);
     r.on(RoomEvent.TrackUnmuted, bumpTrackVersion);
     r.on(RoomEvent.LocalTrackPublished, bumpTrackVersion);
@@ -839,6 +857,14 @@ function createCallState() {
     setStore('joinError', error);
   }
 
+  function syncCallPageTab(channelId: string, isCallTab: boolean) {
+    if (isCallTab) {
+      setStore('callPageChannelId', channelId);
+    } else if (store.callPageChannelId === channelId) {
+      setStore('callPageChannelId', null);
+    }
+  }
+
   async function setBackgroundEffect(effect: BackgroundEffect) {
     const prevEffect = store.backgroundEffect;
     setStore('backgroundEffect', effect);
@@ -933,6 +959,16 @@ function createCallState() {
     rollbackOptimisticJoin,
     joinError: () => store.joinError,
     setJoinError,
+    callPageChannelId: () => store.callPageChannelId,
+    syncCallPageTab,
+    isCallPage: () => {
+      store.callPageChannelId;
+      store.activeChannelId;
+      store.optimisticJoinChannelId;
+      const page = store.callPageChannelId;
+      const active = store.activeChannelId ?? store.optimisticJoinChannelId;
+      return page !== null && active !== null && page === active;
+    },
     backgroundEffect: () => store.backgroundEffect,
     setBackgroundEffect,
     isSharedWithTeam: () => store.isSharedWithTeam,
