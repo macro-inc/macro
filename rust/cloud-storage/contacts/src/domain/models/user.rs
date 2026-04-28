@@ -1,15 +1,11 @@
 use crate::domain::models::graph::{UndirectedGraph, Vertex};
+use macro_user_id::user_id::MacroUserIdStr;
 
 /// A user identifier.
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct User {
-    /// The string ID for this user.
-    pub id: String,
-}
-
-/// Creates a [`User`] from a string identifier.
-pub fn create_user(id: &str) -> User {
-    User { id: id.to_string() }
+    /// The typed ID for this user.
+    pub id: MacroUserIdStr<'static>,
 }
 
 /// A group of user participants.
@@ -19,21 +15,21 @@ pub struct Group {
 }
 
 impl Group {
-    /// Creates a new group from a slice of user ID strings.
-    pub fn new(group: &[String]) -> Self {
+    /// Creates a new group from a slice of user IDs.
+    pub fn new(group: &[MacroUserIdStr<'static>]) -> Self {
         Self::default().append_participants(group)
     }
 
-    /// Adds participants to the group from a slice of user ID strings.
-    pub fn append_participants(mut self, group: &[String]) -> Group {
+    /// Adds participants to the group.
+    pub fn append_participants(mut self, group: &[MacroUserIdStr<'static>]) -> Group {
         for user in group {
-            self.users.push(create_user(user));
+            self.users.push(User { id: user.clone() });
         }
         self
     }
 
     /// Generates all pairwise connections among participants.
-    pub fn generate(&self) -> Vec<(String, String)> {
+    pub fn generate(&self) -> Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)> {
         UndirectedGraph::new(self.users.iter().map(Vertex::new))
             .complete()
             .inner()

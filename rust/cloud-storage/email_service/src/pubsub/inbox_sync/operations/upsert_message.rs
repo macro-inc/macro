@@ -336,22 +336,29 @@ async fn handle_contacts_sync(
         return Ok(());
     }
 
-    let users = std::iter::once(link.macro_id.to_string())
-        .chain(connection_emails.iter().map(|email| format!("macro|{email}")))
-        .collect();
-
-    ctx.sqs_client
-        .enqueue_contacts(users)
-        .await
+    let users: Vec<MacroUserIdStr<'static>> = std::iter::once(Ok(link.macro_id.clone()))
+        .chain(
+            connection_emails
+                .iter()
+                .map(|email| MacroUserIdStr::try_from_email(email)),
+        )
+        .collect::<Result<_, _>>()
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::SqsEnqueueFailed,
-                source: e.context(format!(
-                    "Failed to enqueue contacts message for {}",
-                    link.macro_id
-                )),
+                source: anyhow::anyhow!(e).context("invalid user email for contacts"),
             })
         })?;
+
+    ctx.sqs_client.enqueue_contacts(users).await.map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::SqsEnqueueFailed,
+            source: e.context(format!(
+                "Failed to enqueue contacts message for {}",
+                link.macro_id
+            )),
+        })
+    })?;
 
     Ok(())
 }

@@ -1,3 +1,4 @@
+use macro_user_id::user_id::MacroUserIdStr;
 use sqs_client::SQS;
 
 /// Process contacts for a single macro ID
@@ -22,13 +23,15 @@ pub async fn process_macro_id(
         return Ok(());
     }
 
-    let users = std::iter::once(link.macro_id.to_string())
-        .chain(contact_emails.iter().map(|email| format!("macro|{}", email)))
-        .collect();
+    let users: Vec<MacroUserIdStr<'static>> = std::iter::once(Ok(link.macro_id.clone()))
+        .chain(
+            contact_emails
+                .iter()
+                .map(|email| MacroUserIdStr::try_from_email(email)),
+        )
+        .collect::<Result<_, _>>()?;
 
-    sqs_client
-        .enqueue_contacts(users)
-        .await?;
+    sqs_client.enqueue_contacts(users).await?;
 
     Ok(())
 }

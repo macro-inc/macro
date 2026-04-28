@@ -1,6 +1,6 @@
+use crate::domain::models::messages::ContactsMessage;
 use crate::domain::ports::{ContactsNotifier, ContactsRepository};
 use crate::domain::service::ContactsDomainService;
-use crate::domain::models::messages::ContactsMessage;
 use sqs_worker::SQSWorker;
 use tracing::instrument;
 
@@ -43,20 +43,14 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
     }
 
     #[instrument(skip(self, message))]
-    async fn process_message(
-        &self,
-        message: &aws_sdk_sqs::types::Message,
-    ) -> anyhow::Result<()> {
+    async fn process_message(&self, message: &aws_sdk_sqs::types::Message) -> anyhow::Result<()> {
         self.parse_message(message).await?;
         self.cleanup_message(message).await?;
         Ok(())
     }
 
     #[instrument(skip(sqs_message, self))]
-    async fn parse_message(
-        &self,
-        sqs_message: &aws_sdk_sqs::types::Message,
-    ) -> anyhow::Result<()> {
+    async fn parse_message(&self, sqs_message: &aws_sdk_sqs::types::Message) -> anyhow::Result<()> {
         let message = message_from_sqs(sqs_message);
         if let Some(message) = message {
             self.service.process_message(&message).await;

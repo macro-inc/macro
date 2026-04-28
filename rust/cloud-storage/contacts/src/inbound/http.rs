@@ -187,7 +187,8 @@ pub struct AppState<S> {
     /// The contacts service instance.
     pub contacts_service: Arc<S>,
     /// The rate limiter service.
-    pub rate_limit_service: rate_limit::RateLimitServiceImpl<rate_limit::RedisRateLimitAdapter<redis::Client>>,
+    pub rate_limit_service:
+        rate_limit::RateLimitServiceImpl<rate_limit::RedisRateLimitAdapter<redis::Client>>,
 }
 
 /// OpenAPI documentation.

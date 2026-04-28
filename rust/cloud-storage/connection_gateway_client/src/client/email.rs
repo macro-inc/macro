@@ -18,5 +18,4 @@ impl ConnectionGatewayClient {
         )
         .await
     }
-
 }
