@@ -69,6 +69,7 @@ export type CommentsContextType = {
   documentId: string;
   ownedComment: (id: number) => boolean;
   inComment: boolean;
+  highlightedCommentId: Accessor<number | null>;
 };
 export const CommentsContext = createContext<CommentsContextType>({
   setActiveThread: () => {},
@@ -84,6 +85,7 @@ export const CommentsContext = createContext<CommentsContextType>({
   documentId: '',
   ownedComment: () => false,
   inComment: false,
+  highlightedCommentId: () => null,
 });
 
 export function Thread(props: {
@@ -98,7 +100,7 @@ export function Thread(props: {
 }) {
   let measureContainerRef!: HTMLDivElement;
 
-  const { canComment, commentOperations, setActiveThread, ownedComment } =
+  const { canComment, commentOperations, setActiveThread, ownedComment, highlightedCommentId } =
     useContext(CommentsContext);
 
   const [textValue, setTextValue] = createSignal('');
@@ -148,6 +150,15 @@ export function Thread(props: {
   createEffect(() => {
     if (props.isActive || !allRepliesVisible()) return;
     setAllRepliesVisible(false);
+  });
+
+  // expand all replies if we're navigating to a specific reply via URL
+  createEffect(() => {
+    const hId = highlightedCommentId();
+    if (hId === null) return;
+    if (replyIds().includes(hId)) {
+      setAllRepliesVisible(true);
+    }
   });
 
   onMount(() => {

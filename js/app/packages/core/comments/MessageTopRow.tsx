@@ -85,7 +85,7 @@ export function MessageRowUI(
       >
         {!props.hideBubble && (
           <div
-            class={`w-4 h-4 relative flex items-center justify-center shrink-0 rounded-[2px]`}
+            class={`w-4 h-4 relative flex items-center justify-center shrink-0 rounded-xs`}
           >
             <div class="absolute">
               <UserIcon
@@ -121,6 +121,7 @@ export function MessageTopRow(props: {
   date?: DateValue | null;
   deleteMessage?: () => void;
   enableEditing?: () => void;
+  copyLink?: () => void;
   hideBottomMargin?: boolean;
   isNew: boolean;
   isResolved: boolean;
@@ -153,26 +154,28 @@ export function MessageTopRow(props: {
                 <Check />
               </Button>
             </Show>
-            <Button
-              tooltip="Edit Comment"
-              size="icon-sm"
-              variant="ghost"
-              class="rounded-xs"
-              onClick={props.enableEditing}
-            >
-              <NotePencil />
-            </Button>
-            <Button
-              tooltip="Copy link to comment"
-              size="icon-sm"
-              variant="ghost"
-              class="rounded-xs"
-              onClick={() => {
-                toast.success('TODO - copy comment link');
-              }}
-            >
-              <Link />
-            </Button>
+            <Show when={props.enableEditing}>
+              <Button
+                tooltip="Edit Comment"
+                size="icon-sm"
+                variant="ghost"
+                class="rounded-xs"
+                onClick={props.enableEditing}
+              >
+                <NotePencil />
+              </Button>
+            </Show>
+            <Show when={props.copyLink}>
+              <Button
+                tooltip="Copy link to comment"
+                size="icon-sm"
+                variant="ghost"
+                class="rounded-xs"
+                onClick={props.copyLink}
+              >
+                <Link />
+              </Button>
+            </Show>
           </Show>
           <Show when={!props.isEditing && (props.isOwned || isDocumentOwner())}>
             <Button

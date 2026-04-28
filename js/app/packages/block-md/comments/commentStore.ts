@@ -34,6 +34,9 @@ export const markStore = createBlockStore<MarkStore>({});
 export const activeMarkIdsSignal = createBlockSignal<string[]>([]);
 
 export const activeCommentThreadSignal = createBlockSignal<number | null>(null);
+export const highlightedCommentIdSignal = createBlockSignal<number | null>(
+  null
+);
 
 export const commentsStore = createBlockStore<CommentStore>({});
 

@@ -184,6 +184,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isIOS } from '@solid-primitives/platform';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { URL_PARAMS } from '@block-md/constants';
 
 false && fileFolderDrop;
 
@@ -421,6 +422,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   };
 
   const [highlightNodeId, setHighlightNodeId] = createSignal<string>();
+  const [activeCommentIdParam, setActiveCommentIdParam] = createSignal<string | undefined>(undefined, { equals: false });
   const [searchParams] = useSearchParams();
   const derivedSearchParams = createMemo(() => {
     return {
@@ -434,7 +436,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const [locationReady, setLocationReady] = createSignal(false);
 
   createEffect(() => {
-    let nodeId = derivedSearchParams().node_id;
+    let nodeId = derivedSearchParams()[URL_PARAMS.nodeId];
     if (Array.isArray(nodeId)) {
       nodeId = nodeId.length > 0 ? nodeId[0] : undefined;
     }
@@ -442,12 +444,17 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       setHighlightNodeId(nodeId);
     }
 
-    const location = derivedSearchParams().location;
+    const location = derivedSearchParams()[URL_PARAMS.location];
     if (location && typeof location === 'string') {
       const locationObj = parsePersistentLocation(location);
       if (locationObj) {
         setActiveLocation(locationObj);
       }
+    }
+
+    const comment = derivedSearchParams()[URL_PARAMS.commentId];
+    if (comment && typeof comment === 'string') {
+      setActiveCommentIdParam(comment);
     }
   });
 
@@ -1044,7 +1051,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         </Show>
 
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
-          <CommentsProvider />
+          <CommentsProvider activeComment={activeCommentIdParam} />
         </Show>
 
         <ScopedPortal scope="block">

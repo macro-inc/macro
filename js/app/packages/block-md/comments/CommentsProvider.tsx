@@ -5,15 +5,22 @@ import {
 import { commentPlugin } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { blockLoroManagerSignal } from '@core/signal/load';
 import type { CommentNode } from '@lexical-core';
-import { useContext } from 'solid-js';
+import { createEffect, useContext, type Accessor } from 'solid-js';
 import { useDeleteComment } from './commentOperations';
 import {
+  activeCommentThreadSignal,
   activeMarkIdsSignal,
   commentMarksInitializedSignal,
+  commentsStore,
+  highlightedCommentIdSignal,
   markStore,
 } from './commentStore';
+import { autoRegister } from '@core/component/LexicalMarkdown/plugins';
+import { COMMAND_PRIORITY_LOW, SELECTION_CHANGE_COMMAND } from 'lexical';
 
-export function CommentsProvider() {
+export function CommentsProvider(props: {
+  activeComment?: Accessor<string | undefined>;
+}) {
   const wrapper = useContext(LexicalWrapperContext);
   if (!isWrapperWithIds(wrapper)) {
     return '';
@@ -81,6 +88,37 @@ export function CommentsProvider() {
       return;
     }
   };
+
+  const [highlightedId, setHighlightedId] = highlightedCommentIdSignal;
+
+  createEffect(() => {
+    if (!commentMarksInitializedSignal()) return;
+    const rawId = props.activeComment?.();
+    if (!rawId) return;
+    const commentId = Number(rawId);
+    if (isNaN(commentId)) return;
+    const comment = commentsStore.get[commentId];
+    if (!comment) return;
+    activeCommentThreadSignal.set(comment.threadId);
+    highlightedCommentIdSignal.set(commentId);
+    const mark = marks[comment.anchorId];
+    if (mark) {
+      const firstEl = Object.values(mark.markNodes)[0];
+      firstEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
+  autoRegister(
+    wrapper.editor.registerCommand(
+      SELECTION_CHANGE_COMMAND,
+      () => {
+        if (highlightedId() === null) return false;
+        setHighlightedId(null);
+        return false;
+      },
+      COMMAND_PRIORITY_LOW
+    )
+  );
 
   plugins.use(
     commentPlugin({
