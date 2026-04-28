@@ -11,7 +11,10 @@ export type {
   CallControlsProps,
   CallControlsVariant,
 } from './CallControls/CallControls';
-export type { CallControlButtonSize } from './CallControls/CallControlButton';
+export type {
+  CallControlButtonSize,
+  CallControlButtonVariant,
+} from './CallControls/CallControlButton';
 export { CallAudioSink } from './CallAudioSink';
 export { ChannelCallButton } from './ChannelCallButton';
 export { ChannelCallTab } from './ChannelCallTab';

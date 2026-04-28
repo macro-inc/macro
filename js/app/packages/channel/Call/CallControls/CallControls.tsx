@@ -12,9 +12,7 @@ export type CallControlsProps = {
   when?: boolean | Accessor<boolean>;
 };
 
-function readWhen(
-  when: boolean | Accessor<boolean> | undefined
-): boolean {
+function readWhen(when: boolean | Accessor<boolean> | undefined): boolean {
   if (when === undefined) return true;
   return typeof when === 'function' ? when() : when;
 }
@@ -32,7 +30,7 @@ export function CallControls(rawProps: CallControlsProps) {
   const variant = () => props.variant ?? 'default';
 
   const buttonSize = (): CallControlButtonSize =>
-    variant() === 'default' ? 'default' : 'panel';
+    variant() === 'default' ? 'md' : 'sm';
 
   return (
     <Show when={() => readWhen(props.when)}>
