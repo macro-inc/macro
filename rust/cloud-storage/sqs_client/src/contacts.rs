@@ -8,7 +8,7 @@ impl SQS {
         self
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn enqueue_contacts(
         &self,
         users: Vec<MacroUserIdStr<'static>>,
@@ -23,6 +23,6 @@ impl SQS {
                 .await?;
             return Ok(());
         }
-        Err(anyhow::anyhow!("contacts_queue is not configured"))
+        anyhow::bail!("contacts_queue is not configured")
     }
 }

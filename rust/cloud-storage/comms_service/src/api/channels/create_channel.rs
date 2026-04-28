@@ -142,8 +142,11 @@ pub async fn create_channel_handler(
     if !participants.is_empty() && req.channel_type == ChannelType::Private {
         // Contacts: send message create channel SQS message to Contacts Service
         let sqs_client = &ctx.sqs_client;
-        let contacts_users = participants_copy
-            .unwrap()
+        let mut all_users = participants_copy.unwrap_or_default();
+        if !all_users.contains(&user_context.user_id) {
+            all_users.push(user_context.user_id.clone());
+        }
+        let contacts_users = all_users
             .into_iter()
             .map(MacroUserIdStr::try_from)
             .collect::<Result<Vec<_>, _>>()

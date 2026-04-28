@@ -9,19 +9,16 @@ pub struct ConnectionGatewayNotifier {
 
 impl ConnectionGatewayNotifier {
     /// Creates a new notifier with the given gateway URL and internal auth key.
-    pub fn new(internal_auth_key: String, url: String) -> Self {
+    pub fn new(internal_auth_key: String, url: String) -> anyhow::Result<Self> {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             "x-internal-auth-key",
-            internal_auth_key
-                .parse()
-                .expect("invalid auth key header value"),
+            internal_auth_key.parse()?,
         );
         let client = reqwest::Client::builder()
             .default_headers(headers)
-            .build()
-            .expect("failed to build reqwest client");
-        Self { url, client }
+            .build()?;
+        Ok(Self { url, client })
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -37,21 +34,24 @@ impl ConnectionGatewayNotifier {
 }
 
 impl ContactsNotifier for ConnectionGatewayNotifier {
-    async fn invalidate_contacts_for_users(&self, user_ids: &[MacroUserIdStr<'static>]) {
+    async fn invalidate_contacts_for_users(&self, user_ids: &[MacroUserIdStr<'static>]) -> anyhow::Result<()> {
         for user_id in user_ids {
-            if let Err(e) = self.invalidate_contacts(user_id.as_ref() as &str).await {
-                tracing::error!(user_id = %user_id.as_ref(), error = ?e, "Failed to invalidate contacts");
-            }
+            self.invalidate_contacts(user_id.as_ref() as &str)
+                .await
+                .inspect_err(|e| tracing::error!(user_id = %user_id.as_ref(), error = ?e, "Failed to invalidate contacts"))
+                .ok();
         }
+        Ok(())
     }
 }
 
 /// Implements [`ContactsNotifier`] for `Option<ConnectionGatewayNotifier>`,
 /// acting as a no-op when `None`.
 impl ContactsNotifier for Option<ConnectionGatewayNotifier> {
-    async fn invalidate_contacts_for_users(&self, user_ids: &[MacroUserIdStr<'static>]) {
+    async fn invalidate_contacts_for_users(&self, user_ids: &[MacroUserIdStr<'static>]) -> anyhow::Result<()> {
         if let Some(notifier) = self {
-            notifier.invalidate_contacts_for_users(user_ids).await;
+            notifier.invalidate_contacts_for_users(user_ids).await?;
         }
+        Ok(())
     }
 }

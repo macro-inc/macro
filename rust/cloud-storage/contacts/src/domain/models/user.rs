@@ -20,10 +20,12 @@ impl Group {
         Self::default().append_participants(group)
     }
 
-    /// Adds participants to the group.
+    /// Adds participants to the group, deduplicating by user ID.
     pub fn append_participants(mut self, group: &[MacroUserIdStr<'static>]) -> Group {
         for user in group {
-            self.users.push(User { id: user.clone() });
+            if !self.users.iter().any(|u| u.id.as_ref() == user.as_ref()) {
+                self.users.push(User { id: user.clone() });
+            }
         }
         self
     }

@@ -21,5 +21,5 @@ pub trait ContactsNotifier: Send + Sync + 'static {
     fn invalidate_contacts_for_users(
         &self,
         user_ids: &[MacroUserIdStr<'static>],
-    ) -> impl Future<Output = ()> + Send;
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }

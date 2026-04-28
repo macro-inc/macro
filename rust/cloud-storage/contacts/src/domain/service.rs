@@ -16,7 +16,11 @@ pub struct ContactsDomainService<R, N> {
 impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
     /// Queries a user's contacts from the repository.
     pub async fn query_contacts(&self, user_id: &str) -> Option<Vec<String>> {
-        self.repository.get_contacts(user_id).await.ok()
+        self.repository
+            .get_contacts(user_id)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, user_id=%user_id, "failed to get contacts"))
+            .ok()
     }
 
     /// Adds a single contact connection between two users.
@@ -36,13 +40,15 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
             return;
         }
 
-        if let Err(e) = self.repository.create_connections(connections).await {
-            tracing::error!(error=?e, "couldn't create connections");
+        if self.repository.create_connections(connections).await.is_err() {
             return;
         }
+
         self.notifier
             .invalidate_contacts_for_users(&msg.users)
-            .await;
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to invalidate contacts"))
+            .ok();
     }
 }
 
