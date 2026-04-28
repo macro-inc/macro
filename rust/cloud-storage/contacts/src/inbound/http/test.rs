@@ -50,7 +50,7 @@ impl ContactsServicePort for MockService {
         &self,
         _caller: MacroUserIdStr<'_>,
         _recipient: MacroUserIdStr<'_>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), rootcause::Report> {
         Ok(())
     }
 }

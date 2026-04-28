@@ -2,6 +2,7 @@ use crate::domain::models::messages::ContactsMessage;
 use crate::domain::models::user::Group;
 use crate::domain::ports::{ContactsNotifier, ContactsRepository};
 use macro_user_id::user_id::MacroUserIdStr;
+use rootcause::Report;
 
 use tracing::instrument;
 
@@ -24,7 +25,7 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
     }
 
     /// Adds a single contact connection between two users.
-    pub async fn add_contact(&self, caller: &str, recipient: &str) -> Result<(), anyhow::Error> {
+    pub async fn add_contact(&self, caller: &str, recipient: &str) -> Result<(), Report> {
         let a = MacroUserIdStr::try_from(caller.to_owned())?;
         let b = MacroUserIdStr::try_from(recipient.to_owned())?;
         self.repository.create_connections(vec![(a, b)]).await
@@ -40,7 +41,12 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
             return;
         }
 
-        if self.repository.create_connections(connections).await.is_err() {
+        if self
+            .repository
+            .create_connections(connections)
+            .await
+            .is_err()
+        {
             return;
         }
 
