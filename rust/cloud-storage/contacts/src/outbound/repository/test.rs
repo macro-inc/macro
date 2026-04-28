@@ -14,7 +14,7 @@ async fn test_create_connections_basic(pool: PgPool) -> sqlx::Result<()> {
     let user1 = "macro|a@test.com";
     let user2 = "macro|b@test.com";
     let repo = DbContactsRepository::new(pool.clone());
-    repo.create_connections(vec![(mid(user1), mid(user2))])
+    repo.create_connections(vec![(mid(user1), mid(user2))].into_iter())
         .await
         .unwrap();
     let pair = sqlx::query!("SELECT user1, user2 FROM contacts_connections LIMIT 1")
@@ -30,7 +30,7 @@ async fn test_create_connections_ordering(pool: PgPool) -> sqlx::Result<()> {
     let user1 = "macro|a@test.com";
     let user2 = "macro|b@test.com";
     let repo = DbContactsRepository::new(pool.clone());
-    repo.create_connections(vec![(mid(user2), mid(user1))])
+    repo.create_connections(vec![(mid(user2), mid(user1))].into_iter())
         .await
         .unwrap();
     let pair = sqlx::query!("SELECT user1, user2 FROM contacts_connections LIMIT 1")
@@ -70,7 +70,7 @@ async fn test_create_connections_batch(pool: PgPool) -> sqlx::Result<()> {
     let expected_count = connections.len() as i64;
 
     let repo = DbContactsRepository::new(pool.clone());
-    repo.create_connections(connections).await.unwrap();
+    repo.create_connections(connections.into_iter()).await.unwrap();
 
     let count = sqlx::query_scalar!("SELECT count(*) FROM contacts_connections")
         .fetch_one(&pool)

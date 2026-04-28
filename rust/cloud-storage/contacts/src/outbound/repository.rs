@@ -35,12 +35,11 @@ impl ContactsRepository for DbContactsRepository {
         Ok(rows.into_iter().filter_map(|r| r.contact).collect())
     }
 
-    async fn create_connections(
+    async fn create_connections<'a>(
         &self,
-        connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
+        connections: impl Iterator<Item = (MacroUserIdStr<'a>, MacroUserIdStr<'a>)> + Send,
     ) -> Result<(), Report> {
-        let (users1, users2): (Vec<MacroUserIdStr<'_>>, Vec<MacroUserIdStr<'_>>) = connections
-            .into_iter()
+        let (users1, users2): (Vec<MacroUserIdStr<'a>>, Vec<MacroUserIdStr<'a>>) = connections
             .map(|(a, b)| {
                 if a.as_ref() <= b.as_ref() {
                     (a, b)
