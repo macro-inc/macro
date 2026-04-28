@@ -18,7 +18,6 @@ anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
-connection_gateway_client = { path = "../connection_gateway_client" }
 contacts = { path = "../contacts", features = ["axum"] }
 macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config" }
