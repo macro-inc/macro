@@ -1,7 +1,7 @@
 @import "tailwindcss"; /* explicitly add all tsx files for all packages instead of relying on Vite */
 @source '../**/*.tsx';
 @source '../../packages/core/component/LexicalMarkdown/theme.ts';
-@plugin '../../tailwind-plugins/zIndex.ts'; /* Legacy PDF viewer stackingContext stuff. Should be deprecated. */
+@plugin '../../tailwind-plugins/zIndex.ts';
 
 @property --a0l { syntax: "<number>"; inherits: true; initial-value:   0.88; }
 @property --a0c { syntax: "<number>"; inherits: true; initial-value:   0.20; }
@@ -78,20 +78,20 @@
   --transition: 0s; /* defualt 0.15, used for transition jamming, currently disabled */
 
   /* Semantic Color names, use these when writing tailwind */
-  --color-accent-ink: var(--a0);
-  --color-accent:     var(--a0);
-  --color-focus:      var(--a0);
+  --color-accent-ink:      var(--a0);
+  --color-accent:          var(--a0);
+  --color-focus:           var(--a0);
 
-  --color-dialog:  var(--b0); /* dialog, e.g. dialog background */
-  --color-input:   var(--b0); /* input, e.g. chat/channel input */
-  --color-menu:    var(--b0); /* menu background */
-  --color-button:  var(--b1); /* dialog, e.g. dialog background */
-  --color-panel:   var(--b1); /* block background */
-  --color-active:  var(--b2); /* elements that are selected or activated */
-  --color-hover:   var(--b2); /* hover, e.g. hover state for buttons/items */
-  --color-message: var(--b3); /* message background */
-  --color-page:    var(--b3); /* page background */
-  --color-edge:    var(--b4); /* edge (border) */
+  --color-dialog:          var(--b0); /* dialog, e.g. dialog background */
+  --color-input:           var(--b0); /* input, e.g. chat/channel input */
+  --color-menu:            var(--b0); /* menu background */
+  --color-button:          var(--b1); /* dialog, e.g. dialog background */
+  --color-panel:           var(--b1); /* block background */
+  --color-active:          var(--b2); /* elements that are selected or activated */
+  --color-hover:           var(--b2); /* hover, e.g. hover state for buttons/items */
+  --color-message:         var(--b3); /* message background */
+  --color-page:            var(--b3); /* page background */
+  --color-edge:            var(--b4); /* edge (border) */
 
   --color-ink:             var(--c0);
   --color-ink-muted:       var(--c1);
@@ -100,43 +100,43 @@
   --color-ink-placeholder: var(--c4);
 
   /* these are fucked */
-  --color-edge-muted: color-mix(in srgb, var(--b4), var(--b1) 50%); /* muted edge */
-  --color-overlay:    oklch(from var(--b2) l c h / 0.5); /* overlay, e.g. modal background */
-  --color-accent-bg:  oklch(from var(--a0) l c h / 0.15);
+  --color-edge-muted:  color-mix(in srgb, var(--b4), var(--b1) 50%); /* muted edge */
+  --color-overlay:     oklch(from var(--b2) l c h / 0.5); /* overlay, e.g. modal background */
+  --color-accent-bg:   oklch(from var(--a0) l c h / 0.15);
 
   /* Below are hardcoded colors */
   --color-failure:     oklch(0.637 0.237 25.331);
   --color-failure-bg:  oklch(from var(--color-failure) l c h / 0.15);
-  --color-failure-ink: oklch(from var(--color-failure) var(--c1l) c h);
+  --color-failure-ink: oklch(from var(--color-failure) var(--c1l) c h); /* scuffed */
 
   --color-success:     oklch(0.696 0.17 162.48);
   --color-success-bg:  oklch(from var(--color-success) l c h / 0.15);
-  --color-success-ink: oklch(from var(--color-success) var(--c0l) c h);
+  --color-success-ink: oklch(from var(--color-success) var(--c1l) c h); /* scuffed */
 
   --color-alert:       oklch(0.769 0.188 70.08);
   --color-alert-bg:    oklch(from var(--color-alert) l c h / 0.15);
-  --color-alert-ink:   oklch(from var(--color-alert) var(--c1l) c h);
+  --color-alert-ink:   oklch(from var(--color-alert) var(--c1l) c h); /* scuffed */
 
   --color-comment:     oklch(from var(--a0) l c 90deg);
   --color-comment-bg:  oklch(from var(--color-comment) l c h / 0.15);
-  --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h);
+  --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h); /* scuffed */
 
-  --color-note:     oklch(from var(--a0) l c 293deg)
-  --color-canvas:   oklch(from var(--a0) l c  60deg);
-  --color-html:     oklch(from var(--a0) l c  47deg);
-  --color-folder:   oklch(from var(--a0) l c 240deg);
-  --color-code:     oklch(from var(--a0) l c 180deg);
-  --color-pdf:      oklch(from var(--a0) l c  25deg);
-  --color-image:    oklch(from var(--a0) l c  95deg);
-  --color-write:    oklch(from var(--a0) l c 260deg);
-  --color-chat:     oklch(from var(--a0) l c 220deg);
-  --color-video:    oklch(from var(--a0) l c 277deg);
-  --color-rss:      oklch(from var(--a0) l c 260deg);
-  --color-task:     oklch(from var(--a0) l c 150deg);
-  --color-calendar: oklch(0.8159 0.2849 98.77);
-  --color-contact:  oklch(0.8617 0.1837 93.83);
-  --color-email:    var(--theme-email);
-  --color-default:  var(--c1);
+  --color-note:        oklch(from var(--a0) l c 293deg)
+  --color-canvas:      oklch(from var(--a0) l c  60deg);
+  --color-html:        oklch(from var(--a0) l c  47deg);
+  --color-folder:      oklch(from var(--a0) l c 240deg);
+  --color-code:        oklch(from var(--a0) l c 180deg);
+  --color-pdf:         oklch(from var(--a0) l c  25deg);
+  --color-image:       oklch(from var(--a0) l c  95deg);
+  --color-write:       oklch(from var(--a0) l c 260deg);
+  --color-chat:        oklch(from var(--a0) l c 220deg);
+  --color-video:       oklch(from var(--a0) l c 277deg);
+  --color-rss:         oklch(from var(--a0) l c 260deg);
+  --color-task:        oklch(from var(--a0) l c 150deg);
+  --color-calendar:    oklch(0.8159 0.2849 98.77);
+  --color-contact:     oklch(0.8617 0.1837 93.83);
+  --color-email:       var(--theme-email);
+  --color-default:     var(--c1);
 
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */
