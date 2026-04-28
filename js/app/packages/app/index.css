@@ -102,7 +102,7 @@
   /* these are fucked */
   --color-edge-muted: color-mix(in srgb, var(--b4), var(--b1) 50%); /* muted edge */
   --color-overlay:    oklch(from var(--b2) l c h / 0.5); /* overlay, e.g. modal background */
-  --color-accent-bg:  oklch(from (var(--a0)) / 0.15);
+  --color-accent-bg:  oklch(from var(--a0) l c h / 0.15);
 
   /* Below are hardcoded colors */
   --color-failure:     oklch(0.637 0.237 25.331);
