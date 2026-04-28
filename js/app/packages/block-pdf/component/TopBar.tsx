@@ -1,4 +1,9 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import {
+  ChatWithAgentButton,
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/component/ChatWithAgentButton';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
@@ -26,6 +31,7 @@ import {
 } from '@core/component/ReferencesModal';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
@@ -225,11 +231,33 @@ export function TopBar() {
       ),
     },
     {
+      label: 'Chat',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: documentId,
+          name: fileName(),
+          fileType,
+        }),
+      divideAbove: true,
+      buttonComponent: () => (
+        <ChatWithAgentButton
+          entity={{
+            type: 'document',
+            id: documentId,
+            name: fileName(),
+            fileType,
+          }}
+        />
+      ),
+    },
+    {
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
-      divideAbove: true,
       buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
+      focusTarget: getShareDrawerRecipientInput,
     },
   ];
 

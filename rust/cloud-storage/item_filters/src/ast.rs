@@ -26,6 +26,8 @@ pub mod call;
 pub mod channel;
 /// contains the ast literal value for chat
 pub mod chat;
+/// contains the date comparison literal type
+pub mod date;
 /// contains the ast literal value for documents
 pub mod document;
 /// contains the ast literal value for emails

@@ -119,6 +119,7 @@ function ChannelGroupItem(props: {
   isSlim?: boolean;
   channelLetters?: string;
 }) {
+  const notificationSource = useGlobalNotificationSource();
   const [isVisible, setIsVisible] = createSignal(!props.animate);
 
   onMount(() => {
@@ -163,6 +164,14 @@ function ChannelGroupItem(props: {
   const openInNewSplit = () => {
     if (!canOpenInNewSplit()) return;
     navigateToLatestNotification(true);
+  };
+
+  const markAllAsDone = () => {
+    void notificationSource.bulkMarkAsDone(props.group.notifications);
+  };
+
+  const markAllAsRead = () => {
+    void notificationSource.bulkMarkAsRead(props.group.notifications);
   };
 
   const _openFullscreen = () => {
@@ -259,6 +268,8 @@ function ChannelGroupItem(props: {
           {/* FIXME: this doesn't work yet */}
           {/* <MenuItem text="Open fullscreen" onClick={openFullscreen} /> */}
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
+          <MenuItem text="Mark all as read" onClick={markAllAsRead} />
+          <MenuItem text="Mark all as done" onClick={markAllAsDone} />
         </ContextMenuContent>
       </ContextMenu.Portal>
     </ContextMenu>

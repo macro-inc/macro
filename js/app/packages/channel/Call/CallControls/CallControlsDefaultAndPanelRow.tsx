@@ -7,14 +7,13 @@ import VideoCamera from '@icon/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
 import Users from '@icon/regular/users.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { Show, type Accessor } from 'solid-js';
+import { For, Show, type Accessor } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import {
   GroupLabel,
   MenuGroup,
   MenuItem,
   MenuSeparator,
-  MENU_ITEM_CLASS,
 } from '@core/component/Menu';
 import {
   CallControlButton,
@@ -22,15 +21,7 @@ import {
 } from './CallControlButton';
 import { CallControlButtonWithDropdown } from './CallControlButtonWithDropdown';
 import { CallDeviceList } from '../CallDeviceList';
-import { useCallContext } from '../CallContext';
-
-const menuStyles = {
-  item: cn(
-    MENU_ITEM_CLASS,
-    'cursor-pointer hover:bg-hover hover-transition-bg'
-  ),
-  groupLabel: cn(MENU_ITEM_CLASS, 'text-xs text-accent'),
-};
+import { BACKGROUND_IMAGES, useCallContext } from '../CallContext';
 
 export type CallControlsDefaultAndPanelRowProps = {
   size: Accessor<CallControlButtonSize>;
@@ -232,19 +223,7 @@ export function CallControlsDefaultAndPanelRow(
             />
             <Show when={isBackgroundBlurSupported()}>
               <MenuSeparator />
-              <MenuGroup>
-                <DropdownMenu.GroupLabel class={menuStyles.groupLabel}>
-                  Effects
-                </DropdownMenu.GroupLabel>
-                <MenuItem
-                  class={menuStyles.item}
-                  text="Blur background"
-                  selectorType="checkbox"
-                  checked={callCtx.isBackgroundBlurred()}
-                  closeOnSelect={false}
-                  onClick={() => callCtx.toggleBackgroundBlur()}
-                />
-              </MenuGroup>
+              <BackgroundEffectSelector />
             </Show>
           </>
         )}

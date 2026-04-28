@@ -1,5 +1,5 @@
 dev-tauri:
-    cd packages/app && bun run --bun dev:tauri
+    cd packages/app && bun run --bun dev
 
 # List available local service names
 local-services:
@@ -35,20 +35,18 @@ build-prod:
     cd packages/app && MODE=production NODE_ENV=production bun run --bun build
 
 build-tauri:
-    cd packages/app && MODE=production NODE_ENV=production bun run --bun build:tauri
+    cd packages/app && MODE=production NODE_ENV=production bun run --bun build
 
-# Build the web bundle for `platform` (default: ios), zip it, and install it at
+# Build the bundle, zip it, and install it at
 # rust/cloud-storage/tools/native_app_server/app-archive.zip for the bundle
 # updater test server. The server hashes the archive at request time, so no
 # checksum wiring is needed.
-dist-archive platform='ios':
+dist-archive: build-prod
     #!/usr/bin/env bash
     set -euo pipefail
-    cd packages/app
-    MODE=production NODE_ENV=production bun run --bun build:{{platform}}
     TARGET="$(cd {{ justfile_directory() }}/../../rust/cloud-storage/tools/native_app_server && pwd)/app-archive.zip"
     rm -f "$TARGET"
-    (cd dist && zip -qr "$TARGET" .)
+    (cd packages/app/dist && zip -qr "$TARGET" .)
     echo "Archive: $TARGET"
 
 test-watch:

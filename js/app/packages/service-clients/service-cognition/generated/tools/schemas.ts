@@ -354,7 +354,7 @@ export const SearchToolResponse = z.object({
           name: z.union([z.string(), z.null()]).optional(),
           owner_id: z.string(),
           participant_ids: z.array(z.string()),
-          type: z.literal('callRecord'),
+          type: z.literal('call'),
         }),
       ];
       const errors = schemas.reduce<z.ZodError[]>(
@@ -496,14 +496,7 @@ export const ListEntities = z
   .object({
     includeTypes: z.union([
       z.array(
-        z.enum([
-          'document',
-          'ai_chat',
-          'project',
-          'email',
-          'channel',
-          'call_record',
-        ])
+        z.enum(['document', 'ai_chat', 'project', 'email', 'channel', 'call'])
       ),
       z.null(),
     ]),
@@ -543,7 +536,7 @@ export const ListEntitiesResponse = z.object({
         z.object({
           createdBy: z.string(),
           id: z.string().uuid(),
-          type: z.literal('callRecord'),
+          type: z.literal('call'),
         }),
       ];
       const errors = schemas.reduce<z.ZodError[]>(

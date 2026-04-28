@@ -62,6 +62,7 @@ export function SplitLabel(props: {
   /** Per-variant fields the block context can't supply (e.g. `channelType`
    * for a channel rename). Merged into the args passed to `buildEntityData`. */
   renameOverrides?: Partial<BuildEntityDataArgs>;
+  maxDisplayLength?: number;
 }) {
   const panel = useSplitPanelOrThrow();
   const blockId = useBlockId();
@@ -70,6 +71,12 @@ export function SplitLabel(props: {
   createEffect(() => {
     panel.handle.setDisplayName(props.label);
   });
+
+  const truncatedLabel = () => {
+    if (!props.maxDisplayLength) return props.label;
+    if (props.label.length <= props.maxDisplayLength) return props.label;
+    return props.label.slice(0, props.maxDisplayLength - 3) + '...';
+  };
 
   const startEditing = (e: MouseEvent) => {
     if (props.lockRename) return;
@@ -97,7 +104,7 @@ export function SplitLabel(props: {
       onContextMenu={startEditing}
       onDblClick={startEditing}
     >
-      {props.label}
+      {truncatedLabel()}
     </span>
   );
 }

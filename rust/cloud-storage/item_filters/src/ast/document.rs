@@ -1,4 +1,7 @@
-use crate::{DocumentFilters, ast::ExpandErr};
+use crate::{
+    DocumentFilters,
+    ast::{ExpandErr, date::DateLiteral},
+};
 use document_sub_type::DocumentSubType;
 use either::Either;
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
@@ -50,6 +53,12 @@ pub enum DocumentLiteral {
     /// this node value filters by email attachment status
     #[serde(rename = "iea")]
     IsEmailAttachment(bool),
+    /// this node value filters by document createdAt timestamp
+    #[serde(rename = "ca")]
+    CreatedAt(DateLiteral),
+    /// this node value filters by document updatedAt timestamp
+    #[serde(rename = "ua")]
+    UpdatedAt(DateLiteral),
 }
 
 fn prefix(s: &str) -> IResult<&str, &str> {

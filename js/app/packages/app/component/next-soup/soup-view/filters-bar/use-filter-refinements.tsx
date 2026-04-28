@@ -1,21 +1,28 @@
 import {
-  VIEW_TAB_PRESETS,
   type PresetContext,
+  getViewPreset,
+  VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID } from '@app/component/next-soup/filters/configs';
-import { NIL_UUID } from '@app/component/next-soup/filters/query-filters';
-import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
+import {
+  type FilterID,
+  type FilterContext,
+  NO_ASSIGNEE,
+} from '@app/component/next-soup/filters';
+import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
 import { useUserContext, useUserId } from '@core/context/user';
-import { deepEqual } from '@core/util/compareUtils';
 import { useContacts } from '@queries/contacts/contacts';
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import type { ActiveFilter } from './active-filter-chips';
-import { INDEX_OPTIONS } from './search-operator-autocomplete';
+import { INDEX_OPTIONS } from './search-filter-controls';
 import {
+  cacheCallSubFilters,
+  cacheChannelSubFilters,
+  cacheEmailSubFilters,
   type SearchableOption,
   useSearchFilterOptions,
   useSearchIndexController,
@@ -24,10 +31,11 @@ import {
   buildContactLabel,
   VIEW_FILTER_CATEGORIES,
 } from './unified-filter-dropdown';
+import { deepEqual } from '@core/util/compareUtils';
 
 // Filter IDs that are set by tabs and should not be shown as removable chips
 const TAB_ONLY_FILTERS = new Set([
-  'signal',
+  'inbox',
   'noise',
   'explicit-noise',
   'channels',
@@ -45,14 +53,9 @@ const TAB_ONLY_FILTERS = new Set([
  * and a function to reset filters to the current tab's default state.
  */
 export function useFilterRefinements() {
-  const {
-    soup,
-    queryFilters,
-    setQueryFilters,
-    assigneeFilter,
-    setAssigneeFilter,
-    activeTab,
-  } = useSoupView();
+  const { soup, queryFilters, assigneeFilter, setAssigneeFilter, activeTab } =
+    useSoupView();
+  const filterData = () => queryFilters.state;
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();
   const contacts = useContacts();
@@ -77,15 +80,9 @@ export function useFilterRefinements() {
   const currentPreset = createMemo(() => {
     const view = currentView();
     if (!view) return undefined;
-
-    const viewConfig = VIEW_TAB_PRESETS[view];
-    if (!viewConfig) return undefined;
-
-    const tab = activeTab() ?? viewConfig.default;
-    const resolver = viewConfig.tabs[tab];
-    if (!resolver) return undefined;
-
-    return resolver(getPresetContext());
+    const tab = activeTab() ?? VIEW_TAB_PRESETS[view]?.default;
+    if (!tab) return undefined;
+    return getViewPreset(view, tab, getPresetContext());
   });
 
   const hasActiveRefinements = createMemo(() => {
@@ -97,13 +94,19 @@ export function useFilterRefinements() {
       ...(preset.clientFilters.or ?? []),
     ]);
 
-    const currentIds = new Set(soup.filters.activeIds() as FilterID[]);
+    const currentIds = new Set(soup.predicates.activeIds() as FilterID[]);
 
     const hasClientFilterDiff =
       expectedIds.size !== currentIds.size ||
       [...expectedIds].some((id) => !currentIds.has(id as FilterID));
 
-    const hasQueryFilterDiff = !deepEqual(queryFilters(), preset.queryFilters);
+    // Check if there are any external filters set (normalize undefined vs {} for comparison)
+    const currentFilterData = filterData();
+    const presetFilters = preset.filters;
+    const hasQueryFilterDiff =
+      !deepEqual(currentFilterData.include, presetFilters.include ?? {}) ||
+      !deepEqual(currentFilterData.exclude, presetFilters.exclude ?? {}) ||
+      currentFilterData.emailView !== presetFilters.emailView;
 
     const hasSubFilters = assigneeFilter().length > 0;
 
@@ -145,15 +148,15 @@ export function useFilterRefinements() {
   };
 
   const setFilterIds =
-    (filterKey: 'channel_filters' | 'call_filters', field: string) =>
+    (
+      field: 'callChannelId' | 'callSpeakerId' | 'channelId' | 'channelSenderId'
+    ) =>
     (ids: string[]) =>
-      setQueryFilters((prev) => ({
-        ...prev,
-        [filterKey]: {
-          ...(prev[filterKey] ?? {}),
-          [field]: ids.length > 0 ? ids : undefined,
+      queryFilters.set({
+        include: {
+          [field]: ids,
         },
-      }));
+      });
 
   /**
    * Cache of chip objects keyed by a stable id derived from the chip's category
@@ -192,7 +195,7 @@ export function useFilterRefinements() {
     for (const category of viewCategories()) {
       for (const option of category.options) {
         if (
-          !soup.filters.isActive(option.id) ||
+          !soup.predicates.isActive(option.id) ||
           TAB_ONLY_FILTERS.has(option.id) ||
           presetFilterIds.has(option.id as FilterID)
         ) {
@@ -213,27 +216,31 @@ export function useFilterRefinements() {
     }
 
     // Search operator filters: index: (entity type toggles)
-    const coveredByView = new Set(
+    const coveredByView = new Set<string>(
       viewCategories().flatMap((c) => c.options.map((o) => o.id))
     );
     for (const option of INDEX_OPTIONS) {
-      const optionId = option.id as FilterID;
+      const optionId = option.value as FilterID;
       if (
-        !soup.filters.isActive(optionId) ||
+        !soup.predicates.isActive(optionId) ||
         coveredByView.has(optionId) ||
         presetFilterIds.has(optionId)
       ) {
         continue;
       }
-      const key = `Type|${option.id}`;
+      const key = `Type|${option.value}`;
       seenKeys.add(key);
       filters.push(
         getOrCreateChip(key, () => ({
           categoryLabel: 'Type',
-          optionId: () => option.id,
+          optionId: () => option.value,
           optionLabel: () => option.label,
           icon: option.icon,
-          categoryOptions: INDEX_OPTIONS as ActiveFilter['categoryOptions'],
+          categoryOptions: INDEX_OPTIONS.map((o) => ({
+            id: o.value,
+            label: o.label,
+            icon: o.icon,
+          })) as ActiveFilter['categoryOptions'],
           multiple: false,
           onRemove: () => changeIndex('all'),
           onReplace: (newOptionId) => changeIndex(newOptionId),
@@ -283,8 +290,22 @@ export function useFilterRefinements() {
           categoryLabel: 'Assignee',
           optionId: () => id,
           optionLabel: () => assigneeOptionsMap().get(id)?.label ?? id,
-          onRemove: () =>
-            setAssigneeFilter(assigneeFilter().filter((a) => a !== id)),
+          onRemove: () => {
+            batch(() => {
+              setAssigneeFilter(assigneeFilter().filter((a) => a !== id));
+              queryFilters.remove({
+                include: {
+                  properties: [
+                    {
+                      propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+                      type: 'entity',
+                      value: id,
+                    },
+                  ],
+                },
+              });
+            });
+          },
         }))
       );
     }
@@ -294,12 +315,12 @@ export function useFilterRefinements() {
       categoryLabel: 'In',
       optionIdPrefix: 'channel-in',
       getIds: () =>
-        (queryFilters().channel_filters?.channel_ids ?? []).filter(
+        (queryFilters.state.include.channelId ?? []).filter(
           (id) => id !== NIL_UUID
         ),
       searchableOptions: channelOptions,
       labelMap: channelLabelMap,
-      onChange: setFilterIds('channel_filters', 'channel_ids'),
+      onChange: setFilterIds('channelId'),
       searchPlaceholder: 'Search channels...',
     });
 
@@ -307,26 +328,26 @@ export function useFilterRefinements() {
       key: 'ChannelFrom',
       categoryLabel: 'From',
       optionIdPrefix: 'channel-from',
-      getIds: () => queryFilters().channel_filters?.sender_ids ?? [],
+      getIds: () => queryFilters.state.include.channelSenderId ?? [],
       searchableOptions: senderOptions,
       labelMap: senderLabelMap,
-      onChange: setFilterIds('channel_filters', 'sender_ids'),
+      onChange: setFilterIds('channelSenderId'),
       searchPlaceholder: 'Search senders...',
     });
 
     if (currentView() === 'search') {
-      if (soup.filters.isActive('calls')) {
+      if (soup.predicates.isActive('calls')) {
         pushSearchableChip({
           key: 'CallIn',
           categoryLabel: 'In',
           optionIdPrefix: 'call-in',
           getIds: () =>
-            (queryFilters().call_filters?.channel_ids ?? []).filter(
+            (queryFilters.state.include.callChannelId ?? []).filter(
               (id) => id !== NIL_UUID
             ),
           searchableOptions: channelOptions,
           labelMap: channelLabelMap,
-          onChange: setFilterIds('call_filters', 'channel_ids'),
+          onChange: setFilterIds('callChannelId'),
           searchPlaceholder: 'Search channels...',
         });
 
@@ -334,14 +355,14 @@ export function useFilterRefinements() {
           key: 'CallFrom',
           categoryLabel: 'From',
           optionIdPrefix: 'call-from',
-          getIds: () => queryFilters().call_filters?.speaker_ids ?? [],
+          getIds: () => queryFilters.state.include.callSpeakerId ?? [],
           searchableOptions: senderOptions,
           labelMap: senderLabelMap,
-          onChange: setFilterIds('call_filters', 'speaker_ids'),
+          onChange: setFilterIds('callSpeakerId'),
           searchPlaceholder: 'Search speakers...',
         });
 
-        const callAttended = queryFilters().call_filters?.attended;
+        const callAttended = queryFilters.state.include.callAttended;
         if (callAttended !== undefined && callAttended !== null) {
           const ATTENDED_YES = 'attended:yes';
           const ATTENDED_NO = 'attended:no';
@@ -352,11 +373,11 @@ export function useFilterRefinements() {
               categoryLabel: 'Attended',
               hideCategoryLabel: true,
               optionId: () =>
-                queryFilters().call_filters?.attended
+                queryFilters.state.include.callAttended
                   ? ATTENDED_YES
                   : ATTENDED_NO,
               optionLabel: () =>
-                queryFilters().call_filters?.attended
+                queryFilters.state.include.callAttended
                   ? 'Attended'
                   : 'Unattended',
               categoryOptions: [
@@ -366,25 +387,21 @@ export function useFilterRefinements() {
               multiple: false,
               isOptionActive: (optionId) =>
                 optionId ===
-                (queryFilters().call_filters?.attended
+                (queryFilters.state.include.callAttended
                   ? ATTENDED_YES
                   : ATTENDED_NO),
               onRemove: () =>
-                setQueryFilters((prev) => ({
-                  ...prev,
-                  call_filters: {
-                    ...prev.call_filters,
-                    attended: undefined,
+                queryFilters.remove({
+                  include: {
+                    callAttended: queryFilters.state.include.callAttended,
                   },
-                })),
+                }),
               onReplace: (newOptionId) =>
-                setQueryFilters((prev) => ({
-                  ...prev,
-                  call_filters: {
-                    ...prev.call_filters,
-                    attended: newOptionId === ATTENDED_YES,
+                queryFilters.add({
+                  include: {
+                    callAttended: newOptionId === ATTENDED_YES,
                   },
-                })),
+                }),
             }))
           );
         }
@@ -392,8 +409,8 @@ export function useFilterRefinements() {
 
       // undefined importance means "All" — no chip.
       if (
-        soup.filters.isActive('email') &&
-        queryFilters().email_filters?.importance !== undefined
+        soup.predicates.isActive('email') &&
+        queryFilters.state.include.emailImportance !== undefined
       ) {
         const IMPORTANCE_SIGNAL = 'importance:signal';
         const IMPORTANCE_NOISE = 'importance:noise';
@@ -403,11 +420,11 @@ export function useFilterRefinements() {
           getOrCreateChip(key, () => ({
             categoryLabel: 'Importance',
             optionId: () =>
-              queryFilters().email_filters?.importance
+              filterData().include.emailImportance
                 ? IMPORTANCE_SIGNAL
                 : IMPORTANCE_NOISE,
             optionLabel: () =>
-              queryFilters().email_filters?.importance ? 'Signal' : 'Noise',
+              filterData().include.emailImportance ? 'Signal' : 'Noise',
             categoryOptions: [
               { id: IMPORTANCE_SIGNAL, label: 'Signal' },
               { id: IMPORTANCE_NOISE, label: 'Noise' },
@@ -415,25 +432,19 @@ export function useFilterRefinements() {
             multiple: false,
             isOptionActive: (optionId) =>
               optionId ===
-              (queryFilters().email_filters?.importance
+              (filterData().include.emailImportance
                 ? IMPORTANCE_SIGNAL
                 : IMPORTANCE_NOISE),
             onRemove: () =>
-              setQueryFilters((prev) => ({
-                ...prev,
-                email_filters: {
-                  ...prev.email_filters,
-                  importance: undefined,
+              queryFilters.remove({
+                include: {
+                  emailImportance: queryFilters.state.include.emailImportance,
                 },
-              })),
+              }),
             onReplace: (newOptionId) =>
-              setQueryFilters((prev) => ({
-                ...prev,
-                email_filters: {
-                  ...prev.email_filters,
-                  importance: newOptionId === IMPORTANCE_SIGNAL,
-                },
-              })),
+              queryFilters.add({
+                include: { emailImportance: newOptionId === IMPORTANCE_SIGNAL },
+              }),
           }))
         );
       }
@@ -449,18 +460,46 @@ export function useFilterRefinements() {
   });
 
   const isOptionActive = (optionId: string) => {
-    return soup.filters.isActive(optionId);
+    return soup.predicates.isActive(optionId);
+  };
+
+  const getFilterContext = (): FilterContext => ({
+    userId: currentUserId(),
+    assignees: assigneeFilter(),
+  });
+
+  const getFilterQuery = (optionId: string) => {
+    const filter = soup.predicates.getConfig(optionId);
+    if (!filter?.query) return undefined;
+    return typeof filter.query === 'function'
+      ? filter.query(getFilterContext())
+      : filter.query;
   };
 
   const removeFilter = (optionId: string) => {
-    soup.filters.toggle({ or: [optionId as FilterID] });
+    const query = getFilterQuery(optionId);
+    batch(() => {
+      soup.predicates.toggle({ or: [optionId as FilterID] });
+      if (query) {
+        queryFilters.remove(query);
+      }
+    });
   };
 
   const replaceFilter = (oldOptionId: string, newOptionId: string) => {
-    // Toggle off the old filter and toggle on the new one
+    const oldQuery = getFilterQuery(oldOptionId);
+    const newQuery = getFilterQuery(newOptionId);
     batch(() => {
-      soup.filters.toggle({ or: [oldOptionId as FilterID] });
-      soup.filters.toggle({ or: [newOptionId as FilterID] });
+      if (soup.predicates.isActive(oldOptionId)) {
+        soup.predicates.toggle({ or: [oldOptionId as FilterID] });
+      }
+
+      if (!soup.predicates.isActive(newOptionId)) {
+        soup.predicates.toggle({ or: [newOptionId as FilterID] });
+      }
+
+      if (oldQuery) queryFilters.remove(oldQuery);
+      if (newQuery) queryFilters.add(newQuery);
     });
   };
 
@@ -468,10 +507,15 @@ export function useFilterRefinements() {
     const preset = currentPreset();
     if (!preset) return;
 
+    const contentId = panel.handle.content().id;
+
     batch(() => {
-      soup.filters.set(preset.clientFilters);
-      setQueryFilters(preset.queryFilters);
+      soup.predicates.set(preset.clientFilters);
+      queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
+      cacheChannelSubFilters(contentId, {});
+      cacheCallSubFilters(contentId, {});
+      cacheEmailSubFilters(contentId, {});
     });
   };
 

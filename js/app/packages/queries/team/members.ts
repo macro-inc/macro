@@ -5,6 +5,7 @@ import type { PatchTeamUserTierRequest } from '@service-auth/generated/schemas/p
 import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
 import { useMutation } from '@tanstack/solid-query';
 
+import { authKeys } from '../auth';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 
@@ -15,10 +16,12 @@ type PatchTeamUserTierArgs = {
   teamId: string;
   request: PatchTeamUserTierRequest;
 };
+type PatchTeamUserTierContext = { previousTeam: TeamWithMembers | undefined };
 type PatchTeamUserTierCallbacks = MutationCallbacks<
   void,
   Error,
-  PatchTeamUserTierArgs
+  PatchTeamUserTierArgs,
+  PatchTeamUserTierContext
 >;
 
 export function usePatchTeamUserTierMutation(
@@ -31,16 +34,65 @@ export function usePatchTeamUserTierMutation(
       );
     },
 
-    ...withCallbacks<void, Error, PatchTeamUserTierArgs>(
+    ...withCallbacks<
+      void,
+      Error,
+      PatchTeamUserTierArgs,
+      PatchTeamUserTierContext
+    >(
       {
-        onSuccess: (_data, { teamId }) => {
-          invalidateTeam(teamId);
-          toast.success('Member tier updated');
+        onMutate: async ({ teamId, request }) => {
+          const queryKey = teamKeys.detail(teamId).queryKey;
+          await queryClient.cancelQueries({ queryKey });
+
+          const previousTeam =
+            queryClient.getQueryData<TeamWithMembers>(queryKey);
+
+          queryClient.setQueryData<TeamWithMembers>(queryKey, (old) =>
+            old
+              ? {
+                  ...old,
+                  members: old.members.map((member) =>
+                    member.user_id === request.team_user_id
+                      ? { ...member, tier: request.new_tier }
+                      : member
+                  ),
+                }
+              : undefined
+          );
+
+          return { previousTeam };
         },
 
-        onError: (error) => {
+        onSuccess: (_data, { teamId, request }) => {
+          invalidateTeam(teamId);
+
+          const userInfo = queryClient.getQueryData<{
+            userId: string;
+            id: string;
+          }>(authKeys.userInfo.queryKey);
+          if (
+            userInfo?.id === request.team_user_id ||
+            userInfo?.userId === request.team_user_id
+          ) {
+            queryClient.invalidateQueries({
+              queryKey: authKeys.userInfo.queryKey,
+            });
+            queryClient.invalidateQueries({
+              queryKey: authKeys.userQuota.queryKey,
+            });
+          }
+        },
+
+        onError: (error, { teamId }, context) => {
           console.error('Failed to update team member tier', error);
-          toast.failure('Failed to update team member tier');
+
+          if (context?.previousTeam) {
+            queryClient.setQueryData(
+              teamKeys.detail(teamId).queryKey,
+              context.previousTeam
+            );
+          }
         },
       },
       callbacks

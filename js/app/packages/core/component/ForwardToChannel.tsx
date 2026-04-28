@@ -21,6 +21,7 @@ import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -33,6 +34,132 @@ import { getDestinationFromOptions } from '@core/util/destination';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
 import { ScrollIndicators } from './VerticalScrollIndicators';
+import { isMobile } from '@core/mobile/isMobile';
+
+type Recipient = WithCustomUserInput<'user' | 'contact' | 'channel'>;
+
+interface MobileForwardToChannelLayoutProps
+  extends Pick<
+    ForwardToChannelProps,
+    'submitPermissionInfo' | 'hideAccessLevelSelector'
+  > {
+  isAuthenticated: Accessor<boolean | undefined>;
+  selectedOptions: Accessor<Recipient[]>;
+  setSelectedOptions: (v: Recipient[]) => void;
+  triedToSubmit: Accessor<boolean>;
+  destinationOptions: ReturnType<typeof useCombinedRecipients>['all'];
+  submitAccessLevel: Accessor<AccessLevel | null>;
+  setSubmitAccessLevel: (level: AccessLevel | null) => void;
+  mdScrollRef: Accessor<HTMLElement | undefined>;
+  setMdScrollRef: (el: HTMLElement) => void;
+  markdownEditor: ReturnType<typeof createConfiguredChannelMarkdownEditor>;
+  handleSubmit: () => void;
+  canSendAsGroup: Accessor<boolean>;
+  sendAsGroupMessage: Accessor<boolean>;
+  setSendAsGroupMessage: (v: boolean) => void;
+}
+
+function MobileForwardToChannelLayout(
+  props: MobileForwardToChannelLayoutProps
+) {
+  return (
+    <Show when={props.isAuthenticated()}>
+      <div class="px-3 py-2 min-h-11" data-share-drawer-recipient>
+        <RecipientSelector<'user' | 'contact' | 'channel'>
+          placeholder="To: Email or group"
+          setSelectedOptions={props.setSelectedOptions}
+          selectedOptions={props.selectedOptions()}
+          triedToSubmit={props.triedToSubmit}
+          options={props.destinationOptions}
+          triggerMode="input"
+          noBrackets
+          class="border-1 border-edge-muted/50 p-1"
+          focusOnMount
+        />
+      </div>
+      {/* Send as group */}
+      <Show when={props.canSendAsGroup()}>
+        <div class="shrink-0 flex w-full items-center p-3 gap-3 flex-wrap">
+          <label
+            class={`flex items-start gap-2 ${!props.canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-default'}`}
+          >
+            <div class="relative mt-0.5">
+              <input
+                onChange={(e) =>
+                  props.setSendAsGroupMessage(e.currentTarget.checked)
+                }
+                checked={props.sendAsGroupMessage() && props.canSendAsGroup()}
+                disabled={!props.canSendAsGroup()}
+                class="peer sr-only"
+                type="checkbox"
+              />
+              <div
+                class={`w-4 h-4 border ${
+                  !props.canSendAsGroup()
+                    ? 'border-edge/30 peer-checked:bg-menu/20'
+                    : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
+                }`}
+              >
+                <Show
+                  when={props.sendAsGroupMessage() && props.canSendAsGroup()}
+                >
+                  <CheckIcon class="w-full h-full text-accent p-0.5" />
+                </Show>
+              </div>
+            </div>
+            <div
+              class={`flex flex-col text-sm ${!props.canSendAsGroup() ? 'text-ink-disabled/50' : ''}`}
+            >
+              <span class="font-medium">Send As Group Message</span>
+              <span
+                class={`text-xs mt-0.5 ${!props.canSendAsGroup() ? 'text-ink-disabled/50' : 'text-ink-muted'}`}
+              >
+                {props.sendAsGroupMessage() && props.canSendAsGroup()
+                  ? 'Creates a new group message with all recipients'
+                  : 'Send a message to each recipient'}
+              </span>
+            </div>
+          </label>
+        </div>
+      </Show>
+      <Show
+        when={
+          props.submitPermissionInfo?.userPermissions === Permissions.OWNER &&
+          !props.hideAccessLevelSelector
+        }
+      >
+        <div class="px-3 py-2 flex items-center">
+          <span class="text-sm text-ink-muted pr-2">Access:</span>
+          <ShareOptions
+            setPermissions={(accessLevel) =>
+              props.setSubmitAccessLevel(accessLevel)
+            }
+            permissions={props.submitAccessLevel()}
+            label="Permission"
+            hideNoAccess
+          />
+        </div>
+      </Show>
+
+      <div class="flex-1 min-h-20 flex flex-col w-full mt-3 border-t-1 border-edge-muted/50 relative">
+        <ScrollIndicators scrollRef={props.mdScrollRef} noBorderStart />
+        <CustomScrollbar scrollContainer={props.mdScrollRef} />
+        <div
+          class="grow-1 shrink-1 min-h-20 overflow-y-auto scrollbar-hidden px-3 py-[6px] w-full text-sm"
+          onClick={() => props.markdownEditor.controls.focus()}
+          ref={props.setMdScrollRef}
+        >
+          <MarkdownShell
+            config={props.markdownEditor}
+            placeholder="Optional message"
+            portalScope="local"
+            class="text-sm"
+          />
+        </div>
+      </div>
+    </Show>
+  );
+}
 
 interface ForwardToChannelProps {
   submitPermissionInfo?: {
@@ -83,7 +210,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       return true;
     },
   });
-  markdownEditor.buildHandle();
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
 
@@ -289,146 +415,170 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   });
 
   return (
-    <Show when={isAuthenticated()}>
-      {/* Row 1: Recipient input + ShareOptions */}
-      <div class="flex items-center">
-        <div class="min-w-0 flex-1 px-1 py-2 min-h-11">
-          <RecipientSelector<'user' | 'contact' | 'channel'>
-            placeholder="To: Email or group"
-            setSelectedOptions={setSelectedOptions}
-            selectedOptions={selectedOptions()}
-            triedToSubmit={triedToSubmit}
-            options={destinationOptions}
-            triggerMode="input"
-            noBrackets
-            class="border border-edge-muted/50 p-1"
-            focusOnMount
-            mobileHorizontalScroll
-          />
-        </div>
-        <Show
-          when={
-            props.submitPermissionInfo?.userPermissions === Permissions.OWNER &&
-            !props.hideAccessLevelSelector
-          }
-        >
-          <div class="shrink-0 pr-2 flex items-center">
-            <Show when={selectedOptions().length > 0}>
-              <span class="text-sm text-ink-muted pr-2">can</span>
-            </Show>
-            <ShareOptions
-              setPermissions={(accessLevel) =>
-                setSubmitAccessLevel(accessLevel)
-              }
-              permissions={submitAccessLevel()}
-              label="Permission"
-              hideNoAccess
-              noBorder
+    <Show
+      when={!isMobile()}
+      fallback={
+        <MobileForwardToChannelLayout
+          isAuthenticated={isAuthenticated}
+          selectedOptions={selectedOptions}
+          setSelectedOptions={(v) => setSelectedOptions(v)}
+          triedToSubmit={triedToSubmit}
+          destinationOptions={destinationOptions}
+          submitPermissionInfo={props.submitPermissionInfo}
+          hideAccessLevelSelector={props.hideAccessLevelSelector}
+          submitAccessLevel={submitAccessLevel}
+          setSubmitAccessLevel={setSubmitAccessLevel}
+          mdScrollRef={mdScrollRef}
+          setMdScrollRef={setMdScrollRef}
+          markdownEditor={markdownEditor}
+          handleSubmit={handleSubmit}
+          canSendAsGroup={canSendAsGroup}
+          sendAsGroupMessage={sendAsGroupMessage}
+          setSendAsGroupMessage={setSendAsGroupMessage}
+        />
+      }
+    >
+      <Show when={isAuthenticated()}>
+        {/* Row 1: Recipient input + ShareOptions */}
+        <div class="flex items-center">
+          <div class="min-w-0 flex-1 px-1 py-2 min-h-11">
+            <RecipientSelector<'user' | 'contact' | 'channel'>
+              placeholder="To: Email or group"
+              setSelectedOptions={setSelectedOptions}
+              selectedOptions={selectedOptions()}
+              triedToSubmit={triedToSubmit}
+              options={destinationOptions}
+              triggerMode="input"
+              noBrackets
+              class="border border-edge-muted/50 p-1"
+              focusOnMount
+              horizontalScroll
             />
           </div>
-        </Show>
-      </div>
-
-      {/* Row 2: Optional message */}
-      <div class="grow shrink min-h-0 flex flex-col w-full border-t border-edge-muted/50">
-        <div class="relative grow shrink min-h-0 flex flex-col">
-          <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
-          <CustomScrollbar scrollContainer={mdScrollRef} />
-          <div
-            class="grow shrink min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-[12px] py-[6px] w-full text-sm"
-            onClick={() => markdownEditor.controls.focus()}
-            ref={setMdScrollRef}
+          <Show
+            when={
+              props.submitPermissionInfo?.userPermissions ===
+                Permissions.OWNER && !props.hideAccessLevelSelector
+            }
           >
-            <MarkdownShell
-              config={markdownEditor}
-              placeholder="Optional message"
-              portalScope="local"
-              class="text-sm"
-            />
-          </div>
+            <div class="shrink-0 pr-2 flex items-center">
+              <Show when={selectedOptions().length > 0}>
+                <span class="text-sm text-ink-muted pr-2">can</span>
+              </Show>
+              <ShareOptions
+                setPermissions={(accessLevel) =>
+                  setSubmitAccessLevel(accessLevel)
+                }
+                permissions={submitAccessLevel()}
+                label="Permission"
+                hideNoAccess
+                noBorder
+              />
+            </div>
+          </Show>
         </div>
 
-        {/* Row 3: Send As Group (optional) + Cancel + Send */}
-        <div class="shrink-0 flex w-full items-center p-3 gap-3 flex-wrap">
-          <Show when={canSendAsGroup()}>
-            <label
-              class={cn(
-                'flex items-start gap-2',
-                !canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-default'
-              )}
+        {/* Row 2: Optional message */}
+        <div class="grow shrink min-h-0 flex flex-col w-full border-t border-edge-muted/50">
+          <div class="relative grow shrink min-h-0 flex flex-col">
+            <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
+            <CustomScrollbar scrollContainer={mdScrollRef} />
+            <div
+              class="grow shrink min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-[12px] py-[6px] w-full text-sm"
+              onClick={() => markdownEditor.controls.focus()}
+              ref={setMdScrollRef}
             >
-              <div class="relative mt-0.5">
-                <input
-                  onChange={(e) =>
-                    setSendAsGroupMessage(e.currentTarget.checked)
-                  }
-                  checked={sendAsGroupMessage() && canSendAsGroup()}
-                  disabled={!canSendAsGroup()}
-                  class="peer sr-only"
-                  type="checkbox"
-                />
-                <div
-                  class={cn(
-                    'w-4 h-4 border',
-                    !canSendAsGroup()
-                      ? 'border-edge/30 peer-checked:bg-menu/20'
-                      : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
-                  )}
-                >
-                  <Show when={sendAsGroupMessage() && canSendAsGroup()}>
-                    <CheckIcon class="w-full h-full text-accent p-0.5" />
-                  </Show>
-                </div>
-              </div>
-              <div
+              <MarkdownShell
+                config={markdownEditor}
+                placeholder="Optional message"
+                portalScope="local"
+                class="text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Row 3: Send As Group (optional) + Cancel + Send */}
+          <div class="shrink-0 flex w-full items-center p-3 gap-3 flex-wrap">
+            <Show when={canSendAsGroup()}>
+              <label
                 class={cn(
-                  'flex flex-col text-sm',
-                  !canSendAsGroup() && 'text-ink-disabled/50'
+                  'flex items-start gap-2',
+                  !canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-default'
                 )}
               >
-                <span class="font-medium">Send As Group Message</span>
-                <span
+                <div class="relative mt-0.5">
+                  <input
+                    onChange={(e) =>
+                      setSendAsGroupMessage(e.currentTarget.checked)
+                    }
+                    checked={sendAsGroupMessage() && canSendAsGroup()}
+                    disabled={!canSendAsGroup()}
+                    class="peer sr-only"
+                    type="checkbox"
+                  />
+                  <div
+                    class={cn(
+                      'w-4 h-4 border',
+                      !canSendAsGroup()
+                        ? 'border-edge/30 peer-checked:bg-menu/20'
+                        : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
+                    )}
+                  >
+                    <Show when={sendAsGroupMessage() && canSendAsGroup()}>
+                      <CheckIcon class="w-full h-full text-accent p-0.5" />
+                    </Show>
+                  </div>
+                </div>
+                <div
                   class={cn(
-                    'text-xs mt-0.5',
-                    !canSendAsGroup()
-                      ? 'text-ink-disabled/50'
-                      : 'text-ink-muted'
+                    'flex flex-col text-sm',
+                    !canSendAsGroup() && 'text-ink-disabled/50'
                   )}
                 >
-                  {sendAsGroupMessage() && canSendAsGroup()
-                    ? 'Creates a new group message with all recipients'
-                    : 'Send a message to each recipient'}
-                </span>
-              </div>
-            </label>
-          </Show>
+                  <span class="font-medium">Send As Group Message</span>
+                  <span
+                    class={cn(
+                      'text-xs mt-0.5',
+                      !canSendAsGroup()
+                        ? 'text-ink-disabled/50'
+                        : 'text-ink-muted'
+                    )}
+                  >
+                    {sendAsGroupMessage() && canSendAsGroup()
+                      ? 'Creates a new group message with all recipients'
+                      : 'Send a message to each recipient'}
+                  </span>
+                </div>
+              </label>
+            </Show>
 
-          <div class="flex flex-auto items-center justify-end gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => props.onCancel?.()}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant={selectedOptions().length > 0 ? 'accent' : 'secondary'}
-              size="sm"
-              class="pl-2 pr-2 rounded-xs flex items-center gap-1"
-              disabled={selectedOptions().length === 0}
-              onClick={() => {
-                const options = selectedOptions();
-                if (options && options.length > 0) {
-                  handleSubmit();
-                }
-              }}
-            >
-              <PaperPlane class="size-4" />
-              Share
-            </Button>
+            <div class="flex flex-auto items-center justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => props.onCancel?.()}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant={selectedOptions().length > 0 ? 'accent' : 'secondary'}
+                size="sm"
+                class="pl-2 pr-2 rounded-xs flex items-center gap-1"
+                disabled={selectedOptions().length === 0}
+                onClick={() => {
+                  const options = selectedOptions();
+                  if (options && options.length > 0) {
+                    handleSubmit();
+                  }
+                }}
+              >
+                <PaperPlane class="size-4" />
+                Share
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      </Show>
     </Show>
   );
 }

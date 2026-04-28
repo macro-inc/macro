@@ -1,5 +1,10 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
+  ChatWithAgentButton,
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/component/ChatWithAgentButton';
+import {
   type BlockTool,
   ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
@@ -30,6 +35,7 @@ import { NOTIFICATIONS_DRAWER_ID } from '@core/component/NotificationsModal';
 import { ReferencesButton } from '@core/component/ReferencesModal';
 import { REFERENCES_DRAWER_ID } from '@core/component/ReferencesModal';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
@@ -231,11 +237,33 @@ export function TopBar() {
       buttonComponent: () => <DispatchAgentButton />,
     },
     {
+      label: 'Chat',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: blockId,
+          name: name(),
+          fileType: 'md',
+        }),
+      divideAbove: true,
+      buttonComponent: () => (
+        <ChatWithAgentButton
+          entity={{
+            type: 'document',
+            id: blockId,
+            name: name(),
+            fileType: 'md',
+          }}
+        />
+      ),
+    },
+    {
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
-      divideAbove: true,
       buttonComponent: () => <ShareTrigger />,
+      focusTarget: getShareDrawerRecipientInput,
     },
     {
       label: 'Copy Link',

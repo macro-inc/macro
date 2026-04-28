@@ -2,6 +2,7 @@
 
 use std::str::FromStr;
 
+use crate::domain::models::CreateTaskRequest;
 use crate::domain::{models::CreateDocumentRepoArgs, ports::DocumentService};
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::Context;
@@ -84,7 +85,7 @@ where
                     id: None,
                     sha: hashes.0,
                     document_name: self.document_name.clone(),
-                    user_id,
+                    user_id: user_id.clone(),
                     file_type: Some(parsed_file_type),
                     project_id: None,
                     email_attachment_id: None,
@@ -100,6 +101,33 @@ where
                 internal_error: e.into(),
             })?;
         tracing::trace!("created document");
+
+        // if the document is a task we need to assign the default properties for the task like status and assignee
+        if self.is_task {
+            let document_id = &document_response
+                .document_response
+                .document_metadata
+                .document_id;
+
+            tracing::trace!("assigning task properties");
+            service_context
+                .service
+                .handle_task_properties(
+                    user_id.clone(),
+                    document_id,
+                    &CreateTaskRequest {
+                        task_name: self.document_name.clone(), // doesn't actually matter
+                        project_id: None,
+                        property_values: None, // uses default properties
+                        share_with_team: true,
+                    },
+                )
+                .await
+                .map_err(|e| ToolCallError {
+                    description: "unable to assign task properties".to_string(),
+                    internal_error: e.into(),
+                })?;
+        }
 
         let document_response = document_response.document_response;
         let document_metadata = document_response.document_metadata;

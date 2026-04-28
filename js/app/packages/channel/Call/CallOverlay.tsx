@@ -6,19 +6,33 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
 
-function VideoTag(props: { children: JSXElement, class?: string, variant?: 'default' | 'truncated' }) {
+function VideoTag(props: {
+  children: JSXElement;
+  class?: string;
+  variant?: 'default' | 'truncated';
+}) {
   return (
-    <div class={cn("absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs", props.variant === 'truncated' ? 'truncate max-w-[80%]' : '', props.class)}>
+    <div
+      class={cn(
+        'absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink text-xs',
+        props.variant === 'truncated' ? 'truncate max-w-[80%]' : '',
+        props.class
+      )}
+    >
       {props.children}
     </div>
   );
-};
+}
 
-function ParticipantTileWrapper(props: { isSpeaking: boolean, children: JSXElement, isConnecting?: boolean }) {
+function ParticipantTileWrapper(props: {
+  isSpeaking: boolean;
+  children: JSXElement;
+  isConnecting?: boolean;
+}) {
   return (
     <div
       class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
-      classList={{ 
+      classList={{
         'ring-inset ring-2 ring-accent-2': props.isSpeaking,
         'animate-pulse': props.isConnecting,
       }}
@@ -56,7 +70,7 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
         <TrackView track={cameraTrack()} />
       </Show>
 
-      <VideoTag variant='truncated'>{displayName()}</VideoTag>
+      <VideoTag variant="truncated">{displayName()}</VideoTag>
     </ParticipantTileWrapper>
   );
 }
@@ -147,7 +161,10 @@ export function CallOverlay(props: { onLeave: () => void }) {
         class={`${hasAnyScreenShare() ? 'h-[180px] shrink-0' : 'flex-1 min-h-0'} grid ${gridCols()} gap-2 py-2 auto-rows-fr overflow-hidden`}
       >
         {/* Local participant */}
-        <ParticipantTileWrapper isSpeaking={isLocalSpeaking()} isConnecting={isConnecting()}>
+        <ParticipantTileWrapper
+          isSpeaking={isLocalSpeaking()}
+          isConnecting={isConnecting()}
+        >
           <Show
             when={!isConnecting() && !callCtx.isVideoMuted()}
             fallback={
@@ -161,12 +178,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
             <TrackView track={localVideoTrack()} mirror />
           </Show>
 
-          <Show
-            when={isConnecting()}
-            fallback={
-              <VideoTag>You</VideoTag>
-            }
-          >
+          <Show when={isConnecting()} fallback={<VideoTag>You</VideoTag>}>
             <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface-0/70 text-ink-muted text-xs">
               Connecting...
             </div>

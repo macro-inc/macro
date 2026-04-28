@@ -3,22 +3,22 @@ import ExclamationIcon from '@icon/regular/exclamation-mark.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
-import type { Component, JSX } from 'solid-js';
-import {
-  Show,
-  For,
-  Switch,
-  Match,
-  createSignal,
-  onMount,
-  onCleanup,
-  createEffect,
-  on,
-} from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { Panel } from '@ui';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
+import type { Component, JSX } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  For,
+  Match,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
 export enum ToastType {
   SUCCESS = 'success',
@@ -142,6 +142,14 @@ interface ToastMessage {
 const recentToasts: Map<string, ToastMessage> = new Map();
 const THROTTLE_DURATION = 3000;
 
+/** Maximum number of toasts visible at one time in the main region. */
+const MAX_VISIBLE_TOASTS = 3;
+/**
+ * Ordered list of active (non-persistent) toast IDs in the main region,
+ * oldest first. Used to evict the oldest toast when the limit is exceeded.
+ */
+const activeToastIds: number[] = [];
+
 function createToastKey(message: string, type: ToastType): string {
   return `${type}:${message}`;
 }
@@ -196,8 +204,6 @@ function alert(message: string, subtext?: string, duration?: number) {
   createToast(message, ToastType.ALERT, subtext, undefined, duration);
 }
 
-// ─── Shared actions row ──────────────────────────────────────────────────────
-
 function ActionButtons(props: { actions: ToastAction[] }) {
   return (
     <For each={props.actions}>
@@ -217,8 +223,6 @@ function ActionButtons(props: { actions: ToastAction[] }) {
   );
 }
 
-// ─── Toast content ───────────────────────────────────────────────────────────
-
 function ToastContent(props: {
   toastId: number;
   toastType?: ToastType;
@@ -230,6 +234,8 @@ function ToastContent(props: {
   duration?: number;
   embed?: Component;
   custom?: CustomToastConfig;
+  /** Called when this toast is removed from the DOM, so callers can clean up tracking. */
+  onDismiss?: () => void;
 }) {
   const styles = () => (props.toastType ? TOAST_STYLES[props.toastType] : null);
 
@@ -247,6 +253,8 @@ function ToastContent(props: {
   const [isHovered, setIsHovered] = createSignal(false);
 
   let elapsed = 0;
+
+  onCleanup(() => props.onDismiss?.());
 
   onMount(() => {
     // Persistent toasts never auto-dismiss
@@ -487,6 +495,13 @@ function createToast(
     }
   }
 
+  // Evict the oldest visible toast when the display limit is reached, so the
+  // newest toast always appears immediately instead of being queued.
+  if (activeToastIds.length >= MAX_VISIBLE_TOASTS) {
+    const oldestId = activeToastIds.shift();
+    if (oldestId !== undefined) toaster.dismiss(oldestId);
+  }
+
   const toastId = toaster.show(
     (props) => (
       <ToastContent
@@ -498,10 +513,16 @@ function createToast(
         // Pass duration only when explicitly provided — this is what gates the progress bar.
         // When undefined, ToastContent falls back to its own default dismiss timing internally.
         duration={duration}
+        onDismiss={() => {
+          const idx = activeToastIds.indexOf(props.toastId);
+          if (idx !== -1) activeToastIds.splice(idx, 1);
+        }}
       />
     ),
     { region: 'toast-region' }
   );
+
+  activeToastIds.push(toastId);
 
   if (!stack) {
     const key = createToastKey(message, toastType);

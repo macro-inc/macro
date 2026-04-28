@@ -5,6 +5,8 @@ mod tests;
 
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use model_entity::EntityType;
+use models_properties::EntityReference;
+use models_properties::api::SetPropertyValue;
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -30,6 +32,10 @@ use s3_key::{
     build_docx_to_pdf_converted_document_key,
 };
 use tracing;
+
+use crate::domain::models::{
+    ASSIGNEES_PROPERTY_ID, NOT_STARTED_STATUS_OPTION_ID, PropertyInput, STATUS_PROPERTY_ID,
+};
 
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
@@ -991,8 +997,8 @@ impl<
                 CreateDocumentRepoArgs {
                     id: None,
                     sha: EMPTY_SHA256.to_string(),
-                    document_name: request.task_name,
-                    user_id,
+                    document_name: request.task_name.clone(),
+                    user_id: user_id.clone(),
                     file_type: Some(FileType::Md),
                     project_id: request.project_id,
                     email_attachment_id: None,
@@ -1010,42 +1016,85 @@ impl<
             .document_id
             .clone();
 
+        let _ = self
+            .handle_task_properties(user_id, &document_id, &request)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    error=?e,
+                    document_id=?document_id,
+                    "failed to assign task properties",
+                );
+            });
+
+        Ok(CreateTaskResponse { document_id })
+    }
+
+    /// Assigns the task properties to a document
+    #[tracing::instrument(skip(self, request), err)]
+    async fn handle_task_properties(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
         if request.share_with_team {
             let _ = self
                 .repo
-                .share_with_team(&plain_user_id, &document_id)
+                .share_with_team(user_id.as_ref(), document_id)
                 .await
                 .inspect_err(|e| {
                     tracing::error!(error=?e, "failed to share task with team");
                 });
         }
 
-        if let Some(properties) = request.property_values {
-            for property_input in properties {
-                let Ok(property_uuid) = uuid::Uuid::parse_str(&property_input.property_id) else {
-                    tracing::warn!(property_id=?property_input.property_id, "invalid property_id UUID, skipping");
-                    continue;
-                };
+        // Use provided properties or assign default ones for task
+        let properties = if let Some(properties) = request.property_values.as_ref() {
+            properties
+        } else {
+            &vec![
+                PropertyInput {
+                    property_id: ASSIGNEES_PROPERTY_ID.to_string(),
+                    value: SetPropertyValue::MultiEntityReference {
+                        references: vec![EntityReference {
+                            entity_id: user_id.as_ref().to_string(),
+                            entity_type: models_properties::EntityType::User,
+                            specific_message_id: None,
+                        }],
+                    },
+                },
+                PropertyInput {
+                    property_id: STATUS_PROPERTY_ID.to_string(),
+                    value: SetPropertyValue::SelectOption {
+                        option_id: NOT_STARTED_STATUS_OPTION_ID,
+                    },
+                },
+            ]
+        };
 
-                let _ = self
-                    .task_properties_service
-                    .set_entity_property(
-                        &plain_user_id,
-                        &document_id,
-                        property_uuid,
-                        Some(property_input.value.clone()),
-                    )
-                    .await
-                    .inspect_err(|e| {
-                        tracing::warn!(
-                            property_id=?property_uuid,
+        for property_input in properties {
+            let Ok(property_uuid) = uuid::Uuid::parse_str(&property_input.property_id) else {
+                tracing::warn!(property_id=?property_input.property_id, "invalid property_id UUID, skipping");
+                continue;
+            };
+
+            let _ = self
+                .task_properties_service
+                .set_entity_property(
+                    user_id.as_ref(),
+                    document_id,
+                    property_uuid,
+                    Some(property_input.value.clone()),
+                )
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(
                             error=?e,
-                            "failed to set property on task, continuing"
-                        );
-                    });
-            }
+                            property_uuid=?property_uuid,
+                            "unable to set entity property")
+                });
         }
 
-        Ok(CreateTaskResponse { document_id })
+        Ok(())
     }
 }

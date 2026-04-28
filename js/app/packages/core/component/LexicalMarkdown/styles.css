@@ -22,11 +22,6 @@
   }
 }
 
-.sender-message * ::selection {
-  background-color: rgb(from white r g b / 0.9);
-  color: var(--color-accent);
-}
-
 .md-p:empty {
   min-height: 1.5em;
 }
