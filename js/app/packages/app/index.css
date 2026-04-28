@@ -113,75 +113,75 @@
   --color-ink-disabled:    var(--c3);
   --color-ink-placeholder: var(--c4);
 
+  /* these are fucked */
   --color-edge-muted: color-mix(in srgb, var(--b4), var(--b1) 50%); /* muted edge */
   --color-overlay:    oklch(from var(--b2) l c h / 0.5); /* overlay, e.g. modal background */
   --color-accent-bg:  oklch(from (var(--a0)) / 0.15);
 
-
   /* Below are hardcoded colors */
-  --color-failure: oklch(0.637 0.237 25.331);
-  --color-failure-bg: oklch(from var(--color-failure) l c h / 0.15);
+  --color-failure:     oklch(0.637 0.237 25.331);
+  --color-failure-bg:  oklch(from var(--color-failure) l c h / 0.15);
   --color-failure-ink: oklch(from var(--color-failure) var(--c1l) c h);
 
-  --color-success: oklch(0.696 0.17 162.48);
-  --color-success-bg: oklch(from var(--color-success) l c h / 0.15);
+  --color-success:     oklch(0.696 0.17 162.48);
+  --color-success-bg:  oklch(from var(--color-success) l c h / 0.15);
   --color-success-ink: oklch(from var(--color-success) var(--c0l) c h);
 
-  --color-alert: oklch(0.769 0.188 70.08);
-  --color-alert-bg: oklch(from var(--color-alert) l c h / 0.15);
-  --color-alert-ink: oklch(from var(--color-alert) var(--c1l) c h);
+  --color-alert:       oklch(0.769 0.188 70.08);
+  --color-alert-bg:    oklch(from var(--color-alert) l c h / 0.15);
+  --color-alert-ink:   oklch(from var(--color-alert) var(--c1l) c h);
 
-  --color-comment: var(--theme-comment);
-  --color-comment-bg: oklch(from var(--color-comment) l c h / 0.15);
+  --color-comment:     var(--theme-comment);
+  --color-comment-bg:  oklch(from var(--color-comment) l c h / 0.15);
   --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h);
 
-  --color-note: var(--theme-note);
-  --color-note-bg: color-mix(in srgb, var(--color-note), var(--color-panel) 90%);
+  --color-note:        var(--theme-note);
+  --color-note-bg:     color-mix(in srgb, var(--color-note), var(--color-panel) 90%);
 
-  --color-canvas: var(--theme-canvas);
-  --color-canvas-bg: color-mix(in srgb, var(--color-canvas), var(--color-panel) 90%);
+  --color-canvas:      var(--theme-canvas);
+  --color-canvas-bg:   color-mix(in srgb, var(--color-canvas), var(--color-panel) 90%);
 
-  --color-html: var(--color-html);
-  --color-html-bg: color-mix(in srgb, var(--color-html), var(--color-panel) 90%);
+  --color-html:        var(--color-html);
+  --color-html-bg:     color-mix(in srgb, var(--color-html), var(--color-panel) 90%);
 
-  --color-folder: var(--theme-folder);
-  --color-folder-bg: color-mix(in srgb, var(--color-folder), var(--color-panel) 90%);
+  --color-folder:      var(--theme-folder);
+  --color-folder-bg:   color-mix(in srgb, var(--color-folder), var(--color-panel) 90%);
 
-  --color-email: var(--theme-email);
-  --color-email-bg: color-mix(in srgb, var(--color-email), var(--color-panel) 90%);
+  --color-email:       var(--theme-email);
+  --color-email-bg:    color-mix(in srgb, var(--color-email), var(--color-panel) 90%);
 
-  --color-code: var(--theme-code);
-  --color-code-bg: color-mix(in srgb, var(--color-code), var(--color-panel) 90%);
+  --color-code:        var(--theme-code);
+  --color-code-bg:     color-mix(in srgb, var(--color-code), var(--color-panel) 90%);
 
-  --color-pdf: var(--theme-pdf);
-  --color-pdf-bg: color-mix(in srgb, var(--color-pdf), var(--color-panel) 90%);
+  --color-pdf:         var(--theme-pdf);
+  --color-pdf-bg:      color-mix(in srgb, var(--color-pdf), var(--color-panel) 90%);
 
-  --color-image: var(--theme-image);
-  --color-image-bg: color-mix(in srgb, var(--color-image), var(--color-panel) 90%);
+  --color-image:       var(--theme-image);
+  --color-image-bg:    color-mix(in srgb, var(--color-image), var(--color-panel) 90%);
 
-  --color-write: var(--theme-write);
-  --color-write-bg: color-mix(in srgb, var(--color-write), var(--color-panel) 90%);
+  --color-write:       var(--theme-write);
+  --color-write-bg:    color-mix(in srgb, var(--color-write), var(--color-panel) 90%);
 
-  --color-chat: var(--theme-chat);
-  --color-chat-bg: color-mix(in srgb, var(--color-chat), var(--color-panel) 90%);
+  --color-chat:        var(--theme-chat);
+  --color-chat-bg:     color-mix(in srgb, var(--color-chat), var(--color-panel) 90%);
 
-  --color-video: var(--theme-video);
-  --color-video-bg: color-mix(in srgb, var(--color-video), var(--color-panel) 90%);
+  --color-video:       var(--theme-video);
+  --color-video-bg:    color-mix(in srgb, var(--color-video), var(--color-panel) 90%);
 
-  --color-rss: var(--theme-rss);
-  --color-rss-bg: color-mix(in srgb, var(--color-rss), var(--color-panel) 90%);
+  --color-rss:         var(--theme-rss);
+  --color-rss-bg:      color-mix(in srgb, var(--color-rss), var(--color-panel) 90%);
 
-  --color-calendar: oklch(0.8159 0.2849 98.77);
+  --color-calendar:    oklch(0.8159 0.2849 98.77);
   --color-calendar-bg: color-mix(in srgb, var(--color-calendar), var(--color-panel) 90%);
 
-  --color-contact: oklch(0.8617 0.1837 93.83);
-  --color-contact-bg: color-mix(in srgb, var(--color-contact), var(--color-panel) 90%);
+  --color-contact:     oklch(0.8617 0.1837 93.83);
+  --color-contact-bg:  color-mix(in srgb, var(--color-contact), var(--color-panel) 90%);
 
-  --color-default: var(--color-ink-muted);
-  --color-default-bg: color-mix(in srgb, var(--color-default), var(--color-panel) 90%);
+  --color-default:     var(--color-ink-muted);
+  --color-default-bg:  color-mix(in srgb, var(--color-default), var(--color-panel) 90%);
 
-  --color-task: var(--theme-task);
-  --color-task-bg: color-mix(in srgb, var(--color-task), var(--color-panel) 90%);
+  --color-task:        var(--theme-task);
+  --color-task-bg:     color-mix(in srgb, var(--color-task), var(--color-panel) 90%);
 
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */
@@ -217,20 +217,20 @@
   --color-focus: var(--color-accent);
 
   /* Cursor variables — override these to use custom cursors */
-  --cursor-auto: auto;
-  --cursor-default: default;
-  --cursor-pointer: default;
-  --cursor-text: text;
-  --cursor-move: move;
-  --cursor-grab: grab;
-  --cursor-grabbing: grabbing;
-  --cursor-not-allowed: not-allowed;
-  --cursor-col-resize: col-resize;
-  --cursor-row-resize: row-resize;
-  --cursor-ew-resize: ew-resize;
-  --cursor-ns-resize: ns-resize;
-  --cursor-nwse-resize: nwse-resize;
   --cursor-nesw-resize: nesw-resize;
+  --cursor-nwse-resize: nwse-resize;
+  --cursor-not-allowed: not-allowed;
+  --cursor-col-resize:  col-resize;
+  --cursor-row-resize:  row-resize;
+  --cursor-ew-resize:   ew-resize;
+  --cursor-ns-resize:   ns-resize;
+  --cursor-grabbing:    grabbing;
+  --cursor-default:     default;
+  --cursor-pointer:     default;
+  --cursor-auto:        auto;
+  --cursor-grab:        grab;
+  --cursor-move:        move;
+  --cursor-text:        text;
 }
 
 .bg-accent {
@@ -241,12 +241,6 @@
   --color-focus: var(--color-accent);
 }
 
-/*
-*{
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-accent);
-}
-*/
 
 /* NOTE: We use this as a compile-time css util in this file to be able reuse the
  * declarations while still being able to override the color. */
