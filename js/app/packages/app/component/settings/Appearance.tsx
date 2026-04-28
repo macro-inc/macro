@@ -18,7 +18,7 @@ export function Appearance() {
         'gap': '20px',
       }}
     >
-      <Panel depth={0.2}>
+      <Panel depth={0}>
         <ThemeTools />
         <ThemeEditorBasic />
       </Panel>

@@ -1,10 +1,7 @@
-@import "tailwindcss";
-/* explicitly add all tsx files for all packages instead of relying on Vite */
+@import "tailwindcss"; /* explicitly add all tsx files for all packages instead of relying on Vite */
 @source '../**/*.tsx';
 @source '../../packages/core/component/LexicalMarkdown/theme.ts';
-
-/* Legacy PDF viewer stackingContext stuff. Should be deprecated. */
-@plugin '../../tailwind-plugins/zIndex.ts';
+@plugin '../../tailwind-plugins/zIndex.ts'; /* Legacy PDF viewer stackingContext stuff. Should be deprecated. */
 
 @property --a0l { syntax: "<number>"; inherits: true; initial-value:   0.88; }
 @property --a0c { syntax: "<number>"; inherits: true; initial-value:   0.20; }
@@ -55,111 +52,70 @@
 @property --c4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
 
 @theme {
+   --color-*: initial; /* Disable default tailwind color palette */
+
+  /* accent - active, hover states, high chroma */
   --a0: oklch(var(--a0l) var(--a0c) var(--a0h));
   --a1: oklch(var(--a1l) var(--a1c) var(--a1h));
   --a2: oklch(var(--a2l) var(--a2c) var(--a2h));
   --a3: oklch(var(--a3l) var(--a3c) var(--a3h));
   --a4: oklch(var(--a4l) var(--a4c) var(--a4h));
 
-  /* main background color */
-  /* in an idealized theme, these are ordered by lightness */
-  /* in an idealized light theme, 0 is the lightest, 4 is the darkest */
-  /* in an idealized dark theme, 0 is the darkest, 4 is the lightest */
-  /* but in practice, in a particular theme, these may be unordered */
+  /* base - background colors, borders */
   --b0: oklch(var(--b0l) var(--b0c) var(--b0h));
   --b1: oklch(var(--b1l) var(--b1c) var(--b1h));
   --b2: oklch(var(--b2l) var(--b2c) var(--b2h));
   --b3: oklch(var(--b3l) var(--b3c) var(--b3h));
   --b4: oklch(var(--b4l) var(--b4c) var(--b4h));
 
-  /* body & paragraph text / icon stoke & fill */
-  /* in an idealized theme, these are ordered by lightness */
-  /* in an idealized light theme, 0 is the darkest, 4 is the lightest */
-  /* in an idealized dark theme, 0 is the lightest, 4 is the darkest */
-  /* but in practice, in a particular theme, these may be unordered */
+  /* contrast, body & paragraph text, icon stroke & fill */
   --c0: oklch(var(--c0l) var(--c0c) var(--c0h));
   --c1: oklch(var(--c1l) var(--c1c) var(--c1h));
   --c2: oklch(var(--c2l) var(--c2c) var(--c2h));
   --c3: oklch(var(--c3l) var(--c3c) var(--c3h));
   --c4: oklch(var(--c4l) var(--c4c) var(--c4h));
 
-  --theme-folder:    oklch(from var(--a0) l c 240deg);
-  --theme-canvas:    oklch(from var(--a0) l c  60deg);
-  --theme-write:     oklch(from var(--a0) l c 260deg);
-  --theme-video:     oklch(from var(--a0) l c 277deg);
-  --theme-note:      oklch(from var(--a0) l c 293deg);
-  --theme-code:      oklch(from var(--a0) l c 180deg);
-  --theme-chat:      oklch(from var(--a0) l c 220deg);
-  --theme-image:     oklch(from var(--a0) l c  95deg);
-  --theme-html:      oklch(from var(--a0) l c  47deg);
-  --theme-rss:       oklch(from var(--a0) l c 260deg);
-  --theme-pdf:       oklch(from var(--a0) l c  25deg);
-  --theme-comment:   oklch(from var(--a0) l c  90deg);
-  --theme-task:      oklch(from var(--a0) l c 150deg);
+   --transition: 0s; /* defualt 0.15, used for transition jamming, currently disabled */
 
-  --gutter-size: 8px;
-  --transition: 0.s;
-  /*--transition: 0.15s;*/
-
-  --color-*: initial; /* Disable default tailwind color palette */
+  --theme-comment: oklch(from var(--a0) l c  90deg);
+  --theme-folder:  oklch(from var(--a0) l c 240deg);
+  --theme-canvas:  oklch(from var(--a0) l c  60deg);
+  --theme-image:   oklch(from var(--a0) l c  95deg);
+  --theme-write:   oklch(from var(--a0) l c 260deg);
+  --theme-video:   oklch(from var(--a0) l c 277deg);
+  --theme-note:    oklch(from var(--a0) l c 293deg);
+  --theme-code:    oklch(from var(--a0) l c 180deg);
+  --theme-chat:    oklch(from var(--a0) l c 220deg);
+  --theme-html:    oklch(from var(--a0) l c  47deg);
+  --theme-task:    oklch(from var(--a0) l c 150deg);
+  --theme-rss:     oklch(from var(--a0) l c 260deg);
+  --theme-pdf:     oklch(from var(--a0) l c  25deg);
 
   /* Semantic Color names, use these when writing tailwind */
+  --color-accent-ink: var(--a0);
+  --color-accent:     var(--a0);
+  --color-focus:      var(--a0);
 
-  /* Generic */
-  --color-accent-0 : var(--a0);
-  --color-accent-1 : var(--a1);
-  --color-accent-2 : var(--a2);
-  --color-accent-3 : var(--a3);
-  --color-accent-4 : var(--a4);
+  --color-dialog:  var(--b0); /* dialog, e.g. dialog background */
+  --color-input:   var(--b0); /* input, e.g. chat/channel input */
+  --color-menu:    var(--b0); /* menu background */
+  --color-button:  var(--b1); /* dialog, e.g. dialog background */
+  --color-panel:   var(--b1); /* block background */
+  --color-active:  var(--b2); /* elements that are selected or activated */
+  --color-hover:   var(--b2); /* hover, e.g. hover state for buttons/items */
+  --color-message: var(--b3); /* message background */
+  --color-page:    var(--b3); /* page background */
+  --color-edge:    var(--b4); /* edge (border) */
 
-  --color-surface-0 : var(--b0);
-  --color-surface-1 : var(--b1);
-  --color-surface-2 : var(--b2);
-  --color-surface-3 : var(--b3);
-  --color-surface-4 : var(--b4);
-
-  --color-contrast-0 : var(--c0);
-  --color-contrast-1 : var(--c1);
-  --color-contrast-2 : var(--c2);
-  --color-contrast-3 : var(--c3);
-  --color-contrast-4 : var(--c4);
-
-  /* text */
-  --color-ink: var(--c0);
-  --color-ink-muted: var(--c1);
+  --color-ink:             var(--c0);
+  --color-ink-muted:       var(--c1);
   --color-ink-extra-muted: var(--c2);
-  --color-ink-disabled: var(--c3);
+  --color-ink-disabled:    var(--c3);
   --color-ink-placeholder: var(--c4);
 
-  /* accent */
-  --color-accent: var(--a0);
-  --color-accent-bg: oklch(from (var(--a0)) / .15);
-  --color-accent-ink: var(--a0);
-
-  --color-focus: var(--color-accent);
-  /* page background */
-  --color-page: var(--b3);
-  /* block background */
-  --color-panel: var(--b1);
-  /* menu background */
-  --color-menu: var(--b0);
-  /* edge (border) */
-  --color-edge: var(--b4);
-  /* muted edge */
-  --color-edge-muted: color-mix(in srgb, var(--color-edge), var(--color-panel) 50%);
-  /* input, e.g. chat/channel input */
-  --color-input: var(--b0);
-  /* message background */
-  --color-message: var(--b3);
-  /* overlay, e.g. modal background */
-  --color-overlay: oklch(from var(--b2) l c h / .5); /* maybe break */
-  /* hover, e.g. hover state for buttons/items */
-  --color-hover: var(--b2);
-  /* elements that are selected or activated */
-  --color-active: var(--b2);
-  /* dialog, e.g. dialog background */
-  --color-dialog: var(--b0);
-  --color-button: var(--b1);
+  --color-edge-muted: color-mix(in srgb, var(--b4), var(--b1) 50%); /* muted edge */
+  --color-overlay:    oklch(from var(--b2) l c h / 0.5); /* overlay, e.g. modal background */
+  --color-accent-bg:  oklch(from (var(--a0)) / 0.15);
 
 
   /* Below are hardcoded colors */
