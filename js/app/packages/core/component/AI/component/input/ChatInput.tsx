@@ -203,7 +203,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       <div
         id="chat-input"
         ref={containerRef}
-        class="relative flex flex-col bg-input transition-all duration-150"
+        class="relative flex flex-col"
       >
         <Show when={hasAttachments()}>
           <div class="px-2 pt-2 w-full">
@@ -236,7 +236,7 @@ export function ChatInput(props: ChatInputComponentProps) {
           <div
             id="chat-input-text-area"
             class={cn(
-              'text-sm sm:text-sm text-ink transition-all duration-150 ease-out'
+              'text-sm sm:text-sm text-ink'
             )}
             classList={{
               'pl-8': !isMultiline(),
@@ -259,7 +259,7 @@ export function ChatInput(props: ChatInputComponentProps) {
           </div>
 
           <div
-            class="absolute left-2 transition-all duration-150 ease-out"
+            class="absolute left-2"
             classList={{
               'top-1/2 -translate-y-1/2': !isMultiline(),
               'bottom-1.5 top-auto translate-y-0': isMultiline(),
@@ -269,7 +269,7 @@ export function ChatInput(props: ChatInputComponentProps) {
           </div>
 
           <div
-            class="absolute right-2 transition-all duration-150 ease-out"
+            class="absolute right-2"
             classList={{
               'top-1/2 -translate-y-1/2': !isMultiline(),
               'bottom-1.5 top-auto translate-y-0': isMultiline(),

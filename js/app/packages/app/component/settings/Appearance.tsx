@@ -13,9 +13,9 @@ export function Appearance() {
         'grid-template-columns': '1fr',
         'overflow': 'hidden',
         'display': 'grid',
-        'padding': '20px',
         'height': '100%',
-        'gap': '20px',
+        'padding': '8px',
+        'gap': '8px',
       }}
     >
       <Panel depth={2}>
@@ -23,7 +23,7 @@ export function Appearance() {
         <ThemeEditorBasic />
       </Panel>
 
-      <div class="@container grid grid-cols-1 @[700px]:grid-cols-2 gap-5 overflow-hidden min-h-0">
+      <div class="@container grid grid-cols-1 @[700px]:grid-cols-2 gap-2 overflow-hidden min-h-0">
         <Panel depth={2}>
           <ThemeList />
         </Panel>
