@@ -1025,12 +1025,29 @@ impl CallRepository for PgCallRepo {
         // Fetch call headers from both active and archived tables, ordered by
         // start time descending. We intentionally exclude transcripts (too
         // large for the soup feed).
+        //
+        // Visibility is derived from the `entity_access` table: a call is
+        // visible to the user if there's an entity_access row whose
+        // `source_id` matches one of the user's source ids (their
+        // channel memberships, team memberships, or their own user id).
+        // This mirrors `entity_access::pg_access_repo::queries::call_access`.
         let channel_ids = extract_channel_ids(filter);
         let has_channel_filter = !channel_ids.is_empty();
         let attended = extract_attended(filter);
 
         let rows = sqlx::query!(
             r#"
+            WITH user_source_ids AS (
+                SELECT cp.channel_id::text AS source_id
+                FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                UNION ALL
+                SELECT t.team_id::text AS source_id
+                FROM team_user t
+                WHERE t.user_id = $1
+                UNION ALL
+                SELECT $1 AS source_id
+            )
             SELECT
                 id as "call_id!",
                 channel_id as "channel_id!",
@@ -1045,10 +1062,10 @@ impl CallRepository for PgCallRepo {
                 true as "is_active!"
             FROM calls c
             WHERE EXISTS (
-                SELECT 1 FROM comms_channel_participants ccp
-                WHERE ccp.channel_id = c.channel_id
-                  AND ccp.user_id = $1
-                  AND ccp.left_at IS NULL
+                SELECT 1 FROM entity_access ea
+                JOIN user_source_ids u ON u.source_id = ea.source_id
+                WHERE ea.entity_id = c.id
+                  AND ea.entity_type = 'call'
             )
             AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
             AND ($5::bool IS NULL OR EXISTS (
@@ -1070,10 +1087,10 @@ impl CallRepository for PgCallRepo {
                 false as "is_active!"
             FROM call_records cr
             WHERE EXISTS (
-                SELECT 1 FROM comms_channel_participants ccp
-                WHERE ccp.channel_id = cr.channel_id
-                  AND ccp.user_id = $1
-                  AND ccp.left_at IS NULL
+                SELECT 1 FROM entity_access ea
+                JOIN user_source_ids u ON u.source_id = ea.source_id
+                WHERE ea.entity_id = cr.id
+                  AND ea.entity_type = 'call'
             )
             AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
             AND ($5::bool IS NULL OR EXISTS (
