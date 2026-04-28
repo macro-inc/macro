@@ -1,5 +1,5 @@
 import { batch } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, reconcile } from 'solid-js/store';
 import { compileToAst, type TargetAstMap } from './compile';
 import { addFieldValues, removeFieldValues } from './field-values';
 import type { FieldFilters, QueryState, Query } from './types';
@@ -17,7 +17,10 @@ const emptyQueryState = (): QueryState => ({
   emailView: undefined,
 });
 
-const mergeFields = (
+// For replace(): produces the full next fields object, dropping keys whose
+// value is undefined or an empty array. Paired with reconcile() so the
+// dropped keys are actually gone from the store.
+const compactedFields = (
   prev: FieldFilters,
   updates: FieldFilters | undefined
 ): FieldFilters => {
@@ -31,6 +34,21 @@ const mergeFields = (
     }
   }
   return result as FieldFilters;
+};
+
+// For set(): produces a partial update where cleared values are encoded as
+// `undefined`. Solid's store merge removes keys set to undefined; an object
+// that just *omits* the key would leave the old value behind.
+const partialFieldUpdate = (updates: FieldFilters): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === undefined || (Array.isArray(value) && value.length === 0)) {
+      out[key] = undefined;
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
 };
 
 const mergeQuery = (base: QueryState, query: Query): QueryState => ({
@@ -65,23 +83,25 @@ export function createQueryStore(options: QueryStoreOptions = {}) {
 
   const replace = (query: Query | null) => {
     if (query === null) {
-      setState(emptyQueryState());
+      setState(reconcile(emptyQueryState()));
       return;
     }
-    setState({
-      include: mergeFields({}, query.include),
-      exclude: mergeFields({}, query.exclude),
-      emailView: query.emailView,
-    });
+    setState(
+      reconcile({
+        include: compactedFields({}, query.include),
+        exclude: compactedFields({}, query.exclude),
+        emailView: query.emailView,
+      })
+    );
   };
 
   const set = (query: Query) => {
     batch(() => {
       if (query.include) {
-        setState('include', (prev) => mergeFields(prev, query.include));
+        setState('include', partialFieldUpdate(query.include));
       }
       if (query.exclude) {
-        setState('exclude', (prev) => mergeFields(prev, query.exclude));
+        setState('exclude', partialFieldUpdate(query.exclude));
       }
       if (query.emailView !== undefined) {
         setState('emailView', query.emailView);
