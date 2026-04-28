@@ -115,11 +115,11 @@ pub struct UndirectedGraph<'a, T> {
 
 impl<'a, T> Edge<'a, T> {
     /// return a reference to the inner vertex a
-    pub fn a(&'a self) -> &'a Vertex<'a, T> {
+    pub fn a(&self) -> &Vertex<'a, T> {
         &self.a
     }
     /// return a reference to the inner vertex b
-    pub fn b(&'a self) -> &'a Vertex<'a, T> {
+    pub fn b(&self) -> &Vertex<'a, T> {
         &self.b
     }
 }
