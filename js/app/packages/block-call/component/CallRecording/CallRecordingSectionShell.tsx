@@ -65,7 +65,9 @@ export function CallRecordingSectionShell(props: {
         fallback={
           <div class="isolate flex shrink-0 items-center gap-2 sticky top-0 bg-panel z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
             {props.icon}
-            <p class="font-semibold text-ink select-none text-sm shrink-0">{props.title}</p>
+            <p class="font-semibold text-ink select-none text-sm shrink-0">
+              {props.title}
+            </p>
             <Show when={props.onToggle}>
               <button
                 type="button"
@@ -78,10 +80,14 @@ export function CallRecordingSectionShell(props: {
                 <Show
                   when={props.open}
                   fallback={
-                    props.toggleIconClosed ?? <UserCircleMinus class="size-4 shrink-0" />
+                    props.toggleIconClosed ?? (
+                      <UserCircleMinus class="size-4 shrink-0" />
+                    )
                   }
                 >
-                  {props.toggleIconOpen ?? <UserCircle class="size-4 shrink-0" />}
+                  {props.toggleIconOpen ?? (
+                    <UserCircle class="size-4 shrink-0" />
+                  )}
                 </Show>
               </button>
             </Show>
@@ -101,7 +107,10 @@ export function CallRecordingSectionShell(props: {
             {props.title}
           </p>
           <span class="ml-auto flex shrink-0 items-center text-ink-muted">
-            <Show when={isOpen()} fallback={<EyeSlash class="size-4 shrink-0" />}>
+            <Show
+              when={isOpen()}
+              fallback={<EyeSlash class="size-4 shrink-0" />}
+            >
               <Eye class="size-4 shrink-0" />
             </Show>
           </span>
@@ -125,9 +134,7 @@ export function CallRecordingSectionShell(props: {
         style={
           props.accordion
             ? {
-                'max-height': isOpen()
-                  ? `${accordionOpenCapPx()}px`
-                  : '0px',
+                'max-height': isOpen() ? `${accordionOpenCapPx()}px` : '0px',
               }
             : undefined
         }

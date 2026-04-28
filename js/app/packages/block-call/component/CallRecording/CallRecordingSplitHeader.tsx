@@ -21,7 +21,9 @@ export function CallRecordingSplitHeaderLoading() {
   );
 }
 
-export function CallRecordingSplitHeader(props: { record: Accessor<CallRecord> }) {
+export function CallRecordingSplitHeader(props: {
+  record: Accessor<CallRecord>;
+}) {
   const record = props.record;
   return (
     <SplitHeaderLeft>

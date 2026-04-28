@@ -18,7 +18,7 @@ export function useGetOrCreateDirectMessageMutation(
     Error,
     GetOrCreateDirectMessageParams,
     undefined
-  >,
+  >
 ) {
   return useMutation(() => ({
     gcTime: 0,
@@ -26,7 +26,7 @@ export function useGetOrCreateDirectMessageMutation(
       return await throwOnErr(async () =>
         commsServiceClient.getOrCreateDirectMessage({
           recipient_id: vars.recipient_id,
-        }),
+        })
       );
     },
     ...withCallbacks<
@@ -41,7 +41,7 @@ export function useGetOrCreateDirectMessageMutation(
         },
         onSettled: () => void invalidateListChannels(),
       },
-      callbacks,
+      callbacks
     ),
   }));
 }

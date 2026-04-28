@@ -67,7 +67,11 @@ export function CallRecordingParticipantsSection(props: {
                   onClick={() => openDirectMessage(participant.userId)}
                 >
                   <div class="shrink-0">
-                    <UserIcon id={participant.userId} size="xs" isDeleted={false} />
+                    <UserIcon
+                      id={participant.userId}
+                      size="xs"
+                      isDeleted={false}
+                    />
                   </div>
                   <span class="font-semibold truncate flex-1 text-ink">
                     {idToEmail(participant.userId)}

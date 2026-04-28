@@ -203,7 +203,10 @@ function createInCallPanelSlimToggle(args: {
         onMaxWidthEnd = onEnd;
         el.addEventListener('transitionend', onEnd);
 
-        fallbackTimer = globalThis.setTimeout(finishExpand, SIDEBAR_MAX_WIDTH_TRANSITION_MS + 80);
+        fallbackTimer = globalThis.setTimeout(
+          finishExpand,
+          SIDEBAR_MAX_WIDTH_TRANSITION_MS + 80
+        );
       });
     },
   } as const;

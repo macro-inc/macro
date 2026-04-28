@@ -29,7 +29,7 @@ export function ChannelCallButton(props: { channelId: string }) {
 
   const handleClick = async () => {
     if (call.isJoining() || call.isLeaving()) return;
-    
+
     try {
       if (call.isInThisChannel()) {
         await call.leaveCall();

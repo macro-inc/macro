@@ -15,7 +15,8 @@ export function InCallParticipantAvatar(props: {
   member: InCallPanelMember;
   size?: UserIconProps['size'];
 }) {
-  const rawIdentity = () => profilePictureIdForMember(props.panel, props.member);
+  const rawIdentity = () =>
+    profilePictureIdForMember(props.panel, props.member);
 
   const size = () => props.size ?? 'md';
 

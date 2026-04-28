@@ -55,7 +55,9 @@ export function ChannelCallTab(props: {
         <div class="flex size-full flex-col items-center justify-center gap-3 text-ink-muted px-4">
           <p class="text-center">{call.joinError()}</p>
           <Show when={call.isJoining()}>
-            <p class="text-xs text-ink-extra-muted animate-pulse">Connecting…</p>
+            <p class="text-xs text-ink-extra-muted animate-pulse">
+              Connecting…
+            </p>
           </Show>
           <button
             type="button"

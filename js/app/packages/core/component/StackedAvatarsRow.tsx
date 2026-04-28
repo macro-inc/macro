@@ -118,11 +118,15 @@ export function stackedAvatarInnerClass(size: StackedAvatarsSize = 'md') {
 }
 
 /** Default +N chip shell (no text); pair with {@link stackedAvatarOverflowChipTextClass}. */
-export function stackedAvatarOverflowChipClass(size: StackedAvatarsSize = 'md') {
+export function stackedAvatarOverflowChipClass(
+  size: StackedAvatarsSize = 'md'
+) {
   return STACK_STYLE[size].overflowChip;
 }
 
-export function stackedAvatarOverflowChipTextClass(size: StackedAvatarsSize = 'md') {
+export function stackedAvatarOverflowChipTextClass(
+  size: StackedAvatarsSize = 'md'
+) {
   return STACK_STYLE[size].overflowChipText;
 }
 
@@ -164,13 +168,15 @@ export type StackedAvatarsRowProps<T = unknown> = {
   /** Face slot; use `UserIcon` with `showTooltip={false}` if you add your own `Tooltip`. */
   children: (item: T, index: number) => JSX.Element;
   /** Plain tooltip on the +N chip when not using `overflowTooltipContent`. */
-  overflowTooltip?: string | ((ctx: StackedAvatarsOverflowContext<T>) => string | undefined);
+  overflowTooltip?:
+    | string
+    | ((ctx: StackedAvatarsOverflowContext<T>) => string | undefined);
   overflowTooltipContent?: (
     close: () => void,
-    ctx: StackedAvatarsOverflowContext<T>,
+    ctx: StackedAvatarsOverflowContext<T>
   ) => JSX.Element;
   overflowWrap?: (
-    ctx: StackedAvatarsOverflowContext<T> & { chip: JSX.Element },
+    ctx: StackedAvatarsOverflowContext<T> & { chip: JSX.Element }
   ) => JSX.Element;
   renderOverflow?: (ctx: StackedAvatarsOverflowContext<T>) => JSX.Element;
   overflowChipClass?: string;
@@ -191,20 +197,22 @@ function defaultOverflowChip(
   size: StackedAvatarsSize,
   overflowCount: number,
   chipClass?: string,
-  labelClass?: string,
+  labelClass?: string
 ): JSX.Element {
   return (
     <div
       class={cn(stackedAvatarOverflowChipClass(size), chipClass)}
       data-ui="stacked-avatars-overflow-chip"
     >
-      <span class={cn(stackedAvatarOverflowChipTextClass(size), labelClass)}>{`+${overflowCount}`}</span>
+      <span
+        class={cn(stackedAvatarOverflowChipTextClass(size), labelClass)}
+      >{`+${overflowCount}`}</span>
     </div>
   );
 }
 
 export function StackedAvatarsRow<T = unknown>(
-  props: StackedAvatarsRowProps<T>,
+  props: StackedAvatarsRowProps<T>
 ) {
   const size = () => props.size ?? 'md';
 
@@ -223,7 +231,7 @@ export function StackedAvatarsRow<T = unknown>(
 
   /** `distribute="fill"` only affects layout at or above the `max` slot cap. */
   const useFillWidthLayout = createMemo(
-    () => distributeFill() && all().length >= maxed(),
+    () => distributeFill() && all().length >= maxed()
   );
 
   createEffect(() => {
@@ -247,7 +255,7 @@ export function StackedAvatarsRow<T = unknown>(
     (): StackedAvatarsOverflowContext<T> => ({
       overflowItems: overflow(),
       overflowCount: overflowCount(),
-    }),
+    })
   );
 
   const plainOverflowTooltip = createMemo(() => {
@@ -270,8 +278,7 @@ export function StackedAvatarsRow<T = unknown>(
     const rowWidthPx = rowWidth();
     const visibleFaces = visible();
     const overflowFaceCount = overflowCount();
-    const slotCount =
-      visibleFaces.length + (overflowFaceCount > 0 ? 1 : 0);
+    const slotCount = visibleFaces.length + (overflowFaceCount > 0 ? 1 : 0);
     const faceDiameterPx = AVATAR_DIAMETER_PX[size()];
 
     if (slotCount < 2 || rowWidthPx < 1) return null;
@@ -283,7 +290,7 @@ export function StackedAvatarsRow<T = unknown>(
     const maxMarginRightPx = Math.max(24, Math.round(faceDiameterPx * 0.45));
     marginRightPerGapPx = Math.max(
       minMarginRightPx,
-      Math.min(maxMarginRightPx, marginRightPerGapPx),
+      Math.min(maxMarginRightPx, marginRightPerGapPx)
     );
 
     return marginRightPerGapPx;
@@ -295,12 +302,12 @@ export function StackedAvatarsRow<T = unknown>(
       !(useFillWidthLayout() && fillStepMarginPx() !== null) && overlap(),
       !(useFillWidthLayout() && fillStepMarginPx() !== null) &&
         lastNoOverflowChip &&
-        '!mr-0',
+        '!mr-0'
     );
 
   const faceWrapperStyle = (
     index: number,
-    lastNoOverflowChip: boolean,
+    lastNoOverflowChip: boolean
   ): JSX.CSSProperties | undefined => {
     const stackingStyle: JSX.CSSProperties = {
       'z-index': String(10 + index),
@@ -346,7 +353,7 @@ export function StackedAvatarsRow<T = unknown>(
       size(),
       ctx.overflowCount,
       props.overflowChipClass,
-      props.overflowChipLabelClass,
+      props.overflowChipLabelClass
     );
 
     if (props.overflowWrap) {
@@ -360,12 +367,12 @@ export function StackedAvatarsRow<T = unknown>(
           tooltip={(close) => props.overflowTooltipContent!(close, ctx)}
         >
           {chip}
-        </Tooltip>,
+        </Tooltip>
       );
     }
 
     return faceShell(
-      <Tooltip tooltip={plainOverflowTooltip()}>{chip}</Tooltip>,
+      <Tooltip tooltip={plainOverflowTooltip()}>{chip}</Tooltip>
     );
   };
 

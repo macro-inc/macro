@@ -127,7 +127,10 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
   const joinCall = async () => {
     setJoinUiPending(true);
     const safetyMs = JOIN_TIMEOUT_MS + 5_000;
-    const safetyTimer = globalThis.setTimeout(() => setJoinUiPending(false), safetyMs);
+    const safetyTimer = globalThis.setTimeout(
+      () => setJoinUiPending(false),
+      safetyMs
+    );
     try {
       await joinCallMutation.mutateAsync(channelId());
     } finally {

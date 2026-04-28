@@ -16,7 +16,10 @@ export function CallRecordingMediaColumn(props: {
   suppressWideParticipantsMotion: Accessor<boolean>;
   participantsContentHeight: Accessor<number>;
   setParticipantsContentRef: Setter<HTMLDivElement | undefined>;
-  onTimeUpdate: (seconds: number, source: CallRecordingTimeUpdateSource) => void;
+  onTimeUpdate: (
+    seconds: number,
+    source: CallRecordingTimeUpdateSource
+  ) => void;
   setVideoRef: Setter<HTMLVideoElement | undefined>;
 }) {
   return (

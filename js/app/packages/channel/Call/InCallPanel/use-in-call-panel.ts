@@ -44,10 +44,7 @@ export function useInCallPanel(
   });
 
   const avatarSplit = createMemo(() =>
-    splitInCallMembersForAvatars(
-      members(),
-      IN_CALL_PANEL_VISIBLE_AVATAR_COUNT
-    )
+    splitInCallMembersForAvatars(members(), IN_CALL_PANEL_VISIBLE_AVATAR_COUNT)
   );
 
   const isActive = () => {
@@ -70,7 +67,8 @@ export function useInCallPanel(
     toggleScreenShare: () => callCtx.toggleScreenShare(),
     leaveCall: () => call.leaveCall(),
     switchAudioInput: (deviceId: string) => callCtx.switchAudioInput(deviceId),
-    switchAudioOutput: (deviceId: string) => callCtx.switchAudioOutput(deviceId),
+    switchAudioOutput: (deviceId: string) =>
+      callCtx.switchAudioOutput(deviceId),
     switchVideoInput: (deviceId: string) => callCtx.switchVideoInput(deviceId),
   };
 

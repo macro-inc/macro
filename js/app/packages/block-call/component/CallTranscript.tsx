@@ -88,7 +88,10 @@ function TranscriptSegmentRow(props: {
           >
             <Message.SenderName />
             <span class="ml-auto text-xs text-ink-muted tabular-nums">
-              <Show when={videoTimestamp !== null} fallback={<Message.Timestamp />}>
+              <Show
+                when={videoTimestamp !== null}
+                fallback={<Message.Timestamp />}
+              >
                 {formatVideoTimestamp(videoTimestamp ?? 0)}
               </Show>
             </span>
@@ -310,9 +313,7 @@ export function CallTranscript(props: {
   });
 
   return (
-    <div
-      class="relative flex h-full min-h-0 flex-col overflow-hidden"
-    >
+    <div class="relative flex h-full min-h-0 flex-col overflow-hidden">
       <div class="relative flex flex-1 min-h-0 flex-col">
         <div
           ref={setScrollRef}
@@ -324,44 +325,51 @@ export function CallTranscript(props: {
             updateActiveRowVisibility();
           }}
         >
+          <Show when={!props.hideHeader}>
+            <div class="isolate flex items-center gap-2 sticky top-0 bg-panel z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
+              <Subtitles class="size-4 text-ink shrink-0" />
+              <p class="font-semibold text-ink select-none text-sm shrink-0">
+                Transcript
+              </p>
+            </div>
+          </Show>
 
-        <Show when={!props.hideHeader}>
-          <div class="isolate flex items-center gap-2 sticky top-0 bg-panel z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
-            <Subtitles class="size-4 text-ink shrink-0" />
-            <p class="font-semibold text-ink select-none text-sm shrink-0">Transcript</p>
-          </div>
-        </Show>
-
-        <div class="flex flex-col p-4 pt-0">
-          <For each={transcriptMeta().items}>
-            {(item) => (
-              <Show
-                when={item.groupedWithPrevious}
-                fallback={
+          <div class="flex flex-col p-4 pt-0">
+            <For each={transcriptMeta().items}>
+              {(item) => (
+                <Show
+                  when={item.groupedWithPrevious}
+                  fallback={
+                    <div
+                      ref={(el) => rowRefs.set(item.segment.sequenceNum, el)}
+                    >
+                      <TranscriptSegmentRow
+                        segment={item.segment}
+                        channelId={props.channelId}
+                        isActive={
+                          item.segment.sequenceNum === props.activeSequenceNum
+                        }
+                        timelineStartMs={transcriptMeta().timelineStartMs}
+                        onSeekToSeconds={props.onSeekToSeconds}
+                      />
+                    </div>
+                  }
+                >
                   <div ref={(el) => rowRefs.set(item.segment.sequenceNum, el)}>
-                    <TranscriptSegmentRow
+                    <GroupedTranscriptSegmentRow
                       segment={item.segment}
                       channelId={props.channelId}
-                      isActive={item.segment.sequenceNum === props.activeSequenceNum}
+                      isActive={
+                        item.segment.sequenceNum === props.activeSequenceNum
+                      }
                       timelineStartMs={transcriptMeta().timelineStartMs}
                       onSeekToSeconds={props.onSeekToSeconds}
                     />
                   </div>
-                }
-              >
-                <div ref={(el) => rowRefs.set(item.segment.sequenceNum, el)}>
-                  <GroupedTranscriptSegmentRow
-                    segment={item.segment}
-                    channelId={props.channelId}
-                    isActive={item.segment.sequenceNum === props.activeSequenceNum}
-                    timelineStartMs={transcriptMeta().timelineStartMs}
-                    onSeekToSeconds={props.onSeekToSeconds}
-                  />
-                </div>
-              </Show>
-            )}
-          </For>
-        </div>
+                </Show>
+              )}
+            </For>
+          </div>
         </div>
       </div>
       <Show
@@ -374,7 +382,10 @@ export function CallTranscript(props: {
       >
         <div
           class="absolute bottom-0 right-px left-px px-2 pb-2 flex justify-center pointer-events-none z-20"
-          style={{ 'background-image': 'linear-gradient(transparent, var(--color-panel) 85%)' }}
+          style={{
+            'background-image':
+              'linear-gradient(transparent, var(--color-panel) 85%)',
+          }}
         >
           <button
             type="button"

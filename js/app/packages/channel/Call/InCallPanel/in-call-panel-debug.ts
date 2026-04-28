@@ -19,7 +19,9 @@ export function readInCallPanelDebugExtraRemoteCount(): number {
   return Math.min(n, MAX_EXTRAS);
 }
 
-export function debugInCallExtraRemoteMembers(count: number): InCallPanelMember[] {
+export function debugInCallExtraRemoteMembers(
+  count: number
+): InCallPanelMember[] {
   return Array.from({ length: count }, (_, i) => {
     const participant = {
       sid: `debug-mock-${i}`,

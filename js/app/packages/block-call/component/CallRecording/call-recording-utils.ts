@@ -28,8 +28,7 @@ export function dedupeCallRecordingParticipants(
       unique.set(participant.userId, {
         userId: participant.userId,
         joinedAt: participant.joinedAt,
-        role:
-          participant.userId === createdBy ? 'organizer' : 'participant',
+        role: participant.userId === createdBy ? 'organizer' : 'participant',
       });
     }
   }

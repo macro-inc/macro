@@ -1,11 +1,6 @@
 import { Popover } from '@kobalte/core/popover';
 import UserCircle from '@icon/regular/user-circle.svg';
-import {
-  For,
-  Show,
-  createMemo,
-  createSignal,
-} from 'solid-js';
+import { For, Show, createMemo, createSignal } from 'solid-js';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { toast } from '@core/component/Toast/Toast';
 import { useSplitLayout } from '@app/component/split-layout/layout';
@@ -84,7 +79,8 @@ export function InCallParticipantNameRow(props: {
   const openDm = () => {
     if (props.member.kind !== 'remote') return;
     const { identity } = props.member.participant;
-    if (!identity.startsWith('macro|') || !identity.slice(6).includes('@')) return;
+    if (!identity.startsWith('macro|') || !identity.slice(6).includes('@'))
+      return;
     getOrCreateDmMutation.mutate(
       { recipient_id: identity },
       {
@@ -92,7 +88,7 @@ export function InCallParticipantNameRow(props: {
           props.onClose();
           replaceOrInsertSplit({ type: 'channel', id: channel_id });
         },
-      },
+      }
     );
   };
 
@@ -109,7 +105,11 @@ export function InCallParticipantNameRow(props: {
         isInteractive() ? 'cursor-pointer hover:bg-hover' : 'cursor-default'
       )}
     >
-      <InCallParticipantAvatar panel={props.panel} member={props.member} size="sm" />
+      <InCallParticipantAvatar
+        panel={props.panel}
+        member={props.member}
+        size="sm"
+      />
       <span class="truncate text-sm text-ink">{label()}</span>
       <Show when={props.member.kind === 'local'}>
         <span class="ml-auto text-xs text-ink-muted shrink-0">You</span>
@@ -128,7 +128,7 @@ export type InCallParticipantsListPopoverProps = {
  * Parent should render only when the panel is in slim layout.
  */
 export function InCallParticipantsListPopover(
-  props: InCallParticipantsListPopoverProps,
+  props: InCallParticipantsListPopoverProps
 ) {
   const [open, setOpen] = createSignal(false);
 
@@ -150,7 +150,7 @@ export function InCallParticipantsListPopover(
         type="button"
         class={cn(
           'inline-flex items-center justify-center rounded-full bg-transparent p-0 transition-colors hover:bg-accent/15 cursor-pointer text-accent',
-          props.class,
+          props.class
         )}
         aria-haspopup="dialog"
         aria-expanded={open()}

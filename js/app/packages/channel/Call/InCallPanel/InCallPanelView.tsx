@@ -77,8 +77,8 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
     return out;
   });
 
-  const controlsVariant = createMemo((): CallControlsVariant =>
-    slim() ? 'panel-small' : 'panel'
+  const controlsVariant = createMemo(
+    (): CallControlsVariant => (slim() ? 'panel-small' : 'panel')
   );
 
   const showExpandToFullCall = createMemo(() => !onCallPage());
@@ -100,7 +100,12 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
         class="relative isolate overflow-hidden rounded-lg border border-edge-muted"
       >
         <div class={headerRowClass()}>
-          <div class={cn("flex min-w-0 shrink-0 items-center gap-0.5", slim() && !showExpandToFullCall() && 'p-1')}>
+          <div
+            class={cn(
+              'flex min-w-0 shrink-0 items-center gap-0.5',
+              slim() && !showExpandToFullCall() && 'p-1'
+            )}
+          >
             <Show when={showHeaderPulse()}>
               <span
                 class={cn(
@@ -111,9 +116,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
             </Show>
 
             <Show when={showCallLabel()}>
-              <span class="text-sm text-accent truncate">
-                Call
-              </span>
+              <span class="text-sm text-accent truncate">Call</span>
             </Show>
           </div>
 
@@ -132,10 +135,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
               }}
             >
               <ArrowsOut
-                class={cn(
-                  'text-accent',
-                  slim() ? 'h-3.5 w-3.5' : 'h-4 w-4'
-                )}
+                class={cn('text-accent', slim() ? 'h-3.5 w-3.5' : 'h-4 w-4')}
               />
             </button>
           </Show>
@@ -189,7 +189,12 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
           </div>
         </div>
 
-        <div class={cn(!slim() && 'bg-panel border-t border-edge-muted', slim() && 'px-2 pt-1 pb-2')}>
+        <div
+          class={cn(
+            !slim() && 'bg-panel border-t border-edge-muted',
+            slim() && 'px-2 pt-1 pb-2'
+          )}
+        >
           <CallControls
             variant={controlsVariant()}
             when={props.showCallControls}

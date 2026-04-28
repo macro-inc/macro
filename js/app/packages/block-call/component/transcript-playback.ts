@@ -30,7 +30,10 @@ export function getActiveTranscriptSequenceNum(
 
     // Use the latest segment whose start is <= playback time.
     // This handles close/identical timestamps without skipping rows.
-    if (currentTimelineMs >= currentStartMs && rawTimelineMs >= currentStartMs) {
+    if (
+      currentTimelineMs >= currentStartMs &&
+      rawTimelineMs >= currentStartMs
+    ) {
       activeSequenceNum = sortedTranscript[i].sequenceNum;
     } else {
       break;

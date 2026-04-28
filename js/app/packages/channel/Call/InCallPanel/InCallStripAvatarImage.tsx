@@ -26,7 +26,7 @@ export const InCallStripAvatarImage: Component<{
   trackCall?: () => unknown;
 }> = (props) => {
   const [displayName] = useDisplayName(
-    props.image.stripLocalPending ? undefined : tryMacroId(props.image.userId),
+    props.image.stripLocalPending ? undefined : tryMacroId(props.image.userId)
   );
 
   const nameLabel = () => {
@@ -44,9 +44,7 @@ export const InCallStripAvatarImage: Component<{
 
   return (
     <Tooltip
-      tooltip={
-        <span class="wrap-break-word text-ink">{nameLabel()}</span>
-      }
+      tooltip={<span class="wrap-break-word text-ink">{nameLabel()}</span>}
     >
       <Show
         when={props.image.stripLocalPending}
@@ -62,7 +60,9 @@ export const InCallStripAvatarImage: Component<{
           </div>
         }
       >
-        <StackedAvatarsDefaultEmptyPlaceholder size={IN_CALL_STRIP_IMAGE_SIZE} />
+        <StackedAvatarsDefaultEmptyPlaceholder
+          size={IN_CALL_STRIP_IMAGE_SIZE}
+        />
       </Show>
     </Tooltip>
   );

@@ -44,7 +44,8 @@ export function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
     createSignal(false);
   const [participantsContentRef, setParticipantsContentRef] =
     createSignal<HTMLDivElement>();
-  const [participantsContentHeight, setParticipantsContentHeight] = createSignal(0);
+  const [participantsContentHeight, setParticipantsContentHeight] =
+    createSignal(0);
   const [videoSeekGeneration, setVideoSeekGeneration] = createSignal(0);
   let lastVideoSeekBumpKey: string | null = null;
   let lastVideoSeekBumpAtMs = 0;
@@ -131,7 +132,8 @@ export function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
       const prev = prevLayoutStacked;
       if (prev !== undefined && prev !== stacked) {
         if (stacked) {
-          if (transcriptOpen() && participantsOpen()) setParticipantsOpen(false);
+          if (transcriptOpen() && participantsOpen())
+            setParticipantsOpen(false);
         } else {
           setSuppressWideParticipantsMotion(true);
           setTranscriptOpen(hasTranscripts());

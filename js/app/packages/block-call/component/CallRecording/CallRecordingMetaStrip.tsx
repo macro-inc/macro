@@ -76,7 +76,9 @@ export function CallRecordingMetaStrip(props: {
           aria-label={
             props.participantsOpen ? 'Hide participants' : 'Show participants'
           }
-          title={props.participantsOpen ? 'Hide participants' : 'Show participants'}
+          title={
+            props.participantsOpen ? 'Hide participants' : 'Show participants'
+          }
           onClick={() => props.onToggleParticipants()}
         >
           <Show when={props.participantsOpen}>
