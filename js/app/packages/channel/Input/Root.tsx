@@ -1,4 +1,3 @@
-import { isMobile } from '@core/mobile/isMobile';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { cn } from '@ui/utils/classname';
 import { type JSX, splitProps } from 'solid-js';
