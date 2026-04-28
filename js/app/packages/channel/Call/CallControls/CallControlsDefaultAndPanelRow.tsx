@@ -155,7 +155,7 @@ export function CallControlsDefaultAndPanelRow(
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
   const size = () => props.size();
-  const iconClass = () => (size() === 'panel' ? 'w-4 h-4' : 'w-5 h-5');
+  const iconClass = () => (size() === 'sm' ? 'w-4 h-4' : 'w-5 h-5');
   const toggleShareWithTeam = useToggleShareWithTeamMutation();
 
   const handleToggleShareWithTeam = async () => {
@@ -170,9 +170,8 @@ export function CallControlsDefaultAndPanelRow(
       data-call-controls
       class={cn(
         'flex flex-row flex-wrap items-center',
-        size() === 'default' && 'justify-center gap-3',
-        size() === 'panel' &&
-          'justify-around gap-0 divide-x divide-edge-muted [&>*]:px-1 [&>*:first-child]:pl-0',
+        size() === 'md' && 'justify-center gap-3',
+        size() === 'sm' && 'justify-around gap-0 py-1',
         props.class
       )}
     >
@@ -238,6 +237,7 @@ export function CallControlsDefaultAndPanelRow(
       </CallControlButtonWithDropdown>
 
       <CallControlButton
+        class="border-0"
         size={size()}
         onClick={() => callCtx.toggleScreenShare()}
         active={callCtx.isScreenSharing()}
@@ -247,6 +247,7 @@ export function CallControlsDefaultAndPanelRow(
       </CallControlButton>
 
       <CallControlButton
+        class="border-0"
         size={size()}
         onClick={handleToggleShareWithTeam}
         active={callCtx.isSharedWithTeam()}
@@ -256,6 +257,7 @@ export function CallControlsDefaultAndPanelRow(
       </CallControlButton>
 
       <CallControlButton
+        class="border-0"
         size={size()}
         onClick={props.onLeave}
         disabled={isConnecting()}

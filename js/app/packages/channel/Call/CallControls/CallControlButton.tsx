@@ -1,51 +1,65 @@
-import { createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  splitProps,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import { cn } from '@ui/utils/classname';
+import type { OverrideComponentProps } from '@kobalte/core';
 
-const panelHoverOpacity =
-  'transition-opacity duration-150 opacity-100 hover:opacity-70';
-
-export type CallControlButtonSize = 'default' | 'panel';
+export type CallControlButtonSize = 'sm' | 'md';
+export type CallControlButtonVariant = 'default' | 'active' | 'danger';
 
 export const callControlButtonStyles = {
-  base: 'flex items-center justify-center transition-colors cursor-pointer',
+  base: 'flex items-center justify-center cursor-pointer outline outline-transarent bg-transparent transition-colors',
 
   size: {
-    default: 'h-10 w-10 rounded-lg',
-    panel: cn('h-8 w-8', 'border-0 bg-transparent shadow-none'),
+    sm: 'w-6 h-6 rounded-md',
+    md: 'w-10 h-10 rounded-lg',
   },
 
   variant: {
-    default: {
-      base: 'border border-edge-muted bg-transparent hover:bg-edge/20 text-ink',
-      active:
-        'border border-success bg-success/25 text-success transition-colors hover:bg-success/40',
-      danger:
-        'border border-failure/50 bg-transparent text-failure transition-colors hover:bg-failure hover:text-ink',
-    },
-    panel: {
-      base: cn('text-ink', panelHoverOpacity),
-      active: cn('text-success', panelHoverOpacity),
-      danger: cn('text-failure hover:text-failure/90', panelHoverOpacity),
-    },
+    default: 'text-ink outline-edge-muted hover:bg-edge/20',
+    active: 'text-success outline-success bg-success/25 hover:bg-success/20',
+    danger: 'text-failure outline-failure/50 hover:bg-failure hover:text-ink',
   },
 };
 
-export const CallControlButton: Component<{
-  onClick: () => Promise<void> | void;
-  active?: boolean;
-  danger?: boolean;
-  children?: JSX.Element;
-  disabled?: boolean;
-  size?: CallControlButtonSize;
-}> = (props) => {
+export type CallControlButtonProps = OverrideComponentProps<
+  'button',
+  {
+    onClick: () => Promise<void> | void;
+    active?: boolean;
+    danger?: boolean;
+    variant?: CallControlButtonVariant;
+    children?: JSX.Element;
+    disabled?: boolean;
+    size?: CallControlButtonSize;
+    class?: string;
+  }
+>;
+
+export const CallControlButton: Component<CallControlButtonProps> = (props) => {
+  const [local, others] = splitProps(props, [
+    'active',
+    'danger',
+    'variant',
+    'size',
+    'onClick',
+    'disabled',
+    'class',
+    'children',
+  ]);
+
   const [isPending, setIsPending] = createSignal(false);
-  const interactionDisabled = createMemo(() => isPending() || !!props.disabled);
+  const interactionDisabled = createMemo(() => isPending() || !!local.disabled);
 
   const handleClick = async () => {
     if (interactionDisabled()) return;
     setIsPending(true);
     try {
-      await props.onClick();
+      await local.onClick();
     } catch (e) {
       console.error('ControlButton action failed', e);
     } finally {
@@ -53,13 +67,13 @@ export const CallControlButton: Component<{
     }
   };
 
-  const size = () => props.size ?? 'default';
+  const size = () => local.size ?? 'md';
 
-  const variantClass = () => {
-    const sizeVariant = callControlButtonStyles.variant[size()];
-    if (props.danger) return sizeVariant.danger;
-    if (props.active) return sizeVariant.active;
-    return sizeVariant.base;
+  const variant = (): CallControlButtonVariant => {
+    if (local.variant) return local.variant;
+    if (local.danger) return 'danger';
+    if (local.active) return 'active';
+    return 'default';
   };
 
   return (
@@ -69,11 +83,13 @@ export const CallControlButton: Component<{
       class={cn(
         callControlButtonStyles.base,
         callControlButtonStyles.size[size()],
-        variantClass(),
-        interactionDisabled() && 'pointer-events-none opacity-50'
+        callControlButtonStyles.variant[variant()],
+        interactionDisabled() && 'pointer-events-none opacity-50',
+        local.class
       )}
+      {...others}
     >
-      {props.children}
+      {local.children}
     </button>
   );
 };
