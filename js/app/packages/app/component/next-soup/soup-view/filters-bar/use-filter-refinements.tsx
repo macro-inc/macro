@@ -32,7 +32,7 @@ import { deepEqual } from '@core/util/compareUtils';
 
 // Filter IDs that are set by tabs and should not be shown as removable chips
 const TAB_ONLY_FILTERS = new Set([
-  'signal',
+  'inbox',
   'noise',
   'explicit-noise',
   'channels',
