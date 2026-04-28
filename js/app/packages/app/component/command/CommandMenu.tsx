@@ -24,6 +24,7 @@ import { useSplitLayout } from '../split-layout/layout';
 import { CommandItem } from './CommandItem';
 import { CommandState } from './state';
 import { useCommandItems } from './useCommandItems';
+import { trackCommandUsage } from './recency';
 import type { CategoryFilter } from './types';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { cn } from '@ui/utils/classname';
@@ -149,6 +150,7 @@ export function CommandMenuInner(props: {
       }
 
       // Regular command - close and run
+      trackCommandUsage(item.id);
       CommandState.close();
       CommandState.setQuery('');
       runCommand(command);
