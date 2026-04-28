@@ -75,7 +75,7 @@
   --c3: oklch(var(--c3l) var(--c3c) var(--c3h));
   --c4: oklch(var(--c4l) var(--c4c) var(--c4h));
 
-   --transition: 0s; /* defualt 0.15, used for transition jamming, currently disabled */
+  --transition: 0s; /* defualt 0.15, used for transition jamming, currently disabled */
 
   /* Semantic Color names, use these when writing tailwind */
   --color-accent-ink: var(--a0);
