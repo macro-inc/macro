@@ -79,14 +79,10 @@ pub async fn handler<S: ContactsServicePort>(
     State(contacts): State<Arc<S>>,
     MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
 ) -> impl IntoResponse {
-    let contacts = contacts.query_contacts(macro_user_id).await;
-    if contacts.is_none() {
-        return (StatusCode::NOT_FOUND, Json(None));
+    match contacts.query_contacts(macro_user_id).await {
+        Some(contacts) => (StatusCode::OK, Json(Some(GetContactsResponse { contacts }))),
+        None => (StatusCode::NOT_FOUND, Json(None)),
     }
-
-    let contacts = contacts.unwrap();
-
-    (StatusCode::OK, Json(Some(GetContactsResponse { contacts })))
 }
 
 /// POST /contacts handler.

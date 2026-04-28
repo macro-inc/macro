@@ -1,82 +1,74 @@
 // Small utility to generate a sample connections message to send to the SQS service
 use contacts::domain::models::messages::ContactsMessage;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::env;
 
-async fn genmsg_add_user_to_group() {
-    let mut users: Vec<String> = [
-        "FF038D36-1AEF-461A-8AA8-34001FA1ABAD",
-        "5AB8C770-F2CB-4C6C-BC08-AE64569E324C",
-        "D44CAADA-98C0-49EB-AB20-6851B824983A",
-        "79A5557B-7827-4E2E-A6AE-F0935CDB762E",
-        "C3F4D826-F8FD-478A-AA66-B5B6BB370CBC",
-        "C3B1970F-18EE-4DFA-B5FB-E8240E28E51D",
-        "9EFFE035-BB12-4FCC-B479-800E1C2551A8",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect();
-    users.push("AE2C090C-E478-4454-A001-3DF458BF1FE4".to_string());
-
+fn print_contacts_message(users: Vec<MacroUserIdStr<'static>>) {
     println!(
         "{}",
         serde_json::to_string(&ContactsMessage { users }).unwrap()
     );
+}
+
+async fn genmsg_add_user_to_group() {
+    let mut users: Vec<MacroUserIdStr<'static>> = [
+        "macro|alice@macro.com",
+        "macro|bob@macro.com",
+        "macro|carol@macro.com",
+        "macro|dave@macro.com",
+        "macro|eve@macro.com",
+        "macro|frank@macro.com",
+        "macro|grace@macro.com",
+    ]
+    .iter()
+    .map(|s| MacroUserIdStr::try_from(s.to_string()).unwrap())
+    .collect();
+    users.push(MacroUserIdStr::try_from("macro|henry@macro.com".to_string()).unwrap());
+    print_contacts_message(users);
 }
 
 async fn genmsg_add_paul() {
-    let mut users: Vec<String> = [
-        "fake|zeus@olympus.mountain",
-        "fake|athena@olympus.mountain",
-        "fake|apollo@olympus.mountain",
-        "fake|hermes@olympus.mountain",
-        "fake|poseidon@olympus.mountain",
+    let mut users: Vec<MacroUserIdStr<'static>> = [
+        "macro|zeus@olympus.mountain",
+        "macro|athena@olympus.mountain",
+        "macro|apollo@olympus.mountain",
+        "macro|hermes@olympus.mountain",
+        "macro|poseidon@olympus.mountain",
     ]
     .iter()
-    .map(|s| s.to_string())
+    .map(|s| MacroUserIdStr::try_from(s.to_string()).unwrap())
     .collect();
-    users.push("macro|paul@macro.com".to_string());
-
-    println!(
-        "{}",
-        serde_json::to_string(&ContactsMessage { users }).unwrap()
-    );
+    users.push(MacroUserIdStr::try_from("macro|paul@macro.com".to_string()).unwrap());
+    print_contacts_message(users);
 }
 
 async fn genmsg_create_group() {
-    let users: Vec<String> = [
-        "fake|jupiter@olympus.mountain",
-        "fake|athena@olympus.mountain",
-        "fake|mercury@olympus.mountain",
-        "fake|neptune@olympus.mountain",
+    let users: Vec<MacroUserIdStr<'static>> = [
+        "macro|jupiter@olympus.mountain",
+        "macro|athena@olympus.mountain",
+        "macro|mercury@olympus.mountain",
+        "macro|neptune@olympus.mountain",
         "macro|paul@macro.com",
     ]
     .iter()
-    .map(|s| s.to_string())
+    .map(|s| MacroUserIdStr::try_from(s.to_string()).unwrap())
     .collect();
-
-    println!(
-        "{}",
-        serde_json::to_string(&ContactsMessage { users }).unwrap()
-    );
+    print_contacts_message(users);
 }
 
 async fn genmsg_add_participants() {
-    let users: Vec<String> = [
-        "fake|an@uruk.place",
-        "fake|enlil@nippur.place",
-        "fake|enki@eridu.place",
-        "fake|marduk@babylon.place",
+    let users: Vec<MacroUserIdStr<'static>> = [
+        "macro|an@uruk.place",
+        "macro|enlil@nippur.place",
+        "macro|enki@eridu.place",
+        "macro|marduk@babylon.place",
         "macro|paul@macro.com",
-        "fake|poseidon@olympus.mountain",
+        "macro|poseidon@olympus.mountain",
     ]
     .iter()
-    .map(|s| s.to_string())
+    .map(|s| MacroUserIdStr::try_from(s.to_string()).unwrap())
     .collect();
-
-    println!(
-        "{}",
-        serde_json::to_string(&ContactsMessage { users }).unwrap()
-    );
+    print_contacts_message(users);
 }
 
 #[tokio::main]

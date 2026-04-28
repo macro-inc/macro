@@ -42,20 +42,21 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
         }
     }
 
-    #[instrument(skip(self, message))]
+    #[instrument(skip(self, message), err)]
     async fn process_message(&self, message: &aws_sdk_sqs::types::Message) -> anyhow::Result<()> {
         self.parse_message(message).await?;
         self.cleanup_message(message).await?;
         Ok(())
     }
 
-    #[instrument(skip(sqs_message, self))]
+    #[instrument(skip(sqs_message, self), err)]
     async fn parse_message(&self, sqs_message: &aws_sdk_sqs::types::Message) -> anyhow::Result<()> {
-        let message = message_from_sqs(sqs_message);
-        if let Some(message) = message {
-            self.service.process_message(&message).await;
-        } else {
-            tracing::info!("Message could not be processed properly");
+        match message_from_sqs(sqs_message) {
+            Some(message) => self.service.process_message(&message).await,
+            None => tracing::warn!(
+                message_id=?sqs_message.message_id,
+                "SQS message body could not be parsed as ContactsMessage"
+            ),
         }
         Ok(())
     }
