@@ -1,5 +1,6 @@
 use crate::domain::ports::ContactsNotifier;
 use macro_user_id::user_id::MacroUserIdStr;
+use rootcause::Report;
 
 /// Notifier that sends invalidation messages through the connection gateway.
 pub struct ConnectionGatewayNotifier {
@@ -9,12 +10,9 @@ pub struct ConnectionGatewayNotifier {
 
 impl ConnectionGatewayNotifier {
     /// Creates a new notifier with the given gateway URL and internal auth key.
-    pub fn new(internal_auth_key: String, url: String) -> anyhow::Result<Self> {
+    pub fn new(internal_auth_key: String, url: String) -> Result<Self, Report> {
         let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            "x-internal-auth-key",
-            internal_auth_key.parse()?,
-        );
+        headers.insert("x-internal-auth-key", internal_auth_key.parse()?);
         let client = reqwest::Client::builder()
             .default_headers(headers)
             .build()?;
@@ -22,7 +20,7 @@ impl ConnectionGatewayNotifier {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn invalidate_contacts(&self, user_id: &str) -> anyhow::Result<()> {
+    async fn invalidate_contacts(&self, user_id: &str) -> Result<(), Report> {
         self.client
             .post(format!("{}/message/send/user/{}", self.url, user_id))
             .json(&serde_json::json!({"message_type": "contacts_invalidation", "message": {}}))
@@ -34,11 +32,16 @@ impl ConnectionGatewayNotifier {
 }
 
 impl ContactsNotifier for ConnectionGatewayNotifier {
-    async fn invalidate_contacts_for_users(&self, user_ids: &[MacroUserIdStr<'static>]) -> anyhow::Result<()> {
+    async fn invalidate_contacts_for_users(
+        &self,
+        user_ids: &[MacroUserIdStr<'static>],
+    ) -> Result<(), Report> {
         for user_id in user_ids {
             self.invalidate_contacts(user_id.as_ref() as &str)
                 .await
-                .inspect_err(|e| tracing::error!(user_id = %user_id.as_ref(), error = ?e, "Failed to invalidate contacts"))
+                .inspect_err(|e| {
+                    tracing::error!(user_id = %user_id.as_ref(), error = ?e, "Failed to invalidate contacts")
+                })
                 .ok();
         }
         Ok(())
@@ -48,7 +51,10 @@ impl ContactsNotifier for ConnectionGatewayNotifier {
 /// Implements [`ContactsNotifier`] for `Option<ConnectionGatewayNotifier>`,
 /// acting as a no-op when `None`.
 impl ContactsNotifier for Option<ConnectionGatewayNotifier> {
-    async fn invalidate_contacts_for_users(&self, user_ids: &[MacroUserIdStr<'static>]) -> anyhow::Result<()> {
+    async fn invalidate_contacts_for_users(
+        &self,
+        user_ids: &[MacroUserIdStr<'static>],
+    ) -> Result<(), Report> {
         if let Some(notifier) = self {
             notifier.invalidate_contacts_for_users(user_ids).await?;
         }
