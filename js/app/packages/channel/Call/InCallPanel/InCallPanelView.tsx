@@ -1,5 +1,5 @@
 import { Show, createMemo, type Component } from 'solid-js';
-import type { CallControlVariant } from '../CallControls/CallControlButton';
+import type { CallControlsVariant } from '../CallControls/CallControls';
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
 import ArrowsOut from '@icon/regular/arrows-out.svg';
 import { CallControls } from '../CallControls/CallControls';
@@ -77,7 +77,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
     return out;
   });
 
-  const controlsVariant = createMemo((): CallControlVariant =>
+  const controlsVariant = createMemo((): CallControlsVariant =>
     slim() ? 'panel-small' : 'panel'
   );
 
