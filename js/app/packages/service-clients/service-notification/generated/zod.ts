@@ -116,6 +116,7 @@ export const listTypedNotificationsResponse = zod
                 'email_thread',
                 'team',
                 'call',
+                'static_file',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -429,6 +430,12 @@ export const listTypedNotificationsResponse = zod
                             .string()
                             .uuid()
                             .describe('The unique identifier of the team'),
+                          teamInviteId: zod
+                            .string()
+                            .uuid()
+                            .describe(
+                              'The unique identifier of the team invite'
+                            ),
                           teamName: zod
                             .string()
                             .describe('The name of the team being invited to'),
@@ -548,6 +555,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'email_thread',
                 'team',
                 'call',
+                'static_file',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -861,6 +869,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .string()
                             .uuid()
                             .describe('The unique identifier of the team'),
+                          teamInviteId: zod
+                            .string()
+                            .uuid()
+                            .describe(
+                              'The unique identifier of the team invite'
+                            ),
                           teamName: zod
                             .string()
                             .describe('The name of the team being invited to'),
@@ -974,6 +988,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'email_thread',
                 'team',
                 'call',
+                'static_file',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -1287,6 +1302,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .string()
                             .uuid()
                             .describe('The unique identifier of the team'),
+                          teamInviteId: zod
+                            .string()
+                            .uuid()
+                            .describe(
+                              'The unique identifier of the team invite'
+                            ),
                           teamName: zod
                             .string()
                             .describe('The name of the team being invited to'),
@@ -1411,6 +1432,7 @@ export const getTypedNotificationByIdResponse = zod
         'email_thread',
         'team',
         'call',
+        'static_file',
       ])
       .describe('The type of an entity in Macro'),
   })
@@ -1698,6 +1720,10 @@ export const getTypedNotificationByIdResponse = zod
                     .string()
                     .uuid()
                     .describe('The unique identifier of the team'),
+                  teamInviteId: zod
+                    .string()
+                    .uuid()
+                    .describe('The unique identifier of the team invite'),
                   teamName: zod
                     .string()
                     .describe('The name of the team being invited to'),

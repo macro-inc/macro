@@ -1,6 +1,6 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use sqlx::{Pool, Postgres};
+use sqlx::{Pool, Postgres, Row};
 
 ///! Tests for the team_repo implementation for teams
 use super::*;
@@ -551,9 +551,10 @@ async fn test_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
 
-    let team_member = team_repo
+    let accepted_invite = team_repo
         .accept_team_invite(&team_invite_id, &user_id)
         .await?;
+    let team_member = accepted_invite.member;
 
     assert_eq!(team_member.user_id.as_ref(), "macro|user3@user.com");
     assert_eq!(team_member.role, TeamRole::Member);
@@ -581,9 +582,10 @@ async fn test_accept_team_invite_uses_invite_tier(pool: Pool<Postgres>) -> anyho
     let team_invite_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
     let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
 
-    let team_member = team_repo
+    let accepted_invite = team_repo
         .accept_team_invite(&team_invite_id, &user_id)
         .await?;
+    let team_member = accepted_invite.member;
 
     assert_eq!(team_member.tier, TeamUserTier::Opus);
 
@@ -601,6 +603,105 @@ async fn test_accept_team_invite_uses_invite_tier(pool: Pool<Postgres>) -> anyho
     .await?;
 
     assert_eq!(row.tier, TeamUserTier::Opus);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let team_invite_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+
+    let accepted_invite = team_repo
+        .accept_team_invite(&team_invite_id, &user_id)
+        .await?;
+
+    team_repo
+        .rollback_accept_team_invite(&accepted_invite)
+        .await?;
+
+    let member = sqlx::query(
+        r#"
+        SELECT 1
+        FROM team_user
+        WHERE team_id = $1 AND user_id = $2
+        "#,
+    )
+    .bind(team_id)
+    .bind(user_id.as_ref())
+    .fetch_optional(&pool)
+    .await?;
+    assert!(member.is_none());
+
+    let invite = sqlx::query(
+        r#"
+        SELECT email, team_role, tier
+        FROM team_invite
+        WHERE id = $1
+        "#,
+    )
+    .bind(team_invite_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(invite.try_get::<String, _>("email")?, "user3@user.com");
+    assert_eq!(
+        invite.try_get::<TeamRole, _>("team_role")?,
+        TeamRole::Member
+    );
+    assert_eq!(
+        invite.try_get::<TeamUserTier, _>("tier")?,
+        TeamUserTier::Opus
+    );
+
+    let team = sqlx::query(r#"SELECT seat_count FROM team WHERE id = $1"#)
+        .bind(team_id)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(team.try_get::<i32, _>("seat_count")?, 3);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_rollback_remove_user_from_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
+
+    team_repo
+        .patch_team_user_role(&team_id, &user_id, TeamRole::Admin)
+        .await?;
+    team_repo
+        .patch_team_tier(&team_id, &user_id, TeamUserTier::Sonnet)
+        .await?;
+
+    let removed_member = team_repo.remove_user_from_team(&team_id, &user_id).await?;
+    assert_eq!(removed_member.role, TeamRole::Admin);
+    assert_eq!(removed_member.tier, TeamUserTier::Sonnet);
+
+    team_repo
+        .rollback_remove_user_from_team(&removed_member)
+        .await?;
+
+    let member = team_repo.get_team_member(&team_id, &user_id).await?;
+    assert_eq!(member.role, TeamRole::Admin);
+    assert_eq!(member.tier, TeamUserTier::Sonnet);
+
+    let team = sqlx::query(r#"SELECT seat_count FROM team WHERE id = $1"#)
+        .bind(team_id)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(team.try_get::<i32, _>("seat_count")?, 3);
 
     Ok(())
 }

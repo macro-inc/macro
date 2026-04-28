@@ -319,4 +319,12 @@ pub trait DocumentService: Send + Sync + 'static {
         plain_user_id: String,
         request: CreateTaskRequest,
     ) -> impl Future<Output = Result<CreateTaskResponse, DocumentError>> + Send;
+
+    /// Assigns the task properties to a document
+    fn handle_task_properties(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }

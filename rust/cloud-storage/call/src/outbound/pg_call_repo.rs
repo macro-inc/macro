@@ -839,6 +839,8 @@ impl CallRepository for PgCallRepo {
                 recording_key: active.recording_key,
                 recording_url: None,
                 channel_name: None,
+                custom_name: None,
+                summary: None,
                 is_active: true,
                 participants,
                 transcript,
@@ -848,7 +850,7 @@ impl CallRepository for PgCallRepo {
         // Fall back to archived `call_records`.
         let Some(archived) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key
+            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, custom_name, summary
             FROM call_records
             WHERE id = $1
             "#,
@@ -916,6 +918,8 @@ impl CallRepository for PgCallRepo {
             recording_key: archived.recording_key,
             recording_url: None,
             channel_name: None,
+            custom_name: archived.custom_name,
+            summary: archived.summary,
             is_active: false,
             participants,
             transcript,
@@ -1021,12 +1025,29 @@ impl CallRepository for PgCallRepo {
         // Fetch call headers from both active and archived tables, ordered by
         // start time descending. We intentionally exclude transcripts (too
         // large for the soup feed).
+        //
+        // Visibility is derived from the `entity_access` table: a call is
+        // visible to the user if there's an entity_access row whose
+        // `source_id` matches one of the user's source ids (their
+        // channel memberships, team memberships, or their own user id).
+        // This mirrors `entity_access::pg_access_repo::queries::call_access`.
         let channel_ids = extract_channel_ids(filter);
         let has_channel_filter = !channel_ids.is_empty();
         let attended = extract_attended(filter);
 
         let rows = sqlx::query!(
             r#"
+            WITH user_source_ids AS (
+                SELECT cp.channel_id::text AS source_id
+                FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                UNION ALL
+                SELECT t.team_id::text AS source_id
+                FROM team_user t
+                WHERE t.user_id = $1
+                UNION ALL
+                SELECT $1 AS source_id
+            )
             SELECT
                 id as "call_id!",
                 channel_id as "channel_id!",
@@ -1037,13 +1058,14 @@ impl CallRepository for PgCallRepo {
                 NULL::bigint as "duration_ms",
                 egress_id,
                 recording_key,
+                NULL::text as "custom_name",
                 true as "is_active!"
             FROM calls c
             WHERE EXISTS (
-                SELECT 1 FROM comms_channel_participants ccp
-                WHERE ccp.channel_id = c.channel_id
-                  AND ccp.user_id = $1
-                  AND ccp.left_at IS NULL
+                SELECT 1 FROM entity_access ea
+                JOIN user_source_ids u ON u.source_id = ea.source_id
+                WHERE ea.entity_id = c.id
+                  AND ea.entity_type = 'call'
             )
             AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
             AND ($5::bool IS NULL OR EXISTS (
@@ -1061,13 +1083,14 @@ impl CallRepository for PgCallRepo {
                 duration_ms as "duration_ms",
                 egress_id,
                 recording_key,
+                custom_name,
                 false as "is_active!"
             FROM call_records cr
             WHERE EXISTS (
-                SELECT 1 FROM comms_channel_participants ccp
-                WHERE ccp.channel_id = cr.channel_id
-                  AND ccp.user_id = $1
-                  AND ccp.left_at IS NULL
+                SELECT 1 FROM entity_access ea
+                JOIN user_source_ids u ON u.source_id = ea.source_id
+                WHERE ea.entity_id = cr.id
+                  AND ea.entity_type = 'call'
             )
             AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
             AND ($5::bool IS NULL OR EXISTS (
@@ -1141,6 +1164,8 @@ impl CallRepository for PgCallRepo {
                 recording_key: row.recording_key,
                 recording_url: None,
                 channel_name: None,
+                custom_name: row.custom_name,
+                summary: None,
                 is_active: row.is_active,
                 participants,
                 transcript: Vec::new(),
@@ -1312,6 +1337,15 @@ impl CallRepository for PgCallRepo {
             edit::set_share_with_team(&mut tx, call_record_id, share_with_team).await?;
         }
 
+        if let Some(custom_name) = request.custom_name.as_deref() {
+            let custom_name = if custom_name.is_empty() {
+                None
+            } else {
+                Some(custom_name)
+            };
+            edit::set_custom_name(&mut tx, call_record_id, custom_name).await?;
+        }
+
         tx.commit().await?;
         Ok(())
     }
@@ -1328,6 +1362,14 @@ impl CallRepository for PgCallRepo {
         )
         .execute(&self.pool)
         .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, name), err)]
+    async fn set_custom_name_if_null(&self, call_id: &Uuid, name: &str) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        edit::set_custom_name_if_null(&mut tx, call_id, name).await?;
+        tx.commit().await?;
         Ok(())
     }
 }

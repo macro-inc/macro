@@ -1,20 +1,22 @@
-import { cn } from '@ui/utils/classname';
-import { fileSelector } from '@core/directive/fileSelector';
+import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
+import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
+import { EmailDateSelector } from '@block-email/component/email-date-selector';
+import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
+import {
+  MACRO_EMAIL_SIGNATURE,
+  MAX_ATTACHMENTS_BYTES_SIZE,
+} from '@block-email/constants';
+import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import {
   applyInlineFormat,
   applyNodeFormat,
 } from '@channel/Input/utils/formatting';
-import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
-import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
-import {
-  MACRO_EMAIL_SIGNATURE,
-  MAX_ATTACHMENTS_BYTES_SIZE,
-} from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
+import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils';
 import {
   createFilesReadyHandler,
   getDragDropPosition,
@@ -24,44 +26,62 @@ import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
+import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
+import { useEmail, useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { fileSelector } from '@core/directive/fileSelector';
 import { observedSize } from '@core/directive/observedSize';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
+import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
+import ChevronDown from '@icon/regular/caret-down.svg';
 import Paperclip from '@icon/regular/paperclip.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
+import { $generateHtmlFromNodes } from '@lexical/html';
 import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@lexical-core';
-import { $generateHtmlFromNodes } from '@lexical/html';
-import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils';
 import { logger } from '@observability';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import { queryClient } from '@queries/client';
+import {
+  useAddForwardedAttachmentsMutation,
+  useRemoveDraftAttachmentMutation,
+  useRemoveForwardedAttachmentMutation,
+  useUploadDraftAttachmentsMutation,
+} from '@queries/email/attachment';
+import {
+  useDeleteDraftMutation,
+  useSaveDraftMutation,
+} from '@queries/email/draft';
+import { emailKeys } from '@queries/email/keys';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { invalidateSoupEntity } from '@queries/soup/cache';
-import { emailClient } from '@service-email/client';
 import {
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
+import { invalidateSoupEntity } from '@queries/soup/cache';
+import { emailClient } from '@service-email/client';
 import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
-import { useEmail, useUserId } from '@core/context/user';
 import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -87,10 +107,6 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import {
-  useDeleteDraftMutation,
-  useSaveDraftMutation,
-} from '@queries/email/draft';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
@@ -109,21 +125,6 @@ import {
   useEmailContext,
 } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
-import {
-  useAddForwardedAttachmentsMutation,
-  useRemoveDraftAttachmentMutation,
-  useRemoveForwardedAttachmentMutation,
-  useUploadDraftAttachmentsMutation,
-} from '@queries/email/attachment';
-import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
-import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
-import { plural } from '@core/util/string';
-import { EmailDateSelector } from '@block-email/component/email-date-selector';
-import { isMobile } from '@core/mobile/isMobile';
-import { queryClient } from '@queries/client';
-import { emailKeys } from '@queries/email/keys';
-import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
-import ChevronDown from '@icon/regular/caret-down.svg';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -841,6 +842,7 @@ export function BaseInput(props: {
   const [attachComposeHotkeys, composeHotkeyScope] =
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
+  useTouchOutsideToDismissKeyboard(() => composeContainerRef);
 
   const sendEmail = async (markDone = false) => {
     if (sendMutation.isPending || uploadAttachmentMutation.isPending) return;

@@ -2,7 +2,6 @@ import { deleteTheme, exportTheme, importTheme, invertTheme, saveTheme } from '.
 import { currentThemeId, isThemeSaved, themes, userThemes } from '../signals/themeSignals';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
-import IconPaintbrush from '@macro-icons/wide/paintbrush.svg';
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import IconClipboard from '@macro-icons/macro-clipboard.svg';
 import IconImport from '@macro-icons/macro-import.svg';
@@ -10,7 +9,6 @@ import IconTrash from '@macro-icons/macro-trash.svg';
 import { randomizeTheme } from './ThemeEditorBasic';
 import IconDice from '@macro-icons/macro-dice.svg';
 import IconSave from '@macro-icons/macro-save.svg';
-
 
 export function ThemeTools() {
   let themeName!: HTMLDivElement;
@@ -39,7 +37,8 @@ export function ThemeTools() {
   return (
     <div
       style={{
-        'grid-template-columns': `min-content min-content 1fr repeat(${columnCount()}, min-content)`,
+        'grid-template-columns': ` min-content 1fr repeat(${columnCount()}, min-content)`,
+        'border-bottom': '1px solid var(--color-edge-muted)',
         'padding': '0 12px 0 20px' /* (41 - 32) / 2 */,
         'gap': '4.5px' /* (41 - 32) / 2 */,
         'font-family': 'var(--font-sans)',
@@ -53,19 +52,7 @@ export function ThemeTools() {
         'width': '100%',
       }}
     >
-      <div style="width: 18px; height: 18px; shrink: 0; color: var(--color-text-muted)">
-        <IconPaintbrush />
-      </div>
-
       <div
-        ref={themeName}
-        contentEditable
-        style="white-space: nowrap;"
-        onBlur={() => {
-          if(!themeName.innerText.trim()){
-            themeName.innerText = defaultThemeName;
-          }
-        }}
         onKeyDown={(e) => {
           if(e.key === 'Enter'){
             e.preventDefault();
@@ -74,23 +61,27 @@ export function ThemeTools() {
               saveTheme(name);
               themeName.blur();
             }
-            else {
-              themeName.innerText = defaultThemeName;
-            }
+            else { themeName.innerText = defaultThemeName; }
           }
         }}
+        onBlur={() => {
+          if(!themeName.innerText.trim()){
+            themeName.innerText = defaultThemeName;
+          }
+        }}
+        style={{
+          'white-space': 'nowrap',
+          'font-size': '0.875rem',
+          'font-weight': '600',
+          'outline': 'none',
+        }}
+        contentEditable={true}
+        ref={themeName}
       >
         {currentThemeName()}
       </div>
 
-      <hr
-        style="
-          border: none;
-          border-top: 1px dashed var(--color-edge-muted);
-          box-sizing: border-box;
-          width: 100%;
-        "
-      />
+      <div/>
 
       <Show when={showTrash()}>
         <DeprecatedIconButton

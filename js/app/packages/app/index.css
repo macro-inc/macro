@@ -1,231 +1,142 @@
-@import "tailwindcss";
-/* explicitly add all tsx files for all packages instead of relying on Vite */
+@import "tailwindcss"; /* explicitly add all tsx files for all packages instead of relying on Vite */
 @source '../**/*.tsx';
 @source '../../packages/core/component/LexicalMarkdown/theme.ts';
-
-/* Legacy PDF viewer stackingContext stuff. Should be deprecated. */
 @plugin '../../tailwind-plugins/zIndex.ts';
 
-@property --a0l { syntax: "<number>"; inherits: false; initial-value:   0.88; }
-@property --a0c { syntax: "<number>"; inherits: false; initial-value:   0.20; }
-@property --a0h { syntax: "<angle>";  inherits: false; initial-value: 145deg; }
-@property --a1l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
-@property --a1c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
-@property --a1h { syntax: "<angle>";  inherits: false; initial-value:  54deg; }
-@property --a2l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
-@property --a2c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
-@property --a2h { syntax: "<angle>";  inherits: false; initial-value:  94deg; }
-@property --a3l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
-@property --a3c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
-@property --a3h { syntax: "<angle>";  inherits: false; initial-value: 144deg; }
-@property --a4l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
-@property --a4c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
-@property --a4h { syntax: "<angle>";  inherits: false; initial-value: 194deg; }
+@property --a0l { syntax: "<number>"; inherits: true; initial-value:   0.88; }
+@property --a0c { syntax: "<number>"; inherits: true; initial-value:   0.20; }
+@property --a0h { syntax: "<angle>";  inherits: true; initial-value: 145deg; }
+@property --a1l { syntax: "<number>"; inherits: true; initial-value:   0.61; }
+@property --a1c { syntax: "<number>"; inherits: true; initial-value:   0.37; }
+@property --a1h { syntax: "<angle>";  inherits: true; initial-value:  54deg; }
+@property --a2l { syntax: "<number>"; inherits: true; initial-value:   0.61; }
+@property --a2c { syntax: "<number>"; inherits: true; initial-value:   0.37; }
+@property --a2h { syntax: "<angle>";  inherits: true; initial-value:  94deg; }
+@property --a3l { syntax: "<number>"; inherits: true; initial-value:   0.61; }
+@property --a3c { syntax: "<number>"; inherits: true; initial-value:   0.37; }
+@property --a3h { syntax: "<angle>";  inherits: true; initial-value: 144deg; }
+@property --a4l { syntax: "<number>"; inherits: true; initial-value:   0.61; }
+@property --a4c { syntax: "<number>"; inherits: true; initial-value:   0.37; }
+@property --a4h { syntax: "<angle>";  inherits: true; initial-value: 194deg; }
 
-@property --b0l { syntax: "<number>"; inherits: false; initial-value:      0; }
-@property --b0c { syntax: "<number>"; inherits: false; initial-value:      0; }
-@property --b0h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
-@property --b1l { syntax: "<number>"; inherits: false; initial-value:   0.15; }
-@property --b1c { syntax: "<number>"; inherits: false; initial-value:      0; }
-@property --b1h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
-@property --b2l { syntax: "<number>"; inherits: false; initial-value:   0.16; }
-@property --b2c { syntax: "<number>"; inherits: false; initial-value:      0; }
-@property --b2h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
-@property --b3l { syntax: "<number>"; inherits: false; initial-value:   0.18; }
-@property --b3c { syntax: "<number>"; inherits: false; initial-value:      0; }
-@property --b3h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
-@property --b4l { syntax: "<number>"; inherits: false; initial-value:   0.36; }
-@property --b4c { syntax: "<number>"; inherits: false; initial-value:      0; }
-@property --b4h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
+@property --b0l { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --b0c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --b0h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --b1l { syntax: "<number>"; inherits: true; initial-value:   0.15; }
+@property --b1c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --b1h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --b2l { syntax: "<number>"; inherits: true; initial-value:   0.16; }
+@property --b2c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --b2h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --b3l { syntax: "<number>"; inherits: true; initial-value:   0.18; }
+@property --b3c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --b3h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --b4l { syntax: "<number>"; inherits: true; initial-value:   0.36; }
+@property --b4c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --b4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
 
-@property --c0l { syntax: "<number>"; inherits: false; initial-value:      1; }
-@property --c0c { syntax: "<number>"; inherits: false; initial-value:      0; }
-@property --c0h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
-@property --c1l { syntax: "<number>"; inherits: false; initial-value:   0.90; }
-@property --c1c { syntax: "<number>"; inherits: false; initial-value:      0; }
-@property --c1h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
-@property --c2l { syntax: "<number>"; inherits: false; initial-value:   0.80; }
-@property --c2c { syntax: "<number>"; inherits: false; initial-value:      0; }
-@property --c2h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
-@property --c3l { syntax: "<number>"; inherits: false; initial-value:   0.70; }
-@property --c3c { syntax: "<number>"; inherits: false; initial-value:      0; }
-@property --c3h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
-@property --c4l { syntax: "<number>"; inherits: false; initial-value:   0.60; }
-@property --c4c { syntax: "<number>"; inherits: false; initial-value:      0; }
-@property --c4h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
+@property --c0l { syntax: "<number>"; inherits: true; initial-value:      1; }
+@property --c0c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --c0h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --c1l { syntax: "<number>"; inherits: true; initial-value:   0.90; }
+@property --c1c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --c1h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --c2l { syntax: "<number>"; inherits: true; initial-value:   0.80; }
+@property --c2c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --c2h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --c3l { syntax: "<number>"; inherits: true; initial-value:   0.70; }
+@property --c3c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --c3h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
+@property --c4l { syntax: "<number>"; inherits: true; initial-value:   0.60; }
+@property --c4c { syntax: "<number>"; inherits: true; initial-value:      0; }
+@property --c4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
 
 @theme {
+   --color-*: initial; /* Disable default tailwind color palette */
+
+  /* accent - active, hover states, high chroma */
   --a0: oklch(var(--a0l) var(--a0c) var(--a0h));
   --a1: oklch(var(--a1l) var(--a1c) var(--a1h));
   --a2: oklch(var(--a2l) var(--a2c) var(--a2h));
   --a3: oklch(var(--a3l) var(--a3c) var(--a3h));
   --a4: oklch(var(--a4l) var(--a4c) var(--a4h));
 
-  /* main background color */
-  /* in an idealized theme, these are ordered by lightness */
-  /* in an idealized light theme, 0 is the lightest, 4 is the darkest */
-  /* in an idealized dark theme, 0 is the darkest, 4 is the lightest */
-  /* but in practice, in a particular theme, these may be unordered */
+  /* base - background colors, borders */
   --b0: oklch(var(--b0l) var(--b0c) var(--b0h));
   --b1: oklch(var(--b1l) var(--b1c) var(--b1h));
   --b2: oklch(var(--b2l) var(--b2c) var(--b2h));
   --b3: oklch(var(--b3l) var(--b3c) var(--b3h));
   --b4: oklch(var(--b4l) var(--b4c) var(--b4h));
 
-  /* body & paragraph text / icon stoke & fill */
-  /* in an idealized theme, these are ordered by lightness */
-  /* in an idealized light theme, 0 is the darkest, 4 is the lightest */
-  /* in an idealized dark theme, 0 is the lightest, 4 is the darkest */
-  /* but in practice, in a particular theme, these may be unordered */
+  /* contrast, body & paragraph text, icon stroke & fill */
   --c0: oklch(var(--c0l) var(--c0c) var(--c0h));
   --c1: oklch(var(--c1l) var(--c1c) var(--c1h));
   --c2: oklch(var(--c2l) var(--c2c) var(--c2h));
   --c3: oklch(var(--c3l) var(--c3c) var(--c3h));
   --c4: oklch(var(--c4l) var(--c4c) var(--c4h));
 
-  --theme-folder:    oklch(from var(--a0) l c 240deg);
-  --theme-canvas:    oklch(from var(--a0) l c  60deg);
-  --theme-write:     oklch(from var(--a0) l c 260deg);
-  --theme-video:     oklch(from var(--a0) l c 277deg);
-  --theme-note:      oklch(from var(--a0) l c 293deg);
-  --theme-code:      oklch(from var(--a0) l c 180deg);
-  --theme-chat:      oklch(from var(--a0) l c 220deg);
-  --theme-image:     oklch(from var(--a0) l c  95deg);
-  --theme-html:      oklch(from var(--a0) l c  47deg);
-  --theme-rss:       oklch(from var(--a0) l c 260deg);
-  --theme-pdf:       oklch(from var(--a0) l c  25deg);
-  --theme-comment:   oklch(from var(--a0) l c  90deg);
-  --theme-task:      oklch(from var(--a0) l c 150deg);
-
-  --gutter-size: 8px;
-  --transition: 0.s;
-  /*--transition: 0.15s;*/
-
-  --color-*: initial; /* Disable default tailwind color palette */
+  --transition: 0s; /* defualt 0.15, used for transition jamming, currently disabled */
 
   /* Semantic Color names, use these when writing tailwind */
+  --color-accent-ink:      var(--a0);
+  --color-accent:          var(--a0);
+  --color-focus:           var(--a0);
 
-  /* Generic */
-  --color-accent-0 : var(--a0);
-  --color-accent-1 : var(--a1);
-  --color-accent-2 : var(--a2);
-  --color-accent-3 : var(--a3);
-  --color-accent-4 : var(--a4);
+  --color-dialog:          var(--b0); /* dialog, e.g. dialog background */
+  --color-input:           var(--b0); /* input, e.g. chat/channel input */
+  --color-menu:            var(--b0); /* menu background */
+  --color-button:          var(--b1); /* dialog, e.g. dialog background */
+  --color-panel:           var(--b1); /* block background */
+  --color-active:          var(--b2); /* elements that are selected or activated */
+  --color-hover:           var(--b2); /* hover, e.g. hover state for buttons/items */
+  --color-message:         var(--b3); /* message background */
+  --color-page:            var(--b3); /* page background */
+  --color-edge:            var(--b4); /* edge (border) */
 
-  --color-surface-0 : var(--b0);
-  --color-surface-1 : var(--b1);
-  --color-surface-2 : var(--b2);
-  --color-surface-3 : var(--b3);
-  --color-surface-4 : var(--b4);
-
-  --color-contrast-0 : var(--c0);
-  --color-contrast-1 : var(--c1);
-  --color-contrast-2 : var(--c2);
-  --color-contrast-3 : var(--c3);
-  --color-contrast-4 : var(--c4);
-
-  /* text */
-  --color-ink: var(--c0);
-  --color-ink-muted: var(--c1);
+  --color-ink:             var(--c0);
+  --color-ink-muted:       var(--c1);
   --color-ink-extra-muted: var(--c2);
-  --color-ink-disabled: var(--c3);
+  --color-ink-disabled:    var(--c3);
   --color-ink-placeholder: var(--c4);
 
-  /* accent */
-  --color-accent: var(--a0);
-  --color-accent-bg: oklch(from (var(--a0)) / .15);
-  --color-accent-ink: var(--a0);
-
-  --color-focus: var(--color-accent);
-  /* page background */
-  --color-page: var(--b3);
-  /* block background */
-  --color-panel: var(--b1);
-  /* menu background */
-  --color-menu: var(--b0);
-  /* edge (border) */
-  --color-edge: var(--b4);
-  /* muted edge */
-  --color-edge-muted: color-mix(in srgb, var(--color-edge), var(--color-panel) 50%);
-  /* input, e.g. chat/channel input */
-  --color-input: var(--b0);
-  /* message background */
-  --color-message: var(--b3);
-  /* overlay, e.g. modal background */
-  --color-overlay: oklch(from var(--b2) l c h / .5); /* maybe break */
-  /* hover, e.g. hover state for buttons/items */
-  --color-hover: var(--b2);
-  /* elements that are selected or activated */
-  --color-active: var(--b2);
-  /* dialog, e.g. dialog background */
-  --color-dialog: var(--b0);
-  --color-button: var(--b1);
-
+  /* these are fucked */
+  --color-edge-muted:  color-mix(in srgb, var(--b4), var(--b1) 50%); /* muted edge */
+  --color-overlay:     oklch(from var(--b2) l c h / 0.5); /* overlay, e.g. modal background */
+  --color-accent-bg:   oklch(from var(--a0) l c h / 0.15);
 
   /* Below are hardcoded colors */
-  --color-failure: oklch(0.637 0.237 25.331);
-  --color-failure-bg: oklch(from var(--color-failure) l c h / 0.15);
-  --color-failure-ink: oklch(from var(--color-failure) var(--c1l) c h);
+  --color-failure:     oklch(0.637 0.237 25.331);
+  --color-failure-bg:  oklch(from var(--color-failure) l c h / 0.15);
+  --color-failure-ink: oklch(from var(--color-failure) var(--c1l) c h); /* scuffed */
 
-  --color-success: oklch(0.696 0.17 162.48);
-  --color-success-bg: oklch(from var(--color-success) l c h / 0.15);
-  --color-success-ink: oklch(from var(--color-success) var(--c0l) c h);
+  --color-success:     oklch(0.696 0.17 162.48);
+  --color-success-bg:  oklch(from var(--color-success) l c h / 0.15);
+  --color-success-ink: oklch(from var(--color-success) var(--c1l) c h); /* scuffed */
 
-  --color-alert: oklch(0.769 0.188 70.08);
-  --color-alert-bg: oklch(from var(--color-alert) l c h / 0.15);
-  --color-alert-ink: oklch(from var(--color-alert) var(--c1l) c h);
+  --color-alert:       oklch(0.769 0.188 70.08);
+  --color-alert-bg:    oklch(from var(--color-alert) l c h / 0.15);
+  --color-alert-ink:   oklch(from var(--color-alert) var(--c1l) c h); /* scuffed */
 
-  --color-comment: var(--theme-comment);
-  --color-comment-bg: oklch(from var(--color-comment) l c h / 0.15);
-  --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h);
+  --color-comment:     oklch(from var(--a0) l c 90deg);
+  --color-comment-bg:  oklch(from var(--color-comment) l c h / 0.15);
+  --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h); /* scuffed */
 
-  --color-note: var(--theme-note);
-  --color-note-bg: color-mix(in srgb, var(--color-note), var(--color-panel) 90%);
-
-  --color-canvas: var(--theme-canvas);
-  --color-canvas-bg: color-mix(in srgb, var(--color-canvas), var(--color-panel) 90%);
-
-  --color-html: var(--color-html);
-  --color-html-bg: color-mix(in srgb, var(--color-html), var(--color-panel) 90%);
-
-  --color-folder: var(--theme-folder);
-  --color-folder-bg: color-mix(in srgb, var(--color-folder), var(--color-panel) 90%);
-
-  --color-email: var(--theme-email);
-  --color-email-bg: color-mix(in srgb, var(--color-email), var(--color-panel) 90%);
-
-  --color-code: var(--theme-code);
-  --color-code-bg: color-mix(in srgb, var(--color-code), var(--color-panel) 90%);
-
-  --color-pdf: var(--theme-pdf);
-  --color-pdf-bg: color-mix(in srgb, var(--color-pdf), var(--color-panel) 90%);
-
-  --color-image: var(--theme-image);
-  --color-image-bg: color-mix(in srgb, var(--color-image), var(--color-panel) 90%);
-
-  --color-write: var(--theme-write);
-  --color-write-bg: color-mix(in srgb, var(--color-write), var(--color-panel) 90%);
-
-  --color-chat: var(--theme-chat);
-  --color-chat-bg: color-mix(in srgb, var(--color-chat), var(--color-panel) 90%);
-
-  --color-video: var(--theme-video);
-  --color-video-bg: color-mix(in srgb, var(--color-video), var(--color-panel) 90%);
-
-  --color-rss: var(--theme-rss);
-  --color-rss-bg: color-mix(in srgb, var(--color-rss), var(--color-panel) 90%);
-
-  --color-calendar: oklch(0.8159 0.2849 98.77);
-  --color-calendar-bg: color-mix(in srgb, var(--color-calendar), var(--color-panel) 90%);
-
-  --color-contact: oklch(0.8617 0.1837 93.83);
-  --color-contact-bg: color-mix(in srgb, var(--color-contact), var(--color-panel) 90%);
-
-  --color-default: var(--color-ink-muted);
-  --color-default-bg: color-mix(in srgb, var(--color-default), var(--color-panel) 90%);
-
-  --color-task: var(--theme-task);
-  --color-task-bg: color-mix(in srgb, var(--color-task), var(--color-panel) 90%);
+  --color-note:        oklch(from var(--a0) l c 293deg)
+  --color-canvas:      oklch(from var(--a0) l c  60deg);
+  --color-html:        oklch(from var(--a0) l c  47deg);
+  --color-folder:      oklch(from var(--a0) l c 240deg);
+  --color-code:        oklch(from var(--a0) l c 180deg);
+  --color-pdf:         oklch(from var(--a0) l c  25deg);
+  --color-image:       oklch(from var(--a0) l c  95deg);
+  --color-write:       oklch(from var(--a0) l c 260deg);
+  --color-chat:        oklch(from var(--a0) l c 220deg);
+  --color-video:       oklch(from var(--a0) l c 277deg);
+  --color-rss:         oklch(from var(--a0) l c 260deg);
+  --color-task:        oklch(from var(--a0) l c 150deg);
+  --color-calendar:    oklch(0.8159 0.2849 98.77);
+  --color-contact:     oklch(0.8617 0.1837 93.83);
+  --color-email:       var(--theme-email);
+  --color-default:     var(--c1);
 
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */
@@ -261,20 +172,20 @@
   --color-focus: var(--color-accent);
 
   /* Cursor variables — override these to use custom cursors */
-  --cursor-auto: auto;
-  --cursor-default: default;
-  --cursor-pointer: default;
-  --cursor-text: text;
-  --cursor-move: move;
-  --cursor-grab: grab;
-  --cursor-grabbing: grabbing;
-  --cursor-not-allowed: not-allowed;
-  --cursor-col-resize: col-resize;
-  --cursor-row-resize: row-resize;
-  --cursor-ew-resize: ew-resize;
-  --cursor-ns-resize: ns-resize;
-  --cursor-nwse-resize: nwse-resize;
   --cursor-nesw-resize: nesw-resize;
+  --cursor-nwse-resize: nwse-resize;
+  --cursor-not-allowed: not-allowed;
+  --cursor-col-resize:  col-resize;
+  --cursor-row-resize:  row-resize;
+  --cursor-ew-resize:   ew-resize;
+  --cursor-ns-resize:   ns-resize;
+  --cursor-grabbing:    grabbing;
+  --cursor-default:     default;
+  --cursor-pointer:     default;
+  --cursor-auto:        auto;
+  --cursor-grab:        grab;
+  --cursor-move:        move;
+  --cursor-text:        text;
 }
 
 .bg-accent {
@@ -285,12 +196,6 @@
   --color-focus: var(--color-accent);
 }
 
-/*
-*{
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-accent);
-}
-*/
 
 /* NOTE: We use this as a compile-time css util in this file to be able reuse the
  * declarations while still being able to override the color. */
@@ -732,7 +637,8 @@ html:not([data-touch-device="true"]) [data-message][data-highlighted] {
 }
 
 /* Keyboard selection accent bar can coexist with hover styles */
-[data-message][data-selected] > .message-accent-bar {
+/* Suppressed on touch devices */
+html:not([data-touch-device="true"]) [data-message][data-selected] > .message-accent-bar {
     @apply opacity-100;
 }
 

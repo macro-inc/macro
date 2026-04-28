@@ -11,6 +11,7 @@ import { Tooltip } from '@core/component/Tooltip';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import PlusIcon from '@icon/regular/plus.svg';
@@ -51,6 +52,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const generating = input.isGenerating;
 
   let containerRef!: HTMLDivElement;
+  useTouchOutsideToDismissKeyboard(() => containerRef);
   const toolsetSignal = createSignal<ToolSet>({ type: 'all' });
   const { hasConsent, requestConsent, ConsentDialog } = useAiDataConsentGate();
 

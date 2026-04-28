@@ -19,6 +19,8 @@ export interface InviteToTeamMetadata {
   senderProfilePictureUrl?: InviteToTeamMetadataSenderProfilePictureUrl;
   /** The unique identifier of the team */
   teamId: string;
+  /** The unique identifier of the team invite */
+  teamInviteId: string;
   /** The name of the team being invited to */
   teamName: string;
 }

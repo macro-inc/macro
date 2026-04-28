@@ -1,21 +1,102 @@
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
+import type { FilterContext } from '@app/component/next-soup/filters/configs/base';
+import type { QueryState } from '@app/component/next-soup/filters/filter-store';
 import { useSearchContext } from '@app/component/next-soup/search-context';
 import {
   createSoupFreshSearch,
-  getValidSearchFilters,
   intersectEntityPools,
   nameFuzzySearchFilter,
 } from '@app/component/next-soup/search-utils';
 import { arrayEquals } from '@core/util/compareUtils';
+import { useUserId } from '@core/context/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { isChannelEntity, type EntityData } from '@entity';
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import {
   useSearchSoupQuery,
   validateSearchServiceText,
 } from '@queries/soup/search';
+import type { EntityFilters } from '@service-search/generated/models';
 import type { UnifiedSearchRequest } from '@service-search/generated/models';
 import { type Accessor, createMemo, createSignal, on } from 'solid-js';
+
+function filterDataToQueryFilters(data: QueryState): EntityFilters {
+  const filters: EntityFilters = {};
+  const { include } = data;
+
+  // Document filters
+  if (
+    include.documentId?.length ||
+    include.fileType?.length ||
+    include.subType?.length ||
+    include.projectId?.length ||
+    include.documentOwnerId?.length
+  ) {
+    filters.document_filters = {
+      document_ids: include.documentId,
+      file_types: include.fileType,
+      sub_types: include.subType,
+      project_ids: include.projectId,
+      owners: include.documentOwnerId,
+    };
+  }
+
+  // Email filters
+  if (
+    include.threadId?.length ||
+    include.emailSender?.length ||
+    include.emailShared
+  ) {
+    filters.email_filters = {
+      email_thread_ids: include.threadId,
+      senders: include.emailSender,
+      shared: include.emailShared,
+    };
+  }
+
+  // Channel filters
+  if (
+    include.channelId?.length ||
+    include.channelType?.length ||
+    include.channelSenderId?.length
+  ) {
+    filters.channel_filters = {
+      channel_ids: include.channelId,
+      channel_types: include.channelType,
+      sender_ids: include.channelSenderId,
+    };
+  }
+
+  // Chat filters
+  if (
+    include.chatId?.length ||
+    include.chatOwnerId?.length ||
+    include.chatProjectId?.length
+  ) {
+    filters.chat_filters = {
+      chat_ids: include.chatId,
+      owners: include.chatOwnerId,
+      project_ids: include.chatProjectId,
+    };
+  }
+
+  // Project/folder filters
+  if (include.folderId?.length || include.folderOwnerId?.length) {
+    filters.project_filters = {
+      project_ids: include.folderId,
+      owners: include.folderOwnerId,
+    };
+  }
+
+  // Call filters
+  if (include.callChannelId?.length) {
+    filters.call_filters = {
+      channel_ids: include.callChannelId,
+    };
+  }
+
+  return filters;
+}
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -27,7 +108,8 @@ const freshSearch = createSoupFreshSearch();
 
 interface CreateSearchStateArgs {
   soup: SoupState;
-  queryFilters: Accessor<SoupItemsQueryFilters>;
+  filters: Accessor<QueryState>;
+  assignees: Accessor<string[]>;
   disableLocalSearch?: boolean;
   searchPaused?: Accessor<boolean>;
   searchMentions?: Accessor<string[]>;
@@ -35,12 +117,22 @@ interface CreateSearchStateArgs {
 
 export const createSearchState = ({
   soup,
-  queryFilters,
+  filters,
+  assignees,
   disableLocalSearch,
   searchPaused,
   searchMentions,
 }: CreateSearchStateArgs) => {
   const [searchText, setSearchText] = createSignal('');
+
+  const notificationSource = useGlobalNotificationSource();
+  const userId = useUserId();
+
+  const getFilterContext = (): FilterContext => ({
+    userId: userId(),
+    notificationSource,
+    assignees: assignees(),
+  });
 
   const trimmedSearchText = createMemo(() => searchText().trim());
 
@@ -66,26 +158,28 @@ export const createSearchState = ({
 
   const searchUnifiedNameContentRequest = createMemo(
     (): UnifiedSearchRequest => {
-      const filters = queryFilters();
       const query = debouncedSearchForService();
       const mentionIds =
         isSearchServiceDebounceSettled() && !isSearchServiceDisabled()
           ? searchMentions?.()
           : undefined;
+
+      // Translate FilterData to legacy EntityFilters format for search service
+      const baseFilters = filterDataToQueryFilters(filters());
+
+      // Merge mention filters into channel_filters if present
+      if (mentionIds && mentionIds.length > 0) {
+        baseFilters.channel_filters = {
+          ...baseFilters.channel_filters,
+          mentions: mentionIds,
+        };
+      }
+
       return {
         search_on: 'name_content',
         match_type: 'partial',
         query,
-        filters:
-          mentionIds && mentionIds.length > 0
-            ? {
-                ...filters,
-                channel_filters: {
-                  ...filters.channel_filters,
-                  mentions: mentionIds,
-                },
-              }
-            : filters,
+        filters: baseFilters,
       };
     }
   );
@@ -129,12 +223,12 @@ export const createSearchState = ({
 
   const allFiltersResults = createMemo((): Map<string, EntityData[]> => {
     if (!localFuzzyResults()) return new Map();
-    const allFilters = getValidSearchFilters(soup.filters.available);
     const filterToResultMap = new Map<string, EntityData[]>();
-    for (const filter of allFilters) {
+    const ctx = getFilterContext();
+    for (const filter of soup.predicates.available) {
       filterToResultMap.set(
         filter.id,
-        localFuzzyResults().filter((e) => filter.predicate(e))
+        localFuzzyResults().filter((e) => filter.predicate(e, ctx))
       );
     }
     return filterToResultMap;
@@ -142,19 +236,23 @@ export const createSearchState = ({
 
   // we will hide local results if there are channel filters because we only want message results
   const hasChannelQueryFilters = () => {
-    const cf = queryFilters().channel_filters;
-    return !!(cf?.channel_ids?.length || cf?.sender_ids?.length);
+    const filters_ = filters().include;
+    const channelIds = filters_.channelId ?? [];
+    const senderIds = filters_.channelSenderId ?? [];
+    return channelIds.length > 0 || senderIds.length > 0;
   };
 
   const filteredLocalFuzzyResults = createMemo(() => {
     if (!localFuzzyResults()) return [];
     if (hasChannelQueryFilters()) return [];
-    const activeFilters = getValidSearchFilters(soup.filters.active());
+    const activeIds = soup.predicates
+      .activeIds()
+      .filter((id) => id !== 'explicit-noise');
     const results =
-      activeFilters.length === 0
+      activeIds.length === 0
         ? localFuzzyResults()
         : intersectEntityPools(
-            activeFilters.map((f) => allFiltersResults().get(f.id) ?? [])
+            activeIds.map((id) => allFiltersResults().get(id) ?? [])
           );
     const channels = results.filter((e) => isChannelEntity(e));
     const nonChannels = results

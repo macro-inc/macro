@@ -2,6 +2,7 @@ import { analytics } from '@app/lib/analytics';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr, isOk } from '@core/util/maybeResult';
+import { callServiceClient } from '@service-call/client';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
@@ -108,6 +109,13 @@ export async function renameItem(args: {
       result = await commsServiceClient.patchChannel({
         channel_id: id,
         channel_name: newName,
+      });
+      break;
+    }
+    case 'call': {
+      result = await callServiceClient.editCallRecord({
+        callId: id,
+        customName: newName,
       });
       break;
     }

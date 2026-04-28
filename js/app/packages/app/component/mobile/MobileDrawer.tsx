@@ -1,7 +1,9 @@
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { isEditableInput } from '@core/util/isEditableInput';
 import Drawer from '@corvu/drawer';
 import { cn } from '@ui/utils/classname';
 import {
-  createSignal,
+  onCleanup,
   splitProps,
   type ComponentProps,
   type ValidComponent,
@@ -13,21 +15,18 @@ import { Dynamic } from 'solid-js/web';
  * focused input/textarea to `offset` px from the container's top edge.
  *
  * Usage:
- *   <div onFocusIn={(e) => scrollToFocusedInput(e, e.currentTarget)}>
+ *   <div onFocusIn={(e) => scrollToFocusedInput(e)}>
  */
-export function scrollToFocusedInput(
-  e: FocusEvent & { currentTarget: HTMLElement },
-  offset = 40
-) {
-  if (
-    !(e.target instanceof HTMLInputElement) &&
-    !(e.target instanceof HTMLTextAreaElement)
-  )
+let scrollTimer: ReturnType<typeof setTimeout> | undefined;
+
+export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
+  if (!isEditableInput(e.target as Element) || scrollTimer !== undefined)
     return;
   const input = e.target as HTMLElement;
-  const container = e.currentTarget;
+  const container = e.currentTarget as HTMLElement;
   // Has to be delayed until after browser's native keyboard-show scroll completes
-  setTimeout(() => {
+  scrollTimer = setTimeout(() => {
+    scrollTimer = undefined;
     const inputRect = input.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
     container.scrollTo({
@@ -50,22 +49,20 @@ export function scrollToFocusedInput(
  */
 function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
   const [local, rest] = splitProps(props, ['class']);
-  const [inputFocused, setInputFocused] = createSignal(false);
 
-  const isInputEl = (target: EventTarget | null) =>
-    target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+  onCleanup(() => {
+    clearTimeout(scrollTimer);
+    scrollTimer = undefined;
+  });
 
   return (
     <Drawer.Content
       onFocusIn={(e: FocusEvent) => {
-        if (isInputEl(e.target)) setInputFocused(true);
-      }}
-      onFocusOut={(e: FocusEvent) => {
-        if (isInputEl(e.target)) setInputFocused(false);
+        scrollToFocusedInput(e);
       }}
       class={cn(
         'bottom-(--virtual-keyboard-height) fixed left-0 right-0 z-modal bg-page rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
-        inputFocused()
+        virtualKeyboardVisible()
           ? 'pb-0 max-h-[calc(80vh-var(--virtual-keyboard-height))] overflow-y-auto'
           : 'pb-(--safe-bottom)',
         local.class
@@ -107,7 +104,13 @@ function MobileDrawerSection<T extends ValidComponent = 'div'>(
  */
 export const MobileDrawer = Object.assign(
   (props: ComponentProps<typeof Drawer>) => (
-    <Drawer breakPoints={[0.8]} {...props} />
+    <Drawer
+      breakPoints={[0.8]}
+      closeOnOutsideFocus={false}
+      noOutsidePointerEvents={false}
+      restoreFocus={false}
+      {...props}
+    />
   ),
   {
     Trigger: Drawer.Trigger,

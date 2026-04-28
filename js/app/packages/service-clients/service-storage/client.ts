@@ -34,6 +34,7 @@ import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
 import type {
   AccessLevel,
+  PostSoupAstRequest,
   CallRecordPreview,
   PostSoupRequest,
   SoupPage,
@@ -230,6 +231,20 @@ export const storageServiceClient = {
       : '';
 
     return await dssFetch<SoupPage>(`/items/soup${searchParams}`, {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+    });
+  },
+
+  async getSoupAstItems(args: {
+    params: { cursor?: string | null };
+    body: PostSoupAstRequest;
+  }) {
+    const searchParams = args.params.cursor
+      ? `?cursor=${args.params.cursor}`
+      : '';
+
+    return await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
       method: 'POST',
       body: JSON.stringify(args.body),
     });
