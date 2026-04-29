@@ -894,6 +894,81 @@
         }
       }
     },
+    "/call/record/{call_id}/transcript": {
+      "patch": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `PATCH /call/record/{call_id}/transcript`.",
+        "description": "Applies per-diarized-speaker `custom_speaker` overrides to the call's\narchived transcript rows. Auth uses the same `EditAccessLevel` extractor\nas `edit_call_record_handler`.",
+        "operationId": "edit_call_transcript",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditCallTranscriptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Transcript updated"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/webhook": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -7239,6 +7314,21 @@
           }
         }
       },
+      "CustomSpeakerAssignment": {
+        "type": "object",
+        "description": "One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].\n\n`custom_speaker = None` clears any existing override for this\n`diarized_speaker_id`; `Some(macro_user_id)` sets it. The string is\nexpected to parse as a `MacroUserId` (e.g. `macro|alice@example.com`);\nthe service layer rejects malformed values with `400 Bad Request`.",
+        "required": ["diarizedSpeakerId", "customSpeaker"],
+        "properties": {
+          "customSpeaker": {
+            "type": "string",
+            "description": "Macro user id to attribute matching rows to, or `None` to clear."
+          },
+          "diarizedSpeakerId": {
+            "type": "string",
+            "description": "The diarization label whose rows this assignment targets."
+          }
+        }
+      },
       "DataType": {
         "type": "string",
         "description": "Data type for property values, determining storage and validation.",
@@ -7848,6 +7938,20 @@
           "shareWithTeam": {
             "type": ["boolean", "null"],
             "description": "If `Some(true)`, grant the creator's team View access on the call.\nIf `Some(false)`, revoke the creator's team's access. `None` is a no-op.\nThe team is resolved from the call's `created_by`, not the acting user."
+          }
+        }
+      },
+      "EditCallTranscriptRequest": {
+        "type": "object",
+        "description": "Body of `PATCH /call/record/{call_id}/transcript`.\n\nEach entry in `assignments` sets (or clears, when `custom_speaker` is\n`None`) the `custom_speaker` override for every transcript row in the\ncall whose `diarized_speaker_id` matches. Diarized speakers not listed\nare left untouched. Empty `assignments` is a 204 no-op.",
+        "required": ["assignments"],
+        "properties": {
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomSpeakerAssignment"
+            },
+            "description": "The set of per-diarized-speaker overrides to apply."
           }
         }
       },

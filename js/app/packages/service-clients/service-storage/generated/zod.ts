@@ -1093,6 +1093,43 @@ export const toggleShareWithTeamParams = zod.object({
 export const toggleShareWithTeamResponse = zod.boolean();
 
 /**
+ * Applies per-diarized-speaker `custom_speaker` overrides to the call's
+archived transcript rows. Auth uses the same `EditAccessLevel` extractor
+as `edit_call_record_handler`.
+ * @summary Handler for `PATCH /call/record/{call_id}/transcript`.
+ */
+export const editCallTranscriptParams = zod.object({
+  call_id: zod.string().uuid().describe('Call ID'),
+});
+
+export const editCallTranscriptBody = zod
+  .object({
+    assignments: zod
+      .array(
+        zod
+          .object({
+            customSpeaker: zod
+              .string()
+              .describe(
+                'Macro user id to attribute matching rows to, or `None` to clear.'
+              ),
+            diarizedSpeakerId: zod
+              .string()
+              .describe(
+                'The diarization label whose rows this assignment targets.'
+              ),
+          })
+          .describe(
+            'One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].\n\n`custom_speaker = None` clears any existing override for this\n`diarized_speaker_id`; `Some(macro_user_id)` sets it. The string is\nexpected to parse as a `MacroUserId` (e.g. `macro|alice@example.com`);\nthe service layer rejects malformed values with `400 Bad Request`.'
+          )
+      )
+      .describe('The set of per-diarized-speaker overrides to apply.'),
+  })
+  .describe(
+    'Body of `PATCH \/call\/record\/{call_id}\/transcript`.\n\nEach entry in `assignments` sets (or clears, when `custom_speaker` is\n`None`) the `custom_speaker` override for every transcript row in the\ncall whose `diarized_speaker_id` matches. Diarized speakers not listed\nare left untouched. Empty `assignments` is a 204 no-op.'
+  );
+
+/**
  * Gets or creates a call for the channel. If a call already exists, joins it;
 otherwise creates a new one. Always returns a join token.
  * @summary Handler for `GET /call/{channel_id}`.
