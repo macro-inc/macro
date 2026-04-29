@@ -11,7 +11,9 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { waitForFrames } from '@core/util/sleep';
 import {
   type EntityData,
+  getSnippetHit,
   isSearchEntity,
+  isSnippetEntity,
   type SearchLocation,
   type WithSearch,
 } from '@entity';
@@ -312,13 +314,11 @@ export const openEntityInSplitFromUnifiedList = async (
   const { openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
-  // For call entity rows, fall back to the first content hit so the row click
-  // lands on the segment that's previewed inline rather than the call's start.
-  if (!location && entity.type === 'call' && isSearchEntity(entity)) {
-    const firstHit = entity.search.contentHitData?.[0];
-    if (firstHit?.location?.type === 'call_record') {
-      location = firstHit.location;
-    }
+  // For snippet entities (email, call), fall back to the rendered snippet
+  // hit's location so the row click lands on the previewed match rather
+  // than the entity's default landing position.
+  if (!location && isSnippetEntity(entity)) {
+    location = getSnippetHit(entity)?.location;
   }
 
   // Get dependencies internally
