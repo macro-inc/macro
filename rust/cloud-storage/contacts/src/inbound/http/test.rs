@@ -13,37 +13,38 @@ use tower::ServiceExt;
 #[derive(Clone, Debug)]
 struct MockService;
 
-impl ContactsServicePort for MockService {
-    async fn query_contacts(&self, user_id: MacroUserIdStr<'_>) -> Option<Vec<String>> {
+impl ContactsService for MockService {
+    async fn query_contacts(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
         if user_id.as_ref() == "macro|found@test.com" {
             let contacts = [
-                "0bcabd1a-1bf5-48d7-b334-5f7e59e8a9ff",
-                "3a90b186-0288-4819-8e1a-8e10cb685c0c",
-                "e3cf7c46-60c9-413a-8f27-57c91c3297cf",
+                "macro|contact1@test.com",
+                "macro|contact2@test.com",
+                "macro|contact3@test.com",
             ]
             .into_iter()
-            .map(String::from)
+            .map(|s| MacroUserIdStr::try_from_email(s).unwrap())
             .collect();
-
-            return Some(contacts);
+            return Ok(contacts);
         } else if user_id.as_ref() == "macro|many@test.com" {
             let contacts = [
-                "d44caada-98c0-49eb-ab20-6851b824983a",
-                "5ab8c770-f2cb-4c6c-bc08-ae64569e324c",
-                "79a5557b-7827-4e2e-a6ae-f0935cdb762e",
-                "c3f4d826-f8fd-478a-aa66-b5b6bb370cbc",
-                "ff038d36-1aef-461a-8aa8-34001fa1abad",
-                "c3b1970f-18ee-4dfa-b5fb-e8240e28e51d",
-                "9effe035-bb12-4fcc-b479-800e1c2551a8",
+                "macro|contact4@test.com",
+                "macro|contact5@test.com",
+                "macro|contact6@test.com",
+                "macro|contact7@test.com",
+                "macro|contact8@test.com",
+                "macro|contact9@test.com",
+                "macro|contact10@test.com",
             ]
             .into_iter()
-            .map(String::from)
+            .map(|s| MacroUserIdStr::try_from_email(s).unwrap())
             .collect();
-
-            return Some(contacts);
+            return Ok(contacts);
         }
 
-        None
+        Ok(vec![])
     }
 
     async fn add_contact(
@@ -138,21 +139,20 @@ async fn test_get_contact() {
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let body: GetContactsResponse = serde_json::from_slice(&body).unwrap();
 
-    let contact_list: HashSet<String> = [
-        "0bcabd1a-1bf5-48d7-b334-5f7e59e8a9ff",
-        "3a90b186-0288-4819-8e1a-8e10cb685c0c",
-        "e3cf7c46-60c9-413a-8f27-57c91c3297cf",
+    let contact_list: HashSet<&str> = [
+        "macro|contact1@test.com",
+        "macro|contact2@test.com",
+        "macro|contact3@test.com",
     ]
     .into_iter()
-    .map(String::from)
     .collect();
 
     assert_eq!(body.contacts.len(), 3, "Not enough contacts");
     for contact in &body.contacts {
         assert!(
-            contact_list.contains(contact),
+            contact_list.contains(contact.as_ref()),
             "Could not find contact: {}",
-            contact
+            contact.as_ref()
         );
     }
 }

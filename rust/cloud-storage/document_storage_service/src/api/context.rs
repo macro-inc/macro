@@ -1,3 +1,6 @@
+use contacts::domain::service::SqsContactsIngress;
+use contacts::outbound::ingress::SqsContactsQueue;
+
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
 use cal::{
