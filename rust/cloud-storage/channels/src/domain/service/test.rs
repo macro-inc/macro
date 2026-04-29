@@ -328,6 +328,78 @@ async fn around_message_not_found() {
 }
 
 #[tokio::test]
+async fn around_deleted_top_level_without_active_replies_is_not_found() {
+    let message_id = Uuid::new_v4();
+    let mut anchor = make_row(message_id, 0);
+    anchor.deleted_at = Some(Utc::now());
+
+    let mut repo = MockChannelMessagesRepo::new();
+    repo.expect_resolve_top_level_parent()
+        .returning(move |_, _| {
+            let anchor = anchor.clone();
+            Box::pin(async move { Ok(Some(anchor)) })
+        });
+    repo.expect_get_thread_data()
+        .returning(|_, _| Box::pin(async { Ok(HashMap::new()) }));
+
+    let svc = ChannelMessagesServiceImpl::new(repo);
+    let err = svc
+        .get_channel_messages_around(Uuid::nil(), message_id, 50)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(err, ChannelMessagesErr::MessageNotFound(id) if id == message_id),
+        "expected MessageNotFound, got {err:?}"
+    );
+}
+
+#[tokio::test]
+async fn around_reply_to_deleted_top_level_with_active_replies_still_works() {
+    let reply_id = Uuid::new_v4();
+    let mut anchor = make_row(Uuid::new_v4(), 0);
+    anchor.deleted_at = Some(Utc::now());
+
+    let anchor_clone = anchor.clone();
+    let mut repo = MockChannelMessagesRepo::new();
+
+    repo.expect_resolve_top_level_parent()
+        .returning(move |_, _| {
+            let anchor = anchor_clone.clone();
+            Box::pin(async move { Ok(Some(anchor)) })
+        });
+    repo.expect_get_thread_data()
+        .returning(move |parent_ids, _| {
+            let mut map = HashMap::new();
+            map.insert(
+                parent_ids[0],
+                ThreadData {
+                    reply_count: 1,
+                    latest_reply_at: Some(Utc::now()),
+                    preview_replies: vec![],
+                },
+            );
+            Box::pin(async move { Ok(map) })
+        });
+    repo.expect_get_top_level_messages_around()
+        .returning(|_, _, _, _| Box::pin(async { Ok((vec![], vec![])) }));
+    repo.expect_get_reactions_batch()
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+    repo.expect_get_attachments_batch()
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+
+    let svc = ChannelMessagesServiceImpl::new(repo);
+    let result = svc
+        .get_channel_messages_around(Uuid::nil(), reply_id, 50)
+        .await
+        .unwrap();
+
+    assert!(!result.has_more_newer);
+    assert_eq!(result.page.items.len(), 1);
+    assert_eq!(result.page.items[0].id, anchor.id);
+}
+
+#[tokio::test]
 async fn around_resolves_and_hydrates() {
     let anchor = make_row(Uuid::new_v4(), 0);
     let before_row = make_row(Uuid::new_v4(), 1);
