@@ -117,7 +117,7 @@ pub async fn handler(
             let contacts_users = recipients
                 .into_iter()
                 .map(MacroUserIdStr::try_from)
-                .collect::<Result<Vec<_>, _>>()
+                .collect::<Result<std::collections::HashSet<_>, _>>()
                 .map_err(|e| {
                     tracing::error!(error=?e, "invalid user id for contacts");
                     (StatusCode::BAD_REQUEST, "invalid user id".to_string())

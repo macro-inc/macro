@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::pubsub::context::PubSubContext;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::db::address::EmailRecipientType;
@@ -157,7 +159,7 @@ async fn handle_contacts_sync(ctx: &PubSubContext, link: &Link) -> Result<(), Pr
         link.macro_id
     );
 
-    let users: Vec<MacroUserIdStr<'static>> = std::iter::once(Ok(link.macro_id.clone()))
+    let users: HashSet<MacroUserIdStr<'static>> = std::iter::once(Ok(link.macro_id.clone()))
         .chain(
             email_addresses
                 .iter()

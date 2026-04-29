@@ -34,7 +34,7 @@ impl ConnectionGatewayNotifier {
 impl ContactsNotifier for ConnectionGatewayNotifier {
     async fn invalidate_contacts_for_users(
         &self,
-        user_ids: impl Iterator<Item = MacroUserIdStr<'static>> + Send,
+        user_ids: Vec<MacroUserIdStr<'_>>,
     ) -> Result<(), Report> {
         for user_id in user_ids {
             self.invalidate_contacts(user_id.as_ref() as &str)
@@ -53,7 +53,7 @@ impl ContactsNotifier for ConnectionGatewayNotifier {
 impl ContactsNotifier for Option<ConnectionGatewayNotifier> {
     async fn invalidate_contacts_for_users(
         &self,
-        user_ids: impl Iterator<Item = MacroUserIdStr<'static>> + Send,
+        user_ids: Vec<MacroUserIdStr<'_>>,
     ) -> Result<(), Report> {
         if let Some(notifier) = self {
             notifier.invalidate_contacts_for_users(user_ids).await?;

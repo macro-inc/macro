@@ -134,7 +134,7 @@ impl<'a, T> UndirectedGraph<'a, T> {
     }
 
     /// Returns an iterator over the graph's edges.
-    pub fn edges(&'a self) -> impl Iterator<Item = Edge<'a, T>> + 'a {
+    pub fn edges(&self) -> impl Iterator<Item = Edge<'a, T>> {
         self.edges.iter().copied()
     }
 

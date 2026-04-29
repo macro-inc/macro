@@ -1,4 +1,4 @@
 INSERT INTO contacts_connections(user1, user2) VALUES
-  ('51028BDA-67F0-44DF-AA21-5853963524F1', 'AA000000-0000-0000-0000-000000000001'),
-  ('51028BDA-67F0-44DF-AA21-5853963524F1', 'BB000000-0000-0000-0000-000000000002'),
-  ('51028BDA-67F0-44DF-AA21-5853963524F1', 'CC000000-0000-0000-0000-000000000003');
+  ('macro|a@test.com', 'macro|b@test.com'),
+  ('macro|a@test.com', 'macro|c@test.com'),
+  ('macro|a@test.com', 'macro|d@test.com');

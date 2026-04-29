@@ -1,9 +1,9 @@
 // Small utility to generate a sample connections message to send to the SQS service
 use contacts::domain::models::messages::ContactsMessage;
 use macro_user_id::user_id::MacroUserIdStr;
-use std::env;
+use std::{collections::HashSet, env};
 
-fn print_contacts_message(users: Vec<MacroUserIdStr<'static>>) {
+fn print_contacts_message(users: HashSet<MacroUserIdStr<'static>>) {
     println!(
         "{}",
         serde_json::to_string(&ContactsMessage { users }).unwrap()
@@ -11,7 +11,7 @@ fn print_contacts_message(users: Vec<MacroUserIdStr<'static>>) {
 }
 
 async fn genmsg_add_user_to_group() {
-    let mut users: Vec<MacroUserIdStr<'static>> = [
+    let mut users: HashSet<MacroUserIdStr<'static>> = [
         "macro|alice@macro.com",
         "macro|bob@macro.com",
         "macro|carol@macro.com",
@@ -23,12 +23,12 @@ async fn genmsg_add_user_to_group() {
     .iter()
     .map(|s| MacroUserIdStr::try_from(s.to_string()).unwrap())
     .collect();
-    users.push(MacroUserIdStr::try_from("macro|henry@macro.com".to_string()).unwrap());
+    users.insert(MacroUserIdStr::try_from("macro|henry@macro.com".to_string()).unwrap());
     print_contacts_message(users);
 }
 
 async fn genmsg_add_paul() {
-    let mut users: Vec<MacroUserIdStr<'static>> = [
+    let mut users: HashSet<MacroUserIdStr<'static>> = [
         "macro|zeus@olympus.mountain",
         "macro|athena@olympus.mountain",
         "macro|apollo@olympus.mountain",
@@ -38,12 +38,12 @@ async fn genmsg_add_paul() {
     .iter()
     .map(|s| MacroUserIdStr::try_from(s.to_string()).unwrap())
     .collect();
-    users.push(MacroUserIdStr::try_from("macro|paul@macro.com".to_string()).unwrap());
+    users.insert(MacroUserIdStr::try_from("macro|paul@macro.com".to_string()).unwrap());
     print_contacts_message(users);
 }
 
 async fn genmsg_create_group() {
-    let users: Vec<MacroUserIdStr<'static>> = [
+    let users: HashSet<MacroUserIdStr<'static>> = [
         "macro|jupiter@olympus.mountain",
         "macro|athena@olympus.mountain",
         "macro|mercury@olympus.mountain",
@@ -57,7 +57,7 @@ async fn genmsg_create_group() {
 }
 
 async fn genmsg_add_participants() {
-    let users: Vec<MacroUserIdStr<'static>> = [
+    let users: HashSet<MacroUserIdStr<'static>> = [
         "macro|an@uruk.place",
         "macro|enlil@nippur.place",
         "macro|enki@eridu.place",

@@ -23,7 +23,7 @@ pub async fn process_macro_id(
         return Ok(());
     }
 
-    let users: Vec<MacroUserIdStr<'static>> = std::iter::once(Ok(link.macro_id.clone()))
+    let users: std::collections::HashSet<MacroUserIdStr<'static>> = std::iter::once(Ok(link.macro_id.clone()))
         .chain(
             contact_emails
                 .iter()

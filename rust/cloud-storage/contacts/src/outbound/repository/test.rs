@@ -14,7 +14,7 @@ async fn test_create_connections_basic(pool: PgPool) -> sqlx::Result<()> {
     let user1 = "macro|a@test.com";
     let user2 = "macro|b@test.com";
     let repo = DbContactsRepository::new(pool.clone());
-    repo.create_connections(vec![(mid(user1), mid(user2))].into_iter())
+    repo.create_connections(vec![(mid(user1), mid(user2))])
         .await
         .unwrap();
     let pair = sqlx::query!("SELECT user1, user2 FROM contacts_connections LIMIT 1")
@@ -30,7 +30,7 @@ async fn test_create_connections_ordering(pool: PgPool) -> sqlx::Result<()> {
     let user1 = "macro|a@test.com";
     let user2 = "macro|b@test.com";
     let repo = DbContactsRepository::new(pool.clone());
-    repo.create_connections(vec![(mid(user2), mid(user1))].into_iter())
+    repo.create_connections(vec![(mid(user2), mid(user1))])
         .await
         .unwrap();
     let pair = sqlx::query!("SELECT user1, user2 FROM contacts_connections LIMIT 1")
@@ -48,7 +48,7 @@ async fn test_create_connections_ordering(pool: PgPool) -> sqlx::Result<()> {
 async fn test_get_contacts(pool: PgPool) -> sqlx::Result<()> {
     let repo = DbContactsRepository::new(pool);
     let contacts = repo
-        .get_contacts("51028BDA-67F0-44DF-AA21-5853963524F1")
+        .get_contacts(mid("macro|a@test.com"))
         .await
         .unwrap();
     assert_eq!(contacts.len(), 3);
@@ -70,7 +70,7 @@ async fn test_create_connections_batch(pool: PgPool) -> sqlx::Result<()> {
     let expected_count = connections.len() as i64;
 
     let repo = DbContactsRepository::new(pool.clone());
-    repo.create_connections(connections.into_iter()).await.unwrap();
+    repo.create_connections(connections).await.unwrap();
 
     let count = sqlx::query_scalar!("SELECT count(*) FROM contacts_connections")
         .fetch_one(&pool)
@@ -78,7 +78,10 @@ async fn test_create_connections_batch(pool: PgPool) -> sqlx::Result<()> {
         .unwrap();
     assert_eq!(count, expected_count);
 
-    let contacts = repo.get_contacts("macro|user0@test.com").await.unwrap();
+    let contacts = repo
+        .get_contacts(mid("macro|user0@test.com"))
+        .await
+        .unwrap();
     assert_eq!(contacts.len(), expected_count as usize);
     Ok(())
 }
