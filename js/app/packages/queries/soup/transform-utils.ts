@@ -37,6 +37,7 @@ import type {
   SoupPage,
 } from '@service-storage/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
+import { differenceInMilliseconds } from 'date-fns';
 
 type InnerSearchResult =
   | DocumentSearchResult
@@ -136,17 +137,15 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
       break;
     }
     case 'call_record': {
-      const callStartMs = new Date(data.callStartedAt).getTime();
       contentHitData = data.results.flatMap((r) => {
         // TODO: support name only hits for call records when we support rename
         const isContentHit = !!r.transcript_id;
         if (!isContentHit) return [];
 
-        const segmentStartMs = new Date(r.started_at!).getTime();
-        const videoSeconds =
-          Number.isFinite(callStartMs) && Number.isFinite(segmentStartMs)
-            ? Math.max(0, (segmentStartMs - callStartMs) / 1000)
-            : 0;
+        const videoSeconds = Math.max(
+          0,
+          differenceInMilliseconds(r.started_at!, data.callStartedAt) / 1000
+        );
 
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
