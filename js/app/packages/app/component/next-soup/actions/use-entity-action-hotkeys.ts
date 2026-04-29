@@ -27,7 +27,10 @@ import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { onCleanup } from 'solid-js';
-import { isListViewID } from '@app/constants/list-views';
+import { isListViewID, type ListView } from '@app/constants/list-views';
+
+// Valid list views where the mark done hotkey can be run in
+const VALID_MARK_DONE_LIST_VIEWS: ListView[] = ['inbox', 'mail'];
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
@@ -135,6 +138,15 @@ export const useEntityActionHotkeys = (
     },
     condition: () => {
       if (condition && !condition()) return false;
+
+      const splitContentId = splitHandle?.content().id;
+
+      if (
+        isListViewID(splitContentId) &&
+        !VALID_MARK_DONE_LIST_VIEWS.includes(splitContentId)
+      )
+        return false;
+
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(markDone.canExecute);
     },

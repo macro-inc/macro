@@ -123,9 +123,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       entity.type === 'email' ||
       entity.type === 'channel' ||
       entity.type === 'chat' ||
-      entity.type === 'document' ||
-      entity.type === 'project' ||
-      isTaskEntity(entity)
+      entity.type === 'project'
     ) {
       return true;
     }
