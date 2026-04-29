@@ -481,7 +481,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
       : (props.scopeId ?? panel.splitHotkeyScope);
   });
 
-  // Register navigation hotkeys
+  // Register navigation hotkeys on the active list scope (usually the split
+  // scope), but dispose them with the mounted SoupViewList. This keeps j/k
+  // available while the list split is active without leaking into opened blocks
+  // after the list unmounts.
   useSoupNavigationHotkeys({
     scopeId: scopeId(),
     soup,
