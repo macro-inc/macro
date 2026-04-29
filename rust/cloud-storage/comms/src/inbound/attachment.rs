@@ -95,8 +95,14 @@ impl<C: CommsRepo, E: EntityAccessService> CommsAttachmentService<C, E> {
         Ok(AttachmentContent {
             reference: EntityType::Channel.with_entity_string(id.to_string()),
             name,
-            content: NonEmpty::new(vec![AttachmentPart::Content(parts)])
-                .expect("single element is non-empty"),
+            content: NonEmpty::new(vec![
+                AttachmentPart::Metadata {
+                    key: "message-limit".into(),
+                    value: MESSAGE_LIMIT.to_string(),
+                },
+                AttachmentPart::Content(parts),
+            ])
+            .expect("single element is non-empty"),
         })
     }
 }
