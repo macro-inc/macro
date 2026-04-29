@@ -30,19 +30,19 @@ export function CallBlockAdapter(props: CallBlockProps) {
   const blockHandle = blockHandleSignal.get;
   const [searchParams] = useSearchParams();
 
-  const initialTranscriptId = (): string | undefined => {
+  const initialTranscriptId = ((): string | undefined => {
     const fromProps = props[URL_PARAMS.transcriptId];
     if (fromProps) return fromProps;
     const isSingleSplit = globalSplitManager()?.splits().length === 1;
     if (!isSingleSplit) return undefined;
     return searchParams[URL_PARAMS.transcriptId] as string | undefined;
-  };
+  })();
 
   const [transcriptTarget, setTranscriptTarget] = createSignal<
     CallTranscriptTarget | undefined
   >(
-    initialTranscriptId()
-      ? { transcriptId: initialTranscriptId()!, gen: 0 }
+    initialTranscriptId
+      ? { transcriptId: initialTranscriptId, gen: 0 }
       : undefined
   );
 
