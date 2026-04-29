@@ -5,7 +5,8 @@ publish = false
 version = "0.1.0"
 
 [features]
-default = ["inbound", "outbound", "ports"]
+default = ["ai_tools", "inbound", "outbound", "ports"]
+ai_tools = ["dep:async-trait", "dep:schemars", "inbound", "ports"]
 attachment = [
   "dep:attachment",
   "dep:futures",
@@ -49,6 +50,10 @@ uuid = { workspace = true }
 # Attachment (attachment provider)
 attachment = { path = "../attachment", optional = true }
 futures = { workspace = true, optional = true }
+
+# AI tools (toolset adapter)
+async-trait = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
 
 # Inbound (HTTP handlers)
 axum = { workspace = true, optional = true }

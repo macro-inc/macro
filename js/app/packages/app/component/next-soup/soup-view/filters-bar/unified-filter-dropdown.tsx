@@ -7,6 +7,7 @@ import { isListViewID } from '@app/constants/list-views';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import {
   type Accessor,
+  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -30,7 +31,12 @@ import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
 import type { FilterID } from '@app/component/next-soup/filters';
-import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
+import {
+  NO_ASSIGNEE,
+  type FilterContext,
+} from '@app/component/next-soup/filters/configs/';
+import type { PropertyFilter } from '@app/component/next-soup/filters/filter-store';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import {
@@ -644,7 +650,8 @@ const SearchIndexSubRow = (props: {
 export const UnifiedFilterDropdown = () => {
   const [open, setOpen] = createSignal(false);
   const panel = useSplitPanelOrThrow();
-  const { soup, assigneeFilter, setAssigneeFilter } = useSoupView();
+  const { soup, queryFilters, assigneeFilter, setAssigneeFilter } =
+    useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
   const contentId = panel.handle.content().id;
@@ -663,11 +670,28 @@ export const UnifiedFilterDropdown = () => {
   });
 
   const isOptionActive = (optionId: string) => {
-    return soup.filters.isActive(optionId);
+    return soup.predicates.isActive(optionId);
   };
 
   const toggleFilter = (optionId: string) => {
-    soup.filters.toggle({ or: [optionId] });
+    const wasActive = soup.predicates.isActive(optionId);
+    soup.predicates.toggle({ or: [optionId] });
+
+    const filter = soup.predicates.getConfig(optionId);
+    if (!filter?.query) return;
+
+    const ctx: FilterContext = {
+      userId: userId(),
+      assignees: assigneeFilter(),
+    };
+    const query =
+      typeof filter.query === 'function' ? filter.query(ctx) : filter.query;
+
+    if (wasActive) {
+      queryFilters.remove(query);
+    } else {
+      queryFilters.add(query);
+    }
   };
 
   // Assignee options for tasks view
@@ -706,10 +730,43 @@ export const UnifiedFilterDropdown = () => {
     ];
   });
 
+  const handleAssigneeChange = (ids: string[]) => {
+    const current = assigneeFilter();
+    const toAdd = ids.filter((id) => !current.includes(id));
+    const toRemove = current.filter((id) => !ids.includes(id));
+
+    // Exclude NO_ASSIGNEE from backend queries - it's handled client-side only
+    const toProps = (list: string[]): PropertyFilter[] =>
+      list
+        .filter((id) => id !== NO_ASSIGNEE)
+        .map((id) => ({
+          propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+          type: 'entity',
+          value: id,
+        }));
+
+    batch(() => {
+      setAssigneeFilter(ids);
+
+      // Activate/deactivate the assignee predicate based on selection
+      const shouldBeActive = ids.length > 0;
+      if (shouldBeActive !== soup.predicates.isActive('assignee')) {
+        soup.predicates.toggle({ and: ['assignee'] });
+      }
+
+      const removeProps = toProps(toRemove);
+      const addProps = toProps(toAdd);
+      if (removeProps.length)
+        queryFilters.remove({ include: { properties: removeProps } });
+      if (addProps.length)
+        queryFilters.add({ include: { properties: addProps } });
+    });
+  };
+
   const isTasksView = () => currentView() === 'tasks';
-  const isSearchView = createMemo(() => currentView() === 'search');
+  const isSearchView = () => currentView() === 'search';
   const hasActiveIndex = () =>
-    INDEX_OPTIONS.some((opt) => soup.filters.isActive(opt.value));
+    INDEX_OPTIONS.some((opt) => soup.predicates.isActive(opt.value));
 
   const { changeIndex: handleIndexChange } = useSearchIndexController();
 
@@ -817,7 +874,7 @@ export const UnifiedFilterDropdown = () => {
                       label="Assignee"
                       options={assigneeOptions}
                       activeIds={assigneeFilter}
-                      onChange={setAssigneeFilter}
+                      onChange={handleAssigneeChange}
                       placeholder="Search assignees..."
                     />
                   </Show>
@@ -828,7 +885,7 @@ export const UnifiedFilterDropdown = () => {
                       {(option) => {
                         const rowProps = {
                           option,
-                          active: () => soup.filters.isActive(option.value),
+                          active: () => soup.predicates.isActive(option.value),
                           onSelect: () => handleIndexChange(option.value),
                           closeRoot: () => setOpen(false),
                         };

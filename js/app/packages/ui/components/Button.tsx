@@ -1,6 +1,6 @@
 import { Button as KButton, type ButtonRootProps } from '@kobalte/core/button';
 import type { PolymorphicProps } from '@kobalte/core/polymorphic';
-import { cn } from '@ui/utils/classname';
+import { cn } from '../utils/classname';
 import CorvuTooltip from '@corvu/tooltip';
 import type { Placement } from '@floating-ui/dom';
 import { type JSX, Show, splitProps, type ValidComponent } from 'solid-js';

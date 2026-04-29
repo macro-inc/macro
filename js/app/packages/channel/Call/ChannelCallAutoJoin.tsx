@@ -2,7 +2,7 @@ import { type Accessor, createEffect, untrack } from 'solid-js';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
-import { useCall } from './useCall';
+import { useCall } from './use-call';
 
 /**
  * Auto-joins the call for this channel whenever `pendingJoinCall` flips to

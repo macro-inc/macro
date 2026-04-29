@@ -110,7 +110,6 @@ export function ThemeList() {
                 }}
                 style="
                   cursor: var(--cursor-pointer);
-                  background-color: var(--b1);
                 "
               >
                 <div
@@ -159,9 +158,9 @@ export function ThemeList() {
                   <div
                     class="theme-list-item-name"
                     style="
+                      transition: color var(--transition);
                       background-color: var(--b1);
                       box-sizing: border-box;
-                      transition: color var(--transition);
                       white-space: nowrap;
                       align-items: center;
                       padding: 0 20px;

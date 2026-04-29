@@ -28,11 +28,15 @@ pub struct ChatResponse {
     #[deprecated(note = "Attachments are now stateless and no longer float until message send")]
     pub attachments: Vec<ChatAttachmentWithName>,
     /// Current number of tokens in the chat
+    // kill
     pub token_count: Option<i64>,
     /// Available models for the chat
+    // kill
     pub available_models: Vec<Model>,
     /// message_id - web citation list
+    // kill
     pub web_citations: Vec<(String, Vec<GetUnfurlResponse>)>,
     /// whether the chat is persistent or not
+    // kill
     pub is_persistent: bool,
 }

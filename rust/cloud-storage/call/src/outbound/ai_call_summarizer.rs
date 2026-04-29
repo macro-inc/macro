@@ -35,6 +35,49 @@ Rules:
   fabricating content.
 - Respond with only the summary text — no preamble, no sign-off.";
 
+/// System prompt for naming a call from its summary. Kept tight so the model
+/// returns a bare title instead of a sentence.
+const CALL_NAME_SYSTEM_PROMPT: &str = "\
+You generate short titles for recorded calls from a written summary of the \
+call. The title is shown in a list of past calls, so it must be specific \
+enough to distinguish one call from another at a glance.
+
+Output requirements:
+- A single title, 4 to 8 words, in Title Case (capitalize every word except \
+  articles, prepositions, and conjunctions of 3 letters or fewer).
+- No surrounding quotes, no trailing punctuation, no preamble, no sign-off.
+- Internal punctuation (colons, hyphens, ampersands, apostrophes) is allowed \
+  when it improves readability.
+- Prefer concrete topics and proper nouns drawn from the summary — people, \
+  companies, projects, products — over generic words like `Meeting`, \
+  `Discussion`, or `Call`.
+- If the summary indicates the call had no substantive content (silence, \
+  test call, accidental recording, empty transcript), output exactly: \
+  UNTITLED_CALL
+
+Examples:
+Summary: `Alex and Priya reviewed Q3 marketing spend and agreed to cut paid \
+search by 20% next quarter.` → `Q3 Marketing Spend Review`
+Summary: `Standup with the platform team. Blocked on the Postgres upgrade; \
+Sam will follow up with infra.` → `Platform Standup: Postgres Upgrade Blocker`
+Summary: `Intro call between Jordan (Macro) and Lee (Acme) about a possible \
+SSO integration.` → `Macro & Acme SSO Intro Call`
+Summary: `No speech detected in the transcript.` → `UNTITLED_CALL`";
+
+/// Sentinel the model is asked to emit when the summary has no substantive
+/// content. Mapped to `None` so the caller leaves the existing name untouched.
+const UNTITLED_CALL_SENTINEL: &str = "UNTITLED_CALL";
+
+/// Maximum characters of summary text we send to the naming model. The
+/// summary is already concise; this is a safety cap so a runaway summary
+/// does not blow up the prompt.
+const CALL_NAME_SUMMARY_CHAR_CAP: usize = 4_000;
+
+/// Hard cap on the title returned to callers. Anything longer is truncated
+/// at a word boundary — protects the DB column / UI from misbehaving model
+/// output regardless of the system prompt.
+const CALL_NAME_MAX_CHARS: usize = 80;
+
 /// AI-powered [`CallSummarizer`] that delegates to
 /// [`ai::chat_completion::get_chat_completion`].
 ///
@@ -75,6 +118,79 @@ impl CallSummarizer for AiCallSummarizer {
                 tracing::error!(error = ?e, %call_id, "ai call summarization failed");
             })
     }
+
+    #[tracing::instrument(skip(self, summary), fields(summary_len = summary.len()), err)]
+    async fn generate_call_name(
+        &self,
+        call_id: &Uuid,
+        summary: &str,
+    ) -> Result<Option<String>, Self::Err> {
+        let trimmed_summary = summary.trim();
+        if trimmed_summary.is_empty() {
+            return Ok(None);
+        }
+
+        let summary_for_prompt: &str = if trimmed_summary.len() > CALL_NAME_SUMMARY_CHAR_CAP {
+            let mut end = CALL_NAME_SUMMARY_CHAR_CAP;
+            while end > 0 && !trimmed_summary.is_char_boundary(end) {
+                end -= 1;
+            }
+            &trimmed_summary[..end]
+        } else {
+            trimmed_summary
+        };
+
+        let user_message = format!("Summary:\n\n{summary_for_prompt}");
+
+        let request = RequestBuilder::new()
+            .model(SUMMARIZATION_MODEL)
+            .system_prompt(CALL_NAME_SYSTEM_PROMPT)
+            .user_message(user_message)
+            .build();
+
+        let raw = get_chat_completion(request)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, %call_id, "ai call naming failed");
+            })?;
+
+        Ok(sanitize_call_name(&raw))
+    }
+}
+
+#[cfg(test)]
+mod test;
+
+/// Trim quotes/whitespace, normalize internal whitespace, and clamp to
+/// [`CALL_NAME_MAX_CHARS`] at a word boundary. Returns `None` when the model
+/// emitted [`UNTITLED_CALL_SENTINEL`] or sanitization left nothing usable, so
+/// the caller can leave the existing call name untouched.
+fn sanitize_call_name(raw: &str) -> Option<String> {
+    let trimmed = raw
+        .trim()
+        .trim_matches(|c: char| c == '"' || c == '\'' || c == '`')
+        .trim();
+    let normalized = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    if normalized.is_empty() || normalized.eq_ignore_ascii_case(UNTITLED_CALL_SENTINEL) {
+        return None;
+    }
+
+    if normalized.chars().count() <= CALL_NAME_MAX_CHARS {
+        return Some(normalized);
+    }
+
+    let mut taken = String::with_capacity(CALL_NAME_MAX_CHARS);
+    for ch in normalized.chars().take(CALL_NAME_MAX_CHARS) {
+        taken.push(ch);
+    }
+    // Cut back to the last whitespace so we don't end mid-word.
+    if let Some(idx) = taken.rfind(char::is_whitespace) {
+        taken.truncate(idx);
+    }
+    let cut = taken.trim_end().to_string();
+    if cut.is_empty() { None } else { Some(cut) }
 }
 
 /// Render the transcript as a chronological, speaker-labeled block suitable

@@ -57,6 +57,11 @@ const databaseUrlArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: DATABASE_URL })
   .apply((secret) => secret.arn);
 
+const DATABASE_URL_READONLY = config.require('macro_db_readonly_secret_key');
+const databaseUrlReadonlyArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: DATABASE_URL_READONLY })
+  .apply((secret) => secret.arn);
+
 const INTERNAL_AUTH_KEY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`internal_auth_key`),
@@ -73,6 +78,7 @@ const searchProcessingService = new SearchProcessingService(
   {
     secretKeyArns: [
       databaseUrlArn,
+      databaseUrlReadonlyArn,
       opensearchPasswordArn,
       syncServiceAuthKeyArn,
     ],
@@ -96,6 +102,10 @@ const searchProcessingService = new SearchProcessingService(
       {
         name: 'DATABASE_URL',
         value: pulumi.interpolate`${DATABASE_URL}`,
+      },
+      {
+        name: 'DATABASE_URL_READONLY',
+        value: pulumi.interpolate`${DATABASE_URL_READONLY}`,
       },
       {
         name: 'SEARCH_EVENT_QUEUE',

@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
 
-use crate::domain::models::EditCallRecordRequest;
+use crate::domain::models::{EditCallRecordRequest, EditCallTranscriptRequest};
 
 use super::models::{
     AddParticipantError, CallActiveResponse, CallError, CallRecord, CallRecordTranscriptSegment,
@@ -906,6 +906,29 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))
     }
 
+    #[tracing::instrument(err, skip(self, request), fields(num_assignments = request.assignments.len()))]
+    async fn edit_call_transcript(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        request: EditCallTranscriptRequest,
+    ) -> Result<(), CallError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::Call {
+            return Err(CallError::Internal(anyhow::anyhow!(
+                "expected Call entity in receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+
+        let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
+            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+
+        self.repo
+            .patch_call_transcript_custom_speakers(&call_id, &request.assignments)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn toggle_share_with_team(
         &self,
@@ -994,6 +1017,34 @@ impl<
             .inspect_err(|e| tracing::error!(error=?e, %call_id, "failed to persist call summary"))
             .map_err(|e| CallError::Internal(e.into()))?;
 
+        // Auto-generate a display name from the summary; only persisted when
+        // the user has not already set one (`set_custom_name_if_null`). Best
+        // effort — naming failures must not fail summarization.
+        if record.custom_name.is_none() {
+            match summarizer.generate_call_name(call_id, &summary).await {
+                Ok(Some(name)) => {
+                    if let Err(e) = self.repo.set_custom_name_if_null(call_id, &name).await {
+                        tracing::error!(
+                            error=?e, %call_id,
+                            "failed to persist ai-generated call name"
+                        );
+                    }
+                }
+                Ok(None) => {
+                    tracing::info!(
+                        %call_id,
+                        "ai call naming returned no title; leaving name unset"
+                    );
+                }
+                Err(e) => {
+                    tracing::error!(
+                        error=?e, %call_id,
+                        "ai call naming failed after summary; leaving name unset"
+                    );
+                }
+            }
+        }
+
         Ok(())
     }
 }
@@ -1049,6 +1100,32 @@ impl<
 
             if let Err(e) = repo.insert_call_summary(&call_id, &summary).await {
                 tracing::error!(error=?e, %call_id, "failed to persist call summary");
+                return;
+            }
+
+            if record.custom_name.is_none() {
+                match summarizer.generate_call_name(&call_id, &summary).await {
+                    Ok(Some(name)) => {
+                        if let Err(e) = repo.set_custom_name_if_null(&call_id, &name).await {
+                            tracing::error!(
+                                error=?e, %call_id,
+                                "failed to persist ai-generated call name"
+                            );
+                        }
+                    }
+                    Ok(None) => {
+                        tracing::info!(
+                            %call_id,
+                            "ai call naming returned no title; leaving name unset"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            error=?e, %call_id,
+                            "ai call naming failed after summary; leaving name unset"
+                        );
+                    }
+                }
             }
         });
     }
@@ -1090,6 +1167,16 @@ impl CallSummarizer for NoopCallSummarizer {
         // `Some(_)` value in practice.
         unreachable!(
             "NoopCallSummarizer::summarize_call invoked; it exists only as a type placeholder when the optional summarizer is None"
+        )
+    }
+
+    async fn generate_call_name(
+        &self,
+        _call_id: &Uuid,
+        _summary: &str,
+    ) -> Result<Option<String>, Self::Err> {
+        unreachable!(
+            "NoopCallSummarizer::generate_call_name invoked; it exists only as a type placeholder when the optional summarizer is None"
         )
     }
 }

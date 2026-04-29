@@ -84,8 +84,7 @@ import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
-import type { FilterID } from '@app/component/next-soup/filters';
+import type { QueryState } from '@app/component/next-soup/filters/filter-store';
 import {
   SoupViewTabs,
   CollapsedSoupViewTabs,
@@ -112,7 +111,8 @@ import {
 import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
-import { QUERY_FILTERS } from '../filters/query-filters';
+import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
+import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -167,14 +167,14 @@ const useSoupNotificationInvalidators = () => {
 type PersistedSoupViewState = {
   version?: number;
   activeTab: string | undefined;
-  filters: { and: string[]; or: string[] };
-  queryFilters: SoupItemsQueryFilters;
+  filters: SetPredicatesInput<string>;
+  queryFilters: Partial<QueryState>;
   sort: SystemSortOption[];
   previewEntity: string | undefined;
   assigneeFilter: string[];
 };
 
-const PERSISTED_STATE_VERSION = 3;
+const PERSISTED_STATE_VERSION = 4;
 
 const listStateCache = new Map<
   string,
@@ -188,8 +188,8 @@ const listStateCache = new Map<
 
 interface SoupViewProps {
   viewName: string;
-  initialClientFilters?: { and?: FilterID[]; or?: FilterID[] };
-  queryFilters?: SoupItemsQueryFilters;
+  initialClientFilters?: SetPredicatesInput<string>;
+  initialFilters?: Partial<QueryState>;
   disableLocalSearch?: boolean;
   /**
    * Client-side entities to merge into the soup results. Useful for entity
@@ -269,7 +269,7 @@ export const SoupView = (props: SoupViewProps) => {
     >
       <SoupViewContextProvider
         soup={soup}
-        queryFilters={props.queryFilters}
+        initialQuery={props.initialFilters}
         disableLocalSearch={props.disableLocalSearch}
         additionalEntities={props.additionalEntities}
       >
@@ -391,7 +391,7 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
-  initialClientFilters?: { and?: FilterID[]; or?: FilterID[] };
+  initialClientFilters?: SetPredicatesInput<string>;
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {
@@ -402,7 +402,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     rows,
     searchText,
     setSearchText,
-    setQueryFilters,
     queryFilters,
     featuredIds,
     isSearchServiceLoading,
@@ -451,7 +450,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   // Focus first entity on filter/search changes
   createEffect(
     on(
-      () => [soup.filters.activeIds(), searchText(), featuredIds()] as const,
+      () => [soup.predicates.activeIds(), searchText(), featuredIds()] as const,
       () => {
         if (!focusEffectsEnabled()) return;
         focusFirstEntity();
@@ -482,7 +481,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
       : (props.scopeId ?? panel.splitHotkeyScope);
   });
 
-  // Register navigation hotkeys
+  // Register navigation hotkeys on the active list scope (usually the split
+  // scope), but dispose them with the mounted SoupViewList. This keeps j/k
+  // available while the list split is active without leaking into opened blocks
+  // after the list unmounts.
   useSoupNavigationHotkeys({
     scopeId: scopeId(),
     soup,
@@ -705,17 +707,27 @@ export const SoupViewList = (props: SoupViewListProps) => {
         applyTabPreset(contentId, initialPersistedState.activeTab);
       if (!applied) {
         batch(() => {
-          soup.filters.set(
+          soup.predicates.set(
             isStale
-              ? (props.initialClientFilters ?? { and: [], or: [] })
-              : (initialPersistedState.filters ?? { and: [], or: [] })
+              ? (props.initialClientFilters ?? {})
+              : initialPersistedState.filters
           );
-          setQueryFilters(
-            isStale
-              ? QUERY_FILTERS.default
-              : (initialPersistedState.queryFilters ?? QUERY_FILTERS.default)
-          );
-          setActiveTab(initialPersistedState.activeTab);
+          const persistedFilterData = isStale
+            ? {}
+            : (initialPersistedState.queryFilters ?? {});
+          queryFilters.replace({
+            include: persistedFilterData.include,
+            exclude: persistedFilterData.exclude,
+            emailView: persistedFilterData.emailView,
+          });
+          if (isListViewID(contentId)) {
+            const tab =
+              initialPersistedState.activeTab ??
+              VIEW_TAB_PRESETS[contentId].default;
+            if (tab) {
+              setActiveTab(tab);
+            }
+          }
         });
       }
       batch(() => {
@@ -724,7 +736,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
       });
     } else {
       if (props.initialClientFilters) {
-        soup.filters.set(props.initialClientFilters);
+        soup.predicates.set(props.initialClientFilters);
+      }
+      // Set default tab for list views when no persisted state exists
+      if (isListViewID(contentId)) {
+        const defaultTab = VIEW_TAB_PRESETS[contentId].default;
+        if (defaultTab) {
+          setActiveTab(defaultTab);
+        }
       }
     }
   });
@@ -736,10 +755,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
           version: PERSISTED_STATE_VERSION,
           activeTab: activeTab(),
           filters: {
-            and: soup.filters.andFilters().map((f) => f.id),
-            or: soup.filters.orFilters().map((f) => f.id),
+            and: [...soup.predicates.andIds()],
+            or: [...soup.predicates.orIds()],
           },
-          queryFilters: queryFilters(),
+          queryFilters: JSON.parse(JSON.stringify(queryFilters.state)),
           sort: soup.sort.active().map((s) => s.id),
           previewEntity: soup.previewEntity(),
           assigneeFilter: assigneeFilter(),
@@ -926,8 +945,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                       soup.focus.set(row.original.id);
                                     }}
                                     showUnrollNotifications={
-                                      soup.filters.isActive('signal') &&
-                                      !soup.filters.isActive('noise')
+                                      soup.predicates.isActive('inbox') &&
+                                      !soup.predicates.isActive('noise')
                                     }
                                     checked={row.isSelected()}
                                     onChecked={(

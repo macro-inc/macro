@@ -18,14 +18,18 @@ export function Appearance() {
         'gap': '20px',
       }}
     >
-      <Panel>
+      <Panel depth={0}>
         <ThemeTools />
         <ThemeEditorBasic />
       </Panel>
 
       <div class="@container grid grid-cols-1 @[700px]:grid-cols-2 gap-5 overflow-hidden min-h-0">
-        <Panel><ThemeList /></Panel>
-        <Panel><ThemeEditorAdvanced /></Panel>
+        <Panel depth={0}>
+          <ThemeList />
+        </Panel>
+        <Panel depth={0}>
+          <ThemeEditorAdvanced />
+        </Panel>
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
 use std::{ops::Deref, sync::Arc, sync::LazyLock};
 
 use crate::domain::models::{
-    AddParticipantError, CallRecordPreview, EditCallRecordRequest, TranscriptSegmentRequest,
+    AddParticipantError, CallRecordPreview, CustomSpeakerAssignment, EditCallRecordRequest,
+    TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
@@ -888,7 +889,7 @@ async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::
     assert!(record.participants.iter().all(|p| p.left_at.is_some()));
 
     // Transcripts ordered by sequence_num.
-    assert_eq!(record.transcript.len(), 2);
+    assert_eq!(record.transcript.len(), 3);
     assert_eq!(record.transcript[0].content, "archived hello");
     assert_eq!(
         record.transcript[0].diarized_speaker_id.as_deref(),
@@ -896,6 +897,34 @@ async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::
     );
     assert_eq!(record.transcript[1].content, "archived reply");
     assert_eq!(record.transcript[1].diarized_speaker_id, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_overrides_speaker_id_with_custom_speaker(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .expect("archived call should be found");
+
+    // Row without an override returns the derived speaker_id.
+    assert_eq!(record.transcript[0].content, "archived hello");
+    assert_eq!(record.transcript[0].speaker_id, "macro|user-a@test.com");
+
+    // Row with `custom_speaker` set returns the override, not the derived
+    // speaker_id (which is `macro|user-a@test.com` in the fixture).
+    assert_eq!(record.transcript[2].content, "archived overridden");
+    assert_eq!(record.transcript[2].speaker_id, "macro|user-b@test.com");
+    assert_eq!(
+        record.transcript[2].diarized_speaker_id.as_deref(),
+        Some("spk-arch-b0")
+    );
     Ok(())
 }
 
@@ -1207,6 +1236,7 @@ async fn patch_call_record_sets_is_public_true_defaults_view(
                 channel_share_permissions: None,
             }),
             share_with_team: None,
+            custom_name: None,
         },
     )
     .await?;
@@ -1253,6 +1283,7 @@ async fn patch_call_record_sets_is_public_false_clears_public_access_level(
                 channel_share_permissions: None,
             }),
             share_with_team: None,
+            custom_name: None,
         },
     )
     .await?;
@@ -1289,6 +1320,7 @@ async fn patch_call_record_sets_public_access_level(pool: Pool<Postgres>) -> any
                 channel_share_permissions: None,
             }),
             share_with_team: None,
+            custom_name: None,
         },
     )
     .await?;
@@ -1331,6 +1363,7 @@ async fn patch_call_record_adds_channel_share_permission(
                 }]),
             }),
             share_with_team: None,
+            custom_name: None,
         },
     )
     .await?;
@@ -1405,6 +1438,7 @@ async fn patch_call_record_removes_channel_share_permission(
                 }]),
             }),
             share_with_team: None,
+            custom_name: None,
         },
     )
     .await?;
@@ -1447,6 +1481,7 @@ async fn patch_call_record_none_is_noop(pool: Pool<Postgres>) -> anyhow::Result<
         &EditCallRecordRequest {
             share_permission: None,
             share_with_team: None,
+            custom_name: None,
         },
     )
     .await?;
@@ -1464,6 +1499,152 @@ async fn patch_call_record_none_is_noop(pool: Pool<Postgres>) -> anyhow::Result<
 
     assert_eq!(before.is_public, after.is_public);
     assert_eq!(before.public_access_level, after.public_access_level);
+    Ok(())
+}
+
+// -- patch_call_record: custom_name -------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_sets_custom_name_on_archived_record(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    repo.patch_call_record(
+        &CALL_ARCHIVED,
+        &EditCallRecordRequest {
+            share_permission: None,
+            share_with_team: None,
+            custom_name: Some("Q4 sync".to_string()),
+        },
+    )
+    .await?;
+
+    let stored = sqlx::query_scalar!(
+        r#"SELECT custom_name FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(stored.as_deref(), Some("Q4 sync"));
+
+    let record = repo.get_call_record_by_call_id(&CALL_ARCHIVED).await?;
+    assert_eq!(
+        record.and_then(|r| r.custom_name).as_deref(),
+        Some("Q4 sync"),
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_custom_name_overwrites_existing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    sqlx::query!(
+        r#"UPDATE call_records SET custom_name = $2 WHERE id = $1"#,
+        CALL_ARCHIVED,
+        "Old name",
+    )
+    .execute(&pool)
+    .await?;
+
+    repo.patch_call_record(
+        &CALL_ARCHIVED,
+        &EditCallRecordRequest {
+            share_permission: None,
+            share_with_team: None,
+            custom_name: Some("New name".to_string()),
+        },
+    )
+    .await?;
+
+    let stored = sqlx::query_scalar!(
+        r#"SELECT custom_name FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(stored.as_deref(), Some("New name"));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_custom_name_empty_string_clears_existing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    sqlx::query!(
+        r#"UPDATE call_records SET custom_name = $2 WHERE id = $1"#,
+        CALL_ARCHIVED,
+        "Existing",
+    )
+    .execute(&pool)
+    .await?;
+
+    repo.patch_call_record(
+        &CALL_ARCHIVED,
+        &EditCallRecordRequest {
+            share_permission: None,
+            share_with_team: None,
+            custom_name: Some(String::new()),
+        },
+    )
+    .await?;
+
+    let stored = sqlx::query_scalar!(
+        r#"SELECT custom_name FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(stored, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_record_custom_name_none_is_noop(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    sqlx::query!(
+        r#"UPDATE call_records SET custom_name = $2 WHERE id = $1"#,
+        CALL_ARCHIVED,
+        "Existing",
+    )
+    .execute(&pool)
+    .await?;
+
+    repo.patch_call_record(
+        &CALL_ARCHIVED,
+        &EditCallRecordRequest {
+            share_permission: None,
+            share_with_team: None,
+            custom_name: None,
+        },
+    )
+    .await?;
+
+    let stored = sqlx::query_scalar!(
+        r#"SELECT custom_name FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(stored.as_deref(), Some("Existing"));
     Ok(())
 }
 
@@ -1487,6 +1668,7 @@ async fn patch_call_record_share_with_team_true_grants_team_access_on_active_cal
         &EditCallRecordRequest {
             share_permission: None,
             share_with_team: Some(true),
+            custom_name: None,
         },
     )
     .await?;
@@ -1540,6 +1722,7 @@ async fn patch_call_record_share_with_team_false_removes_team_access(
         &EditCallRecordRequest {
             share_permission: None,
             share_with_team: Some(false),
+            custom_name: None,
         },
     )
     .await?;
@@ -1579,6 +1762,7 @@ async fn patch_call_record_share_with_team_works_on_archived_record(
         &EditCallRecordRequest {
             share_permission: None,
             share_with_team: Some(true),
+            custom_name: None,
         },
     )
     .await?;
@@ -1650,6 +1834,7 @@ async fn patch_call_record_share_with_team_ignores_non_creator_teams(
         &EditCallRecordRequest {
             share_permission: None,
             share_with_team: Some(true),
+            custom_name: None,
         },
     )
     .await?;
@@ -1683,6 +1868,7 @@ async fn patch_call_record_share_with_team_true_noop_when_creator_has_no_team(
         &EditCallRecordRequest {
             share_permission: None,
             share_with_team: Some(true),
+            custom_name: None,
         },
     )
     .await?;
@@ -1701,6 +1887,73 @@ async fn patch_call_record_share_with_team_true_noop_when_creator_has_no_team(
         .await?;
     assert!(flag);
 
+    Ok(())
+}
+
+// -- set_custom_name_if_null --------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn set_custom_name_if_null_writes_when_column_is_null(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    repo.set_custom_name_if_null(&CALL_ARCHIVED, "AI Generated Name")
+        .await?;
+
+    let stored = sqlx::query_scalar!(
+        r#"SELECT custom_name FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(stored.as_deref(), Some("AI Generated Name"));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn set_custom_name_if_null_does_not_overwrite_existing_name(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    sqlx::query!(
+        r#"UPDATE call_records SET custom_name = $2 WHERE id = $1"#,
+        CALL_ARCHIVED,
+        "User Picked",
+    )
+    .execute(&pool)
+    .await?;
+
+    repo.set_custom_name_if_null(&CALL_ARCHIVED, "AI Generated")
+        .await?;
+
+    let stored = sqlx::query_scalar!(
+        r#"SELECT custom_name FROM call_records WHERE id = $1"#,
+        CALL_ARCHIVED,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(stored.as_deref(), Some("User Picked"));
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn set_custom_name_if_null_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    // Idempotent on missing rows — must not error.
+    repo.set_custom_name_if_null(&Uuid::now_v7(), "Whatever")
+        .await?;
     Ok(())
 }
 
@@ -1746,5 +1999,104 @@ async fn insert_call_summary_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow
     .fetch_one(&pool)
     .await?;
     assert!(stored.is_none());
+    Ok(())
+}
+
+// -- patch_call_transcript_custom_speakers ------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_transcript_custom_speakers_sets_and_clears(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // Set: pin diarized `spk-arch-a0` to user-c. The fixture's seg-arch-3 row
+    // (diarized `spk-arch-b0`) already has user-b as its custom_speaker — clear it.
+    repo.patch_call_transcript_custom_speakers(
+        &CALL_ARCHIVED,
+        &[
+            CustomSpeakerAssignment {
+                diarized_speaker_id: "spk-arch-a0".to_string(),
+                custom_speaker: Some(USER_C.clone()),
+            },
+            CustomSpeakerAssignment {
+                diarized_speaker_id: "spk-arch-b0".to_string(),
+                custom_speaker: None,
+            },
+        ],
+    )
+    .await?;
+
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .expect("archived call should exist");
+
+    // seg-arch-1 (diarized spk-arch-a0): override now applied → user-c.
+    assert_eq!(record.transcript[0].content, "archived hello");
+    assert_eq!(record.transcript[0].speaker_id, "macro|user-c@test.com");
+
+    // seg-arch-2 (diarized NULL): never touched.
+    assert_eq!(record.transcript[1].content, "archived reply");
+    assert_eq!(record.transcript[1].speaker_id, "macro|user-b@test.com");
+
+    // seg-arch-3 (diarized spk-arch-b0): override cleared → derived speaker_id wins.
+    assert_eq!(record.transcript[2].content, "archived overridden");
+    assert_eq!(record.transcript[2].speaker_id, "macro|user-a@test.com");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_transcript_custom_speakers_empty_is_noop(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    repo.patch_call_transcript_custom_speakers(&CALL_ARCHIVED, &[])
+        .await?;
+
+    // Fixture state is unchanged.
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .expect("archived call should exist");
+    assert_eq!(record.transcript[2].speaker_id, "macro|user-b@test.com");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_transcript_custom_speakers_unknown_diarized_id_is_noop(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // Diarized id that doesn't exist in this call: silently affects nothing.
+    repo.patch_call_transcript_custom_speakers(
+        &CALL_ARCHIVED,
+        &[CustomSpeakerAssignment {
+            diarized_speaker_id: "spk-does-not-exist".to_string(),
+            custom_speaker: Some(USER_C.clone()),
+        }],
+    )
+    .await?;
+
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .expect("archived call should exist");
+    // All rows still reflect their original speaker_id / custom_speaker.
+    assert_eq!(record.transcript[0].speaker_id, "macro|user-a@test.com");
+    assert_eq!(record.transcript[1].speaker_id, "macro|user-b@test.com");
+    assert_eq!(record.transcript[2].speaker_id, "macro|user-b@test.com");
     Ok(())
 }

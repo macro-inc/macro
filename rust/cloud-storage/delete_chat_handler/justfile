@@ -1,6 +1,6 @@
 lambda_name := file_name(justfile_directory())
 
-DATABASE_URL := "postgres://user:password@localhost:5432/macrodb"
+import '../database.just'
 
 mod sqlx '../sqlx.just'
 force_drop_db:

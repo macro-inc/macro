@@ -3,7 +3,6 @@ import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-ic
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
-import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import {
@@ -11,7 +10,11 @@ import {
   activeSoupViewCounts,
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import type { SoupBody } from '@queries/soup/items';
+import {
+  NIL_UUID,
+  defineQueryFilters,
+  type Query,
+} from '@app/component/next-soup/filters/filter-store';
 import {
   type Accessor,
   batch,
@@ -19,7 +22,6 @@ import {
   createMemo,
   type JSX,
 } from 'solid-js';
-import type { Option } from './filter-primitives';
 import type {
   ChannelFilters,
   EmailFilters,
@@ -221,27 +223,16 @@ type SearchFilterHookOpts = {
 
 /** Channel-message search filters (in:, from:). */
 export function useChannelSearchFilter(opts: SearchFilterHookOpts) {
-  const { soup, queryFilters, setQueryFilters } = useSoupView();
+  const { soup, queryFilters } = useSoupView();
   const { changeIndex } = useSearchIndexController();
 
-  const isActive = () => soup.filters.isActive('channels');
-  const mutate = <K extends keyof ChannelFilters>(
-    field: K,
-    value: ChannelFilters[K]
-  ) =>
-    batch(() => {
-      if (!isActive()) changeIndex('channels');
-      setQueryFilters((prev) => ({
-        ...prev,
-        channel_filters: { ...prev.channel_filters, [field]: value },
-      }));
-    });
+  const isActive = () => soup.predicates.isActive('channels');
 
   const channelIds = createMemo(
-    () => queryFilters().channel_filters?.channel_ids ?? []
+    () => queryFilters.state.include.channelId ?? []
   );
   const senderIds = createMemo(
-    () => queryFilters().channel_filters?.sender_ids ?? []
+    () => queryFilters.state.include?.channelSenderId ?? []
   );
 
   createEffect(() => {
@@ -255,29 +246,48 @@ export function useChannelSearchFilter(opts: SearchFilterHookOpts) {
   return {
     isActive,
     channelIds,
-    setChannelIds: (ids: string[]) =>
-      mutate('channel_ids', ids.length ? ids : undefined),
+    setChannelIds: (ids: string[]) => {
+      if (!isActive()) changeIndex('channels');
+      queryFilters.set({
+        include: {
+          channelId: ids,
+        },
+      });
+    },
     senderIds,
-    setSenderIds: (ids: string[]) =>
-      mutate('sender_ids', ids.length ? ids : undefined),
+    setSenderIds: (ids: string[]) => {
+      if (!isActive()) changeIndex('channels');
+
+      queryFilters.set({
+        include: {
+          channelSenderId: ids,
+        },
+      });
+    },
   };
 }
 
 /** Email search filters (importance). */
 export function useEmailSearchFilter(opts: SearchFilterHookOpts) {
-  const { soup, queryFilters, setQueryFilters } = useSoupView();
+  const { soup, queryFilters } = useSoupView();
   const { changeIndex } = useSearchIndexController();
 
-  const isActive = () => soup.filters.isActive('email');
-  const importance = createMemo(() => queryFilters().email_filters?.importance);
+  const isActive = () => soup.predicates.isActive('email');
+  const importance = createMemo(
+    () => queryFilters.state.include.emailImportance
+  );
 
   const setImportance = (val: boolean | undefined) =>
     batch(() => {
       if (!isActive()) changeIndex('email');
-      setQueryFilters((prev) => ({
-        ...prev,
-        email_filters: { ...prev.email_filters, importance: val },
-      }));
+      queryFilters.set({
+        include: {
+          emailImportance: val,
+        },
+        exclude: {
+          emailImportance: undefined,
+        },
+      });
     });
 
   createEffect(() => {
@@ -289,36 +299,37 @@ export function useEmailSearchFilter(opts: SearchFilterHookOpts) {
 }
 
 type CallFieldMap = {
-  channel_ids: string[] | undefined;
-  speaker_ids: string[] | undefined;
-  attended: boolean | undefined;
+  callChannelId: string[] | undefined;
+  callSpeakerId: string[] | undefined;
+  callAttended: boolean | undefined;
 };
 
 /** Call-record search filters (in:, from:, attended). */
 export function useCallSearchFilter(opts: SearchFilterHookOpts) {
-  const { soup, queryFilters, setQueryFilters } = useSoupView();
+  const { soup, queryFilters } = useSoupView();
   const { changeIndex } = useSearchIndexController();
 
-  const isActive = () => soup.filters.isActive('calls');
+  const isActive = () => soup.predicates.isActive('calls');
   const mutate = <K extends keyof CallFieldMap>(
     field: K,
     value: CallFieldMap[K]
   ) =>
     batch(() => {
       if (!isActive()) changeIndex('calls');
-      setQueryFilters((prev) => ({
-        ...prev,
-        call_filters: { ...prev.call_filters, [field]: value },
-      }));
+      queryFilters.set({
+        include: {
+          [field]: value,
+        },
+      });
     });
 
   const channelIds = createMemo(
-    () => queryFilters().call_filters?.channel_ids ?? []
+    () => queryFilters.state.include.callChannelId ?? []
   );
   const speakerIds = createMemo(
-    () => queryFilters().call_filters?.speaker_ids ?? []
+    () => queryFilters.state.include.callSpeakerId ?? []
   );
-  const attended = createMemo(() => queryFilters().call_filters?.attended);
+  const attended = createMemo(() => queryFilters.state.include.callAttended);
 
   createEffect(() => {
     if (!opts.isSearchView() || !isActive()) return;
@@ -334,80 +345,84 @@ export function useCallSearchFilter(opts: SearchFilterHookOpts) {
     isActive,
     channelIds,
     setChannelIds: (ids: string[]) =>
-      mutate('channel_ids', ids.length ? ids : undefined),
+      mutate('callChannelId', ids.length ? ids : undefined),
     speakerIds,
     setSpeakerIds: (ids: string[]) =>
-      mutate('speaker_ids', ids.length ? ids : undefined),
+      mutate('callSpeakerId', ids.length ? ids : undefined),
     attended,
-    setAttended: (val: boolean | undefined) => mutate('attended', val),
+    setAttended: (val: boolean | undefined) => mutate('callAttended', val),
   };
 }
 
 export function useSearchIndexController() {
-  const { soup, setQueryFilters } = useSoupView();
+  const { soup, queryFilters } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const contentId = panel.handle.content().id;
 
   const changeIndex = (newValue: string) => {
     batch(() => {
       for (const opt of INDEX_OPTIONS) {
-        if (soup.filters.isActive(opt.value)) {
-          soup.filters.toggle({ or: [opt.value as FilterID] });
+        if (soup.predicates.isActive(opt.value)) {
+          soup.predicates.toggle({ or: [opt.value as FilterID] });
         }
       }
 
       if (newValue === 'all') {
         cacheChannelSubFilters(contentId, {});
-        setQueryFilters({
-          ...QUERY_FILTERS.default,
-          email_filters: { importance: true },
-        });
+        queryFilters.replace({ include: { emailImportance: true } });
         return;
       }
 
       const opt = INDEX_OPTIONS.find((o) => o.value === newValue);
       if (!opt) return;
-      soup.filters.toggle({ or: [opt.value as FilterID] });
+      soup.predicates.toggle({ or: [opt.value as FilterID] });
 
       if (opt.value === 'channels') {
         const cached = getCachedChannelSubFilters(contentId);
-        setQueryFilters({
-          ...opt.queryFilters,
-          channel_filters: {
-            ...opt.queryFilters.channel_filters,
-            ...cached,
+
+        queryFilters.replace({
+          include: {
+            ...opt.queryFilters.include,
+            channelId: cached.channel_ids,
+            channelSenderId: cached.sender_ids,
           },
+          exclude: opt.queryFilters.exclude,
         });
       } else if (opt.value === 'email') {
         const cached = getCachedEmailSubFilters(contentId);
         const importance =
           'importance' in cached
             ? (cached.importance ?? undefined)
-            : opt.queryFilters.email_filters?.importance;
-        setQueryFilters({
-          ...opt.queryFilters,
-          email_filters: {
-            ...opt.queryFilters.email_filters,
-            importance,
+            : opt.queryFilters.include?.emailImportance;
+
+        queryFilters.replace({
+          include: {
+            ...opt.queryFilters.include,
+            emailImportance: importance,
           },
+          exclude: opt.queryFilters.exclude,
         });
       } else if (opt.value === 'calls') {
         const cached = getCachedCallSubFilters(contentId);
         const attended =
           'attended' in cached
             ? (cached.attended ?? undefined)
-            : opt.queryFilters.call_filters?.attended;
-        setQueryFilters({
-          ...opt.queryFilters,
-          call_filters: {
-            ...opt.queryFilters.call_filters,
-            channel_ids: cached.channel_ids,
-            speaker_ids: cached.speaker_ids,
-            attended,
+            : opt.queryFilters.include?.callAttended;
+
+        queryFilters.replace({
+          include: {
+            ...opt.queryFilters.include,
+            callChannelId: cached.channel_ids,
+            callSpeakerId: cached.speaker_ids,
+            callAttended: attended,
           },
+          exclude: opt.queryFilters.exclude,
         });
       } else {
-        setQueryFilters({ ...opt.queryFilters });
+        queryFilters.replace({
+          include: opt.queryFilters.include,
+          exclude: opt.queryFilters.exclude,
+        });
       }
     });
   };
@@ -415,38 +430,48 @@ export function useSearchIndexController() {
   return { changeIndex };
 }
 
-export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
+export const INDEX_OPTIONS: {
+  label: string;
+  value: string;
+  icon: () => JSX.Element;
+  queryFilters: Query;
+}[] = [
   {
     value: 'channels',
     label: 'Channels',
     icon: () => (
       <EntityIcon targetType="channel" size="xs" theme="monochrome" />
     ),
-    queryFilters: QUERY_FILTERS.channels,
+    queryFilters: defineQueryFilters({ exclude: { channelId: [NIL_UUID] } }),
   },
   {
     value: 'document-or-file',
     label: 'Documents',
     icon: () => <EntityIcon targetType="md" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.documentAndFile,
+    queryFilters: defineQueryFilters({ exclude: { subType: ['task'] } }),
   },
   {
     value: 'task',
     label: 'Tasks',
     icon: () => <EntityIcon targetType="task" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.task,
+    queryFilters: defineQueryFilters({ include: { subType: ['task'] } }),
   },
   {
     value: 'email',
     label: 'Email',
     icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.email,
+    queryFilters: defineQueryFilters({
+      exclude: { threadId: [NIL_UUID] },
+      include: { emailImportance: true },
+    }),
   },
   {
     value: 'calls',
     label: 'Calls',
     icon: () => <EntityIcon targetType="call" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.calls,
+    queryFilters: defineQueryFilters({
+      exclude: { callChannelId: [NIL_UUID] },
+    }),
   },
   {
     value: 'folders',
@@ -454,12 +479,12 @@ export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
     icon: () => (
       <EntityIcon targetType="project" size="xs" theme="monochrome" />
     ),
-    queryFilters: QUERY_FILTERS.folders,
+    queryFilters: defineQueryFilters({ exclude: { folderId: [NIL_UUID] } }),
   },
   {
     value: 'agent',
     label: 'Agents',
     icon: () => <EntityIcon targetType="chat" size="xs" theme="monochrome" />,
-    queryFilters: QUERY_FILTERS.agent,
+    queryFilters: defineQueryFilters({ exclude: { chatId: [NIL_UUID] } }),
   },
 ];

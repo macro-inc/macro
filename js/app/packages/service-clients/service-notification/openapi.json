@@ -1453,7 +1453,8 @@
           "project",
           "email_thread",
           "team",
-          "call"
+          "call",
+          "static_file"
         ]
       },
       "ErrorResponse": {

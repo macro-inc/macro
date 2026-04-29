@@ -139,6 +139,8 @@ where
                     .await
             }
             EntityType::Channel => self.get_channel_access(entity_id, user_id).await,
+            // Static files are always viewable. This is wrong for owners
+            EntityType::StaticFile => Ok(Some(AccessLevel::View)),
             // These entity types don't have access checks implemented yet.
             EntityType::Team | EntityType::User => Ok(None),
         }

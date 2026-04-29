@@ -42,7 +42,7 @@ export function useRecentlyViewedSoupQuery() {
           })
       );
       return page.items
-        .filter((item) => item.tag !== 'callRecord')
+        .filter((item) => item.tag !== 'call')
         .map((item) => ({
           id: item.tag === 'channel' ? item.data.channel.id : item.data.id,
           viewedAt:

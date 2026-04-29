@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { EditCallRecordRequestCustomName } from './editCallRecordRequestCustomName';
 import type { EditCallRecordRequestSharePermission } from './editCallRecordRequestSharePermission';
 import type { EditCallRecordRequestShareWithTeam } from './editCallRecordRequestShareWithTeam';
 
@@ -11,6 +12,12 @@ import type { EditCallRecordRequestShareWithTeam } from './editCallRecordRequest
  * Edit call request
  */
 export interface EditCallRecordRequest {
+  /** Updated user-supplied display name for the call. `None` is a no-op;
+`Some("")` clears `call_records.custom_name`; any other `Some(s)`
+overwrites it with `s`. Only the archived `call_records` row carries
+this column — patching while the call is still active is a no-op for
+this field. */
+  customName?: EditCallRecordRequestCustomName;
   sharePermission?: EditCallRecordRequestSharePermission;
   /** If `Some(true)`, grant the creator's team View access on the call.
 If `Some(false)`, revoke the creator's team's access. `None` is a no-op.

@@ -272,6 +272,21 @@ where
             .map_err(anyhow::Error::from)?
             .ok_or(ChannelMessagesErr::MessageNotFound(message_id))?;
 
+        if anchor.deleted_at.is_some() {
+            let thread_data = self
+                .repo
+                .get_thread_data(&[anchor.id], 1)
+                .await
+                .map_err(anyhow::Error::from)?;
+            let has_active_replies = thread_data
+                .get(&anchor.id)
+                .is_some_and(|td| td.reply_count > 0);
+
+            if !has_active_replies {
+                return Err(ChannelMessagesErr::MessageNotFound(message_id));
+            }
+        }
+
         let (before, after) = self
             .repo
             .get_top_level_messages_around(channel_id, anchor.created_at, anchor.id, limit)

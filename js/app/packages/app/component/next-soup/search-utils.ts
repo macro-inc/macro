@@ -2,11 +2,11 @@ import { fuzzyMatch } from '@core/util/fuzzy';
 import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EntityData, WithSearch } from '@entity';
-import type { FilterConfig } from './filters/create-filter-state';
+import type { PredicateConfig } from './filters/filter-store/predicates-store';
 import type { SearchPoolItem } from './search-context';
 
 export const getValidSearchFilters = <T>(
-  filters: readonly FilterConfig<T>[]
+  filters: readonly PredicateConfig<T>[]
 ) => {
   return filters.filter((f) => f.id !== 'explicit-noise');
 };

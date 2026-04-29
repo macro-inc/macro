@@ -7,7 +7,11 @@ import {
   exclude,
 } from '@core/context/quickAccess';
 import type { HotkeyCommand } from '@core/hotkey/types';
-import { createFreshSearch, type FreshSortConfig } from '@core/util/freshSort';
+import {
+  createFreshSearch,
+  type FreshSortConfig,
+  type TimestampedItem,
+} from '@core/util/freshSort';
 import { createMemo } from 'solid-js';
 import type { CategoryFilter } from './types';
 import {
@@ -19,6 +23,8 @@ import { CommandState } from './state';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import type { HotkeySequenceStep } from '@core/component/Tooltip';
+import { getCommandLastUsedAt } from './recency';
+import { mergeSortedArrays } from '@core/util/list';
 
 /** Command item type - local to command menu, not part of quickAccess */
 type CommandItem = {
@@ -27,7 +33,7 @@ type CommandItem = {
   bucket: 'command';
   searchText: string;
   sortTimestamp: number;
-  timestamps: Record<string, never>;
+  timestamps: TimestampedItem;
   data: HotkeyCommand;
   displayHotkey?: string;
   displayHotkeySequence?: HotkeySequenceStep[];
@@ -87,25 +93,29 @@ function commandsToItems(
     return true;
   });
 
-  return dedupedCommands.map((command): CommandItem => {
+  const items = dedupedCommands.map((command): CommandItem => {
     const description =
       typeof command.description === 'function'
         ? command.description()
         : command.description;
     const tags = command.tags?.join(' ') ?? '';
+    const id = `command-${description.replaceAll(' ', '-')}`;
+    const lastUsedAt = getCommandLastUsedAt(id);
 
     return {
-      id: `command-${description.replaceAll(' ', '-')}`,
+      id,
       kind: 'command',
       bucket: 'command',
       searchText: [tags, description].filter(Boolean).join(' '),
-      sortTimestamp: 0,
-      timestamps: {},
+      sortTimestamp: lastUsedAt?.getTime() ?? 0,
+      timestamps: { viewedAt: lastUsedAt, updatedAt: lastUsedAt },
       data: command,
       displayHotkey: options?.displayHotkey?.(command),
       displayHotkeySequence: options?.displayHotkeySequence?.(command),
     };
   });
+
+  return items.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
 }
 
 /**
@@ -176,11 +186,13 @@ function useQuickAccessBuckets(): Record<
   const commandsList = useCommandsList();
   const entitiesList = quickAccess.useList(...exclude('person'));
 
-  const allWithCommands = createMemo((): CommandMenuItem[] => {
-    const entities = entitiesList();
-    const commands = commandsList();
-    return [...entities, ...commands];
-  });
+  const allWithCommands = createMemo((): CommandMenuItem[] =>
+    mergeSortedArrays(
+      entitiesList(),
+      commandsList(),
+      (a, b) => b.sortTimestamp - a.sortTimestamp
+    )
+  );
 
   return {
     all: allWithCommands,

@@ -1,64 +1,65 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
-import {
-  InviteModal,
-  setInviteModalOpen,
-} from '@app/component/app-sidebar/invite-modal';
-import { CommandState } from '@app/component/command';
-import { gitBranch, setDevStatusBarOpen } from '@app/component/DevStatusBar';
-import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import {
-  LIST_VIEW_ID,
-  LIST_VIEW_PATHS,
-  type ListView,
-} from '@app/constants/list-views';
-import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { Hotkey } from '@core/component/Hotkey';
-import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-import { LabelAndHotKey } from '@core/component/Tooltip';
-import { ENABLE_CALLS, LOCAL_ONLY } from '@core/constant/featureFlags';
-import { useSettingsState } from '@core/constant/SettingsState';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { clearPressedKeys } from '@core/hotkey/state';
-import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
-import type { ValidHotkey } from '@core/hotkey/types';
-import { activateClosestDOMScope } from '@core/hotkey/utils';
-import BellIcon from '@icon/regular/bell.svg';
-import TerminalIcon from '@icon/regular/terminal.svg';
-import { ContextMenu } from '@kobalte/core/context-menu';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
-import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
-import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
-import { AnimatedNewSplitIcon } from '@macro-icons/wide/animating/newSplit';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
-import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
-import { useNotificationSettings } from '@notifications';
-import { debounce } from '@solid-primitives/scheduled';
-import { useLocation } from '@solidjs/router';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
 import {
   type Component,
   createMemo,
   createSignal,
   For,
   type JSX,
+  onCleanup,
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
+import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
+import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
+import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
+import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
+import { AnimatedNewSplitIcon } from '@macro-icons/wide/animating/newSplit';
+import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
+import { useLocation } from '@solidjs/router';
+import LogoIcon from '@macro-icons/macro-logo.svg';
+import {
+  LIST_VIEW_ID,
+  LIST_VIEW_PATHS,
+  type ListView,
+} from '@app/constants/list-views';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
+import { CommandState } from '@app/component/command';
+import { cn } from '@ui/utils/classname';
+import { Button } from '@ui/components/Button';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { useSettingsState } from '@core/constant/SettingsState';
+import type { ValidHotkey } from '@core/hotkey/types';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import { debounce } from '@solid-primitives/scheduled';
+import { Hotkey } from '@core/component/Hotkey';
+import { clearPressedKeys } from '@core/hotkey/state';
+import { activateClosestDOMScope } from '@core/hotkey/utils';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { ContextMenu } from '@kobalte/core/context-menu';
+import { useAnalytics } from '@app/component/analytics-context';
+import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
+import {
+  InviteModal,
+  setInviteModalOpen,
+} from '@app/component/app-sidebar/invite-modal';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
+import BellIcon from '@icon/regular/bell.svg';
+import { useCallContextOptional } from '@channel/Call/CallContext';
+import { InCallPanel } from '@channel/Call';
+import { useNotificationSettings } from '@notifications';
 
 interface SidebarItem {
   id: ListView;
@@ -132,6 +133,84 @@ export const SIDEBAR_LINKS = [
 ] satisfies SidebarItem[];
 
 export type SidebarState = 'hidden' | 'expanded' | 'slim';
+
+/** Root sidebar `max-width` transition (see `SIDEBAR_MAX_WIDTH_TRANSITION_STYLE`). */
+const SIDEBAR_MAX_WIDTH_TRANSITION_MS = 100;
+const SIDEBAR_MAX_WIDTH_TRANSITION_STYLE = `max-width ease-in-out ${SIDEBAR_MAX_WIDTH_TRANSITION_MS}ms`;
+
+/**
+ * InCallPanel stays in slim layout until the sidebar shell finishes widening.
+ * Uses `transitionend` on that element’s `max-width` (no timer on the happy path);
+ * a short fallback timeout covers reduced-motion / no-op layout.
+ */
+function createInCallPanelSlimToggle(args: {
+  initialSlim: boolean;
+  parentOnOpenChange: (open: boolean) => void;
+  getShell: () => HTMLDivElement | undefined;
+}) {
+  const [panelIsSlim, setPanelIsSlim] = createSignal(args.initialSlim);
+  let shellEl: HTMLDivElement | undefined;
+  let onMaxWidthEnd: ((e: TransitionEvent) => void) | undefined;
+  let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const detachExpandTracking = () => {
+    const el = shellEl;
+    const handler = onMaxWidthEnd;
+    shellEl = undefined;
+    onMaxWidthEnd = undefined;
+    if (el && handler) {
+      el.removeEventListener('transitionend', handler);
+    }
+    if (fallbackTimer !== undefined) {
+      globalThis.clearTimeout(fallbackTimer);
+      fallbackTimer = undefined;
+    }
+  };
+
+  const finishExpand = () => {
+    detachExpandTracking();
+    setPanelIsSlim(false);
+  };
+
+  onCleanup(detachExpandTracking);
+
+  return {
+    panelIsSlim,
+    handleSidebarOpenChange(open: boolean) {
+      detachExpandTracking();
+
+      if (!open) {
+        setPanelIsSlim(true);
+        args.parentOnOpenChange(open);
+        return;
+      }
+
+      args.parentOnOpenChange(open);
+
+      requestAnimationFrame(() => {
+        const el = args.getShell();
+        if (!el) {
+          setPanelIsSlim(false);
+          return;
+        }
+
+        const onEnd = (e: TransitionEvent) => {
+          if (e.propertyName !== 'max-width' || e.target !== el) return;
+          finishExpand();
+        };
+
+        shellEl = el;
+        onMaxWidthEnd = onEnd;
+        el.addEventListener('transitionend', onEnd);
+
+        fallbackTimer = globalThis.setTimeout(
+          finishExpand,
+          SIDEBAR_MAX_WIDTH_TRANSITION_MS + 80
+        );
+      });
+    },
+  } as const;
+}
 
 type AppSidebarProps = {
   sidebarState?: SidebarState;
@@ -364,6 +443,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
   const notificationSettings = useNotificationSettings();
+  const callCtx = useCallContextOptional();
 
   const showEnableNotifications = () =>
     notificationSettings.isSupported && notificationSettings.canPrompt();
@@ -434,6 +514,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const isExpanded = () => props.sidebarState === 'expanded';
   const isSlim = () => props.sidebarState === 'slim';
+
+  let sidebarShell: HTMLDivElement | undefined;
+  const { panelIsSlim, handleSidebarOpenChange } = createInCallPanelSlimToggle({
+    initialSlim: isSlim(),
+    parentOnOpenChange: props.onOpenChange,
+    getShell: () => sidebarShell,
+  });
+
   const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
 
   registerSidebarHotkeys({
@@ -442,12 +530,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
     setHotkeyVisible,
     resetHotkeysState,
     isSlim,
-    onOpenChange: props.onOpenChange,
+    onOpenChange: handleSidebarOpenChange,
     openWithSplit: layout.openWithSplit,
   });
 
   return (
     <div
+      ref={(el) => {
+        sidebarShell = el ?? undefined;
+      }}
       class={cn(
         'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
         isExpanded() &&
@@ -459,7 +550,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       )}
       data-expanded={isExpanded()}
       data-slim={isSlim()}
-      style={{ transition: 'max-width ease-in-out 100ms' }}
+      style={{ transition: SIDEBAR_MAX_WIDTH_TRANSITION_STYLE }}
     >
       <div class="flex items-center justify-between py-2 pl-2 pr-2 relative">
         <div class="flex items-center group/logo-area w-full">
@@ -469,7 +560,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           <div class="grow shrink-10 min-w-0" />
           <Button
             class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-page [&_svg]:size-4"
-            onClick={() => props.onOpenChange(!isExpanded())}
+            onClick={() => handleSidebarOpenChange(!isExpanded())}
             onMouseEnter={() => setSidebarBtnHovering(true)}
             onMouseLeave={() => setSidebarBtnHovering(false)}
             tooltip={
@@ -526,11 +617,17 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />
       </div>
 
-      <div class="px-2 mt-auto w-full">
-        <hr class="border-edge-muted mb-2" />
+      <Show when={callCtx?.isInCall()}>
+        <div class="px-2 mb-2 mt-auto" data-ui="in-call-panel">
+          <InCallPanel isSlim={panelIsSlim} />
+        </div>
+      </Show>
+
+      <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
+        <hr class="border-edge-muted mb-[8px]" />
       </div>
 
-      <div class=" w-full px-2 flex flex-col">
+      <div class="w-full px-2 flex flex-col">
         <Show when={showEnableNotifications()}>
           <SidebarActionButton
             label="Enable Notifications"
@@ -539,7 +636,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
             icon={() => <BellIcon class="size-4" />}
           />
         </Show>
-
         <SidebarActionButton
           label="Invite"
           isSlim={isSlim}
@@ -571,15 +667,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
           onClick={toggleSettings}
           icon={AnimatedGearIcon}
         />
-
-        <Show when={LOCAL_ONLY && gitBranch()}>
-          <SidebarActionButton
-            label="Dev Toolbar"
-            isSlim={isSlim}
-            onClick={() => setDevStatusBarOpen((v) => !v)}
-            icon={TerminalIcon}
-          />
-        </Show>
       </div>
       <InviteModal />
     </div>
@@ -699,9 +786,12 @@ const SidebarLink = (props: SidebarLinkProps) => {
               <Dynamic component={props.icon} triggerAnimation={isHovering()} />
             </div>
           </Show>
-          <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-            {props.label}
-          </span>
+
+          <div class="flex items-center gap-1">
+            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+              {props.label}
+            </span>
+          </div>
 
           <Show when={isHovering() && !props.hotkeyVisible}>
             <div class="group-data-[slim=true]/sidebar:invisible ml-auto">
@@ -710,8 +800,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
                   <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={GO_TO_LEADER_KEY} />
                   </div>
-                  then
-                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={props.hotkey} />
                   </div>
                 </Show>

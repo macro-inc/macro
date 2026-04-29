@@ -320,6 +320,20 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized call tool context");
 
+    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
+        chat::domain::service::ChatServiceImpl::new(
+            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            Arc::new(ai_toolset::AsyncToolSet::new()),
+            (),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
+        ),
+        (*entity_access_service).clone(),
+    );
+
+    tracing::info!("initialized chat tool context");
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -330,6 +344,7 @@ async fn main() -> anyhow::Result<()> {
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
+        chat_tool_context,
         schedule_tool_context: ai_tools::NoOpScheduleContext,
     };
     let all_tools = ai_tools::all_tools();

@@ -9,6 +9,7 @@ use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst,
     chat::ChatLiteral,
+    date::DateLiteral,
     document::DocumentLiteral,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyMatchValue},
@@ -288,6 +289,17 @@ fn build_task_include_cbm_atm_nc_clause() -> String {
     .to_string()
 }
 
+fn date_predicate(col: &str, lit: &DateLiteral) -> String {
+    match lit {
+        DateLiteral::GreaterThan(dt) => format!("{col} > '{}'::timestamptz", dt.to_rfc3339()),
+        DateLiteral::LessThan(dt) => format!("{col} < '{}'::timestamptz", dt.to_rfc3339()),
+        DateLiteral::GreaterThanOrEqual(dt) => {
+            format!("{col} >= '{}'::timestamptz", dt.to_rfc3339())
+        }
+        DateLiteral::LessThanOrEqual(dt) => format!("{col} <= '{}'::timestamptz", dt.to_rfc3339()),
+    }
+}
+
 fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
@@ -346,6 +358,12 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
             r#"NOT EXISTS(SELECT 1 FROM document_email WHERE document_id = d.id)"#
                 .to_string()
         }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::CreatedAt(lit)) => {
+            date_predicate(r#"d."createdAt""#, &lit)
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::UpdatedAt(lit)) => {
+            date_predicate(r#"d."updatedAt""#, &lit)
+        }
     });
     if formatting.is_empty() {
         String::new()
@@ -380,6 +398,12 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ChatLiteral::NotificationSeen(seen)) => {
             build_notification_seen_clause("c.id", "chat", seen)
         }
+        filter_ast::ExprFrame::Literal(ChatLiteral::CreatedAt(lit)) => {
+            date_predicate(r#"c."createdAt""#, &lit)
+        }
+        filter_ast::ExprFrame::Literal(ChatLiteral::UpdatedAt(lit)) => {
+            date_predicate(r#"c."updatedAt""#, &lit)
+        }
     });
     if formatting.is_empty() {
         String::new()
@@ -410,6 +434,12 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationSeen(seen)) => {
             build_notification_seen_clause("p.id", "project", seen)
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::CreatedAt(lit)) => {
+            date_predicate(r#"p."createdAt""#, &lit)
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::UpdatedAt(lit)) => {
+            date_predicate(r#"p."updatedAt""#, &lit)
         }
     });
     if formatting.is_empty() {

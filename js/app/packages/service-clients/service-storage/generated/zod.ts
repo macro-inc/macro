@@ -913,6 +913,12 @@ export const getCallRecordResponse = zod
       .nullish()
       .describe('Resolved display name for the channel.'),
     createdBy: zod.string().describe('User who created the call.'),
+    customName: zod
+      .string()
+      .nullish()
+      .describe(
+        'User-supplied or AI-generated display name for the call. Only set on\narchived `call_records`; active calls always return `None`.'
+      ),
     durationMs: zod
       .number()
       .nullish()
@@ -958,6 +964,12 @@ export const getCallRecordResponse = zod
       .datetime({})
       .describe(
         'When the call started (created_at for active, started_at for archived).'
+      ),
+    summary: zod
+      .string()
+      .nullish()
+      .describe(
+        'AI-generated summary of the call. Only set on archived `call_records`\nonce summarization has run; active calls always return `None`.'
       ),
     transcript: zod
       .array(
@@ -1014,6 +1026,12 @@ export const editCallRecordParams = zod.object({
 
 export const editCallRecordBody = zod
   .object({
+    customName: zod
+      .string()
+      .nullish()
+      .describe(
+        'Updated user-supplied display name for the call. `None` is a no-op;\n`Some(\"\")` clears `call_records.custom_name`; any other `Some(s)`\noverwrites it with `s`. Only the archived `call_records` row carries\nthis column — patching while the call is still active is a no-op for\nthis field.'
+      ),
     sharePermission: zod
       .union([
         zod.null(),
@@ -1073,6 +1091,43 @@ export const toggleShareWithTeamParams = zod.object({
 });
 
 export const toggleShareWithTeamResponse = zod.boolean();
+
+/**
+ * Applies per-diarized-speaker `custom_speaker` overrides to the call's
+archived transcript rows. Auth uses the same `EditAccessLevel` extractor
+as `edit_call_record_handler`.
+ * @summary Handler for `PATCH /call/record/{call_id}/transcript`.
+ */
+export const editCallTranscriptParams = zod.object({
+  call_id: zod.string().uuid().describe('Call ID'),
+});
+
+export const editCallTranscriptBody = zod
+  .object({
+    assignments: zod
+      .array(
+        zod
+          .object({
+            customSpeaker: zod
+              .string()
+              .describe(
+                'Macro user id to attribute matching rows to, or `None` to clear.'
+              ),
+            diarizedSpeakerId: zod
+              .string()
+              .describe(
+                'The diarization label whose rows this assignment targets.'
+              ),
+          })
+          .describe(
+            'One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].\n\n`custom_speaker = None` clears any existing override for this\n`diarized_speaker_id`; `Some(macro_user_id)` sets it. The string is\nexpected to parse as a `MacroUserId` (e.g. `macro|alice@example.com`);\nthe service layer rejects malformed values with `400 Bad Request`.'
+          )
+      )
+      .describe('The set of per-diarized-speaker overrides to apply.'),
+  })
+  .describe(
+    'Body of `PATCH \/call\/record\/{call_id}\/transcript`.\n\nEach entry in `assignments` sets (or clears, when `custom_speaker` is\n`None`) the `custom_speaker` override for every transcript row in the\ncall whose `diarized_speaker_id` matches. Diarized speakers not listed\nare left untouched. Empty `assignments` is a 204 no-op.'
+  );
 
 /**
  * Gets or creates a call for the channel. If a call already exists, joins it;
@@ -5116,6 +5171,12 @@ export const getItemsSoupResponse = zod.object({
                 .nullish()
                 .describe('Resolved display name for the channel.'),
               createdBy: zod.string().describe('User who created the call.'),
+              customName: zod
+                .string()
+                .nullish()
+                .describe(
+                  'User-supplied or AI-generated display name for the call.'
+                ),
               durationMs: zod
                 .number()
                 .nullish()
@@ -5160,7 +5221,7 @@ export const getItemsSoupResponse = zod.object({
             .describe(
               'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
             ),
-          tag: zod.enum(['callRecord']),
+          tag: zod.enum(['call']),
         }),
       ])
       .and(
@@ -6813,6 +6874,12 @@ export const postItemsSoupResponse = zod.object({
                 .nullish()
                 .describe('Resolved display name for the channel.'),
               createdBy: zod.string().describe('User who created the call.'),
+              customName: zod
+                .string()
+                .nullish()
+                .describe(
+                  'User-supplied or AI-generated display name for the call.'
+                ),
               durationMs: zod
                 .number()
                 .nullish()
@@ -6857,7 +6924,7 @@ export const postItemsSoupResponse = zod.object({
             .describe(
               'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
             ),
-          tag: zod.enum(['callRecord']),
+          tag: zod.enum(['call']),
         }),
       ])
       .and(
@@ -8154,6 +8221,12 @@ export const postItemsSoupAstResponse = zod.object({
                 .nullish()
                 .describe('Resolved display name for the channel.'),
               createdBy: zod.string().describe('User who created the call.'),
+              customName: zod
+                .string()
+                .nullish()
+                .describe(
+                  'User-supplied or AI-generated display name for the call.'
+                ),
               durationMs: zod
                 .number()
                 .nullish()
@@ -8198,7 +8271,7 @@ export const postItemsSoupAstResponse = zod.object({
             .describe(
               'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
             ),
-          tag: zod.enum(['callRecord']),
+          tag: zod.enum(['call']),
         }),
       ])
       .and(

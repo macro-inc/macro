@@ -229,10 +229,30 @@ pub fn run() {
 /// fn to merge the headers from the http cookie store into the initial
 /// GET request to open a websocket
 fn merge_header_callback<R: Runtime>(url: String, headers: &mut HeaderMap, handle: &AppHandle<R>) {
-    let Some(s) = handle.try_state::<tauri_plugin_http::Http>() else {
+    let Ok(mut parsed_url) = Url::parse(&url) else {
         return;
     };
-    let Ok(mut parsed_url) = url.parse::<Url>() else {
+
+    // Origin headers are required for service auth and must be set unconditionally,
+    // independent of whether cookie state is available.
+    match parsed_url.host_str() {
+        Some("services.macro.com") | Some("services-dev.macro.com") => {
+            headers.insert(ORIGIN, HeaderValue::from_static("https://macro.com"));
+        }
+        // The sync service (macroverse.workers.dev) also validates Origin.
+        Some("macroverse.workers.dev") => {
+            let origin = if cfg!(debug_assertions) {
+                "https://dev.macro.com"
+            } else {
+                "https://macro.com"
+            };
+            headers.insert(ORIGIN, HeaderValue::from_static(origin));
+        }
+        _ => {}
+    }
+
+    // Cookie forwarding requires the HTTP plugin's cookie jar.
+    let Some(s) = handle.try_state::<tauri_plugin_http::Http>() else {
         return;
     };
     parsed_url
@@ -246,21 +266,6 @@ fn merge_header_callback<R: Runtime>(url: String, headers: &mut HeaderMap, handl
     if let Some(cookie) = s.inner().cookies_jar.as_ref().cookies(&parsed_url) {
         tracing::trace!("inserting cookie value for {parsed_url}");
         headers.insert(COOKIE, cookie);
-    }
-
-    // The API Gateway authorizer for services.macro.com validates Origin against an allowlist.
-    if url.contains("services.macro.com") || url.contains("services-dev.macro.com") {
-        headers.insert(ORIGIN, HeaderValue::from_static("https://macro.com"));
-    }
-
-    // The sync service (macroverse.workers.dev) also validates Origin.
-    if url.contains("macroverse.workers.dev") {
-        let origin = if cfg!(debug_assertions) {
-            "https://dev.macro.com"
-        } else {
-            "https://macro.com"
-        };
-        headers.insert(ORIGIN, HeaderValue::from_static(origin));
     }
 }
 

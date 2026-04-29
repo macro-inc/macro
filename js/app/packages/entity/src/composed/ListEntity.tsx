@@ -1,80 +1,43 @@
 import './ListEntity.css';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
-import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
-import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import {
-  twoLineClampMarkdownTheme,
-  unifiedListMarkdownTheme,
-} from '@core/component/LexicalMarkdown/theme';
-import { UserIcon } from '@core/component/UserIcon';
 import { isMobile } from '@core/mobile/isMobile';
-import type { NotificationType } from '@core/types';
-import { tryMacroId, useDisplayNameParts } from '@core/user';
 import type { DateValue } from '@core/util/date';
-import {
-  HighlightRender,
-  visibleLength,
-  windowSearchMatch,
-} from '@core/util/searchHighlight';
-import { DisplayName } from '@entity/components/DisplayName';
 import { stackNotifications } from '@notifications';
-import type { StreamEvent } from '@service-connection/generated/schemas';
 import {
   getStreamState,
   subscribeToStreamState,
 } from '@service-connection/stream-events';
 import { mergeRefs } from '@solid-primitives/refs';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui/utils/classname';
 import {
-  type Accessor,
-  createContext,
   createEffect,
   createMemo,
   createSignal,
   type JSX,
   Match,
-  onCleanup,
   type Ref,
   Show,
   Switch,
   useContext,
 } from 'solid-js';
-import { AttendanceBadge, DraftBadge, SharedBadge } from '../components/Badges';
-import { CallChannelName } from '../components/CallChannelName';
-import { MultiSelectCheckbox } from '../components/MultiSelectCheckbox';
-import { ProjectBreadCrumb } from '../components/ProjectBreadCrumb';
-import { UnreadIndicator } from '../components/UnreadIndicator';
 import { Entity } from '../entity';
 import type { EntityRowConfig } from '../extractors-notification';
-import { getActionVerb } from '../extractors-notification/notification-description-helpers';
-import { SearchContent } from '../extractors-search/search-content';
-import { SearchSender } from '../extractors-search/search-sender';
 import {
-  type CallEntity,
-  type ChannelEntity,
-  type ChannelMessageEntity,
-  type EmailEntity,
-  type EntityData,
-  isCallEntity,
+  isHitSnippetComplete,
+  isSnippetEntity,
+} from '../extractors-search/snippet-entity';
+import {
   isChannelEntity,
-  isChannelMessageEntity,
   isEmailEntity,
-  isProjectContainedEntity,
-  isAutomationEntity,
-  isTaskEntity,
+  type EntityData,
   type ProjectEntity,
-  type AutomationEntity,
 } from '../types/entity';
 import {
   isWithNotification,
-  type Notification,
   type WithNotification,
 } from '../types/notification';
-import type { ContentHitData, SearchLocation } from '../types/search';
-import { isCallRecordHit, isSearchEntity } from '../types/search';
-import { matches } from '@core/util/match';
+import { isSearchEntity, type SearchLocation } from '../types/search';
 import { createEntityDraggable } from '../utils/draggable';
 import { unreadFilterFn } from '../utils/filter';
 import {
@@ -82,76 +45,18 @@ import {
   filterValidNotifications,
 } from '../utils/notification';
 import { useIsShared } from '../utils/shared';
-import { formatDateAndTime } from '../utils/timestamp';
-import { formatCallDuration } from '@block-call/utils';
+import {
+  hasSearchContentHits,
+  InboxDivider,
+  type LayoutProps,
+  useCharacterCount,
+  useListLayout,
+} from './list-entity/shared';
+import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
+import { NarrowLayout } from './list-entity/narrow-layout';
+import { WideLayout } from './list-entity/wide-layout';
 
-const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
-
-interface ListLayoutContextValue {
-  isWide: Accessor<boolean>;
-}
-
-const ListLayoutContext = createContext<ListLayoutContextValue>();
-
-export function ListLayoutProvider(props: {
-  ref: Accessor<HTMLElement | undefined>;
-  children: JSX.Element;
-}) {
-  const [isWide, setIsWide] = createSignal(true);
-
-  createEffect(() => {
-    const el = props.ref();
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      setIsWide((entries[0]?.contentRect.width ?? 0) >= WIDE_BREAKPOINT);
-    });
-    observer.observe(el);
-    onCleanup(() => observer.disconnect());
-  });
-
-  return (
-    <ListLayoutContext.Provider value={{ isWide }}>
-      {props.children}
-    </ListLayoutContext.Provider>
-  );
-}
-
-const useListLayout = () => useContext(ListLayoutContext);
-
-const hasSearchContentHits = (entity: EntityData) =>
-  isSearchEntity(entity) && !!entity.search.contentHitData?.length;
-
-const getBestContentHitContent = (entity: EntityData) => {
-  if (!isSearchEntity(entity)) return undefined;
-  const hits = entity.search.contentHitData;
-  if (!hits?.length) return undefined;
-  if (hits.length === 1) return hits[0].content;
-
-  let bestIdx = 0;
-  let bestLen = visibleLength(hits[0].content);
-  for (let i = 1; i < hits.length; i++) {
-    const len = visibleLength(hits[i].content);
-    if (len > bestLen) {
-      bestLen = len;
-      bestIdx = i;
-    }
-  }
-  return hits[bestIdx].content;
-};
-
-function useCharacterCount(ref: Accessor<HTMLElement | undefined>) {
-  const size = createElementSize(ref);
-  const [chars, setChars] = createSignal(200);
-  const CHAR_WIDTH_PX = 6; // this is an approximation for text-sm
-
-  createEffect(() => {
-    if (!size.width) return;
-    const charCount = Math.round(size.width / CHAR_WIDTH_PX / 2);
-    setChars(charCount);
-  });
-
-  return chars;
-}
+export { ListLayoutProvider } from './list-entity/shared';
 
 interface ListEntityProps {
   entity: WithNotification<EntityData>;
@@ -174,765 +79,6 @@ interface ListEntityProps {
     location?: SearchLocation
   ) => void;
   entityRowConfig?: EntityRowConfig;
-}
-
-interface LayoutProps {
-  entity: WithNotification<EntityData>;
-  checked?: boolean;
-  onChecked?: (checked: boolean, shiftKey: boolean) => void;
-  unread: boolean;
-  isShared: boolean;
-  hasNotifications: boolean;
-  showContentHits: boolean;
-  streamState?: StreamEvent;
-  onProjectClick?: (
-    entity: ProjectEntity,
-    e: PointerEvent | MouseEvent
-  ) => void;
-}
-
-function InboxDivider() {
-  return (
-    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px bg-edge-muted" />
-  );
-}
-
-function EmailIdentity(props: { entity: EmailEntity }) {
-  return (
-    <>
-      <Show when={props.entity.isDraft}>
-        <DraftBadge />
-      </Show>
-      <span class="truncate">
-        <Entity.EmailParticipants entity={props.entity} />
-      </span>
-    </>
-  );
-}
-
-function EmailSnippet(props: {
-  entity: EmailEntity;
-  showContentHits: boolean;
-  chars: number;
-}) {
-  return (
-    <Show
-      when={props.showContentHits && getBestContentHitContent(props.entity)}
-      fallback={props.entity.snippet}
-    >
-      {(content) => (
-        <HighlightRender text={windowSearchMatch(content(), props.chars)} />
-      )}
-    </Show>
-  );
-}
-
-function AutomationSubtitle(props: { entity: AutomationEntity }) {
-  return (
-    <div class="text-xs font-mono text-right uppercase font-light">
-      <Switch>
-        <Match when={props.entity.isRunning}>
-          <span class="flex items-center justify-end gap-1.5 text-accent">
-            <span class="size-1.5 animate-pulse rounded-full bg-accent" />
-            Running
-          </span>
-        </Match>
-        <Match when={props.entity.enabled && props.entity.nextRunAt}>
-          {(nextRunAt) => (
-            <span class="text-ink-extra-muted">
-              Next run {formatDateAndTime(nextRunAt())}
-            </span>
-          )}
-        </Match>
-        <Match when={!props.entity.enabled}>
-          <span class="text-ink-extra-muted">Paused</span>
-        </Match>
-      </Switch>
-    </div>
-  );
-}
-
-function ChannelMessage(props: {
-  message: NonNullable<ChannelEntity['latestMessage']>;
-}) {
-  const hasContent = () => Boolean(props.message.content?.trim());
-  return (
-    <>
-      <span class="ph-no-capture font-semibold truncate min-w-min max-w-1/3 shrink-0">
-        <DisplayName id={props.message.senderId} format="firstName" />
-      </span>
-      <span class="ph-no-capture text-ink/50 font-medium truncate inline-flex items-center shrink min-w-0">
-        <Show
-          when={hasContent()}
-          fallback={<span class="italic">Attached Items</span>}
-        >
-          <StaticMarkdown
-            theme={unifiedListMarkdownTheme}
-            markdown={props.message.content}
-            singleLine
-          />
-        </Show>
-      </span>
-    </>
-  );
-}
-
-function firstContentHit(entity: EntityData): ContentHitData | undefined {
-  return isSearchEntity(entity) ? entity.search.contentHitData?.[0] : undefined;
-}
-
-// Narrow inbox body slots (one per entity type)
-
-function ChannelMessageNarrowBody(props: { entity: ChannelMessageEntity }) {
-  const hit = () => firstContentHit(props.entity);
-  return (
-    <Entity.Slot placement="body" class="flex flex-col pb-2 min-h-[2lh] pr-4">
-      <Show when={hit()}>
-        {(h) => (
-          <>
-            <span class="text-ink-muted text-xs flex items-center gap-1">
-              <Show when={props.entity.senderId}>
-                {(id) => <UserIcon id={id()} size="xs" />}
-              </Show>
-              <SearchSender hit={h()} />
-            </span>
-            <span class="text-ink-extra-muted truncate">
-              <SearchContent hit={h()} />
-            </span>
-          </>
-        )}
-      </Show>
-    </Entity.Slot>
-  );
-}
-
-function ChannelLatestMessageNarrowBody(props: {
-  message: NonNullable<ChannelEntity['latestMessage']>;
-  senderFirstName?: string;
-}) {
-  return (
-    <Entity.Slot
-      placement="body"
-      class="text-ink-extra-muted line-clamp-2 pb-2 min-h-[2lh] pr-4"
-    >
-      <Show
-        when={props.message.content?.trim()}
-        fallback={<span class="italic">Attached Items</span>}
-      >
-        <StaticMarkdown
-          theme={twoLineClampMarkdownTheme}
-          markdown={
-            (props.senderFirstName ? `**${props.senderFirstName}:** ` : '') +
-            props.message.content.trim()
-          }
-          singleLine
-        />
-      </Show>
-    </Entity.Slot>
-  );
-}
-
-function EmailNarrowBody(props: {
-  entity: EmailEntity;
-  chars: number;
-  showContentHits: boolean;
-  setContainerRef: (el: HTMLElement) => void;
-}) {
-  return (
-    <Entity.Slot placement="body" class="flex flex-col pb-2 min-h-[2lh] pr-4">
-      <Entity.Title entity={props.entity} />
-      <span
-        ref={props.setContainerRef}
-        class="text-ink/50 font-medium truncate"
-      >
-        <EmailSnippet
-          entity={props.entity}
-          showContentHits={props.showContentHits}
-          chars={props.chars}
-        />
-      </span>
-    </Entity.Slot>
-  );
-}
-
-function TaskNarrowBody(props: {
-  entity: EntityData;
-  notification?: Notification;
-}) {
-  return (
-    <Entity.Slot placement="body" class="flex flex-col pb-2 min-h-[2lh] pr-4 ">
-      <Entity.Properties entity={props.entity} />
-      <Show when={props.notification}>
-        {(notif) => (
-          <span class="text-ink-extra-muted font-normal truncate">
-            <Show when={notif().sender_id}>
-              {(senderId) => (
-                <>
-                  <DisplayName id={senderId()} format="firstName" />{' '}
-                </>
-              )}
-            </Show>
-            {getActionVerb(notif().notification_event_type as NotificationType)}
-          </span>
-        )}
-      </Show>
-    </Entity.Slot>
-  );
-}
-
-function CallNarrowBody(props: {
-  entity: CallEntity;
-  showAttendanceBadge: boolean;
-}) {
-  const hit = () => firstContentHit(props.entity);
-  return (
-    <Entity.Slot placement="body" class="flex flex-col pb-2 min-h-[2lh] pr-4">
-      <Show
-        when={hit()}
-        fallback={
-          <span class="text-ink-muted text-xs truncate">
-            <CallChannelName entity={props.entity} />
-          </span>
-        }
-      >
-        {(h) => (
-          <span class="flex items-center gap-1 min-w-0 truncate">
-            <Show when={matches(h(), isCallRecordHit)}>
-              {(callHit) => (
-                <Show when={callHit().senderId}>
-                  {(id) => <UserIcon id={id()} size="xs" />}
-                </Show>
-              )}
-            </Show>
-            <span class="shrink-0 text-ink-extra-muted text-xs whitespace-nowrap">
-              <SearchSender hit={h()} />
-            </span>
-            <span class="text-ink/50 font-normal truncate min-w-0 text-xs">
-              <SearchContent hit={h()} singleLine />
-            </span>
-          </span>
-        )}
-      </Show>
-      <span class="text-ink-extra-muted text-xs flex items-center gap-2">
-        <Show
-          when={props.entity.durationMs}
-          fallback={props.entity.isActive ? 'In progress' : 'No duration'}
-        >
-          {(ms) => formatCallDuration(ms())}
-        </Show>
-        <Show when={props.showAttendanceBadge}>
-          <AttendanceBadge attended={props.entity.attended} />
-        </Show>
-      </span>
-    </Entity.Slot>
-  );
-}
-
-// Wide layout content slots (one per entity type)
-
-function EmailWideContent(props: {
-  entity: EmailEntity;
-  chars: number;
-  showContentHits: boolean;
-  setContainerRef: (el: HTMLElement) => void;
-}) {
-  return (
-    <>
-      <span class="w-(--title-width) shrink-0">
-        <span class="truncate max-w-32 flex gap-2 items-center">
-          <EmailIdentity entity={props.entity} />
-        </span>
-      </span>
-      <span class="truncate">
-        <Entity.Title entity={props.entity} />
-      </span>
-      <span
-        ref={props.setContainerRef}
-        class="text-ink/50 font-medium truncate flex-1 inline-flex items-center"
-      >
-        <EmailSnippet
-          entity={props.entity}
-          showContentHits={props.showContentHits}
-          chars={props.chars}
-        />
-      </span>
-    </>
-  );
-}
-
-function ChannelMessageWideContent(props: { entity: ChannelMessageEntity }) {
-  const hit = () => firstContentHit(props.entity);
-  return (
-    <>
-      <span class="shrink-0 flex gap-1.5 items-center">
-        <span class="text-ink-muted whitespace-nowrap">
-          {props.entity.channelName}
-        </span>
-        <Show when={props.entity.senderId}>
-          {(id) => <UserIcon id={id()} size="xs" />}
-        </Show>
-        <Show when={hit()}>
-          {(h) => (
-            <span class="text-ink-extra-muted text-xs whitespace-nowrap">
-              <SearchSender hit={h()} />
-            </span>
-          )}
-        </Show>
-      </span>
-      <div class="text-ink/50 font-medium flex-1 min-w-0 overflow-hidden">
-        <Show when={hit()} fallback={props.entity.content}>
-          {(h) => <SearchContent hit={h()} singleLine />}
-        </Show>
-      </div>
-    </>
-  );
-}
-
-function ChannelWideContent(props: {
-  entity: ChannelEntity;
-  showLatestMessage: boolean;
-}) {
-  return (
-    <Show
-      when={props.showLatestMessage && props.entity.latestMessage}
-      fallback={
-        <span class="truncate flex gap-2">
-          <Entity.Title entity={props.entity} />
-        </span>
-      }
-    >
-      {(msg) => (
-        <>
-          <span class="w-(--title-width) shrink-0 truncate flex gap-2">
-            <Entity.Title entity={props.entity} />
-          </span>
-          <ChannelMessage message={msg()} />
-        </>
-      )}
-    </Show>
-  );
-}
-
-function CallWideContent(props: { entity: CallEntity }) {
-  const hit = () => firstContentHit(props.entity);
-  return (
-    <>
-      <span class="truncate">
-        <CallChannelName entity={props.entity} />
-      </span>
-      <Show
-        when={hit()}
-        fallback={
-          <span class="text-ink-extra-muted font-medium truncate">
-            <Show
-              when={props.entity.durationMs}
-              fallback={props.entity.isActive ? 'In progress' : ''}
-            >
-              {(ms) => formatCallDuration(ms())}
-            </Show>
-          </span>
-        }
-      >
-        {(h) => (
-          <>
-            <span class="shrink-0 flex gap-1.5 items-center">
-              <Show when={matches(h(), isCallRecordHit)}>
-                {(callHit) => (
-                  <Show when={callHit().senderId}>
-                    {(id) => <UserIcon id={id()} size="xs" />}
-                  </Show>
-                )}
-              </Show>
-              <span class="text-ink-extra-muted text-xs whitespace-nowrap">
-                <SearchSender hit={h()} />
-              </span>
-            </span>
-            <div class="text-ink/50 font-medium flex-1 min-w-0 overflow-hidden">
-              <SearchContent hit={h()} singleLine />
-            </div>
-          </>
-        )}
-      </Show>
-    </>
-  );
-}
-
-function AutomationWideContent(props: { entity: AutomationEntity }) {
-  return (
-    <>
-      <span class="w-(--title-width) shrink-0 truncate">
-        <Entity.Title entity={props.entity} />
-      </span>
-      <span class="">
-        <AutomationSubtitle entity={props.entity} />
-      </span>
-    </>
-  );
-}
-
-function NarrowLayout(props: LayoutProps) {
-  return (
-    <Entity.Layout
-      class="w-full gap-x-2 items-center text-sm px-2 grid"
-      style={{
-        'grid-template-columns': 'auto 1fr max-content',
-        'grid-template-rows': '44px',
-        'grid-template-areas': '"indicator title timestamp"',
-      }}
-    >
-      <Entity.Slot placement="indicator" class="relative self-start pt-3">
-        <div
-          class={cn('w-0 opacity-0 overflow-hidden', {
-            'w-6 opacity-100': props.checked,
-          })}
-        >
-          <MultiSelectCheckbox
-            checked={props.checked}
-            onChecked={props.onChecked}
-          />
-        </div>
-      </Entity.Slot>
-
-      <Entity.Slot
-        placement="title"
-        class="ph-no-capture flex items-center gap-2 truncate font-semibold"
-      >
-        <Show when={props.unread}>
-          <UnreadIndicator active />
-        </Show>
-        <div class="size-4 shrink-0">
-          <Entity.Icon entity={props.entity} streamState={props.streamState} />
-        </div>
-        <Show
-          when={isChannelMessageEntity(props.entity) && props.entity}
-          fallback={<Entity.Title entity={props.entity} />}
-        >
-          {(entity) => {
-            const hit = () => {
-              const e = entity();
-              return isSearchEntity(e)
-                ? e.search.contentHitData?.[0]
-                : undefined;
-            };
-            return (
-              <span class="flex items-center gap-1 min-w-0 truncate">
-                <span class="shrink-0 text-ink-muted text-xs whitespace-nowrap">
-                  {entity().channelName}
-                </span>
-                <Show when={entity().senderId}>
-                  {(id) => <UserIcon id={id()} size="xs" />}
-                </Show>
-                <Show when={hit()}>
-                  {(h) => (
-                    <span class="shrink-0 text-ink-extra-muted text-xs whitespace-nowrap">
-                      <SearchSender hit={h()} />
-                    </span>
-                  )}
-                </Show>
-                <span class="text-ink/50 font-normal truncate min-w-0">
-                  <Show when={hit()} fallback={entity().content}>
-                    {(h) => <SearchContent hit={h()} singleLine />}
-                  </Show>
-                </span>
-              </span>
-            );
-          }}
-        </Show>
-      </Entity.Slot>
-
-      <Show
-        when={
-          !props.hasNotifications &&
-          !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
-        }
-      >
-        <Entity.Slot
-          placement="timestamp"
-          class="text-xs font-mono text-right text-ink-extra-muted uppercase font-light"
-        >
-          <Show
-            when={!isTaskEntity(props.entity)}
-            fallback={<Entity.Properties entity={props.entity} />}
-          >
-            <Entity.Timestamp entity={props.entity} />
-          </Show>
-        </Entity.Slot>
-      </Show>
-    </Entity.Layout>
-  );
-}
-
-function NarrowInboxLayout(props: LayoutProps) {
-  const soupView = useMaybeSoupView();
-  const isDirectMessage = () =>
-    isChannelEntity(props.entity) &&
-    props.entity.channelType === 'direct_message';
-
-  const [emailSnippetContainerRef, setEmailSnippetContainerRef] = createSignal<
-    HTMLElement | undefined
-  >();
-  const chars = useCharacterCount(emailSnippetContainerRef);
-
-  const mostRecentMessageSenderName =
-    isChannelEntity(props.entity) && props.entity.latestMessage?.senderId
-      ? useDisplayNameParts(tryMacroId(props.entity.latestMessage?.senderId))
-      : undefined;
-
-  const firstNotification = () => {
-    if (!isWithNotification(props.entity)) return undefined;
-    return filterNotDoneNotifications(
-      filterValidNotifications(props.entity.notifications?.())
-    )[0];
-  };
-
-  return (
-    <Entity.Layout
-      class="w-full text-sm grid"
-      style={{
-        'grid-template-columns': 'auto 1fr 8ch',
-        'grid-template-rows': 'auto auto auto',
-        'grid-template-areas':
-          '"icon title timestamp" "icon body body" "icon body body"',
-      }}
-    >
-      <Entity.Slot
-        placement="icon"
-        class="flex items-center self-center pr-(--soup-inbox-icon-padding-r)"
-      >
-        <UnreadIndicator
-          class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)"
-          active={props.unread}
-        />
-        <div class="relative size-(--soup-inbox-icon-diameter) shrink-0 group">
-          <Show when={!props.checked}>
-            <div class="absolute inset-0 grid place-items-center group-hover:opacity-0 transition-opacity">
-              <Show
-                when={isDirectMessage()}
-                fallback={
-                  <div class="size-(--soup-inbox-icon-diameter) bg-edge-muted rounded-full flex items-center justify-center">
-                    <div class="size-[calc(var(--soup-inbox-icon-diameter)*var(--soup-inbox-icon-factor))]">
-                      <Entity.Icon
-                        entity={props.entity}
-                        streamState={props.streamState}
-                      />
-                    </div>
-                  </div>
-                }
-              >
-                <div class="size-11">
-                  <Entity.Icon
-                    entity={props.entity}
-                    streamState={props.streamState}
-                    class="bg-edge-muted text-ink"
-                  />
-                </div>
-              </Show>
-            </div>
-          </Show>
-          {/* TODO: make multiselect work on mobile */}
-          <div
-            class={cn(
-              'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity',
-              { 'opacity-100': props.checked }
-            )}
-          >
-            <MultiSelectCheckbox
-              checked={props.checked}
-              onChecked={props.onChecked}
-            />
-          </div>
-        </div>
-      </Entity.Slot>
-
-      <Entity.Slot
-        placement="title"
-        class="ph-no-capture flex items-center gap-2 truncate font-semibold pt-3"
-      >
-        <Show
-          when={isEmailEntity(props.entity) && props.entity}
-          fallback={<Entity.Title entity={props.entity} />}
-        >
-          {(entity) => <EmailIdentity entity={entity()} />}
-        </Show>
-      </Entity.Slot>
-
-      <Entity.Slot
-        placement="timestamp"
-        class="text-xs text-right text-ink-extra-muted font-light pt-3 pr-4"
-      >
-        <Show
-          when={
-            !props.hasNotifications &&
-            !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
-          }
-        >
-          <Entity.Timestamp entity={props.entity} />
-        </Show>
-      </Entity.Slot>
-
-      <Switch>
-        <Match when={isChannelMessageEntity(props.entity) && props.entity}>
-          {(entity) => <ChannelMessageNarrowBody entity={entity()} />}
-        </Match>
-        <Match
-          when={isChannelEntity(props.entity) && props.entity.latestMessage}
-        >
-          {(msg) => (
-            <ChannelLatestMessageNarrowBody
-              message={msg()}
-              senderFirstName={mostRecentMessageSenderName?.firstName()}
-            />
-          )}
-        </Match>
-        <Match when={isEmailEntity(props.entity) && props.entity}>
-          {(entity) => (
-            <EmailNarrowBody
-              entity={entity()}
-              chars={chars()}
-              showContentHits={props.showContentHits}
-              setContainerRef={setEmailSnippetContainerRef}
-            />
-          )}
-        </Match>
-        <Match when={isTaskEntity(props.entity)}>
-          <TaskNarrowBody
-            entity={props.entity}
-            notification={firstNotification()}
-          />
-        </Match>
-        <Match when={isCallEntity(props.entity) && props.entity}>
-          {(entity) => (
-            <CallNarrowBody
-              entity={entity()}
-              showAttendanceBadge={(soupView?.activeTab() ?? 'all') === 'all'}
-            />
-          )}
-        </Match>
-        <Match when={true}>
-          <Entity.Slot placement="body" class="pb-2 min-h-[2lh] pr-4" />
-        </Match>
-      </Switch>
-      <InboxDivider />
-    </Entity.Layout>
-  );
-}
-
-function WideLayout(props: LayoutProps) {
-  const [emailSnippetContainerRef, setEmailSnippetContainerRef] = createSignal<
-    HTMLElement | undefined
-  >();
-  const chars = useCharacterCount(emailSnippetContainerRef);
-  const soupView = useMaybeSoupView();
-
-  return (
-    <Entity.Layout
-      class={cn(
-        'w-full min-h-[inherit] items-center text-sm px-2',
-        'gap-2 grid grid-cols-[1rem_1fr_auto_8ch] grid-rows-[1fr]',
-        '[--title-width:10rem]'
-      )}
-      style={{
-        'grid-template-areas': '"indicator content meta timestamp"',
-      }}
-    >
-      <Entity.Slot placement="indicator" class="relative size-full group">
-        <div class="absolute inset-0 grid place-items-center group-hover:opacity-0">
-          <UnreadIndicator active={props.unread} />
-        </div>
-        <div
-          class={cn(
-            'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100',
-            {
-              'opacity-100': props.checked,
-            }
-          )}
-        >
-          <MultiSelectCheckbox
-            checked={props.checked}
-            onChecked={props.onChecked}
-          />
-        </div>
-      </Entity.Slot>
-      <Entity.Slot
-        placement="content"
-        class="ph-no-capture font-semibold truncate items-center gap-2 flex"
-      >
-        <div class="size-4 shrink-0">
-          <Entity.Icon entity={props.entity} streamState={props.streamState} />
-        </div>
-        <Switch>
-          <Match when={isEmailEntity(props.entity) && props.entity}>
-            {(entity) => (
-              <EmailWideContent
-                entity={entity()}
-                chars={chars()}
-                showContentHits={props.showContentHits}
-                setContainerRef={setEmailSnippetContainerRef}
-              />
-            )}
-          </Match>
-          <Match when={isChannelMessageEntity(props.entity) && props.entity}>
-            {(entity) => <ChannelMessageWideContent entity={entity()} />}
-          </Match>
-          <Match when={isChannelEntity(props.entity) && props.entity}>
-            {(entity) => (
-              <ChannelWideContent
-                entity={entity()}
-                showLatestMessage={!props.hasNotifications}
-              />
-            )}
-          </Match>
-          <Match when={isCallEntity(props.entity) && props.entity}>
-            {(entity) => <CallWideContent entity={entity()} />}
-          </Match>
-          <Match when={isAutomationEntity(props.entity) && props.entity}>
-            {(entity) => <AutomationWideContent entity={entity()} />}
-          </Match>
-          <Match when={props.entity}>
-            {(entity) => <Entity.Title entity={entity()} />}
-          </Match>
-        </Switch>
-      </Entity.Slot>
-      <Entity.Slot placement="meta" class="flex items-center gap-2">
-        <Show when={isProjectContainedEntity(props.entity) && props.entity}>
-          {(entity) => (
-            <span class="ph-no-capture text-ink-extra-muted text-xs">
-              <ProjectBreadCrumb
-                entity={entity()}
-                onClick={props.onProjectClick}
-              />
-            </span>
-          )}
-        </Show>
-        <Show when={props.isShared}>
-          <SharedBadge ownerId={props.entity.ownerId} />
-        </Show>
-        <Show when={isCallEntity(props.entity) && props.entity}>
-          {(entity) => (
-            <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
-              <AttendanceBadge attended={entity().attended} />
-            </Show>
-          )}
-        </Show>
-        <Show when={isTaskEntity(props.entity) && props.entity}>
-          {(entity) => <Entity.Properties entity={entity()} />}
-        </Show>
-      </Entity.Slot>
-      <Entity.Slot
-        placement="timestamp"
-        class="text-xs font-mono text-right text-ink-extra-muted uppercase font-light"
-      >
-        <Show
-          when={
-            !props.hasNotifications &&
-            !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
-          }
-        >
-          <Entity.Timestamp entity={props.entity} />
-        </Show>
-      </Entity.Slot>
-    </Entity.Layout>
-  );
 }
 
 function MaybeEntityRow(props: {
@@ -973,8 +119,29 @@ export function ListEntity(props: ListEntityProps) {
     );
   };
 
-  const showContentHits = () =>
+  const [snippetContainerRef, setSnippetContainerRef] = createSignal<
+    HTMLElement | undefined
+  >();
+  const chars = useCharacterCount(snippetContainerRef);
+
+  // For singleton hits on a SnippetEntity, expanding "show more" only adds
+  // value when windowSearchMatch trimmed text — otherwise the inline
+  // snippet already shows everything.
+  const isContentHitsRedundant = () => {
+    if (!isSnippetEntity(props.entity)) return false;
+    if (!isSearchEntity(props.entity)) return false;
+    const hits = props.entity.search.contentHitData;
+    if (!hits || hits.length !== 1) return false;
+    return isHitSnippetComplete(hits[0].content, chars());
+  };
+
+  // Render the highlighted hit snippet whenever the entity has hits — even
+  // if the expandable panel is suppressed as redundant, the inline snippet
+  // should still highlight the match.
+  const showHitSnippet = () =>
     !props.hideContentHits && hasSearchContentHits(props.entity);
+
+  const showContentHits = () => showHitSnippet() && !isContentHitsRedundant();
 
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
@@ -983,8 +150,10 @@ export function ListEntity(props: ListEntityProps) {
     unread: unread(),
     isShared: isShared(),
     hasNotifications: hasNotifications(),
-    showContentHits: showContentHits(),
+    showHitSnippet: showHitSnippet(),
     streamState: streamState(),
+    setSnippetContainerRef,
+    chars: chars(),
     onProjectClick: props.onProjectClick,
   });
 

@@ -3,6 +3,9 @@ require('dotenv').config();
 import { Client } from '@opensearch-project/opensearch';
 
 const IS_LOCAL = process.env.ENVIRONMENT === 'local' ? true : false;
+// Set to bypass TLS verification when connecting through an SSH tunnel
+// (cert is for the prod hostname, request goes to localhost).
+const INSECURE_TLS = process.env.OPENSEARCH_INSECURE_TLS === 'true';
 const OPENSEARCH_URL = process.env.OPENSEARCH_URL;
 const USERNAME = process.env.OPENSEARCH_USERNAME;
 const PASSWORD = process.env.OPENSEARCH_PASSWORD;
@@ -27,7 +30,7 @@ export function client(): Client {
       password: PASSWORD,
     },
     ssl: {
-      rejectUnauthorized: !IS_LOCAL,
+      rejectUnauthorized: !IS_LOCAL && !INSECURE_TLS,
     },
   });
 

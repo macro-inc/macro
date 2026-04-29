@@ -1,16 +1,14 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { createSortState } from '@app/component/next-soup/create-sort-state';
 import {
-  createFilterState,
-  createSoupFilters,
-  SOUP_FILTER_GROUPS,
-  type FilterConfig,
-  type FilterGroupConfig,
+  SOUP_FILTERS,
   type FilterID,
-} from '@app/component/next-soup/filters';
+} from '@app/component/next-soup/filters/configs/';
+import {
+  createPredicatesStore,
+  type PredicateConfig,
+} from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
-import { useUserContext } from '@core/context/user';
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData, WithSearch } from '@entity';
@@ -32,39 +30,27 @@ export type SortConfig<T> = {
 
 interface SoupContextOptions<TId extends string = FilterID> {
   initialData?: SoupEntity[];
-  initialFilters?: TId[];
-  filterConfigs?: FilterConfig<SoupEntity>[];
-  filterGroups?: FilterGroupConfig[];
+  initialPredicates?: {
+    and?: TId[];
+    or?: TId[];
+  };
+  predicateConfigs?: PredicateConfig<SoupEntity, string>[];
   wrapNavigation?: boolean;
 }
 
 export const createSoupState = <TId extends string = FilterID>(
   options: SoupContextOptions<TId> = { wrapNavigation: false }
 ) => {
-  const {
-    wrapNavigation,
-    initialData,
-    initialFilters,
-    filterConfigs,
-    filterGroups,
-  } = options;
+  const { wrapNavigation, initialData, initialPredicates, predicateConfigs } =
+    options;
 
   const selection = createSelectionState<SoupEntity>({
     getItemId: (i) => i.id,
   });
 
-  const notificationSource = useGlobalNotificationSource();
-  const user = useUserContext();
-
-  const filters = createFilterState({
-    filters:
-      filterConfigs ??
-      (createSoupFilters(
-        notificationSource,
-        user.userId
-      ) as FilterConfig<SoupEntity>[]),
-    groups: filterGroups ?? SOUP_FILTER_GROUPS,
-    initialFilters,
+  const predicates = createPredicatesStore({
+    configs: predicateConfigs ?? SOUP_FILTERS,
+    initial: initialPredicates,
   });
 
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);
@@ -158,7 +144,7 @@ export const createSoupState = <TId extends string = FilterID>(
   return {
     data,
     setData,
-    filters,
+    predicates,
     selection,
     sort,
     groups,
@@ -203,7 +189,7 @@ export const createSoupState = <TId extends string = FilterID>(
       set: setCollapseEntityCallback,
       shouldCollapse: () => {
         return (
-          filters.isActive('not-done') &&
+          predicates.isActive('not-done') &&
           collapseEntityCallback() !== undefined &&
           isModality('touch')
         );

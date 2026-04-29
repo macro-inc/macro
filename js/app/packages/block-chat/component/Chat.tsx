@@ -3,7 +3,7 @@ import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
 import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
-import { useBlockId } from '@core/block';
+import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
@@ -46,7 +46,7 @@ import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
-import { createEffect, createSignal, getOwner, Show } from 'solid-js';
+import { createEffect, createSignal, getOwner, Show, Suspense } from 'solid-js';
 import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { Button } from '@ui/components/Button';
 import ChatDebugIcon from '@icon/regular/chat-text.svg';
@@ -250,12 +250,18 @@ function ChatInner(props: {
     hasRun = true;
   });
 
+  const isNestedBlock = useIsNestedBlock();
+
   return (
     <DragDropWrapper
       class="size-full bg-panel overscroll-none overflow-hidden flex flex-col"
       isEntityDraggingOver={isDraggingOver}
     >
-      <TopBar />
+      <Show when={!isNestedBlock}>
+        <Suspense>
+          <TopBar />
+        </Suspense>
+      </Show>
       <SplitToolbarLeft>
         <Show when={DEV_MODE_ENV}>
           <Button

@@ -302,6 +302,18 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         (*entity_access_service).clone(),
     );
 
+    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
+        chat::domain::service::ChatServiceImpl::new(
+            chat::outbound::postgres::PgChatRepo::new(pool.clone()),
+            Arc::new(ai_toolset::AsyncToolSet::new()),
+            (),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
+        ),
+        (*entity_access_service).clone(),
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -312,6 +324,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
+        chat_tool_context,
         schedule_tool_context: ai_tools::no_op_schedule_context(),
     };
     let all_tools = ai_tools::all_tools();

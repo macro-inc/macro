@@ -11,16 +11,6 @@ processing = []
 service = ["macro_db_client"]
 
 [[bin]]
-name = "backfill_chat"
-path = "src/bin/backfill_chat.rs"
-required-features = ["service"]
-
-[[bin]]
-name = "backfill_call"
-path = "src/bin/backfill_call.rs"
-required-features = ["service"]
-
-[[bin]]
 name = "search_processing_service"
 path = "src/main.rs"
 required-features = ["processing", "service"]
@@ -69,6 +59,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
 ] }
 sqs_worker = { path = "../sqs_worker" }
 strum = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }

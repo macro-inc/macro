@@ -1,11 +1,4 @@
-import {
-  isCurrentUserAssigned,
-  isTaskClosed,
-  isTaskEntity,
-  type TaskEntityWithProperties,
-  type EntityData,
-} from '@entity';
-import { useUserId } from '@core/context/user';
+import type { EntityData } from '@entity';
 import { ENABLE_CLIENT_EMAIL_SIGNAL_FILTER } from '@core/constant/featureFlags';
 
 const PRIORITY_LABELS = [
@@ -102,38 +95,11 @@ function isNoiseEmail(entity: EmailEntity): boolean {
 }
 
 /**
- * determines if a task should appear in the signal tab.
- * tasks appear in signal if:
- * - they are not completed or canceled
- * - the current user is an assignee (or the task has no assignees)
- */
-export const isSignalTask = (
-  entity: TaskEntityWithProperties,
-  currentUserId: string | undefined
-): boolean => {
-  if (isTaskClosed(entity)) {
-    return false;
-  }
-  return isCurrentUserAssigned(entity, currentUserId);
-};
-
-const getCurrentUserId = () => {
-  try {
-    return useUserId()();
-  } catch {
-    return undefined;
-  }
-};
-
-/**
  * Signal filter - important/prioritized items.
  *
- * Classification:
- * - Channels: Always signal (explicit membership)
- * - Chats: Always signal
- * - Documents: Docs always signal, tasks depending on conditions
- * - Emails: Based on priority/depriority labels and metadata
- * - Projects: Always signal
+ * The inbox query already gates entities on the user's not-done notifications,
+ * so non-email types are signal whenever they're returned. Email priority is
+ * still classified client-side from labels.
  */
 export function signalFilter(entity: EntityData): boolean {
   switch (entity.type) {
@@ -141,14 +107,8 @@ export function signalFilter(entity: EntityData): boolean {
       return true;
     case 'chat':
       return true;
-    case 'document': {
-      if (isTaskEntity(entity)) {
-        const currentUserId = getCurrentUserId();
-        return isSignalTask(entity as TaskEntityWithProperties, currentUserId);
-      }
-
+    case 'document':
       return true;
-    }
     case 'email':
       if (!ENABLE_CLIENT_EMAIL_SIGNAL_FILTER) return true;
       return isSignalEmail(entity) || entity.isDraft;

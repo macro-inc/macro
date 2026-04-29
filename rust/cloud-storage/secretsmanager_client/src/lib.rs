@@ -5,7 +5,7 @@ pub use SecretsManagerClient as SecretsManager;
 use aws_sdk_secretsmanager as secretsmanager;
 #[allow(unused_imports)]
 use mockall::automock;
-pub use remote_env_var::{LocalOrRemoteSecret, SecretManager};
+pub use remote_env_var::{LocalOrRemoteSecret, OptionalLocalOrRemoteSecret, SecretManager};
 use std::sync::Arc;
 use thiserror::Error;
 
