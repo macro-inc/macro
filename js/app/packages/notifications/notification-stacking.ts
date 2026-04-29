@@ -200,9 +200,7 @@ function toDocCommentView(n: UnifiedNotification): NormalizedView | null {
     .otherwise(() => null);
 }
 
-function stackDocCommentViews(
-  views: NormalizedView[]
-): NotificationStack[] {
+function stackDocCommentViews(views: NormalizedView[]): NotificationStack[] {
   const mentionedMsgIds = new Set(
     views.filter((v) => v.role === 'mention').map((v) => v.messageId)
   );
@@ -219,8 +217,7 @@ function stackDocCommentViews(
   for (const [threadId, group] of byThread) {
     if (threadId === '') continue;
 
-    const isThread =
-      group.length >= 2 || group.some((v) => v.role === 'reply');
+    const isThread = group.length >= 2 || group.some((v) => v.role === 'reply');
 
     if (isThread) {
       stacks.push({
@@ -244,9 +241,7 @@ function stackDocCommentViews(
   if (standaloneSends.length > 0) {
     stacks.push({
       type: 'commented_on_document',
-      notifications: sortByRecency(
-        standaloneSends.map((v) => v.notification)
-      ),
+      notifications: sortByRecency(standaloneSends.map((v) => v.notification)),
     });
   }
 
