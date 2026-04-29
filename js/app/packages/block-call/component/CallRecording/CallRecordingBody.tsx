@@ -102,13 +102,21 @@ export function CallRecordingBody(props: {
   };
 
   const seekToSeconds = (seconds: number) => {
+    if (!Number.isFinite(seconds)) return;
     const video = videoRef();
-    if (!video || !Number.isFinite(seconds)) return;
-    const maxTime = Number.isFinite(video.duration) ? video.duration : seconds;
+    const maxTime = Number.isFinite(video?.duration ?? Number.NaN)
+      ? (video!.duration as number)
+      : seconds;
     const targetSeconds = Math.max(0, Math.min(seconds, maxTime));
-    video.currentTime = targetSeconds;
+
     setPlaybackSeconds(targetSeconds);
     setAllowFutureLead(false);
+    // Explicit bump so transcript-only calls (no video / video not loaded)
+    // still scroll the active row into view. Deduped against the `seeked`
+    // event that fires when video is present.
+    bumpVideoSeekGeneration(targetSeconds);
+
+    if (video) video.currentTime = targetSeconds;
   };
 
   const goToTranscriptSegment = (transcriptId: string) => {
@@ -118,18 +126,7 @@ export function CallRecordingBody(props: {
     if (!segment) return;
     const seconds = getSegmentVideoSeconds(segment, timelineStartMs());
     if (seconds === null) return;
-
-    setPlaybackSeconds(seconds);
-    setAllowFutureLead(false);
-    bumpVideoSeekGeneration(seconds);
-
-    const video = videoRef();
-    if (video) {
-      const maxTime = Number.isFinite(video.duration)
-        ? video.duration
-        : seconds;
-      video.currentTime = Math.max(0, Math.min(seconds, maxTime));
-    }
+    seekToSeconds(seconds);
   };
 
   createEffect(
