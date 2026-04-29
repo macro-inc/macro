@@ -1,3 +1,4 @@
+use crate::domain::models::messages::ContactsMessage;
 use crate::domain::ports::{ContactsNotifier, ContactsRepository};
 use crate::domain::service::ContactsDomainService;
 use axum::extract::{FromRequestParts, Json, State};
@@ -6,11 +7,13 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{RequestPartsExt, Router};
 use axum_extra::extract::Cached;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_user::axum_extractor::MacroUserExtractor;
 use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::instrument;
@@ -51,7 +54,7 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsServicePort
     for ContactsDomainService<R, N>
 {
     async fn query_contacts(&self, user_id: MacroUserIdStr<'_>) -> Option<Vec<String>> {
-        self.query_contacts(user_id.as_ref()).await
+        self.query_contacts(user_id).await
     }
 
     async fn add_contact(
@@ -59,7 +62,10 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsServicePort
         caller: MacroUserIdStr<'_>,
         recipient: MacroUserIdStr<'_>,
     ) -> Result<(), rootcause::Report> {
-        self.add_contact(caller.as_ref(), recipient.as_ref()).await
+        self.process_message(ContactsMessage {
+            users: HashSet::from([caller.into_owned(), recipient.into_owned()]),
+        })
+        .await
     }
 }
 

@@ -336,7 +336,7 @@ async fn handle_contacts_sync(
         return Ok(());
     }
 
-    let users: Vec<MacroUserIdStr<'static>> = std::iter::once(Ok(link.macro_id.clone()))
+    let users: std::collections::HashSet<MacroUserIdStr<'static>> = std::iter::once(Ok(link.macro_id.clone()))
         .chain(
             connection_emails
                 .iter()
