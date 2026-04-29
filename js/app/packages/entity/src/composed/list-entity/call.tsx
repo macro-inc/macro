@@ -40,7 +40,7 @@ function ParticipantsTooltip(props: { participantIds: string[] }) {
         <UserCircleIcon class="size-3.5 text-ink-muted" />
         <span class="text-xs">Participants</span>
       </div>
-      <div class="flex flex-col gap-1.5">
+      <div class="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
         <For each={props.participantIds}>
           {(userId) => <ParticipantItem userId={userId} />}
         </For>
