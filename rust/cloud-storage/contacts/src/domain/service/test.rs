@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn test_deserialize_connections_message() {
     let input_json = include_str!("../../../tests/fixtures/add_connection.json");
-    let msg: Option<ContactsMessage> = serde_json::from_str(input_json).ok();
+    let msg: Option<ContactsNodes> = serde_json::from_str(input_json).ok();
     assert!(msg.is_some());
     assert_eq!(msg.unwrap().users.len(), 3);
 }

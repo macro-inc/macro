@@ -74,7 +74,9 @@ pub async fn add_contact_handler<S: ContactsService>(
     Json(body): Json<AddContactRequest>,
 ) -> Result<StatusCode, StatusCode> {
     service
-        .add_contact(macro_user_id, body.user_id)
+        .add_contact_nodes(ContactsNodes {
+            users: HashSet::from([macro_user_id, body.user_id]),
+        })
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to create contact connection");

@@ -1,7 +1,9 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::ports::{ContactsBackfillOutbox, ContactsBackfillOutboxMessage, ContactsRepository};
+use crate::domain::ports::{
+    ContactsBackfillOutboxMessage, ContactsBackfillOutboxRepo, ContactsRepository,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use sqlx::PgPool;
@@ -87,7 +89,7 @@ struct BackfillOutboxRow {
     user_ids: serde_json::Value,
 }
 
-impl ContactsBackfillOutbox for DbContactsRepository {
+impl ContactsBackfillOutboxRepo for DbContactsRepository {
     async fn get_unapplied_messages(&self) -> Result<Vec<ContactsBackfillOutboxMessage>, Report> {
         let rows = sqlx::query_as!(
             BackfillOutboxRow,
@@ -115,6 +117,7 @@ impl ContactsBackfillOutbox for DbContactsRepository {
             .collect()
     }
 
+    #[tracing::instrument(err, skip(self))]
     async fn mark_message_applied(&self, id: u64) -> Result<(), Report> {
         sqlx::query!(
             "UPDATE contacts_backfill_outbox SET applied_at = now() WHERE id = $1",
@@ -122,7 +125,9 @@ impl ContactsBackfillOutbox for DbContactsRepository {
         )
         .execute(&self.db)
         .await
-        .inspect_err(|e| tracing::error!(error=?e, "couldn't mark backfill outbox message applied"))?;
+        .inspect_err(
+            |e| tracing::error!(error=?e, "couldn't mark backfill outbox message applied"),
+        )?;
         Ok(())
     }
 }

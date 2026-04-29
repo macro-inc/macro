@@ -1,4 +1,4 @@
-use crate::domain::models::messages::ContactsMessage;
+use crate::domain::models::messages::ContactsNodes;
 use crate::domain::ports::{ContactsNotifier, ContactsRepository};
 use crate::domain::service::ContactsDomainService;
 use rootcause::report;
@@ -87,11 +87,11 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
 }
 
 /// Parses a JSON string into a [`ContactsMessage`].
-pub fn message_from_json(body: &str) -> Option<ContactsMessage> {
+pub fn message_from_json(body: &str) -> Option<ContactsNodes> {
     serde_json::from_str(body).ok()
 }
 
 /// Extracts and parses the body from an SQS message.
-pub fn message_from_sqs(msg: &aws_sdk_sqs::types::Message) -> Option<ContactsMessage> {
+pub fn message_from_sqs(msg: &aws_sdk_sqs::types::Message) -> Option<ContactsNodes> {
     msg.body.as_ref().and_then(|body| message_from_json(body))
 }

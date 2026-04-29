@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 /// A contacts SQS message carrying the list of user IDs to connect.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ContactsMessage {
+pub struct ContactsNodes {
     /// User IDs whose pairwise connections should be upserted.
     pub users: HashSet<MacroUserIdStr<'static>>,
 }

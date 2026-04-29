@@ -1,4 +1,4 @@
-use crate::domain::models::messages::ContactsMessage;
+use crate::domain::models::messages::ContactsNodes;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use sqlx::types::Uuid;
@@ -31,7 +31,7 @@ pub trait ContactsNotifier: Send + Sync + 'static {
 /// Port trait for publishing a contacts message to the ingress queue.
 pub trait ContactsIngressQueue: Send + Sync + 'static {
     /// Publish a contacts message to the queue.
-    fn publish(&self, message: ContactsMessage) -> impl Future<Output = Result<(), Report>> + Send;
+    fn publish(&self, message: ContactsNodes) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Port trait for enqueuing contacts messages for async processing.
@@ -51,12 +51,17 @@ pub trait ContactsService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, rootcause::Report>> + Send;
 
-    /// Adds a contact connection between two users.
-    fn add_contact(
+    /// Adds a contact connection between n users as a complete graph.
+    fn add_contact_nodes(
         &self,
-        caller: MacroUserIdStr<'_>,
-        recipient: MacroUserIdStr<'_>,
+        nodes: ContactsNodes,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+}
+
+/// Trait for outbox message processing
+pub trait ContactsOutboxService: Send + Sync + 'static {
+    /// polls the outbox for non-applied messages and attempts to apply them, marking them as done
+    fn poll_outbox(&self) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 
 pub(crate) struct ContactsBackfillOutboxMessage {
@@ -65,7 +70,7 @@ pub(crate) struct ContactsBackfillOutboxMessage {
     pub(crate) channel_participants: HashSet<MacroUserIdStr<'static>>,
 }
 
-pub(crate) trait ContactsBackfillOutbox: Send + Sync + 'static {
+pub(crate) trait ContactsBackfillOutboxRepo: Send + Sync + 'static {
     fn get_unapplied_messages(
         &self,
     ) -> impl Future<Output = Result<Vec<ContactsBackfillOutboxMessage>, rootcause::Report>> + Send;
