@@ -230,10 +230,10 @@ export const openEntityInNewTab = ({
         }
         break;
       case 'call_record':
-        if (location.sequenceNum !== undefined) {
+        if (location.transcriptId) {
           entityUrl.searchParams.set(
-            CALL_PARAMS.segmentSeq,
-            location.sequenceNum.toString()
+            CALL_PARAMS.transcriptId,
+            location.transcriptId
           );
         }
         break;
@@ -338,7 +338,7 @@ export const openEntityInSplitFromUnifiedList = async (
   } else if (entity.type === 'channel_message') {
     params = getChannelParams(entity.messageId, entity.threadId);
   } else if (entity.type === 'call' && location?.type === 'call_record') {
-    params = { [CALL_PARAMS.segmentSeq]: location.sequenceNum.toString() };
+    params = { [CALL_PARAMS.transcriptId]: location.transcriptId };
   }
 
   splitManager.openWithSplit(
@@ -429,7 +429,7 @@ async function navigateToLocation(
     }
     case 'call_record': {
       await blockHandle.goToLocationFromParams({
-        [CALL_PARAMS.segmentSeq]: location.sequenceNum.toString(),
+        [CALL_PARAMS.transcriptId]: location.transcriptId,
       });
       break;
     }

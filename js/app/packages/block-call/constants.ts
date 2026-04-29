@@ -1,3 +1,3 @@
 export const URL_PARAMS = {
-  segmentSeq: 'call_segment_seq',
+  transcriptId: 'call_transcript_id',
 };

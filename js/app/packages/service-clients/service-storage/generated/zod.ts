@@ -997,6 +997,12 @@ export const getCallRecordResponse = zod
               .string()
               .datetime({})
               .describe('When the speaker started this segment.'),
+            transcriptId: zod
+              .string()
+              .uuid()
+              .describe(
+                'Stable DB-row identifier for the segment. Always present and unique\nwithin a call — clients use this for deep-link targeting (e.g. search\n\"go to\" navigation) where `sequence_num` is only an ordering hint.'
+              ),
           })
           .describe('A transcript segment as returned in a [`CallRecord`].')
       )

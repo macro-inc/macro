@@ -111,9 +111,9 @@ export function CallRecordingBody(props: {
     setAllowFutureLead(false);
   };
 
-  const goToTranscriptSegment = (sequenceNum: number) => {
+  const goToTranscriptSegment = (transcriptId: string) => {
     const segment = sortedTranscript().find(
-      (s) => s.sequenceNum === sequenceNum
+      (s) => s.transcriptId === transcriptId
     );
     if (!segment) return;
     const seconds = getSegmentVideoSeconds(segment, timelineStartMs());
@@ -137,7 +137,7 @@ export function CallRecordingBody(props: {
       () => props.transcriptTarget?.(),
       (target) => {
         if (!target) return;
-        goToTranscriptSegment(target.sequenceNum);
+        goToTranscriptSegment(target.transcriptId);
       }
     )
   );

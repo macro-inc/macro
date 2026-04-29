@@ -28,4 +28,8 @@ return a speaker label. */
   speakerId: string;
   /** When the speaker started this segment. */
   startedAt: string;
+  /** Stable DB-row identifier for the segment. Always present and unique
+within a call — clients use this for deep-link targeting (e.g. search
+"go to" navigation) where `sequence_num` is only an ordering hint. */
+  transcriptId: string;
 }

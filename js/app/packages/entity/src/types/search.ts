@@ -29,7 +29,8 @@ type EmailMessageHighlightLocation = {
 type CallRecordSegmentHighlightLocation = {
   type: 'call_record';
   callId: string;
-  sequenceNum: number;
+  /** Stable DB-row id for the segment — the safe deep-link key. */
+  transcriptId: string;
 };
 
 export type SearchLocation =

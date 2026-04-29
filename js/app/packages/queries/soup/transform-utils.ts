@@ -159,7 +159,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           location: {
             type: 'call_record' as const,
             callId: data.callId,
-            sequenceNum: r.sequence_num!,
+            transcriptId: r.transcript_id!,
           },
         }));
       });

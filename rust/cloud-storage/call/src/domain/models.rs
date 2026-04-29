@@ -200,6 +200,10 @@ pub struct EditCallTranscriptRequest {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CallRecordTranscriptSegment {
+    /// Stable DB-row identifier for the segment. Always present and unique
+    /// within a call — clients use this for deep-link targeting (e.g. search
+    /// "go to" navigation) where `sequence_num` is only an ordering hint.
+    pub transcript_id: Uuid,
     /// LiveKit segment ID (nullable for archived records).
     pub segment_id: Option<String>,
     /// The speaker's user ID.

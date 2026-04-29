@@ -19,16 +19,10 @@ function isUnauthorized(error: Error | null): boolean {
 }
 
 export type CallBlockProps = {
-  [URL_PARAMS.segmentSeq]?: string;
+  [URL_PARAMS.transcriptId]?: string;
 };
 
-export type CallTranscriptTarget = { sequenceNum: number; gen: number };
-
-function parseSequenceNum(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : undefined;
-}
+export type CallTranscriptTarget = { transcriptId: string; gen: number };
 
 export function CallBlockAdapter(props: CallBlockProps) {
   const callId = useBlockId();
@@ -36,30 +30,28 @@ export function CallBlockAdapter(props: CallBlockProps) {
   const blockHandle = blockHandleSignal.get;
   const [searchParams] = useSearchParams();
 
-  const initialSequenceNum = (): number | undefined => {
-    const fromProps = parseSequenceNum(props[URL_PARAMS.segmentSeq]);
-    if (fromProps !== undefined) return fromProps;
+  const initialTranscriptId = (): string | undefined => {
+    const fromProps = props[URL_PARAMS.transcriptId];
+    if (fromProps) return fromProps;
     const isSingleSplit = globalSplitManager()?.splits().length === 1;
     if (!isSingleSplit) return undefined;
-    return parseSequenceNum(
-      searchParams[URL_PARAMS.segmentSeq] as string | undefined
-    );
+    return searchParams[URL_PARAMS.transcriptId] as string | undefined;
   };
 
   const [transcriptTarget, setTranscriptTarget] = createSignal<
     CallTranscriptTarget | undefined
   >(
-    initialSequenceNum() !== undefined
-      ? { sequenceNum: initialSequenceNum()!, gen: 0 }
+    initialTranscriptId()
+      ? { transcriptId: initialTranscriptId()!, gen: 0 }
       : undefined
   );
 
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: CallBlockProps) => {
-      const next = parseSequenceNum(params[URL_PARAMS.segmentSeq]);
-      if (next === undefined) return;
+      const next = params[URL_PARAMS.transcriptId];
+      if (!next) return;
       setTranscriptTarget((prev) => ({
-        sequenceNum: next,
+        transcriptId: next,
         gen: (prev?.gen ?? 0) + 1,
       }));
     },
