@@ -81,6 +81,8 @@ export type CallRecordContentHitData = {
   content: string;
   senderId: string;
   sentAt: DateValue;
+  /** Seconds from the start of the call to this segment. */
+  videoSeconds: number;
   location: CallRecordSegmentHighlightLocation;
 };
 

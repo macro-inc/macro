@@ -56,6 +56,7 @@ type TypedInnerSearchResult =
       results: CallRecordSearchResult[];
       type: 'call_record';
       callId: string;
+      callStartedAt: string;
     };
 
 const getSearchData = (data: TypedInnerSearchResult): SearchData => {
@@ -135,10 +136,17 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
       break;
     }
     case 'call_record': {
+      const callStartMs = new Date(data.callStartedAt).getTime();
       contentHitData = data.results.flatMap((r) => {
         // TODO: support name only hits for call records when we support rename
         const isContentHit = !!r.transcript_id;
         if (!isContentHit) return [];
+
+        const segmentStartMs = new Date(r.started_at!).getTime();
+        const videoSeconds =
+          Number.isFinite(callStartMs) && Number.isFinite(segmentStartMs)
+            ? Math.max(0, (segmentStartMs - callStartMs) / 1000)
+            : 0;
 
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
@@ -147,6 +155,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           content: mergeAdjacentMacroEmTags(content),
           senderId: r.speaker_id!,
           sentAt: r.started_at!,
+          videoSeconds,
           location: {
             type: 'call_record' as const,
             callId: data.callId,
@@ -364,6 +373,7 @@ export const useSearchResponseItemMapper = () => {
           type: 'call_record',
           results: result.call_search_results,
           callId: result.call_id,
+          callStartedAt: result.metadata.started_at,
         });
 
         const channelName: string | undefined =
