@@ -309,7 +309,17 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
-  const { openInNewSplit, location, splitHandle, mergeHistory } = options;
+  const { openInNewSplit, splitHandle, mergeHistory } = options;
+  let { location } = options;
+
+  // For call entity rows, fall back to the first content hit so the row click
+  // lands on the segment that's previewed inline rather than the call's start.
+  if (!location && entity.type === 'call' && isSearchEntity(entity)) {
+    const firstHit = entity.search.contentHitData?.[0];
+    if (firstHit?.location?.type === 'call_record') {
+      location = firstHit.location;
+    }
+  }
 
   // Get dependencies internally
   const splitManager = globalSplitManager();
