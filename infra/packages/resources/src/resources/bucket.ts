@@ -47,10 +47,6 @@ export function createBucket({
     tags,
   });
 
-  // CORS lives on a separate resource so updates to ALLOWED_ORIGINS actually
-  // propagate. The legacy `corsRules` field on `aws.s3.Bucket` is deprecated
-  // and the underlying TF provider silently no-ops on changes to it (Pulumi
-  // reports "updated" but S3 keeps the old config).
   new aws.s3.BucketCorsConfigurationV2(
     `${id}-cors`,
     {
