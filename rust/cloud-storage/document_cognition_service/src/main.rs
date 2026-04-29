@@ -345,6 +345,7 @@ async fn main() -> anyhow::Result<()> {
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
         chat_tool_context,
+        channel_tool_context: ai_tools::build_channel_tool_context(db.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
     };
     let all_tools = ai_tools::all_tools();

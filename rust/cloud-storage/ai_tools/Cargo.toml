@@ -18,6 +18,7 @@ axum = { workspace = true, features = ["macros"] }
 aws-sdk-sqs.workspace = true
 call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }
+channels = { path = "../channels", features = ["ai_tools", "outbound"] }
 chrono.workspace = true
 dateparser.workspace = true
 comms = { path = "../comms", features = ["outbound"] }

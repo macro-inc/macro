@@ -5,6 +5,9 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
+use channels::domain::service::ChannelMessagesServiceImpl;
+use channels::inbound::toolset::ChannelToolContext;
+use channels::outbound::pg_channels_repo::PgChannelMessagesRepo;
 use chat::domain::service::ChatServiceImpl;
 use chat::inbound::toolset::ChatToolContext;
 use chat::outbound::postgres::PgChatRepo;
@@ -45,6 +48,23 @@ pub type ToolCommsService = comms::domain::service::ChannelServiceImpl<
     comms::outbound::postgres::user_repo::PgUserRepo,
     frecency::outbound::postgres::FrecencyPgStorage,
 >;
+
+/// Type alias for the channel messages service implementation used by AI tools.
+pub type ToolChannelMessagesService = ChannelMessagesServiceImpl<PgChannelMessagesRepo>;
+
+/// Type alias for the channel AI tool context.
+pub type ToolChannelToolContext =
+    ChannelToolContext<ToolChannelMessagesService, ToolEntityAccessService>;
+
+/// Build the channel AI tool context from a Postgres pool.
+pub fn build_channel_tool_context(pool: sqlx::PgPool) -> ToolChannelToolContext {
+    ChannelToolContext::new(
+        ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(pool.clone())),
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool),
+        ),
+    )
+}
 
 /// No-op task properties service (not needed for AI tools)
 #[derive(Clone)]
@@ -287,6 +307,7 @@ pub struct ToolServiceContext {
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
     pub chat_tool_context: ToolChatToolContext,
+    pub channel_tool_context: ToolChannelToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
 }
 

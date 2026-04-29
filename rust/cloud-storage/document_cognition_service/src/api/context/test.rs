@@ -325,6 +325,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
         chat_tool_context,
+        channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
     };
     let all_tools = ai_tools::all_tools();

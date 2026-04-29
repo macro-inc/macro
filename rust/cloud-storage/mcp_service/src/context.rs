@@ -316,6 +316,7 @@ async fn build_tool_context(
         email_tool_context,
         call_tool_context,
         chat_tool_context,
+        channel_tool_context: ai_tools::build_channel_tool_context(db.clone()),
         schedule_tool_context: NoOpScheduleContext,
     };
 

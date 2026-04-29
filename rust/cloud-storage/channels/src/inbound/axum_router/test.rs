@@ -941,7 +941,7 @@ async fn post_messages_empty_body_uses_default_filters() {
 
     let captured = svc.captured.lock().unwrap().clone().unwrap();
     assert!(captured.message_ids.is_empty());
-    assert!(captured.last_activity.is_none());
+    assert!(captured.activity_after.is_none());
     assert!(captured.notification_filters.is_empty());
     assert!(svc.captured_notification_user_id.lock().unwrap().is_none());
 }
@@ -997,8 +997,8 @@ async fn post_messages_forwards_last_activity_filter() {
     assert_eq!(res.status(), StatusCode::OK);
 
     let captured = svc.captured.lock().unwrap().clone().unwrap();
-    assert!(captured.last_activity.is_some());
-    let ts = captured.last_activity.unwrap();
+    assert!(captured.activity_after.is_some());
+    let ts = captured.activity_after.unwrap();
     assert_eq!(
         ts,
         chrono::DateTime::parse_from_rfc3339("2024-06-01T12:00:00Z")

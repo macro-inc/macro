@@ -183,6 +183,24 @@ pub async fn build_tool_service_context(
         ))),
     );
 
+    let call_service = call::domain::service::CallServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        ai_tools::NoOpCallRtcClient,
+        ai_tools::NoOpConnectionService,
+        (*entity_access_service).clone(),
+        ai_tools::NoOpNotificationIngress,
+        None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
+        String::new(),
+    );
+    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+    );
+    let call_tool_context = call::inbound::toolset::CallToolContext::new(
+        call_service,
+        call_query_service,
+        (*entity_access_service).clone(),
+    );
+
     Ok(ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
@@ -192,5 +210,8 @@ pub async fn build_tool_service_context(
         document_tool_context,
         properties_tool_context,
         email_tool_context,
+        call_tool_context,
+        channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
+        schedule_tool_context: ai_tools::NoOpScheduleContext,
     })
 }

@@ -11,6 +11,7 @@ mod subagent;
 mod tool_context;
 
 use call::inbound::toolset::call_toolset;
+use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
 use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::email_toolset;
@@ -54,6 +55,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
         .add_subtoolset::<ToolCallToolContext>(call_toolset())
         .add_subtoolset::<ToolChatToolContext>(chat_toolset())
+        .add_subtoolset::<ToolChannelToolContext>(channel_toolset())
 }
 
 /// These are actually sent to the AI provider
