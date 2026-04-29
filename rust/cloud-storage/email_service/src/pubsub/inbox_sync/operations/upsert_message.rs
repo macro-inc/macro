@@ -350,15 +350,18 @@ async fn handle_contacts_sync(
             })
         })?;
 
-    ctx.sqs_client.enqueue_contacts(users).await.map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::SqsEnqueueFailed,
-            source: e.context(format!(
-                "Failed to enqueue contacts message for {}",
-                link.macro_id
-            )),
-        })
-    })?;
+    ctx.contacts_ingress
+        .enqueue_contacts(users)
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: anyhow::anyhow!("{e:?}").context(format!(
+                    "Failed to enqueue contacts message for {}",
+                    link.macro_id
+                )),
+            })
+        })?;
 
     Ok(())
 }

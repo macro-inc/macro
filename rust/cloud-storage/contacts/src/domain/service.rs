@@ -1,8 +1,9 @@
 use crate::domain::models::graph::{UndirectedGraph, Vertex};
 use crate::domain::models::messages::ContactsMessage;
-use crate::domain::ports::{ContactsNotifier, ContactsRepository};
+use crate::domain::ports::{ContactsIngress, ContactsIngressQueue, ContactsNotifier, ContactsRepository};
 use macro_user_id::user_id::MacroUserIdStr;
-
+use rootcause::Report;
+use std::collections::HashSet;
 use tracing::instrument;
 
 /// Domain service combining a repository and notifier to manage contacts.
@@ -46,6 +47,26 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
             .invalidate_contacts_for_users(msg.users.into_iter().collect())
             .await?;
         Ok(())
+    }
+}
+
+/// Queue-backed implementation of [`ContactsIngress`].
+///
+/// Serialises the user set into a [`ContactsMessage`] and publishes it through
+/// the provided [`ContactsIngressQueue`]. The heavy lifting (computing pairwise
+/// connections, persisting them) is done by the contacts service worker that
+/// consumes from that queue.
+pub struct SqsContactsIngress<Q> {
+    /// The queue used to publish contacts messages.
+    pub queue: Q,
+}
+
+impl<Q: ContactsIngressQueue> ContactsIngress for SqsContactsIngress<Q> {
+    async fn enqueue_contacts(
+        &self,
+        users: HashSet<MacroUserIdStr<'static>>,
+    ) -> Result<(), Report> {
+        self.queue.publish(ContactsMessage { users }).await
     }
 }
 
