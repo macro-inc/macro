@@ -87,7 +87,9 @@ pub(in crate::api::search) async fn enrich_call_records(
     let result = hits_by_call_id
         .into_iter()
         .map(|(call_id, mut hits)| {
-            hits.sort_by_key(|h| h.sequence_num);
+            // Hits without a sequence_num sink to the bottom rather than
+            // floating to the top (where `None` would sort by default).
+            hits.sort_by_key(|h| h.sequence_num.unwrap_or(i32::MAX));
 
             let (channel_id, participant_ids) = call_context
                 .get(&call_id)
