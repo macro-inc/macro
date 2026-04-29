@@ -1,6 +1,6 @@
 set dotenv-load := true
 
-DATABASE_URL := "postgres://user:password@localhost:5432/macrodb"
+import '../database.just'
 
 mod sqlx '../sqlx.just'
 mod ci '../ci.just'
