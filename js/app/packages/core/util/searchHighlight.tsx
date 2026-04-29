@@ -96,27 +96,43 @@ export function highlightTermsInText(text: string, terms: string[]): string {
 /**
  * Creates a single-line window around the first <macro_em> highlight.
  * - Collapses newlines and invisible chars into a clean single line
- * - If the highlight is within `chars` of the start, keeps the start
- * - Otherwise, trims the front to show context before the highlight
- * - Trims the end to keep total visible length reasonable
+ * - Targets ~`2 * chars` total visible characters around the highlight
+ * - When one side is shorter than `chars`, donates the unused budget to
+ *   the other side so the rendered row uses the full available width
  *
  * @param text - Content with <macro_em> tags
- * @param chars - Max visible characters to show on each side of the highlight
+ * @param chars - Half-width visible character budget (each side of highlight)
  */
 export function windowSearchMatch(text: string, chars: number): string {
   let line = stripInvisibleChars(text);
 
   const macroOpen = '<macro_em>';
+  const macroClose = '</macro_em>';
   const tagIndex = line.indexOf(macroOpen);
   if (tagIndex === -1) return line;
+
+  const lastCloseIndex = line.lastIndexOf(macroClose);
 
   const visibleBefore = line
     .slice(0, tagIndex)
     .replace(/<\/?macro_em>/g, '').length;
+  const visibleAfter =
+    lastCloseIndex === -1
+      ? 0
+      : line
+          .slice(lastCloseIndex + macroClose.length)
+          .replace(/<\/?macro_em>/g, '')
+          .replace(INVISIBLE_CHARS_RE, '').length;
+
+  // Half-budget is `chars`; rebalance so unused space on one side goes to
+  // the other (otherwise short-prefix or short-suffix rows under-fill).
+  const totalBudget = chars * 2;
+  const frontKeep = Math.max(chars, totalBudget - visibleAfter);
+  const backKeep = Math.max(chars, totalBudget - visibleBefore);
 
   // Trim from front if highlight is far from the start
-  if (visibleBefore > chars) {
-    const targetStart = Math.max(0, tagIndex - chars);
+  if (visibleBefore > frontKeep) {
+    const targetStart = Math.max(0, tagIndex - frontKeep);
     let cutIndex = targetStart;
     for (let i = targetStart; i < tagIndex; i++) {
       if (/\s/.test(line[i])) {
@@ -128,16 +144,15 @@ export function windowSearchMatch(text: string, chars: number): string {
   }
 
   // Trim from end to keep total length reasonable
-  const macroClose = '</macro_em>';
-  const lastCloseIndex = line.lastIndexOf(macroClose);
-  if (lastCloseIndex !== -1) {
-    const afterLastTag = lastCloseIndex + macroClose.length;
+  const finalCloseIndex = line.lastIndexOf(macroClose);
+  if (finalCloseIndex !== -1) {
+    const afterLastTag = finalCloseIndex + macroClose.length;
     const remainingVisible = line
       .slice(afterLastTag)
       .replace(/<\/?macro_em>/g, '')
       .replace(INVISIBLE_CHARS_RE, '').length;
-    if (remainingVisible > chars) {
-      let endCut = afterLastTag + chars;
+    if (remainingVisible > backKeep) {
+      let endCut = afterLastTag + backKeep;
       for (let i = endCut; i < line.length; i++) {
         if (/\s/.test(line[i])) {
           endCut = i;

@@ -158,6 +158,28 @@ describe('windowSearchMatch', () => {
       'no highlight here'
     );
   });
+
+  it('donates unused front budget to back when highlight is at start', () => {
+    // chars=10, total budget 20. Front is empty so back should keep ~20.
+    const longSuffix = 'b '.repeat(40);
+    const text = `<macro_em>match</macro_em> ${longSuffix}`;
+    const result = windowSearchMatch(text, 10);
+    const visibleAfter = result
+      .slice(result.lastIndexOf('</macro_em>') + '</macro_em>'.length)
+      .trim().length;
+    expect(visibleAfter).toBeGreaterThan(10);
+    expect(visibleAfter).toBeLessThanOrEqual(20);
+  });
+
+  it('donates unused back budget to front when highlight is at end', () => {
+    const longPrefix = 'a '.repeat(40);
+    const text = `${longPrefix}<macro_em>match</macro_em>`;
+    const result = windowSearchMatch(text, 10);
+    const visibleBefore = result.slice(0, result.indexOf('<macro_em>')).trim()
+      .length;
+    expect(visibleBefore).toBeGreaterThan(10);
+    expect(visibleBefore).toBeLessThanOrEqual(20);
+  });
 });
 
 describe('parseSearchHighlightSegments', () => {
