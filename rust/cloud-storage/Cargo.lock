@@ -1795,6 +1795,7 @@ dependencies = [
  "aws-sdk-s3",
  "axum",
  "chrono",
+ "comms_db_client",
  "connection",
  "entity_access",
  "entity_access_db_utils",
