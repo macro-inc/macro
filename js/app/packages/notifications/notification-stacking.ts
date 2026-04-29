@@ -33,8 +33,20 @@ export function getAllNotificationsFromGroup(
 /**
  * Gets the threadId from a thread stack (replies, thread-mentions, or absorbed root sends).
  * Works for both channel threads and document comment threads.
+ *
+ * Returns '' for stack types that represent standalone (non-thread) groups —
+ * the "new sends" stack and orphan root mentions for either domain.
  */
 export function getThreadId(group: NotificationStack): string {
+  // Standalone-group stack types do not represent a thread.
+  if (
+    group.type === 'channel_message_send' ||
+    group.type === 'channel_mention' ||
+    group.type === 'commented_on_document' ||
+    group.type === 'mentioned_in_document_comment'
+  ) {
+    return '';
+  }
   for (const notification of group.notifications) {
     const threadId = match(notification.notification_metadata)
       .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId ?? '')
@@ -57,8 +69,7 @@ export function getThreadId(group: NotificationStack): string {
 /**
  * Stacks notifications by type for unrolled notification display.
  *
- * Stacking rules (applied independently to channel notifications and document
- * comment notifications):
+ * Channel rules:
  * - Replies, thread-mentions, and the root send for a thread all group into
  *   a single thread stack.
  * - Root-level new sends are grouped into a single stack.
@@ -66,8 +77,18 @@ export function getThreadId(group: NotificationStack): string {
  * - Any send/reply whose messageId matches a mention's messageId is shadowed
  *   (the mention is more informative).
  *
- * For document comments, a notification is treated as the root of its thread
- * when its commentId === threadId, otherwise as belonging to the thread.
+ * Document comment rules (`commented_on_document` cannot be statically
+ * distinguished as root vs. reply — the metadata only carries `commentId` and
+ * `threadId`, which come from independent id namespaces — so grouping is
+ * inferred from peers within the same threadId):
+ * - A threadId is a "thread" when it has any reply notification or 2+
+ *   notifications of any kind. All notifications for that threadId fold into
+ *   a single thread stack.
+ * - Otherwise the lone notification is treated as standalone:
+ *   - `commented_on_document` standalones bundle into a "new comments" stack.
+ *   - `mentioned_in_document_comment` standalones each form their own stack.
+ *   - A lone `replied_to_document_comment_thread` is still a thread stack.
+ * - Mention shadowing applies the same way as for channels.
  */
 export function stackNotifications(
   notifications: UnifiedNotification[]
@@ -88,11 +109,7 @@ export function stackNotifications(
     mention: 'channel_mention',
   });
 
-  const docCommentStacks = stackNormalizedViews(docCommentViews, {
-    send: 'commented_on_document',
-    reply: 'replied_to_document_comment_thread',
-    mention: 'mentioned_in_document_comment',
-  });
+  const docCommentStacks = stackDocCommentViews(docCommentViews);
 
   const docMentions = notifications.filter(
     (n) => n.notification_metadata.tag === 'document_mention'
@@ -158,38 +175,82 @@ function toChannelView(n: UnifiedNotification): NormalizedView | null {
 }
 
 function toDocCommentView(n: UnifiedNotification): NormalizedView | null {
+  // commentId and threadId come from separate DB tables (Comment.id and
+  // Thread.id), so equality between them carries no meaning. Roots vs.
+  // replies are inferred at the stacking layer from peers sharing a threadId.
   return match(n.notification_metadata)
-    .with({ tag: 'commented_on_document' }, (m) => {
-      const messageId = m.content.commentId.toString();
-      const threadId = m.content.threadId.toString();
-      // A doc comment is the root of its thread when commentId === threadId;
-      // otherwise it is a reply made on the doc owner's document.
-      const isRoot = messageId === threadId;
-      return {
-        notification: n,
-        role: isRoot ? ('send' as const) : ('reply' as const),
-        messageId,
-        threadId: isRoot ? undefined : threadId,
-      };
-    })
+    .with({ tag: 'commented_on_document' }, (m) => ({
+      notification: n,
+      role: 'send' as const,
+      messageId: m.content.commentId.toString(),
+      threadId: m.content.threadId.toString(),
+    }))
     .with({ tag: 'replied_to_document_comment_thread' }, (m) => ({
       notification: n,
       role: 'reply' as const,
       messageId: m.content.commentId.toString(),
       threadId: m.content.threadId.toString(),
     }))
-    .with({ tag: 'mentioned_in_document_comment' }, (m) => {
-      const messageId = m.content.commentId.toString();
-      const threadId = m.content.threadId.toString();
-      const isRoot = messageId === threadId;
-      return {
-        notification: n,
-        role: 'mention' as const,
-        messageId,
-        threadId: isRoot ? undefined : threadId,
-      };
-    })
+    .with({ tag: 'mentioned_in_document_comment' }, (m) => ({
+      notification: n,
+      role: 'mention' as const,
+      messageId: m.content.commentId.toString(),
+      threadId: m.content.threadId.toString(),
+    }))
     .otherwise(() => null);
+}
+
+function stackDocCommentViews(
+  views: NormalizedView[]
+): NotificationStack[] {
+  const mentionedMsgIds = new Set(
+    views.filter((v) => v.role === 'mention').map((v) => v.messageId)
+  );
+
+  const filtered = views.filter(
+    (v) => v.role === 'mention' || !mentionedMsgIds.has(v.messageId)
+  );
+
+  const byThread = groupBy(filtered, (v) => v.threadId ?? '');
+
+  const standaloneSends: NormalizedView[] = [];
+  const stacks: NotificationStack[] = [];
+
+  for (const [threadId, group] of byThread) {
+    if (threadId === '') continue;
+
+    const isThread =
+      group.length >= 2 || group.some((v) => v.role === 'reply');
+
+    if (isThread) {
+      stacks.push({
+        type: 'replied_to_document_comment_thread',
+        notifications: sortByRecency(group.map((v) => v.notification)),
+      });
+      continue;
+    }
+
+    const v = group[0];
+    if (v.role === 'send') {
+      standaloneSends.push(v);
+    } else if (v.role === 'mention') {
+      stacks.push({
+        type: 'mentioned_in_document_comment',
+        notifications: [v.notification],
+      });
+    }
+  }
+
+  if (standaloneSends.length > 0) {
+    stacks.push({
+      type: 'commented_on_document',
+      notifications: sortByRecency(
+        standaloneSends.map((v) => v.notification)
+      ),
+    });
+  }
+
+  return stacks;
 }
 
 function stackNormalizedViews(
