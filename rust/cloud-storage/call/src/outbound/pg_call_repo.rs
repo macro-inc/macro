@@ -20,8 +20,8 @@ use uuid::Uuid;
 use crate::domain::channel_name::{NameLookup, display_name, resolve_channel_name};
 use crate::domain::models::{
     AddParticipantError, Call, CallParticipant, CallRecord, CallRecordParticipant,
-    CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, EditCallRecordRequest,
-    TranscriptSegmentRequest, WithCallId,
+    CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
+    EditCallRecordRequest, TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
 
@@ -1346,6 +1346,21 @@ impl CallRepository for PgCallRepo {
             edit::set_custom_name(&mut tx, call_record_id, custom_name).await?;
         }
 
+        tx.commit().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, assignments), fields(num_assignments = assignments.len()), err)]
+    async fn patch_call_transcript_custom_speakers(
+        &self,
+        call_record_id: &Uuid,
+        assignments: &[CustomSpeakerAssignment],
+    ) -> Result<(), Self::Err> {
+        if assignments.is_empty() {
+            return Ok(());
+        }
+        let mut tx = self.pool.begin().await?;
+        edit::set_custom_speakers(&mut tx, call_record_id, assignments).await?;
         tx.commit().await?;
         Ok(())
     }

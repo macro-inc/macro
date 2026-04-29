@@ -11,7 +11,9 @@ use uuid::Uuid;
 
 use item_filters::ast::{LiteralTree, call::CallLiteral};
 
-use crate::domain::models::EditCallRecordRequest;
+use crate::domain::models::{
+    CustomSpeakerAssignment, EditCallRecordRequest, EditCallTranscriptRequest,
+};
 
 use super::models::{
     AddParticipantError, Call, CallActiveResponse, CallError, CallParticipant, CallRecord,
@@ -219,6 +221,19 @@ pub trait CallRepository: Send + Sync + 'static {
         request: &EditCallRecordRequest,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Apply a batch of per-diarized-speaker `custom_speaker` overrides to
+    /// the archived `call_record_transcripts` rows for `call_record_id`.
+    ///
+    /// Each entry sets `custom_speaker` for every row in the call whose
+    /// `diarized_speaker_id` matches; entries with `custom_speaker = None`
+    /// clear the override. Rows whose `diarized_speaker_id` doesn't appear
+    /// in `assignments` are left untouched. Empty `assignments` is a no-op.
+    fn patch_call_transcript_custom_speakers(
+        &self,
+        call_record_id: &Uuid,
+        assignments: &[CustomSpeakerAssignment],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Persist the AI-generated summary text on the archived call record.
     ///
     /// Tolerates unknown `call_id` (no row matches): the summarization flow
@@ -424,6 +439,17 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         request: EditCallRecordRequest,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Apply per-diarized-speaker `custom_speaker` overrides to a call's
+    /// transcript. Authorization is carried in the receipt; the entity must
+    /// be `EntityType::Call` and its `entity_id` must be the call's UUID.
+    /// Each `custom_speaker` (when `Some`) must parse as a `MacroUserId`;
+    /// otherwise the request is rejected with [`CallError::InvalidRequest`].
+    fn edit_call_transcript(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        request: EditCallTranscriptRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// Toggle the `share_with_team` flag on the active call identified by the

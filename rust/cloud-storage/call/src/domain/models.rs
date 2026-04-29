@@ -164,6 +164,36 @@ pub struct EditCallRecordRequest {
     pub custom_name: Option<String>,
 }
 
+/// One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].
+///
+/// `custom_speaker = None` clears any existing override for this
+/// `diarized_speaker_id`; `Some(macro_user_id)` sets it. The string is
+/// expected to parse as a `MacroUserId` (e.g. `macro|alice@example.com`);
+/// the service layer rejects malformed values with `400 Bad Request`.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CustomSpeakerAssignment {
+    /// The diarization label whose rows this assignment targets.
+    pub diarized_speaker_id: String,
+    /// Macro user id to attribute matching rows to, or `None` to clear.
+    pub custom_speaker: Option<String>,
+}
+
+/// Body of `PATCH /call/record/{call_id}/transcript`.
+///
+/// Each entry in `assignments` sets (or clears, when `custom_speaker` is
+/// `None`) the `custom_speaker` override for every transcript row in the
+/// call whose `diarized_speaker_id` matches. Diarized speakers not listed
+/// are left untouched. Empty `assignments` is a 204 no-op.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EditCallTranscriptRequest {
+    /// The set of per-diarized-speaker overrides to apply.
+    pub assignments: Vec<CustomSpeakerAssignment>,
+}
+
 /// A transcript segment as returned in a [`CallRecord`].
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
