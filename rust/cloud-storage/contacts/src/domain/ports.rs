@@ -1,6 +1,7 @@
 use crate::domain::models::messages::ContactsMessage;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
+use sqlx::types::Uuid;
 use std::collections::HashSet;
 
 /// Port trait for accessing the contacts data store.
@@ -55,5 +56,22 @@ pub trait ContactsService: Send + Sync + 'static {
         &self,
         caller: MacroUserIdStr<'_>,
         recipient: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+}
+
+pub(crate) struct ContactsBackfillOutboxMessage {
+    pub(crate) id: u64,
+    pub(crate) channel_id: Uuid,
+    pub(crate) channel_participants: HashSet<MacroUserIdStr<'static>>,
+}
+
+pub(crate) trait ContactsBackfillOutbox: Send + Sync + 'static {
+    fn get_unapplied_messages(
+        &self,
+    ) -> impl Future<Output = Result<Vec<ContactsBackfillOutboxMessage>, rootcause::Report>> + Send;
+
+    fn mark_message_applied(
+        &self,
+        id: u64,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }

@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::ports::ContactsRepository;
+use crate::domain::ports::{ContactsBackfillOutbox, ContactsBackfillOutboxMessage, ContactsRepository};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use sqlx::PgPool;
+use sqlx::types::Uuid;
 
 /// Database-backed implementation of [`ContactsRepository`].
 pub struct DbContactsRepository {
@@ -76,6 +77,52 @@ impl ContactsRepository for DbContactsRepository {
             tracing::error!(error=?e, "couldn't create connections");
         })?;
 
+        Ok(())
+    }
+}
+
+struct BackfillOutboxRow {
+    id: i32,
+    comms_channel_id: Uuid,
+    user_ids: serde_json::Value,
+}
+
+impl ContactsBackfillOutbox for DbContactsRepository {
+    async fn get_unapplied_messages(&self) -> Result<Vec<ContactsBackfillOutboxMessage>, Report> {
+        let rows = sqlx::query_as!(
+            BackfillOutboxRow,
+            "SELECT id, comms_channel_id, user_ids
+             FROM contacts_backfill_outbox
+             WHERE applied_at IS NULL
+             ORDER BY id"
+        )
+        .fetch_all(&self.db)
+        .await?;
+
+        rows.into_iter()
+            .map(|r| -> Result<ContactsBackfillOutboxMessage, Report> {
+                let user_ids: Vec<String> = serde_json::from_value(r.user_ids)?;
+                let channel_participants = user_ids
+                    .into_iter()
+                    .map(MacroUserIdStr::try_from)
+                    .collect::<Result<_, _>>()?;
+                Ok(ContactsBackfillOutboxMessage {
+                    id: r.id as u64,
+                    channel_id: r.comms_channel_id,
+                    channel_participants,
+                })
+            })
+            .collect()
+    }
+
+    async fn mark_message_applied(&self, id: u64) -> Result<(), Report> {
+        sqlx::query!(
+            "UPDATE contacts_backfill_outbox SET applied_at = now() WHERE id = $1",
+            id as i64
+        )
+        .execute(&self.db)
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "couldn't mark backfill outbox message applied"))?;
         Ok(())
     }
 }
