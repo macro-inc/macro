@@ -231,6 +231,25 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     displayPriority: 10,
   }).withGroup(group);
 
+  // cmd+a - Toggle select all items
+  registerHotkey({
+    hotkey: ['cmd+a'],
+    scopeId,
+    description: 'Toggle select all',
+    keyDownHandler: (e) => {
+      const items = soup.items.data();
+      if (items.length === 0) return false;
+      e?.preventDefault();
+      if (soup.selection.count() === items.length) {
+        soup.selection.clear();
+      } else {
+        soup.selection.set(items.slice());
+      }
+      return true;
+    },
+    displayPriority: 10,
+  }).withGroup(group);
+
   // cmd+k - Open command menu with selection context
   // When there's a selection, opens in entity action mode showing only
   // selection modification commands with a preview of the selected entities
