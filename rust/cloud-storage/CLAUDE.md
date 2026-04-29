@@ -56,8 +56,10 @@ with `just setup_macrodb` in `macro-api/cloud-storage`. Remember that some datab
 camelCased rather than snake_cased (use `/dump-schema` or check the migration files for actual column names).
 When a column is camelCased, you need to cast it as the snake_cased version when reading from the database. E.g.
 `SELECT "userId" as "user_id" FROM "UserInsights"`.
-Any time you make changes to the SQL code in rust, you need to run `just prepare_db` in
-the root directory of the crate you made the changes in, to update the .sqlx directory.
+Any time you make changes to the SQL code in rust, you need to run `just prepare_db` to
+update the .sqlx directory. Run it **only** from `rust/cloud-storage` — do not run it from
+individual crate directories anymore. The workspace-level recipe handles every crate that
+has sqlx queries.
 
 ## Development Commands
 
