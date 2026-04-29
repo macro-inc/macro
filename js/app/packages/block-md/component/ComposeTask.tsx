@@ -166,6 +166,7 @@ export interface ComposeTaskProps {
   initialContent?: string;
   placeholder?: string;
   initialAssigneeId?: string;
+  initialAssigneeIds?: string[];
   /**
    * When provided, replaces the default success behavior (auto-copy link +
    * toast) so the caller can handle the created task however it needs.
@@ -179,11 +180,20 @@ export function ComposeTask(props: ComposeTaskProps) {
   const currentUserId = useUserId();
 
   const getDefaultPropertyValues = (): Record<string, PropertyApiValues> => {
-    const id = props.initialAssigneeId ?? currentUserId();
+    const ids = (() => {
+      if (props.initialAssigneeIds && props.initialAssigneeIds.length > 0) {
+        return [...new Set(props.initialAssigneeIds)];
+      }
+      const id = props.initialAssigneeId ?? currentUserId();
+      return id ? [id] : [];
+    })();
     return {
       [SYSTEM_PROPERTY_IDS.ASSIGNEES]: {
         valueType: 'ENTITY' as const,
-        refs: id ? [{ entity_id: id, entity_type: 'USER' as const }] : [],
+        refs: ids.map((entity_id) => ({
+          entity_id,
+          entity_type: 'USER' as const,
+        })),
       },
       [SYSTEM_PROPERTY_IDS.STATUS]: {
         valueType: 'SELECT_STRING' as const,
@@ -197,7 +207,8 @@ export function ComposeTask(props: ComposeTaskProps) {
     if (
       !props.initialTitle &&
       !props.initialContent &&
-      !props.initialAssigneeId
+      !props.initialAssigneeId &&
+      !props.initialAssigneeIds?.length
     ) {
       const draft = loadTaskComposerDraft();
       if (draft) {
