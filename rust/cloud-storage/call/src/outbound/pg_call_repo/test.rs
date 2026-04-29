@@ -888,7 +888,7 @@ async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::
     assert!(record.participants.iter().all(|p| p.left_at.is_some()));
 
     // Transcripts ordered by sequence_num.
-    assert_eq!(record.transcript.len(), 2);
+    assert_eq!(record.transcript.len(), 3);
     assert_eq!(record.transcript[0].content, "archived hello");
     assert_eq!(
         record.transcript[0].diarized_speaker_id.as_deref(),
@@ -896,6 +896,34 @@ async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::
     );
     assert_eq!(record.transcript[1].content, "archived reply");
     assert_eq!(record.transcript[1].diarized_speaker_id, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_overrides_speaker_id_with_custom_speaker(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .expect("archived call should be found");
+
+    // Row without an override returns the derived speaker_id.
+    assert_eq!(record.transcript[0].content, "archived hello");
+    assert_eq!(record.transcript[0].speaker_id, "macro|user-a@test.com");
+
+    // Row with `custom_speaker` set returns the override, not the derived
+    // speaker_id (which is `macro|user-a@test.com` in the fixture).
+    assert_eq!(record.transcript[2].content, "archived overridden");
+    assert_eq!(record.transcript[2].speaker_id, "macro|user-b@test.com");
+    assert_eq!(
+        record.transcript[2].diarized_speaker_id.as_deref(),
+        Some("spk-arch-b0")
+    );
     Ok(())
 }
 

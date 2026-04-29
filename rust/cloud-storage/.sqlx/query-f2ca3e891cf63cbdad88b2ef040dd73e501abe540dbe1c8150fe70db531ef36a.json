@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num\n            FROM call_record_transcripts\n            WHERE call_record_id = $1\n            ORDER BY sequence_num ASC\n            ",
+  "query": "\n            SELECT segment_id, speaker_id, diarized_speaker_id, custom_speaker, content, started_at, ended_at, sequence_num\n            FROM call_record_transcripts\n            WHERE call_record_id = $1\n            ORDER BY sequence_num ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -20,21 +20,26 @@
       },
       {
         "ordinal": 3,
-        "name": "content",
+        "name": "custom_speaker",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
         "name": "started_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "ended_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "sequence_num",
         "type_info": "Int4"
       }
@@ -48,11 +53,12 @@
       true,
       false,
       true,
+      true,
       false,
       false,
       true,
       false
     ]
   },
-  "hash": "9b0034065161dec2180a9714d46745b36e32ab06043cd636bbfab029d173bf72"
+  "hash": "f2ca3e891cf63cbdad88b2ef040dd73e501abe540dbe1c8150fe70db531ef36a"
 }

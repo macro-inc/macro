@@ -55,11 +55,14 @@ INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_a
   ('00000000-0000-0000-0000-0000000ca2ed', 'macro|user-a@test.com', '2024-01-01 10:00:00+00', '2024-01-01 10:05:00+00'),
   ('00000000-0000-0000-0000-0000000ca2ed', 'macro|user-b@test.com', '2024-01-01 10:01:00+00', '2024-01-01 10:04:30+00');
 
-INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num) VALUES
-  ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-1', 'macro|user-a@test.com', 'spk-arch-a0', 'archived hello',
+INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, diarized_speaker_id, custom_speaker, content, started_at, ended_at, sequence_num) VALUES
+  ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-1', 'macro|user-a@test.com', 'spk-arch-a0', NULL,                    'archived hello',
    '2024-01-01 10:00:05+00', '2024-01-01 10:00:07+00', 1),
-  ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-2', 'macro|user-b@test.com', NULL, 'archived reply',
-   '2024-01-01 10:00:08+00', '2024-01-01 10:00:10+00', 2);
+  ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-2', 'macro|user-b@test.com', NULL,          NULL,                    'archived reply',
+   '2024-01-01 10:00:08+00', '2024-01-01 10:00:10+00', 2),
+  -- Override row: derived speaker_id is user-a, but custom_speaker pins it to user-b.
+  ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-3', 'macro|user-a@test.com', 'spk-arch-b0', 'macro|user-b@test.com', 'archived overridden',
+   '2024-01-01 10:00:11+00', '2024-01-01 10:00:13+00', 3);
 
 -- entity_access grants for the active call (owner + channel view).
 INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES

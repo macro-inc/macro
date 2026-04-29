@@ -884,7 +884,7 @@ impl CallRepository for PgCallRepo {
 
         let transcript = sqlx::query!(
             r#"
-            SELECT segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num
+            SELECT segment_id, speaker_id, diarized_speaker_id, custom_speaker, content, started_at, ended_at, sequence_num
             FROM call_record_transcripts
             WHERE call_record_id = $1
             ORDER BY sequence_num ASC
@@ -896,7 +896,7 @@ impl CallRepository for PgCallRepo {
         .into_iter()
         .map(|row| CallRecordTranscriptSegment {
             segment_id: row.segment_id,
-            speaker_id: row.speaker_id,
+            speaker_id: row.custom_speaker.unwrap_or(row.speaker_id),
             diarized_speaker_id: row.diarized_speaker_id,
             content: row.content,
             started_at: row.started_at,
