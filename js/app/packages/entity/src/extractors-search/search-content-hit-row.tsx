@@ -22,6 +22,7 @@ interface SearchContentHitRowProps {
 export function SearchContentHitRow(props: SearchContentHitRowProps) {
   const senderId = () => getSenderId(props.hit);
   const handleClick = (e: PointerEvent | MouseEvent) => {
+    e.stopPropagation();
     props.onClick?.(e, props.hit.location);
   };
 
