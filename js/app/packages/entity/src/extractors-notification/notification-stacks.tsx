@@ -102,7 +102,7 @@ function NotificationStackRow(props: {
   };
 
   return (
-    <Layer depth={3}>
+    <Layer depth={2}>
       <ContextMenu>
         <ContextMenu.Trigger class="size-full">
           <div

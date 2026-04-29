@@ -313,7 +313,7 @@ export function ThemeEditorBasic(){
       <div
         style="
           font-family: var(--font-sans);
-          background-color: var(--b1);
+          background-color: var(--b0);
           box-sizing: border-box;
           height: min-content;
           font-weight: 500;
@@ -327,7 +327,7 @@ export function ThemeEditorBasic(){
           onPointerDown={handleCanvasPointerDown}
           ref={canvasContainerRef}
           style="
-            border: 1px solid var(--color-edge-muted);
+            border: 1px solid var(--b4);
             border-radius: 6px;
             position: relative;
             height: 250px;
@@ -348,9 +348,9 @@ export function ThemeEditorBasic(){
           />
           <div
             style="
-              border: 1px solid var(--color-edge-muted);
               transform: translate(-50%, -50%);
               background-color: var(--a0);
+              border: 1px solid var(--b4);
               box-sizing: border-box;
               border-radius: 2px;
               position: absolute;
@@ -393,8 +393,8 @@ export function ThemeEditorBasic(){
             <div
               style="
                 background: linear-gradient(to right, oklch(from var(--a0) l 0.0 h), oklch(from var(--a0) l 0.37 h));
-                border: 1px solid var(--color-edge-muted);
                 transform: translate(-50%, -50%);
+                border: 1px solid var(--b4);
                 box-sizing: border-box;
                 border-radius: 2px;
                 position: absolute;
@@ -408,9 +408,9 @@ export function ThemeEditorBasic(){
             <div
               style={{
                 'left': `${themeReactive.a0.c[0]() * (100 / 0.37)}%`,
-                'border': '1px solid var(--color-edge-muted)',
                 'transform': 'translate(-50%, -50%)',
                 'background-color': 'var(--a0)',
+                'border': '1px solid var(--b4)',
                 'box-sizing': 'border-box',
                 'border-radius': '2px',
                 'position': 'absolute',
@@ -469,9 +469,9 @@ export function ThemeEditorBasic(){
             <div
               style="
                 grid-template-columns: 50fr 40.5fr 32fr 24.5fr 18fr 12.5fr 8fr 5fr 2fr 0.5fr;
-                background-color: var(--color-edge-muted);
-                border: 1px solid var(--color-edge-muted);
                 transform: translate(-50%, -50%);
+                background-color: var(--b4);
+                border: 1px solid var(--b4);
                 box-sizing: border-box;
                 border-radius: 2px;
                 position: absolute;
@@ -484,24 +484,24 @@ export function ThemeEditorBasic(){
                 gap: 1px;
               "
             >
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
             </div>
 
             <div
               style={{
                 'left': `${(themeReactive.b0.c[0]() / (themeReactive.a0.c[0]() * 0.8) / 0.37) * 100}%`,
-                'border': '1px solid var(--color-edge-muted)',
                 'transform': 'translate(-50%, -50%)',
-                'background-color': 'var(--b1)',
+                'background-color': 'var(--b0)',
+                'border': '1px solid var(--b4)',
                 'box-sizing': 'border-box',
                 'border-radius': '2px',
                 'position': 'absolute',
@@ -561,9 +561,9 @@ export function ThemeEditorBasic(){
             <div
               style="
                 grid-template-columns:  0.5fr 2fr 5fr 8fr 12.5fr 18fr 50fr 50fr 18fr 12.5fr 8fr 5fr 2fr 0.5fr;
-                background-color: var(--color-edge-muted);
-                border: 1px solid var(--color-edge-muted);
                 transform: translate(-50%, -50%);
+                background-color: var(--b4);
+                border: 1px solid var(--b4);
                 box-sizing: border-box;
                 border-radius: 2px;
                 position: absolute;
@@ -576,28 +576,28 @@ export function ThemeEditorBasic(){
                 gap: 1px;
               "
             >
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
-              <div style="background-color: var(--b1); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
+              <div style="background-color: var(--b0); height: 100%; width: 100%;" />
             </div>
 
             <div
               style={{
                 'left': `${getContrastFromY(themeReactive.b0.l[0]()) * 100}%`,
-                'border': '1px solid var(--color-edge-muted)',
                 'transform': 'translate(-50%, -50%)',
-                'background-color': 'var(--b1)',
+                'background-color': 'var(--b0)',
+                'border': '1px solid var(--b4)',
                 'box-sizing': 'border-box',
                 'border-radius': '2px',
                 'position': 'absolute',

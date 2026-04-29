@@ -6,7 +6,7 @@ export type LayerProps = {
 };
 
 export function Layer(props: LayerProps) {
-  const depth = ((props.depth ?? 0) / 5) * 0.05;
+  const depth = ((props.depth ?? 0) / 5) * 0.15;
   return (
     <div
       style={{
