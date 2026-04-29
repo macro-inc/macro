@@ -43,6 +43,7 @@ cloudfront_sign = { workspace = true }
 comms = { path = "../comms", features = ["outbound"] }
 comms_db_client = { path = "../comms_db_client" }
 comms_service = { path = "../comms_service" }
+contacts = { path = "../contacts" }
 connection = { path = "../connection", default-features = false, features = [
   "outbound",
 ] }
@@ -119,7 +120,6 @@ serde_json = { workspace = true }
 soup = { path = "../soup", features = ["axum", "inbound", "outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
-  "contacts",
   "document",
   "search",
 ] }

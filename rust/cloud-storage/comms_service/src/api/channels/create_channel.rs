@@ -143,7 +143,6 @@ pub async fn create_channel_handler(
     // There should always be participants, but better safe than sorry
     if !participants.is_empty() && req.channel_type == ChannelType::Private {
         // Contacts: send message create channel SQS message to Contacts Service
-        let sqs_client = &ctx.sqs_client;
         let mut all_users = participants_copy.unwrap_or_default();
         if !all_users.contains(&user_context.user_id) {
             all_users.push(user_context.user_id.clone());
@@ -156,7 +155,7 @@ pub async fn create_channel_handler(
                 tracing::error!(error=?e, "invalid user id for contacts");
                 (StatusCode::BAD_REQUEST, "invalid user id".to_string())
             })?;
-        sqs_client
+        ctx.contacts_ingress
             .enqueue_contacts(contacts_users)
             .await
             .map_err(|e| {

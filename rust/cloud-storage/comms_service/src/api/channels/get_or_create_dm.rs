@@ -110,7 +110,6 @@ pub async fn handler(
                 )
             })?;
             // Contacts: create connections
-            let sqs_client = &ctx.sqs_client;
             let contacts_users = vec![user_id.clone(), recipient_id.clone()]
                 .into_iter()
                 .map(MacroUserIdStr::try_from)
@@ -119,7 +118,7 @@ pub async fn handler(
                     tracing::error!(error=?e, "invalid user id for contacts");
                     (StatusCode::BAD_REQUEST, "invalid user id".to_string())
                 })?;
-            sqs_client
+            ctx.contacts_ingress
                 .enqueue_contacts(contacts_users)
                 .await
                 .map_err(|e| {
