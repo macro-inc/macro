@@ -86,7 +86,9 @@ pub(in crate::api::search) async fn enrich_call_records(
 
     let result = hits_by_call_id
         .into_iter()
-        .map(|(call_id, hits)| {
+        .map(|(call_id, mut hits)| {
+            hits.sort_by_key(|h| h.sequence_num);
+
             let (channel_id, participant_ids) = call_context
                 .get(&call_id)
                 .cloned()
