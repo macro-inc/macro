@@ -461,7 +461,6 @@ export const INDEX_OPTIONS: {
     label: 'Email',
     icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
     queryFilters: defineQueryFilters({
-      exclude: { threadId: [NIL_UUID] },
       include: { emailImportance: true },
     }),
   },
