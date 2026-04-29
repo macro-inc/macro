@@ -1,4 +1,4 @@
-use comms_db_client::channels::resolve_names::batch_resolve_channel_names;
+use comms::outbound::postgres::channel_name::batch_resolve_channel_names;
 use indexmap::IndexMap;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_search::call_record::{
