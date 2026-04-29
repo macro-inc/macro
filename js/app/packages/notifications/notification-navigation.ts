@@ -23,7 +23,6 @@ import {
   stackNotifications,
   getMostRecentNotification,
 } from './notification-stacking';
-import { resolve } from 'node:path/win32';
 
 /**
  * Go to location via global block orchestrator.

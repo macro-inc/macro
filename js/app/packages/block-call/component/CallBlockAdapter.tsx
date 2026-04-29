@@ -24,28 +24,22 @@ export function CallBlockAdapter() {
           {(data) => <CallRecordingBody data={data} />}
         </Match>
         <Match when={callRecord.isLoading}>
-          <>
-            <CallRecordingSplitHeaderLoading />
-            <div class="flex flex-1 min-h-0 items-center justify-center text-sm text-ink-faint">
-              Loading call...
-            </div>
-          </>
+          <CallRecordingSplitHeaderLoading />
+          <div class="flex flex-1 min-h-0 items-center justify-center text-sm text-ink-faint">
+            Loading call...
+          </div>
         </Match>
         <Match when={callRecord.isError && isUnauthorized(callRecord.error)}>
-          <>
-            <CallRecordingSplitHeaderLoading />
-            <div class="flex flex-1 min-h-0 overflow-hidden">
-              <Unauthorized />
-            </div>
-          </>
+          <CallRecordingSplitHeaderLoading />
+          <div class="flex flex-1 min-h-0 overflow-hidden">
+            <Unauthorized />
+          </div>
         </Match>
         <Match when={callRecord.isError}>
-          <>
-            <CallRecordingSplitHeaderLoading />
-            <div class="flex flex-1 min-h-0 items-center justify-center text-sm text-failure">
-              Failed to load call recording.
-            </div>
-          </>
+          <CallRecordingSplitHeaderLoading />
+          <div class="flex flex-1 min-h-0 items-center justify-center text-sm text-failure">
+            Failed to load call recording.
+          </div>
         </Match>
       </Switch>
     </div>
