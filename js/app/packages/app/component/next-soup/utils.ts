@@ -1,5 +1,6 @@
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
+import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
@@ -226,6 +227,14 @@ export const openEntityInNewTab = ({
           entityUrl.searchParams.set('search_snippet', location.searchSnippet);
         }
         break;
+      case 'call_record':
+        if (location.sequenceNum !== undefined) {
+          entityUrl.searchParams.set(
+            CALL_PARAMS.segmentSeq,
+            location.sequenceNum.toString()
+          );
+        }
+        break;
     }
   }
 
@@ -318,6 +327,8 @@ export const openEntityInSplitFromUnifiedList = async (
     params = getChannelParams(location.messageId, location.threadId);
   } else if (entity.type === 'channel_message') {
     params = getChannelParams(entity.messageId, entity.threadId);
+  } else if (entity.type === 'call' && location?.type === 'call_record') {
+    params = { [CALL_PARAMS.segmentSeq]: location.sequenceNum.toString() };
   }
 
   splitManager.openWithSplit(
@@ -403,6 +414,12 @@ async function navigateToLocation(
           location.highlightTerms
         ),
         [PDF_PARAMS.searchSnippet]: location.searchSnippet,
+      });
+      break;
+    }
+    case 'call_record': {
+      await blockHandle.goToLocationFromParams({
+        [CALL_PARAMS.segmentSeq]: location.sequenceNum.toString(),
       });
       break;
     }

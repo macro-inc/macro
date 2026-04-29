@@ -29,7 +29,7 @@ type EmailMessageHighlightLocation = {
 type CallRecordSegmentHighlightLocation = {
   type: 'call_record';
   callId: string;
-  transcriptId: string;
+  sequenceNum: number;
 };
 
 export type SearchLocation =

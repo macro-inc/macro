@@ -1,8 +1,13 @@
+import { URL_PARAMS } from '@block-call/constants';
 import { useBlockId } from '@core/block';
 import Unauthorized from '@core/component/AccessErrorViews/Unauthorized';
+import { createMethodRegistration } from '@core/orchestrator';
+import { blockHandleSignal } from '@core/signal/load';
 import { MaybeResultError } from '@core/util/maybeResult';
 import { useCallRecordQuery } from '@queries/call/call';
-import { Match, Switch } from 'solid-js';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { useSearchParams } from '@solidjs/router';
+import { createSignal, Match, Switch } from 'solid-js';
 import { CallRecordingBody } from './CallRecording/CallRecordingBody';
 import { CallRecordingSplitHeaderLoading } from './CallRecording/CallRecordingSplitHeader';
 
@@ -13,15 +18,63 @@ function isUnauthorized(error: Error | null): boolean {
   return false;
 }
 
-export function CallBlockAdapter() {
+export type CallBlockProps = {
+  [URL_PARAMS.segmentSeq]?: string;
+};
+
+export type CallTranscriptTarget = { sequenceNum: number; gen: number };
+
+function parseSequenceNum(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+export function CallBlockAdapter(props: CallBlockProps) {
   const callId = useBlockId();
   const callRecord = useCallRecordQuery(() => callId);
+  const blockHandle = blockHandleSignal.get;
+  const [searchParams] = useSearchParams();
+
+  const initialSequenceNum = (): number | undefined => {
+    const fromProps = parseSequenceNum(props[URL_PARAMS.segmentSeq]);
+    if (fromProps !== undefined) return fromProps;
+    const isSingleSplit = globalSplitManager()?.splits().length === 1;
+    if (!isSingleSplit) return undefined;
+    return parseSequenceNum(
+      searchParams[URL_PARAMS.segmentSeq] as string | undefined
+    );
+  };
+
+  const [transcriptTarget, setTranscriptTarget] = createSignal<
+    CallTranscriptTarget | undefined
+  >(
+    initialSequenceNum() !== undefined
+      ? { sequenceNum: initialSequenceNum()!, gen: 0 }
+      : undefined
+  );
+
+  createMethodRegistration(blockHandle, {
+    goToLocationFromParams: async (params: CallBlockProps) => {
+      const next = parseSequenceNum(params[URL_PARAMS.segmentSeq]);
+      if (next === undefined) return;
+      setTranscriptTarget((prev) => ({
+        sequenceNum: next,
+        gen: (prev?.gen ?? 0) + 1,
+      }));
+    },
+  });
 
   return (
     <div class="h-full flex flex-col @container">
       <Switch>
         <Match when={callRecord.data}>
-          {(data) => <CallRecordingBody data={data} />}
+          {(data) => (
+            <CallRecordingBody
+              data={data}
+              transcriptTarget={transcriptTarget}
+            />
+          )}
         </Match>
         <Match when={callRecord.isLoading}>
           <CallRecordingSplitHeaderLoading />

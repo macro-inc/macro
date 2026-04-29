@@ -4,14 +4,17 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   untrack,
 } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import {
   getActiveTranscriptSequenceNum,
+  getSegmentVideoSeconds,
   sortTranscriptSegments,
 } from '../transcript-playback';
+import type { CallTranscriptTarget } from '../CallBlockAdapter';
 import {
   CallRecordingMediaColumn,
   type CallRecordingTimeUpdateSource,
@@ -25,7 +28,10 @@ import {
   shouldCoalesceSeekGenerationBump,
 } from './call-recording-utils';
 
-export function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
+export function CallRecordingBody(props: {
+  data: Accessor<CallRecord>;
+  transcriptTarget?: Accessor<CallTranscriptTarget | undefined>;
+}) {
   const record = props.data;
   const hasTranscripts = createMemo(() => record().transcript.length > 0);
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
@@ -95,6 +101,41 @@ export function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
     setPlaybackSeconds(targetSeconds);
     setAllowFutureLead(false);
   };
+
+  const goToTranscriptSegment = (sequenceNum: number) => {
+    const segments = sortedTranscript();
+    const segment = segments.find((s) => s.sequenceNum === sequenceNum);
+    if (!segment) return;
+    const firstStartMs =
+      segments.length > 0 ? new Date(segments[0].startedAt).getTime() : NaN;
+    const seconds = getSegmentVideoSeconds(
+      segment,
+      Number.isFinite(firstStartMs) ? firstStartMs : null
+    );
+    if (seconds === null) return;
+
+    setPlaybackSeconds(seconds);
+    setAllowFutureLead(false);
+    bumpVideoSeekGeneration(seconds);
+
+    const video = videoRef();
+    if (video) {
+      const maxTime = Number.isFinite(video.duration)
+        ? video.duration
+        : seconds;
+      video.currentTime = Math.max(0, Math.min(seconds, maxTime));
+    }
+  };
+
+  createEffect(
+    on(
+      () => props.transcriptTarget?.(),
+      (target) => {
+        if (!target) return;
+        goToTranscriptSegment(target.sequenceNum);
+      }
+    )
+  );
 
   const toggleTranscript = () => {
     setTranscriptOpen((open) => {
