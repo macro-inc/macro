@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Show, Suspense } from 'solid-js';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
 import { UserGroup } from '@core/component/Properties/component/propertyValue/UserGroup';
 import type { EntityReference } from '@core/component/Properties/types';
@@ -81,7 +81,9 @@ export function CallNarrowBody(props: {
         when={hit()}
         fallback={
           <span class="text-ink-muted text-xs truncate">
-            <CallChannelName entity={props.entity} />
+            <Suspense>
+              <CallChannelName entity={props.entity} />
+            </Suspense>
           </span>
         }
       >
@@ -130,7 +132,9 @@ export function CallWideContent(props: {
   return (
     <>
       <span class="truncate">
-        <CallChannelName entity={props.entity} />
+        <Suspense>
+          <CallChannelName entity={props.entity} />
+        </Suspense>
       </span>
       <Show
         when={hit()}
