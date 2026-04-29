@@ -441,19 +441,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     })
   );
 
-  // createEffect(
-  //   on([nodeId, location, commentId], ([id, loc, comment]) => {
-  //     if (id) setHighlightNodeId(id);
-  //     if (comment) setActiveCommentIdParam(comment);
-  //     if (loc) {
-  //       const locationObj = parsePersistentLocation(loc);
-  //       if (locationObj) {
-  //         setActiveLocation(locationObj);
-  //       }
-  //     }
-  //   })
-  // );
-
   plugins.use(
     locationPlugin({
       mapping: lexicalWrapper.mapping,

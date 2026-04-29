@@ -142,10 +142,10 @@ export function signalFilter(entity: EntityData): boolean {
     case 'chat':
       return true;
     case 'document': {
-      // if (isTaskEntity(entity)) {
-      //   const currentUserId = getCurrentUserId();
-      //   return isSignalTask(entity as TaskEntityWithProperties, currentUserId);
-      // }
+      if (isTaskEntity(entity)) {
+        const currentUserId = getCurrentUserId();
+        return isSignalTask(entity as TaskEntityWithProperties, currentUserId);
+      }
 
       return true;
     }
