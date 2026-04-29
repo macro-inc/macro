@@ -1,6 +1,22 @@
 use anyhow::Context;
 pub use macro_env::Environment;
 
+/// Per-entity DB page sizes used by the backfill source adapters. Tunable at
+/// runtime via the corresponding `BACKFILL_*_PAGE_SIZE` env vars.
+pub struct BackfillPageSizes {
+    pub calls: usize,
+    pub chats: usize,
+    pub channels: usize,
+    pub documents: usize,
+    pub emails: usize,
+}
+
+const DEFAULT_CALLS_PAGE: usize = 2000;
+const DEFAULT_CHATS_PAGE: usize = 5000;
+const DEFAULT_CHANNELS_PAGE: usize = 5000;
+const DEFAULT_DOCUMENTS_PAGE: usize = 1000;
+const DEFAULT_EMAILS_PAGE: usize = 1000;
+
 pub struct Config {
     /// The connection URL for the Postgres database this application should use.
     /// For deployed applications, this is a secret stored in AWS Secrets Manager.
@@ -45,6 +61,24 @@ pub struct Config {
 
     /// The URL for the Lexical service
     pub lexical_service_url: String,
+
+    /// Per-entity DB page sizes for backfill adapters.
+    pub backfill_page_sizes: BackfillPageSizes,
+}
+
+fn parse_page_size(name: &str, default: usize) -> anyhow::Result<usize> {
+    match std::env::var(name) {
+        Ok(raw) => raw
+            .parse::<usize>()
+            .with_context(|| format!("{name} must be a positive integer"))
+            .and_then(|n| {
+                if n == 0 {
+                    anyhow::bail!("{name} must be > 0");
+                }
+                Ok(n)
+            }),
+        Err(_) => Ok(default),
+    }
 }
 
 impl Config {
@@ -95,6 +129,14 @@ impl Config {
         let lexical_service_url =
             std::env::var("LEXICAL_SERVICE_URL").context("LEXICAL_SERVICE_URL must be provided")?;
 
+        let backfill_page_sizes = BackfillPageSizes {
+            calls: parse_page_size("BACKFILL_CALLS_PAGE_SIZE", DEFAULT_CALLS_PAGE)?,
+            chats: parse_page_size("BACKFILL_CHATS_PAGE_SIZE", DEFAULT_CHATS_PAGE)?,
+            channels: parse_page_size("BACKFILL_CHANNELS_PAGE_SIZE", DEFAULT_CHANNELS_PAGE)?,
+            documents: parse_page_size("BACKFILL_DOCUMENTS_PAGE_SIZE", DEFAULT_DOCUMENTS_PAGE)?,
+            emails: parse_page_size("BACKFILL_EMAILS_PAGE_SIZE", DEFAULT_EMAILS_PAGE)?,
+        };
+
         Ok(Config {
             database_url,
             database_url_readonly,
@@ -110,6 +152,7 @@ impl Config {
             sync_service_auth_key,
             worker_count,
             lexical_service_url,
+            backfill_page_sizes,
         })
     }
 }

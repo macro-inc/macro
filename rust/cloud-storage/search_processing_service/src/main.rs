@@ -177,20 +177,13 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
 
-    // Per-entity page sizes preserve the values we used in the previous
-    // one-shot bins. They're tunable here without touching the adapters.
-    const CALLS_PAGE: usize = 2000;
-    const CHATS_PAGE: usize = 5000;
-    const CHANNELS_PAGE: usize = 5000;
-    const DOCUMENTS_PAGE: usize = 1000;
-    const EMAILS_PAGE: usize = 1000;
-
+    let pages = &config.backfill_page_sizes;
     let backfill_service = Arc::new(BackfillOrchestrator::new(
-        PgCallSource::new(backfill_db.clone(), CALLS_PAGE),
-        PgChatSource::new(backfill_db.clone(), CHATS_PAGE),
-        PgChannelSource::new(backfill_db.clone(), CHANNELS_PAGE),
-        PgDocumentSource::new(backfill_db.clone(), DOCUMENTS_PAGE),
-        PgEmailSource::new(backfill_db, EMAILS_PAGE),
+        PgCallSource::new(backfill_db.clone(), pages.calls),
+        PgChatSource::new(backfill_db.clone(), pages.chats),
+        PgChannelSource::new(backfill_db.clone(), pages.channels),
+        PgDocumentSource::new(backfill_db.clone(), pages.documents),
+        PgEmailSource::new(backfill_db, pages.emails),
         SqsSearchEventPublisher::new(sqs_client.clone()),
     ));
 
