@@ -31,7 +31,7 @@ impl CallBackfillSource for PgCallSource {
             if start >= req.call_ids.len() {
                 return Ok(SourcePage::empty());
             }
-            let end = (start + self.page_size).min(req.call_ids.len());
+            let end = start.saturating_add(self.page_size).min(req.call_ids.len());
             let messages: Vec<SearchQueueMessage> = req.call_ids[start..end]
                 .iter()
                 .map(|id| {
@@ -40,9 +40,10 @@ impl CallBackfillSource for PgCallSource {
                     })
                 })
                 .collect();
+            let rows_consumed = messages.len();
             return Ok(SourcePage {
                 messages,
-                rows_consumed: end - start,
+                rows_consumed,
             });
         }
 
