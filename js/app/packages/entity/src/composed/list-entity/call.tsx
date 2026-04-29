@@ -161,7 +161,7 @@ export function CallWideContent(props: {
             </span>
             <div
               ref={props.setContainerRef}
-              class="text-ink/50 font-medium flex-1 min-w-0 overflow-hidden"
+              class="text-ink/50 font-medium flex-1 min-w-0 truncate"
             >
               <HitSnippet content={h().content} chars={props.chars} />
             </div>
