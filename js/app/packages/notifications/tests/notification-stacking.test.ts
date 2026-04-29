@@ -650,9 +650,7 @@ describe('stackNotifications — document comments', () => {
     });
 
     it('lone mention with no other thread activity stays as an individual stack', () => {
-      const notifications = [
-        createDocMentionNotification('m1', 100, 10, 1000),
-      ];
+      const notifications = [createDocMentionNotification('m1', 100, 10, 1000)];
 
       const result = stackNotifications(notifications);
 
@@ -679,9 +677,7 @@ describe('stackNotifications — document comments', () => {
 
   describe('getThreadId standalone regression', () => {
     it('returns "" for a standalone commented_on_document stack', () => {
-      const notifications = [
-        createDocCommentNotification('c1', 100, 1, 1000),
-      ];
+      const notifications = [createDocCommentNotification('c1', 100, 1, 1000)];
 
       const result = stackNotifications(notifications);
 
@@ -691,9 +687,7 @@ describe('stackNotifications — document comments', () => {
     });
 
     it('returns "" for a standalone mentioned_in_document_comment stack', () => {
-      const notifications = [
-        createDocMentionNotification('m1', 100, 1, 1000),
-      ];
+      const notifications = [createDocMentionNotification('m1', 100, 1, 1000)];
 
       const result = stackNotifications(notifications);
 
