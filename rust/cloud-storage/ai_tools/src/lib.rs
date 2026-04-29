@@ -69,30 +69,15 @@ pub fn all_tools() -> ToolSetWithPrompt {
 }
 
 /// Combined schema with shared, deduplicated `$defs`.
-///
-/// Uses a single [`schemars::SchemaGenerator`] so types referenced by
-/// multiple tools (e.g. `CodeExecutionErrorCode`) appear exactly once.
 pub fn all_tool_combined_schema() -> CombinedToolSchemas {
-    use ai_toolset::schema::NormaliseRefSiblings;
-    use schemars::transform::RecursiveTransform;
-
-    let mut generator = schemars::generate::SchemaSettings::draft2020_12()
-        .with(|s| s.meta_schema = None)
-        .with_transform(RecursiveTransform(NormaliseRefSiblings))
-        .into_generator();
-
-    let mut tools = Vec::new();
-    tools.extend(all_tools().register_schemas(&mut generator));
-    tools.extend(anthropic_tools::web_search().register_schemas(&mut generator));
-    tools.extend(anthropic_tools::web_fetch().register_schemas(&mut generator));
-    tools.extend(anthropic_tools::bash_code_execution().register_schemas(&mut generator));
-    tools.extend(anthropic_tools::text_editor_code_execution().register_schemas(&mut generator));
-    tools.extend(read::read_thread().register_schemas(&mut generator));
-
-    let defs = generator.take_definitions(true);
-    let mut combined = CombinedToolSchemas { defs, tools };
-    combined.mangle_collisions();
-    combined
+    CombinedToolSchemas::builder()
+        .merge(&all_tools())
+        .merge(&anthropic_tools::web_search())
+        .merge(&anthropic_tools::web_fetch())
+        .merge(&anthropic_tools::bash_code_execution())
+        .merge(&anthropic_tools::text_editor_code_execution())
+        .merge(&read::read_thread())
+        .build()
 }
 
 pub fn no_tools() -> ToolSetWithPrompt {

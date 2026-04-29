@@ -111,6 +111,22 @@ pub struct CombinedToolSchemas {
 }
 
 impl CombinedToolSchemas {
+    /// Returns a builder that uses a shared [`schemars::SchemaGenerator`]
+    /// (with [`NormaliseRefSiblings`]) so types referenced by multiple tools
+    /// appear exactly once in the final `$defs`.
+    pub fn builder() -> CombinedToolSchemasBuilder {
+        use schemars::transform::RecursiveTransform;
+
+        let generator = schemars::generate::SchemaSettings::draft2020_12()
+            .with(|s| s.meta_schema = None)
+            .with_transform(RecursiveTransform(NormaliseRefSiblings))
+            .into_generator();
+        CombinedToolSchemasBuilder {
+            generator,
+            tools: Vec::new(),
+        }
+    }
+
     /// Replaces schemars' numeric collision suffixes (e.g. `ReadContent2`)
     /// with tool-name-prefixed names (e.g. `ReadThreadReadContent`).
     ///
@@ -236,6 +252,34 @@ pub trait ToolSchemaGenerator {
     /// multiple tools (e.g. `CodeExecutionErrorCode`) appear only once.
     fn register_schemas(&self, generator: &mut schemars::SchemaGenerator)
     -> Vec<CombinedToolEntry>;
+}
+
+/// Builder for [`CombinedToolSchemas`] that accumulates tools from multiple
+/// [`ToolSchemaGenerator`]s while sharing a single [`schemars::SchemaGenerator`]
+/// for deduplication.
+pub struct CombinedToolSchemasBuilder {
+    generator: schemars::SchemaGenerator,
+    tools: Vec<CombinedToolEntry>,
+}
+
+impl CombinedToolSchemasBuilder {
+    /// Registers all tools from the given generator.
+    pub fn merge(mut self, schema_generator: &dyn ToolSchemaGenerator) -> Self {
+        self.tools
+            .extend(schema_generator.register_schemas(&mut self.generator));
+        self
+    }
+
+    /// Consumes the builder and returns the combined schema.
+    pub fn build(mut self) -> CombinedToolSchemas {
+        let defs = self.generator.take_definitions(true);
+        let mut combined = CombinedToolSchemas {
+            defs,
+            tools: self.tools,
+        };
+        combined.mangle_collisions();
+        combined
+    }
 }
 
 impl<Context> ToolSchemaGenerator for AsyncToolSet<Context> {
