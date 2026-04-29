@@ -1,10 +1,12 @@
+use contacts::domain::ports::ContactsIngress;
+use contacts::domain::service::SqsContactsIngress;
+use contacts::outbound::ingress::SqsContactsQueue;
 use macro_user_id::user_id::MacroUserIdStr;
-use sqs_client::SQS;
 
 /// Process contacts for a single macro ID
 pub async fn process_macro_id(
     db_pool: &sqlx::PgPool,
-    sqs_client: &SQS,
+    contacts_ingress: &SqsContactsIngress<SqsContactsQueue>,
     macro_id: &str,
 ) -> anyhow::Result<()> {
     let link = email_db_client::links::get::fetch_link_by_macro_id(db_pool, macro_id)
@@ -31,7 +33,10 @@ pub async fn process_macro_id(
         )
         .collect::<Result<_, _>>()?;
 
-    sqs_client.enqueue_contacts(users).await?;
+    contacts_ingress
+        .enqueue_contacts(users)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
     Ok(())
 }

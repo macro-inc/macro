@@ -131,7 +131,6 @@ pub async fn handler(
             .iter()
             .map(|p| p.user_id.to_string())
             .collect();
-        let sqs_client = &ctx.sqs_client;
         let contacts_users = [participants.clone(), channel_participants]
             .concat()
             .into_iter()
@@ -141,7 +140,7 @@ pub async fn handler(
                 tracing::error!(error=?e, "invalid user id for contacts");
                 (StatusCode::BAD_REQUEST, "invalid user id".to_string())
             })?;
-        sqs_client
+        ctx.contacts_ingress
             .enqueue_contacts(contacts_users)
             .await
             .map_err(|e| {

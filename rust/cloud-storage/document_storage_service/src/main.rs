@@ -161,9 +161,15 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized s3 client");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
-        .contacts_queue(&config.vars.contacts_queue)
         .search_event_queue(&config.vars.search_event_queue)
         .document_delete_queue(&config.vars.document_delete_queue);
+
+    let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
+        queue: contacts::outbound::ingress::SqsContactsQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            config.vars.contacts_queue.as_ref().to_string(),
+        ),
+    });
 
     tracing::trace!("initialized sqs client");
 
@@ -478,6 +484,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let api_context = ApiContext {
+        contacts_ingress,
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
                 PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),

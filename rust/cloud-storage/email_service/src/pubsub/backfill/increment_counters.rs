@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::pubsub::context::PubSubContext;
+use contacts::domain::ports::ContactsIngress;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::db::address::EmailRecipientType;
 use models_email::service::attachment::{
@@ -173,15 +174,18 @@ async fn handle_contacts_sync(ctx: &PubSubContext, link: &Link) -> Result<(), Pr
             })
         })?;
 
-    ctx.sqs_client.enqueue_contacts(users).await.map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::SqsEnqueueFailed,
-            source: e.context(format!(
-                "Failed to enqueue contacts message for {}",
-                email_addresses.join(", ")
-            )),
-        })
-    })?;
+    ctx.contacts_ingress
+        .enqueue_contacts(users)
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: anyhow::anyhow!("{e:?}").context(format!(
+                    "Failed to enqueue contacts message for {}",
+                    email_addresses.join(", ")
+                )),
+            })
+        })?;
 
     tracing::info!(
         "Successfully populated {} contacts for macro email {}",
