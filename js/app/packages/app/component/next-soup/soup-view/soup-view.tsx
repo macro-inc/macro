@@ -496,6 +496,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   useEntityActionHotkeys({
     scopeId: scopeId(),
     soup,
+    activeSoupViewTab: activeTab,
     splitHandle: panel.handle,
   });
 

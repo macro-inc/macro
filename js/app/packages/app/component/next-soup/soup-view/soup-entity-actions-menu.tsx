@@ -4,6 +4,7 @@ import { For, Show } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import { createSoupEntityActions } from './create-soup-entity-actions';
 import { useSoupView } from './soup-view-context';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 
 interface SoupEntityActionsMenuProps {
   entities: EntityData[];
@@ -12,11 +13,15 @@ interface SoupEntityActionsMenuProps {
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
+  const panel = useSplitPanelOrThrow();
   const { activeTab } = useSoupView();
   const { buildActionGroups } = createSoupEntityActions();
 
   const groups = () =>
-    buildActionGroups(props.entities, props.soup, activeTab());
+    buildActionGroups(props.soup, props.entities, {
+      activeTab: activeTab(),
+      activeListView: panel.handle.content().id,
+    });
 
   const handleAction = async (onClick: () => void | Promise<void>) => {
     await onClick();

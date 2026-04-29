@@ -27,14 +27,13 @@ import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { onCleanup } from 'solid-js';
-import { isListViewID, type ListView } from '@app/constants/list-views';
-
-// Valid list views where the mark done hotkey can be run in
-const VALID_MARK_DONE_LIST_VIEWS: ListView[] = ['inbox', 'mail'];
+import { isListViewID } from '@app/constants/list-views';
+import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
   soup: SoupState;
+  activeSoupViewTab?: () => string | undefined;
   splitHandle?: SplitHandle;
   condition?: () => boolean;
   /** Fallback entity getter used when soup has no selection/focus (e.g., block views) */
@@ -141,9 +140,12 @@ export const useEntityActionHotkeys = (
 
       const splitContentId = splitHandle?.content().id;
 
+      const soupViewTab = options.activeSoupViewTab?.();
+
       if (
+        soupViewTab &&
         isListViewID(splitContentId) &&
-        !VALID_MARK_DONE_LIST_VIEWS.includes(splitContentId)
+        !canExecuteMarkDoneOnView(splitContentId, soupViewTab)
       )
         return false;
 
