@@ -375,7 +375,7 @@ export const useSearchResponseItemMapper = () => {
           {
             type: 'call',
             id: result.call_id,
-            name: result.name ?? channelName ?? '',
+            name: result.name ?? channelName ?? blockNameToDefaultFile('call'),
             channelId: result.channel_id,
             channelName,
             ownerId: result.owner_id,
