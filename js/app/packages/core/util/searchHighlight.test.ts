@@ -164,6 +164,7 @@ describe('windowSearchMatch', () => {
     const longSuffix = 'b '.repeat(40);
     const text = `<macro_em>match</macro_em> ${longSuffix}`;
     const result = windowSearchMatch(text, 10);
+    expect(result).toContain('<macro_em>match</macro_em>');
     const visibleAfter = result
       .slice(result.lastIndexOf('</macro_em>') + '</macro_em>'.length)
       .trim().length;
@@ -175,6 +176,7 @@ describe('windowSearchMatch', () => {
     const longPrefix = 'a '.repeat(40);
     const text = `${longPrefix}<macro_em>match</macro_em>`;
     const result = windowSearchMatch(text, 10);
+    expect(result).toContain('<macro_em>match</macro_em>');
     const visibleBefore = result
       .slice(0, result.indexOf('<macro_em>'))
       .trim().length;
