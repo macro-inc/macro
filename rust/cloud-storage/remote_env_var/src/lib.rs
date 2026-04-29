@@ -91,3 +91,41 @@ where
         secret_manager.get_maybe_secret_value(Environment::new_or_prod(), val)
     }
 }
+
+/// Optional variant of [`LocalOrRemoteSecret`]. `None` represents an env var
+/// that wasn't configured at all; `Some(...)` carries a resolved secret.
+/// Useful for secrets that are genuinely optional (e.g. a read-replica URL
+/// that, when absent, lets callers fall back to a different code path).
+#[derive(Clone)]
+pub struct OptionalLocalOrRemoteSecret<T>(pub Option<LocalOrRemoteSecret<T>>);
+
+impl<T> OptionalLocalOrRemoteSecret<T>
+where
+    T: AsRef<str> + Send,
+{
+    /// Resolve `val` through the secret manager when present, propagating
+    /// the manager's error on failure. `None` in → `None` out, with no
+    /// secret-manager call.
+    pub async fn new_from_secret_manager<S>(
+        val: Option<T>,
+        secret_manager: &S,
+    ) -> Result<Self, S::Err>
+    where
+        S: SecretManager,
+    {
+        match val {
+            Some(v) => Ok(Self(Some(
+                LocalOrRemoteSecret::new_from_secret_manager(v, secret_manager).await?,
+            ))),
+            None => Ok(Self(None)),
+        }
+    }
+
+    /// View the resolved secret as `&str`, or `None` when unset.
+    pub fn as_str(&self) -> Option<&str>
+    where
+        T: AsRef<str>,
+    {
+        self.0.as_ref().map(AsRef::as_ref)
+    }
+}
