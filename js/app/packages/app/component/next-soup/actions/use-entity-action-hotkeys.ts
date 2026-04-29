@@ -138,14 +138,13 @@ export const useEntityActionHotkeys = (
     condition: () => {
       if (condition && !condition()) return false;
 
-      const splitContentId = splitHandle?.content().id;
+      const contentId = splitHandle?.content().id;
 
       const soupViewTab = options.activeSoupViewTab?.();
 
       if (
-        !soupViewTab ||
-        !isListViewID(splitContentId) ||
-        !canExecuteMarkDoneOnView(splitContentId, soupViewTab)
+        !isListViewID(contentId) ||
+        (soupViewTab && !canExecuteMarkDoneOnView(contentId, soupViewTab))
       )
         return false;
 

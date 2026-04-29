@@ -879,9 +879,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           const tab = activeTab();
 
                           if (
-                            !tab ||
                             !isListViewID(contentId) ||
-                            !canExecuteMarkDoneOnView(contentId, tab)
+                            (tab && !canExecuteMarkDoneOnView(contentId, tab))
                           )
                             return false;
 
