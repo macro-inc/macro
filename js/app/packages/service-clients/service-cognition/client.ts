@@ -353,7 +353,8 @@ export async function generateTitle(text: string): Promise<string | undefined> {
 type DcsCompletionErrorCode = 'NETWORK_ERROR' | 'OPENAI_ERROR';
 
 export async function dcsCompletion(
-  body: Omit<OpenAI.ChatCompletionCreateParamsNonStreaming, 'stream'>
+  body: Omit<OpenAI.ChatCompletionCreateParamsNonStreaming, 'stream'>,
+  options?: { signal?: AbortSignal }
 ): Promise<
   MaybeResult<
     FetchWithTokenErrorCode | DcsCompletionErrorCode,
@@ -365,6 +366,7 @@ export async function dcsCompletion(
     response = await platformFetch(`${dcsHost}/chat/completions`, {
       method: 'POST',
       credentials: 'include',
+      signal: options?.signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body, stream: false }),
     });

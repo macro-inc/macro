@@ -1,5 +1,6 @@
 import { isErr } from '@core/util/maybeResult';
 import { dcsCompletion } from '@service-cognition/client';
+import { z } from 'zod';
 
 type StructuredOutputSchema = {
   type: string;
@@ -8,12 +9,25 @@ type StructuredOutputSchema = {
   additionalProperties: boolean;
 };
 
+function toJsonSchema(schema: z.ZodType | StructuredOutputSchema) {
+  if (!('safeParse' in schema)) {
+    return schema;
+  }
+
+  return z.toJSONSchema(schema, {
+    target: 'draft-07',
+    unrepresentable: 'throw',
+    cycles: 'throw',
+    reused: 'inline',
+  });
+}
+
 /**
  * Sends a structured output completion to the dcs
  *
  * @type T - The type of the completion
  * @param prompt - The prompt to send to the dcs
- * @param schema - A valid openai structured output schema
+ * @param schema - A Zod v4 schema or valid OpenAI structured output schema
  * @param schema_name - The name of the schema (should be formatted using snake case)
  *
  * @returns The completion response
@@ -38,7 +52,7 @@ type StructuredOutputSchema = {
  */
 export async function structuredOutputCompletion<T>(
   prompt: string,
-  schema: StructuredOutputSchema,
+  schema: z.ZodType<T> | StructuredOutputSchema,
   schema_name: string
 ): Promise<T | undefined> {
   const response = await dcsCompletion({
@@ -49,7 +63,7 @@ export async function structuredOutputCompletion<T>(
       json_schema: {
         name: schema_name,
         strict: true,
-        schema,
+        schema: toJsonSchema(schema),
       },
     },
   });
@@ -65,5 +79,6 @@ export async function structuredOutputCompletion<T>(
     return undefined;
   }
 
-  return JSON.parse(content) as T;
+  const json = JSON.parse(content);
+  return 'safeParse' in schema ? schema.parse(json) : (json as T);
 }
