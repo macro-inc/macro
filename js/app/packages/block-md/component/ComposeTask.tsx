@@ -165,7 +165,6 @@ export interface ComposeTaskProps {
   initialTitle?: string;
   initialContent?: string;
   placeholder?: string;
-  initialAssigneeId?: string;
   initialAssigneeIds?: string[];
   /**
    * When provided, replaces the default success behavior (auto-copy link +
@@ -184,7 +183,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       if (props.initialAssigneeIds && props.initialAssigneeIds.length > 0) {
         return [...new Set(props.initialAssigneeIds)];
       }
-      const id = props.initialAssigneeId ?? currentUserId();
+      const id = currentUserId();
       return id ? [id] : [];
     })();
     return {
@@ -207,7 +206,6 @@ export function ComposeTask(props: ComposeTaskProps) {
     if (
       !props.initialTitle &&
       !props.initialContent &&
-      !props.initialAssigneeId &&
       !props.initialAssigneeIds?.length
     ) {
       const draft = loadTaskComposerDraft();
