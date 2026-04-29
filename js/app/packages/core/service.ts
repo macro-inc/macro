@@ -330,22 +330,25 @@ export function withFetchErrors<const T extends string>(
 type AnyZodType = z.core.SomeType;
 
 type UnionToIntersection<U> = (
-  U extends unknown ? (value: U) => void : never
+  U extends unknown
+    ? (value: U) => void
+    : never
 ) extends (value: infer I) => void
   ? I
   : never;
 
-type NonNullableShape<T extends AnyZodType> = T extends z.ZodOptional<infer U>
-  ? NonNullableShape<U>
-  : T extends z.ZodNullable<infer U>
+type NonNullableShape<T extends AnyZodType> =
+  T extends z.ZodOptional<infer U>
     ? NonNullableShape<U>
-    : T extends z.ZodIntersection<infer Left, infer Right>
-      ? NonNullableShape<Left> & NonNullableShape<Right>
-      : T extends z.ZodUnion<infer Options>
-        ? UnionToIntersection<NonNullableShape<Options[number]>>
-        : T extends z.ZodObject<infer Shape>
-          ? Shape
-          : T;
+    : T extends z.ZodNullable<infer U>
+      ? NonNullableShape<U>
+      : T extends z.ZodIntersection<infer Left, infer Right>
+        ? NonNullableShape<Left> & NonNullableShape<Right>
+        : T extends z.ZodUnion<infer Options>
+          ? UnionToIntersection<NonNullableShape<Options[number]>>
+          : T extends z.ZodObject<infer Shape>
+            ? Shape
+            : T;
 
 type LooseRawShape = Record<string, z.ZodAny>;
 
