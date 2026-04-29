@@ -22,15 +22,15 @@ impl ChatBackfillSource for PgChatSource {
         req: &ChatBackfillRequest,
         offset: usize,
     ) -> Result<SourcePage, BackfillError> {
-        let chat_ids = (!req.chat_ids.is_empty()).then(|| req.chat_ids.clone());
-        let user_ids = (!req.user_ids.is_empty()).then(|| req.user_ids.clone());
+        let chat_ids = (!req.chat_ids.is_empty()).then_some(&req.chat_ids);
+        let user_ids = (!req.user_ids.is_empty()).then_some(&req.user_ids);
 
         let batch = macro_db_client::chat::get::get_chat_messages_for_search_backfill(
             &self.db,
             self.page_size as i64,
             offset as i64,
-            chat_ids.as_ref(),
-            user_ids.as_ref(),
+            chat_ids,
+            user_ids,
         )
         .await
         .map_err(BackfillError::Source)?;
