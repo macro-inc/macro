@@ -107,7 +107,7 @@ export function Comment(
         await navigator.clipboard.writeText(url);
         toast.success('Link copied to clipboard');
       } catch (_) {
-        toast.failure('Count not copy link');
+        toast.failure('Could not copy link');
       }
     };
   };
