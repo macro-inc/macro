@@ -33,7 +33,9 @@ const CommentText = (props: { text: string; isThreaded?: boolean }) => {
   );
 };
 
-function CommentContainer(props: ParentProps<{ isThreaded?: boolean; isHighlighted?: boolean }>) {
+function CommentContainer(
+  props: ParentProps<{ isThreaded?: boolean; isHighlighted?: boolean }>
+) {
   return (
     <div
       class="relative isolate group rounded-sm"
@@ -71,8 +73,11 @@ export function Comment(
   const maybeBlockName = useMaybeBlockAliasedName();
   const commentsContext = useContext(CommentsContext);
 
-  const { commentOperations, setActiveThread, highlightedCommentId } = commentsContext;
-  const isHighlighted = createMemo(() => highlightedCommentId() === props.comment.id);
+  const { commentOperations, setActiveThread, highlightedCommentId } =
+    commentsContext;
+  const isHighlighted = createMemo(
+    () => highlightedCommentId() === props.comment.id
+  );
 
   const isResolved = createMemo(() => props.comment.resolved ?? false);
   const date = () => props.comment.createdAt;
@@ -113,7 +118,10 @@ export function Comment(
     <Show
       when={isEditing()}
       fallback={
-        <CommentContainer isThreaded={props.isThreaded} isHighlighted={isHighlighted()}>
+        <CommentContainer
+          isThreaded={props.isThreaded}
+          isHighlighted={isHighlighted()}
+        >
           <Show when={props.isThreaded}>
             <ThreadLine />
           </Show>
@@ -192,10 +200,13 @@ export function CommentReply(
   }>
 ) {
   const thisAuthor = useAuthor();
-  const { getCommentById, highlightedCommentId, documentId } = useContext(CommentsContext);
+  const { getCommentById, highlightedCommentId, documentId } =
+    useContext(CommentsContext);
   const maybeBlockName = useMaybeBlockAliasedName();
   const reply = createMemo(() => getCommentById(props.replyId));
-  const isHighlighted = createMemo(() => highlightedCommentId() === props.replyId);
+  const isHighlighted = createMemo(
+    () => highlightedCommentId() === props.replyId
+  );
 
   const copyLink = () => {
     if (!maybeBlockName) return;
@@ -231,7 +242,10 @@ export function CommentReply(
       <Show
         when={isEditing()}
         fallback={
-          <CommentContainer isThreaded={props.isThreaded} isHighlighted={isHighlighted()}>
+          <CommentContainer
+            isThreaded={props.isThreaded}
+            isHighlighted={isHighlighted()}
+          >
             <Show when={props.isThreaded}>
               <ThreadLine />
             </Show>
