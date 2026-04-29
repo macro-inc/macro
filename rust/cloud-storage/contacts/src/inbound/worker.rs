@@ -59,13 +59,16 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
         sqs_message: &aws_sdk_sqs::types::Message,
     ) -> Result<(), rootcause::Report> {
         match message_from_sqs(sqs_message) {
-            Some(message) => self.service.process_message(&message).await,
-            None => tracing::warn!(
-                message_id=?sqs_message.message_id,
-                "SQS message body could not be parsed as ContactsMessage"
-            ),
+            Some(message) => self.service.process_message(message).await,
+            None => {
+                tracing::warn!(
+                    message_id=?sqs_message.message_id,
+                    "SQS message body could not be parsed as ContactsMessage"
+                );
+
+                Ok(())
+            }
         }
-        Ok(())
     }
 
     async fn cleanup_message(

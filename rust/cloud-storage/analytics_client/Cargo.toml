@@ -1,8 +1,8 @@
 [package]
-edition = "2021"
+edition = "2024"
 name = "analytics_client"
-version = "0.1.0"
 publish = false
+version = "0.1.0"
 
 [dependencies]
 chrono = { workspace = true }

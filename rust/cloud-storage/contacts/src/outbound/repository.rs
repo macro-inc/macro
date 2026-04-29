@@ -20,26 +20,34 @@ impl DbContactsRepository {
 }
 
 impl ContactsRepository for DbContactsRepository {
-    async fn get_contacts(&self, user_id: &str) -> Result<Vec<String>, Report> {
+    async fn get_contacts(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
         let rows = sqlx::query!(
             "
             SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
             UNION
             SELECT user2 AS contact FROM contacts_connections WHERE user1 = $1
             ",
-            user_id
+            user_id.as_ref()
         )
         .fetch_all(&self.db)
         .await?;
 
-        Ok(rows.into_iter().filter_map(|r| r.contact).collect())
+        Ok(rows
+            .into_iter()
+            .filter_map(|r| r.contact)
+            .filter_map(|s| MacroUserIdStr::try_from(s).ok())
+            .collect())
     }
 
-    async fn create_connections<'a>(
+    async fn create_connections(
         &self,
-        connections: impl Iterator<Item = (MacroUserIdStr<'a>, MacroUserIdStr<'a>)> + Send,
+        connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
     ) -> Result<(), Report> {
-        let (users1, users2): (Vec<MacroUserIdStr<'a>>, Vec<MacroUserIdStr<'a>>) = connections
+        let (users1, users2): (Vec<_>, Vec<_>) = connections
+            .into_iter()
             .map(|(a, b)| {
                 if a.as_ref() <= b.as_ref() {
                     (a, b)

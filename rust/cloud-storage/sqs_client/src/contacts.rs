@@ -1,6 +1,7 @@
 use crate::SQS;
 use contacts::domain::models::messages::ContactsMessage;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::collections::HashSet;
 
 impl SQS {
     pub fn contacts_queue(mut self, contacts_queue: &str) -> Self {
@@ -8,10 +9,10 @@ impl SQS {
         self
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, users), err)]
     pub async fn enqueue_contacts(
         &self,
-        users: Vec<MacroUserIdStr<'static>>,
+        users: HashSet<MacroUserIdStr<'static>>,
     ) -> anyhow::Result<()> {
         if let Some(contacts_queue) = &self.contacts_queue {
             let message_str = serde_json::to_string(&ContactsMessage { users })?;

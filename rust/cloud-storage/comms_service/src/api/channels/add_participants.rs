@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::api::channels::create_channel::to_lowercase;
 use crate::api::context::{AppState, ChannelImpl};
 use crate::api::extractors::{
@@ -134,7 +136,7 @@ pub async fn handler(
             .concat()
             .into_iter()
             .map(MacroUserIdStr::try_from)
-            .collect::<Result<Vec<_>, _>>()
+            .collect::<Result<HashSet<_>, _>>()
             .map_err(|e| {
                 tracing::error!(error=?e, "invalid user id for contacts");
                 (StatusCode::BAD_REQUEST, "invalid user id".to_string())

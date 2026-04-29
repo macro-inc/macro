@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::api::context::AppState;
 use anyhow::Result;
 use axum::{
@@ -149,7 +151,7 @@ pub async fn create_channel_handler(
         let contacts_users = all_users
             .into_iter()
             .map(MacroUserIdStr::try_from)
-            .collect::<Result<Vec<_>, _>>()
+            .collect::<Result<HashSet<_>, _>>()
             .map_err(|e| {
                 tracing::error!(error=?e, "invalid user id for contacts");
                 (StatusCode::BAD_REQUEST, "invalid user id".to_string())
