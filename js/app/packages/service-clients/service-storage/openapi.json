@@ -6526,7 +6526,7 @@
           "transcriptId": {
             "type": "string",
             "format": "uuid",
-            "description": "Stable DB-row identifier for the segment. Always present and unique\nwithin a call — clients use this for deep-link targeting (e.g. search\n\"go to\" navigation) where `sequence_num` is only an ordering hint."
+            "description": "Stable DB-row id for the segment."
           }
         }
       },

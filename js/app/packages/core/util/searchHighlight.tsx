@@ -96,12 +96,12 @@ export function highlightTermsInText(text: string, terms: string[]): string {
 /**
  * Creates a single-line window around the first <macro_em> highlight.
  * - Collapses newlines and invisible chars into a clean single line
- * - Targets ~`2 * chars` total visible characters around the highlight
- * - When one side is shorter than `chars`, donates the unused budget to
- *   the other side so the rendered row uses the full available width
+ * - If the highlight is within `chars` of the start, keeps the start
+ * - Otherwise, trims the front to show context before the highlight
+ * - Trims the end to keep total visible length reasonable
  *
  * @param text - Content with <macro_em> tags
- * @param chars - Half-width visible character budget (each side of highlight)
+ * @param chars - Max visible characters to show on each side of the highlight
  */
 export function windowSearchMatch(text: string, chars: number): string {
   let line = stripInvisibleChars(text);
@@ -121,11 +121,8 @@ export function windowSearchMatch(text: string, chars: number): string {
       ? 0
       : line
           .slice(lastCloseIndex + macroClose.length)
-          .replace(/<\/?macro_em>/g, '')
-          .replace(INVISIBLE_CHARS_RE, '').length;
+          .replace(/<\/?macro_em>/g, '').length;
 
-  // Half-budget is `chars`; rebalance so unused space on one side goes to
-  // the other (otherwise short-prefix or short-suffix rows under-fill).
   const totalBudget = chars * 2;
   const frontKeep = Math.max(chars, totalBudget - visibleAfter);
   const backKeep = Math.max(chars, totalBudget - visibleBefore);
@@ -149,8 +146,7 @@ export function windowSearchMatch(text: string, chars: number): string {
     const afterLastTag = finalCloseIndex + macroClose.length;
     const remainingVisible = line
       .slice(afterLastTag)
-      .replace(/<\/?macro_em>/g, '')
-      .replace(INVISIBLE_CHARS_RE, '').length;
+      .replace(/<\/?macro_em>/g, '').length;
     if (remainingVisible > backKeep) {
       let endCut = afterLastTag + backKeep;
       for (let i = endCut; i < line.length; i++) {

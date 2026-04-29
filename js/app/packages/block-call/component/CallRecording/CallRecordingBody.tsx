@@ -43,9 +43,6 @@ export function CallRecordingBody(props: {
     sortTranscriptSegments(record().transcript)
   );
 
-  // The recording starts when the call started, not when the first
-  // transcript segment was spoken — anchor video offsets to call.startedAt
-  // so search hits and the transcript view agree.
   const timelineStartMs = createMemo(() => {
     const ms = new Date(record().startedAt).getTime();
     return Number.isFinite(ms) ? ms : null;
@@ -111,9 +108,6 @@ export function CallRecordingBody(props: {
 
     setPlaybackSeconds(targetSeconds);
     setAllowFutureLead(false);
-    // Explicit bump so transcript-only calls (no video / video not loaded)
-    // still scroll the active row into view. Deduped against the `seeked`
-    // event that fires when video is present.
     bumpVideoSeekGeneration(targetSeconds);
 
     if (video) video.currentTime = targetSeconds;
@@ -134,10 +128,6 @@ export function CallRecordingBody(props: {
       () => props.transcriptTarget?.(),
       (target) => {
         if (!target) return;
-        // If the user previously collapsed the transcript, opening the panel
-        // here is what makes the deep-linked row actually visible. The scroll
-        // container's ResizeObserver re-runs `scrollActiveIntoView` after the
-        // open animation, so no manual defer is needed.
         if (hasTranscripts()) setTranscriptOpen(true);
         goToTranscriptSegment(target.transcriptId);
       }

@@ -160,7 +160,6 @@ describe('windowSearchMatch', () => {
   });
 
   it('donates unused front budget to back when highlight is at start', () => {
-    // chars=10, total budget 20. Front is empty so back should keep ~20.
     const longSuffix = 'b '.repeat(40);
     const text = `<macro_em>match</macro_em> ${longSuffix}`;
     const result = windowSearchMatch(text, 10);

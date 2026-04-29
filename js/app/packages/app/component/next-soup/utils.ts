@@ -314,9 +314,6 @@ export const openEntityInSplitFromUnifiedList = async (
   const { openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
-  // For snippet entities (email, call), fall back to the rendered snippet
-  // hit's location so the row click lands on the previewed match rather
-  // than the entity's default landing position.
   if (!location && isSnippetEntity(entity)) {
     location = getSnippetHit(entity)?.location;
   }

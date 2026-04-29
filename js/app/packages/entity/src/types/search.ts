@@ -29,7 +29,6 @@ type EmailMessageHighlightLocation = {
 type CallRecordSegmentHighlightLocation = {
   type: 'call_record';
   callId: string;
-  /** Stable DB-row id for the segment — the safe deep-link key. */
   transcriptId: string;
 };
 
@@ -82,7 +81,6 @@ export type CallRecordContentHitData = {
   content: string;
   senderId: string;
   sentAt: DateValue;
-  /** Seconds from the start of the call to this segment. */
   videoSeconds: number;
   location: CallRecordSegmentHighlightLocation;
 };

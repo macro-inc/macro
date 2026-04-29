@@ -1000,9 +1000,7 @@ export const getCallRecordResponse = zod
             transcriptId: zod
               .string()
               .uuid()
-              .describe(
-                'Stable DB-row identifier for the segment. Always present and unique\nwithin a call — clients use this for deep-link targeting (e.g. search\n\"go to\" navigation) where `sequence_num` is only an ordering hint.'
-              ),
+              .describe('Stable DB-row id for the segment.'),
           })
           .describe('A transcript segment as returned in a [`CallRecord`].')
       )

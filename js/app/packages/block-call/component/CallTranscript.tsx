@@ -148,7 +148,6 @@ function GroupedTranscriptSegmentRow(props: {
 export function CallTranscript(props: {
   transcript: CallRecordTranscriptSegment[];
   channelId: string;
-  /** Anchor for video offsets — the moment the recording starts (call.startedAt). */
   timelineStartMs: number | null;
   activeSequenceNum?: number | null;
   /** Bumps when the user seeks via the native video controls (deduped in CallBlockAdapter). */

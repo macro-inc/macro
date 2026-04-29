@@ -1,7 +1,3 @@
-/**
- * Formats a duration as `m:ss` (or `h:mm:ss` past one hour). Used for
- * video / call playback offsets.
- */
 export function formatVideoTimestamp(totalSeconds: number): string {
   const clamped = Math.max(0, Math.floor(totalSeconds));
   const hours = Math.floor(clamped / 3600);

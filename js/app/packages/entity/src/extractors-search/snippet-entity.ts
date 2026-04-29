@@ -19,9 +19,7 @@ export const isSnippetEntity = (entity: EntityData): entity is SnippetEntity =>
   isEmailEntity(entity) || isCallEntity(entity);
 
 /**
- * The hit rendered as the row snippet for a SnippetEntity. Click handlers
- * use this hit's location so the row click lands on the previewed match.
- *
+ * Hit rendered as the row snippet for a SnippetEntity:
  * - email: longest hit (best context window around the highlight)
  * - call: first hit (typically the first transcript match)
  */

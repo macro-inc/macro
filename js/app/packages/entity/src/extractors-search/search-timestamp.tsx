@@ -11,9 +11,7 @@ interface SearchTimestampProps {
 }
 
 /**
- * Displays the timestamp of a search hit:
- * - call_record: offset within the call (0:02, 1:24, …)
- * - channel/email: relative date
+ * Displays the timestamp of a search hit (for channel/email/call_record)
  */
 export function SearchTimestamp(props: SearchTimestampProps) {
   const formatted = () => {
