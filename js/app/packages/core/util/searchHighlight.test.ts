@@ -175,8 +175,9 @@ describe('windowSearchMatch', () => {
     const longPrefix = 'a '.repeat(40);
     const text = `${longPrefix}<macro_em>match</macro_em>`;
     const result = windowSearchMatch(text, 10);
-    const visibleBefore = result.slice(0, result.indexOf('<macro_em>')).trim()
-      .length;
+    const visibleBefore = result
+      .slice(0, result.indexOf('<macro_em>'))
+      .trim().length;
     expect(visibleBefore).toBeGreaterThan(10);
     expect(visibleBefore).toBeLessThanOrEqual(20);
   });
