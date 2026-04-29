@@ -45,12 +45,14 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
   if (
     include.threadId?.length ||
     include.emailSender?.length ||
-    include.emailShared
+    include.emailShared ||
+    include.emailImportance !== undefined
   ) {
     filters.email_filters = {
       email_thread_ids: include.threadId,
       senders: include.emailSender,
       shared: include.emailShared,
+      importance: include.emailImportance,
     };
   }
 
