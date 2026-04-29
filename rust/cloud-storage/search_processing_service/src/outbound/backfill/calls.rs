@@ -23,14 +23,16 @@ impl CallBackfillSource for PgCallSource {
         req: &CallBackfillRequest,
         offset: usize,
     ) -> Result<SourcePage, BackfillError> {
-        // Caller passed an explicit set of ids: emit them all on the first
-        // page; subsequent pages report 0 rows so the orchestrator stops.
+        // Caller passed an explicit set of ids: page through them at the
+        // adapter's configured page size so the explicit-ids branch and the
+        // full-scan branch share the same loop shape and failure semantics.
         if !req.call_ids.is_empty() {
-            if offset > 0 {
+            let start = offset;
+            if start >= req.call_ids.len() {
                 return Ok(SourcePage::empty());
             }
-            let messages: Vec<SearchQueueMessage> = req
-                .call_ids
+            let end = (start + self.page_size).min(req.call_ids.len());
+            let messages: Vec<SearchQueueMessage> = req.call_ids[start..end]
                 .iter()
                 .map(|id| {
                     SearchQueueMessage::CallRecord(CallRecordMessage {
@@ -38,10 +40,9 @@ impl CallBackfillSource for PgCallSource {
                     })
                 })
                 .collect();
-            let rows_consumed = messages.len();
             return Ok(SourcePage {
                 messages,
-                rows_consumed,
+                rows_consumed: end - start,
             });
         }
 
