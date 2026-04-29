@@ -167,14 +167,14 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       ? () => soup.focus.set(focusedIdBeforeMarkDone)
       : undefined;
 
-    await execute(entities, restoreFocus);
-
     soup.selection.clear();
 
     if (nextEntity) {
       soup.focus.set(nextEntity.id);
       onNavigate?.(nextEntity);
     }
+
+    await execute(entities, restoreFocus);
   };
 
   return { canExecute, execute, executeWithSoup };
