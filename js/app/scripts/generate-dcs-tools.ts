@@ -109,7 +109,7 @@ async function generateSchemasFile(schema: CombinedSchema) {
 
   await Bun.write(
     schemasFile,
-    `${warning}\nimport { z } from 'zod';\n\n${content.join('\n\n')}\n`
+    `${warning}\nimport { z } from 'zod/v3';\n\n${content.join('\n\n')}\n`
   );
 }
 

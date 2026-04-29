@@ -8,6 +8,6 @@
     "pdfjs-dist": "github:macro-inc/pdf.js#v2.16.52-web",
     "solid-custom-scrollbars": "^0.1.7",
     "solid-styled-components": "^0.28.5",
-    "zod-validation-error": "^3.4.0"
+    "zod-validation-error": "^5.0.0"
   }
 }

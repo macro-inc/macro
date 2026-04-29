@@ -30,11 +30,11 @@
 		"@lexical/selection": "0.32.1",
 		"@lexical/table": "0.32.1",
 		"@lexical/utils": "0.32.1",
-		"chanfana": "^2.6.3",
+		"chanfana": "^3.3.0",
 		"hono": "^4.6.20",
 		"lexical": "0.32.1",
 		"nanoid": "^5.1.5",
-		"zod": "^3.24.1"
+		"zod": "^4.3.6"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.2.19",
