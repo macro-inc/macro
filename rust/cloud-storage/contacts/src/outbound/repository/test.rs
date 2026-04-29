@@ -47,10 +47,7 @@ async fn test_create_connections_ordering(pool: PgPool) -> sqlx::Result<()> {
 )]
 async fn test_get_contacts(pool: PgPool) -> sqlx::Result<()> {
     let repo = DbContactsRepository::new(pool);
-    let contacts = repo
-        .get_contacts(mid("macro|a@test.com"))
-        .await
-        .unwrap();
+    let contacts = repo.get_contacts(mid("macro|a@test.com")).await.unwrap();
     assert_eq!(contacts.len(), 3);
     Ok(())
 }

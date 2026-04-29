@@ -1,6 +1,9 @@
 use crate::domain::models::graph::{UndirectedGraph, Vertex};
 use crate::domain::models::messages::ContactsMessage;
-use crate::domain::ports::{ContactsIngress, ContactsIngressQueue, ContactsNotifier, ContactsRepository};
+use crate::domain::ports::{
+    ContactsIngress, ContactsIngressQueue, ContactsNotifier, ContactsRepository, ContactsService,
+};
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::collections::HashSet;
@@ -16,22 +19,25 @@ pub struct ContactsDomainService<R, N> {
 
 impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
     /// Queries a user's contacts from the repository.
-    pub async fn query_contacts(&self, user_id: MacroUserIdStr<'_>) -> Option<Vec<String>> {
-        let user_id_str = user_id.as_ref().to_owned();
-        self.repository
-            .get_contacts(user_id)
-            .await
-            .inspect_err(
-                |e| tracing::error!(error=?e, user_id=%user_id_str, "failed to get contacts"),
-            )
-            .ok()
-            .map(|v| v.into_iter().map(String::from).collect())
+    #[tracing::instrument(err, skip(self))]
+    async fn query_contacts(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        let mut res = self.repository.get_contacts(user_id.copied()).await?;
+        // because the database data is a graph there is no edge from Self<->Self
+        // we just aritificially insert self as a special case
+        res.push(user_id.into_owned());
+        Ok(res)
     }
 
     /// Processes a contacts SQS message by computing all pairwise connections
     /// from the user list and persisting them.
-    #[instrument(skip(self))]
-    pub async fn process_message(&self, msg: ContactsMessage) -> Result<(), rootcause::Report> {
+    #[instrument(err, skip(self))]
+    pub(crate) async fn process_message(
+        &self,
+        msg: ContactsMessage,
+    ) -> Result<(), rootcause::Report> {
         let connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)> = {
             let graph = UndirectedGraph::new(msg.users.iter().map(Vertex::new)).complete();
             graph
@@ -47,6 +53,26 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
             .invalidate_contacts_for_users(msg.users.into_iter().collect())
             .await?;
         Ok(())
+    }
+}
+
+impl<R: ContactsRepository, N: ContactsNotifier> ContactsService for ContactsDomainService<R, N> {
+    async fn query_contacts(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        self.query_contacts(user_id).await
+    }
+
+    async fn add_contact(
+        &self,
+        caller: MacroUserIdStr<'_>,
+        recipient: MacroUserIdStr<'_>,
+    ) -> Result<(), rootcause::Report> {
+        self.process_message(ContactsMessage {
+            users: HashSet::from([caller.into_owned(), recipient.into_owned()]),
+        })
+        .await
     }
 }
 
