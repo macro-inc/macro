@@ -196,7 +196,7 @@ pub(super) async fn set_custom_speakers(
         .collect();
     let custom_speakers: Vec<Option<&str>> = assignments
         .iter()
-        .map(|a| a.custom_speaker.as_deref())
+        .map(|a| a.custom_speaker.as_deref().map(|c| c.as_ref()))
         .collect();
     sqlx::query!(
         r#"

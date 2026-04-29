@@ -176,8 +176,9 @@ pub struct EditCallRecordRequest {
 pub struct CustomSpeakerAssignment {
     /// The diarization label whose rows this assignment targets.
     pub diarized_speaker_id: String,
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
     /// Macro user id to attribute matching rows to, or `None` to clear.
-    pub custom_speaker: Option<String>,
+    pub custom_speaker: Option<MacroUserIdStr<'static>>,
 }
 
 /// Body of `PATCH /call/record/{call_id}/transcript`.

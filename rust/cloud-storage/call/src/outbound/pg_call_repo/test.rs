@@ -2020,7 +2020,7 @@ async fn patch_call_transcript_custom_speakers_sets_and_clears(
         &[
             CustomSpeakerAssignment {
                 diarized_speaker_id: "spk-arch-a0".to_string(),
-                custom_speaker: Some("macro|user-c@test.com".to_string()),
+                custom_speaker: Some(USER_C.clone()),
             },
             CustomSpeakerAssignment {
                 diarized_speaker_id: "spk-arch-b0".to_string(),
@@ -2085,7 +2085,7 @@ async fn patch_call_transcript_custom_speakers_unknown_diarized_id_is_noop(
         &CALL_ARCHIVED,
         &[CustomSpeakerAssignment {
             diarized_speaker_id: "spk-does-not-exist".to_string(),
-            custom_speaker: Some("macro|user-c@test.com".to_string()),
+            custom_speaker: Some(USER_C.clone()),
         }],
     )
     .await?;

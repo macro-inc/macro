@@ -923,18 +923,6 @@ impl<
         let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
 
-        // Validate every supplied custom_speaker parses as a Macro user id.
-        for assignment in &request.assignments {
-            if let Some(s) = assignment.custom_speaker.as_deref()
-                && MacroUserIdStr::parse_from_str(s).is_err()
-            {
-                return Err(CallError::InvalidRequest(format!(
-                    "invalid custom_speaker {s:?} for diarized_speaker_id {:?}",
-                    assignment.diarized_speaker_id
-                )));
-            }
-        }
-
         self.repo
             .patch_call_transcript_custom_speakers(&call_id, &request.assignments)
             .await
