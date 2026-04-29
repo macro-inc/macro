@@ -1,5 +1,5 @@
 use crate::domain::models::messages::ContactsMessage;
-use crate::domain::ports::{ContactsNotifier, ContactsRepository};
+use crate::domain::ports::{ContactsNotifier, ContactsRepository, ContactsService};
 use crate::domain::service::ContactsDomainService;
 use axum::extract::{FromRequestParts, Json, State};
 use axum::http::StatusCode;
@@ -23,7 +23,8 @@ use utoipa::{OpenApi, ToSchema};
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct GetContactsResponse {
     /// The list of contact user IDs.
-    pub contacts: Vec<String>,
+    #[schema(value_type = Vec<String>)]
+    pub contacts: Vec<MacroUserIdStr<'static>>,
 }
 
 /// Request body for POST /contacts.
@@ -32,41 +33,6 @@ pub struct AddContactRequest {
     /// The user ID to add as a contact.
     #[schema(value_type = String)]
     pub user_id: MacroUserIdStr<'static>,
-}
-
-/// Trait for contacts service operations used by HTTP handlers.
-pub trait ContactsServicePort: Send + Sync + 'static {
-    /// Queries a user's contacts.
-    fn query_contacts(
-        &self,
-        user_id: MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Option<Vec<String>>> + Send;
-
-    /// Adds a contact connection between two users.
-    fn add_contact(
-        &self,
-        caller: MacroUserIdStr<'_>,
-        recipient: MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
-}
-
-impl<R: ContactsRepository, N: ContactsNotifier> ContactsServicePort
-    for ContactsDomainService<R, N>
-{
-    async fn query_contacts(&self, user_id: MacroUserIdStr<'_>) -> Option<Vec<String>> {
-        self.query_contacts(user_id).await
-    }
-
-    async fn add_contact(
-        &self,
-        caller: MacroUserIdStr<'_>,
-        recipient: MacroUserIdStr<'_>,
-    ) -> Result<(), rootcause::Report> {
-        self.process_message(ContactsMessage {
-            users: HashSet::from([caller.into_owned(), recipient.into_owned()]),
-        })
-        .await
-    }
 }
 
 /// GET /contacts handler.
@@ -81,13 +47,16 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsServicePort
     (status = 500, body=String)))
 ]
 #[instrument(skip(macro_user_id, contacts), fields(user_id = macro_user_id.as_ref()))]
-pub async fn handler<S: ContactsServicePort>(
+pub async fn handler<S: ContactsService>(
     State(contacts): State<Arc<S>>,
     MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
 ) -> impl IntoResponse {
     match contacts.query_contacts(macro_user_id).await {
-        Some(contacts) => (StatusCode::OK, Json(Some(GetContactsResponse { contacts }))),
-        None => (StatusCode::NOT_FOUND, Json(None)),
+        Ok(contacts) if !contacts.is_empty() => {
+            (StatusCode::OK, Json(Some(GetContactsResponse { contacts })))
+        }
+        Ok(_) => (StatusCode::NOT_FOUND, Json(None)),
+        Err(_e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(None)),
     }
 }
 
@@ -103,7 +72,7 @@ pub async fn handler<S: ContactsServicePort>(
     (status = 500, body=String)))
 ]
 #[instrument(skip(service, macro_user_id), err)]
-pub async fn add_contact_handler<S: ContactsServicePort>(
+pub async fn add_contact_handler<S: ContactsService>(
     State(service): State<Arc<S>>,
     MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
     Json(body): Json<AddContactRequest>,
@@ -155,7 +124,7 @@ where
 }
 
 /// Builds the contacts API router with rate limiting applied to POST.
-pub fn contacts_router<R: RateLimitService + Clone, S: ContactsServicePort>(
+pub fn contacts_router<R: RateLimitService + Clone, S: ContactsService>(
     rate_limiter: R,
 ) -> Router<Arc<S>> {
     let post_route = Router::new()
@@ -171,7 +140,7 @@ pub fn contacts_router<R: RateLimitService + Clone, S: ContactsServicePort>(
 }
 
 /// Builds the full API router with JWT auth middleware and rate limiting.
-pub fn api_router<S: ContactsServicePort>(app_state: AppState<S>) -> Router {
+pub fn api_router<S: ContactsService>(app_state: AppState<S>) -> Router {
     contacts_router(app_state.rate_limit_service.clone())
         .layer(axum::middleware::from_fn_with_state(
             app_state.jwt_args.clone(),

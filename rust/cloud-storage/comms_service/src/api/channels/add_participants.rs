@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use contacts::domain::ports::ContactsIngress;
+
 use crate::api::channels::create_channel::to_lowercase;
 use crate::api::context::{AppState, ChannelImpl};
 use crate::api::extractors::{

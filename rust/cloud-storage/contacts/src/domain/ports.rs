@@ -30,10 +30,7 @@ pub trait ContactsNotifier: Send + Sync + 'static {
 /// Port trait for publishing a contacts message to the ingress queue.
 pub trait ContactsIngressQueue: Send + Sync + 'static {
     /// Publish a contacts message to the queue.
-    fn publish(
-        &self,
-        message: ContactsMessage,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    fn publish(&self, message: ContactsMessage) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Port trait for enqueuing contacts messages for async processing.
@@ -43,4 +40,20 @@ pub trait ContactsIngress: Send + Sync + 'static {
         &self,
         users: HashSet<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Trait for contacts service operations
+pub trait ContactsService: Send + Sync + 'static {
+    /// Queries a user's contacts.
+    fn query_contacts(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, rootcause::Report>> + Send;
+
+    /// Adds a contact connection between two users.
+    fn add_contact(
+        &self,
+        caller: MacroUserIdStr<'_>,
+        recipient: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }

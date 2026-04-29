@@ -1,3 +1,5 @@
+use contacts::domain::ports::ContactsIngress;
+
 use crate::convert::{map_message_resource_to_service, map_thread_resources_to_service};
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::operations::shared::notify_search;
@@ -336,19 +338,20 @@ async fn handle_contacts_sync(
         return Ok(());
     }
 
-    let users: std::collections::HashSet<MacroUserIdStr<'static>> = std::iter::once(Ok(link.macro_id.clone()))
-        .chain(
-            connection_emails
-                .iter()
-                .map(|email| MacroUserIdStr::try_from_email(email)),
-        )
-        .collect::<Result<_, _>>()
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::SqsEnqueueFailed,
-                source: anyhow::anyhow!(e).context("invalid user email for contacts"),
-            })
-        })?;
+    let users: std::collections::HashSet<MacroUserIdStr<'static>> =
+        std::iter::once(Ok(link.macro_id.clone()))
+            .chain(
+                connection_emails
+                    .iter()
+                    .map(|email| MacroUserIdStr::try_from_email(email)),
+            )
+            .collect::<Result<_, _>>()
+            .map_err(|e| {
+                ProcessingError::NonRetryable(DetailedError {
+                    reason: FailureReason::SqsEnqueueFailed,
+                    source: anyhow::anyhow!(e).context("invalid user email for contacts"),
+                })
+            })?;
 
     ctx.contacts_ingress
         .enqueue_contacts(users)
