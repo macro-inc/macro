@@ -43,6 +43,14 @@ export function CallRecordingBody(props: {
     sortTranscriptSegments(record().transcript)
   );
 
+  // The recording starts when the call started, not when the first
+  // transcript segment was spoken — anchor video offsets to call.startedAt
+  // so search hits and the transcript view agree.
+  const timelineStartMs = createMemo(() => {
+    const ms = new Date(record().startedAt).getTime();
+    return Number.isFinite(ms) ? ms : null;
+  });
+
   const [transcriptOpen, setTranscriptOpen] = createSignal(true);
   const [participantsOpen, setParticipantsOpen] = createSignal(false);
   const [layoutDefaultsSeeded, setLayoutDefaultsSeeded] = createSignal(false);
@@ -79,6 +87,7 @@ export function CallRecordingBody(props: {
     getActiveTranscriptSequenceNum(
       sortedTranscript(),
       playbackSeconds(),
+      timelineStartMs(),
       allowFutureLead()
     )
   );
@@ -103,15 +112,11 @@ export function CallRecordingBody(props: {
   };
 
   const goToTranscriptSegment = (sequenceNum: number) => {
-    const segments = sortedTranscript();
-    const segment = segments.find((s) => s.sequenceNum === sequenceNum);
-    if (!segment) return;
-    const firstStartMs =
-      segments.length > 0 ? new Date(segments[0].startedAt).getTime() : NaN;
-    const seconds = getSegmentVideoSeconds(
-      segment,
-      Number.isFinite(firstStartMs) ? firstStartMs : null
+    const segment = sortedTranscript().find(
+      (s) => s.sequenceNum === sequenceNum
     );
+    if (!segment) return;
+    const seconds = getSegmentVideoSeconds(segment, timelineStartMs());
     if (seconds === null) return;
 
     setPlaybackSeconds(seconds);
@@ -244,6 +249,7 @@ export function CallRecordingBody(props: {
             transcriptOpen={transcriptOpen}
             participantsOpen={participantsOpen}
             activeSequenceNum={activeSequenceNum}
+            timelineStartMs={timelineStartMs}
             videoSeekGeneration={videoSeekGeneration}
             onToggleTranscript={toggleTranscript}
             onToggleParticipants={toggleParticipants}

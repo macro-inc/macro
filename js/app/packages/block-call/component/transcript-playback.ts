@@ -11,16 +11,20 @@ export function sortTranscriptSegments(
 export function getActiveTranscriptSequenceNum(
   sortedTranscript: CallRecordTranscriptSegment[],
   playbackSeconds: number,
+  timelineStartMs: number | null,
   allowFutureLead = true
 ): number | null {
-  if (sortedTranscript.length === 0 || playbackSeconds < 0) return null;
-  const firstStartMs = new Date(sortedTranscript[0].startedAt).getTime();
-  if (!Number.isFinite(firstStartMs)) return null;
+  if (
+    sortedTranscript.length === 0 ||
+    playbackSeconds < 0 ||
+    timelineStartMs === null ||
+    !Number.isFinite(timelineStartMs)
+  )
+    return null;
 
   // Bias slightly earlier so short segments feel responsive.
   const ACTIVE_LEAD_MS = 250;
-  const rawTimelineMs = firstStartMs + playbackSeconds * 1000;
-  if (rawTimelineMs < firstStartMs) return null;
+  const rawTimelineMs = timelineStartMs + playbackSeconds * 1000;
   const currentTimelineMs = allowFutureLead
     ? rawTimelineMs + ACTIVE_LEAD_MS
     : rawTimelineMs;

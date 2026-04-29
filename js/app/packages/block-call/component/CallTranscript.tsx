@@ -148,6 +148,8 @@ function GroupedTranscriptSegmentRow(props: {
 export function CallTranscript(props: {
   transcript: CallRecordTranscriptSegment[];
   channelId: string;
+  /** Anchor for video offsets — the moment the recording starts (call.startedAt). */
+  timelineStartMs: number | null;
   activeSequenceNum?: number | null;
   /** Bumps when the user seeks via the native video controls (deduped in CallBlockAdapter). */
   videoSeekGeneration?: number;
@@ -168,13 +170,7 @@ export function CallTranscript(props: {
       segment,
       groupedWithPrevious: shouldGroupWithPrevious(segment, sorted[index - 1]),
     }));
-    if (sorted.length === 0) return { items, timelineStartMs: null };
-
-    const firstStartMs = new Date(sorted[0].startedAt).getTime();
-    return {
-      items,
-      timelineStartMs: Number.isFinite(firstStartMs) ? firstStartMs : null,
-    };
+    return { items };
   });
 
   const scrollActiveIntoView = (
@@ -349,7 +345,7 @@ export function CallTranscript(props: {
                         isActive={
                           item.segment.sequenceNum === props.activeSequenceNum
                         }
-                        timelineStartMs={transcriptMeta().timelineStartMs}
+                        timelineStartMs={props.timelineStartMs}
                         onSeekToSeconds={props.onSeekToSeconds}
                       />
                     </div>
@@ -362,7 +358,7 @@ export function CallTranscript(props: {
                       isActive={
                         item.segment.sequenceNum === props.activeSequenceNum
                       }
-                      timelineStartMs={transcriptMeta().timelineStartMs}
+                      timelineStartMs={props.timelineStartMs}
                       onSeekToSeconds={props.onSeekToSeconds}
                     />
                   </div>
