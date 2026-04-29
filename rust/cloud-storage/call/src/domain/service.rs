@@ -999,13 +999,19 @@ impl<
         // effort — naming failures must not fail summarization.
         if record.custom_name.is_none() {
             match summarizer.generate_call_name(call_id, &summary).await {
-                Ok(name) => {
+                Ok(Some(name)) => {
                     if let Err(e) = self.repo.set_custom_name_if_null(call_id, &name).await {
                         tracing::error!(
                             error=?e, %call_id,
                             "failed to persist ai-generated call name"
                         );
                     }
+                }
+                Ok(None) => {
+                    tracing::info!(
+                        %call_id,
+                        "ai call naming returned no title; leaving name unset"
+                    );
                 }
                 Err(e) => {
                     tracing::error!(
@@ -1076,13 +1082,19 @@ impl<
 
             if record.custom_name.is_none() {
                 match summarizer.generate_call_name(&call_id, &summary).await {
-                    Ok(name) => {
+                    Ok(Some(name)) => {
                         if let Err(e) = repo.set_custom_name_if_null(&call_id, &name).await {
                             tracing::error!(
                                 error=?e, %call_id,
                                 "failed to persist ai-generated call name"
                             );
                         }
+                    }
+                    Ok(None) => {
+                        tracing::info!(
+                            %call_id,
+                            "ai call naming returned no title; leaving name unset"
+                        );
                     }
                     Err(e) => {
                         tracing::error!(
@@ -1139,7 +1151,7 @@ impl CallSummarizer for NoopCallSummarizer {
         &self,
         _call_id: &Uuid,
         _summary: &str,
-    ) -> Result<String, Self::Err> {
+    ) -> Result<Option<String>, Self::Err> {
         unreachable!(
             "NoopCallSummarizer::generate_call_name invoked; it exists only as a type placeholder when the optional summarizer is None"
         )

@@ -301,14 +301,19 @@ pub trait CallSummarizer: Send + Sync + 'static {
         transcript: Vec<CallRecordTranscriptSegment>,
     ) -> impl Future<Output = Result<String, Self::Err>> + Send;
 
-    /// Produce a short (typically 3–6 word) display name for the call from
-    /// its already-generated summary. Used by the auto-name flow only when
-    /// the call has no user-supplied `custom_name` yet.
+    /// Produce a short display name for the call from its already-generated
+    /// summary. Used by the auto-name flow only when the call has no
+    /// user-supplied `custom_name` yet.
+    ///
+    /// Returns `Ok(None)` when the summary has no substantive content
+    /// (silence, test call, accidental recording) so the caller can leave
+    /// the existing `custom_name` untouched rather than persisting a
+    /// generic placeholder.
     fn generate_call_name(
         &self,
         call_id: &Uuid,
         summary: &str,
-    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
