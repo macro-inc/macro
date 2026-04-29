@@ -13,10 +13,8 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import {
-  formatVideoTimestamp,
-  getSegmentVideoSeconds,
-} from './transcript-playback';
+import { formatVideoTimestamp } from '@core/util/duration';
+import { getSegmentVideoSeconds } from './transcript-playback';
 
 // Match the channel message grouping window (5 minutes).
 const GROUPING_WINDOW_MS = 5 * 60 * 1000;

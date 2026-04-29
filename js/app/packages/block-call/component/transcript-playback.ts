@@ -1,7 +1,5 @@
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
 
-export { formatVideoTimestamp } from '@core/util/duration';
-
 export function sortTranscriptSegments(
   transcript: CallRecordTranscriptSegment[]
 ): CallRecordTranscriptSegment[] {
