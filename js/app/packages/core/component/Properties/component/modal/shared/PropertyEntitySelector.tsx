@@ -238,6 +238,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const allEntities = entities();
     const userId = currentUserId();
 
+    // List is unvirtualized — revisit if these caps grow significantly.
     const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
     const MAX_SEARCH_RESULTS = 20;
 
