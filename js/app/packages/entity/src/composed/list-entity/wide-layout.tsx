@@ -17,7 +17,7 @@ import {
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
 import { AutomationWideContent } from './automation';
-import { CallWideContent } from './call';
+import { CallParticipants, CallWideContent } from './call';
 import { ChannelMessageWideContent, ChannelWideContent } from './channel';
 import { EmailWideContent } from './email';
 import type { LayoutProps } from './shared';
@@ -116,9 +116,12 @@ export function WideLayout(props: LayoutProps) {
         </Show>
         <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (
-            <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
-              <AttendanceBadge attended={entity().attended} />
-            </Show>
+            <>
+              <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
+                <AttendanceBadge attended={entity().attended} />
+              </Show>
+              <CallParticipants participantIds={entity().participantIds} />
+            </>
           )}
         </Show>
         <Show when={isTaskEntity(props.entity) && props.entity}>

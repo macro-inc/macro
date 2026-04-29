@@ -2,6 +2,7 @@ import { CommentsProvider } from '@block-md/comments/CommentsProvider';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
+import { useUrlParams } from '@core/component/ParamsProvider';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
 import { useUserId } from '@core/context/user';
 import {
@@ -148,7 +149,6 @@ import {
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, throttle } from '@solid-primitives/scheduled';
-import { useSearchParams } from '@solidjs/router';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/normalize-enter/';
 import {
@@ -163,6 +163,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   Show,
   untrack,
@@ -184,6 +185,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isIOS } from '@solid-primitives/platform';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { URL_PARAMS } from '@block-md/constants';
 
 false && fileFolderDrop;
 
@@ -204,23 +206,15 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const mdDocumentName = useBlockDocumentName('');
 
+  const blockHandle = blockHandleSignal.get;
   const saveMarkdownDocument = useSaveMarkdownDocument();
   const setMdStore = mdStore.set;
   const md = mdStore.get;
   const canEdit = useCanEdit();
   const canComment = useCanComment();
   const [blockElement] = blockElementSignal;
-  const [locationParams, setPendingLocationParams] =
-    createSignal<Record<string, string>>();
   const [findAndReplaceStore, setFindAndReplaceStore] = FindAndReplaceStore;
   const docSource = blockSourceSignal.get;
-
-  const blockHandle = blockHandleSignal.get;
-  createMethodRegistration(blockHandle, {
-    goToLocationFromParams: (params: Record<string, any>) => {
-      setPendingLocationParams({ ...params });
-    },
-  });
 
   const IS_SYNC = () => {
     return docSource() && isSourceSyncService(docSource()!);
@@ -421,35 +415,31 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   };
 
   const [highlightNodeId, setHighlightNodeId] = createSignal<string>();
-  const [searchParams] = useSearchParams();
-  const derivedSearchParams = createMemo(() => {
-    return {
-      ...searchParams,
-      ...locationParams(),
-    };
-  });
+  const [activeCommentIdParam, setActiveCommentIdParam] = createSignal<
+    string | undefined
+  >(undefined, { equals: false });
 
   const [activeLocation, setActiveLocation] =
     createSignal<PersistentLocation>();
   const [locationReady, setLocationReady] = createSignal(false);
 
-  createEffect(() => {
-    let nodeId = derivedSearchParams().node_id;
-    if (Array.isArray(nodeId)) {
-      nodeId = nodeId.length > 0 ? nodeId[0] : undefined;
-    }
-    if (typeof nodeId === 'string' && nodeId) {
-      setHighlightNodeId(nodeId);
-    }
-
-    const location = derivedSearchParams().location;
-    if (location && typeof location === 'string') {
-      const locationObj = parsePersistentLocation(location);
-      if (locationObj) {
-        setActiveLocation(locationObj);
+  const { nodeId, location, commentId } = useUrlParams(URL_PARAMS);
+  createEffect(on(nodeId, (id) => setHighlightNodeId(id ?? undefined)));
+  createEffect(
+    on(commentId, (id) => {
+      setActiveCommentIdParam(id ?? undefined);
+    })
+  );
+  createEffect(
+    on(location, (loc) => {
+      if (loc) {
+        const locationObj = parsePersistentLocation(loc);
+        if (locationObj) {
+          setActiveLocation(locationObj);
+        }
       }
-    }
-  });
+    })
+  );
 
   plugins.use(
     locationPlugin({
@@ -1044,7 +1034,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         </Show>
 
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
-          <CommentsProvider />
+          <CommentsProvider activeComment={activeCommentIdParam} />
         </Show>
 
         <ScopedPortal scope="block">

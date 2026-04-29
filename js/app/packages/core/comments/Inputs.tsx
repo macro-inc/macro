@@ -1,10 +1,11 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin';
 import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
 import XIcon from '@icon/regular/x.svg';
 import { batch, createEffect, createSignal, Show, useContext } from 'solid-js';
 import { CommentsContext, ThreadContext } from './Thread';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 
 export function EditBottomRow(props: {
   handleCancel: (e: MouseEvent) => void;
@@ -14,19 +15,26 @@ export function EditBottomRow(props: {
 }) {
   return (
     <div class="absolute bottom-1 right-1 flex items-center">
-      <DeprecatedIconButton
-        tooltip={{ label: 'Delete Draft' }}
-        icon={XIcon}
+      <Button
+        tooltip="Delete Draft"
+        size="icon-sm"
+        class="rounded-xs"
+        variant="ghost"
         on:click={props.handleCancel}
-        theme="muted"
-      />
-      <DeprecatedIconButton
-        tooltip={{ label: 'Send Comment' }}
-        icon={PaperPlaneRight}
+      >
+        <XIcon />
+      </Button>
+
+      <Button
+        tooltip="Send Comment"
+        size="icon-sm"
+        class="rounded-xs"
+        variant="ghost"
+        disabled={!props.hasContent}
         on:click={props.handleSend}
-        theme={props.hasContent ? 'accent' : 'muted'}
-        class={props.hasContent ? '' : 'opacity-10'}
-      />
+      >
+        <PaperPlaneRight class={cn({ 'text-accent': props.hasContent })} />
+      </Button>
     </div>
   );
 }
@@ -76,7 +84,7 @@ export function EditInput(props: {
   return (
     <div class="relative">
       <div
-        class="px-2 pt-1 pb-8 relative border border-edge/50 focus-within:bracket focus-within:border-accent"
+        class="px-2 pt-1 pb-8 bg-input rounded-sm relative border border-edge-muted focus-within:ring-accent focus-within:ring"
         on:click={(e) => {
           e.stopPropagation();
           focusEditor();
@@ -128,7 +136,7 @@ export function NewReplyInput(props: {
         when={props.isEditing}
         fallback={
           <div
-            class="px-2 pt-2 pb-2 cursor-default text-sm text-ink-extra-muted border border-edge/50"
+            class="px-2 py-2 mt-2 cursor-default text-sm text-ink-extra-muted bg-input/50 border border-edge-muted rounded-sm"
             on:click={(e) => {
               e.stopPropagation();
               props.setEditing(true);
@@ -138,6 +146,7 @@ export function NewReplyInput(props: {
           </div>
         }
       >
+        <div class="h-2"></div>
         <EditInput
           textValue={props.textValue}
           handleCancel={() => props.setTextValue('')}

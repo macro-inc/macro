@@ -1,5 +1,4 @@
-MACRODB := "postgres://user:password@localhost:5432/macrodb"
-DATABASE_URL := "postgres://user:password@localhost:5432"
+import './database.just'
 
 mod sqlx './sqlx.just'
 
@@ -12,7 +11,7 @@ clippy:
 # This can be used in any crate that uses macrodb under the hood
 [no-cd]
 prepare_db:
-    just sqlx::prepare_db {{ MACRODB }}
+    just sqlx::prepare_db {{ DATABASE_URL }}
 
 format:
     SQLX_OFFLINE=true cargo fmt
@@ -53,46 +52,46 @@ build_lambdas:
 
 # Copies over necessary .env files for sqlx tests
 setup_test_envs:
-    echo "DATABASE_URL={{ MACRODB }}" >> ./contacts_db_client/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./notification_db_client/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./notification/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./properties_db_client/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./macro_db_client/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./email_db_client/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./email_refresh_handler/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./comms_db_client/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./comms/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./document_cognition_service/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./document_text_extractor/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./organization_retention_handler/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./organization_retention_trigger/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./organization_retention_handler/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./sha_cleanup_worker/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./roles_and_permissions/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./teams/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./frecency/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./soup/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./email/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./system_properties/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./properties/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./name_search/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./email_scheduled_handler/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./saved_views/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./channels/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./comms_service/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./documents/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./stream/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./macro_project_utils/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./entity_access/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./github/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./referral/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./chat/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./memory/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./call/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./backfill_entity_access/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./entity_access_management/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./mobile_welcome_email_db_client/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./entity_access_db_utils/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./contacts_db_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./notification_db_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./notification/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./properties_db_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./macro_db_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_db_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_refresh_handler/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./comms_db_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./comms/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./document_cognition_service/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./document_text_extractor/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./organization_retention_handler/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./organization_retention_trigger/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./organization_retention_handler/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./sha_cleanup_worker/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./roles_and_permissions/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./teams/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./frecency/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./soup/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./system_properties/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./properties/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./name_search/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_scheduled_handler/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./saved_views/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./channels/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./comms_service/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./documents/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./stream/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./macro_project_utils/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./entity_access/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./github/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./referral/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./chat/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./memory/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./call/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./backfill_entity_access/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./entity_access_management/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./mobile_welcome_email_db_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./entity_access_db_utils/.env
 
 setup_macrodb:
     just macro_db_client/create_db

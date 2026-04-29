@@ -388,23 +388,21 @@ export function StackedAvatarsRow<T = unknown>(
         </Show>
       </Show>
       <Show when={all().length > 0}>
-        <>
-          <For each={visible()}>
-            {(item, index) => {
-              const lastNoOverflowChip =
-                index() === visible().length - 1 && overflowCount() === 0;
-              return (
-                <div
-                  class={faceWrapperClass(lastNoOverflowChip)}
-                  style={faceWrapperStyle(index(), lastNoOverflowChip)}
-                >
-                  {props.children(item, index())}
-                </div>
-              );
-            }}
-          </For>
-          <Show when={overflowCount() > 0}>{overflowSlot()}</Show>
-        </>
+        <For each={visible()}>
+          {(item, index) => {
+            const lastNoOverflowChip =
+              index() === visible().length - 1 && overflowCount() === 0;
+            return (
+              <div
+                class={faceWrapperClass(lastNoOverflowChip)}
+                style={faceWrapperStyle(index(), lastNoOverflowChip)}
+              >
+                {props.children(item, index())}
+              </div>
+            );
+          }}
+        </For>
+        <Show when={overflowCount() > 0}>{overflowSlot()}</Show>
       </Show>
     </div>
   );

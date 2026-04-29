@@ -7,8 +7,10 @@ import { For, Show } from 'solid-js';
 import { createSoupEntityActions } from './create-soup-entity-actions';
 import { useSoupEntityActionDrawer } from './soup-entity-action-drawer-context';
 import { useSoupView } from './soup-view-context';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 
 export function SoupEntityActionDrawer() {
+  const panel = useSplitPanelOrThrow();
   const drawerState = useSoupEntityActionDrawer();
   const { activeTab } = useSoupView();
   const { buildActionGroups } = createSoupEntityActions();
@@ -22,7 +24,10 @@ export function SoupEntityActionDrawer() {
     const e = drawerState.entity();
     const s = drawerState.soup();
     if (!e || !s) return [];
-    return buildActionGroups([e], s, activeTab());
+    return buildActionGroups(s, [e], {
+      activeTab: activeTab(),
+      activeListView: panel.handle.content().id,
+    });
   };
 
   return (

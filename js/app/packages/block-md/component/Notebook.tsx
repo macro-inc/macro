@@ -8,6 +8,7 @@ import {
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { useBlockAliasedName, useBlockId } from '@core/block';
+import { ParamsProvider } from '@core/component/ParamsProvider';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import {
   ENABLE_MARKDOWN_COMMENTS,
@@ -288,10 +289,12 @@ export function Notebook() {
           documentName={documentName()}
           fallback={<div class="h-6 w-full" />}
         />
-        <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
-        <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
-          <TaskDiscussion />
-        </Show>
+        <ParamsProvider>
+          <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
+          <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
+            <TaskDiscussion />
+          </Show>
+        </ParamsProvider>
       </div>
       <div
         class={commentPositioning().classes}

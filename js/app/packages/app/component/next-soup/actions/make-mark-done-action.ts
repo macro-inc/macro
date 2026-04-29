@@ -1,6 +1,6 @@
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { toast } from '@core/component/Toast/Toast';
-import { type EntityData, isTaskEntity } from '@entity';
+import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import { useUndoableMutation } from '@queries/undo';
 import {
@@ -13,6 +13,20 @@ import {
 } from '@app/component/next-soup/utils';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import type { SoupState } from '../create-soup-state';
+import type { ListView } from '@app/constants/list-views';
+
+// Valid list views where the mark done should be allowed to run
+const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
+  'inbox-signal',
+  'mail-important',
+  'mail-all',
+  'mail-noise',
+  'mail-shared',
+];
+
+export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
+  return VALID_MARK_DONE_LIST_VIEWS.includes(`${view}-${tabId}`);
+};
 
 type MakeMarkDoneOptions = {
   userId?: () => string | undefined;
@@ -124,8 +138,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       entity.type === 'channel' ||
       entity.type === 'chat' ||
       entity.type === 'document' ||
-      entity.type === 'project' ||
-      isTaskEntity(entity)
+      entity.type === 'project'
     ) {
       return true;
     }

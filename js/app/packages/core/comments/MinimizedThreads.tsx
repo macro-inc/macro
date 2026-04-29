@@ -1,10 +1,16 @@
-import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
 import ChatTeardrop from '@icon/regular/chat-teardrop.svg';
+import { cn } from '@ui/utils/classname';
 import type { EditorThemeClasses } from 'lexical';
-import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  onCleanup,
+  Show,
+  useContext,
+} from 'solid-js';
 import type { Layout, Root } from './commentType';
 import { MeasureContainer } from './MeasureContainer';
-import { Thread } from './Thread';
+import { CommentsContext, Thread } from './Thread';
 
 export function MinimizedThread(props: {
   comment: Root;
@@ -21,6 +27,15 @@ export function MinimizedThread(props: {
   if (props.comment.isNew) {
     setExpanded(true);
   }
+
+  const { highlightedCommentId } = useContext(CommentsContext);
+  createEffect(() => {
+    const hId = highlightedCommentId();
+    if (hId === null) return;
+    if (hId === props.comment.id || props.comment.children.includes(hId)) {
+      setExpanded(true);
+    }
+  });
 
   createEffect(() => {
     if (!expanded()) return;
@@ -77,40 +92,31 @@ export function MinimizedThread(props: {
         threadId={props.comment.threadId}
         maxHeight={props.maxHeight}
         isActive={props.isActive}
-        transition={true}
+        transition={false}
       >
         <div
-          class="flex flex-row justify-between p-[2px] gap-1 transition-transform items-center bg-panel text-ink-muted border-edge/50 border relative overflow-clip"
-          classList={{
-            '-translate-x-4': props.isActive,
-          }}
+          class={cn(
+            'flex flex-row justify-between p-0.5 gap-1 transition-transform items-center text-ink-muted border-edge-muted border relative overflow-clip rounded-sm pointer-events-auto',
+            props.isActive && '-translate-x-4'
+          )}
           onClick={clickHandler}
         >
           <div
-            class="size-6 flex items-center justify-center"
-            classList={{
-              'bg-comment-bg text-comment-fg': !props.isActive,
-              'bg-comment text-page': props.isActive,
-            }}
+            class={cn(
+              'size-6 flex items-center justify-center rounded-xs',
+              props.isActive
+                ? 'bg-comment text-page'
+                : 'bg-comment-bg text-comment-fg'
+            )}
           >
             <ChatTeardrop
               class="size-5 pointer-events-auto"
               onClick={clickHandler}
             />
           </div>
-          <div class="flex items-center px-1 h-6 pointer-events-auto">
-            <span class="text-xs font-bold text-center font-mono">
-              [{commentCount()}]
-            </span>
+          <div class="flex items-center px-1 h-6 pointer-events-none">
+            <span class="text-xs text-center">{commentCount()}</span>
           </div>
-          <BozzyBracketInnerSibling
-            classList={{
-              'opacity-0': !props.isActive,
-              'transition-transform duration-100': true,
-              'scale-110': !props.isActive,
-              'scale-100': props.isActive,
-            }}
-          />
         </div>
       </MeasureContainer>
     </Show>

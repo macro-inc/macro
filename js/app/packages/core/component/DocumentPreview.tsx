@@ -195,11 +195,16 @@ export const mentionsAccessories = (
     return;
   }
   // Md block handling
-  else if (blockName === 'md') {
+  else if (resolveBlockAlias(blockName) === 'md') {
     const id = params[URL_PARAMS_MD.nodeId];
     const loc = params[URL_PARAMS_MD.location];
     if (id?.trim() || loc?.trim()) {
       return { icon: 'highlight', note: 'Snippet' };
+    }
+
+    const comment = params[URL_PARAMS_MD.commentId];
+    if (comment?.trim()) {
+      return { icon: 'message', note: 'Comment' };
     }
   }
 };

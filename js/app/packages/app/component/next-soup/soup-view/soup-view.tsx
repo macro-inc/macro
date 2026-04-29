@@ -113,6 +113,7 @@ import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
+import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -496,6 +497,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   useEntityActionHotkeys({
     scopeId: scopeId(),
     soup,
+    activeSoupViewTab: activeTab,
     splitHandle: panel.handle,
   });
 
@@ -873,6 +875,15 @@ export const SoupViewList = (props: SoupViewListProps) => {
                         canSwipeLeft={(entityId) => {
                           const entity = entityById().get(entityId);
                           if (!entity) return false;
+
+                          const tab = activeTab();
+
+                          if (
+                            !isListViewID(contentId) ||
+                            (tab && !canExecuteMarkDoneOnView(contentId, tab))
+                          )
+                            return false;
+
                           return markDoneAction.canExecute(entity.original);
                         }}
                         onSwipeLeft={(entityId) => {
