@@ -25,7 +25,7 @@ export function createBucket({
   tags?: { [name: string]: string };
 }): Bucket {
   // Document Storage S3 Bucket
-  return new aws.s3.Bucket(id, {
+  const bucket = new aws.s3.Bucket(id, {
     bucket: bucketName,
     forceDestroy: stack !== 'prod',
     versioning: enableVersioning
@@ -37,15 +37,6 @@ export function createBucket({
     // Enable transfer acceleration for our production bucket for SPEEDZ
     accelerationStatus: transferAcceleration ? 'Enabled' : undefined,
     lifecycleRules,
-    corsRules: [
-      {
-        allowedHeaders: ['*'],
-        allowedMethods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'],
-        allowedOrigins: ALLOWED_ORIGINS,
-        exposeHeaders: ['ETag', ...(exposeHeaders || [])],
-        maxAgeSeconds: 3000,
-      },
-    ],
     logging:
       stack === 'prod'
         ? {
@@ -55,6 +46,29 @@ export function createBucket({
         : undefined,
     tags,
   });
+
+  // CORS lives on a separate resource so updates to ALLOWED_ORIGINS actually
+  // propagate. The legacy `corsRules` field on `aws.s3.Bucket` is deprecated
+  // and the underlying TF provider silently no-ops on changes to it (Pulumi
+  // reports "updated" but S3 keeps the old config).
+  new aws.s3.BucketCorsConfigurationV2(
+    `${id}-cors`,
+    {
+      bucket: bucket.id,
+      corsRules: [
+        {
+          allowedHeaders: ['*'],
+          allowedMethods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'],
+          allowedOrigins: ALLOWED_ORIGINS,
+          exposeHeaders: ['ETag', ...(exposeHeaders || [])],
+          maxAgeSeconds: 3000,
+        },
+      ],
+    },
+    { dependsOn: [bucket] }
+  );
+
+  return bucket;
 }
 
 /**
