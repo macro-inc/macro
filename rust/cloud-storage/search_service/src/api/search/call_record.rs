@@ -36,9 +36,12 @@ pub(in crate::api::search) async fn enrich_call_records(
             .await
             .map_err(SearchError::InternalError)?;
 
+    let mut custom_name_by_id: std::collections::HashMap<Uuid, Option<String>> =
+        std::collections::HashMap::new();
     let metadata_by_id: std::collections::HashMap<Uuid, CallRecordMetadata> = metadata_rows
         .into_iter()
         .map(|row| {
+            custom_name_by_id.insert(row.call_id, row.custom_name);
             (
                 row.call_id,
                 CallRecordMetadata {
@@ -96,7 +99,7 @@ pub(in crate::api::search) async fn enrich_call_records(
             CallRecordSearchResponseItemWithMetadata {
                 extra: CallRecordSearchResponseItem {
                     id: call_id,
-                    name: metadata.as_ref().and_then(|m| m.channel_name.clone()),
+                    name: custom_name_by_id.get(&call_id).cloned().flatten(),
                     owner_id: metadata
                         .as_ref()
                         .map(|m| m.created_by.clone())

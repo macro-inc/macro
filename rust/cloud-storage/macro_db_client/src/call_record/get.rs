@@ -14,6 +14,7 @@ pub struct CallRecordMetadataRow {
     pub ended_at: DateTime<Utc>,
     pub duration_ms: i64,
     pub channel_name: Option<String>,
+    pub custom_name: Option<String>,
     /// Whether the requesting user was a participant on the call.
     pub attended: bool,
 }
@@ -190,6 +191,7 @@ pub async fn get_call_records_metadata(
             cr.ended_at AS "ended_at!",
             cr.duration_ms AS "duration_ms!",
             cc.name AS "channel_name?",
+            cr.custom_name AS "custom_name?",
             EXISTS (
                 SELECT 1 FROM call_record_participants crp
                 WHERE crp.call_record_id = cr.id AND crp.user_id = $2

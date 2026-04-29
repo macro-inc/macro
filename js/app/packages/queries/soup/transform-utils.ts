@@ -375,7 +375,6 @@ export const useSearchResponseItemMapper = () => {
           {
             type: 'call',
             id: result.call_id,
-            // NOTE: leave empty, the CallChannelName will fall back to the preview endpoint.
             name: result.name ?? channelName ?? '',
             channelId: result.channel_id,
             channelName,
