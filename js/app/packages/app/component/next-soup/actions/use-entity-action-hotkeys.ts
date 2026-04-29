@@ -143,8 +143,8 @@ export const useEntityActionHotkeys = (
       const soupViewTab = options.activeSoupViewTab?.();
 
       if (
-        soupViewTab &&
-        isListViewID(splitContentId) &&
+        !soupViewTab ||
+        !isListViewID(splitContentId) ||
         !canExecuteMarkDoneOnView(splitContentId, soupViewTab)
       )
         return false;
