@@ -4,13 +4,7 @@ use std::sync::Arc;
 use crate::{
     api::context::ApiContext,
     domain::service::BackfillOrchestrator,
-    outbound::{
-        backfill::{
-            calls::PgCallSource, channels::PgChannelSource, chats::PgChatSource,
-            documents::PgDocumentSource, emails::PgEmailSource,
-        },
-        publisher::SqsSearchEventPublisher,
-    },
+    outbound::{publisher::SqsSearchEventPublisher, source::PgBackfillSource},
     process::{context::SearchProcessingContext, worker::run_search_processing_workers},
 };
 use anyhow::Context;
@@ -31,17 +25,10 @@ mod outbound;
 mod parsers;
 mod process;
 
-/// Concrete [`BackfillOrchestrator`] wired to the production Postgres sources
+/// Concrete [`BackfillOrchestrator`] wired to the production Postgres source
 /// and the SQS publisher. Lives in the wiring module so the domain stays
 /// agnostic of which adapters back it.
-pub type BackfillServiceImpl = BackfillOrchestrator<
-    PgCallSource,
-    PgChatSource,
-    PgChannelSource,
-    PgDocumentSource,
-    PgEmailSource,
-    SqsSearchEventPublisher,
->;
+pub type BackfillServiceImpl = BackfillOrchestrator<PgBackfillSource, SqsSearchEventPublisher>;
 
 /// Resolve a read-replica macrodb URL via [`OptionalLocalOrRemoteSecret`] and
 /// connect a small pool. Returns `None` when the replica URL is missing,
@@ -171,13 +158,8 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
 
-    let pages = &config.backfill_page_sizes;
     let backfill_service = Arc::new(BackfillOrchestrator::new(
-        PgCallSource::new(backfill_db.clone(), pages.calls),
-        PgChatSource::new(backfill_db.clone(), pages.chats),
-        PgChannelSource::new(backfill_db.clone(), pages.channels),
-        PgDocumentSource::new(backfill_db.clone(), pages.documents),
-        PgEmailSource::new(backfill_db, pages.emails),
+        PgBackfillSource::new(backfill_db, config.backfill_page_sizes),
         SqsSearchEventPublisher::new(sqs_client.clone()),
     ));
 

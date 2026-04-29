@@ -4,10 +4,12 @@ use sqs_client::search::{SearchQueueMessage, call::CallRecordMessage};
 
 use super::*;
 use crate::domain::models::{CallBackfillRequest, SourcePage};
-use crate::domain::ports::{CallBackfillSource, SearchEventPublisher};
+use crate::domain::ports::SearchEventPublisher;
 
-/// Programmable source. Each `fetch_page` call returns the next entry from
-/// `pages`; after that, returns an empty page so the orchestrator stops.
+/// Programmable fake fetch closure. `drain_source` takes any
+/// `Fn(usize) -> Future<SourcePage>`, so the test fakes don't need to
+/// implement `BackfillSource` — we just give them a method that matches
+/// the closure shape and avoid stubbing 4 unrelated trait methods.
 struct FakeSource {
     pages: Mutex<std::collections::VecDeque<SourcePage>>,
     /// Records the offsets `fetch_page` was called with, in order.
@@ -22,12 +24,6 @@ impl FakeSource {
         }
     }
 
-    fn observed_offsets(&self) -> Vec<usize> {
-        self.offsets.lock().unwrap().clone()
-    }
-}
-
-impl CallBackfillSource for FakeSource {
     async fn fetch_page(
         &self,
         _req: &CallBackfillRequest,
@@ -41,12 +37,16 @@ impl CallBackfillSource for FakeSource {
             .pop_front()
             .unwrap_or_else(SourcePage::empty))
     }
+
+    fn observed_offsets(&self) -> Vec<usize> {
+        self.offsets.lock().unwrap().clone()
+    }
 }
 
 /// Source that always errors. Verifies error propagation through the loop.
 struct ExplodingSource;
 
-impl CallBackfillSource for ExplodingSource {
+impl ExplodingSource {
     async fn fetch_page(
         &self,
         _req: &CallBackfillRequest,

@@ -3,6 +3,7 @@ pub use macro_env::Environment;
 
 /// Per-entity DB page sizes used by the backfill source adapters. Tunable at
 /// runtime via the corresponding `BACKFILL_*_PAGE_SIZE` env vars.
+#[derive(Debug, Clone, Copy)]
 pub struct BackfillPageSizes {
     pub calls: usize,
     pub chats: usize,

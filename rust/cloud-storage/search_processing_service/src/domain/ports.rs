@@ -1,20 +1,16 @@
 //! Outbound trait contracts for the backfill domain.
 //!
-//! Two kinds of ports:
+//! Two ports:
 //!
-//! - **Sources** — one per entity type. Each knows how to read its source of
-//!   truth and shape the result into a [`SourcePage`]: a batch of
-//!   [`SearchQueueMessage`]s plus the number of source rows the batch
-//!   covered. The orchestrator uses `rows_consumed` to advance its DB
-//!   offset, which is critical for sources (e.g. emails) that fold many
-//!   rows into fewer SQS messages — advancing by message count would
-//!   re-read rows on every iteration.
-//! - **Publisher** — one trait, one job: deliver a batch of
-//!   [`SearchQueueMessage`]s onto the search-event queue.
+//! - [`BackfillSource`] — entity-aware reader. One method per searchable
+//!   entity, each producing a [`SourcePage`] (messages + rows consumed) for
+//!   a given offset. The orchestrator drives sources through these methods.
+//! - [`SearchEventPublisher`] — entity-agnostic batch publisher onto the
+//!   search-event queue.
 //!
-//! Splitting per-entity DB reads (sources) from the queue write (publisher)
-//! keeps each adapter single-concern and lets the application-level
-//! pagination loop be tested with in-memory fakes.
+//! Splitting reads (source) from the queue write (publisher) keeps each
+//! adapter single-concern and lets the application-level pagination loop be
+//! tested with in-memory fakes.
 
 use std::future::Future;
 
@@ -25,7 +21,7 @@ use super::models::{
     DocumentBackfillRequest, EmailBackfillRequest, SourcePage,
 };
 
-/// Publishes batches of search-event messages. Entity-agnostic.
+/// Publishes batches of search-event messages.
 pub trait SearchEventPublisher: Send + Sync + 'static {
     fn publish(
         &self,
@@ -33,45 +29,40 @@ pub trait SearchEventPublisher: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), BackfillError>> + Send;
 }
 
-/// Source for archived call records.
-pub trait CallBackfillSource: Send + Sync + 'static {
-    fn fetch_page(
+/// Source of backfill messages across every searchable entity. The
+/// orchestrator's `drain_source` loop calls one of these per request.
+///
+/// `rows_consumed` on each [`SourcePage`] is the unit the orchestrator
+/// advances by; `messages` is what gets handed to the publisher. Sources
+/// that fold many rows into fewer messages (e.g. emails batching threads
+/// per user) must report the row count separately so the loop offsets
+/// correctly.
+pub trait BackfillSource: Send + Sync + 'static {
+    fn fetch_calls(
         &self,
         req: &CallBackfillRequest,
         offset: usize,
     ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
-}
 
-/// Source for chat messages.
-pub trait ChatBackfillSource: Send + Sync + 'static {
-    fn fetch_page(
+    fn fetch_chats(
         &self,
         req: &ChatBackfillRequest,
         offset: usize,
     ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
-}
 
-/// Source for channel messages.
-pub trait ChannelBackfillSource: Send + Sync + 'static {
-    fn fetch_page(
+    fn fetch_channels(
         &self,
         req: &ChannelBackfillRequest,
         offset: usize,
     ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
-}
 
-/// Source for documents.
-pub trait DocumentBackfillSource: Send + Sync + 'static {
-    fn fetch_page(
+    fn fetch_documents(
         &self,
         req: &DocumentBackfillRequest,
         offset: usize,
     ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
-}
 
-/// Source for email threads.
-pub trait EmailBackfillSource: Send + Sync + 'static {
-    fn fetch_page(
+    fn fetch_emails(
         &self,
         req: &EmailBackfillRequest,
         offset: usize,

@@ -1,11 +1,11 @@
 //! Application-level backfill service.
 //!
 //! [`BackfillService`] is the inbound contract the HTTP layer talks to. The
-//! [`BackfillOrchestrator`] holds one source adapter per entity plus a single
-//! [`SearchEventPublisher`], and runs the shared paginate-and-publish loop
-//! that drains a source onto the publisher. The loop lives here (in the
-//! domain) so it can be tested with in-memory fakes — adapters stay
-//! single-concern.
+//! [`BackfillOrchestrator`] holds one [`BackfillSource`] (which knows about
+//! every entity type) and one [`SearchEventPublisher`], and runs the shared
+//! paginate-and-publish loop that drains a source onto the publisher. The
+//! loop lives here (in the domain) so it can be tested with in-memory fakes
+//! — adapters stay single-concern.
 
 use std::future::Future;
 
@@ -13,10 +13,7 @@ use super::models::{
     BackfillError, BackfillReceipt, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest, SourcePage,
 };
-use super::ports::{
-    CallBackfillSource, ChannelBackfillSource, ChatBackfillSource, DocumentBackfillSource,
-    EmailBackfillSource, SearchEventPublisher,
-};
+use super::ports::{BackfillSource, SearchEventPublisher};
 
 /// Inbound contract for all backfill HTTP routes.
 pub trait BackfillService: Send + Sync + 'static {
@@ -42,50 +39,26 @@ pub trait BackfillService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
 }
 
-pub struct BackfillOrchestrator<Call, Chat, Channel, Doc, Email, Pub> {
-    calls: Call,
-    chats: Chat,
-    channels: Channel,
-    documents: Doc,
-    emails: Email,
-    publisher: Pub,
+pub struct BackfillOrchestrator<S, P> {
+    source: S,
+    publisher: P,
 }
 
-impl<Call, Chat, Channel, Doc, Email, Pub>
-    BackfillOrchestrator<Call, Chat, Channel, Doc, Email, Pub>
+impl<S, P> BackfillOrchestrator<S, P>
 where
-    Call: CallBackfillSource,
-    Chat: ChatBackfillSource,
-    Channel: ChannelBackfillSource,
-    Doc: DocumentBackfillSource,
-    Email: EmailBackfillSource,
-    Pub: SearchEventPublisher,
+    S: BackfillSource,
+    P: SearchEventPublisher,
 {
-    pub fn new(
-        calls: Call,
-        chats: Chat,
-        channels: Channel,
-        documents: Doc,
-        emails: Email,
-        publisher: Pub,
-    ) -> Self {
-        Self {
-            calls,
-            chats,
-            channels,
-            documents,
-            emails,
-            publisher,
-        }
+    pub fn new(source: S, publisher: P) -> Self {
+        Self { source, publisher }
     }
 }
 
-/// Drive a source by repeatedly calling `fetch_page(offset)`, publishing each
+/// Drive a source by repeatedly calling `fetch(offset)`, publishing each
 /// page's messages, and stopping when the source reports zero rows consumed.
 /// Offset advances by `rows_consumed`, *not* by message count — sources are
-/// free to fold many rows into a smaller batch of messages (see
-/// [`crate::outbound::backfill::emails::PgEmailSource`]) without confusing
-/// the loop into re-reading rows.
+/// free to fold many rows into a smaller batch of messages (see the email
+/// path) without confusing the loop into re-reading rows.
 async fn drain_source<Fut, P>(
     publisher: &P,
     fetch: impl Fn(usize) -> Fut,
@@ -110,22 +83,17 @@ where
     Ok(BackfillReceipt { enqueued })
 }
 
-impl<Call, Chat, Channel, Doc, Email, Pub> BackfillService
-    for BackfillOrchestrator<Call, Chat, Channel, Doc, Email, Pub>
+impl<S, P> BackfillService for BackfillOrchestrator<S, P>
 where
-    Call: CallBackfillSource,
-    Chat: ChatBackfillSource,
-    Channel: ChannelBackfillSource,
-    Doc: DocumentBackfillSource,
-    Email: EmailBackfillSource,
-    Pub: SearchEventPublisher,
+    S: BackfillSource,
+    P: SearchEventPublisher,
 {
     async fn backfill_calls(
         &self,
         req: CallBackfillRequest,
     ) -> Result<BackfillReceipt, BackfillError> {
         drain_source(&self.publisher, |offset| {
-            self.calls.fetch_page(&req, offset)
+            self.source.fetch_calls(&req, offset)
         })
         .await
     }
@@ -135,7 +103,7 @@ where
         req: ChatBackfillRequest,
     ) -> Result<BackfillReceipt, BackfillError> {
         drain_source(&self.publisher, |offset| {
-            self.chats.fetch_page(&req, offset)
+            self.source.fetch_chats(&req, offset)
         })
         .await
     }
@@ -145,7 +113,7 @@ where
         req: ChannelBackfillRequest,
     ) -> Result<BackfillReceipt, BackfillError> {
         drain_source(&self.publisher, |offset| {
-            self.channels.fetch_page(&req, offset)
+            self.source.fetch_channels(&req, offset)
         })
         .await
     }
@@ -155,7 +123,7 @@ where
         req: DocumentBackfillRequest,
     ) -> Result<BackfillReceipt, BackfillError> {
         drain_source(&self.publisher, |offset| {
-            self.documents.fetch_page(&req, offset)
+            self.source.fetch_documents(&req, offset)
         })
         .await
     }
@@ -165,7 +133,7 @@ where
         req: EmailBackfillRequest,
     ) -> Result<BackfillReceipt, BackfillError> {
         drain_source(&self.publisher, |offset| {
-            self.emails.fetch_page(&req, offset)
+            self.source.fetch_emails(&req, offset)
         })
         .await
     }
