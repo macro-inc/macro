@@ -8,6 +8,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::collections::HashSet;
+use std::sync::Arc;
 use tracing::instrument;
 
 #[cfg(test)]
@@ -93,9 +94,12 @@ impl<Q: ContactsIngressQueue> ContactsIngress for SqsContactsIngress<Q> {
     }
 }
 
+/// Domain service that polls the backfill outbox and applies pending entries.
 pub struct ContactsOutboxServiceImpl<O, S> {
+    /// The outbox repository for fetching and marking applied messages.
     pub outbox_repo: O,
-    pub inner_service: S,
+    /// The inner contacts service used to apply each outbox entry.
+    pub inner_service: Arc<S>,
 }
 
 impl<O, S> ContactsOutboxService for ContactsOutboxServiceImpl<O, S>

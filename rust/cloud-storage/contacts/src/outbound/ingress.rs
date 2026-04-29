@@ -1,4 +1,4 @@
-use crate::domain::models::messages::ContactsMessage;
+use crate::domain::models::messages::ContactsNodes;
 use crate::domain::ports::ContactsIngressQueue;
 use rootcause::Report;
 
@@ -18,7 +18,7 @@ impl SqsContactsQueue {
 
 impl ContactsIngressQueue for SqsContactsQueue {
     #[tracing::instrument(skip(self, message), err)]
-    async fn publish(&self, message: ContactsMessage) -> Result<(), Report> {
+    async fn publish(&self, message: ContactsNodes) -> Result<(), Report> {
         let body = serde_json::to_string(&message)?;
         self.client
             .send_message()
