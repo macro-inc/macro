@@ -1,11 +1,9 @@
 import {
-  isCurrentUserAssigned,
   isTaskClosed,
   isTaskEntity,
   type TaskEntityWithProperties,
   type EntityData,
 } from '@entity';
-import { useUserId } from '@core/context/user';
 import { ENABLE_CLIENT_EMAIL_SIGNAL_FILTER } from '@core/constant/featureFlags';
 
 const PRIORITY_LABELS = [
@@ -103,26 +101,12 @@ function isNoiseEmail(entity: EmailEntity): boolean {
 
 /**
  * determines if a task should appear in the signal tab.
- * tasks appear in signal if:
- * - they are not completed or canceled
- * - the current user is an assignee (or the task has no assignees)
+ * the inbox query already gates entities on the user's not-done notifications,
+ * so we only need to filter out closed tasks here. assignee/ownership filtering
+ * would incorrectly drop notifications for mentions and thread replies.
  */
-export const isSignalTask = (
-  entity: TaskEntityWithProperties,
-  currentUserId: string | undefined
-): boolean => {
-  if (isTaskClosed(entity)) {
-    return false;
-  }
-  return isCurrentUserAssigned(entity, currentUserId);
-};
-
-const getCurrentUserId = () => {
-  try {
-    return useUserId()();
-  } catch {
-    return undefined;
-  }
+export const isSignalTask = (entity: TaskEntityWithProperties): boolean => {
+  return !isTaskClosed(entity);
 };
 
 /**
@@ -143,8 +127,7 @@ export function signalFilter(entity: EntityData): boolean {
       return true;
     case 'document': {
       if (isTaskEntity(entity)) {
-        const currentUserId = getCurrentUserId();
-        return isSignalTask(entity as TaskEntityWithProperties, currentUserId);
+        return isSignalTask(entity as TaskEntityWithProperties);
       }
 
       return true;
