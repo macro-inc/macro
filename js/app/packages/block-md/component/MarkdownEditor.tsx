@@ -424,10 +424,14 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const [locationReady, setLocationReady] = createSignal(false);
 
   const { nodeId, location, commentId } = useUrlParams(URL_PARAMS);
+  createEffect(on(nodeId, (id) => setHighlightNodeId(id ?? undefined)));
   createEffect(
-    on([nodeId, location, commentId], ([id, loc, comment]) => {
-      if (id) setHighlightNodeId(id);
-      if (comment) setActiveCommentIdParam(comment);
+    on(commentId, (id) => {
+      setActiveCommentIdParam(id ?? undefined);
+    })
+  );
+  createEffect(
+    on(location, (loc) => {
       if (loc) {
         const locationObj = parsePersistentLocation(loc);
         if (locationObj) {
@@ -436,6 +440,19 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       }
     })
   );
+
+  // createEffect(
+  //   on([nodeId, location, commentId], ([id, loc, comment]) => {
+  //     if (id) setHighlightNodeId(id);
+  //     if (comment) setActiveCommentIdParam(comment);
+  //     if (loc) {
+  //       const locationObj = parsePersistentLocation(loc);
+  //       if (locationObj) {
+  //         setActiveLocation(locationObj);
+  //       }
+  //     }
+  //   })
+  // );
 
   plugins.use(
     locationPlugin({

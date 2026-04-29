@@ -1,7 +1,13 @@
 import ChatTeardrop from '@icon/regular/chat-teardrop.svg';
 import { cn } from '@ui/utils/classname';
 import type { EditorThemeClasses } from 'lexical';
-import { createEffect, createSignal, onCleanup, Show, useContext } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  onCleanup,
+  Show,
+  useContext,
+} from 'solid-js';
 import type { Layout, Root } from './commentType';
 import { MeasureContainer } from './MeasureContainer';
 import { CommentsContext, Thread } from './Thread';
@@ -22,7 +28,7 @@ export function MinimizedThread(props: {
     setExpanded(true);
   }
 
-  const { highlightedCommentId, clearHighlightedComment } = useContext(CommentsContext);
+  const { highlightedCommentId } = useContext(CommentsContext);
   createEffect(() => {
     const hId = highlightedCommentId();
     if (hId === null) return;
@@ -39,7 +45,6 @@ export function MinimizedThread(props: {
         _expandedThreadRef &&
         !_expandedThreadRef.contains(e.target as Node)
       ) {
-        clearHighlightedComment();
         setExpanded(false);
       }
     }

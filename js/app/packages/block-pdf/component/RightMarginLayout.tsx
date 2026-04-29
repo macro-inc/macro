@@ -93,7 +93,6 @@ const useCommentsContext = (): CommentsContextType => {
     },
     inComment: true,
     highlightedCommentId: () => null,
-    clearHighlightedComment: () => {},
   };
 
   return commentsContext;
