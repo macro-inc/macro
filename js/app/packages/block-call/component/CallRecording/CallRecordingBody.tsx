@@ -134,6 +134,11 @@ export function CallRecordingBody(props: {
       () => props.transcriptTarget?.(),
       (target) => {
         if (!target) return;
+        // If the user previously collapsed the transcript, opening the panel
+        // here is what makes the deep-linked row actually visible. The scroll
+        // container's ResizeObserver re-runs `scrollActiveIntoView` after the
+        // open animation, so no manual defer is needed.
+        if (hasTranscripts()) setTranscriptOpen(true);
         goToTranscriptSegment(target.transcriptId);
       }
     )
