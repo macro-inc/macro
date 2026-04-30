@@ -725,10 +725,8 @@ impl<
                 // the recording start by the egress bootstrap window).
                 if event.event == "egress_started" {
                     if let Some(egress_id) = &event.egress_id {
-                        let started_at = chrono::DateTime::<chrono::Utc>::from_timestamp(
-                            event.created_at,
-                            0,
-                        );
+                        let started_at =
+                            chrono::DateTime::<chrono::Utc>::from_timestamp(event.created_at, 0);
                         if let Some(started_at) = started_at {
                             self.repo
                                 .set_recording_started_at_by_egress_id(egress_id, started_at)
