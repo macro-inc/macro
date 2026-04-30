@@ -116,6 +116,9 @@ export function CommandMenuInner(props: {
 
   const { openWithSplit } = useSplitLayout();
 
+  const canOpenInNewSplit = () =>
+    globalSplitManager()?.canAppendSplit() ?? false;
+
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
   const query = debouncedDependent(CommandState.query, 60);
@@ -486,6 +489,7 @@ export function CommandMenuInner(props: {
         selectedItem={selectedItem()}
         isInCommandScope={isInCommandScope()}
         isEntityActionMode={isEntityActionMode()}
+        canOpenInNewSplit={canOpenInNewSplit()}
       />
     </div>
   );
@@ -615,6 +619,7 @@ function CommandMenuFooter(props: {
   selectedItem: CommandMenuItem | undefined;
   isInCommandScope: boolean;
   isEntityActionMode?: boolean;
+  canOpenInNewSplit: boolean;
 }) {
   const isCommand = () =>
     props.selectedItem && isCommandItem(props.selectedItem);
@@ -645,11 +650,15 @@ function CommandMenuFooter(props: {
         </Match>
         <Match when={isSearch()}>
           <HotkeyHint shortcut="enter" label="Search" />
-          <HotkeyHint shortcut="shift+enter" label="Search in new split" />
+          <Show when={props.canOpenInNewSplit}>
+            <HotkeyHint shortcut="shift+enter" label="Search in new split" />
+          </Show>
         </Match>
         <Match when={isEntity()}>
           <HotkeyHint shortcut="enter" label="Open" />
-          <HotkeyHint shortcut="shift+enter" label="Open in new split" />
+          <Show when={props.canOpenInNewSplit}>
+            <HotkeyHint shortcut="shift+enter" label="Open in new split" />
+          </Show>
         </Match>
       </Switch>
 
