@@ -8,6 +8,7 @@ import type { FilterOption } from './unified-filter-dropdown';
 import type { SearchableOption } from './search-filter-controls';
 import { SearchableMultiSelect } from './searchable-multi-select';
 import { Button } from '@ui/components/Button';
+import { truncateLabel } from '@core/util/string';
 
 export type ActiveFilter = {
   categoryLabel: string;
@@ -129,7 +130,7 @@ const SearchableFilterChip = (props: {
               </span>
             )}
           </Show>
-          <span class="font-medium">
+          <span class="font-medium" title={props.filter.optionLabel()}>
             <Show
               when={
                 !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
@@ -137,7 +138,7 @@ const SearchableFilterChip = (props: {
             >
               {props.filter.categoryLabel}:{' '}
             </Show>
-            {props.filter.optionLabel()}
+            {truncateLabel(props.filter.optionLabel())}
           </span>
         </Combobox.Trigger>
       </SearchableMultiSelect>
@@ -193,7 +194,7 @@ const FilterChip = (props: {
                 </span>
               )}
             </Show>
-            <span class="font-medium">
+            <span class="font-medium" title={props.filter.optionLabel()}>
               <Show
                 when={
                   !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
@@ -201,7 +202,7 @@ const FilterChip = (props: {
               >
                 {props.filter.categoryLabel}:{' '}
               </Show>
-              {props.filter.optionLabel()}
+              {truncateLabel(props.filter.optionLabel())}
             </span>
           </span>
         }
@@ -220,7 +221,7 @@ const FilterChip = (props: {
                 </span>
               )}
             </Show>
-            <span class="font-medium">
+            <span class="font-medium" title={props.filter.optionLabel()}>
               <Show
                 when={
                   !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
@@ -228,7 +229,7 @@ const FilterChip = (props: {
               >
                 {props.filter.categoryLabel}:{' '}
               </Show>
-              {props.filter.optionLabel()}
+              {truncateLabel(props.filter.optionLabel())}
             </span>
           </DropdownMenu.Trigger>
 
