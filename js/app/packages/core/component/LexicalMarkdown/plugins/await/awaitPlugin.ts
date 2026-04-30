@@ -16,21 +16,21 @@ import {
 import { $collapseSelection, $traverseNodes } from '../../utils';
 
 export type InsertAwaitPayload = {
-  nonce: string;
+  awaitId: string;
   text?: string;
   inline?: boolean;
 };
 
 /**
- * Pre-generated nonce + optional placeholder text. Caller is responsible
- * for tracking the nonce so a later REPLACE_AWAIT_NODE_COMMAND can find it.
+ * Pre-generated awaitId + optional placeholder text. Caller is responsible
+ * for tracking the awaitId so a later REPLACE_AWAIT_NODE_COMMAND can find it.
  */
 export const INSERT_AWAIT_NODE_COMMAND = createCommand<InsertAwaitPayload>(
   'INSERT_AWAIT_NODE_COMMAND'
 );
 
 export type ReplaceAwaitPayload = {
-  nonce: string;
+  awaitId: string;
   /**
    * Run inside `editor.update`. Return node(s) to replace the await with, or
    * null/undefined / empty to delete it.
@@ -42,11 +42,11 @@ export const REPLACE_AWAIT_NODE_COMMAND = createCommand<ReplaceAwaitPayload>(
   'REPLACE_AWAIT_NODE_COMMAND'
 );
 
-function $findAwaitNodeByNonce(nonce: string): AwaitNode | null {
+function $findAwaitNodeByAwaitId(awaitId: string): AwaitNode | null {
   let found: AwaitNode | null = null;
   $traverseNodes($getRoot(), (node) => {
     if (found) return;
-    if ($isAwaitNode(node) && node.getNonce() === nonce) {
+    if ($isAwaitNode(node) && node.getAwaitId() === awaitId) {
       found = node;
     }
   });
@@ -65,7 +65,7 @@ export function awaitPlugin() {
           editor.update(() => {
             const selection = $getSelection();
             const awaitNode = $createAwaitNode({
-              nonce: payload.nonce,
+              awaitId: payload.awaitId,
               text: payload.text,
               inline: payload.inline ?? true,
             });
@@ -91,7 +91,7 @@ export function awaitPlugin() {
         (payload) => {
           console.log('REPLACE_AWAIT_NODE_COMMAND', payload);
           editor.update(() => {
-            const target = $findAwaitNodeByNonce(payload.nonce);
+            const target = $findAwaitNodeByAwaitId(payload.awaitId);
             if (!target) return;
             const replacement = payload.$createReplacement?.();
             const nodes = Array.isArray(replacement)

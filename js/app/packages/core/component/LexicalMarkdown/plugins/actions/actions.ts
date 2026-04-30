@@ -160,9 +160,9 @@ export const ACTIONS: Action[] = [
     action: (editor: LexicalEditor) => {
       const splitManager = globalSplitManager();
       if (!splitManager) return;
-      const nonce = nanoid(21);
+      const awaitId = nanoid(21);
       let placeholderInserted = false;
-      console.log('[task-action] opening compose, nonce=', nonce);
+      console.log('[task-action] opening compose, awaitId=', awaitId);
       splitManager.createPopoverSplit({
         content: {
           type: 'component',
@@ -173,8 +173,8 @@ export const ACTIONS: Action[] = [
               const handled = editor.dispatchCommand(
                 INSERT_AWAIT_NODE_COMMAND,
                 {
-                  nonce,
-                  text: `Creating task “${title}”…`,
+                  awaitId,
+                  text: `Creating ${title}`,
                 }
               );
               console.log(
@@ -189,7 +189,7 @@ export const ACTIONS: Action[] = [
                 placeholderInserted
               );
               if (!placeholderInserted) return;
-              editor.dispatchCommand(REPLACE_AWAIT_NODE_COMMAND, { nonce });
+              editor.dispatchCommand(REPLACE_AWAIT_NODE_COMMAND, { awaitId });
               placeholderInserted = false;
             },
             onSuccess: (result: ComposeTaskSuccess) => {
@@ -201,7 +201,7 @@ export const ACTIONS: Action[] = [
               );
               if (placeholderInserted) {
                 editor.dispatchCommand(REPLACE_AWAIT_NODE_COMMAND, {
-                  nonce,
+                  awaitId,
                   $createReplacement: () =>
                     $createDocumentMentionNode({
                       documentId: result.documentId,
@@ -315,7 +315,7 @@ export const ACTIONS: Action[] = [
     action: (editor: LexicalEditor) => {
       queueMicrotask(() => {
         editor.dispatchCommand(INSERT_AWAIT_NODE_COMMAND, {
-          nonce: 'kasldasjd',
+          awaitId: 'kasldasjd',
           inline: true,
           text: 'what the sigma',
         });

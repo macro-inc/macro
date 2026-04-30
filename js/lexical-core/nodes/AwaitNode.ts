@@ -15,12 +15,12 @@ import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 import { $applyPeerIdFromSerialized, $getLocal } from '../plugins/peerIdPlugin';
 
 const VERSION = 1;
-const NONCE_LENGTH = 21;
+const AWAIT_ID_LENGTH = 21;
 
 export const AWAIT_NODE_TYPE = 'await';
 
 export type AwaitNodeInfo = {
-  nonce: string;
+  awaitId: string;
   text?: string;
   inline?: boolean;
 };
@@ -28,7 +28,7 @@ export type AwaitNodeInfo = {
 export type SerializedAwaitNode = Spread<AwaitNodeInfo, SerializedLexicalNode>;
 
 export type AwaitDecoratorProps = {
-  nonce: string;
+  awaitId: string;
   text: string | undefined;
   inline: boolean;
   key: NodeKey;
@@ -37,7 +37,7 @@ export type AwaitDecoratorProps = {
 
 /**
  * Ephemeral placeholder node that represents an in-flight async operation
- * (e.g. a network call to create a task). Created with a unique nonce so a
+ * (e.g. a network call to create a task). Created with a unique awaitId so a
  * REPLACE_AWAIT_NODE_COMMAND can later target it for replacement or removal.
  *
  * Visibility is gated on local peer status — non-local peers render nothing,
@@ -46,7 +46,7 @@ export type AwaitDecoratorProps = {
 export class AwaitNode extends DecoratorNode<
   DecoratorComponent<AwaitDecoratorProps> | undefined
 > {
-  __nonce: string;
+  __awaitId: string;
   __text: string | undefined;
   __inline: boolean;
 
@@ -55,17 +55,22 @@ export class AwaitNode extends DecoratorNode<
   }
 
   static clone(node: AwaitNode) {
-    return new AwaitNode(node.__nonce, node.__text, node.__inline, node.__key);
+    return new AwaitNode(
+      node.__awaitId,
+      node.__text,
+      node.__inline,
+      node.__key
+    );
   }
 
   constructor(
-    nonce?: string,
+    awaitId?: string,
     text?: string,
     inline: boolean = true,
     key?: NodeKey
   ) {
     super(key);
-    this.__nonce = nonce ?? nanoid(NONCE_LENGTH);
+    this.__awaitId = awaitId ?? nanoid(AWAIT_ID_LENGTH);
     this.__text = text;
     this.__inline = inline;
   }
@@ -80,7 +85,7 @@ export class AwaitNode extends DecoratorNode<
 
   static importJSON(serializedNode: SerializedAwaitNode) {
     const node = $createAwaitNode({
-      nonce: serializedNode.nonce,
+      awaitId: serializedNode.awaitId,
       text: serializedNode.text,
       inline: serializedNode.inline,
     });
@@ -92,7 +97,7 @@ export class AwaitNode extends DecoratorNode<
   exportJSON(): SerializedAwaitNode {
     return {
       ...super.exportJSON(),
-      nonce: this.__nonce,
+      awaitId: this.__awaitId,
       text: this.__text,
       inline: this.__inline,
       type: AWAIT_NODE_TYPE,
@@ -102,7 +107,7 @@ export class AwaitNode extends DecoratorNode<
 
   exportComponentProps(): AwaitNodeInfo {
     return {
-      nonce: this.__nonce,
+      awaitId: this.__awaitId,
       text: this.__text,
       inline: this.__inline,
     };
@@ -110,7 +115,7 @@ export class AwaitNode extends DecoratorNode<
 
   createDOM(_config: EditorConfig): HTMLElement {
     const elem = document.createElement(this.__inline ? 'span' : 'div');
-    elem.setAttribute('data-await-nonce', this.__nonce);
+    elem.setAttribute('data-await-id', this.__awaitId);
     elem.classList.add('macro-await-node');
     elem.classList.toggle('local', this.isLocal());
     return elem;
@@ -126,8 +131,8 @@ export class AwaitNode extends DecoratorNode<
     return { element: null };
   }
 
-  getNonce(): string {
-    return this.__nonce;
+  getAwaitId(): string {
+    return this.__awaitId;
   }
 
   getText(): string | undefined {
@@ -153,7 +158,7 @@ export class AwaitNode extends DecoratorNode<
     if (decorator) {
       return () =>
         decorator({
-          nonce: this.__nonce,
+          awaitId: this.__awaitId,
           text: this.__text,
           inline: this.__inline,
           key: this.getKey(),
@@ -165,7 +170,7 @@ export class AwaitNode extends DecoratorNode<
 
 export function $createAwaitNode(params?: Partial<AwaitNodeInfo>): AwaitNode {
   const node = new AwaitNode(
-    params?.nonce,
+    params?.awaitId,
     params?.text,
     params?.inline ?? true
   );

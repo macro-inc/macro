@@ -6,7 +6,7 @@ export const Await: Component<AwaitDecoratorProps> = (props) => {
     <span
       class="animate-pulse text-current/50 select-none bg-current/5 rounded-xs"
       inert
-      data-await-nonce={props.nonce}
+      data-await-id={props.awaitId}
     >
       {props.text ?? 'Waiting…'}
     </span>
