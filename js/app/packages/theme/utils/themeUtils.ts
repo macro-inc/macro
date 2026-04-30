@@ -1,4 +1,4 @@
-import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setUserThemes, systemMode, themeShouldMatchSystem, themes, userThemes} from '../signals/themeSignals';
+import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setThemeDepth, setUserThemes, systemMode, themeDepth, themeShouldMatchSystem, themes, userThemes} from '../signals/themeSignals';
 import type { ThemeV2, ThemeV2Tokens } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { toast } from '@core/component/Toast/Toast';
@@ -78,6 +78,7 @@ export function applyTheme(id: string): void{
         });
       }
     );
+    setThemeDepth(theme!.depth ?? 0.15);
     queueMicrotask(() => {/* scuffed af */
       setIsThemeSaved(true);
       setHtmlColor({color: `oklch(${themeReactive.b0.l[0]()} ${themeReactive.b0.c[0]()} ${themeReactive.b0.h[0]()}deg)`});
@@ -128,7 +129,7 @@ export function saveTheme(name: string): void{
     id: id,
     name: name,
     version: 2,
-    depth: 0.15,
+    depth: themeDepth(),
     tokens: tokens,
   };
   setUserThemes([...userThemes(), newTheme]);

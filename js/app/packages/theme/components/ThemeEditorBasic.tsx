@@ -1,4 +1,5 @@
 import { batch, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import { setThemeDepth, themeDepth } from '../signals/themeSignals';
 import { themeReactive } from '../signals/themeReactive';
 
 function setLightness(lightness: number) {
@@ -101,10 +102,12 @@ export function randomizeTheme(){
     const randSaturation = Math.random() * 0.5;
     const randContrast = 1 - randLightness;
     const randChroma = (Math.random() * 0.5 + 0.5) * 0.37;
+    const randDepth = (Math.random() * 0.2 + 0.1);
 
     setContrast(randContrast);
     setChroma(randChroma, randSaturation);
     setSaturation(randSaturation);
+    setThemeDepth(randDepth);
   });
 }
 
@@ -113,6 +116,7 @@ export function ThemeEditorBasic(){
 
   let sliderSaturationRef!: HTMLInputElement;
   let sliderContrastRef!: HTMLInputElement;
+  let sliderDepthRef!: HTMLInputElement;
   let chromaLocation: WebGLUniformLocation;
   let canvasContainerRef!: HTMLDivElement;
   let canvasThumbRef!: HTMLDivElement;
@@ -259,6 +263,10 @@ export function ThemeEditorBasic(){
 
   function handleContrastChange(e: Event){
     setContrast(parseFloat((e.target as HTMLInputElement).value));
+  }
+
+  function handleDepthChange(e: Event){
+    setThemeDepth(parseFloat((e.target as HTMLInputElement).value));
   }
 
   onMount(() => {
@@ -690,7 +698,7 @@ export function ThemeEditorBasic(){
 
             <div
               style={{
-                'left': `${getContrastFromY(themeReactive.b0.l[0]()) * 100}%`,
+                'left': `${(themeDepth() / 0.4) * 100}%`,
                 'transform': 'translate(-50%, -50%)',
                 'background-color': 'var(--b0)',
                 'border': '1px solid var(--b4)',
@@ -705,7 +713,7 @@ export function ThemeEditorBasic(){
 
             <input
               onInput={(e) => {
-                handleContrastChange(e);
+                handleDepthChange(e);
               }}
               class="theme-editor-basic-slider"
               style="
@@ -723,11 +731,11 @@ export function ThemeEditorBasic(){
                 margin: 0;
                 top: 0;
                "
-              ref={sliderContrastRef}
+              ref={sliderDepthRef}
               type="range"
               step="0.001"
-              value="0"
-              max="1.0"
+              value={themeDepth()}
+              max="0.4"
               min="0.0"
             />
           </div>

@@ -76,6 +76,8 @@ export const [monochromeIcons, setMonochromeIcons] = makePersisted(
   {name: 'enable-monochrome-icons'}
 );
 
+export const [themeDepth, setThemeDepth] = createSignal<number>(0.15);
+
 
 createEffect(() => {
   if(monochromeIcons()){
