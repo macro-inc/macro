@@ -7,16 +7,16 @@ use crate::{
     model::stream::SendChatMessagePayload,
 };
 
-use macro_db_client::dcs::create_chat_message::create_chat_message;
-
 use ai::types::Model;
 use ai::types::Role;
 use ai::types::{ChatMessage, ChatMessageContent};
 use anyhow::{Context, Result};
+use chat::domain::models::ResolvedMessageContent;
+use chat::domain::ports::MessageService;
 use model::chat::{NewAttachment, NewChatMessage};
 use std::sync::Arc;
 
-// Stores the incoming user message in the database
+/// Stores the incoming user message and resolves its attachments in one step.
 #[tracing::instrument(err, skip(ctx, chat, incoming_message), fields(chat_id=?incoming_message.chat_id))]
 pub async fn store_incoming_message(
     ctx: Arc<ApiContext>,
@@ -24,13 +24,12 @@ pub async fn store_incoming_message(
     chat: &ChatResponse,
     model: Model,
     incoming_message: &SendChatMessagePayload,
-) -> Result<String> {
+) -> Result<ResolvedMessageContent> {
     let created_at = chrono::Utc::now();
     let new_chat_message = NewChatMessage {
         id: None,
         content: ChatMessageContent::Text(incoming_message.content.clone()),
         role: Role::User,
-        // Attach the current chat attachments to the user message
         attachments: incoming_message.attachments.as_ref().map(|attachments| {
             attachments
                 .iter()
@@ -46,22 +45,24 @@ pub async fn store_incoming_message(
         model,
     };
 
-    let user_message_id =
-        create_chat_message(ctx.db.clone(), &incoming_message.chat_id, new_chat_message)
-            .await
-            .context("failed to create chat message")?;
+    let user_id: macro_user_id::user_id::MacroUserIdStr<'static> =
+        user_id.to_owned().try_into().map_err(anyhow::Error::msg)?;
+    let resolved = ctx
+        .message_service
+        .create(&user_id, &incoming_message.chat_id, new_chat_message)
+        .await
+        .context("failed to create chat message")?;
 
-    // Send chat message for search processing
     search::send_chat_message_to_search(
         &ctx,
         &chat.id,
-        &user_message_id,
-        user_id,
+        &resolved.message_id,
+        user_id.as_ref(),
         created_at,
-        created_at, // updated_at = created_at
+        created_at,
     );
 
-    Ok(user_message_id)
+    Ok(resolved)
 }
 
 /// Stores multiple conversation messages to the database.
@@ -85,7 +86,6 @@ pub async fn store_conversation_messages(
     let created_at = chrono::Utc::now();
 
     for message in messages {
-        // Use the pre-generated ID for the first assistant message
         let id = if !first_id_used && message.role == Role::Assistant {
             first_id_used = true;
             first_message_id.clone()
@@ -93,30 +93,31 @@ pub async fn store_conversation_messages(
             None
         };
 
-        let new_chat_message = model::chat::NewChatMessage {
+        let new_chat_message = NewChatMessage {
             id,
             content: message.content,
             role: message.role,
-            attachments: None, // New messages from streaming don't have attachments (they are asssistant messages)
+            attachments: None,
             model,
             created_at,
             updated_at: created_at,
         };
 
-        let message_id = create_chat_message(ctx.db.clone(), chat_id, new_chat_message)
+        let message_id = ctx
+            .message_service
+            .store(chat_id, new_chat_message)
             .await
             .context("failed to create chat message")?;
 
         message_ids.push(message_id.clone());
 
-        // Send each message for search processing
         search::send_chat_message_to_search(
             &ctx,
             chat_id,
             &message_id,
             user_id,
             created_at,
-            created_at, // updated_at = created_at
+            created_at,
         );
     }
 

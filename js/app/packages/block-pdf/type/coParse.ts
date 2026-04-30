@@ -99,15 +99,12 @@ export interface IModificationData {
 }
 
 // NOTE: typing this way ensures that the parsed output matches the expected type
-export const IModificationDataSchema: z.ZodType<
-  IModificationData,
-  z.ZodTypeDef,
-  any
-> = z.object({
-  bookmarks: z.array(IBookmarkSchema),
-  placeables: z.array(IPlaceableSchema),
-  pinnedTermsNames: z.array(z.string()),
-});
+export const IModificationDataSchema: z.ZodType<IModificationData, any> =
+  z.object({
+    bookmarks: z.array(IBookmarkSchema),
+    placeables: z.array(IPlaceableSchema),
+    pinnedTermsNames: z.array(z.string()),
+  });
 
 // Transform server data to client data
 export function transformModificationDataToClient(
@@ -131,6 +128,7 @@ export function transformModificationDataToServer(
   data: IModificationData
 ): IModificationDataOnServer {
   return {
+    highlights: null,
     bookmarks: data.bookmarks,
     placeables: data.placeables
       .filter((p) => !isThreadPlaceable(p))
@@ -167,7 +165,7 @@ export interface ICoParse {
   documentData?: TDocumentData;
 }
 
-export const CoParseSchema: z.ZodType<ICoParse, z.ZodTypeDef, any> = z.object({
+export const CoParseSchema: z.ZodType<ICoParse, any> = z.object({
   bookmarks: z.array(IBookmarkSchema).optional(),
   hash: z.string().optional(),
   toc: z.string().optional(), // Stringified XML of the PDF table of contents

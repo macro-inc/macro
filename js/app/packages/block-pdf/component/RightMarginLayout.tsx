@@ -92,6 +92,7 @@ const useCommentsContext = (): CommentsContextType => {
       updateComment,
     },
     inComment: true,
+    highlightedCommentId: () => null,
   };
 
   return commentsContext;

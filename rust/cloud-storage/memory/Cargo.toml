@@ -28,6 +28,7 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 
 # For building ToolServiceContext
+call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 comms = { path = "../comms" }
 document_storage_service_client = { path = "../document_storage_service_client" }
 documents = { path = "../documents" }

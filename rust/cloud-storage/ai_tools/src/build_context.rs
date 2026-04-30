@@ -179,6 +179,7 @@ pub async fn build_tool_service_context_from_env(
         PgUserRepo::new(pool.clone()),
         frecency_storage,
     );
+    let channel_tool_context = crate::tool_context::build_channel_tool_context(pool.clone());
     let email_service_for_tools: Arc<crate::tool_context::ToolEmailService> =
         Arc::new(email_service.clone());
     let soup_service = Arc::new(SoupImpl::new(
@@ -269,6 +270,20 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
     );
 
+    let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone());
+    let chat_service = chat::domain::service::ChatServiceImpl::new(
+        chat_repo,
+        Arc::new(ai_toolset::AsyncToolSet::new()),
+        (),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
+    );
+    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
+        chat_service,
+        (*entity_access_service).clone(),
+    );
+
     Ok(ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
@@ -279,6 +294,8 @@ pub async fn build_tool_service_context_from_env(
         properties_tool_context,
         email_tool_context,
         call_tool_context,
+        chat_tool_context,
+        channel_tool_context,
         schedule_tool_context: crate::NoOpScheduleContext,
     })
 }

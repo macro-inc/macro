@@ -1,7 +1,12 @@
+use schemars::SchemaGenerator;
 use serde_json::Error as JsonError;
 use serde_json::Map;
 use serde_json::Value;
 use thiserror::Error;
+
+/// Closure that registers a tool's input/output types with a shared
+/// [`SchemaGenerator`], returning `(input_name, output_name)`.
+pub type SchemaRegistrar = Box<dyn Fn(&mut SchemaGenerator) -> (String, String) + Send + Sync>;
 
 /// A compiled tool object containing schema and deserialization logic.
 ///
@@ -18,6 +23,9 @@ pub struct ToolObject<T> {
     pub name: String,
     /// The deserializer function for converting JSON to the tool type.
     pub deserializer: T,
+    /// Registers this tool's input/output types with a shared generator
+    /// for combined schema generation.
+    pub schema_registrar: SchemaRegistrar,
 }
 
 /// Errors that can occur when validating a tool's schema.

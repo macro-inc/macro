@@ -52,11 +52,10 @@ dependencies = [
  "async-openai",
  "async-stream",
  "async-trait",
- "base64 0.22.1",
+ "attachment",
  "chrono",
  "const_format",
  "futures",
- "image",
  "lazy_static",
  "macro_user_id",
  "model_file_type",
@@ -68,11 +67,9 @@ dependencies = [
  "serde_json",
  "strum",
  "thiserror 2.0.17",
- "tiktoken-rs",
  "tokio",
  "tracing",
  "utoipa",
- "webp",
 ]
 
 [[package]]
@@ -93,10 +90,13 @@ dependencies = [
  "anthropic",
  "anyhow",
  "async-trait",
+ "attachment",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
  "call",
+ "channels",
+ "chat",
  "chrono",
  "comms",
  "connection",
@@ -119,6 +119,7 @@ dependencies = [
  "macro_env_var",
  "macro_user_id",
  "model",
+ "model-entity",
  "model_notifications",
  "models_dcs",
  "models_email",
@@ -126,6 +127,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "models_search",
+ "non_empty",
  "notification",
  "properties",
  "rand 0.9.3",
@@ -592,12 +594,17 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 name = "attachment"
 version = "0.1.0"
 dependencies = [
- "ai",
  "anyhow",
+ "base64 0.22.1",
  "futures",
+ "image",
  "macro_user_id",
+ "model-entity",
+ "model_file_type",
  "non_empty",
+ "serde",
  "thiserror 2.0.17",
+ "webp",
 ]
 
 [[package]]
@@ -1794,6 +1801,7 @@ dependencies = [
  "aws-sdk-s3",
  "axum",
  "chrono",
+ "comms",
  "connection",
  "entity_access",
  "entity_access_db_utils",
@@ -1882,7 +1890,9 @@ dependencies = [
 name = "channels"
 version = "0.1.0"
 dependencies = [
+ "ai",
  "anyhow",
+ "async-trait",
  "axum",
  "chrono",
  "entity_access",
@@ -1893,6 +1903,7 @@ dependencies = [
  "model-error-response",
  "model_user",
  "models_pagination",
+ "schemars",
  "serde",
  "serde_json",
  "sqlx",
@@ -1921,6 +1932,7 @@ dependencies = [
  "ai",
  "ai_toolset",
  "anyhow",
+ "async-trait",
  "attachment",
  "axum",
  "chrono",
@@ -1939,6 +1951,7 @@ dependencies = [
  "models_permissions",
  "non_empty",
  "roles_and_permissions",
+ "schemars",
  "serde",
  "serde_json",
  "sqlx",
@@ -3072,6 +3085,7 @@ dependencies = [
  "async-openai",
  "async-stream",
  "async-trait",
+ "attachment",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -3119,6 +3133,7 @@ dependencies = [
  "models_dcs",
  "models_opensearch",
  "models_permissions",
+ "non_empty",
  "notification",
  "properties",
  "readonly_pool",
@@ -3135,6 +3150,7 @@ dependencies = [
  "soup",
  "sqlx",
  "sqs_client",
+ "static_file",
  "static_file_service_client",
  "stream",
  "strum",
@@ -3319,6 +3335,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "tiktoken-rs",
  "tokio",
  "tracing",
  "urlencoding",
@@ -4581,6 +4598,7 @@ dependencies = [
  "macro_uuid",
  "mockall",
  "model",
+ "model-entity",
  "model-error-response",
  "models_permissions",
  "redis",
@@ -6498,6 +6516,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "call",
+ "chat",
  "comms",
  "document_storage_service_client",
  "documents",
@@ -6559,6 +6578,7 @@ dependencies = [
  "ai_toolset",
  "anyhow",
  "axum",
+ "call",
  "chrono",
  "comms",
  "document_storage_service_client",
@@ -7193,6 +7213,10 @@ dependencies = [
 [[package]]
 name = "non_empty"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "noop_proc_macro"
@@ -9568,6 +9592,7 @@ dependencies = [
  "ai",
  "ai_format",
  "anyhow",
+ "attachment",
  "base64 0.22.1",
  "bytes",
  "chat",
@@ -9662,6 +9687,7 @@ dependencies = [
  "sqs_client",
  "sqs_worker",
  "strum",
+ "thiserror 2.0.17",
  "tokio",
  "tower 0.5.2",
  "tower-http",
@@ -9679,6 +9705,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "axum",
  "chrono",
+ "comms",
  "comms_db_client",
  "document_sub_type",
  "email_db_client",
@@ -10695,6 +10722,21 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
+name = "static_file"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "attachment",
+ "futures",
+ "macro_user_id",
+ "mime",
+ "model-entity",
+ "non_empty",
+ "reqwest",
+ "tracing",
+]
 
 [[package]]
 name = "static_file_service"

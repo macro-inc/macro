@@ -31,6 +31,7 @@ pdfium-render = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
+tiktoken-rs = "0.5.9"
 tokio = { workspace = true }
 tracing = { workspace = true }
 urlencoding = { workspace = true }

@@ -5,7 +5,11 @@ import type {
   SoupApiItem,
 } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
-import type { InfiniteData, QueryKey } from '@tanstack/solid-query';
+import {
+  partialMatchKey,
+  type InfiniteData,
+  type QueryKey,
+} from '@tanstack/solid-query';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { queryClient } from '../../client';
@@ -81,6 +85,9 @@ export function invalidateAllSoup(): void {
   queryClient.invalidateQueries({
     queryKey: soupKeys.items._def,
   });
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.astItems._def,
+  });
 }
 
 /** O(1) check whether an entity exists in normy's normalized store. */
@@ -111,11 +118,14 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
 
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
     {
-      queryKey: soupKeys.items._def,
       predicate: (query) => {
+        const matchingKey =
+          partialMatchKey(query.queryKey, soupKeys.astItems._def) ||
+          partialMatchKey(query.queryKey, soupKeys.items._def);
+
         const filter = query.meta?.itemFilter as SoupApiItemFilter | undefined;
-        if (!filter) return true;
-        return filter(item);
+        if (!filter) return matchingKey;
+        return filter(item) && matchingKey;
       },
     },
     (prev) => {
@@ -140,11 +150,19 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
  */
 export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
   queryClient.cancelQueries({ queryKey: soupKeys.items._def });
+  queryClient.cancelQueries({ queryKey: soupKeys.astItems._def });
 
   const previous = snapshotSoup();
 
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
-    { queryKey: soupKeys.items._def },
+    {
+      predicate(query) {
+        return (
+          partialMatchKey(query.queryKey, soupKeys.astItems._def) ||
+          partialMatchKey(query.queryKey, soupKeys.items._def)
+        );
+      },
+    },
     (prev) => {
       if (!prev || !prev.pages) return prev;
       return {
@@ -386,7 +404,7 @@ function snapshotSoup(): [
   InfiniteData<SoupPage, unknown> | undefined,
 ][] {
   return queryClient.getQueriesData<InfiniteData<SoupPage, unknown>>({
-    queryKey: soupKeys.items._def,
+    queryKey: soupKeys.astItems._def,
   });
 }
 

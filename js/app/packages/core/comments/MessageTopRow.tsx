@@ -1,14 +1,15 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { UserIcon } from '@core/component/UserIcon';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { cn } from '@ui/utils/classname';
 import { idToDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
-import Check from '@phosphor-icons/core/regular/check.svg?component-solid';
-import NotePencil from '@phosphor-icons/core/regular/note-pencil.svg?component-solid';
+import Check from '@icon/regular/check.svg';
+import Link from '@icon/regular/link.svg';
+import NotePencil from '@icon/regular/note-pencil.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { type ParentProps, Show, useContext } from 'solid-js';
 import { CommentsContext } from './Thread';
+import { Button } from '@ui/components/Button';
 
 // SCUFFED: how should we define these tag colors?
 const NewTag = () => {
@@ -83,7 +84,7 @@ export function MessageRowUI(
       >
         {!props.hideBubble && (
           <div
-            class={`w-4 h-4 relative flex items-center justify-center shrink-0 rounded-[2px]`}
+            class={`w-4 h-4 relative flex items-center justify-center shrink-0 rounded-xs`}
           >
             <div class="absolute">
               <UserIcon
@@ -119,6 +120,7 @@ export function MessageTopRow(props: {
   date?: DateValue | null;
   deleteMessage?: () => void;
   enableEditing?: () => void;
+  copyLink?: () => void;
   hideBottomMargin?: boolean;
   isNew: boolean;
   isResolved: boolean;
@@ -137,33 +139,53 @@ export function MessageTopRow(props: {
       hideBottomMargin={props.hideBottomMargin}
       isActive={props.isActive}
     >
-      <div class="absolute top-1 right-1 flex flex-row bg-menu border border-edge z-user-highlight">
+      <div class="absolute top-0 right-0 flex flex-row bg-menu border border-edge-muted p-1 rounded-sm z-user-highlight">
+        <Show when={props.copyLink}>
+          <Button
+            tooltip="Copy link to comment"
+            size="icon-sm"
+            variant="ghost"
+            class="rounded-xs"
+            onClick={props.copyLink}
+          >
+            <Link />
+          </Button>
+        </Show>
         <Show when={canComment()}>
           <Show when={props.isOwned}>
-            {props.toggleResolve && (
-              <DeprecatedIconButton
-                tooltip={{ label: 'Resolve Comment' }}
-                icon={Check}
-                theme={props.isResolved ? 'accent' : 'clear'}
-                on:click={props.toggleResolve}
-              />
-            )}
-            {props.enableEditing && (
-              <DeprecatedIconButton
-                tooltip={{ label: 'Edit Comment' }}
-                theme="clear"
-                icon={NotePencil}
-                on:click={props.enableEditing}
-              />
-            )}
+            <Show when={props.toggleResolve}>
+              <Button
+                tooltip="Resolve Comment"
+                size="icon-sm"
+                variant="ghost"
+                class="rounded-xs"
+                onClick={props.toggleResolve}
+              >
+                <Check />
+              </Button>
+            </Show>
+            <Show when={props.enableEditing}>
+              <Button
+                tooltip="Edit Comment"
+                size="icon-sm"
+                variant="ghost"
+                class="rounded-xs"
+                onClick={props.enableEditing}
+              >
+                <NotePencil />
+              </Button>
+            </Show>
           </Show>
           <Show when={!props.isEditing && (props.isOwned || isDocumentOwner())}>
-            <DeprecatedIconButton
-              tooltip={{ label: 'Delete Comment' }}
-              theme="clear"
-              icon={Trash}
-              on:click={props.deleteMessage}
-            />
+            <Button
+              tooltip="Delete Comment"
+              size="icon-sm"
+              variant="ghost"
+              class="rounded-xs"
+              onClick={props.deleteMessage}
+            >
+              <Trash class="text-failure" />
+            </Button>
           </Show>
         </Show>
       </div>

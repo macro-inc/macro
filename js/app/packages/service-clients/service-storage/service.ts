@@ -60,7 +60,7 @@ const AnnotationsSvc = new Svc('Annotations Service')
       documentId: schemas.createAnchorParams.shape.document_id,
       body: schemas.createAnchorBody,
     },
-    result: asRawShape(schemas.createAnchorResponse),
+    result: schemas.createAnchorResponse,
     throws: withFetchErrors(),
   })
   .fn('deleteComment', {
@@ -75,8 +75,8 @@ const AnnotationsSvc = new Svc('Annotations Service')
   })
   .fn('deleteAnchor', {
     description: schemas.deleteAnchorBody.description!,
-    args: { body: asRawShape(schemas.deleteAnchorBody).shape },
-    result: asRawShape(schemas.deleteAnchorResponse),
+    args: { body: schemas.deleteAnchorBody },
+    result: schemas.deleteAnchorResponse,
     throws: withFetchErrors(),
     modifies: true,
   })
@@ -92,8 +92,8 @@ const AnnotationsSvc = new Svc('Annotations Service')
   })
   .fn('editAnchor', {
     description: schemas.editAnchorBody.description!,
-    args: { body: asRawShape(schemas.editAnchorBody).shape },
-    result: asRawShape(schemas.editAnchorResponse),
+    args: { body: schemas.editAnchorBody },
+    result: schemas.editAnchorResponse,
     throws: withFetchErrors(),
     modifies: true,
   });
@@ -163,7 +163,6 @@ export const ProjectsSvc = new Svc('Projects Service')
       schemas.getProjectUserAccessLevelParams.description ??
       'Get project user access level',
     args: schemas.getProjectUserAccessLevelParams.shape,
-    // @ts-expect-error - TODO: we need to be able to return a string, the record<string, any> constraint is too strict
     result: schemas.getProjectUserAccessLevelResponse,
     throws: withFetchErrors(),
   })

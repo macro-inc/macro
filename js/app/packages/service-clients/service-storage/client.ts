@@ -1059,20 +1059,16 @@ export const storageServiceClient = {
   getDocxExpandedParts,
 
   async upsertDocumentViewLocation({ documentId, location }) {
-    return ok(
-      await dssFetch<{}>(`/user_document_view_location/${documentId}`, {
-        method: 'POST',
-        body: JSON.stringify({ location }),
-      })
-    );
+    return await dssFetch<{}>(`/user_document_view_location/${documentId}`, {
+      method: 'POST',
+      body: JSON.stringify({ location }),
+    });
   },
 
   async deleteDocumentViewLocation({ documentId }) {
-    return ok(
-      await dssFetch<{}>(`/user_document_view_location/${documentId}`, {
-        method: 'DELETE',
-      })
-    );
+    return await dssFetch<{}>(`/user_document_view_location/${documentId}`, {
+      method: 'DELETE',
+    });
   },
 
   projects: {
@@ -1145,7 +1141,6 @@ export const storageServiceClient = {
       );
     },
 
-    // @ts-expect-error - TODO: we need to be able to return a string, the record<string, any> constraint is too strict
     async getUserAccessLevel({
       id,
     }): Promise<MaybeResult<FetchWithTokenErrorCode, AccessLevel>> {
@@ -1262,7 +1257,9 @@ export const storageServiceClient = {
       (result) => result.data
     );
   },
-} satisfies StorageServiceClient & typeof enhancements;
+} satisfies StorageServiceClient &
+  typeof enhancements &
+  Record<string, unknown>;
 
 export const uploadFileToPresignedUrl = async (
   presignedUrl: URL,

@@ -15,6 +15,8 @@ use model::document::{ContentType, DocumentBasic, DocumentMetadata};
 
 use model::sync_service::SyncServiceVersionID;
 
+use model_entity::Entity;
+
 use super::models::{
     CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
     CreateTaskResponse, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
@@ -149,6 +151,18 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         project_id: &str,
     ) -> impl Future<Output = Result<MacroUserIdStr<'static>, Self::Err>> + Send;
+
+    /// Get the name of a project by ID.
+    fn get_project_name(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+
+    /// Get the top-level children (documents and sub-projects) of a project.
+    fn get_project_children(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, Self::Err>> + Send;
 
     /// Copy a document's DB records in a single transaction.
     ///
@@ -311,6 +325,18 @@ pub trait DocumentService: Send + Sync + 'static {
         query_version_id: Option<i64>,
         sync_version_id: Option<SyncServiceVersionID>,
     ) -> impl Future<Output = Result<model::document::response::DocumentResponse, DocumentError>> + Send;
+
+    /// Get the name of a project by ID.
+    fn get_project_name(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<String, DocumentError>> + Send;
+
+    /// Get the top-level children (documents and sub-projects) of a project.
+    fn get_project_children(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, DocumentError>> + Send;
 
     /// Create a task document and optionally set property values on it.
     fn create_task(

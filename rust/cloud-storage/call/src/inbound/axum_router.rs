@@ -15,7 +15,7 @@ use axum::{
     extract::{FromRef, FromRequestParts, State},
     http::{StatusCode, request::Parts},
     response::IntoResponse,
-    routing::{get, post},
+    routing::{get, patch, post},
 };
 use entity_access::{
     domain::{
@@ -33,8 +33,8 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     CallActiveResponse, CallError, CallRecord, CallTokenResponse, EditCallRecordRequest,
-    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, LeaveCallResponse,
-    MAX_BATCH_CALL_IDS, TranscriptSegmentRequest,
+    EditCallTranscriptRequest, GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse,
+    LeaveCallResponse, MAX_BATCH_CALL_IDS, TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallService;
 
@@ -81,6 +81,7 @@ impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
 /// - `DELETE /{channel_id}` — leave or end a call
 /// - `GET /record/{call_id}` — get a full call record (transcript + participants)
 /// - `PATCH /record/{call_id}` — edit a call record (e.g. share permissions)
+/// - `PATCH /record/{call_id}/transcript` — set per-diarized-speaker custom_speaker overrides
 /// - `DELETE /record/{call_id}` — delete a call record
 /// - `POST /record/{call_id}/share-with-team/toggle` — flip the call's share_with_team flag
 /// - `POST /record/preview` — batch-fetch lightweight previews for many call ids
@@ -108,6 +109,10 @@ where
             get(get_call_record_handler::<S, Svc>)
                 .patch(edit_call_record_handler::<S, Svc>)
                 .delete(delete_call_record_handler::<S, Svc>),
+        )
+        .route(
+            "/record/{call_id}/transcript",
+            patch(edit_call_transcript_handler::<S, Svc>),
         )
         .route(
             "/record/{call_id}/share-with-team/toggle",
@@ -393,6 +398,40 @@ pub async fn edit_call_record_handler<S: CallService, Svc: EntityAccessService>(
     state
         .service
         .edit_call_record(access.entity_access_receipt, request)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Handler for `PATCH /call/record/{call_id}/transcript`.
+///
+/// Applies per-diarized-speaker `custom_speaker` overrides to the call's
+/// archived transcript rows. Auth uses the same `EditAccessLevel` extractor
+/// as `edit_call_record_handler`.
+#[utoipa::path(
+    patch,
+    operation_id = "edit_call_transcript",
+    path = "/call/record/{call_id}/transcript",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    request_body = EditCallTranscriptRequest,
+    responses(
+        (status = 204, description = "Transcript updated"),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn edit_call_transcript_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
+    Json(request): Json<EditCallTranscriptRequest>,
+) -> Result<StatusCode, CallError> {
+    state
+        .service
+        .edit_call_transcript(access.entity_access_receipt, request)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

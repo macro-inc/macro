@@ -14,6 +14,10 @@ import type { Root } from './commentType';
 import { EditInput } from './Inputs';
 import { MessageTopRow } from './MessageTopRow';
 import { CommentsContext, ThreadContext } from './Thread';
+import { useMaybeBlockAliasedName } from '@core/block';
+import { buildSimpleEntityUrl } from '@core/util/url';
+import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
+import { toast } from '@core/component/Toast/Toast';
 
 const ThreadLine = () => {
   return (
@@ -29,10 +33,23 @@ const CommentText = (props: { text: string; isThreaded?: boolean }) => {
   );
 };
 
-function CommentContainer(props: ParentProps<{ isThreaded?: boolean }>) {
+function CommentContainer(
+  props: ParentProps<{ isThreaded?: boolean; isHighlighted?: boolean }>
+) {
   return (
-    <div class="relative isolate group">
-      <div class="absolute top-0 left-0 size-[calc(100%)] bracket bg-menu/30 -z-1 transition-opacity duration-50 opacity-0 group-hover:opacity-100" />
+    <div
+      class="relative isolate group rounded-sm"
+      classList={{
+        'outline-1 outline-accent/20 -outline-offset-1': props.isHighlighted,
+      }}
+    >
+      <div
+        class="absolute top-0 left-0 size-[calc(100%)] rounded-sm -z-1"
+        classList={{
+          'bg-accent/5 opacity-100': props.isHighlighted,
+          'bg-hover opacity-0 group-hover:opacity-100': !props.isHighlighted,
+        }}
+      />
       <div
         class="supports-text-pretty:whitespace-normal wrap-break-word p-1"
         classList={{
@@ -53,7 +70,14 @@ export function Comment(
     isThreaded?: boolean;
   }>
 ) {
-  const { commentOperations, setActiveThread } = useContext(CommentsContext);
+  const maybeBlockName = useMaybeBlockAliasedName();
+  const commentsContext = useContext(CommentsContext);
+
+  const { commentOperations, setActiveThread, highlightedCommentId } =
+    commentsContext;
+  const isHighlighted = createMemo(
+    () => highlightedCommentId() === props.comment.id
+  );
 
   const isResolved = createMemo(() => props.comment.resolved ?? false);
   const date = () => props.comment.createdAt;
@@ -68,13 +92,36 @@ export function Comment(
     }
   });
 
+  const copyLink = () => {
+    if (!maybeBlockName) return;
+    return async () => {
+      const params: Record<string, string> = {};
+      if (maybeBlockName === 'task' || maybeBlockName === 'md') {
+        params[MD_URL_PARAMS.commentId] = props.comment.id.toString();
+      }
+      try {
+        const url = buildSimpleEntityUrl(
+          { type: maybeBlockName, id: commentsContext.documentId },
+          params
+        );
+        await navigator.clipboard.writeText(url);
+        toast.success('Link copied to clipboard');
+      } catch (_) {
+        toast.failure('Could not copy link');
+      }
+    };
+  };
+
   const mentionsSignal = useContext(ThreadContext).mentionsSignal;
 
   return (
     <Show
       when={isEditing()}
       fallback={
-        <CommentContainer isThreaded={props.isThreaded}>
+        <CommentContainer
+          isThreaded={props.isThreaded}
+          isHighlighted={isHighlighted()}
+        >
           <Show when={props.isThreaded}>
             <ThreadLine />
           </Show>
@@ -96,6 +143,7 @@ export function Comment(
               setActiveThread(props.comment.threadId);
               setIsEditing(true);
             }}
+            copyLink={copyLink()}
           />
           <CommentText text={props.comment.text} />
           {props.children}
@@ -152,8 +200,33 @@ export function CommentReply(
   }>
 ) {
   const thisAuthor = useAuthor();
-  const { getCommentById } = useContext(CommentsContext);
+  const { getCommentById, highlightedCommentId, documentId } =
+    useContext(CommentsContext);
+  const maybeBlockName = useMaybeBlockAliasedName();
   const reply = createMemo(() => getCommentById(props.replyId));
+  const isHighlighted = createMemo(
+    () => highlightedCommentId() === props.replyId
+  );
+
+  const copyLink = () => {
+    if (!maybeBlockName) return;
+    return async () => {
+      const params: Record<string, string> = {};
+      if (maybeBlockName === 'task' || maybeBlockName === 'md') {
+        params[MD_URL_PARAMS.commentId] = props.replyId.toString();
+      }
+      try {
+        const url = buildSimpleEntityUrl(
+          { type: maybeBlockName, id: documentId },
+          params
+        );
+        await navigator.clipboard.writeText(url);
+        toast.success('Link copied to clipboard');
+      } catch (_) {
+        toast.failure('Could not copy link');
+      }
+    };
+  };
 
   const [isEditing, setIsEditing] = createSignal<boolean>(false);
   const [textValue, setTextValue] = createSignal<string>('');
@@ -169,7 +242,10 @@ export function CommentReply(
       <Show
         when={isEditing()}
         fallback={
-          <CommentContainer isThreaded={props.isThreaded}>
+          <CommentContainer
+            isThreaded={props.isThreaded}
+            isHighlighted={isHighlighted()}
+          >
             <Show when={props.isThreaded}>
               <ThreadLine />
             </Show>
@@ -180,6 +256,7 @@ export function CommentReply(
               isResolved={false}
               deleteMessage={props.deleteReply}
               enableEditing={() => setIsEditing(true)}
+              copyLink={copyLink()}
               hideBottomMargin
               isOwned={props.isOwned}
               isActive={props.isActive}

@@ -28,8 +28,10 @@ pub struct ChatMessageWithAttachments {
     /// Whether the chat is from the user or system
     pub role: Role,
     /// The ids of the attachments used to generate the message
+    // transform to Vec<Entity<'static>>
     pub attachments: Vec<ChatAttachmentWithName>,
     /// The model used to generate the message
+    /// kill
     pub model: Option<String>,
 }
 

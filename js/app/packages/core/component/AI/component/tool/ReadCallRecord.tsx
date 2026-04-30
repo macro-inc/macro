@@ -1,13 +1,12 @@
-import Microphone from '@phosphor-icons/core/regular/microphone.svg';
+import Newspaper from '@phosphor-icons/core/regular/newspaper.svg';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
 const handler = createToolRenderer({
   name: 'ReadCallRecord',
   render: (ctx) => (
-    <BaseTool type="call" icon={Microphone} renderContext={ctx.renderContext}>
-      Read call transcript{' '}
-      <span class="text-accent">{ctx.tool.data.callId}</span>
+    <BaseTool type="call" icon={Newspaper} renderContext={ctx.renderContext}>
+      Read <span class="text-accent">call transcript</span>
     </BaseTool>
   ),
 });

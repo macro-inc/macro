@@ -116,7 +116,6 @@ export const useSoupNavigationHotkeys = (
     return true;
   };
 
-  // Used outside soup view, does not need to be disposed
   registerHotkey({
     hotkey: ['j'],
     scopeId,
@@ -124,7 +123,7 @@ export const useSoupNavigationHotkeys = (
     hotkeyToken: TOKENS.entity.step.end,
     keyDownHandler: navigateDown,
     hide: true,
-  });
+  }).withGroup(group);
 
   registerHotkey({
     hotkey: ['arrowdown'],
@@ -134,7 +133,6 @@ export const useSoupNavigationHotkeys = (
     hide: true,
   }).withGroup(group);
 
-  // Used outside soup view, does not need to be disposed
   registerHotkey({
     hotkey: ['k'],
     scopeId,
@@ -142,7 +140,7 @@ export const useSoupNavigationHotkeys = (
     description: 'Up',
     keyDownHandler: navigateUp,
     hide: true,
-  });
+  }).withGroup(group);
 
   registerHotkey({
     hotkey: ['arrowup'],

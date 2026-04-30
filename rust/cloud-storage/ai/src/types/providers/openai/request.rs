@@ -10,9 +10,7 @@ use schemars::{JsonSchema, schema_for};
 use serde::Deserialize;
 
 impl ChatCompletionRequest {
-    pub fn openai_messages(&self) -> Vec<ChatCompletionRequestMessage> {
-        let mut all_messages = vec![];
-
+    pub fn openai_messages(self) -> Vec<ChatCompletionRequestMessage> {
         let system_message =
             ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
                 content: ChatCompletionRequestSystemMessageContent::Text(
@@ -21,15 +19,12 @@ impl ChatCompletionRequest {
                 name: None,
             });
 
-        let messages: Vec<ChatCompletionRequestMessage> = self
-            .messages
-            .clone()
-            .into_iter()
-            .flat_map(Vec::<ChatCompletionRequestMessage>::from)
-            .collect();
-
-        all_messages.push(system_message);
-        all_messages.extend(messages);
+        let mut all_messages = vec![system_message];
+        all_messages.extend(
+            self.messages
+                .into_iter()
+                .flat_map(Vec::<ChatCompletionRequestMessage>::from),
+        );
         all_messages
     }
 }

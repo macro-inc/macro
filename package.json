@@ -1,0 +1,6 @@
+{
+  "dependencies": {},
+  "devDependencies": {
+    "@apidevtools/json-schema-ref-parser": "^15.3.5"
+  }
+}

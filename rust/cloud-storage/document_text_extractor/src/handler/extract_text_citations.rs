@@ -210,10 +210,12 @@ pub async fn extract_text_from_document(
     };
 
     let (references, extracted_text) = ref_id_extract_text(&file);
-    let token_count = ai::tokens::count_tokens(&extracted_text).map_err(|e| {
-        tracing::error!(error=?e, "unable to count tokens");
-        Error::from(e)
-    })?;
+    let token_count = tiktoken_rs::o200k_base()
+        .map(|enc| enc.encode_with_special_tokens(&extracted_text).len() as i64)
+        .map_err(|e| {
+            tracing::error!(error=?e, "unable to count tokens");
+            Error::from(e)
+        })?;
 
     db.create_document_text(document_id, &extracted_text, token_count)
         .await

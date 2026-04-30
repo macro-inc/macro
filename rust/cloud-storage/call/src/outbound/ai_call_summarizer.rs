@@ -31,18 +31,55 @@ Rules:
 - Write in plain prose, using short paragraphs or bullet points where \
   appropriate. No markdown headings.
 - Do not speculate or invent content that is not in the transcript.
-- If the transcript is empty or uninformative, say so briefly rather than \
-  fabricating content.
+- Write directly about what was discussed in the call. Do NOT begin with a \
+  meta-reference to the transcript or recording itself such as `This \
+  transcript...`, `The transcript...`, `The call...`, `In this call...`, \
+  `The recording...`, or similar — start with the actual content (a topic, \
+  a decision, a participant).
+- If the transcript is empty, contains only fragmented or incoherent speech, \
+  or otherwise has no useful information to summarize, respond with exactly \
+  the single token `NULL` and nothing else. Do not produce a summary that \
+  merely states the transcript is uninformative — return `NULL` instead.
 - Respond with only the summary text — no preamble, no sign-off.";
+
+/// Sentinel the model is asked to emit when the transcript has no useful
+/// content to summarize. Mapped to `None` so the caller skips persisting a
+/// summary at all (rather than writing a placeholder \"transcript is
+/// uninformative\" line).
+const NULL_SUMMARY_SENTINEL: &str = "NULL";
 
 /// System prompt for naming a call from its summary. Kept tight so the model
 /// returns a bare title instead of a sentence.
 const CALL_NAME_SYSTEM_PROMPT: &str = "\
-You write short titles for recorded calls based on their summary. \
-Output a single title — 3 to 6 words, Title Case, no punctuation, no \
-quotes, no preamble, no sign-off. The title should reflect the main \
-topic of the call; if the summary is empty or uninformative, respond \
-with `Untitled Call`.";
+You generate short titles for recorded calls from a written summary of the \
+call. The title is shown in a list of past calls, so it must be specific \
+enough to distinguish one call from another at a glance.
+
+Output requirements:
+- A single title, 4 to 8 words, in Title Case (capitalize every word except \
+  articles, prepositions, and conjunctions of 3 letters or fewer).
+- No surrounding quotes, no trailing punctuation, no preamble, no sign-off.
+- Internal punctuation (colons, hyphens, ampersands, apostrophes) is allowed \
+  when it improves readability.
+- Prefer concrete topics and proper nouns drawn from the summary — people, \
+  companies, projects, products — over generic words like `Meeting`, \
+  `Discussion`, or `Call`.
+- If the summary indicates the call had no substantive content (silence, \
+  test call, accidental recording, empty transcript), output exactly: \
+  UNTITLED_CALL
+
+Examples:
+Summary: `Alex and Priya reviewed Q3 marketing spend and agreed to cut paid \
+search by 20% next quarter.` → `Q3 Marketing Spend Review`
+Summary: `Standup with the platform team. Blocked on the Postgres upgrade; \
+Sam will follow up with infra.` → `Platform Standup: Postgres Upgrade Blocker`
+Summary: `Intro call between Jordan (Macro) and Lee (Acme) about a possible \
+SSO integration.` → `Macro & Acme SSO Intro Call`
+Summary: `No speech detected in the transcript.` → `UNTITLED_CALL`";
+
+/// Sentinel the model is asked to emit when the summary has no substantive
+/// content. Mapped to `None` so the caller leaves the existing name untouched.
+const UNTITLED_CALL_SENTINEL: &str = "UNTITLED_CALL";
 
 /// Maximum characters of summary text we send to the naming model. The
 /// summary is already concise; this is a safety cap so a runaway summary
@@ -78,7 +115,7 @@ impl CallSummarizer for AiCallSummarizer {
         &self,
         call_id: &Uuid,
         transcript: Vec<CallRecordTranscriptSegment>,
-    ) -> Result<String, Self::Err> {
+    ) -> Result<Option<String>, Self::Err> {
         let user_message = format_transcript_prompt(call_id, &transcript);
 
         let request = RequestBuilder::new()
@@ -87,19 +124,25 @@ impl CallSummarizer for AiCallSummarizer {
             .user_message(user_message)
             .build();
 
-        get_chat_completion(request)
+        let raw = get_chat_completion(request)
             .await
             .map_err(|e| anyhow::anyhow!(e))
             .inspect_err(|e| {
                 tracing::error!(error = ?e, %call_id, "ai call summarization failed");
-            })
+            })?;
+
+        Ok(parse_summary(&raw))
     }
 
     #[tracing::instrument(skip(self, summary), fields(summary_len = summary.len()), err)]
-    async fn generate_call_name(&self, call_id: &Uuid, summary: &str) -> Result<String, Self::Err> {
+    async fn generate_call_name(
+        &self,
+        call_id: &Uuid,
+        summary: &str,
+    ) -> Result<Option<String>, Self::Err> {
         let trimmed_summary = summary.trim();
         if trimmed_summary.is_empty() {
-            return Ok("Untitled Call".to_string());
+            return Ok(None);
         }
 
         let summary_for_prompt: &str = if trimmed_summary.len() > CALL_NAME_SUMMARY_CHAR_CAP {
@@ -112,10 +155,7 @@ impl CallSummarizer for AiCallSummarizer {
             trimmed_summary
         };
 
-        let user_message = format!(
-            "Call {call_id} summary follows. Produce a title per the rules in \
-             the system prompt.\n\n{summary_for_prompt}"
-        );
+        let user_message = format!("Summary:\n\n{summary_for_prompt}");
 
         let request = RequestBuilder::new()
             .model(SUMMARIZATION_MODEL)
@@ -137,22 +177,42 @@ impl CallSummarizer for AiCallSummarizer {
 #[cfg(test)]
 mod test;
 
+/// Map a raw summary completion to `Some(text)` or `None`.
+///
+/// Trims whitespace and surrounding quotes/backticks. Returns `None` when
+/// the model emitted [`NULL_SUMMARY_SENTINEL`] (case-insensitive, with or
+/// without surrounding quotes/whitespace) or when sanitization left
+/// nothing usable. The caller treats `None` as "do not persist a summary".
+fn parse_summary(raw: &str) -> Option<String> {
+    let trimmed = raw
+        .trim()
+        .trim_matches(|c: char| c == '"' || c == '\'' || c == '`')
+        .trim();
+
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case(NULL_SUMMARY_SENTINEL) {
+        return None;
+    }
+
+    Some(trimmed.to_string())
+}
+
 /// Trim quotes/whitespace, normalize internal whitespace, and clamp to
-/// [`CALL_NAME_MAX_CHARS`] at a word boundary so the persisted name is
-/// well-formed regardless of model output.
-fn sanitize_call_name(raw: &str) -> String {
+/// [`CALL_NAME_MAX_CHARS`] at a word boundary. Returns `None` when the model
+/// emitted [`UNTITLED_CALL_SENTINEL`] or sanitization left nothing usable, so
+/// the caller can leave the existing call name untouched.
+fn sanitize_call_name(raw: &str) -> Option<String> {
     let trimmed = raw
         .trim()
         .trim_matches(|c: char| c == '"' || c == '\'' || c == '`')
         .trim();
     let normalized = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
 
-    if normalized.is_empty() {
-        return "Untitled Call".to_string();
+    if normalized.is_empty() || normalized.eq_ignore_ascii_case(UNTITLED_CALL_SENTINEL) {
+        return None;
     }
 
     if normalized.chars().count() <= CALL_NAME_MAX_CHARS {
-        return normalized;
+        return Some(normalized);
     }
 
     let mut taken = String::with_capacity(CALL_NAME_MAX_CHARS);
@@ -163,7 +223,8 @@ fn sanitize_call_name(raw: &str) -> String {
     if let Some(idx) = taken.rfind(char::is_whitespace) {
         taken.truncate(idx);
     }
-    taken.trim_end().to_string()
+    let cut = taken.trim_end().to_string();
+    if cut.is_empty() { None } else { Some(cut) }
 }
 
 /// Render the transcript as a chronological, speaker-labeled block suitable
@@ -172,8 +233,8 @@ fn sanitize_call_name(raw: &str) -> String {
 fn format_transcript_prompt(call_id: &Uuid, transcript: &[CallRecordTranscriptSegment]) -> String {
     if transcript.is_empty() {
         return format!(
-            "Call {call_id} has no transcript segments. Produce a one-line \
-             summary noting that the call has no transcribed content."
+            "Call {call_id} has no transcript segments. Per the system prompt, \
+             respond with exactly the single token NULL."
         );
     }
 

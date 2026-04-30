@@ -1,33 +1,7 @@
-use crate::{
-    traits::TextAttachment,
-    types::{
-        ChatCompletionRequest, ChatMessage, ChatMessageContent, ImageData, Model, Role,
-        SystemPrompt,
-    },
+use crate::types::{
+    ChatCompletionRequest, ChatMessage, ChatMessageContent, Model, Role, SystemPrompt,
 };
-
-#[derive(Default)]
-pub struct Attachments(pub Vec<Attachment>);
-
-impl From<Vec<Attachment>> for Attachments {
-    fn from(value: Vec<Attachment>) -> Self {
-        Attachments(value)
-    }
-}
-
-impl From<Vec<Box<dyn TextAttachment>>> for Attachments {
-    fn from(values: Vec<Box<dyn TextAttachment>>) -> Self {
-        Attachments(values.into_iter().map(Attachment::Text).collect())
-    }
-}
-
-pub enum Attachment {
-    /// A document, channel, project, or other thing that can be represented by text
-    /// These are inserted into the system prompt
-    Text(Box<dyn TextAttachment>),
-    /// a base64 or static url to a supported image type
-    Image(ImageData),
-}
+use attachment::Attachments;
 
 pub type NotSet = ();
 
@@ -77,41 +51,27 @@ pub struct RequestBuilder<ChatModel, Messages, Prompt> {
     /// optional max tokens (input + output)
     max_tokens: Option<u32>,
     /// optional list of attachments (prefetched)
-    attachments: Option<Attachments>,
+    attachments: Option<Attachments<'static>>,
 }
 
 /// the build method only works if we have model, messages, and system prompt
 impl RequestBuilder<Model, Vec<ChatMessage>, String> {
     pub fn build(mut self) -> ChatCompletionRequest {
-        let (image_attachments, prompt_attachments) = std::mem::take(&mut self.attachments)
-            .unwrap_or_default()
-            .0
-            .into_iter()
-            .map(|attachment| match attachment {
-                Attachment::Image(data) => (Some(data), None),
-                Attachment::Text(text_attachment) => (None, Some(text_attachment)),
-            })
-            .collect::<(Vec<_>, Vec<_>)>();
-
-        let image_attachments = image_attachments.into_iter().flatten().collect::<Vec<_>>();
-        let prompt_attachments = prompt_attachments.into_iter().flatten().collect::<Vec<_>>();
-        let system_prompt = SystemPrompt {
-            attachments: prompt_attachments.into(),
-            instructions: std::mem::take(&mut self.system_prompt),
-        };
-        // insert images on the last user message  :)
-        if !image_attachments.is_empty()
+        if let Some(attachments) = self.attachments.take()
             && let Some(message) = self
                 .messages
                 .iter_mut()
                 .rev()
                 .find(|message| message.role == Role::User)
         {
-            message.image_urls = Some(image_attachments);
+            message.attachments = Some(attachments);
         }
 
         ChatCompletionRequest {
-            system_prompt,
+            system_prompt: SystemPrompt {
+                attachments: Default::default(),
+                instructions: self.system_prompt,
+            },
             messages: self.messages,
             model: self.model,
         }
@@ -158,35 +118,8 @@ impl<ChatModel, Messages, Prompt> RequestBuilder<ChatModel, Messages, Prompt> {
         }
     }
 
-    // set text attachments
-    pub fn attachments(mut self, attachments: impl Into<Attachments>) -> Self {
-        let attachments = attachments.into();
-        if attachments.0.is_empty() {
-            self.attachments = None;
-            self
-        } else {
-            self.attachments = Some(attachments);
-            self
-        }
-    }
-
-    pub fn add_text_attachment(mut self, attachment: Box<dyn TextAttachment>) -> Self {
-        let wrapped = Attachment::Text(attachment);
-        if let Some(ref mut attachments) = self.attachments {
-            attachments.0.push(wrapped)
-        } else {
-            self.attachments = Some(vec![wrapped].into());
-        }
-        self
-    }
-
-    pub fn add_image_attachment(mut self, data: ImageData) -> Self {
-        let wrapped = Attachment::Image(data);
-        if let Some(ref mut attachments) = self.attachments {
-            attachments.0.push(wrapped)
-        } else {
-            self.attachments = Some(vec![wrapped].into());
-        }
+    pub fn attachments(mut self, attachments: Attachments<'static>) -> Self {
+        self.attachments = Some(attachments);
         self
     }
 
@@ -196,8 +129,8 @@ impl<ChatModel, Messages, Prompt> RequestBuilder<ChatModel, Messages, Prompt> {
     ) -> RequestBuilder<ChatModel, Vec<ChatMessage>, Prompt> {
         self.messages(vec![ChatMessage {
             content: ChatMessageContent::Text(message.into()),
-            image_urls: None,
             role: Role::User,
+            attachments: None,
         }])
     }
 
@@ -267,11 +200,8 @@ mod test {
         // Verify messages count
         assert_eq!(request.messages.len(), 2);
 
-        // Verify no image attachments on any message
         for message in &request.messages {
-            assert!(
-                message.image_urls.is_none() || message.image_urls.as_ref().unwrap().is_empty()
-            );
+            assert!(message.attachments.is_none());
         }
     }
 }

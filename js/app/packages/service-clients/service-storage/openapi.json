@@ -894,6 +894,81 @@
         }
       }
     },
+    "/call/record/{call_id}/transcript": {
+      "patch": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `PATCH /call/record/{call_id}/transcript`.",
+        "description": "Applies per-diarized-speaker `custom_speaker` overrides to the call's\narchived transcript rows. Auth uses the same `EditAccessLevel` extractor\nas `edit_call_record_handler`.",
+        "operationId": "edit_call_transcript",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditCallTranscriptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Transcript updated"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/webhook": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -1506,6 +1581,77 @@
                   "items": {
                     "$ref": "#/components/schemas/ApiThreadReply"
                   }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/messages/{message_id}/resolve": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/{channel_id}/messages/{message_id}/resolve`.",
+        "operationId": "resolve_channel_message",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "description": "Message ID to resolve",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResolvedChannelMessage"
                 }
               }
             }
@@ -4991,46 +5137,6 @@
             }
           }
         }
-      },
-      "delete": {
-        "tags": ["saved_views"],
-        "operationId": "delete_view_handler",
-        "parameters": [
-          {
-            "name": "saved_view_id",
-            "in": "path",
-            "description": "The id of the saved view to delete",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/saved_views/exclude_default": {
@@ -5075,6 +5181,46 @@
       }
     },
     "/saved_views/{saved_view_id}": {
+      "delete": {
+        "tags": ["saved_views"],
+        "operationId": "delete_view_handler",
+        "parameters": [
+          {
+            "name": "saved_view_id",
+            "in": "path",
+            "description": "The id of the saved view to delete",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "tags": ["saved_views"],
         "operationId": "patch_view_handler",
@@ -5875,6 +6021,11 @@
           }
         }
       },
+      "ApiChannelMessageKind": {
+        "type": "string",
+        "description": "Position of a message in the channel/thread model.",
+        "enum": ["topLevelMessage", "threadReply"]
+      },
       "ApiChannelMessagesPage": {
         "type": "object",
         "description": "Paginated response of channel messages.",
@@ -5979,6 +6130,43 @@
         "type": "string",
         "description": "Participant role in a channel.",
         "enum": ["owner", "admin", "member"]
+      },
+      "ApiResolvedChannelMessage": {
+        "type": "object",
+        "description": "Resolution metadata for any channel message id.",
+        "required": [
+          "message_id",
+          "channel_id",
+          "kind",
+          "thread_id",
+          "created_at"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel this message belongs to."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the requested message was created."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ApiChannelMessageKind",
+            "description": "Whether the message is top-level or a thread reply."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The requested message id."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The top-level parent/thread id. Equals message_id for top-level messages."
+          }
+        }
       },
       "ApiThreadInfo": {
         "type": "object",
@@ -6285,6 +6473,11 @@
             },
             "description": "Participants (both active and historic)."
           },
+          "recordingStartedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the egress recording actually began. `None` until the\n`egress_started` webhook arrives (typically a few seconds after\n`started_at`). Frontend should anchor transcript-to-audio sync to\nthis value when present, falling back to `started_at` otherwise."
+          },
           "recordingUrl": {
             "type": ["string", "null"],
             "description": "Presigned URL for the call recording, if available."
@@ -6409,7 +6602,13 @@
       "CallRecordTranscriptSegment": {
         "type": "object",
         "description": "A transcript segment as returned in a [`CallRecord`].",
-        "required": ["speakerId", "content", "startedAt", "sequenceNum"],
+        "required": [
+          "transcriptId",
+          "speakerId",
+          "content",
+          "startedAt",
+          "sequenceNum"
+        ],
         "properties": {
           "content": {
             "type": "string",
@@ -6441,6 +6640,11 @@
             "type": "string",
             "format": "date-time",
             "description": "When the speaker started this segment."
+          },
+          "transcriptId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable DB-row id for the segment."
           }
         }
       },
@@ -6623,10 +6827,25 @@
         "type": "object",
         "description": "Filters for channel message queries.",
         "properties": {
-          "last_activity": {
+          "activity_after": {
             "type": ["string", "null"],
             "format": "date-time",
-            "description": "When set, only return top-level messages that have activity after this\ntimestamp. Activity means either the message itself was created after\nthis time, or a thread reply was created after this time."
+            "description": "When set, only return top-level messages with channel activity at or after\nthis timestamp. Activity means either the message itself was created after\nthis time, or a thread reply was created after this time.\n\nAccepts the legacy JSON field `last_activity` for backwards compatibility."
+          },
+          "activity_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When set, only return top-level messages with channel activity before this\ntimestamp. Activity means either the parent message or at least one thread\nreply falls in the requested activity window."
+          },
+          "created_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When set, only return top-level messages created at or after this timestamp."
+          },
+          "created_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When set, only return top-level messages created before this timestamp."
           },
           "message_ids": {
             "type": "array",
@@ -7239,6 +7458,21 @@
           }
         }
       },
+      "CustomSpeakerAssignment": {
+        "type": "object",
+        "description": "One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].\n\n`custom_speaker = None` clears any existing override for this\n`diarized_speaker_id`; `Some(macro_user_id)` sets it. The string is\nexpected to parse as a `MacroUserId` (e.g. `macro|alice@example.com`);\nthe service layer rejects malformed values with `400 Bad Request`.",
+        "required": ["diarizedSpeakerId", "customSpeaker"],
+        "properties": {
+          "customSpeaker": {
+            "type": "string",
+            "description": "Macro user id to attribute matching rows to, or `None` to clear."
+          },
+          "diarizedSpeakerId": {
+            "type": "string",
+            "description": "The diarization label whose rows this assignment targets."
+          }
+        }
+      },
       "DataType": {
         "type": "string",
         "description": "Data type for property values, determining storage and validation.",
@@ -7848,6 +8082,20 @@
           "shareWithTeam": {
             "type": ["boolean", "null"],
             "description": "If `Some(true)`, grant the creator's team View access on the call.\nIf `Some(false)`, revoke the creator's team's access. `None` is a no-op.\nThe team is resolved from the call's `created_by`, not the acting user."
+          }
+        }
+      },
+      "EditCallTranscriptRequest": {
+        "type": "object",
+        "description": "Body of `PATCH /call/record/{call_id}/transcript`.\n\nEach entry in `assignments` sets (or clears, when `custom_speaker` is\n`None`) the `custom_speaker` override for every transcript row in the\ncall whose `diarized_speaker_id` matches. Diarized speakers not listed\nare left untouched. Empty `assignments` is a 204 no-op.",
+        "required": ["assignments"],
+        "properties": {
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomSpeakerAssignment"
+            },
+            "description": "The set of per-diarized-speaker overrides to apply."
           }
         }
       },
@@ -11028,6 +11276,10 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started."
+          },
+          "summary": {
+            "type": ["string", "null"],
+            "description": "AI-generated summary of the call. Only set on archived\n`call_records` once summarization has run; active calls always\nreturn `None`."
           }
         }
       },

@@ -1,5 +1,5 @@
-use ai::types::ImageData;
 use anyhow::{Error, bail};
+use attachment::image::ImageData;
 use model::document::{ContentType, ContentTypeExt};
 
 use models_sfs::FileMetadata;

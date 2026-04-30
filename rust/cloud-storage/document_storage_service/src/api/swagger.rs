@@ -63,9 +63,10 @@ use crate::{
     },
 };
 use channels::inbound::axum_router::{
-    ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelMessage, ApiChannelMessagesPage,
-    ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment, ApiParticipantRole,
-    ApiThreadInfo, ApiThreadReply, ChannelMessageFilters,
+    ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelMessage, ApiChannelMessageKind,
+    ApiChannelMessagesPage, ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment,
+    ApiParticipantRole, ApiResolvedChannelMessage, ApiThreadInfo, ApiThreadReply,
+    ChannelMessageFilters,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::ShortIdResponse;
@@ -189,6 +190,7 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_channel_messages_handler,
         channels::inbound::axum_router::post_channel_messages_handler,
         channels::inbound::axum_router::get_thread_replies_handler,
+        channels::inbound::axum_router::resolve_channel_message_handler,
         channels::inbound::axum_router::get_channel_attachments_handler,
         channels::inbound::axum_router::get_channel_participants_handler,
 
@@ -198,6 +200,7 @@ use utoipa::OpenApi;
         call::inbound::axum_router::leave_or_end_call_handler,
         call::inbound::axum_router::get_call_record_handler,
         call::inbound::axum_router::edit_call_record_handler,
+        call::inbound::axum_router::edit_call_transcript_handler,
         call::inbound::axum_router::delete_call_record_handler,
         call::inbound::axum_router::toggle_share_with_team_handler,
         call::inbound::axum_router::get_batch_call_record_preview_handler,
@@ -334,6 +337,8 @@ use utoipa::OpenApi;
             ApiChannelMessage,
             ApiThreadInfo,
             ApiThreadReply,
+            ApiChannelMessageKind,
+            ApiResolvedChannelMessage,
             ApiCountedReaction,
             ApiMessageAttachment,
             ApiChannelAttachmentsPage,
@@ -351,6 +356,8 @@ use utoipa::OpenApi;
             call::domain::models::CallRecordParticipant,
             call::domain::models::CallRecordTranscriptSegment,
             call::domain::models::EditCallRecordRequest,
+            call::domain::models::EditCallTranscriptRequest,
+            call::domain::models::CustomSpeakerAssignment,
             call::domain::models::CallRecordPreview,
             call::domain::models::CallRecordPreviewData,
             call::domain::models::WithCallId,

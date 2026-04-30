@@ -41,4 +41,11 @@ export {
   isCurrentUserAssigned,
 } from './utils/task-properties';
 
+export {
+  getSnippetHit,
+  isHitSnippetComplete,
+  isSnippetEntity,
+  type SnippetEntity,
+} from './extractors-search/snippet-entity';
+
 export { default as DebugEntityView } from './debug/DebugEntityView';

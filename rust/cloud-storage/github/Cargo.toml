@@ -59,6 +59,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 utoipa = { workspace = true, optional = true }
 
 [dev-dependencies]
+model-entity = { path = "../model-entity"}
 document_sub_type = { path = "../document_sub_type" }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }

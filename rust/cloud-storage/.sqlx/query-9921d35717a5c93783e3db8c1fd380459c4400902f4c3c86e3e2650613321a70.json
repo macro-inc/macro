@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE call_record_transcripts AS t\n        SET custom_speaker = u.custom_speaker\n        FROM UNNEST($2::text[], $3::text[]) AS u(diarized_speaker_id, custom_speaker)\n        WHERE t.call_record_id = $1\n          AND t.diarized_speaker_id = u.diarized_speaker_id\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9921d35717a5c93783e3db8c1fd380459c4400902f4c3c86e3e2650613321a70"
+}

@@ -140,7 +140,7 @@ function mockSearchCache(
   };
 }
 
-const soupSeedKey = [...soupKeys.items._def, 'seed'];
+const soupSeedKey = [...soupKeys.astItems._def, 'seed'];
 const searchSeedKey = [...soupKeys.search._def, 'seed'];
 
 function seedSoupQuery(data: InfiniteData<SoupPage, unknown>) {
@@ -347,7 +347,7 @@ describe('removeSearchEntities', () => {
 
 describe('optimisticUpdateSoupEntity', () => {
   it('rollback restores dependent query data', () => {
-    const dependentKey = [...soupKeys.items._def, 'dependent'];
+    const dependentKey = [...soupKeys.astItems._def, 'dependent'];
     const originalData = mockSoupCache([[mockDocumentItem('d-1')]]);
     testQueryClient.setQueryData(dependentKey, originalData);
 

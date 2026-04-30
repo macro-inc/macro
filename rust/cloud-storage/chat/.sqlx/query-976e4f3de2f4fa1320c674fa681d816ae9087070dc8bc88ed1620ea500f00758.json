@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"ResolvedMessageContent\" (\"messageId\", \"content\")\n        VALUES ($1, $2)\n        ON CONFLICT (\"messageId\") DO UPDATE SET \"content\" = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "976e4f3de2f4fa1320c674fa681d816ae9087070dc8bc88ed1620ea500f00758"
+}

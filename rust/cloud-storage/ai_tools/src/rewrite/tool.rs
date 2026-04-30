@@ -2,7 +2,6 @@ use super::types::AIDiffResponse;
 use super::types::{PROMPT, REWRITE_MODEL};
 use crate::tool_context::ToolScribe;
 use ai::types::{MessageBuilder, RequestBuilder};
-use ai_format::document::Document;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::Error;
 use async_trait::async_trait;
@@ -71,20 +70,19 @@ pub async fn generate_patches(
     markdown_text: String,
     file_name: String,
 ) -> Result<AIDiffResponse, Error> {
+    let attachment_content = attachment::AttachmentContent {
+        reference: model_entity::EntityType::Document.with_entity_string(request.markdown_file_id),
+        name: Some(file_name),
+        content: non_empty::NonEmpty::one(attachment::AttachmentPart::Content(markdown_text)),
+    };
+    let attachments =
+        attachment::Attachments::new(non_empty::NonEmpty::one(Ok(attachment_content)));
+
     let request = RequestBuilder::new()
         .max_tokens(32_000)
         .system_prompt(PROMPT)
         .model(REWRITE_MODEL)
-        .add_text_attachment(
-            Document {
-                content: markdown_text,
-                file_type: "md".into(),
-                id: request.markdown_file_id,
-                name: file_name,
-                properties: None,
-            }
-            .boxed(),
-        )
+        .attachments(attachments)
         .messages(vec![
             MessageBuilder::new()
                 .content(request.instructions)

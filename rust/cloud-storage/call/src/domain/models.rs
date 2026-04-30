@@ -164,11 +164,44 @@ pub struct EditCallRecordRequest {
     pub custom_name: Option<String>,
 }
 
+/// One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].
+///
+/// `custom_speaker = None` clears any existing override for this
+/// `diarized_speaker_id`; `Some(macro_user_id)` sets it. The string is
+/// expected to parse as a `MacroUserId` (e.g. `macro|alice@example.com`);
+/// the service layer rejects malformed values with `400 Bad Request`.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CustomSpeakerAssignment {
+    /// The diarization label whose rows this assignment targets.
+    pub diarized_speaker_id: String,
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    /// Macro user id to attribute matching rows to, or `None` to clear.
+    pub custom_speaker: Option<MacroUserIdStr<'static>>,
+}
+
+/// Body of `PATCH /call/record/{call_id}/transcript`.
+///
+/// Each entry in `assignments` sets (or clears, when `custom_speaker` is
+/// `None`) the `custom_speaker` override for every transcript row in the
+/// call whose `diarized_speaker_id` matches. Diarized speakers not listed
+/// are left untouched. Empty `assignments` is a 204 no-op.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EditCallTranscriptRequest {
+    /// The set of per-diarized-speaker overrides to apply.
+    pub assignments: Vec<CustomSpeakerAssignment>,
+}
+
 /// A transcript segment as returned in a [`CallRecord`].
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CallRecordTranscriptSegment {
+    /// Stable DB-row id for the segment.
+    pub transcript_id: Uuid,
     /// LiveKit segment ID (nullable for archived records).
     pub segment_id: Option<String>,
     /// The speaker's user ID.
@@ -223,6 +256,11 @@ pub struct CallRecord {
     pub duration_ms: Option<i64>,
     /// Recording egress ID, if any.
     pub egress_id: Option<String>,
+    /// When the egress recording actually began. `None` until the
+    /// `egress_started` webhook arrives (typically a few seconds after
+    /// `started_at`). Frontend should anchor transcript-to-audio sync to
+    /// this value when present, falling back to `started_at` otherwise.
+    pub recording_started_at: Option<DateTime<Utc>>,
     /// S3 object key for the call recording (internal, not serialized).
     #[serde(skip_serializing)]
     pub recording_key: Option<String>,

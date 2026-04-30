@@ -1,9 +1,10 @@
-use crate::types::{ChatMessage, ChatMessageContent, ImageData, Role};
+use crate::types::{ChatMessage, ChatMessageContent, Role};
+use attachment::Attachments;
 
 pub struct MessageBuilder<R, C> {
     content: C,
     role: R,
-    image_urls: Option<Vec<ImageData>>,
+    attachments: Option<Attachments<'static>>,
 }
 
 impl MessageBuilder<Role, ChatMessageContent> {
@@ -11,7 +12,7 @@ impl MessageBuilder<Role, ChatMessageContent> {
         ChatMessage {
             content: self.content,
             role: self.role,
-            image_urls: self.image_urls,
+            attachments: self.attachments,
         }
     }
 }
@@ -33,7 +34,7 @@ impl MessageBuilder<(), ()> {
         Self {
             content: (),
             role: (),
-            image_urls: None,
+            attachments: None,
         }
     }
 }
@@ -44,7 +45,7 @@ impl<C> MessageBuilder<NoRole, C> {
     pub fn user(self) -> MessageBuilder<Role, C> {
         MessageBuilder {
             content: self.content,
-            image_urls: self.image_urls,
+            attachments: self.attachments,
             role: Role::User,
         }
     }
@@ -52,7 +53,7 @@ impl<C> MessageBuilder<NoRole, C> {
     pub fn assistant(self) -> MessageBuilder<Role, C> {
         MessageBuilder {
             content: self.content,
-            image_urls: self.image_urls,
+            attachments: self.attachments,
             role: Role::Assistant,
         }
     }
@@ -60,7 +61,7 @@ impl<C> MessageBuilder<NoRole, C> {
     pub fn system(self) -> MessageBuilder<Role, C> {
         MessageBuilder {
             content: self.content,
-            image_urls: self.image_urls,
+            attachments: self.attachments,
             role: Role::System,
         }
     }
@@ -68,7 +69,7 @@ impl<C> MessageBuilder<NoRole, C> {
     pub fn role(self, role: Role) -> MessageBuilder<Role, C> {
         MessageBuilder {
             content: self.content,
-            image_urls: self.image_urls,
+            attachments: self.attachments,
             role,
         }
     }
@@ -84,7 +85,7 @@ impl<R> MessageBuilder<R, NoContent> {
     {
         MessageBuilder {
             content: content.into(),
-            image_urls: self.image_urls,
+            attachments: self.attachments,
             role: self.role,
         }
     }
@@ -92,20 +93,15 @@ impl<R> MessageBuilder<R, NoContent> {
     pub fn text<T: Into<String>>(self, content: T) -> MessageBuilder<R, ChatMessageContent> {
         MessageBuilder {
             content: ChatMessageContent::Text(content.into()),
-            image_urls: self.image_urls,
+            attachments: self.attachments,
             role: self.role,
         }
     }
 }
 
 impl<R, C> MessageBuilder<R, C> {
-    pub fn image_urls(mut self, image_urls: Vec<ImageData>) -> Self {
-        if image_urls.is_empty() {
-            self.image_urls = None;
-            self
-        } else {
-            self.image_urls = Some(image_urls);
-            self
-        }
+    pub fn attachments(mut self, attachments: Attachments<'static>) -> Self {
+        self.attachments = Some(attachments);
+        self
     }
 }

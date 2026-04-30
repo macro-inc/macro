@@ -1,0 +1,20 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "devDependencies": {
+        "@apidevtools/json-schema-ref-parser": "^15.3.5",
+      },
+    },
+  },
+  "packages": {
+    "@apidevtools/json-schema-ref-parser": ["@apidevtools/json-schema-ref-parser@15.3.5", "", { "dependencies": { "js-yaml": "^4.1.1" }, "peerDependencies": { "@types/json-schema": "^7.0.15" } }, "sha512-orNOYXw3hYXxxisXMldjzjBzqqTLBPbwOtHg7ovBPvfBHDue1qM9YJENZ3W2BQuS+7z4ThogMbEzEsov57Itkg=="],
+
+    "@types/json-schema": ["@types/json-schema@7.0.15", "", {}, "sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA=="],
+
+    "argparse": ["argparse@2.0.1", "", {}, "sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q=="],
+
+    "js-yaml": ["js-yaml@4.1.1", "", { "dependencies": { "argparse": "^2.0.1" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-qQKT4zQxXl8lLwBtHMWwaTcGfFOZviOJet3Oy/xmGk2gZH677CJM9EvtfdSkgWcATZhj/55JZ0rmy3myCT5lsA=="],
+  }
+}

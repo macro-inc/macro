@@ -1497,7 +1497,7 @@
           },
           "model": {
             "type": ["string", "null"],
-            "description": "The model used to generate the message"
+            "description": "The model used to generate the message\nkill"
           },
           "role": {
             "$ref": "#/components/schemas/Role",

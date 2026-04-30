@@ -36,3 +36,29 @@ export function intersection<T>(
 ): T[] {
   return a.filter((item) => b.some((other) => equal(item, other)));
 }
+
+/**
+ * Merge two pre-sorted arrays into a single sorted array.
+ * `compare` follows the Array.sort convention (negative if a goes first).
+ */
+export function mergeSortedArrays<T>(
+  arr1: T[],
+  arr2: T[],
+  compare: (a: T, b: T) => number
+): T[] {
+  const merged: T[] = [];
+  let i = 0;
+  let j = 0;
+
+  while (i < arr1.length && j < arr2.length) {
+    if (compare(arr1[i], arr2[j]) <= 0) {
+      merged.push(arr1[i]);
+      i++;
+    } else {
+      merged.push(arr2[j]);
+      j++;
+    }
+  }
+
+  return [...merged, ...arr1.slice(i), ...arr2.slice(j)];
+}

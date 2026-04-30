@@ -113,6 +113,7 @@ import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
+import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -174,7 +175,7 @@ type PersistedSoupViewState = {
   assigneeFilter: string[];
 };
 
-const PERSISTED_STATE_VERSION = 4;
+const PERSISTED_STATE_VERSION = 5;
 
 const listStateCache = new Map<
   string,
@@ -481,7 +482,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
       : (props.scopeId ?? panel.splitHotkeyScope);
   });
 
-  // Register navigation hotkeys
+  // Register navigation hotkeys on the active list scope (usually the split
+  // scope), but dispose them with the mounted SoupViewList. This keeps j/k
+  // available while the list split is active without leaking into opened blocks
+  // after the list unmounts.
   useSoupNavigationHotkeys({
     scopeId: scopeId(),
     soup,
@@ -493,6 +497,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   useEntityActionHotkeys({
     scopeId: scopeId(),
     soup,
+    activeSoupViewTab: activeTab,
     splitHandle: panel.handle,
   });
 
@@ -870,6 +875,15 @@ export const SoupViewList = (props: SoupViewListProps) => {
                         canSwipeLeft={(entityId) => {
                           const entity = entityById().get(entityId);
                           if (!entity) return false;
+
+                          const tab = activeTab();
+
+                          if (
+                            !isListViewID(contentId) ||
+                            (tab && !canExecuteMarkDoneOnView(contentId, tab))
+                          )
+                            return false;
+
                           return markDoneAction.canExecute(entity.original);
                         }}
                         onSwipeLeft={(entityId) => {

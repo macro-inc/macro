@@ -219,7 +219,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let document_repo = PgDocumentRepo::new(db.clone());
     let cloudfront_private_key = match config.environment {
-        Environment::Local => config.cloudfront_signer_private_key.clone(),
+        Environment::Local => config.cloudfront_signer_private_key.replace("\\n", "\n"),
         _ => secretsmanager_client
             .get_secret_value(&config.cloudfront_signer_private_key)
             .await
@@ -252,6 +252,35 @@ async fn main() -> anyhow::Result<()> {
     );
 
     tracing::info!("initialized document tool context");
+
+    let attachment_provider = attachment::provider::AttachmentProvider {
+        document: documents::inbound::attachment::DocumentAttachmentService::new(
+            document_tool_context.service.clone(),
+            document_tool_context.entity_access_service.clone(),
+            document_tool_context.lexical_client.clone(),
+        ),
+        email_thread: email::inbound::attachment::EmailAttachmentService::new(
+            email_service_for_tools.clone(),
+            entity_access_service.clone(),
+        ),
+        chat: chat::inbound::attachment::ChatAttachmentService::new(
+            Arc::new(chat::outbound::postgres::PgChatRepo::new(db.clone())),
+            entity_access_service.clone(),
+        ),
+        channel: comms::inbound::attachment::CommsAttachmentService::new(
+            Arc::new(PgCommsRepo::new(ReadOnlyPool(db.clone()))),
+            entity_access_service.clone(),
+        ),
+        static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(Arc::new(
+            static_file::outbound::CdnStaticFileRepo::new(config.static_file_service_url.clone()),
+        )),
+    };
+    let message_service = Arc::new(chat::domain::service::MessageServiceImpl::new(
+        chat::outbound::postgres::PgChatRepo::new(db.clone()),
+        attachment_provider,
+    ));
+
+    tracing::info!("initialized attachment provider");
 
     let email_service_client_external = Arc::new(EmailServiceClientExternal::new(
         email_service_client.url().to_owned(),
@@ -320,6 +349,20 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized call tool context");
 
+    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
+        chat::domain::service::ChatServiceImpl::new(
+            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            Arc::new(ai_toolset::AsyncToolSet::new()),
+            (),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
+        ),
+        (*entity_access_service).clone(),
+    );
+
+    tracing::info!("initialized chat tool context");
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -330,6 +373,8 @@ async fn main() -> anyhow::Result<()> {
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
+        chat_tool_context,
+        channel_tool_context: ai_tools::build_channel_tool_context(db.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
     };
     let all_tools = ai_tools::all_tools();
@@ -372,6 +417,7 @@ async fn main() -> anyhow::Result<()> {
         all_tools: all_tools_toolset,
         all_tools_prompt,
         entity_access_service,
+        message_service,
         ai_stream_registry: service::ai_stream_registry::AiStreamRegistry::new(
             redis_client.clone(),
         ),

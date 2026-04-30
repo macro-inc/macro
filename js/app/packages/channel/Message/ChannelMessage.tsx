@@ -1,6 +1,7 @@
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import { longPressHighlight } from '@core/directive/longPressHighlight';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import TrashIcon from '@macro-icons/square/trash.svg';
 import { cn } from '@ui/utils/classname';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
@@ -96,6 +97,21 @@ function GroupedMeta(props: { messageEditor?: MessageEditor }) {
   );
 }
 
+function DeletedMessageLayout() {
+  return (
+    <Message.Layout class="pt-(--regular-message-padding-t) pb-2">
+      <Message.Slot placement="icon">
+        <div class="shrink-0 size-(--user-icon-width) rounded-full bg-edge-muted text-ink-muted flex items-center justify-center">
+          <TrashIcon class="size-5" aria-hidden="true" />
+        </div>
+      </Message.Slot>
+      <Message.Slot placement="content" class="ph-no-capture">
+        <p class="text-sm text-ink-muted italic">This message was deleted.</p>
+      </Message.Slot>
+    </Message.Layout>
+  );
+}
+
 function RegularMessageLayout(props: {
   channelId: string;
   messageEditor?: MessageEditor;
@@ -178,6 +194,9 @@ export function ChannelMessage(props: ChannelMessageProps) {
     >
       <MessageSelectionProvider value={props.selectionState}>
         <Switch>
+          <Match when={props.message.deleted_at != null}>
+            <DeletedMessageLayout />
+          </Match>
           <Match when={isGrouped()}>
             <GroupedMessageLayout
               channelId={props.channelId}

@@ -1,0 +1,27 @@
+[package]
+edition = "2024"
+name = "static_file"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["outbound"]
+attachment = ["dep:futures", "dep:attachment", "dep:model-entity"]
+outbound = ["dep:reqwest"]
+
+[dependencies]
+anyhow = { workspace = true }
+mime = "0.3"
+tracing = { workspace = true }
+
+# Domain
+macro_user_id = { path = "../macro_user_id" }
+
+# Attachment
+attachment = { path = "../attachment", optional = true }
+futures = { workspace = true, optional = true }
+model-entity = { path = "../model-entity", optional = true }
+non_empty = { path = "../non_empty" }
+
+# Outbound
+reqwest = { workspace = true, optional = true }

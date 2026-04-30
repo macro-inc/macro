@@ -1,12 +1,21 @@
 use crate::config::Config;
 use crate::service::ai_stream_registry::AiStreamRegistry;
 use ai_tools::{
-    AiToolSet, ToolCallToolContext, ToolDocumentToolContext, ToolEmailService,
-    ToolEmailToolContext, ToolPropertiesToolContext, ToolServiceContext, ToolSoupService,
+    AiToolSet, ToolCallToolContext, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
+    ToolEmailToolContext, ToolEntityAccessService, ToolPropertiesToolContext, ToolServiceContext,
+    ToolSoupService,
 };
+use attachment::provider::AttachmentProvider;
 use axum::extract::FromRef;
+use chat::domain::service::MessageServiceImpl;
+use chat::inbound::attachment::ChatAttachmentService;
+use chat::outbound::postgres::PgChatRepo;
+use comms::inbound::attachment::CommsAttachmentService;
+use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
+use documents::inbound::attachment::DocumentAttachmentService;
+use email::inbound::attachment::EmailAttachmentService;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -19,11 +28,25 @@ use scribe::{
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
+use static_file::inbound::attachment::StaticFileAttachmentService;
+use static_file::outbound::CdnStaticFileRepo;
 use std::sync::{Arc, OnceLock};
 use stream::domain::StreamRepo;
 
 /// Type alias for the entity access service.
 pub type DcsEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
+
+/// Type alias for the attachment provider wired to concrete DCS services.
+pub type DcsAttachmentProvider = AttachmentProvider<
+    DocumentAttachmentService<ToolDocumentService, ToolEntityAccessService>,
+    EmailAttachmentService<ToolEmailService, ToolEntityAccessService>,
+    ChatAttachmentService<PgChatRepo, ToolEntityAccessService>,
+    CommsAttachmentService<PgCommsRepo, ToolEntityAccessService>,
+    StaticFileAttachmentService<CdnStaticFileRepo>,
+>;
+
+/// Type alias for the message service wired to concrete DCS services.
+pub type DcsMessageService = MessageServiceImpl<PgChatRepo, DcsAttachmentProvider>;
 
 #[cfg(test)]
 mod test;
@@ -64,6 +87,7 @@ pub struct ApiContext {
     pub all_tools: Arc<AiToolSet>,
     pub all_tools_prompt: &'static str,
     pub entity_access_service: Arc<DcsEntityAccessService>,
+    pub message_service: Arc<DcsMessageService>,
     pub ai_stream_registry: AiStreamRegistry,
 }
 

@@ -1,7 +1,8 @@
 use std::{ops::Deref, sync::Arc, sync::LazyLock};
 
 use crate::domain::models::{
-    AddParticipantError, CallRecordPreview, EditCallRecordRequest, TranscriptSegmentRequest,
+    AddParticipantError, CallRecordPreview, CustomSpeakerAssignment, EditCallRecordRequest,
+    TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
@@ -888,7 +889,7 @@ async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::
     assert!(record.participants.iter().all(|p| p.left_at.is_some()));
 
     // Transcripts ordered by sequence_num.
-    assert_eq!(record.transcript.len(), 2);
+    assert_eq!(record.transcript.len(), 3);
     assert_eq!(record.transcript[0].content, "archived hello");
     assert_eq!(
         record.transcript[0].diarized_speaker_id.as_deref(),
@@ -896,6 +897,34 @@ async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::
     );
     assert_eq!(record.transcript[1].content, "archived reply");
     assert_eq!(record.transcript[1].diarized_speaker_id, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_record_overrides_speaker_id_with_custom_speaker(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .expect("archived call should be found");
+
+    // Row without an override returns the derived speaker_id.
+    assert_eq!(record.transcript[0].content, "archived hello");
+    assert_eq!(record.transcript[0].speaker_id, "macro|user-a@test.com");
+
+    // Row with `custom_speaker` set returns the override, not the derived
+    // speaker_id (which is `macro|user-a@test.com` in the fixture).
+    assert_eq!(record.transcript[2].content, "archived overridden");
+    assert_eq!(record.transcript[2].speaker_id, "macro|user-b@test.com");
+    assert_eq!(
+        record.transcript[2].diarized_speaker_id.as_deref(),
+        Some("spk-arch-b0")
+    );
     Ok(())
 }
 
@@ -1107,6 +1136,44 @@ async fn get_call_records_by_user_attended_none_returns_all(
         .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
         .await?;
     assert_eq!(records.len(), 2);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_returns_archived_summary(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let summary = "AI-generated summary of the archived call.";
+    sqlx::query!(
+        r#"UPDATE call_records SET summary = $2 WHERE id = $1"#,
+        CALL_ARCHIVED,
+        summary,
+    )
+    .execute(&pool)
+    .await?;
+
+    let records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
+        .await?;
+
+    let active = records
+        .iter()
+        .find(|r| r.call_id == CALL1)
+        .expect("active call missing");
+    assert!(active.is_active);
+    assert!(active.summary.is_none());
+
+    let archived = records
+        .iter()
+        .find(|r| r.call_id == CALL_ARCHIVED)
+        .expect("archived call missing");
+    assert!(!archived.is_active);
+    assert_eq!(archived.summary.as_deref(), Some(summary));
+
     Ok(())
 }
 
@@ -1970,5 +2037,104 @@ async fn insert_call_summary_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow
     .fetch_one(&pool)
     .await?;
     assert!(stored.is_none());
+    Ok(())
+}
+
+// -- patch_call_transcript_custom_speakers ------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_transcript_custom_speakers_sets_and_clears(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // Set: pin diarized `spk-arch-a0` to user-c. The fixture's seg-arch-3 row
+    // (diarized `spk-arch-b0`) already has user-b as its custom_speaker — clear it.
+    repo.patch_call_transcript_custom_speakers(
+        &CALL_ARCHIVED,
+        &[
+            CustomSpeakerAssignment {
+                diarized_speaker_id: "spk-arch-a0".to_string(),
+                custom_speaker: Some(USER_C.clone()),
+            },
+            CustomSpeakerAssignment {
+                diarized_speaker_id: "spk-arch-b0".to_string(),
+                custom_speaker: None,
+            },
+        ],
+    )
+    .await?;
+
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .expect("archived call should exist");
+
+    // seg-arch-1 (diarized spk-arch-a0): override now applied → user-c.
+    assert_eq!(record.transcript[0].content, "archived hello");
+    assert_eq!(record.transcript[0].speaker_id, "macro|user-c@test.com");
+
+    // seg-arch-2 (diarized NULL): never touched.
+    assert_eq!(record.transcript[1].content, "archived reply");
+    assert_eq!(record.transcript[1].speaker_id, "macro|user-b@test.com");
+
+    // seg-arch-3 (diarized spk-arch-b0): override cleared → derived speaker_id wins.
+    assert_eq!(record.transcript[2].content, "archived overridden");
+    assert_eq!(record.transcript[2].speaker_id, "macro|user-a@test.com");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_transcript_custom_speakers_empty_is_noop(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    repo.patch_call_transcript_custom_speakers(&CALL_ARCHIVED, &[])
+        .await?;
+
+    // Fixture state is unchanged.
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .expect("archived call should exist");
+    assert_eq!(record.transcript[2].speaker_id, "macro|user-b@test.com");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_call_transcript_custom_speakers_unknown_diarized_id_is_noop(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    // Diarized id that doesn't exist in this call: silently affects nothing.
+    repo.patch_call_transcript_custom_speakers(
+        &CALL_ARCHIVED,
+        &[CustomSpeakerAssignment {
+            diarized_speaker_id: "spk-does-not-exist".to_string(),
+            custom_speaker: Some(USER_C.clone()),
+        }],
+    )
+    .await?;
+
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .expect("archived call should exist");
+    // All rows still reflect their original speaker_id / custom_speaker.
+    assert_eq!(record.transcript[0].speaker_id, "macro|user-a@test.com");
+    assert_eq!(record.transcript[1].speaker_id, "macro|user-b@test.com");
+    assert_eq!(record.transcript[2].speaker_id, "macro|user-b@test.com");
     Ok(())
 }

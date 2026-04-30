@@ -1,6 +1,3 @@
-import EntityNavigationIndicator, {
-  shouldShowEntityNavigation,
-} from '@app/component/EntityNavigationIndicator';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import {
   ENABLE_PREVIEW,
@@ -30,7 +27,6 @@ import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
 import { cn } from '@ui/utils/classname';
 import { isListViewID } from '@app/constants/list-views';
-import { useSoup } from '@app/component/next-soup/soup-context';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -178,16 +174,13 @@ function _SplitControlButtons() {
 }
 
 export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
-  const soup = useSoup();
   const panel = useContext(SplitPanelContext);
   if (!panel)
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
   const layout = useContext(SplitLayoutContext);
 
   const shouldShowRightmost = () =>
-    !isTouchDevice() &&
-    (shouldShowEntityNavigation(soup, panel) ||
-      (layout && canSpotlight(layout.manager)));
+    !isTouchDevice() && layout && canSpotlight(layout.manager);
 
   return (
     <div
@@ -228,7 +221,6 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
               'pl-0.5 pr-2 z-annotation-layer relative flex items-center gap-0.5 h-full order-last'
             }
           >
-            <EntityNavigationIndicator />
             <SplitSpotlightButton />
           </div>
         </Show>

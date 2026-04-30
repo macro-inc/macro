@@ -45,7 +45,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
         </DropdownMenu.Trigger>
       </Tooltip>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-sm min-w-[140px] p-1">
+        <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-sm min-w-[140px] p-1">
           <For each={options()}>
             {(option) => (
               <DropdownMenu.Item

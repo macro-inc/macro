@@ -23,6 +23,7 @@ import {
 import { createStore } from 'solid-js/store';
 import { makePersisted } from '@solid-primitives/storage';
 import type { CallTokenResponse } from '@service-call/client';
+import { CallAudioSink } from './CallAudioSink';
 
 export type CallParticipantInfo = {
   identity: string;
@@ -119,6 +120,10 @@ type CallStoreState = {
   activeAudioOutputDeviceId: string | null;
   activeVideoInputDeviceId: string | null;
   isNoiseSuppressed: boolean;
+  optimisticJoinChannelId: string | null;
+  joinError: string | null;
+  /** Which channel block has the Call tab selected (synced from channel UI). */
+  callPageChannelId: string | null;
   backgroundEffect: BackgroundEffect;
   // Mirrors the call's `share_with_team` flag. Defaults to true to match the
   // server-side default for newly-created calls; synced from the toggle
@@ -143,6 +148,9 @@ const initialState: CallStoreState = {
   activeAudioOutputDeviceId: null,
   activeVideoInputDeviceId: null,
   isNoiseSuppressed: false,
+  optimisticJoinChannelId: null,
+  joinError: null,
+  callPageChannelId: null,
   backgroundEffect: { type: 'none' },
   isSharedWithTeam: true,
 };
@@ -238,6 +246,29 @@ export type CallState = {
   isNoiseSuppressed: () => boolean;
   /** Toggle mic noise suppression on/off */
   toggleNoiseSuppression: () => Promise<void>;
+  /** Begin an optimistic join to a channel */
+  beginOptimisticJoin: (channelId: string) => void;
+  /** Rollback an optimistic join to a channel */
+  rollbackOptimisticJoin: () => void;
+  /** Whether we're in the optimistic join window */
+  isConnecting: () => boolean;
+  /** Error message from a failed join attempt */
+  joinError: () => string | null;
+  /** Set the join error message */
+  setJoinError: (error: string | null) => void;
+  /**
+   * Which channel has the Call tab focused in a channel split. `null` when no
+   * channel block reports the Call tab.
+   */
+  callPageChannelId: () => string | null;
+  /**
+   * Channel blocks call this when the tab strip changes.
+   */
+  syncCallPageTab: (channelId: string, isCallTab: boolean) => void;
+  /**
+   * True when the active call and call-page channel match.
+   */
+  isCallPage: () => boolean;
   /** Current background effect (none, blur, or image) */
   backgroundEffect: () => BackgroundEffect;
   /** Set the background effect (blur with intensity or image background) */
@@ -430,8 +461,12 @@ function createCallState() {
   }
 
   function resetState() {
+    // Preserve joinError across room teardown — LiveKit can emit Disconnected
+    // when the network drops or reconnects; wiping joinError would hide the
+    // "Try again" UI while the user is still not in the call (empty ChannelCallTab).
     setStore({
       ...initialState,
+      joinError: store.joinError,
       backgroundEffect: persistedBackgroundEffect(),
       isNoiseSuppressed: persistedNoiseSuppressionPref(),
     });
@@ -447,8 +482,11 @@ function createCallState() {
 
     r.on(RoomEvent.TrackSubscribed, bumpTrackVersion);
     r.on(RoomEvent.TrackUnsubscribed, bumpTrackVersion);
+    r.on(RoomEvent.TrackPublished, bumpTrackVersion);
+    r.on(RoomEvent.TrackUnpublished, bumpTrackVersion);
     r.on(RoomEvent.TrackMuted, bumpTrackVersion);
     r.on(RoomEvent.TrackUnmuted, bumpTrackVersion);
+    r.on(RoomEvent.LocalTrackPublished, bumpTrackVersion);
 
     r.on(RoomEvent.ActiveSpeakersChanged, () => {
       setStore('speakerVersion', (v) => v + 1);
@@ -663,6 +701,9 @@ function createCallState() {
 
     try {
       await targetRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
+      // Real connection established — optimistic flag no longer needed
+      setStore('optimisticJoinChannelId', null);
+      setStore('joinError', null);
     } catch (e) {
       console.error('failed to connect to LiveKit room', e);
       destroyRoom();
@@ -800,6 +841,30 @@ function createCallState() {
     }
   }
 
+  // --- optimistic join ---
+
+  function beginOptimisticJoin(channelId: string) {
+    // Do not clear joinError here — retries should keep the error panel visible
+    // with `isJoining` until LiveKit connects (see useCall join mutation).
+    setStore('optimisticJoinChannelId', channelId);
+  }
+
+  function rollbackOptimisticJoin() {
+    setStore('optimisticJoinChannelId', null);
+  }
+
+  function setJoinError(error: string | null) {
+    setStore('joinError', error);
+  }
+
+  function syncCallPageTab(channelId: string, isCallTab: boolean) {
+    if (isCallTab) {
+      setStore('callPageChannelId', channelId);
+    } else if (store.callPageChannelId === channelId) {
+      setStore('callPageChannelId', null);
+    }
+  }
+
   async function setBackgroundEffect(effect: BackgroundEffect) {
     const prevEffect = store.backgroundEffect;
     setStore('backgroundEffect', effect);
@@ -850,8 +915,11 @@ function createCallState() {
     // readonly state
     room,
     connectionState: () => store.connectionState,
-    isInCall: () => store.connectionState === ConnectionState.Connected,
-    activeChannelId: () => store.activeChannelId,
+    isInCall: () =>
+      store.connectionState === ConnectionState.Connected ||
+      store.optimisticJoinChannelId !== null,
+    activeChannelId: () =>
+      store.activeChannelId ?? store.optimisticJoinChannelId,
     activeCallId: () => store.activeCallId,
     remoteParticipants: () => store.remoteParticipants,
     trackVersion: () => store.trackVersion,
@@ -874,6 +942,7 @@ function createCallState() {
     activeAudioInputDeviceId: () => store.activeAudioInputDeviceId,
     activeAudioOutputDeviceId: () => store.activeAudioOutputDeviceId,
     activeVideoInputDeviceId: () => store.activeVideoInputDeviceId,
+    isConnecting: () => store.optimisticJoinChannelId !== null,
 
     // mutations
     connect,
@@ -886,6 +955,20 @@ function createCallState() {
     switchVideoInput,
     isNoiseSuppressed: () => store.isNoiseSuppressed,
     toggleNoiseSuppression,
+    beginOptimisticJoin,
+    rollbackOptimisticJoin,
+    joinError: () => store.joinError,
+    setJoinError,
+    callPageChannelId: () => store.callPageChannelId,
+    syncCallPageTab,
+    isCallPage: () => {
+      store.callPageChannelId;
+      store.activeChannelId;
+      store.optimisticJoinChannelId;
+      const page = store.callPageChannelId;
+      const active = store.activeChannelId ?? store.optimisticJoinChannelId;
+      return page !== null && active !== null && page === active;
+    },
     backgroundEffect: () => store.backgroundEffect,
     setBackgroundEffect,
     isSharedWithTeam: () => store.isSharedWithTeam,
@@ -899,6 +982,9 @@ export function CallProvider(props: ParentProps) {
   const state = createCallState();
 
   return (
-    <CallContext.Provider value={state}>{props.children}</CallContext.Provider>
+    <CallContext.Provider value={state}>
+      {props.children}
+      <CallAudioSink />
+    </CallContext.Provider>
   );
 }

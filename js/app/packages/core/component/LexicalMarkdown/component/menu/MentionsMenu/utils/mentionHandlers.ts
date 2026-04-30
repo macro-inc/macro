@@ -12,10 +12,6 @@ import type {
   MentionItem,
 } from '../../../../utils/mentionsUtils';
 import { handleUserMention } from '../../../../utils/mentionsUtils';
-import {
-  handleSnapshotMention,
-  supportsSnapshotNode,
-} from '../../../../utils/snapshotMention';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import { getBlockNameFromEntity } from './entityUtils';
 
@@ -39,24 +35,6 @@ export async function handleEntityMention(
 
   const blockNameForMention = getBlockNameFromEntity(item);
   const itemName = entity.name ?? (item.bucket === 'email' ? 'No Subject' : '');
-
-  // For document entities, check if snapshot insertion is requested and supported.
-  // This restores the behaviour that existed before the quick-access refactor where
-  // handleBasicMention (which calls handleSnapshotMention) was used for 'item' picks.
-  if (
-    dependencies.useSnapshotNode &&
-    item.bucket !== 'channel' &&
-    item.bucket !== 'dm' &&
-    item.bucket !== 'email' &&
-    supportsSnapshotNode(blockNameForMention)
-  ) {
-    // EntityBase is a superset of the fields DocumentHistoryItem needs, so the
-    // cast is safe for the document buckets we've already filtered to.
-    const historyLike = entity as unknown as Parameters<
-      typeof handleSnapshotMention
-    >[0];
-    return await handleSnapshotMention(historyLike, dependencies);
-  }
 
   let mentionId: string | undefined;
   if (

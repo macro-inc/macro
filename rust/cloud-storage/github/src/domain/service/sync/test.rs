@@ -22,6 +22,7 @@ use model::document::{
     DocumentBasic, DocumentMetadata,
     response::{CreateDocumentResponseData, GetDocumentResponseData, LocationResponseV3},
 };
+use model_entity::Entity;
 use models_permissions::share_permission::access_level::AccessLevel;
 
 use super::*;
@@ -115,6 +116,15 @@ impl DocumentService for StubDocumentService {
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, DocumentError> {
+        unimplemented!()
+    }
+    async fn get_project_children(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<Entity<'static>>, DocumentError> {
+        unimplemented!()
+    }
+    async fn get_project_name(&self, project_id: &str) -> Result<String, DocumentError> {
         unimplemented!()
     }
     async fn get_document(

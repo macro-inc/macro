@@ -90,7 +90,6 @@ export type MentionsMenuProps = {
   onDocumentMention?: (item: Item | ChannelWithParticipants) => void;
   onEmailMention?: (item: EmailEntity) => void;
   disableMentionTracking?: boolean;
-  useSnapshotForDocuments?: boolean;
   /** whether to show open tabs as a bucket in the menu */
   showOpenTabs?: boolean;
   /** restrict which mention source buckets to show (e.g. ['users'] for user-only mentions) */
@@ -327,7 +326,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     onDocumentMention: props.onDocumentMention,
     onEmailMention: props.onEmailMention,
     disableMentionTracking: props.disableMentionTracking,
-    useSnapshotNode: props.useSnapshotForDocuments,
   });
 
   const itemAction = async (item: MentionItem) => {

@@ -1,5 +1,5 @@
-use ai::types::ImageData;
 use anyhow::{Error, bail};
+use attachment::image::ImageData;
 use bytes::Bytes;
 use lexical_client::types::CognitionResponseData;
 use model::document::response::LocationResponseV3;

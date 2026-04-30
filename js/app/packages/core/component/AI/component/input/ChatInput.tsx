@@ -104,6 +104,7 @@ export function ChatInput(props: ChatInputComponentProps) {
         metaKey: opts?.metaKey,
       };
       props.editor.controls.clear();
+      attachments.setAttached([]);
       props.onSend(sendInput);
     }
   );

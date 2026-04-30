@@ -238,9 +238,6 @@ export const MarkdownShell: Component<
               portalScope={props.portalScope}
               block={builderConfig.mentions?.block as any}
               showOpenTabs={builderConfig.mentions?.showOpenTabs}
-              useSnapshotForDocuments={
-                builderConfig.mentions?.useSnapshotForDocuments
-              }
               entities={builderConfig.mentions?.entities}
               users={builderConfig.mentions?.users}
               disableMentionTracking={

@@ -15,6 +15,12 @@ import {
   setEntityPropertyHandler,
 } from './Properties';
 import { readCallRecordHandler } from './ReadCallRecord';
+import {
+  readChannelMessageContextHandler,
+  readChannelMessagesHandler,
+  readChannelThreadHandler,
+} from './ReadChannel';
+import { readChatHandler } from './ReadChat';
 import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
 import { readThreadHandler } from './ReadThread';
@@ -23,8 +29,8 @@ import { sendEmailHandler } from './SendEmail';
 import { subagentHandler } from './Subagent';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
 import {
-  ToolErrorContext,
   type RenderContext,
+  ToolErrorContext,
   type ToolHandler,
   type ToolHandlerMap,
   type ToolRenderContext,
@@ -43,6 +49,10 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   GetThread: getThreadHandler,
   NameSearch: nameSearchHandler,
   ReadCallRecord: readCallRecordHandler,
+  ReadChannelMessageContext: readChannelMessageContextHandler,
+  ReadChannelMessages: readChannelMessagesHandler,
+  ReadChannelThread: readChannelThreadHandler,
+  ReadChat: readChatHandler,
   ReadThread: readThreadHandler,
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
