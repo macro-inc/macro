@@ -161,49 +161,26 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-extra-beefy
-    env:
-      RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=lld"
-      RUSTDOCFLAGS: "-Dwarnings"
-      SQLX_OFFLINE: true
     steps:
       - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v27
         with:
-          clean: false
-      - uses: ./.github/actions/setup-rust
-        env:
-          SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-      - name: setup lld
-        run: |
-          if ! command -v ld.lld >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y lld
-          fi
-          ld.lld --version
-      - name: fmt
-        run: |
-          cd rust/cloud-storage
-          cargo fmt --check
-      - name: clippy
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          cd rust/cloud-storage
-          cargo clippy --all-features
-      - name: show sccache stats
-        if: always()
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: sccache --show-stats || true
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-x86_64-linux-check-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-x86_64-linux-check-
+      - uses: cachix/cachix-action@v15
+        with:
+          name: macro-inc
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: fmt + clippy
+        run: nix build .#checks.x86_64-linux.fmt .#checks.x86_64-linux.clippy
 
   test:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-extra-beefy
-    env:
-      NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
-      NEXTEST_TEST_THREADS: '32'
     services:
       postgres:
         image: postgres:16
@@ -220,48 +197,33 @@ jobs:
         ports:
           - 6379:6379
         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
+      NEXTEST_TEST_THREADS: '32'
+      CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v27
         with:
-          clean: false
-      - uses: ./.github/actions/setup-rust
-        env:
-          SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-      - name: setup lld
-        run: |
-          if ! command -v ld.lld >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y lld
-          fi
-          ld.lld --version
-      - uses: actions/cache@v4
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: nix-community/cache-nix-action@v7
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-      - name: check cargo-nextest
-        id: check-cargo-nextest
+          primary-key: nix-x86_64-linux-test-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-x86_64-linux-test-
+      - uses: cachix/cachix-action@v15
+        with:
+          name: macro-inc
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: restore crane dependency artifacts
         run: |
-          if command -v cargo-nextest >/dev/null 2>&1; then
-            echo "installed=true" >> "$GITHUB_OUTPUT"
-            cargo nextest --version
-          else
-            echo "installed=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: install cargo-nextest
-        if: steps.check-cargo-nextest.outputs.installed != 'true'
-        uses: taiki-e/install-action@e32179aa3c2a47939bd07439bd80ddf13f99979f
-      - name: install dependencies
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          ARTIFACTS=$(nix build .#cargoArtifacts --no-link --print-out-paths)
+          mkdir -p rust/cloud-storage/target
+          zstd -d "$ARTIFACTS/target.tar.zst" --stdout | tar -xf - -C rust/cloud-storage/target
+          chmod -R +w rust/cloud-storage/target
+      - name: prepare tests
         run: |
-          command -v just || cargo install just --locked
-          command -v sqlx || cargo install sqlx-cli --locked
+          nix develop --command just rust/cloud-storage/setup_test_envs
+          nix develop --command just rust/cloud-storage/initialize_dbs
       - name: configure postgres for concurrent tests
         run: |
           postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "postgres:16" { print $1; exit }')"
@@ -276,10 +238,6 @@ jobs:
           until docker exec "$postgres_container" pg_isready -U user -d macrodb; do
             sleep 1
           done
-      - name: prepare tests
-        run: |
-          just rust/cloud-storage/setup_test_envs
-          just rust/cloud-storage/initialize_dbs
       - name: run tests
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
@@ -292,13 +250,7 @@ jobs:
             args+=(-E "$NEXTEST_FILTER")
           fi
 
-          cargo nextest run "${args[@]}"
-      - name: show sccache stats
-        if: always()
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: sccache --show-stats || true
+          nix develop --command cargo nextest run "${args[@]}"
 
   diff-check:
     needs: path-check

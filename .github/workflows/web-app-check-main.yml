@@ -50,10 +50,27 @@ jobs:
         uses: biomejs/setup-biome@v2
         with:
           version: 2.4.12
-      - name: Generate API Types
+      - uses: cachix/install-nix-action@v27
+        if: needs.path-check.outputs.api_changed == 'true'
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: nix-community/cache-nix-action@v7
+        if: needs.path-check.outputs.api_changed == 'true'
+        with:
+          primary-key: nix-x86_64-linux-gen-api-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-x86_64-linux-gen-api-
+      - uses: cachix/cachix-action@v15
+        if: needs.path-check.outputs.api_changed == 'true'
+        with:
+          name: macro-inc
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Check API schemas
+        if: needs.path-check.outputs.api_changed == 'true'
+        run: nix build .#checks.x86_64-linux.gen-api
+      - name: Check TypeScript types from API
         if: needs.path-check.outputs.api_changed == 'true'
         working-directory: js/app
-        run: bun run gen-api -- --check
+        run: OPENAPI_BINS_DIR=$(nix build --print-out-paths .#packages.x86_64-linux.openApiBins)/bin bun run gen-api -- --check
       - name: Check Types
         working-directory: js/app
         run: |
