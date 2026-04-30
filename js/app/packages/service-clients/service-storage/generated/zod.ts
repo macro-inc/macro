@@ -1468,11 +1468,29 @@ export const postChannelMessagesQueryParams = zod.object({
 
 export const postChannelMessagesBody = zod
   .object({
-    last_activity: zod.iso
+    activity_after: zod.iso
       .datetime({})
       .nullish()
       .describe(
-        'When set, only return top-level messages that have activity after this\ntimestamp. Activity means either the message itself was created after\nthis time, or a thread reply was created after this time.'
+        'When set, only return top-level messages with channel activity at or after\nthis timestamp. Activity means either the message itself was created after\nthis time, or a thread reply was created after this time.\n\nAccepts the legacy JSON field `last_activity` for backwards compatibility.'
+      ),
+    activity_before: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When set, only return top-level messages with channel activity before this\ntimestamp. Activity means either the parent message or at least one thread\nreply falls in the requested activity window.'
+      ),
+    created_after: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When set, only return top-level messages created at or after this timestamp.'
+      ),
+    created_before: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When set, only return top-level messages created before this timestamp.'
       ),
     message_ids: zod
       .array(zod.uuid())
@@ -1693,6 +1711,32 @@ export const getThreadRepliesResponseItem = zod
   })
   .describe('A thread reply shown in preview.');
 export const getThreadRepliesResponse = zod.array(getThreadRepliesResponseItem);
+
+/**
+ * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/resolve`.
+ */
+export const resolveChannelMessageParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  message_id: zod.uuid().describe('Message ID to resolve'),
+});
+
+export const resolveChannelMessageResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel this message belongs to.'),
+    created_at: zod.iso
+      .datetime({})
+      .describe('When the requested message was created.'),
+    kind: zod
+      .enum(['topLevelMessage', 'threadReply'])
+      .describe('Position of a message in the channel\/thread model.'),
+    message_id: zod.uuid().describe('The requested message id.'),
+    thread_id: zod
+      .uuid()
+      .describe(
+        'The top-level parent\/thread id. Equals message_id for top-level messages.'
+      ),
+  })
+  .describe('Resolution metadata for any channel message id.');
 
 /**
  * @summary Handler for `GET /channels/{channel_id}/participants`.
