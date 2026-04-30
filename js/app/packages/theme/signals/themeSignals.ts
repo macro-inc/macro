@@ -56,14 +56,21 @@ export const [themeShouldMatchSystem, setThemeShouldMatchSystem] = makePersisted
   {name: 'macro-theme-should-match-system'}
 );
 
+const supportsMatchMedia =
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function';
+
 export const [systemMode, setSystemMode] = createSignal<'dark' | 'light'>(
-  window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  supportsMatchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light'
 );
 
-const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-darkModeQuery.addEventListener('change', (e: MediaQueryListEvent) => {
-  setSystemMode(e.matches ? 'dark' : 'light');
-});
+if (supportsMatchMedia) {
+  const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  darkModeQuery.addEventListener('change', (e: MediaQueryListEvent) => {
+    setSystemMode(e.matches ? 'dark' : 'light');
+  });
+}
 
 export const [monochromeIcons, setMonochromeIcons] = makePersisted(
   createSignal<boolean>(false),
