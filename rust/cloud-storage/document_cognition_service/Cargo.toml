@@ -26,7 +26,6 @@ local_queue = []
 [dependencies]
 aho-corasick = "1.1.3"
 ai = { path = "../ai" }
-ai_format = { path = "../ai_format" }
 attachment = { path = "../attachment", features = ["provider"] }
 non_empty = { path = "../non_empty" }
 ai_tools = { path = "../ai_tools" }

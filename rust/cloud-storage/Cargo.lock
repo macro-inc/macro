@@ -45,7 +45,6 @@ dependencies = [
 name = "ai"
 version = "0.1.0"
 dependencies = [
- "ai_format",
  "ai_toolset",
  "anthropic",
  "anyhow",
@@ -73,19 +72,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ai_format"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "models_properties",
-]
-
-[[package]]
 name = "ai_tools"
 version = "0.1.0"
 dependencies = [
  "ai",
- "ai_format",
  "ai_toolset",
  "anthropic",
  "anyhow",
@@ -2155,7 +2145,6 @@ dependencies = [
 name = "comms_service"
 version = "0.1.0"
 dependencies = [
- "ai_format",
  "anyhow",
  "async-trait",
  "aws-sdk-secretsmanager",
@@ -3075,7 +3064,6 @@ version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "ai",
- "ai_format",
  "ai_tools",
  "ai_toolset",
  "anyhow",
@@ -6737,7 +6725,6 @@ name = "model"
 version = "0.1.0"
 dependencies = [
  "ai",
- "ai_format",
  "anyhow",
  "axum",
  "base64 0.22.1",

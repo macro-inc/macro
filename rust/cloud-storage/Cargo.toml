@@ -2,8 +2,7 @@
 resolver = "2"
 
 members = [
-    "ai",
-  "ai_format",
+  "ai",
   "ai_tools",
   "ai_toolset",
   "analytics_client",

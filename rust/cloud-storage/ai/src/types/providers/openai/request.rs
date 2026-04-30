@@ -14,7 +14,7 @@ impl ChatCompletionRequest {
         let system_message =
             ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
                 content: ChatCompletionRequestSystemMessageContent::Text(
-                    self.system_prompt.to_string(),
+                    self.system_prompt.instructions,
                 ),
                 name: None,
             });

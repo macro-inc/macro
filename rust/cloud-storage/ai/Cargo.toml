@@ -34,5 +34,4 @@ anthropic = { path = "../anthropic" }
 ai_toolset = { path = "../ai_toolset" }
 macro_user_id = { path = "../macro_user_id" }
 model_file_type = { path = "../model_file_type"}
-ai_format = { path = "../ai_format" }
 attachment = { path = "../attachment" }

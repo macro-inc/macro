@@ -192,7 +192,7 @@ mod test {
 
         // Verify system prompt (no attachments)
         assert_eq!(request.system_prompt.instructions, "Basic system prompt");
-        assert!(request.system_prompt.attachments.is_empty());
+        assert!(request.system_prompt.attachments.is_none());
 
         // Verify model and default max_tokens
         assert_eq!(request.model, Model::Claude35Sonnet);

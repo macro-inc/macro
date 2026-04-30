@@ -6,7 +6,6 @@ version = "0.1.0"
 
 [dependencies]
 ai = { path = "../ai" }
-ai_format = { path = "../ai_format" }
 anyhow = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }
