@@ -56,10 +56,10 @@ tokio = { workspace = true, features = ["sync"], optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model-entity = { path = "../model-entity"}
 utoipa = { workspace = true, optional = true }
 
 [dev-dependencies]
+model-entity = { path = "../model-entity"}
 document_sub_type = { path = "../document_sub_type" }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
