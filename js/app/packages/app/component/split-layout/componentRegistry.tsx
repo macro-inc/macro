@@ -15,7 +15,6 @@ import { EmailCompose } from '../../../block-email/component/compose/Compose';
 import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
-import { Dynamic } from 'solid-js/web';
 
 function usePageViewTracking(pageTitle: string) {
   const analytics = useAnalytics();
