@@ -73,7 +73,7 @@ fn test_send_email_schema_validation() {
 
 #[test]
 fn test_get_thread_schema_validation() {
-    let schema = generate_tool_input_schema!(ReadThread);
+    let schema = generate_tool_input_schema!(GetThread);
 
     let result = validate_tool_schema(&schema);
     assert!(result.is_ok(), "{:?}", result);
