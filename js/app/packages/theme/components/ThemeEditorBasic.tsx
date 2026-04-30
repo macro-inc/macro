@@ -69,11 +69,11 @@ function sigmoid(x: number, b: number): number {
 }
 
 function getContrastFromY(y: number): number {
-  return ((-2 * Math.log(1 / (-(y - 0.5) / (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5)) + 0.5) - 1) - (-2 * Math.log(1 / (-(y - 0.5) / (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5)) + 0.5) - 1) < 0 ? -1 : 1)) / (q - 1) / 2 + 0.5);
+  return ((-2 * Math.log(1 / (-(y - 0.5) / (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5)) + 0.5) - 1) - (-2 * Math.log(1 / (-(y - 0.5) / (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5)) + 0.5) - 1) < 0 ? -1 : 1)) / (q - 1) / 2 + 0.4);
 }
 
 function setContrast(contrast: number) {
-  const c = (contrast - 0.5) * 2;
+  const c = (contrast - 0.4) * 2;
   const p = c < 0 ? -1 : 1;
   const b = c * (q - 1) + p;
 
@@ -81,7 +81,7 @@ function setContrast(contrast: number) {
     themeReactive.b0.l[1](sigmoid(0.00, b));
     themeReactive.b1.l[1](sigmoid(0.80, b));
     themeReactive.b2.l[1](sigmoid(0.18, b));
-    themeReactive.b3.l[1](sigmoid(0.27, b));
+    themeReactive.b3.l[1](sigmoid(0.22, b));
     themeReactive.b4.l[1](sigmoid(0.28, b));
 
     themeReactive.c4.l[1](sigmoid(0.68, b));
@@ -602,7 +602,7 @@ export function ThemeEditorBasic(){
 
             <div
               style={{
-                'left': `${getContrastFromY(themeReactive.b0.l[0]()) * 100}%`,
+                'left': `${(getContrastFromY(themeReactive.b0.l[0]()) / 0.8) * 100}%`,
                 'transform': 'translate(-50%, -50%)',
                 'background-color': 'var(--b0)',
                 'border': '1px solid var(--b4)',
@@ -639,7 +639,7 @@ export function ThemeEditorBasic(){
               type="range"
               step="0.001"
               value="0"
-              max="1.0"
+              max="0.8"
               min="0.0"
             />
           </div>
