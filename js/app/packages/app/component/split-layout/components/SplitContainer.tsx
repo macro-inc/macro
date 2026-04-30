@@ -95,7 +95,11 @@ export function SplitContainer(
           }
         >
           <Panel
-            active={panel.isPanelActive() && multipleSplits() && !panel.handle.isSpotLight()}
+            active={
+              panel.isPanelActive() &&
+              multipleSplits() &&
+              !panel.handle.isSpotLight()
+            }
             depth={1}
           >
             <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">

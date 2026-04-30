@@ -36,26 +36,26 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
   };
 
   return (
-      <button
-        class="pointer-events-auto mx-0.5 inline-flex items-center gap-0.75 align-baseline px-1 py-px rounded-[3px] border border-edge-muted bg-transparent"
-        onClick={handleClick}
-        type="button"
-      >
-        <span class="inline-flex items-center gap-0.5">
-          <span
-            class="inline-block size-2.5 rounded-xs border border-edge-muted"
-            style={{ 'background-color': oklch(a0()) }}
-          />
-          <span
-            class="inline-block size-2.5 rounded-xs border border-edge-muted"
-            style={{ 'background-color': oklch(b0()) }}
-          />
-          <span
-            class="inline-block size-2.5 rounded-xs border border-edge-muted"
-            style={{ 'background-color': oklch(c0()) }}
-          />
-        </span>
-        <span class="mx-0.5 cursor-default">{props.name}</span>
+    <button
+      class="pointer-events-auto mx-0.5 inline-flex items-center gap-0.75 align-baseline px-1 py-px rounded-[3px] border border-edge-muted bg-transparent"
+      onClick={handleClick}
+      type="button"
+    >
+      <span class="inline-flex items-center gap-0.5">
+        <span
+          class="inline-block size-2.5 rounded-xs border border-edge-muted"
+          style={{ 'background-color': oklch(a0()) }}
+        />
+        <span
+          class="inline-block size-2.5 rounded-xs border border-edge-muted"
+          style={{ 'background-color': oklch(b0()) }}
+        />
+        <span
+          class="inline-block size-2.5 rounded-xs border border-edge-muted"
+          style={{ 'background-color': oklch(c0()) }}
+        />
+      </span>
+      <span class="mx-0.5 cursor-default">{props.name}</span>
     </button>
   );
 }

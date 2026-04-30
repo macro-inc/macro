@@ -493,8 +493,7 @@ function GlyphGrid(props: GlyphGridProps) {
                   class="items-center border relative group transition-colors justify-self-stretch"
                   classList={{
                     'border-edge bg-edge bracket-offset-2': isSelected(),
-                    'border-edge bg-background hover:bg-edge':
-                      !isSelected(),
+                    'border-edge bg-background hover:bg-edge': !isSelected(),
                   }}
                 >
                   <div class="w-20 h-20 flex items-center justify-center mx-auto m-2">

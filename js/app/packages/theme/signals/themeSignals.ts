@@ -25,12 +25,6 @@ setUserThemes(
   })
 );
 
-let convertedDefaultThemes = DEFAULT_THEMES.map((theme) => {
-  if(!theme.version){return convertThemev1v2(convertThemev0v1(theme as unknown as ThemeV0))}
-  else if(theme.version === 1){return convertThemev1v2(theme as unknown as ThemeV1)}
-  else{return theme}
-});
-
 export const [currentThemeId, setCurrentThemeId_] = makePersisted(
   createSignal<string>(DEFAULT_DARK_THEME),
   {name: 'macro-selected-theme'}
@@ -45,7 +39,7 @@ export const setCurrentThemeId = ( ...args: Parameters<typeof setCurrentThemeId_
   }
 };
 
-export const themes = createMemo(() => [...convertedDefaultThemes, ...userThemes()]);
+export const themes = createMemo(() => [...DEFAULT_THEMES, ...userThemes()]);
 
 export const [lightModeTheme, setLightModeTheme] = makePersisted(
   createSignal<string>(DEFAULT_LIGHT_THEME),

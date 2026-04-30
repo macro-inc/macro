@@ -200,11 +200,7 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   return (
     <Panel depth={2}>
-      <div
-        id="chat-input"
-        ref={containerRef}
-        class="relative flex flex-col"
-      >
+      <div id="chat-input" ref={containerRef} class="relative flex flex-col">
         <Show when={hasAttachments()}>
           <div class="px-2 pt-2 w-full">
             <AttachmentList
@@ -235,9 +231,7 @@ export function ChatInput(props: ChatInputComponentProps) {
         <div class="relative px-2 py-1.5">
           <div
             id="chat-input-text-area"
-            class={cn(
-              'text-sm sm:text-sm text-ink'
-            )}
+            class={cn('text-sm sm:text-sm text-ink')}
             classList={{
               'pl-8': !isMultiline(),
               'pr-[48px]': !isMultiline() && isTouchDevice(),

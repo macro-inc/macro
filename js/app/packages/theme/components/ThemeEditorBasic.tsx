@@ -79,7 +79,7 @@ function setContrast(contrast: number) {
 
   batch(() => {
     themeReactive.b0.l[1](sigmoid(0.00, b));
-    themeReactive.b1.l[1](sigmoid(0.80, b));
+    themeReactive.b1.l[1](sigmoid(0.08, b));
     themeReactive.b2.l[1](sigmoid(0.18, b));
     themeReactive.b3.l[1](sigmoid(0.22, b));
     themeReactive.b4.l[1](sigmoid(0.28, b));
