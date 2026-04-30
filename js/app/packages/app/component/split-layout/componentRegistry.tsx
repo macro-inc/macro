@@ -15,6 +15,7 @@ import { EmailCompose } from '../../../block-email/component/compose/Compose';
 import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
+import { Dynamic } from 'solid-js/web';
 
 function usePageViewTracking(pageTitle: string) {
   const analytics = useAnalytics();
@@ -266,14 +267,7 @@ registerComponent('email-compose', (params) => {
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
-  return (
-    <ComposeTask
-      initialContent={params?.initialContent}
-      initialTitle={params?.initialTitle}
-      initialAssigneeIds={params?.initialAssigneeIds}
-      onSuccess={params?.onSuccess}
-    />
-  );
+  return <ComposeTask {...params} />;
 });
 registerComponent(
   'import-linear',

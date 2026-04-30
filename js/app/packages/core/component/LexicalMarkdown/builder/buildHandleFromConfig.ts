@@ -1,6 +1,7 @@
 import type { EditorType } from '@lexical-core';
 import { createLexicalWrapper } from '../context/LexicalWrapperContext';
 import {
+  awaitPlugin,
   codePlugin,
   createAccessoryStore,
   createDraggableBlockStore,
@@ -123,6 +124,11 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
   if (config.type !== 'plain-text' && !config.singleLine) {
     plugins.use(horizontalRulePlugin());
     plugins.use(normalizeEnterPlugin());
+  }
+
+  // Await placeholders for in-flight async operations (any non-plain-text editor).
+  if (config.type !== 'plain-text') {
+    plugins.use(awaitPlugin());
   }
 
   // Selection / formatting state

@@ -46,6 +46,7 @@ import {
   LexicalWrapperContext,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
+  awaitPlugin,
   CLOSE_INLINE_SEARCH_COMMAND,
   createDraggableBlockStore,
   createDragInsertStore,
@@ -145,6 +146,7 @@ import {
   InlineSearchNode,
   type PeerIdValidator,
   peerIdPlugin,
+  AwaitNode,
 } from '@lexical-core';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { createCallback } from '@solid-primitives/rootless';
@@ -598,7 +600,8 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         onVersionError: (error) => setEditorError(error),
       })
     )
-    .use(pinnedPropertiesPlugin());
+    .use(pinnedPropertiesPlugin())
+    .use(awaitPlugin());
 
   if (isIOS || isNativeMobilePlatform()) {
     plugins.use(
@@ -610,7 +613,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     const getBlockLoroManager = blockLoroManagerSignal.get;
     const peerId = () => getBlockLoroManager()?.getPeerIdStr();
     plugins.use(
-      peerIdPlugin({ peerId, nodes: [InlineSearchNode, CommentNode] })
+      peerIdPlugin({
+        peerId,
+        nodes: [InlineSearchNode, CommentNode, AwaitNode],
+      })
     );
   }
 

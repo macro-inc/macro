@@ -171,6 +171,17 @@ export interface ComposeTaskProps {
    * toast) so the caller can handle the created task however it needs.
    */
   onSuccess?: (result: ComposeTaskSuccess) => void;
+  /**
+   * Fires when the user submits and the dialog closes but the create-task
+   * network call is still in flight. The originating editor can use this to
+   * drop in an await placeholder which onSuccess later replaces.
+   */
+  onCreateStart?: (init: { title: string; content: string }) => void;
+  /**
+   * Fires if the create-task API call fails after the dialog has been closed.
+   * Pairs with onCreateStart for placeholder cleanup.
+   */
+  onCreateFailure?: () => void;
 }
 
 export function ComposeTask(props: ComposeTaskProps) {
@@ -459,6 +470,11 @@ export function ComposeTask(props: ComposeTaskProps) {
       // Close the dialog immediately
       splitPanel.handle.close();
       props.onClose?.();
+      console.log(
+        '[ComposeTask] dispatching onCreateStart, hasHandler=',
+        Boolean(props.onCreateStart)
+      );
+      props.onCreateStart?.({ title: taskTitle, content: taskContent });
 
       const documentId = await createTaskWithProperties(
         taskTitle,
@@ -471,6 +487,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       setIsCreating(false);
 
       if (!documentId) {
+        props.onCreateFailure?.();
         // Restore the draft and re-open so the user can retry
         saveTaskComposerDraft(draftSnapshot);
         popoverSplit({ type: 'component', id: 'task-compose' });

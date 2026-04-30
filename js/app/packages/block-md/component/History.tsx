@@ -401,7 +401,7 @@ function DocumentPreview(props: {
     .use(
       peerIdPlugin({
         peerId: () => undefined,
-        nodes: [InlineSearchNode, CommentNode, CustomCodeNode],
+        nodes: [InlineSearchNode, CommentNode],
       })
     );
 
