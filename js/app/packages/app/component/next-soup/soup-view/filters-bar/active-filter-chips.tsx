@@ -80,6 +80,56 @@ interface ActiveFilterChipsProps {
   hideCategoryLabel?: boolean;
 }
 
+const ChipContent = (props: {
+  filter: ActiveFilter;
+  hideCategoryLabel?: boolean;
+}) => {
+  const showCategory = () =>
+    !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel);
+  return (
+    <>
+      <Show when={props.filter.icon}>
+        {(icon) => (
+          <span class="size-3 flex items-center justify-center shrink-0">
+            {icon()()}
+          </span>
+        )}
+      </Show>
+      <span class="font-medium" title={props.filter.optionLabel()}>
+        <Show when={showCategory()}>{props.filter.categoryLabel}: </Show>
+        {truncateLabel(props.filter.optionLabel())}
+      </span>
+    </>
+  );
+};
+
+const CHIP_WRAPPER_CLASS = cn(
+  'flex text-xs rounded-xs',
+  'bg-ink/10 text-ink-muted border border-edge-muted',
+  'group transition-colors'
+);
+
+const CHIP_TRIGGER_CLASS = cn(
+  'inline-flex items-center gap-1.5 pl-2 pr-1 py-1',
+  'hover:text-ink hover:bg-edge-muted'
+);
+
+const ChipRemoveButton = (props: { onRemove: () => void }) => (
+  <button
+    type="button"
+    class={cn(
+      'px-1 min-h-full',
+      'hover:bg-edge-muted hover:text-ink transition-colors'
+    )}
+    onClick={(e) => {
+      e.stopPropagation();
+      props.onRemove();
+    }}
+  >
+    <XIcon class="size-3" />
+  </button>
+);
+
 const SearchableFilterChip = (props: {
   filter: ActiveFilter;
   onRemove: () => void;
@@ -100,14 +150,7 @@ const SearchableFilterChip = (props: {
     `Search ${props.filter.categoryLabel.toLowerCase()}...`;
 
   return (
-    <div
-      class={cn(
-        'flex text-xs rounded-xs',
-        'bg-ink/10 text-ink-muted border border-edge-muted',
-        'group transition-colors',
-        props.chipClass
-      )}
-    >
+    <div class={cn(CHIP_WRAPPER_CLASS, props.chipClass)}>
       <SearchableMultiSelect
         options={options}
         activeIds={activeIds}
@@ -117,45 +160,15 @@ const SearchableFilterChip = (props: {
         open={props.filter.isPopupOpen}
         onOpenChange={(v) => props.filter.setPopupOpen?.(v)}
       >
-        <Combobox.Trigger
-          class={cn(
-            'inline-flex items-center gap-1.5 pl-2 pr-1 py-1',
-            'hover:text-ink hover:bg-edge-muted'
-          )}
-        >
-          <Show when={props.filter.icon}>
-            {(icon) => (
-              <span class="size-3 flex items-center justify-center shrink-0">
-                {icon()()}
-              </span>
-            )}
-          </Show>
-          <span class="font-medium" title={props.filter.optionLabel()}>
-            <Show
-              when={
-                !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
-              }
-            >
-              {props.filter.categoryLabel}:{' '}
-            </Show>
-            {truncateLabel(props.filter.optionLabel())}
-          </span>
+        <Combobox.Trigger class={CHIP_TRIGGER_CLASS}>
+          <ChipContent
+            filter={props.filter}
+            hideCategoryLabel={props.hideCategoryLabel}
+          />
         </Combobox.Trigger>
       </SearchableMultiSelect>
 
-      <button
-        type="button"
-        class={cn(
-          'px-1 min-h-full',
-          'hover:bg-edge-muted hover:text-ink transition-colors'
-        )}
-        onClick={(e) => {
-          e.stopPropagation();
-          props.onRemove();
-        }}
-      >
-        <XIcon class="size-3" />
-      </button>
+      <ChipRemoveButton onRemove={props.onRemove} />
     </div>
   );
 };
@@ -174,63 +187,24 @@ const FilterChip = (props: {
     props.filter.categoryOptions && props.filter.categoryOptions.length > 0;
 
   return (
-    <div
-      class={cn(
-        'flex text-xs rounded-xs',
-        'bg-ink/10 text-ink-muted border border-edge-muted',
-        'group',
-        'transition-colors',
-        props.chipClass
-      )}
-    >
+    <div class={cn(CHIP_WRAPPER_CLASS, props.chipClass)}>
       <Show
         when={hasOptions()}
         fallback={
           <span class="inline-flex items-center gap-1.5 pl-2 pr-1 py-1">
-            <Show when={props.filter.icon}>
-              {(icon) => (
-                <span class="size-3 flex items-center justify-center shrink-0">
-                  {icon()()}
-                </span>
-              )}
-            </Show>
-            <span class="font-medium" title={props.filter.optionLabel()}>
-              <Show
-                when={
-                  !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
-                }
-              >
-                {props.filter.categoryLabel}:{' '}
-              </Show>
-              {truncateLabel(props.filter.optionLabel())}
-            </span>
+            <ChipContent
+              filter={props.filter}
+              hideCategoryLabel={props.hideCategoryLabel}
+            />
           </span>
         }
       >
         <DropdownMenu open={open()} onOpenChange={setOpen} gutter={4}>
-          <DropdownMenu.Trigger
-            class={cn(
-              'inline-flex items-center gap-1.5 pl-2 pr-1 py-1',
-              'hover:text-ink hover:bg-edge-muted'
-            )}
-          >
-            <Show when={props.filter.icon}>
-              {(icon) => (
-                <span class="size-3 flex items-center justify-center shrink-0">
-                  {icon()()}
-                </span>
-              )}
-            </Show>
-            <span class="font-medium" title={props.filter.optionLabel()}>
-              <Show
-                when={
-                  !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
-                }
-              >
-                {props.filter.categoryLabel}:{' '}
-              </Show>
-              {truncateLabel(props.filter.optionLabel())}
-            </span>
+          <DropdownMenu.Trigger class={CHIP_TRIGGER_CLASS}>
+            <ChipContent
+              filter={props.filter}
+              hideCategoryLabel={props.hideCategoryLabel}
+            />
           </DropdownMenu.Trigger>
 
           <DropdownMenu.Portal>
@@ -308,30 +282,48 @@ const FilterChip = (props: {
         </DropdownMenu>
       </Show>
 
-      {/* Remove button */}
-      <button
-        type="button"
-        class={cn(
-          'px-1 min-h-full',
-          'hover:bg-edge-muted hover:text-ink transition-colors'
-        )}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (props.filter.onRemove) {
-            props.filter.onRemove();
-          } else {
-            props.onRemove();
-          }
-        }}
-      >
-        <XIcon class="size-3" />
-      </button>
+      <ChipRemoveButton onRemove={props.onRemove} />
     </div>
   );
 };
 
 export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
   const lastIndex = () => props.filters.length - 1;
+
+  const renderChip = (filter: ActiveFilter) => {
+    const onRemove = () => {
+      if (filter.onRemove) {
+        filter.onRemove();
+      } else {
+        props.onRemove(filter.optionId());
+      }
+    };
+
+    return (
+      <Show
+        when={filter.searchableOptions}
+        fallback={
+          <FilterChip
+            filter={filter}
+            onRemove={onRemove}
+            onReplace={(newOptionId) =>
+              props.onReplace(filter.optionId(), newOptionId)
+            }
+            isOptionActive={props.isOptionActive}
+            chipClass={props.chipClass}
+            hideCategoryLabel={props.hideCategoryLabel}
+          />
+        }
+      >
+        <SearchableFilterChip
+          filter={filter}
+          onRemove={onRemove}
+          chipClass={props.chipClass}
+          hideCategoryLabel={props.hideCategoryLabel}
+        />
+      </Show>
+    );
+  };
 
   return (
     <Show when={props.filters.length > 0}>
@@ -341,71 +333,12 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
             // To make sure that the Clear all button never wraps to a new line on its own, we wrap it with the last FilterChip
             <Show
               when={props.filters.length > 1 && index() === lastIndex()}
-              fallback={
-                <Show
-                  when={filter.searchableOptions}
-                  fallback={
-                    <FilterChip
-                      filter={filter}
-                      onRemove={() => props.onRemove(filter.optionId())}
-                      onReplace={(newOptionId) =>
-                        props.onReplace(filter.optionId(), newOptionId)
-                      }
-                      isOptionActive={props.isOptionActive}
-                      chipClass={props.chipClass}
-                      hideCategoryLabel={props.hideCategoryLabel}
-                    />
-                  }
-                >
-                  <SearchableFilterChip
-                    filter={filter}
-                    onRemove={() => {
-                      if (filter.onRemove) {
-                        filter.onRemove();
-                      } else {
-                        props.onRemove(filter.optionId());
-                      }
-                    }}
-                    chipClass={props.chipClass}
-                    hideCategoryLabel={props.hideCategoryLabel}
-                  />
-                </Show>
-              }
+              fallback={renderChip(filter)}
             >
               <span class="inline-flex items-center gap-1.5">
-                <Show
-                  when={filter.searchableOptions}
-                  fallback={
-                    <FilterChip
-                      filter={filter}
-                      onRemove={() => props.onRemove(filter.optionId())}
-                      onReplace={(newOptionId) =>
-                        props.onReplace(filter.optionId(), newOptionId)
-                      }
-                      isOptionActive={props.isOptionActive}
-                      chipClass={props.chipClass}
-                      hideCategoryLabel={props.hideCategoryLabel}
-                    />
-                  }
-                >
-                  <SearchableFilterChip
-                    filter={filter}
-                    onRemove={() => {
-                      if (filter.onRemove) {
-                        filter.onRemove();
-                      } else {
-                        props.onRemove(filter.optionId());
-                      }
-                    }}
-                    chipClass={props.chipClass}
-                    hideCategoryLabel={props.hideCategoryLabel}
-                  />
-                </Show>
+                {renderChip(filter)}
                 <Button
-                  class={cn(
-                    'rounded-xs whitespace-nowrap'
-                    // 'text-ink-muted hover:text-ink hover:bg-hover transition-colors'
-                  )}
+                  class="rounded-xs whitespace-nowrap"
                   size="sm"
                   variant="ghost"
                   onClick={() => props.onClearAll()}
