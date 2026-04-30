@@ -5137,46 +5137,6 @@
             }
           }
         }
-      },
-      "delete": {
-        "tags": ["saved_views"],
-        "operationId": "delete_view_handler",
-        "parameters": [
-          {
-            "name": "saved_view_id",
-            "in": "path",
-            "description": "The id of the saved view to delete",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/saved_views/exclude_default": {
@@ -5221,6 +5181,46 @@
       }
     },
     "/saved_views/{saved_view_id}": {
+      "delete": {
+        "tags": ["saved_views"],
+        "operationId": "delete_view_handler",
+        "parameters": [
+          {
+            "name": "saved_view_id",
+            "in": "path",
+            "description": "The id of the saved view to delete",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "tags": ["saved_views"],
         "operationId": "patch_view_handler",
@@ -6472,6 +6472,11 @@
               "$ref": "#/components/schemas/CallRecordParticipant"
             },
             "description": "Participants (both active and historic)."
+          },
+          "recordingStartedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the egress recording actually began. `None` until the\n`egress_started` webhook arrives (typically a few seconds after\n`started_at`). Frontend should anchor transcript-to-audio sync to\nthis value when present, falling back to `started_at` otherwise."
           },
           "recordingUrl": {
             "type": ["string", "null"],

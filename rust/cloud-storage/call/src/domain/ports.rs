@@ -147,6 +147,17 @@ pub trait CallRepository: Send + Sync + 'static {
         recording_key: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Set `recording_started_at` on whichever row currently owns the egress —
+    /// active `calls` first, then archived `call_records` — driven by the
+    /// `egress_started` webhook. Idempotent: only sets the column when it is
+    /// still `NULL` so a duplicate or retried webhook can't overwrite a
+    /// previously captured start time.
+    fn set_recording_started_at_by_egress_id(
+        &self,
+        egress_id: &str,
+        started_at: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Insert a transcript segment for an active call.
     fn create_transcript_segment(
         &self,

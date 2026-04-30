@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, share_permission_id, share_with_team\n            FROM calls\n            WHERE id = $1\n            FOR UPDATE\n            ",
+  "query": "\n            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, recording_started_at, custom_name, summary\n            FROM call_records\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -25,28 +25,43 @@
       },
       {
         "ordinal": 4,
-        "name": "created_at",
+        "name": "started_at",
         "type_info": "Timestamptz"
       },
       {
         "ordinal": 5,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "duration_ms",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
         "name": "egress_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 8,
         "name": "recording_key",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
-        "name": "share_permission_id",
+        "ordinal": 9,
+        "name": "recording_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "custom_name",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
-        "name": "share_with_team",
-        "type_info": "Bool"
+        "ordinal": 11,
+        "name": "summary",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -60,11 +75,14 @@
       false,
       false,
       false,
-      true,
-      true,
       false,
-      false
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
     ]
   },
-  "hash": "b514f8481c5d7b865fd3265fd927a9bb5855eb01eb33f90137e7685573b3be8e"
+  "hash": "626f582f62f31f4e1ad7fe155af220675ece4abffb0e2f3d0435199827900624"
 }

@@ -939,6 +939,12 @@ export const getCallRecordResponse = zod
           )
       )
       .describe('Participants (both active and historic).'),
+    recordingStartedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the egress recording actually began. `None` until the\n`egress_started` webhook arrives (typically a few seconds after\n`started_at`). Frontend should anchor transcript-to-audio sync to\nthis value when present, falling back to `started_at` otherwise.'
+      ),
     recordingUrl: zod
       .string()
       .nullish()
@@ -10068,12 +10074,12 @@ export const createViewHandlerResponse = zod.object({
   userId: zod.string(),
 });
 
-export const deleteViewHandlerParams = zod.object({
-  saved_view_id: zod.string().describe('The id of the saved view to delete'),
-});
-
 export const excludeDefaultViewHandlerBody = zod.object({
   defaultViewId: zod.string(),
+});
+
+export const deleteViewHandlerParams = zod.object({
+  saved_view_id: zod.string().describe('The id of the saved view to delete'),
 });
 
 export const patchViewHandlerParams = zod.object({

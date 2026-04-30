@@ -256,6 +256,11 @@ pub struct CallRecord {
     pub duration_ms: Option<i64>,
     /// Recording egress ID, if any.
     pub egress_id: Option<String>,
+    /// When the egress recording actually began. `None` until the
+    /// `egress_started` webhook arrives (typically a few seconds after
+    /// `started_at`). Frontend should anchor transcript-to-audio sync to
+    /// this value when present, falling back to `started_at` otherwise.
+    pub recording_started_at: Option<DateTime<Utc>>,
     /// S3 object key for the call recording (internal, not serialized).
     #[serde(skip_serializing)]
     pub recording_key: Option<String>,

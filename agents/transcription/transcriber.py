@@ -3,7 +3,7 @@ import logging
 import os
 import uuid
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from dotenv import load_dotenv
@@ -70,6 +70,12 @@ class Transcriber(Agent):
         # Word counts per Deepgram speaker int, accumulated across final
         # transcripts inside a single user turn and cleared on turn completion.
         self._pending_speakers: Counter[int] = Counter()
+        # Earliest speech-start and latest speech-end wall clocks observed
+        # across FINAL transcripts within the current turn. Derived from
+        # Deepgram word-level timing so segments line up with the audio
+        # rather than the end-of-turn callback.
+        self._pending_started_at: datetime | None = None
+        self._pending_ended_at: datetime | None = None
         # Deepgram's speaker ints are only unique within one streaming session.
         # Namespace them with a nonce regenerated per Transcriber so a reconnect
         # doesn't silently merge two different humans under the same UUID.
@@ -94,12 +100,33 @@ class Transcriber(Agent):
                 event.type == stt_pkg.SpeechEventType.FINAL_TRANSCRIPT
             ):
                 alt = event.alternatives[0] if event.alternatives else None
-                for word in getattr(alt, "words", None) or ():
-                    speaker = getattr(word, "speaker", None)
-                    if speaker is None:
-                        speaker = getattr(word, "speaker_id", None)
-                    if speaker is not None:
-                        self._pending_speakers[int(speaker)] += 1
+                words = list(getattr(alt, "words", None) or ())
+                if words:
+                    # Deepgram word.start/end are seconds relative to the STT
+                    # stream start; we don't expose that anchor here. Pin
+                    # speech_end to "now" (FINAL arrives ~immediately after
+                    # speech ends + endpointing) and back-calculate the start
+                    # from the word-span duration.
+                    speech_end = datetime.now(timezone.utc)
+                    span = max(words[-1].end - words[0].start, 0.0)
+                    speech_start = speech_end - timedelta(seconds=span)
+                    if (
+                        self._pending_started_at is None
+                        or speech_start < self._pending_started_at
+                    ):
+                        self._pending_started_at = speech_start
+                    if (
+                        self._pending_ended_at is None
+                        or speech_end > self._pending_ended_at
+                    ):
+                        self._pending_ended_at = speech_end
+
+                    for word in words:
+                        speaker = getattr(word, "speaker", None)
+                        if speaker is None:
+                            speaker = getattr(word, "speaker_id", None)
+                        if speaker is not None:
+                            self._pending_speakers[int(speaker)] += 1
             yield event
 
     async def on_user_turn_completed(
@@ -107,12 +134,11 @@ class Transcriber(Agent):
     ):
         content = new_message.text_content
         if content:
-            message_time = datetime.now(timezone.utc)
-            if new_message.created_at is not None:
-                message_time = datetime.fromtimestamp(
-                    new_message.created_at, tz=timezone.utc
-                )
-            timestamp = message_time.isoformat()
+            now = datetime.now(timezone.utc)
+            started_at = self._pending_started_at or now
+            ended_at = self._pending_ended_at or now
+            self._pending_started_at = None
+            self._pending_ended_at = None
 
             extra = new_message.extra if isinstance(new_message.extra, dict) else {}
             source_id = (
@@ -121,7 +147,8 @@ class Transcriber(Agent):
                 or new_message.id
             )
             segment_seed = (
-                f"{self.channel_id}:{self.participant_identity}:{source_id}:{timestamp}"
+                f"{self.channel_id}:{self.participant_identity}:{source_id}:"
+                f"{started_at.isoformat()}"
             )
             segment_id = str(uuid.uuid5(uuid.NAMESPACE_URL, segment_seed))
 
@@ -136,8 +163,8 @@ class Transcriber(Agent):
                 "speakerId": self.participant_identity,
                 "diarizedSpeakerId": diarized_speaker_id,
                 "content": content,
-                "startedAt": timestamp,
-                "endedAt": timestamp,
+                "startedAt": started_at.isoformat(),
+                "endedAt": ended_at.isoformat(),
                 "isFinal": True,
             }
             max_attempts = 3

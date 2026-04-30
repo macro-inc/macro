@@ -99,6 +99,7 @@ export * from './callRecordPreviewOneOfAllOfType';
 export * from './callRecordPreviewOneOfFour';
 export * from './callRecordPreviewOneOfFourAllOf';
 export * from './callRecordPreviewOneOfFourAllOfType';
+export * from './callRecordRecordingStartedAt';
 export * from './callRecordRecordingUrl';
 export * from './callRecordSummary';
 export * from './callRecordTranscriptSegment';

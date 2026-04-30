@@ -14,6 +14,7 @@ fn record_with_participants(user_ids: &[&str]) -> CallRecord {
         ended_at: None,
         duration_ms: None,
         egress_id: None,
+        recording_started_at: None,
         recording_key: None,
         recording_url: None,
         channel_name: None,
