@@ -6,12 +6,12 @@ import {
   createMemo,
   createSignal,
   type JSX,
-  on,
   Show,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import CheckIcon from '@icon/regular/check.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import type { SearchableOption } from './search-filter-controls';
 
 const ITEM_HEIGHT = 36;
@@ -120,35 +120,7 @@ const useActiveOptions = (
     return options().filter((opt) => set.has(opt.id));
   });
 
-/**
- * Returns options with currently-selected items sorted to the top. The sort
- * is recomputed only when the listed deps change (typically: options,
- * searchQuery, and a "menu opened" trigger). It deliberately does NOT track
- * `activeIds` so toggling selection inside an open menu doesn't shuffle the
- * list out from under the user — same pattern as the task assignee menu.
- */
-const useSortedOptions = (
-  options: Accessor<SearchableOption[]>,
-  activeIds: Accessor<string[]>,
-  searchQuery: Accessor<string>,
-  resortDeps: Accessor<unknown>[]
-) =>
-  createMemo(
-    on([options, searchQuery, ...resortDeps], () => {
-      const opts = options();
-      if (searchQuery()) return opts;
-      const ids = activeIds();
-      if (ids.length === 0) return opts;
-      const idSet = new Set(ids);
-      const selected: SearchableOption[] = [];
-      const unselected: SearchableOption[] = [];
-      for (const opt of opts) {
-        if (idSet.has(opt.id)) selected.push(opt);
-        else unselected.push(opt);
-      }
-      return [...selected, ...unselected];
-    })
-  );
+const getOptionId = (opt: SearchableOption) => opt.id;
 
 export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   const [internalOpen, setInternalOpen] = createSignal(false);
@@ -162,12 +134,13 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
 
   const activeOptions = useActiveOptions(props.options, props.activeIds);
   const hasMatches = useHasMatches(props.options, searchQuery);
-  const sortedOptions = useSortedOptions(
-    props.options,
-    props.activeIds,
+  const sortedOptions = useSelectedFirst({
+    items: props.options,
+    selectedIds: props.activeIds,
     searchQuery,
-    [isOpen]
-  );
+    getId: getOptionId,
+    resortDeps: [isOpen],
+  });
 
   const handleChange = (selected: SearchableOption[]) => {
     props.onChange(selected.map((o) => o.id));
@@ -265,12 +238,12 @@ export const SearchableMultiSelectInline = (
   // Inline variant is freshly mounted each time the parent submenu opens,
   // so we don't need an explicit "menu opened" trigger — the memo's first
   // run captures the current selection ordering.
-  const sortedOptions = useSortedOptions(
-    props.options,
-    props.activeIds,
+  const sortedOptions = useSelectedFirst({
+    items: props.options,
+    selectedIds: props.activeIds,
     searchQuery,
-    []
-  );
+    getId: getOptionId,
+  });
 
   const handleChange = (selected: SearchableOption[]) => {
     props.onChange(selected.map((o) => o.id));
