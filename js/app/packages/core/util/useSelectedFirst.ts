@@ -21,7 +21,7 @@ type UseSelectedFirstOptions<T> = {
    * an open menu doesn't shuffle items underneath the user. Pass an "is
    * open" accessor to re-sort each time the menu reopens.
    */
-  resortDeps?: Accessor<unknown>[];
+  sortDeps?: Accessor<unknown>[];
 };
 
 /**
@@ -33,7 +33,7 @@ export function useSelectedFirst<T>(
   opts: UseSelectedFirstOptions<T>
 ): Accessor<T[]> {
   return createMemo(
-    on([opts.items, opts.searchQuery, ...(opts.resortDeps ?? [])], () => {
+    on([opts.items, opts.searchQuery, ...(opts.sortDeps ?? [])], () => {
       const items = opts.items();
       if (opts.searchQuery()) return items;
 

@@ -139,7 +139,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
     selectedIds: props.activeIds,
     searchQuery,
     getId: getOptionId,
-    resortDeps: [isOpen],
+    sortDeps: [isOpen],
   });
 
   const handleChange = (selected: SearchableOption[]) => {
