@@ -102,35 +102,6 @@ pub enum AttachmentMetadata {
     },
 }
 
-#[derive(sqlx::FromRow, Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ChatAttachmentWithName {
-    /// Type of the attachment ['document' | 'chat' | 'project' | 'image' | 'channel']
-    pub attachment_type: AttachmentType,
-    /// Id of the attachment [Foreign Key to either document, chat or project]
-    pub attachment_id: String,
-    /// Incremented int id of the attachment (not really used for anything)
-    pub id: String,
-    /// Metadata about the attachment, depending on the type
-    pub metadata: Option<AttachmentMetadata>,
-}
-
-impl ChatAttachmentWithName {
-    pub fn name(&self) -> Option<&str> {
-        self.metadata.as_ref().map(|meta| match meta {
-            AttachmentMetadata::Channel { channel_name, .. } => channel_name.as_str(),
-            AttachmentMetadata::Document { document_name, .. } => document_name.as_str(),
-            AttachmentMetadata::Image { image_name, .. } => image_name.as_str(),
-            AttachmentMetadata::Email { email_subject, .. } => email_subject.as_str(),
-            AttachmentMetadata::Project { project_name: name } => name.as_str(),
-        })
-    }
-
-    pub fn name_infallible(&self) -> &str {
-        self.name().unwrap_or("unknown_attachment_name")
-    }
-}
-
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NewChatAttachment {

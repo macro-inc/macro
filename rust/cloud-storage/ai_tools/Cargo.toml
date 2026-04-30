@@ -27,7 +27,6 @@ comms = { path = "../comms", features = ["outbound"] }
 connection = { path = "../connection", default-features = false, features = [
   "ports",
 ] }
-document_storage_service_client = { path = "../document_storage_service_client" }
 documents = { path = "../documents", features = ["ai_tools"] }
 email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }
@@ -56,13 +55,6 @@ rand.workspace = true
 readonly_pool = { path = "../readonly_pool" }
 rootcause = { workspace = true }
 schemars.workspace = true
-scribe = { path = "../scribe", features = [
-  "channel",
-  "dcs",
-  "document",
-  "email",
-  "static_file",
-] }
 search_service_client = { path = "../search_service_client" }
 serde.workspace = true
 serde_json.workspace = true
@@ -70,7 +62,6 @@ properties = { path = "../properties", features = ["ai_tools"] }
 soup = { path = "../soup", features = ["ai_tools", "outbound"] }
 sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }
 sqlx.workspace = true
-static_file_service_client = { path = "../static_file_service_client" }
 strum.workspace = true
 sync_service_client = { path = "../sync_service_client" }
 tokio.workspace = true

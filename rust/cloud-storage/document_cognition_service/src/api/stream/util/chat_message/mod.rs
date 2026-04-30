@@ -13,7 +13,8 @@ use ai::types::{ChatMessage, ChatMessageContent};
 use anyhow::{Context, Result};
 use chat::domain::models::ResolvedMessageContent;
 use chat::domain::ports::MessageService;
-use model::chat::{NewAttachment, NewChatMessage};
+use model::chat::{AttachmentType, NewAttachment, NewChatMessage};
+use model_entity::EntityType;
 use std::sync::Arc;
 
 /// Stores the incoming user message and resolves its attachments in one step.
@@ -33,10 +34,19 @@ pub async fn store_incoming_message(
         attachments: incoming_message.attachments.as_ref().map(|attachments| {
             attachments
                 .iter()
-                .cloned()
-                .map(|attachment| NewAttachment {
-                    attachment_id: attachment.attachment_id,
-                    attachment_type: attachment.attachment_type,
+                .filter_map(|entity| {
+                    let attachment_type = match entity.entity_type {
+                        EntityType::Document => AttachmentType::Document,
+                        EntityType::StaticFile => AttachmentType::Image,
+                        EntityType::Channel => AttachmentType::Channel,
+                        EntityType::EmailThread => AttachmentType::Email,
+                        EntityType::Project => AttachmentType::Project,
+                        _ => return None,
+                    };
+                    Some(NewAttachment {
+                        attachment_id: entity.entity_id.clone().into_owned(),
+                        attachment_type,
+                    })
                 })
                 .collect()
         }),

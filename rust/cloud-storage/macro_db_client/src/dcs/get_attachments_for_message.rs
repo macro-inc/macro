@@ -13,8 +13,8 @@ pub async fn get_attachments_for_message(
         r#"
             SELECT
                 ca.id,
-                ca."attachmentType" as "attachment_type: AttachmentType",
-                ca."attachmentId" as "attachment_id",
+                ca."entity_type" as "attachment_type: AttachmentType",
+                ca."entity_id"::TEXT as "attachment_id!",
                 ca."chatId" as "chat_id",
                 ca."messageId" as "message_id"
             FROM

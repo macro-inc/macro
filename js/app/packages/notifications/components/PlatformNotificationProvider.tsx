@@ -5,7 +5,6 @@ import {
   createResource,
   createSignal,
   type JSX,
-  type Resource,
   type Setter,
   useContext,
 } from 'solid-js';
@@ -110,7 +109,7 @@ type UiDisabled = 'disabled-in-ui';
 export type UserSetting = 'allowed' | UiDisabled;
 
 export interface PlatformNotificationState {
-  permission: Resource<NotificationPermission | UiDisabled>;
+  permission: Accessor<NotificationPermission | UiDisabled>;
   requestPermission: () => Promise<NotificationPermission>;
   unregisterNotification: () => Promise<void>;
   showNotification: (
@@ -190,7 +189,7 @@ function PlatformNotificationState(props: {
   return (
     <NotificationStateContext.Provider
       value={{
-        permission,
+        permission: () => permission.latest ?? 'default',
         requestPermission,
         unregisterNotification: platformNotif.unregisterNotifications,
         showNotification,

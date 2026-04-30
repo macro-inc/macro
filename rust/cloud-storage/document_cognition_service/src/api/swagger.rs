@@ -32,9 +32,9 @@ use chat::inbound::{
 
 use model::{
     chat::{
-        AttachmentMetadata, AttachmentType, Chat, ChatAttachment, ChatAttachmentWithName,
-        ChatHistory, ChatMessage, ChatMessageWithAttachments, ConversationRecord,
-        MessageWithAttachments, NewAttachment, NewChatMessage, NewMessageAttachment,
+        AttachmentMetadata, AttachmentType, Chat, ChatAttachment, ChatHistory, ChatMessage,
+        ChatMessageWithAttachments, ConversationRecord, MessageWithAttachments, NewAttachment,
+        NewChatMessage, NewMessageAttachment,
     },
     response::{GenericErrorResponse, StringIDResponse},
     version::DocumentCognitionServiceApiVersion,
@@ -97,7 +97,6 @@ use utoipa::OpenApi;
                 Chat,
                 ChatAttachment,
                 AttachmentType,
-                ChatAttachmentWithName,
                 ChatHistory,
                 ConversationRecord,
                 MessageWithAttachments,

@@ -29,24 +29,24 @@ const EditableField = (props: EditableFieldProps) => {
   };
 
   return (
-    <div class={cn('mb-4', props.class)}>
+    <div class={cn(props.class)}>
       {props.label && <div class="text-sm text-ink mb-1">{props.label}</div>}
 
       <Show
         when={isEditing()}
         fallback={
           <div class="group flex items-center">
-            <span class="text-ink-placeholder text-xs leading-5">
-              {props.value || props.placeholder || 'Click to edit'}
-            </span>
             <button
               type="button"
-              class="ml-2 text-xs text-accent-ink/80 hover:text-accent-ink hover-transition-text opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+              class="mr-2 text-xs text-accent-ink/80 hover:text-accent-ink hover-transition-text opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
               onClick={() => setIsEditing(true)}
               aria-label={`Edit ${props.label || 'field'}`}
             >
               <PencilSimpleLine class="w-4 h-4" />
             </button>
+            <span class="text-ink-placeholder text-xs leading-5">
+              {props.value || props.placeholder || 'Click to edit'}
+            </span>
           </div>
         }
       >

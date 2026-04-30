@@ -15,7 +15,6 @@ axum = { workspace = true, features = ["tower-log"] }
 call = { path = "../call", default-features = false, features = ["ports"] }
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }
 comms = { path = "../comms", features = ["outbound"] }
-document_storage_service_client = { path = "../document_storage_service_client" }
 documents = { path = "../documents", features = ["ai_tools"] }
 email = { path = "../email", features = ["outbound"] }
 email_service_client = { path = "../email_service_client" }
@@ -41,13 +40,6 @@ properties = { path = "../properties", features = ["ai_tools"] }
 readonly_pool = { path = "../readonly_pool" }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 rmcp = { version = "1.2.0", features = ["transport-streamable-http-server"] }
-scribe = { path = "../scribe", features = [
-  "channel",
-  "dcs",
-  "document",
-  "email",
-  "static_file",
-] }
 search_service_client = { path = "../search_service_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde_json = { workspace = true }
@@ -60,7 +52,6 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "gmail",
   "search",
 ] }
-static_file_service_client = { path = "../static_file_service_client" }
 sync_service_client = { path = "../sync_service_client" }
 tokio = { workspace = true }
 tracing = { workspace = true }

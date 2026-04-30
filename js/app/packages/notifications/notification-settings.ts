@@ -1,4 +1,4 @@
-import type { Accessor, Resource } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import { createSignal } from 'solid-js';
 import {
   type PlatformNotificationState,
@@ -23,13 +23,13 @@ function createPersistedDismissed(
 }
 
 function createIsEnabled(
-  permission: Resource<NotificationPermission | UiDisabled>
+  permission: Accessor<NotificationPermission | UiDisabled>
 ): Accessor<boolean> {
-  return () => permission.latest === 'granted';
+  return () => permission() === 'granted';
 }
 
 function createCanPrompt(
-  permission: Resource<NotificationPermission | UiDisabled>
+  permission: Accessor<NotificationPermission | UiDisabled>
 ): Accessor<boolean> {
   return () => {
     const p = permission();

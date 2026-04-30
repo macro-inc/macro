@@ -30,7 +30,6 @@ utoipa = { workspace = true }
 # For building ToolServiceContext
 call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 comms = { path = "../comms" }
-document_storage_service_client = { path = "../document_storage_service_client" }
 documents = { path = "../documents" }
 email = { path = "../email" }
 email_service_client = { path = "../email_service_client" }
@@ -41,14 +40,12 @@ lexical_client = { path = "../lexical_client" }
 macro_aws_config = { path = "../macro_aws_config" }
 properties = { path = "../properties" }
 readonly_pool = { path = "../readonly_pool" }
-scribe = { path = "../scribe" }
 search_service_client = { path = "../search_service_client" }
 soup = { path = "../soup", features = ["all"] }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "email",
   "gmail",
 ] }
-static_file_service_client = { path = "../static_file_service_client" }
 sync_service_client = { path = "../sync_service_client" }
 
 

@@ -21,10 +21,6 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
-use scribe::{
-    ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
-    email::EmailClient, static_file::StaticFileClient,
-};
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
@@ -53,9 +49,6 @@ mod test;
 #[cfg(test)]
 pub use test::*;
 
-pub type DcsScribe =
-    ScribeClient<DocumentClient, ChannelClient, DcsClient, EmailClient, StaticFileClient>;
-
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
 pub type DcsMemoryService =
@@ -68,7 +61,6 @@ pub struct ApiContext {
     pub document_storage_client: Arc<DocumentStorageServiceClient>,
     pub comms_service_client: Arc<comms_service_client::CommsServiceClient>,
     pub search_service_client: Arc<SearchServiceClient>,
-    pub scribe: Arc<DcsScribe>,
     pub email_service_client_external: Arc<email_service_client::EmailServiceClientExternal>,
     pub jwt_args: JwtValidationArgs,
     pub config: Arc<Config>,

@@ -18,17 +18,10 @@ use email::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use properties::inbound::toolset::PropertiesToolContext;
-use scribe::{
-    ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
-    email::EmailClient, static_file::StaticFileClient,
-};
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
 
 pub use ai_toolset::RequestContext;
-
-pub type ToolScribe =
-    ScribeClient<DocumentClient, ChannelClient, DcsClient, EmailClient, StaticFileClient>;
 
 /// Type alias for the frecency service implementation
 pub type ToolFrecencyService = frecency::domain::services::FrecencyQueryServiceImpl<
@@ -299,7 +292,6 @@ pub fn no_op_schedule_context() -> NoOpScheduleContext {
 pub struct ToolServiceContext {
     pub search_service_client: Arc<search_service_client::SearchServiceClient>,
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
-    pub scribe: Arc<ToolScribe>,
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
     pub document_tool_context: ToolDocumentToolContext,

@@ -1,10 +1,8 @@
 use ai::types::Model;
-use model::chat::{ChatAttachmentWithName, ChatMessageWithAttachments};
+use model::chat::ChatMessageWithAttachments;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-
-use super::WebCitation;
 
 /// Arguments for creating a new chat.
 #[derive(Debug)]
@@ -66,15 +64,4 @@ pub struct ChatResponse {
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the chat was last updated.
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// Attachment context — attachments not attached to messages.
-    #[deprecated(note = "Attachments are now stateless and no longer float until message send")]
-    pub attachments: Vec<ChatAttachmentWithName>,
-    /// Current number of tokens in the chat.
-    pub token_count: Option<i64>,
-    /// Available models for the chat.
-    pub available_models: Vec<Model>,
-    /// Message ID to web citation list.
-    pub web_citations: Vec<(String, Vec<WebCitation>)>,
-    /// Whether the chat is persistent or not.
-    pub is_persistent: bool,
 }

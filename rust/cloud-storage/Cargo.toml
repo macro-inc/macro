@@ -116,7 +116,6 @@ members = [
   "rpc/axum_rpc_parse",
   "s3_client",
   "s3_key",
-  "scribe",
   "scheduled_action",
   "search_processing_service",
   "search_service",

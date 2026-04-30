@@ -28,9 +28,8 @@ use macro_auth::headers::AccessTokenExtractor;
 use macro_db_client::dcs::create_chat;
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::domain::MemoryService;
-use model::chat::ChatAttachmentWithName;
 use model::user::UserContext;
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
@@ -80,7 +79,7 @@ pub struct HttpSendChatMessageRequest {
     pub additional_instructions: Option<String>,
     /// Attachments for the message
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attachments: Option<Vec<ChatAttachmentWithName>>,
+    pub attachments: Option<Vec<Entity<'static>>>,
     /// Which toolset to use. Defaults to `all`
     #[serde(default)]
     pub toolset: ToolSet,
@@ -135,7 +134,7 @@ impl IntoResponse for ChatMessageError {
         (status = 403, description = "Forbidden"),
     )
 )]
-#[tracing::instrument(skip(state, model_access, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.attachment_id.as_str()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
+#[tracing::instrument(skip(state, model_access, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.entity_id.as_ref()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
 pub async fn send_chat_message(
     State(state): State<ApiContext>,
     model_access: ChatModelAccess,
@@ -439,7 +438,7 @@ fn stream_and_save_message(
     now: std::time::Instant,
     user_message_content: String,
     user_message_id: String,
-    user_message_attachments: Vec<ChatAttachmentWithName>,
+    user_message_attachments: Vec<Entity<'static>>,
     durable_stream_id: StreamId,
     cancellation_sub: CancellationSubscription,
 ) {
