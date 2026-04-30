@@ -2,13 +2,13 @@ import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { isErr, ok } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { AllModels } from '@service-cognition/generated/schemas';
-import type { ChatAttachmentWithName } from '@service-cognition/generated/schemas/chatAttachmentWithName';
+import type { Entity } from '@service-cognition/generated/schemas/entity';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import BlockChat from './component/Block';
 
 export const DEFAULT_CHAT_NAME = 'New Chat';
 
-export type AttachmentWithoutId = Omit<ChatAttachmentWithName, 'id'>;
+export type AttachmentWithoutId = Entity;
 
 export const definition = defineBlock({
   name: 'chat',
@@ -35,7 +35,6 @@ export const definition = defineBlock({
       return ok({
         ...chat,
         allModels: AllModels, // TODO maybe limit people with something more swag based on acoun
-        isPersistent: chat.chat.isPersistent,
         documentMetadata: {
           documentId: chat.chat.id,
           documentName: chat.chat.name,

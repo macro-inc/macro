@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n          SELECT\n              ca.id,\n              ca.\"chatId\" as \"chat_id\",\n              ca.\"attachmentId\" as \"attachment_id\",\n              ca.\"attachmentType\" as \"attachment_type: AttachmentType\",\n              ca.\"messageId\" as \"message_id\"\n          FROM\n              \"ChatAttachment\" ca\n          WHERE ca.\"chatId\" = $1\n          ORDER BY ca.id ASC\n    ",
+  "query": "\n          SELECT\n              ca.id,\n              ca.\"chatId\" as \"chat_id\",\n              ca.\"entity_id\"::TEXT as \"attachment_id!\",\n              ca.\"entity_type\" as \"attachment_type: AttachmentType\",\n              ca.\"messageId\" as \"message_id\"\n          FROM\n              \"ChatAttachment\" ca\n          WHERE ca.\"chatId\" = $1\n          ORDER BY ca.id ASC\n    ",
   "describe": {
     "columns": [
       {
@@ -15,7 +15,7 @@
       },
       {
         "ordinal": 2,
-        "name": "attachment_id",
+        "name": "attachment_id!",
         "type_info": "Text"
       },
       {
@@ -37,10 +37,10 @@
     "nullable": [
       false,
       true,
-      false,
+      null,
       false,
       true
     ]
   },
-  "hash": "f7d8f36ace58fb884736c3568cfb78ecce5d0bafb3be445dd141b2ca21865578"
+  "hash": "1ed8b097d0371b977eab7215aba09ffc9721b22d7e9d8ea5d80d285dcf65e152"
 }

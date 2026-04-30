@@ -41,7 +41,7 @@ impl DcsClient {
                     attachment_ids: m
                         .attachments
                         .iter()
-                        .map(|a| a.attachment_id.clone())
+                        .map(|a| a.entity_id.clone().into_owned())
                         .collect(),
                 }
             })

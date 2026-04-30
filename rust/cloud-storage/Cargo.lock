@@ -6755,6 +6755,7 @@ dependencies = [
  "document_sub_type",
  "doppleganger",
  "macro_user_id",
+ "model-entity",
  "model-error-response",
  "model_file_type",
  "model_user",

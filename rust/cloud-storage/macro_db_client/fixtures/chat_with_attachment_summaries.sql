@@ -22,31 +22,31 @@ INSERT INTO
   )
 VALUES
   (
-    'document-id-0',
+    'a0000000-0000-0000-0000-000000000000',
     'document-name-0',
     'md',
     'test-userid'
   ),
   (
-    'document-id-1',
+    'a0000000-0000-0000-0000-000000000001',
     'document-name-1',
     'js',
     'test-userid'
   ),
   (
-    'document-id-2',
+    'a0000000-0000-0000-0000-000000000002',
     'document-name-2',
     'rs',
     'test-userid'
   ),
   (
-    'document-id-img',
+    'a0000000-0000-0000-0000-00000000000a',
     'document-name-img',
     'png',
     'test-userid'
   ),
   (
-    'document-id-never',
+    'a0000000-0000-0000-0000-00000000000b',
     'document-name-never',
     'sql',
     'test-userid'
@@ -125,49 +125,49 @@ VALUES
 
 
 -- attachments --
-INSERT INTO 
+INSERT INTO
   public."ChatAttachment"
   (
     "id",
-    "attachmentType",
-    "attachmentId",
+    "entity_type",
+    "entity_id",
     "messageId"
   )
 VALUES
   (
     'c0a0',
-    'image',
-    'document-id-img',
+    'static_file',
+    'a0000000-0000-0000-0000-00000000000a',
     'c0m0'
   ),
   (
     'c0a1',
     'document',
-    'document-id-0',
+    'a0000000-0000-0000-0000-000000000000',
     'c0m0'
   ),
   (
     'c0a2',
     'document',
-    'document-id-0',
+    'a0000000-0000-0000-0000-000000000000',
     'c0m1'
   ),
   (
     'c0a3',
     'document',
-    'document-id-1',
+    'a0000000-0000-0000-0000-000000000001',
     'c0m1'
   ),
   (
     'c0a4',
     'document',
-    'document-id-2',
+    'a0000000-0000-0000-0000-000000000002',
     'c0m1'
   ),
   (
     'c1a0',
     'document',
-    'document-id-0',
+    'a0000000-0000-0000-0000-000000000000',
     'c0m1'
   );
 
@@ -181,19 +181,19 @@ INSERT INTO
 VALUES
   (
     'd0v0-summary',
-    'document-id-0',
+    'a0000000-0000-0000-0000-000000000000',
     'v0',
     '2025-06-10 00:00:00'
   ),
   (
     'd0v1-summary',
-    'document-id-0',
+    'a0000000-0000-0000-0000-000000000000',
     'v1',
     '2025-06-11 00:00:00'
   ),
   (
     'd1v0-summary',
-    'document-id-1',
+    'a0000000-0000-0000-0000-000000000001',
     'v0',
     '2025-06-12 00:00:00'
   );

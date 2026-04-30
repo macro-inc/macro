@@ -33,7 +33,7 @@ pub async fn get_latest_single_attachment_chat(
             INNER JOIN "ChatAttachment" ca ON c.id = ca."chatId"
             INNER JOIN SingleAttachmentChats sac ON c.id = sac."chatId"
             WHERE
-                ca."attachmentId" = $1 AND c."userId" = $2
+                ca."entity_id"::TEXT = $1 AND c."userId" = $2
                 AND
                 c."deletedAt" IS NULL
 
@@ -77,7 +77,7 @@ pub async fn get_multi_attachment_chat(
             INNER JOIN "ChatAttachment" ca ON c.id = ca."chatId"
             INNER JOIN MultiAttachmentChats mac ON c.id = mac."chatId"
             WHERE
-                ca."attachmentId" = $1 AND c."userId" = $2
+                ca."entity_id"::TEXT = $1 AND c."userId" = $2
                     AND
                 c."deletedAt" IS NULL
             ORDER BY c."updatedAt" DESC;
@@ -99,7 +99,7 @@ mod tests {
         let mut transaction = pool.begin().await?;
         let chat = get_latest_single_attachment_chat(
             &mut transaction,
-            "document-two",
+            "d0000002-0000-0000-0000-000000000002",
             "macro|user@user.com",
         )
         .await?;
@@ -111,9 +111,12 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("chat_example")))]
     async fn test_get_multi_attachment_chat(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let mut transaction = pool.begin().await?;
-        let chat =
-            get_multi_attachment_chat(&mut transaction, "document-two", "macro|user@user.com")
-                .await?;
+        let chat = get_multi_attachment_chat(
+            &mut transaction,
+            "d0000002-0000-0000-0000-000000000002",
+            "macro|user@user.com",
+        )
+        .await?;
         assert_eq!(chat.len(), 3);
         Ok(())
     }

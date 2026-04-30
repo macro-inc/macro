@@ -2,22 +2,15 @@
 use ai::types::ChatMessageContent;
 use ai::types::Role;
 use anyhow::{Error, Result};
-use model::chat::{
-    AttachmentMetadata, AttachmentType, Chat, ChatAttachment, ChatAttachmentWithName,
-    ChatMessageWithAttachments,
-};
-use model::document::FileType;
+use model::chat::{AttachmentType, Chat, ChatAttachment, ChatMessageWithAttachments};
+use model_entity::{Entity, EntityType};
 use sqlx::{Executor, Pool, Postgres};
 use std::collections::HashMap;
 
-// TODO: @synoet this is a temp solution FIX
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
+#[derive(serde::Deserialize, Debug)]
 struct RawAttachment {
-    attachment_id: String,
-    attachment_type: String,
-    document_name: Option<String>,
-    document_type: Option<FileType>,
+    entity_type: String,
+    entity_id: String,
 }
 
 #[tracing::instrument(skip(db))]
@@ -74,8 +67,8 @@ where
           SELECT
               ca.id,
               ca."chatId" as "chat_id",
-              ca."attachmentId" as "attachment_id",
-              ca."attachmentType" as "attachment_type: AttachmentType",
+              ca."entity_id"::TEXT as "attachment_id!",
+              ca."entity_type" as "attachment_type: AttachmentType",
               ca."messageId" as "message_id"
           FROM
               "ChatAttachment" ca
@@ -89,47 +82,12 @@ where
     .map_err(Error::from)
 }
 
-pub async fn get_messages<'e, T>(
-    db: T,
-    chat_id: &str,
-    attachments: &[ChatAttachmentWithName],
-) -> Result<Vec<ChatMessageWithAttachments>>
+pub async fn get_messages<'e, T>(db: T, chat_id: &str) -> Result<Vec<ChatMessageWithAttachments>>
 where
     T: Executor<'e, Database = Postgres>,
 {
     let message_result = sqlx::query!(
         r#"
-        WITH attachment_info AS (
-            SELECT
-                ca.id,
-                ca."attachmentType",
-                ca."attachmentId",
-                ca."messageId",
-                CASE
-                    WHEN ca."attachmentType" = 'document' THEN d.name
-                    WHEN ca."attachmentType" = 'chat' THEN c.name
-                    WHEN ca."attachmentType" = 'project' THEN p.name
-                    WHEN ca."attachmentType" = 'image' THEN d.name
-                    ELSE NULL
-                END AS document_name,
-                CASE
-                    WHEN ca."attachmentType" = 'document' THEN d."fileType"
-                    WHEN ca."attachmentType" = 'image' THEN d."fileType"
-                    ELSE NULL
-                END as document_type
-            FROM
-                "ChatAttachment" ca
-            LEFT JOIN
-            "Document" d ON (
-                (ca."attachmentType" = 'document' AND ca."attachmentId" = d.id)
-                OR
-                (ca."attachmentType" = 'image' AND ca."attachmentId" = d.id)
-            )
-            LEFT JOIN
-                "Chat" c ON ca."attachmentType" = 'chat' AND ca."attachmentId" = c.id
-            LEFT JOIN
-                "Project" p ON ca."attachmentType" = 'project' AND ca."attachmentId" = p.id
-        )
         SELECT
             cm.id AS "id!",
             cm.content,
@@ -139,15 +97,12 @@ where
                 (
                     SELECT json_agg(
                         json_build_object(
-                            'id', attachment_info."attachmentId",
-                            'attachmentType', attachment_info."attachmentType",
-                            'attachmentId', attachment_info."attachmentId",
-                            'documentName', attachment_info.document_name,
-                            'documentType', attachment_info.document_type
+                            'entity_type', ca."entity_type",
+                            'entity_id', ca."entity_id"::TEXT
                         )
                     )
-                    FROM attachment_info
-                    WHERE attachment_info."messageId" = cm.id
+                    FROM "ChatAttachment" ca
+                    WHERE ca."messageId" = cm.id
                 ),
                 '[]'::json
             ) AS attachments
@@ -162,82 +117,38 @@ where
     )
     .fetch_all(db)
     .await?;
-    // FIXME: @synoet this is messy
+
     let messages: Vec<ChatMessageWithAttachments> = message_result
         .into_iter()
         .map(|record| {
-            let attachments = match record.attachments {
-                Some(raw_attachments) => {
-                    let attachments = serde_json::from_value(raw_attachments)
-                        .unwrap_or_else(|e| {
-                            tracing::error!(error=?e, "Error parsing attachments");
-                            Vec::new()
-                        })
-                        .into_iter()
-                        .filter_map(|raw: RawAttachment| match raw.attachment_type.as_str() {
-                            "document" => Some(ChatAttachmentWithName {
-                                id: raw.attachment_id.clone(),
-                                attachment_id: raw.attachment_id,
-                                attachment_type: AttachmentType::Document,
-                                metadata: raw.document_name.zip(raw.document_type).map(
-                                    |(name, type_)| AttachmentMetadata::Document {
-                                        document_type: type_,
-                                        document_name: name,
-                                    },
-                                ),
-                            }),
-                            "image" => Some(ChatAttachmentWithName {
-                                id: raw.attachment_id.clone(),
-                                attachment_id: raw.attachment_id,
-                                attachment_type: AttachmentType::Image,
-                                metadata: raw.document_name.zip(raw.document_type).map(
-                                    |(name, type_)| AttachmentMetadata::Image {
-                                        image_extension: type_,
-                                        image_name: name,
-                                    },
-                                ),
-                            }),
-                            "channel" => {
-                                // Reuse metadata from earlier attachments vector
-                                let metadata = attachments
-                                    .iter()
-                                    .find(|a| {
-                                        a.attachment_id == raw.attachment_id
-                                            && a.attachment_type == AttachmentType::Channel
-                                    })
-                                    .and_then(|a| a.metadata.clone());
-                                Some(ChatAttachmentWithName {
-                                    id: raw.attachment_id.clone(),
-                                    attachment_id: raw.attachment_id,
-                                    attachment_type: AttachmentType::Channel,
-                                    metadata,
-                                })
-                            }
-                            _ => None,
-                        })
-                        .collect();
+            let attachments: Vec<Entity<'static>> = record
+                .attachments
+                .and_then(|raw_json| {
+                    serde_json::from_value::<Vec<RawAttachment>>(raw_json)
+                        .inspect_err(|e| tracing::error!(error=?e, "Error parsing attachments"))
+                        .ok()
+                })
+                .map(|raws| raws.into_iter().filter_map(parse_raw_attachment).collect())
+                .unwrap_or_default();
 
-                    Some(attachments)
-                }
-                None => None,
-            };
-
-            tracing::debug!("get chat\n{:?}", record.content.as_str());
             let content =
                 serde_json::from_value::<ChatMessageContent>(record.content).expect("content");
             let role = Role::try_from(record.role.as_str()).unwrap_or(Role::User);
-            // serde_json::from_str::<Role>(&record.role).expect("role");
 
             ChatMessageWithAttachments {
                 id: record.id,
                 content,
                 role,
-                attachments: attachments.unwrap_or_default(),
-                model: record.model,
+                attachments,
             }
         })
         .collect();
     Ok(messages)
+}
+
+fn parse_raw_attachment(raw: RawAttachment) -> Option<Entity<'static>> {
+    let entity_type: EntityType = raw.entity_type.parse().ok()?;
+    Some(entity_type.with_entity_string(raw.entity_id))
 }
 
 // and still we cope

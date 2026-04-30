@@ -1,7 +1,18 @@
 use ai::types::Role;
 use anyhow::Context;
-use model::chat::NewChatMessage;
+use model::chat::{AttachmentType, NewChatMessage};
+use model_entity::EntityType;
 use sqlx::PgPool;
+
+fn attachment_type_to_entity_type(at: &AttachmentType) -> EntityType {
+    match at {
+        AttachmentType::Document => EntityType::Document,
+        AttachmentType::Image => EntityType::StaticFile,
+        AttachmentType::Channel => EntityType::Channel,
+        AttachmentType::Email => EntityType::EmailThread,
+        AttachmentType::Project => EntityType::Project,
+    }
+}
 
 #[tracing::instrument(skip(db), err)]
 pub async fn create_chat_message(
@@ -35,25 +46,33 @@ pub async fn create_chat_message(
             .context("failed to create chat message")
             .map(|record| record.id)?;
 
-        let (kinds, ids, chat_ids, message_ids) = message
+        let (kinds, ids, chat_ids, message_ids): (
+            Vec<String>,
+            Vec<uuid::Uuid>,
+            Vec<String>,
+            Vec<String>,
+        ) = message
             .attachments
             .clone()
             .unwrap_or_default()
             .into_iter()
-            .map(|attachment| {
-                (
-                    attachment.attachment_type.to_string(),
-                    attachment.attachment_id.to_string(),
+            .filter_map(|attachment| {
+                let entity_type =
+                    attachment_type_to_entity_type(&attachment.attachment_type).to_string();
+                let entity_id = uuid::Uuid::parse_str(&attachment.attachment_id).ok()?;
+                Some((
+                    entity_type,
+                    entity_id,
                     chat_id.to_string(),
                     message_id.to_string(),
-                )
+                ))
             })
             .collect::<(Vec<_>, Vec<_>, Vec<_>, Vec<_>)>();
         // insert attachments for message
         sqlx::query!(
             r#"
-            INSERT INTO "ChatAttachment" ("attachmentType", "attachmentId", "chatId", "messageId")
-            SELECT * FROM UNNEST($1::TEXT[], $2::TEXT[], $3::TEXT[], $4::TEXT[])
+            INSERT INTO "ChatAttachment" ("entity_type", "entity_id", "chatId", "messageId")
+            SELECT * FROM UNNEST($1::TEXT[], $2::UUID[], $3::TEXT[], $4::TEXT[])
         "#,
             &kinds,
             &ids,

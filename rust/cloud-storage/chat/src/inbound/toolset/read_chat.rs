@@ -99,7 +99,7 @@ where
                     attachment_ids: msg
                         .attachments
                         .into_iter()
-                        .map(|a| a.attachment_id)
+                        .map(|a| a.entity_id.into_owned())
                         .collect(),
                 })
             })

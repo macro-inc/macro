@@ -50,11 +50,6 @@ impl ChatService for MockService {
                 model: None,
                 created_at: None,
                 updated_at: None,
-                attachments: Vec::new(),
-                token_count: None,
-                available_models: Vec::new(),
-                web_citations: Vec::new(),
-                is_persistent: false,
             },
             user_access_level: AccessLevel::Owner,
         })

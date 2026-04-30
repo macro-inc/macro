@@ -32,3 +32,4 @@ thiserror.workspace = true
 tracing = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 uuid = { workspace = true }
+model-entity = { path = "../model-entity"}

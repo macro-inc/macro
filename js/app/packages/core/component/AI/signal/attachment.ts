@@ -16,7 +16,7 @@ export function useAttachments(initial?: Attachment[]): Attachments {
     // dedup
     if (
       attachments().some(
-        (attached) => attached.attachmentId === newAttachment.attachmentId
+        (attached) => attached.entity_id === newAttachment.entity_id
       )
     )
       return;
@@ -25,7 +25,7 @@ export function useAttachments(initial?: Attachment[]): Attachments {
 
   const removeAttachment = (id: string) => {
     const attached = attachments();
-    const newAttachments = attached.filter((a) => a.attachmentId !== id);
+    const newAttachments = attached.filter((a) => a.entity_id !== id);
     setAttachments(newAttachments);
   };
 
@@ -61,14 +61,8 @@ export const useGetChatAttachmentInfo = () => {
     }
 
     return {
-      id: `${item.id}-document-attachment`,
-      attachmentId: item.id,
-      attachmentType: 'document',
-      metadata: {
-        type: 'document',
-        document_type: fileType,
-        document_name: item.name,
-      },
+      entity_id: item.id,
+      entity_type: 'document',
     };
   };
 
@@ -76,13 +70,8 @@ export const useGetChatAttachmentInfo = () => {
     const item = history().find((item) => item.id === id);
     if (!item || item.type !== 'project') return;
     return {
-      attachmentType: 'project',
-      attachmentId: item.id,
-      id: item.id,
-      metadata: {
-        type: 'project',
-        project_name: item.name,
-      },
+      entity_id: item.id,
+      entity_type: 'project',
     };
   };
 
@@ -95,26 +84,15 @@ export const useGetChatAttachmentInfo = () => {
     if (!item) return;
 
     return {
-      id: `${item.id}-channel-attachment`,
-      attachmentId: item.id,
-      attachmentType: 'channel',
-      metadata: {
-        type: 'channel',
-        channel_type: item.channel_type,
-        channel_name: item.name ?? 'Channel',
-      },
+      entity_id: item.id,
+      entity_type: 'channel',
     };
   };
 
   const getEmailAttachment = (mention: ItemMention): Attachment | undefined => {
     return {
-      id: `${mention.itemId}-email-attachment`,
-      attachmentId: mention.itemId,
-      attachmentType: 'email',
-      metadata: {
-        type: 'email',
-        email_subject: mention.documentName ?? 'No Subject',
-      },
+      entity_id: mention.itemId,
+      entity_type: 'email_thread',
     };
   };
 
