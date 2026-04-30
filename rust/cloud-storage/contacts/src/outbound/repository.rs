@@ -48,6 +48,7 @@ impl ContactsRepository for DbContactsRepository {
     ) -> Result<(), Report> {
         let (users1, users2): (Vec<_>, Vec<_>) = connections
             .into_iter()
+            .filter(|(a, b)| a.as_ref() != b.as_ref())
             .map(|(a, b)| {
                 if a.as_ref() <= b.as_ref() {
                     (a, b)

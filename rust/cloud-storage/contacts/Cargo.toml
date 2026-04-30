@@ -15,12 +15,16 @@ axum = [
   "dep:redis",
   "dep:utoipa",
 ]
+default = ["axum", "inbound", "outbound", "ports"]
+inbound = ["axum", "dep:aws-sdk-sqs", "dep:sqs_worker", "ports"]
+outbound = ["dep:aws-sdk-sqs", "dep:reqwest", "dep:sqlx", "ports"]
+ports = []
 
 [dependencies]
-aws-sdk-sqs = { workspace = true }
+aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, optional = true }
 macro_auth = { path = "../macro_auth", optional = true }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
@@ -32,8 +36,8 @@ rate_limit = { path = "../rate_limit", features = ["axum"], optional = true }
 redis = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sqlx = { workspace = true }
-sqs_worker = { path = "../sqs_worker" }
+sqlx = { workspace = true, optional = true }
+sqs_worker = { path = "../sqs_worker", optional = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
