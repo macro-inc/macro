@@ -31,9 +31,22 @@ Rules:
 - Write in plain prose, using short paragraphs or bullet points where \
   appropriate. No markdown headings.
 - Do not speculate or invent content that is not in the transcript.
-- If the transcript is empty or uninformative, say so briefly rather than \
-  fabricating content.
+- Write directly about what was discussed in the call. Do NOT begin with a \
+  meta-reference to the transcript or recording itself such as `This \
+  transcript...`, `The transcript...`, `The call...`, `In this call...`, \
+  `The recording...`, or similar — start with the actual content (a topic, \
+  a decision, a participant).
+- If the transcript is empty, contains only fragmented or incoherent speech, \
+  or otherwise has no useful information to summarize, respond with exactly \
+  the single token `NULL` and nothing else. Do not produce a summary that \
+  merely states the transcript is uninformative — return `NULL` instead.
 - Respond with only the summary text — no preamble, no sign-off.";
+
+/// Sentinel the model is asked to emit when the transcript has no useful
+/// content to summarize. Mapped to `None` so the caller skips persisting a
+/// summary at all (rather than writing a placeholder \"transcript is
+/// uninformative\" line).
+const NULL_SUMMARY_SENTINEL: &str = "NULL";
 
 /// System prompt for naming a call from its summary. Kept tight so the model
 /// returns a bare title instead of a sentence.
@@ -102,7 +115,7 @@ impl CallSummarizer for AiCallSummarizer {
         &self,
         call_id: &Uuid,
         transcript: Vec<CallRecordTranscriptSegment>,
-    ) -> Result<String, Self::Err> {
+    ) -> Result<Option<String>, Self::Err> {
         let user_message = format_transcript_prompt(call_id, &transcript);
 
         let request = RequestBuilder::new()
@@ -111,12 +124,14 @@ impl CallSummarizer for AiCallSummarizer {
             .user_message(user_message)
             .build();
 
-        get_chat_completion(request)
+        let raw = get_chat_completion(request)
             .await
             .map_err(|e| anyhow::anyhow!(e))
             .inspect_err(|e| {
                 tracing::error!(error = ?e, %call_id, "ai call summarization failed");
-            })
+            })?;
+
+        Ok(parse_summary(&raw))
     }
 
     #[tracing::instrument(skip(self, summary), fields(summary_len = summary.len()), err)]
@@ -162,6 +177,25 @@ impl CallSummarizer for AiCallSummarizer {
 #[cfg(test)]
 mod test;
 
+/// Map a raw summary completion to `Some(text)` or `None`.
+///
+/// Trims whitespace and surrounding quotes/backticks. Returns `None` when
+/// the model emitted [`NULL_SUMMARY_SENTINEL`] (case-insensitive, with or
+/// without surrounding quotes/whitespace) or when sanitization left
+/// nothing usable. The caller treats `None` as "do not persist a summary".
+fn parse_summary(raw: &str) -> Option<String> {
+    let trimmed = raw
+        .trim()
+        .trim_matches(|c: char| c == '"' || c == '\'' || c == '`')
+        .trim();
+
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case(NULL_SUMMARY_SENTINEL) {
+        return None;
+    }
+
+    Some(trimmed.to_string())
+}
+
 /// Trim quotes/whitespace, normalize internal whitespace, and clamp to
 /// [`CALL_NAME_MAX_CHARS`] at a word boundary. Returns `None` when the model
 /// emitted [`UNTITLED_CALL_SENTINEL`] or sanitization left nothing usable, so
@@ -199,8 +233,8 @@ fn sanitize_call_name(raw: &str) -> Option<String> {
 fn format_transcript_prompt(call_id: &Uuid, transcript: &[CallRecordTranscriptSegment]) -> String {
     if transcript.is_empty() {
         return format!(
-            "Call {call_id} has no transcript segments. Produce a one-line \
-             summary noting that the call has no transcribed content."
+            "Call {call_id} has no transcript segments. Per the system prompt, \
+             respond with exactly the single token NULL."
         );
     }
 

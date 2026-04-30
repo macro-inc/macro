@@ -310,11 +310,17 @@ pub trait CallSummarizer: Send + Sync + 'static {
     /// supplied finalized `transcript` segments. The segments are expected
     /// to be ordered by `sequence_num` ascending (matching what is stored
     /// in a [`CallRecord`]).
+    ///
+    /// Returns `Ok(None)` when the transcript has no substantive content to
+    /// summarize (empty, silence, fragmented/incoherent speech). Callers
+    /// must treat `None` as "do not persist a summary" — writing a
+    /// placeholder "transcript is uninformative" line is exactly the
+    /// behavior this is meant to avoid.
     fn summarize_call(
         &self,
         call_id: &Uuid,
         transcript: Vec<CallRecordTranscriptSegment>,
-    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 
     /// Produce a short display name for the call from its already-generated
     /// summary. Used by the auto-name flow only when the call has no

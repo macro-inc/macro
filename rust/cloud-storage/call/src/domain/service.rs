@@ -1005,11 +1005,18 @@ impl<
             return Ok(());
         }
 
-        let summary = summarizer
+        let Some(summary) = summarizer
             .summarize_call(call_id, record.transcript)
             .await
             .inspect_err(|e| tracing::error!(error=?e, %call_id, "call summarizer failed"))
-            .map_err(|e| CallError::Internal(e.into()))?;
+            .map_err(|e| CallError::Internal(e.into()))?
+        else {
+            tracing::info!(
+                %call_id,
+                "summarizer returned no summary (uninformative transcript); skipping persistence"
+            );
+            return Ok(());
+        };
 
         self.repo
             .insert_call_summary(call_id, &summary)
@@ -1091,7 +1098,14 @@ impl<
             }
 
             let summary = match summarizer.summarize_call(&call_id, record.transcript).await {
-                Ok(summary) => summary,
+                Ok(Some(summary)) => summary,
+                Ok(None) => {
+                    tracing::info!(
+                        %call_id,
+                        "summarizer returned no summary (uninformative transcript); skipping persistence"
+                    );
+                    return;
+                }
                 Err(e) => {
                     tracing::error!(error=?e, %call_id, "failed to summarize call on completion");
                     return;
@@ -1161,7 +1175,7 @@ impl CallSummarizer for NoopCallSummarizer {
         &self,
         _call_id: &Uuid,
         _transcript: Vec<CallRecordTranscriptSegment>,
-    ) -> Result<String, Self::Err> {
+    ) -> Result<Option<String>, Self::Err> {
         // Type-placeholder only — [`CallServiceImpl`] must never invoke this
         // when `summarizer` is `None`, and [`NoopCallSummarizer`] is never a
         // `Some(_)` value in practice.
