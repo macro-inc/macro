@@ -18,12 +18,9 @@ use models_permissions::share_permission::SharePermissionV2;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::domain::models::{ChatErr, CreateChatArgs, GetChatResponse, PatchChatArgs};
+use crate::domain::models::{CreateChatArgs, GetChatResponse, PatchChatArgs, Result};
 use crate::domain::ports::ChatService;
 use crate::inbound::http::extractors::ChatModelAccess;
-
-/// Type alias for handler results using [`ChatErr`] as the error type.
-type ChatResult<T> = Result<T, ChatErr>;
 
 /// Shared state for the chat router, wrapping a [`ChatService`] implementation
 /// and an [`EntityAccessService`] for authorization.
@@ -141,7 +138,7 @@ pub async fn create_chat_handler<S: ChatService, Svc: EntityAccessService>(
     // 402 on no perms
     _model_access: ChatModelAccess,
     Json(req): Json<CreateChatRequest>,
-) -> ChatResult<Json<StringIDResponse>> {
+) -> Result<Json<StringIDResponse>> {
     let id = state
         .inner
         .create(
@@ -175,7 +172,7 @@ pub async fn get_chat_handler<S: ChatService, Svc: EntityAccessService>(
     access: ChatAccessLevelExtractor<ViewAccessLevel, Svc>,
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
-) -> ChatResult<Json<GetChatResponse>> {
+) -> Result<Json<GetChatResponse>> {
     let response = state.inner.get_chat(access.entity_access_receipt).await?;
 
     Ok(Json(response))
@@ -199,7 +196,7 @@ pub async fn delete_chat_handler<S: ChatService, Svc: EntityAccessService>(
     access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
-) -> ChatResult<StatusCode> {
+) -> Result<StatusCode> {
     state.inner.delete(access.entity_access_receipt).await?;
     Ok(StatusCode::OK)
 }
@@ -222,7 +219,7 @@ pub async fn permanently_delete_chat_handler<S: ChatService, Svc: EntityAccessSe
     access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
-) -> ChatResult<StatusCode> {
+) -> Result<StatusCode> {
     state
         .inner
         .permanently_delete(access.entity_access_receipt)
@@ -262,7 +259,7 @@ pub async fn patch_chat_handler<S: ChatService, Svc: EntityAccessService>(
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
     Json(req): Json<PatchChatRequest>,
-) -> ChatResult<StatusCode> {
+) -> Result<StatusCode> {
     state
         .inner
         .patch(
@@ -297,7 +294,7 @@ pub async fn copy_chat_handler<S: ChatService, Svc: EntityAccessService>(
     access: ChatAccessLevelExtractor<ViewAccessLevel, Svc>,
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
-) -> ChatResult<Json<StringIDResponse>> {
+) -> Result<Json<StringIDResponse>> {
     let id = state.inner.copy_chat(access.entity_access_receipt).await?;
     Ok(Json(StringIDResponse { id }))
 }
@@ -320,7 +317,7 @@ pub async fn revert_delete_handler<S: ChatService, Svc: EntityAccessService>(
     access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
-) -> ChatResult<StatusCode> {
+) -> Result<StatusCode> {
     state
         .inner
         .revert_delete(access.entity_access_receipt)
@@ -354,7 +351,7 @@ pub async fn get_chat_permissions_handler<S: ChatService, Svc: EntityAccessServi
     access: ChatAccessLevelExtractor<EditAccessLevel, Svc>,
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
-) -> ChatResult<Json<GetChatPermissionsResponse>> {
+) -> Result<Json<GetChatPermissionsResponse>> {
     let permissions = state
         .inner
         .get_permissions(access.entity_access_receipt)
@@ -442,7 +439,7 @@ pub async fn update_tool_call_handler<S: ChatService, Svc: EntityAccessService>(
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
     Json(req): Json<UpdateToolCallRequest>,
-) -> ChatResult<StatusCode> {
+) -> Result<StatusCode> {
     state
         .inner
         .update_tool_call(
@@ -479,7 +476,7 @@ pub async fn update_tool_response_handler<S: ChatService, Svc: EntityAccessServi
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
     Json(req): Json<UpdateToolResponseRequest>,
-) -> ChatResult<StatusCode> {
+) -> Result<StatusCode> {
     state
         .inner
         .update_tool_response(
@@ -517,7 +514,7 @@ pub async fn call_tool_handler<S: ChatService, Svc: EntityAccessService>(
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
     Json(req): Json<CallToolRequest>,
-) -> ChatResult<Json<CallToolResponse>> {
+) -> Result<Json<CallToolResponse>> {
     let result = state
         .inner
         .call_tool(
@@ -554,7 +551,7 @@ pub async fn reject_tool_call_handler<S: ChatService, Svc: EntityAccessService>(
     State(state): State<ChatRouterState<S, Svc>>,
     Path(chat_id): Path<String>,
     Json(req): Json<RejectToolCallRequest>,
-) -> ChatResult<StatusCode> {
+) -> Result<StatusCode> {
     state
         .inner
         .reject_tool_call(

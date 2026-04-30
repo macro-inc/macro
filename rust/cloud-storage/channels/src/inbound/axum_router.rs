@@ -2,8 +2,9 @@
 mod test;
 
 use crate::domain::models::{
-    ChannelAttachment, ChannelAttachmentType, ChannelMessage, ChannelParticipant, CountedReaction,
-    MessageAttachment, MessagePageDirection, ParticipantRole, ThreadInfo, ThreadReply,
+    ChannelAttachment, ChannelAttachmentType, ChannelMessage, ChannelMessageKind,
+    ChannelParticipant, CountedReaction, MessageAttachment, MessagePageDirection, ParticipantRole,
+    ResolvedChannelMessage, ThreadInfo, ThreadReply,
 };
 pub use crate::domain::models::{ChannelMessageFilters, NotificationFilters};
 use crate::domain::ports::{
@@ -169,6 +170,10 @@ where
         .route(
             "/{channel_id}/messages/{message_id}/replies",
             get(get_thread_replies_handler::<S, Svc>),
+        )
+        .route(
+            "/{channel_id}/messages/{message_id}/resolve",
+            get(resolve_channel_message_handler::<S, Svc>),
         )
         .route(
             "/{channel_id}/attachments",
@@ -394,6 +399,49 @@ pub async fn get_thread_replies_handler<S: ChannelMessagesService, Svc: EntityAc
     ))
 }
 
+/// Handler for `GET /channels/{channel_id}/messages/{message_id}/resolve`.
+#[utoipa::path(
+    get,
+    operation_id = "resolve_channel_message",
+    path = "/channels/{channel_id}/messages/{message_id}/resolve",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("message_id" = Uuid, Path, description = "Message ID to resolve")
+    ),
+    responses(
+        (status = 200, body = ApiResolvedChannelMessage),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(
+    err,
+    skip_all,
+    fields(channel_id = tracing::field::Empty, message_id = tracing::field::Empty)
+)]
+pub async fn resolve_channel_message_handler<
+    S: ChannelMessagesService,
+    Svc: EntityAccessService,
+>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    _access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
+    Path(path): Path<ThreadRepliesPath>,
+) -> Result<Json<ApiResolvedChannelMessage>, ChannelsHandlerErr> {
+    let channel_id = path.channel_id;
+    let message_id = path.message_id;
+    let span = tracing::Span::current();
+    span.record("channel_id", tracing::field::display(channel_id));
+    span.record("message_id", tracing::field::display(message_id));
+
+    let resolved = state
+        .service
+        .resolve_message(channel_id, message_id)
+        .await?;
+
+    Ok(Json(ApiResolvedChannelMessage::from(resolved)))
+}
+
 /// Handler for `GET /channels/{channel_id}/attachments`.
 #[utoipa::path(
     get,
@@ -612,6 +660,52 @@ impl From<ThreadReply> for ApiThreadReply {
                 .into_iter()
                 .map(ApiMessageAttachment::from)
                 .collect(),
+        }
+    }
+}
+
+/// Position of a message in the channel/thread model.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum ApiChannelMessageKind {
+    /// A top-level channel message.
+    TopLevelMessage,
+    /// A reply inside a message thread.
+    ThreadReply,
+}
+
+impl From<ChannelMessageKind> for ApiChannelMessageKind {
+    fn from(kind: ChannelMessageKind) -> Self {
+        match kind {
+            ChannelMessageKind::TopLevelMessage => Self::TopLevelMessage,
+            ChannelMessageKind::ThreadReply => Self::ThreadReply,
+        }
+    }
+}
+
+/// Resolution metadata for any channel message id.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ApiResolvedChannelMessage {
+    /// The requested message id.
+    message_id: Uuid,
+    /// Channel this message belongs to.
+    channel_id: Uuid,
+    /// Whether the message is top-level or a thread reply.
+    kind: ApiChannelMessageKind,
+    /// The top-level parent/thread id. Equals message_id for top-level messages.
+    thread_id: Uuid,
+    /// When the requested message was created.
+    created_at: DateTime<Utc>,
+}
+
+impl From<ResolvedChannelMessage> for ApiResolvedChannelMessage {
+    fn from(message: ResolvedChannelMessage) -> Self {
+        Self {
+            message_id: message.message_id,
+            channel_id: message.channel_id,
+            kind: ApiChannelMessageKind::from(message.kind),
+            thread_id: message.thread_id,
+            created_at: message.created_at,
         }
     }
 }

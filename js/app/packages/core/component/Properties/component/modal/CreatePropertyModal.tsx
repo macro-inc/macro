@@ -92,7 +92,7 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
               }}
               onKeyDown={(e) => handleKeyDown(e, option().id, option().value)}
               placeholder={props.placeholder}
-              class="flex-1 p-1.5 border border-edge-muted/50 text-sm rounded-sm bg-input placeholder:text-ink-placeholder"
+              class="flex-1 p-1.5 border border-edge-muted text-sm rounded-sm bg-input placeholder:text-ink-placeholder"
               data-option-id={option().id}
             />
             <button
@@ -452,7 +452,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                     value={newPropertyName()}
                     onInput={(e) => setNewPropertyName(e.currentTarget.value)}
                     placeholder="Enter property name"
-                    class="w-full p-1.5 border border-edge-muted/50 text-sm rounded-sm bg-input placeholder:text-ink-placeholder"
+                    class="w-full p-1.5 border border-edge-muted text-sm rounded-sm bg-input placeholder:text-ink-placeholder"
                   />
                 </div>
 

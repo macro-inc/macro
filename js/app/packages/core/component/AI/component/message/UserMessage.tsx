@@ -1,6 +1,4 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import type { Model } from '@core/component/AI/types';
-import { isDssImage, isImageAttachment } from '@core/component/AI/util';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
@@ -66,14 +64,11 @@ export function UserMessage(props: {
   };
 
   const imageAttachments = () =>
-    props.message.attachments.filter((a) => isImageAttachment(a));
+    props.message.attachments.filter((a) => a.entity_type === 'static_file');
 
   const itemPreviewAttachments = () =>
-    props.message.attachments.filter(
-      (a) =>
-        // jail
-        !isImageAttachment(a) &&
-        ['channel', 'document', 'email', 'project'].includes(a.attachmentType)
+    props.message.attachments.filter((a) =>
+      ['channel', 'document', 'email_thread', 'project'].includes(a.entity_type)
     );
 
   return (
@@ -91,21 +86,23 @@ export function UserMessage(props: {
           <For each={imageAttachments()}>
             {(attachment) => (
               <ImagePreview
-                image={{ id: attachment.attachmentId }}
+                image={{ id: attachment.entity_id }}
                 variant="small"
-                isDss={isDssImage(attachment)}
+                isDss={false}
               />
             )}
           </For>
           <For each={itemPreviewAttachments()}>
             {(attachment) => (
               <ItemPreview
-                id={attachment.attachmentId}
-                // TODO: improve typing for item preview attachments
+                id={attachment.entity_id}
                 type={
-                  attachment.attachmentType as
+                  (attachment.entity_type === 'email_thread'
+                    ? 'email'
+                    : attachment.entity_type) as
                     | 'channel'
                     | 'document'
+                    | 'email'
                     | 'project'
                 }
               />
@@ -139,7 +136,7 @@ export function UserMessage(props: {
                 chatId={props.edit!.chatId}
                 attachments={props.message.attachments}
                 initialText={props.message.content.toString()}
-                model={(props.message.model as Model) ?? DEFAULT_MODEL}
+                model={DEFAULT_MODEL}
                 onAccept={() => {}}
                 onCancel={() => setIsEditing(false)}
               />

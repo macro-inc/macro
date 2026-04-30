@@ -43,7 +43,7 @@ export function Input(props: {
   return (
     <input
       class={cn(
-        'appearance-none disabled:bg-edge/70 block w-full shadow-none placeholder-placeholder sm:text-sm',
+        'appearance-none disabled:bg-edge block w-full shadow-none placeholder-placeholder sm:text-sm',
         props.textCenter && 'text-center'
       )}
       required={props.required ?? true}

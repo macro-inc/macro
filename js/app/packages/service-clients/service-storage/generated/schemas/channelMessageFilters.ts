@@ -4,17 +4,30 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelMessageFiltersLastActivity } from './channelMessageFiltersLastActivity';
+import type { ChannelMessageFiltersActivityAfter } from './channelMessageFiltersActivityAfter';
+import type { ChannelMessageFiltersActivityBefore } from './channelMessageFiltersActivityBefore';
+import type { ChannelMessageFiltersCreatedAfter } from './channelMessageFiltersCreatedAfter';
+import type { ChannelMessageFiltersCreatedBefore } from './channelMessageFiltersCreatedBefore';
 import type { NotificationFilters } from './notificationFilters';
 
 /**
  * Filters for channel message queries.
  */
 export interface ChannelMessageFilters {
-  /** When set, only return top-level messages that have activity after this
-timestamp. Activity means either the message itself was created after
-this time, or a thread reply was created after this time. */
-  last_activity?: ChannelMessageFiltersLastActivity;
+  /** When set, only return top-level messages with channel activity at or after
+this timestamp. Activity means either the message itself was created after
+this time, or a thread reply was created after this time.
+
+Accepts the legacy JSON field `last_activity` for backwards compatibility. */
+  activity_after?: ChannelMessageFiltersActivityAfter;
+  /** When set, only return top-level messages with channel activity before this
+timestamp. Activity means either the parent message or at least one thread
+reply falls in the requested activity window. */
+  activity_before?: ChannelMessageFiltersActivityBefore;
+  /** When set, only return top-level messages created at or after this timestamp. */
+  created_after?: ChannelMessageFiltersCreatedAfter;
+  /** When set, only return top-level messages created before this timestamp. */
+  created_before?: ChannelMessageFiltersCreatedBefore;
   /** When non-empty, only return messages with these IDs. */
   message_ids?: string[];
   /** When set, only return top-level messages where the message itself or

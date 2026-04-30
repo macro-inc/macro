@@ -1,7 +1,7 @@
 import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, DEFAULT_THEMES } from '../constants';
 import { createEffect, createMemo, createSignal } from 'solid-js';
-import type { ThemeV0, ThemeV1 } from '../types/themeTypes';
-import { convertThemev0v1 } from '../utils/themeMigrations';
+import type { ThemeV0, ThemeV1, ThemeV2 } from '../types/themeTypes';
+import { convertThemev0v1, convertThemev1v2 } from '../utils/themeMigrations';
 import { makePersisted } from '@solid-primitives/storage';
 
 export const [isThemeSaved, setIsThemeSaved] = createSignal<boolean>(true);
@@ -14,20 +14,16 @@ export const [htmlColor, setHtmlColor] = makePersisted(
 );
 
 export const [userThemes, setUserThemes] = makePersisted(
-  createSignal<ThemeV1[]>([]),
+  createSignal<ThemeV2[]>([]),
   {name: 'macro-user-themes'}
 );
 setUserThemes(
   userThemes().map((theme) => {
-    if(!theme.version){return convertThemev0v1(theme as unknown as ThemeV0)}
+    if(!theme.version){return convertThemev1v2(convertThemev0v1(theme as unknown as ThemeV0))}
+    else if(theme.version === 1){return convertThemev1v2(theme as unknown as ThemeV1)}
     else{return theme}
   })
 );
-
-let convertedDefaultThemes = DEFAULT_THEMES.map((theme) => {
-  if(!theme.version){return convertThemev0v1(theme as unknown as ThemeV0)}
-  else{return theme}
-});
 
 export const [currentThemeId, setCurrentThemeId_] = makePersisted(
   createSignal<string>(DEFAULT_DARK_THEME),
@@ -43,7 +39,7 @@ export const setCurrentThemeId = ( ...args: Parameters<typeof setCurrentThemeId_
   }
 };
 
-export const themes = createMemo(() => [...convertedDefaultThemes, ...userThemes()]);
+export const themes = createMemo(() => [...DEFAULT_THEMES, ...userThemes()]);
 
 export const [lightModeTheme, setLightModeTheme] = makePersisted(
   createSignal<string>(DEFAULT_LIGHT_THEME),
@@ -60,19 +56,28 @@ export const [themeShouldMatchSystem, setThemeShouldMatchSystem] = makePersisted
   {name: 'macro-theme-should-match-system'}
 );
 
+const supportsMatchMedia =
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function';
+
 export const [systemMode, setSystemMode] = createSignal<'dark' | 'light'>(
-  window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  supportsMatchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light'
 );
 
-const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-darkModeQuery.addEventListener('change', (e: MediaQueryListEvent) => {
-  setSystemMode(e.matches ? 'dark' : 'light');
-});
+if (supportsMatchMedia) {
+  const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  darkModeQuery.addEventListener('change', (e: MediaQueryListEvent) => {
+    setSystemMode(e.matches ? 'dark' : 'light');
+  });
+}
 
 export const [monochromeIcons, setMonochromeIcons] = makePersisted(
   createSignal<boolean>(false),
   {name: 'enable-monochrome-icons'}
 );
+
+export const [themeDepth, setThemeDepth] = createSignal<number>(0.15);
 
 
 createEffect(() => {

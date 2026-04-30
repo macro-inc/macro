@@ -38,7 +38,15 @@ export type ThemePrevious = {
   c4: { l: number; c: number; h: number };
 };
 
-export type ThemeV1Tokens = {
+export type ThemeV2 = {
+  id: string;
+  name: string;
+  version: number;
+  depth: number;
+  tokens: ThemeV2Tokens;
+};
+
+export type ThemeV2Tokens = {
   a0: { l: number; c: number; h: number };
   a1: { l: number; c: number; h: number };
   a2: { l: number; c: number; h: number };
@@ -61,6 +69,24 @@ export type ThemeV1 = {
   name: string;
   version: number;
   tokens: ThemeV1Tokens;
+};
+
+export type ThemeV1Tokens = {
+  a0: { l: number; c: number; h: number };
+  a1: { l: number; c: number; h: number };
+  a2: { l: number; c: number; h: number };
+  a3: { l: number; c: number; h: number };
+  a4: { l: number; c: number; h: number };
+  b0: { l: number; c: number; h: number };
+  b1: { l: number; c: number; h: number };
+  b2: { l: number; c: number; h: number };
+  b3: { l: number; c: number; h: number };
+  b4: { l: number; c: number; h: number };
+  c0: { l: number; c: number; h: number };
+  c1: { l: number; c: number; h: number };
+  c2: { l: number; c: number; h: number };
+  c3: { l: number; c: number; h: number };
+  c4: { l: number; c: number; h: number };
 };
 
 export type ThemeV0 = {

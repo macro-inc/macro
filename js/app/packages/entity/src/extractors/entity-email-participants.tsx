@@ -151,7 +151,7 @@ function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {
       spanMode
       unstyled
       tooltip={
-        <div class="bg-panel text-ink border border-edge/20 py-1">
+        <div class="bg-panel text-ink border border-edge py-1">
           <For each={props.hidden}>
             {(r) => (
               <div

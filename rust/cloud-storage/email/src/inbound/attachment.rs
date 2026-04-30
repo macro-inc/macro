@@ -3,15 +3,13 @@
 use std::sync::Arc;
 
 use attachment::{
-    AttachmentContent, AttachmentError, AttachmentPart, AttachmentReference, AttachmentService,
-    Attachments, ResolutionError,
+    AttachmentContent, AttachmentError, AttachmentPart, AttachmentService, Attachments,
+    ResolutionError,
 };
-use entity_access::domain::{
-    models::{EntityType, ViewAccessLevel},
-    ports::EntityAccessService,
-};
+use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use futures::future::join_all;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
 use non_empty::NonEmpty;
 use uuid::Uuid;
 
@@ -42,16 +40,21 @@ impl<Svc: EmailService, ESvc: EntityAccessService> AttachmentService
     for EmailAttachmentService<Svc, ESvc>
 {
     #[tracing::instrument(skip_all)]
-    async fn resolve_attachments(
+    async fn resolve_attachments<'a>(
         &self,
         user_id: MacroUserIdStr<'_>,
-        ids: NonEmpty<&[&str]>,
-    ) -> Attachments {
+        ids: NonEmpty<&[&'a Entity<'a>]>,
+    ) -> Attachments<'a> {
         let user_id = &user_id;
-        let results = join_all(ids.iter().map(|id| async move {
-            self.resolve_one(user_id, id)
-                .await
-                .map_err(|error| ResolutionError::new(id.to_string(), error))
+        let results = join_all(ids.iter().map(|entity| async move {
+            self.resolve_one(user_id, entity).await.map_err(|error| {
+                ResolutionError::new(
+                    entity
+                        .entity_type
+                        .with_entity_string(entity.entity_id.to_string()),
+                    error,
+                )
+            })
         }))
         .await;
 
@@ -64,8 +67,9 @@ impl<Svc: EmailService, ESvc: EntityAccessService> EmailAttachmentService<Svc, E
     async fn resolve_one(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        id: &str,
-    ) -> Result<AttachmentContent, AttachmentError> {
+        entity: &Entity<'_>,
+    ) -> Result<AttachmentContent<'static>, AttachmentError> {
+        let id = &*entity.entity_id;
         let thread_id = Uuid::parse_str(id)
             .map_err(|e| AttachmentError::Internal(anyhow::anyhow!("invalid thread ID: {e}")))?;
 
@@ -78,7 +82,7 @@ impl<Svc: EmailService, ESvc: EntityAccessService> EmailAttachmentService<Svc, E
                 EntityType::EmailThread,
             )
             .await
-            .map_err(|_| AttachmentError::PermissionDenied { id: id.to_string() })?;
+            .map_err(|e| AttachmentError::PermissionDenied(Box::new(e)))?;
 
         let thread = self
             .service
@@ -93,25 +97,29 @@ impl<Svc: EmailService, ESvc: EntityAccessService> EmailAttachmentService<Svc, E
     }
 }
 
-fn format_thread(id: &str, thread: &ParsedThread) -> Result<AttachmentContent, AttachmentError> {
+fn format_thread(
+    id: &str,
+    thread: &ParsedThread,
+) -> Result<AttachmentContent<'static>, AttachmentError> {
     let subject = thread
         .messages
         .first()
         .and_then(|m| m.subject.as_deref())
         .map(String::from);
 
-    let parts: Vec<AttachmentPart> = thread.messages.iter().flat_map(format_message).collect();
+    let parts: Vec<AttachmentPart<'static>> =
+        thread.messages.iter().flat_map(format_message).collect();
 
     let content = NonEmpty::new(parts).map_err(|_| AttachmentError::NoContent)?;
 
     Ok(AttachmentContent {
-        reference: AttachmentReference::EmailThread { id: id.to_string() },
+        reference: EntityType::EmailThread.with_entity_string(id.to_string()),
         name: subject,
         content,
     })
 }
 
-fn format_message(msg: &ParsedMessage) -> Vec<AttachmentPart> {
+fn format_message(msg: &ParsedMessage) -> Vec<AttachmentPart<'static>> {
     let mut parts = Vec::new();
 
     if let Some(subject) = &msg.subject {

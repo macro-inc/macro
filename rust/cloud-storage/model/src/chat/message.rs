@@ -1,7 +1,7 @@
-use super::ChatAttachmentWithName;
 use super::NewAttachment;
 use ai::types::{ChatMessageContent, Model, Role};
 use chrono::{DateTime, Utc};
+use model_entity::Entity;
 use serde::{self, Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -29,10 +29,7 @@ pub struct ChatMessageWithAttachments {
     pub role: Role,
     /// The ids of the attachments used to generate the message
     // transform to Vec<Entity<'static>>
-    pub attachments: Vec<ChatAttachmentWithName>,
-    /// The model used to generate the message
-    /// kill
-    pub model: Option<String>,
+    pub attachments: Vec<Entity<'static>>,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]

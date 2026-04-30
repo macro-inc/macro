@@ -213,7 +213,7 @@ export function ActionDrawer() {
                       type="button"
                       title={`React ${emoji}`}
                       aria-label={`React ${emoji}`}
-                      class="size-12 flex items-center justify-center bg-edge/30 rounded-full text-[28px]"
+                      class="size-12 flex items-center justify-center bg-edge rounded-full text-[28px]"
                       onClick={(event) => handleReaction(emoji, event)}
                     >
                       {emoji}
@@ -224,7 +224,7 @@ export function ActionDrawer() {
                   type="button"
                   title="More reactions"
                   aria-label="More reactions"
-                  class="size-12 bg-edge/30 rounded-full flex items-center justify-center text-ink-muted"
+                  class="size-12 bg-edge rounded-full flex items-center justify-center text-ink-muted"
                   onClick={() => setShowEmojiSearch(true)}
                 >
                   {renderIcon(SmileyIcon, 'size-[28px]')}

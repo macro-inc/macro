@@ -34,7 +34,7 @@ function MobileStackRowLayout(props: {
 }) {
   return (
     <Entity.Layout
-      class="w-full text-sm grid bg-edge/10 border-edge-muted"
+      class="w-full text-sm grid bg-edge border-edge-muted"
       onClick={props.onClick}
       style={{
         'grid-template-columns':

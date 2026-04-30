@@ -1,28 +1,17 @@
 use super::Role;
-use crate::tokens::{TokenCount, count_tokens};
-use crate::types::ImageData;
-use anyhow::Result;
-use async_openai::types::ChatCompletionRequestMessage;
+use attachment::Attachments;
 use serde::{self, Deserialize, Serialize};
 use std::fmt::{Display, Write};
 use utoipa::ToSchema;
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug)]
 pub struct ChatMessages(pub Vec<ChatMessage>);
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug)]
 pub struct ChatMessage {
     pub content: ChatMessageContent,
     pub role: Role,
-    pub image_urls: Option<Vec<ImageData>>,
-}
-
-impl TokenCount for ChatMessage {
-    fn token_count(&self) -> Result<i64> {
-        let messages = Vec::<ChatCompletionRequestMessage>::from(self.clone());
-        let messages_str = serde_json::to_string(&messages)?;
-        count_tokens(&messages_str)
-    }
+    pub attachments: Option<Attachments<'static>>,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]

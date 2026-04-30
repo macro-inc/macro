@@ -204,7 +204,7 @@ export function SplitFileMenu(props: {
             {(op, i) => (
               <>
                 <Show when={op.divideAbove && i() >= 1}>
-                  <div class="my-1 h-px bg-edge-muted/50" />
+                  <div class="my-1 h-px bg-edge-muted" />
                 </Show>
                 <ResponsiveDropdown.Item
                   text={op.label}

@@ -112,7 +112,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use comms::outbound::postgres::comms_repo::PgCommsRepo;
     use comms::outbound::postgres::user_repo::PgUserRepo;
     use comms_service_client::CommsServiceClient;
-    use document_cognition_service_client::DocumentCognitionServiceClient;
     use document_storage_service_client::DocumentStorageServiceClient;
     use email::domain::ports::ReadonlyEmailPreviewAdapter;
     use email::domain::service::EmailServiceImpl;
@@ -123,12 +122,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use lexical_client::LexicalClient;
     use notification::domain::service::SqsNotificationIngress;
     use notification::outbound::queue::SqsQueue;
-    use scribe::ScribeClient;
     use search_service_client::SearchServiceClient;
     use soup::domain::service::SoupImpl;
     use soup::outbound::pg_soup_repo::PgSoupRepo;
     use sqs_client::SQS;
-    use static_file_service_client::StaticFileServiceClient;
     use sync_service_client::SyncServiceClient;
 
     let sqs_config = aws_sdk_sqs::Config::builder()
@@ -144,10 +141,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let comms_service_client = Arc::new(CommsServiceClient::new("http://localhost".into()));
     let search_service_client =
         SearchServiceClient::new("dummy_auth_key".into(), "http://localhost".into());
-    let lexical_client = Arc::new(LexicalClient::new(
-        "test".into(),
-        "http://nofileshere".into(),
-    ));
     let sync_service_client = Arc::new(SyncServiceClient::new(
         "dummy_auth_key".into(),
         "http://localhost".into(),
@@ -156,32 +149,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         "dummy_auth_key".into(),
         "http://localhost".into(),
     ));
-    let document_cognition_service_client = Arc::new(DocumentCognitionServiceClient::new(
-        "dummy_auth_key".into(),
-        "http://localhost".into(),
-    ));
-    let static_file_service_client = Arc::new(StaticFileServiceClient::new(
-        "dummy_auth_key".into(),
-        "http://localhost".into(),
-    ));
-
     let email_service_client_external = Arc::new(EmailServiceClientExternal::new(
         email_service_client.url().to_owned(),
     ));
-
-    let content_client = ScribeClient::new()
-        .with_document_client(
-            DocumentClient::builder()
-                .with_dss_client(document_storage_client.clone())
-                .with_lexical_client(lexical_client)
-                .with_sync_service_client(sync_service_client.clone())
-                .with_macro_db(pool.clone())
-                .build(),
-        )
-        .with_channel_client(pool.clone())
-        .with_dcs_client(pool.clone())
-        .with_email_client(email_service_client)
-        .with_static_file_client(static_file_service_client.clone());
 
     // Build soup service dependencies
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
@@ -257,7 +227,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     );
 
     let search_service_client = Arc::new(search_service_client);
-    let scribe = Arc::new(content_client);
 
     // Build properties tool context
     let properties_service = properties::PropertiesServiceImpl::new(
@@ -317,7 +286,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
-        scribe: scribe.clone(),
         soup_service: soup_service.clone(),
         email_service: email_service_for_tools.clone(),
         document_tool_context: document_tool_context.clone(),
@@ -325,6 +293,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
         chat_tool_context,
+        channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
     };
     let all_tools = ai_tools::all_tools();
@@ -345,7 +314,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         document_storage_client,
         comms_service_client,
         search_service_client,
-        scribe,
         email_service_client_external,
         jwt_args: JwtValidationArgs::new_testing(),
         config: Arc::new(Config::new_empty_for_test()),
@@ -353,9 +321,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         notification_ingress_service,
         connection_repo: MockConnectionRepo::new(),
         soup_service,
-        email_service: email_service_for_tools,
+        email_service: email_service_for_tools.clone(),
         stream_repo: MockStreamRepo::new(),
-        document_tool_context,
+        document_tool_context: document_tool_context.clone(),
         memory_service,
         properties_tool_context,
         email_tool_context,
@@ -363,7 +331,34 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         tool_service_context,
         all_tools: all_tools_toolset,
         all_tools_prompt,
-        entity_access_service,
+        entity_access_service: entity_access_service.clone(),
+        message_service: Arc::new(chat::domain::service::MessageServiceImpl::new(
+            chat::outbound::postgres::PgChatRepo::new(pool.clone()),
+            attachment::provider::AttachmentProvider {
+                document: documents::inbound::attachment::DocumentAttachmentService::new(
+                    document_tool_context.service.clone(),
+                    document_tool_context.entity_access_service.clone(),
+                    document_tool_context.lexical_client.clone(),
+                ),
+                email_thread: email::inbound::attachment::EmailAttachmentService::new(
+                    email_service_for_tools.clone(),
+                    entity_access_service.clone(),
+                ),
+                chat: chat::inbound::attachment::ChatAttachmentService::new(
+                    Arc::new(chat::outbound::postgres::PgChatRepo::new(pool.clone())),
+                    entity_access_service.clone(),
+                ),
+                channel: comms::inbound::attachment::CommsAttachmentService::new(
+                    Arc::new(PgCommsRepo::new(readonly_pool::ReadOnlyPool(pool.clone()))),
+                    entity_access_service.clone(),
+                ),
+                static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(
+                    Arc::new(static_file::outbound::CdnStaticFileRepo::new(
+                        "http://localhost".into(),
+                    )),
+                ),
+            },
+        )),
         ai_stream_registry: crate::service::ai_stream_registry::AiStreamRegistry::new(Arc::new(
             redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"),
         )),

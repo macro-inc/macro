@@ -121,7 +121,7 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
         </div>
         {/* Tag */}
         <Show when={local.tagLabel}>
-          <div class="inline-flex items-center ml-2 px-0.5 text-xs bg-edge/15 text-ink border border-edge/30 max-w-[240px] min-w-0">
+          <div class="inline-flex items-center ml-2 px-0.5 text-xs bg-edge text-ink border border-edge max-w-[240px] min-w-0">
             <div class="shrink-0 px-0.5">
               <Show when={local.tagIcon}>
                 <CustomEntityIcon icon={local.tagIcon!} size="xs" />

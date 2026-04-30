@@ -11,7 +11,7 @@ export function SelectionBox(props: { rect?: Rectangle }) {
 
   return (
     <Show when={show()}>
-      <div class="absolute bg-edge/30" style={props.rect!.toCssRect()}></div>
+      <div class="absolute bg-edge" style={props.rect!.toCssRect()}></div>
     </Show>
   );
 }

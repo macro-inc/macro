@@ -120,3 +120,47 @@ INSERT INTO public."SharePermission" ("id", "isPublic", "createdAt", "updatedAt"
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
     (SELECT 'd0000000-0000-0000-0000-000000000002', 'sp-doc-two');
+
+-- Document inside test project (for get_project_children tests)
+INSERT INTO public."Document" ("id", "name", "fileType", "owner", "projectId") (
+    SELECT
+        'd0000000-0000-0000-0000-000000000003',
+        'project_child_doc',
+        'txt',
+        'macro|user@user.com',
+        'd0000000-0000-0000-0000-100000000001'
+);
+
+INSERT INTO public."DocumentInstance" ("revisionName", "documentId", "sha") (
+    SELECT 'project_child_doc', 'd0000000-0000-0000-0000-000000000003', 'sha-three'
+);
+
+INSERT INTO public."SharePermission" ("id", "isPublic", "createdAt", "updatedAt")
+    (SELECT 'sp-doc-three', false, NOW(), NOW());
+
+INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
+    (SELECT 'd0000000-0000-0000-0000-000000000003', 'sp-doc-three');
+
+-- Sub-project inside test project (for get_project_children tests)
+INSERT INTO public."Project" ("id", "name", "userId", "parentId") (
+    SELECT
+        'd0000000-0000-0000-0000-100000000002',
+        'child_project',
+        'macro|user@user.com',
+        'd0000000-0000-0000-0000-100000000001'
+);
+
+-- Deleted document inside test project (should be excluded from children)
+INSERT INTO public."Document" ("id", "name", "fileType", "owner", "projectId", "deletedAt") (
+    SELECT
+        'd0000000-0000-0000-0000-000000000004',
+        'deleted_project_doc',
+        'txt',
+        'macro|user@user.com',
+        'd0000000-0000-0000-0000-100000000001',
+        NOW()
+);
+
+INSERT INTO public."DocumentInstance" ("revisionName", "documentId", "sha") (
+    SELECT 'deleted_project_doc', 'd0000000-0000-0000-0000-000000000004', 'sha-four'
+);

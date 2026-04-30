@@ -638,7 +638,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           <TrashIcon />
         </Button>
       </div>
-      <div class="border-b border-edge-muted/50" />
+      <div class="border-b border-edge-muted" />
       <div class="p-2 flex-1 min-h-0 flex flex-col">
         <div class="shrink-0 flex p-2 gap-2 items-center">
           <EntityIcon targetType="task" size="sm" />
@@ -712,13 +712,13 @@ export function ComposeTask(props: ComposeTaskProps) {
       </div>
 
       <Show when={errorMessage()}>
-        <div class="w-full border-b border-edge-muted/50" />
+        <div class="w-full border-b border-edge-muted" />
         <div class="px-2 py-2">
           <div class="text-sm text-failure-ink px-3 py-2">{errorMessage()}</div>
         </div>
       </Show>
 
-      <div class="w-full border-b border-edge-muted/50" />
+      <div class="w-full border-b border-edge-muted" />
       <div class="shrink-0 flex justify-between items-center p-2 gap-2">
         <MiniToggleSwitch
           size="SM"
@@ -740,7 +740,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             <CircleSpinner width={16} height={16} />
           </Show>
           Create Task
-          <div class="text-xxs text-ink-extra-muted ml-auto border border-edge-muted/50 px-1.5 py-1 font-sans rounded-xs">
+          <div class="text-xxs text-ink-extra-muted ml-auto border border-edge-muted px-1.5 py-1 font-sans rounded-xs">
             <Hotkey shortcut="cmd+enter" />
           </div>
         </Button>

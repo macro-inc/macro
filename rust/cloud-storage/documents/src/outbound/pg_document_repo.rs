@@ -15,6 +15,8 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{DocumentBasic, DocumentMetadata};
 use sqlx::PgPool;
 
+use model_entity::{Entity, EntityType};
+
 use crate::domain::models::{
     Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs,
     Thread,
@@ -695,6 +697,44 @@ impl DocumentRepo for PgDocumentRepo {
         MacroUserIdStr::parse_from_str(&row.user_id)
             .map(|u| u.into_owned())
             .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_project_name(&self, project_id: &str) -> Result<String, Self::Err> {
+        let row = sqlx::query!(r#"SELECT name FROM "Project" WHERE id = $1"#, project_id,)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row.name)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_project_children(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<Entity<'static>>, Self::Err> {
+        let documents = sqlx::query!(
+            r#"SELECT id FROM "Document" WHERE "projectId" = $1 AND "deletedAt" IS NULL"#,
+            project_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let sub_projects = sqlx::query!(
+            r#"SELECT id FROM "Project" WHERE "parentId" = $1 AND "deletedAt" IS NULL"#,
+            project_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut children: Vec<Entity<'static>> =
+            Vec::with_capacity(documents.len() + sub_projects.len());
+        for row in documents {
+            children.push(EntityType::Document.with_entity_string(row.id));
+        }
+        for row in sub_projects {
+            children.push(EntityType::Project.with_entity_string(row.id));
+        }
+        Ok(children)
     }
 
     #[tracing::instrument(err, skip(self, args))]

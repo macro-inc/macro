@@ -261,7 +261,7 @@ export function References(props: ReferenceProps) {
             }
 
             return (
-              <div class="flex justify-between items-center bg-failure-bg px-4 py-2 border-edge/30 border-b w-full">
+              <div class="flex justify-between items-center bg-failure-bg px-4 py-2 border-edge border-b w-full">
                 <div class="text-failure text-xs">
                   Unknown reference type: {JSON.stringify(ref, null, 2)}
                 </div>

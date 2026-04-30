@@ -288,7 +288,7 @@ function EditableLabel(props: EditableLabelProps) {
         fallback={
           <div
             onClick={handleStartEdit}
-            class="cursor-pointer hover:bg-edge/30 px-1 py-0.5 w-full h-full flex items-center"
+            class="cursor-pointer hover:bg-edge px-1 py-0.5 w-full h-full flex items-center"
             style="min-height: 20px;"
           >
             {props.value}
@@ -492,9 +492,8 @@ function GlyphGrid(props: GlyphGridProps) {
                   onDblClick={() => props.onEditGlyph(glyph)}
                   class="items-center border relative group transition-colors justify-self-stretch"
                   classList={{
-                    'border-edge bg-edge/20 bracket-offset-2': isSelected(),
-                    'border-edge/50 bg-background hover:bg-edge/50':
-                      !isSelected(),
+                    'border-edge bg-edge bracket-offset-2': isSelected(),
+                    'border-edge bg-background hover:bg-edge': !isSelected(),
                   }}
                 >
                   <div class="w-20 h-20 flex items-center justify-center mx-auto m-2">
@@ -509,7 +508,7 @@ function GlyphGrid(props: GlyphGridProps) {
                       />
                     </Show>
                   </div>
-                  <div class="text-xs text-ink-muted w-full border-t border-edge/50 p-1">
+                  <div class="text-xs text-ink-muted w-full border-t border-edge p-1">
                     <EditableLabel
                       value={glyph.name}
                       onSave={(newName) => props.onGlyphRename(glyph, newName)}
@@ -810,7 +809,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                 placeholder="Icon name..."
                 value={glyphName()}
                 onInput={(e) => setGlyphName(e.currentTarget.value)}
-                class="p-2 w-full text-sm border-b border-edge/50 mb-4"
+                class="p-2 w-full text-sm border-b border-edge mb-4"
                 ref={inputRef}
               />
               <div class="flex flex-col items-center gap-6">
@@ -1093,7 +1092,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
         </div>
       </div>
 
-      <hr class="border-b border-dashed border-edge/50 my-4" />
+      <hr class="border-b border-dashed border-edge my-4" />
 
       <Show
         when={props.selectedGlyph}
@@ -1113,7 +1112,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
                   props.onGlyphRename(props.selectedGlyph, newName);
                 }
               }}
-              class="font-mono text-ink-muted text-sm text-left w-full ring-1 ring-edge/50"
+              class="font-mono text-ink-muted text-sm text-left w-full ring-1 ring-edge"
             />
             <div class="w-32 h-32 flex items-center justify-center border border-edge bg-background">
               <Show when={selectedPixels()}>

@@ -43,8 +43,15 @@ export function CallRecordingBody(props: {
     sortTranscriptSegments(record().transcript)
   );
 
+  // Anchor transcript-to-audio sync to the recording's actual start when
+  // available. `startedAt` is call-creation time; the room composite egress
+  // starts a few seconds later, so using `startedAt` makes the audio
+  // appear to lag the transcript on every segment. `recordingStartedAt`
+  // (captured from the LiveKit `egress_started` webhook) is the encoder's
+  // true t=0. Falls back to `startedAt` for older records.
   const timelineStartMs = createMemo(() => {
-    const ms = new Date(record().startedAt).getTime();
+    const anchor = record().recordingStartedAt ?? record().startedAt;
+    const ms = new Date(anchor).getTime();
     return Number.isFinite(ms) ? ms : null;
   });
 

@@ -4,11 +4,9 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { ChatAttachmentWithName } from './chatAttachmentWithName';
+import type { Entity } from './entity';
 
 /**
  * Use citation prompt
  */
-export type SendChatMessagePayloadAllOfAttachments =
-  | ChatAttachmentWithName[]
-  | null;
+export type SendChatMessagePayloadAllOfAttachments = Entity[] | null;

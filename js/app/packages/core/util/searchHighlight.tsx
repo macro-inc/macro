@@ -122,8 +122,14 @@ export function windowSearchMatch(text: string, chars: number): string {
       : line
           .slice(lastCloseIndex + macroClose.length)
           .replace(/<\/?macro_em>/g, '').length;
+  const visibleMatch =
+    lastCloseIndex === -1
+      ? 0
+      : line
+          .slice(tagIndex, lastCloseIndex + macroClose.length)
+          .replace(/<\/?macro_em>/g, '').length;
 
-  const totalBudget = chars * 2;
+  const totalBudget = Math.max(0, chars * 2 - visibleMatch);
   const frontKeep = Math.max(chars, totalBudget - visibleAfter);
   const backKeep = Math.max(chars, totalBudget - visibleBefore);
 

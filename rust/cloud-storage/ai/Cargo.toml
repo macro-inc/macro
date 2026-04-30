@@ -27,15 +27,12 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tiktoken-rs = "0.5.9"
 tokio.workspace = true
 tracing = { workspace = true }
 utoipa = { workspace = true }
 anthropic = { path = "../anthropic" }
 ai_toolset = { path = "../ai_toolset" }
 macro_user_id = { path = "../macro_user_id" }
-base64 = { workspace = true }
-image = { workspace = true }
-webp = { version = "0.3.1" }
 model_file_type = { path = "../model_file_type"}
-ai_format = {path = "../ai_format"}
+ai_format = { path = "../ai_format" }
+attachment = { path = "../attachment" }

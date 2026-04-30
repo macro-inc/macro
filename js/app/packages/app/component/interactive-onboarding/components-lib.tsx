@@ -218,7 +218,7 @@ export function ContinueButton(props: ContinueButtonProps) {
         'w-full px-3 py-2.5 text-lg font-bold rounded-xs flex items-center gap-2 bracket-never border-none',
         props.centered ? 'justify-center' : 'justify-between',
         {
-          'bg-transparent text-ink/40 font-normal ring-1 ring-edge-muted/50':
+          'bg-transparent text-ink/40 font-normal ring-1 ring-edge-muted':
             props.disabled,
           'bg-accent text-panel hover:bg-accent hover:ring-2 ring-accent ring-offset-1 ring-offset-panel focus:ring-2':
             !props.disabled,

@@ -21,7 +21,7 @@ import { toast } from '@core/component/Toast/Toast';
 
 const ThreadLine = () => {
   return (
-    <div class="w-px bg-edge/50 h-full absolute left-3 translate-x-[-0.5px] top-4" />
+    <div class="w-px bg-edge h-full absolute left-3 translate-x-[-0.5px] top-4" />
   );
 };
 

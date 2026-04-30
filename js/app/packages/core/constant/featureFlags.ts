@@ -264,12 +264,6 @@ export const ENABLE_UNIFIED_LIST_AI_INPUT = resolveFeatureFlag(
   true
 );
 
-// snapshot mention content inline for AI chat
-export const ENABLE_SNAPSHOT_NODE = resolveFeatureFlag(
-  'ENABLE_SNAPSHOT_NODE',
-  true
-);
-
 export const ENABLE_EMAIL_SCHEDULED_SEND = resolveFeatureFlag(
   'ENABLE_EMAIL_SCHEDULED_SEND',
   true

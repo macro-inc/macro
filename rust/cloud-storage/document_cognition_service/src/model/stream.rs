@@ -1,6 +1,6 @@
 use ai::types::AssistantMessagePart;
 use ai::types::Model;
-use model::chat::ChatAttachmentWithName;
+use model_entity::Entity;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -32,7 +32,7 @@ pub struct SendChatMessagePayload {
     pub additional_instructions: Option<String>,
     /// Use citation prompt
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attachments: Option<Vec<ChatAttachmentWithName>>,
+    pub attachments: Option<Vec<Entity<'static>>>,
     /// Which toolset to use. Defaults to `all`
     #[serde(default)]
     pub toolset: ToolSet,
@@ -93,7 +93,7 @@ pub enum ChatStream {
         chat_id: String,
         message_id: String,
         content: String,
-        attachments: Vec<ChatAttachmentWithName>,
+        attachments: Vec<Entity<'static>>,
     },
 
     /// Indicates a response from the chat completion API for a given message

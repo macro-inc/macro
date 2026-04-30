@@ -314,7 +314,7 @@ function BarContent(props: BarProps) {
               class={cn(
                 'flex justify-center items-center border-b border-edge',
                 truncation().stage.popCenter && !context.suppressPop
-                  ? 'col-start-1 col-end-4 bg-edge/20 row-start-2 px-2 w-full'
+                  ? 'col-start-1 col-end-4 bg-edge row-start-2 px-2 w-full'
                   : 'col-start-2 col-end-3 row-start-1! bg-[revert] px-0'
               )}
               style={{

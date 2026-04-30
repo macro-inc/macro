@@ -364,7 +364,7 @@ export const GetEntityPropertiesResponse = z.object({
   summary: z.string(),
 });
 
-export const ReadThread = z.object({
+export const GetThread = z.object({
   limit: z.union([z.number().int(), z.null()]).default(null),
   threadId: z.string().uuid(),
 });
@@ -527,6 +527,827 @@ export const ReadCallRecordResponse = z.object({
       startedAt: z.string().datetime({ offset: true }),
     })
   ),
+});
+
+export const ReadChannelMessageContext = z.object({
+  channelAfter: z
+    .union([z.number().int().gte(0).lte(65535), z.null()])
+    .default(null),
+  channelBefore: z
+    .union([z.number().int().gte(0).lte(65535), z.null()])
+    .default(null),
+  channelId: z.string().uuid(),
+  maxCharsPerMessage: z
+    .union([z.number().int().gte(0), z.null()])
+    .default(null),
+  messageId: z.string().uuid(),
+  threadAfter: z
+    .union([z.number().int().gte(0).lte(65535), z.null()])
+    .default(null),
+  threadBefore: z
+    .union([z.number().int().gte(0).lte(65535), z.null()])
+    .default(null),
+});
+
+export const ReadChannelMessageContextResponse = z.object({
+  anchor: z.object({
+    channelId: z.string().uuid(),
+    createdAt: z.string().datetime({ offset: true }),
+    kind: z.any().superRefine((x, ctx) => {
+      const schemas = [z.literal('topLevelMessage'), z.literal('threadReply')];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    }),
+    messageId: z.string().uuid(),
+    threadId: z.string().uuid(),
+  }),
+  channelContext: z.object({
+    after: z.array(
+      z.object({
+        attachments: z.array(
+          z.object({
+            createdAt: z.string().datetime({ offset: true }),
+            entityId: z.string(),
+            entityType: z.string(),
+            id: z.string().uuid(),
+          })
+        ),
+        channelId: z.string().uuid(),
+        content: z.string(),
+        contentTruncated: z.boolean(),
+        createdAt: z.string().datetime({ offset: true }),
+        deletedAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        editedAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        id: z.string().uuid(),
+        reactions: z.array(
+          z.object({ emoji: z.string(), users: z.array(z.string()) })
+        ),
+        senderId: z.string(),
+        thread: z.object({
+          latestReplyAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          omittedReplyCount: z.number().int(),
+          preview: z
+            .union([
+              z.array(
+                z.object({
+                  attachments: z.array(
+                    z.object({
+                      createdAt: z.string().datetime({ offset: true }),
+                      entityId: z.string(),
+                      entityType: z.string(),
+                      id: z.string().uuid(),
+                    })
+                  ),
+                  content: z.string(),
+                  contentTruncated: z.boolean(),
+                  createdAt: z.string().datetime({ offset: true }),
+                  editedAt: z
+                    .union([z.string().datetime({ offset: true }), z.null()])
+                    .optional(),
+                  id: z.string().uuid(),
+                  reactions: z.array(
+                    z.object({ emoji: z.string(), users: z.array(z.string()) })
+                  ),
+                  senderId: z.string(),
+                  threadId: z.string().uuid(),
+                  updatedAt: z.string().datetime({ offset: true }),
+                })
+              ),
+              z.null(),
+            ])
+            .optional(),
+          replyCount: z.number().int(),
+          threadId: z.string().uuid(),
+        }),
+        updatedAt: z.string().datetime({ offset: true }),
+      })
+    ),
+    anchorOrParent: z.object({
+      attachments: z.array(
+        z.object({
+          createdAt: z.string().datetime({ offset: true }),
+          entityId: z.string(),
+          entityType: z.string(),
+          id: z.string().uuid(),
+        })
+      ),
+      channelId: z.string().uuid(),
+      content: z.string(),
+      contentTruncated: z.boolean(),
+      createdAt: z.string().datetime({ offset: true }),
+      deletedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      editedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      id: z.string().uuid(),
+      reactions: z.array(
+        z.object({ emoji: z.string(), users: z.array(z.string()) })
+      ),
+      senderId: z.string(),
+      thread: z.object({
+        latestReplyAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        omittedReplyCount: z.number().int(),
+        preview: z
+          .union([
+            z.array(
+              z.object({
+                attachments: z.array(
+                  z.object({
+                    createdAt: z.string().datetime({ offset: true }),
+                    entityId: z.string(),
+                    entityType: z.string(),
+                    id: z.string().uuid(),
+                  })
+                ),
+                content: z.string(),
+                contentTruncated: z.boolean(),
+                createdAt: z.string().datetime({ offset: true }),
+                editedAt: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
+                id: z.string().uuid(),
+                reactions: z.array(
+                  z.object({ emoji: z.string(), users: z.array(z.string()) })
+                ),
+                senderId: z.string(),
+                threadId: z.string().uuid(),
+                updatedAt: z.string().datetime({ offset: true }),
+              })
+            ),
+            z.null(),
+          ])
+          .optional(),
+        replyCount: z.number().int(),
+        threadId: z.string().uuid(),
+      }),
+      updatedAt: z.string().datetime({ offset: true }),
+    }),
+    before: z.array(
+      z.object({
+        attachments: z.array(
+          z.object({
+            createdAt: z.string().datetime({ offset: true }),
+            entityId: z.string(),
+            entityType: z.string(),
+            id: z.string().uuid(),
+          })
+        ),
+        channelId: z.string().uuid(),
+        content: z.string(),
+        contentTruncated: z.boolean(),
+        createdAt: z.string().datetime({ offset: true }),
+        deletedAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        editedAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        id: z.string().uuid(),
+        reactions: z.array(
+          z.object({ emoji: z.string(), users: z.array(z.string()) })
+        ),
+        senderId: z.string(),
+        thread: z.object({
+          latestReplyAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          omittedReplyCount: z.number().int(),
+          preview: z
+            .union([
+              z.array(
+                z.object({
+                  attachments: z.array(
+                    z.object({
+                      createdAt: z.string().datetime({ offset: true }),
+                      entityId: z.string(),
+                      entityType: z.string(),
+                      id: z.string().uuid(),
+                    })
+                  ),
+                  content: z.string(),
+                  contentTruncated: z.boolean(),
+                  createdAt: z.string().datetime({ offset: true }),
+                  editedAt: z
+                    .union([z.string().datetime({ offset: true }), z.null()])
+                    .optional(),
+                  id: z.string().uuid(),
+                  reactions: z.array(
+                    z.object({ emoji: z.string(), users: z.array(z.string()) })
+                  ),
+                  senderId: z.string(),
+                  threadId: z.string().uuid(),
+                  updatedAt: z.string().datetime({ offset: true }),
+                })
+              ),
+              z.null(),
+            ])
+            .optional(),
+          replyCount: z.number().int(),
+          threadId: z.string().uuid(),
+        }),
+        updatedAt: z.string().datetime({ offset: true }),
+      })
+    ),
+  }),
+  omissions: z.array(
+    z.object({
+      count: z.union([z.number().int(), z.null()]).optional(),
+      cursor: z.union([z.string(), z.null()]).optional(),
+      kind: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('olderMessages'),
+          z.literal('newerMessages'),
+          z.literal('threadReplies'),
+          z.literal('truncatedContent'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      messageId: z.union([z.string().uuid(), z.null()]).optional(),
+      threadId: z.union([z.string().uuid(), z.null()]).optional(),
+    })
+  ),
+  threadContext: z
+    .union([
+      z.object({
+        anchorReply: z
+          .union([
+            z.object({
+              attachments: z.array(
+                z.object({
+                  createdAt: z.string().datetime({ offset: true }),
+                  entityId: z.string(),
+                  entityType: z.string(),
+                  id: z.string().uuid(),
+                })
+              ),
+              content: z.string(),
+              contentTruncated: z.boolean(),
+              createdAt: z.string().datetime({ offset: true }),
+              editedAt: z
+                .union([z.string().datetime({ offset: true }), z.null()])
+                .optional(),
+              id: z.string().uuid(),
+              reactions: z.array(
+                z.object({ emoji: z.string(), users: z.array(z.string()) })
+              ),
+              senderId: z.string(),
+              threadId: z.string().uuid(),
+              updatedAt: z.string().datetime({ offset: true }),
+            }),
+            z.null(),
+          ])
+          .optional(),
+        omittedAfter: z.number().int().gte(0),
+        omittedBefore: z.number().int().gte(0),
+        parent: z.object({
+          attachments: z.array(
+            z.object({
+              createdAt: z.string().datetime({ offset: true }),
+              entityId: z.string(),
+              entityType: z.string(),
+              id: z.string().uuid(),
+            })
+          ),
+          channelId: z.string().uuid(),
+          content: z.string(),
+          contentTruncated: z.boolean(),
+          createdAt: z.string().datetime({ offset: true }),
+          deletedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          editedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          id: z.string().uuid(),
+          reactions: z.array(
+            z.object({ emoji: z.string(), users: z.array(z.string()) })
+          ),
+          senderId: z.string(),
+          thread: z.object({
+            latestReplyAt: z
+              .union([z.string().datetime({ offset: true }), z.null()])
+              .optional(),
+            omittedReplyCount: z.number().int(),
+            preview: z
+              .union([
+                z.array(
+                  z.object({
+                    attachments: z.array(
+                      z.object({
+                        createdAt: z.string().datetime({ offset: true }),
+                        entityId: z.string(),
+                        entityType: z.string(),
+                        id: z.string().uuid(),
+                      })
+                    ),
+                    content: z.string(),
+                    contentTruncated: z.boolean(),
+                    createdAt: z.string().datetime({ offset: true }),
+                    editedAt: z
+                      .union([z.string().datetime({ offset: true }), z.null()])
+                      .optional(),
+                    id: z.string().uuid(),
+                    reactions: z.array(
+                      z.object({
+                        emoji: z.string(),
+                        users: z.array(z.string()),
+                      })
+                    ),
+                    senderId: z.string(),
+                    threadId: z.string().uuid(),
+                    updatedAt: z.string().datetime({ offset: true }),
+                  })
+                ),
+                z.null(),
+              ])
+              .optional(),
+            replyCount: z.number().int(),
+            threadId: z.string().uuid(),
+          }),
+          updatedAt: z.string().datetime({ offset: true }),
+        }),
+        repliesAfter: z.array(
+          z.object({
+            attachments: z.array(
+              z.object({
+                createdAt: z.string().datetime({ offset: true }),
+                entityId: z.string(),
+                entityType: z.string(),
+                id: z.string().uuid(),
+              })
+            ),
+            content: z.string(),
+            contentTruncated: z.boolean(),
+            createdAt: z.string().datetime({ offset: true }),
+            editedAt: z
+              .union([z.string().datetime({ offset: true }), z.null()])
+              .optional(),
+            id: z.string().uuid(),
+            reactions: z.array(
+              z.object({ emoji: z.string(), users: z.array(z.string()) })
+            ),
+            senderId: z.string(),
+            threadId: z.string().uuid(),
+            updatedAt: z.string().datetime({ offset: true }),
+          })
+        ),
+        repliesBefore: z.array(
+          z.object({
+            attachments: z.array(
+              z.object({
+                createdAt: z.string().datetime({ offset: true }),
+                entityId: z.string(),
+                entityType: z.string(),
+                id: z.string().uuid(),
+              })
+            ),
+            content: z.string(),
+            contentTruncated: z.boolean(),
+            createdAt: z.string().datetime({ offset: true }),
+            editedAt: z
+              .union([z.string().datetime({ offset: true }), z.null()])
+              .optional(),
+            id: z.string().uuid(),
+            reactions: z.array(
+              z.object({ emoji: z.string(), users: z.array(z.string()) })
+            ),
+            senderId: z.string(),
+            threadId: z.string().uuid(),
+            updatedAt: z.string().datetime({ offset: true }),
+          })
+        ),
+        threadId: z.string().uuid(),
+      }),
+      z.null(),
+    ])
+    .optional(),
+});
+
+export const ReadChannelMessages = z.object({
+  channelId: z.string().uuid(),
+  cursor: z.union([z.string(), z.null()]).default(null),
+  direction: z.union([z.enum(['older', 'newer']), z.null()]).default(null),
+  from: z
+    .union([z.string().datetime({ offset: true }), z.null()])
+    .default(null),
+  includeThreadPreviews: z.union([z.boolean(), z.null()]).default(null),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
+  maxCharsPerMessage: z
+    .union([z.number().int().gte(0), z.null()])
+    .default(null),
+  messageId: z.union([z.string().uuid(), z.null()]).default(null),
+  messageIds: z.array(z.string().uuid()).default([]),
+  to: z.union([z.string().datetime({ offset: true }), z.null()]).default(null),
+  windowType: z.enum([
+    'latest',
+    'timeRange',
+    'aroundMessage',
+    'page',
+    'messages',
+  ]),
+});
+
+export const ReadChannelMessagesResponse = z.object({
+  channelId: z.string().uuid(),
+  messages: z.array(
+    z.object({
+      attachments: z.array(
+        z.object({
+          createdAt: z.string().datetime({ offset: true }),
+          entityId: z.string(),
+          entityType: z.string(),
+          id: z.string().uuid(),
+        })
+      ),
+      channelId: z.string().uuid(),
+      content: z.string(),
+      contentTruncated: z.boolean(),
+      createdAt: z.string().datetime({ offset: true }),
+      deletedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      editedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      id: z.string().uuid(),
+      reactions: z.array(
+        z.object({ emoji: z.string(), users: z.array(z.string()) })
+      ),
+      senderId: z.string(),
+      thread: z.object({
+        latestReplyAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        omittedReplyCount: z.number().int(),
+        preview: z
+          .union([
+            z.array(
+              z.object({
+                attachments: z.array(
+                  z.object({
+                    createdAt: z.string().datetime({ offset: true }),
+                    entityId: z.string(),
+                    entityType: z.string(),
+                    id: z.string().uuid(),
+                  })
+                ),
+                content: z.string(),
+                contentTruncated: z.boolean(),
+                createdAt: z.string().datetime({ offset: true }),
+                editedAt: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
+                id: z.string().uuid(),
+                reactions: z.array(
+                  z.object({ emoji: z.string(), users: z.array(z.string()) })
+                ),
+                senderId: z.string(),
+                threadId: z.string().uuid(),
+                updatedAt: z.string().datetime({ offset: true }),
+              })
+            ),
+            z.null(),
+          ])
+          .optional(),
+        replyCount: z.number().int(),
+        threadId: z.string().uuid(),
+      }),
+      updatedAt: z.string().datetime({ offset: true }),
+    })
+  ),
+  navigation: z.object({
+    hasMoreNewer: z.boolean(),
+    hasMoreOlder: z.boolean(),
+    newerCursor: z.union([z.string(), z.null()]).optional(),
+    olderCursor: z.union([z.string(), z.null()]).optional(),
+  }),
+  omissions: z.array(
+    z.object({
+      count: z.union([z.number().int(), z.null()]).optional(),
+      cursor: z.union([z.string(), z.null()]).optional(),
+      kind: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('olderMessages'),
+          z.literal('newerMessages'),
+          z.literal('threadReplies'),
+          z.literal('truncatedContent'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      messageId: z.union([z.string().uuid(), z.null()]).optional(),
+      threadId: z.union([z.string().uuid(), z.null()]).optional(),
+    })
+  ),
+  window: z.object({
+    direction: z.union([z.enum(['older', 'newer']), z.null()]).optional(),
+    from: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
+    messageId: z.union([z.string().uuid(), z.null()]).optional(),
+    messageIds: z.array(z.string().uuid()),
+    to: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
+    windowType: z.enum([
+      'latest',
+      'timeRange',
+      'aroundMessage',
+      'page',
+      'messages',
+    ]),
+  }),
+});
+
+export const ReadChannelThread = z.object({
+  after: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
+  before: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
+  channelId: z.string().uuid(),
+  includeChannelContext: z.union([z.boolean(), z.null()]).default(null),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
+  maxCharsPerMessage: z
+    .union([z.number().int().gte(0), z.null()])
+    .default(null),
+  messageId: z.string().uuid(),
+  replyId: z.union([z.string().uuid(), z.null()]).default(null),
+  windowType: z
+    .union([z.enum(['allIfSmall', 'latest', 'aroundReply']), z.null()])
+    .default(null),
+});
+
+export const ReadChannelThreadResponse = z.object({
+  anchor: z.object({
+    channelId: z.string().uuid(),
+    createdAt: z.string().datetime({ offset: true }),
+    kind: z.any().superRefine((x, ctx) => {
+      const schemas = [z.literal('topLevelMessage'), z.literal('threadReply')];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    }),
+    messageId: z.string().uuid(),
+    threadId: z.string().uuid(),
+  }),
+  channelContext: z
+    .union([
+      z.array(
+        z.object({
+          attachments: z.array(
+            z.object({
+              createdAt: z.string().datetime({ offset: true }),
+              entityId: z.string(),
+              entityType: z.string(),
+              id: z.string().uuid(),
+            })
+          ),
+          channelId: z.string().uuid(),
+          content: z.string(),
+          contentTruncated: z.boolean(),
+          createdAt: z.string().datetime({ offset: true }),
+          deletedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          editedAt: z
+            .union([z.string().datetime({ offset: true }), z.null()])
+            .optional(),
+          id: z.string().uuid(),
+          reactions: z.array(
+            z.object({ emoji: z.string(), users: z.array(z.string()) })
+          ),
+          senderId: z.string(),
+          thread: z.object({
+            latestReplyAt: z
+              .union([z.string().datetime({ offset: true }), z.null()])
+              .optional(),
+            omittedReplyCount: z.number().int(),
+            preview: z
+              .union([
+                z.array(
+                  z.object({
+                    attachments: z.array(
+                      z.object({
+                        createdAt: z.string().datetime({ offset: true }),
+                        entityId: z.string(),
+                        entityType: z.string(),
+                        id: z.string().uuid(),
+                      })
+                    ),
+                    content: z.string(),
+                    contentTruncated: z.boolean(),
+                    createdAt: z.string().datetime({ offset: true }),
+                    editedAt: z
+                      .union([z.string().datetime({ offset: true }), z.null()])
+                      .optional(),
+                    id: z.string().uuid(),
+                    reactions: z.array(
+                      z.object({
+                        emoji: z.string(),
+                        users: z.array(z.string()),
+                      })
+                    ),
+                    senderId: z.string(),
+                    threadId: z.string().uuid(),
+                    updatedAt: z.string().datetime({ offset: true }),
+                  })
+                ),
+                z.null(),
+              ])
+              .optional(),
+            replyCount: z.number().int(),
+            threadId: z.string().uuid(),
+          }),
+          updatedAt: z.string().datetime({ offset: true }),
+        })
+      ),
+      z.null(),
+    ])
+    .optional(),
+  omissions: z.array(
+    z.object({
+      count: z.union([z.number().int(), z.null()]).optional(),
+      cursor: z.union([z.string(), z.null()]).optional(),
+      kind: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('olderMessages'),
+          z.literal('newerMessages'),
+          z.literal('threadReplies'),
+          z.literal('truncatedContent'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      messageId: z.union([z.string().uuid(), z.null()]).optional(),
+      threadId: z.union([z.string().uuid(), z.null()]).optional(),
+    })
+  ),
+  replies: z.array(
+    z.object({
+      attachments: z.array(
+        z.object({
+          createdAt: z.string().datetime({ offset: true }),
+          entityId: z.string(),
+          entityType: z.string(),
+          id: z.string().uuid(),
+        })
+      ),
+      content: z.string(),
+      contentTruncated: z.boolean(),
+      createdAt: z.string().datetime({ offset: true }),
+      editedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      id: z.string().uuid(),
+      reactions: z.array(
+        z.object({ emoji: z.string(), users: z.array(z.string()) })
+      ),
+      senderId: z.string(),
+      threadId: z.string().uuid(),
+      updatedAt: z.string().datetime({ offset: true }),
+    })
+  ),
+  thread: z.object({
+    channelId: z.string().uuid(),
+    latestReplyAt: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .optional(),
+    parent: z.object({
+      attachments: z.array(
+        z.object({
+          createdAt: z.string().datetime({ offset: true }),
+          entityId: z.string(),
+          entityType: z.string(),
+          id: z.string().uuid(),
+        })
+      ),
+      channelId: z.string().uuid(),
+      content: z.string(),
+      contentTruncated: z.boolean(),
+      createdAt: z.string().datetime({ offset: true }),
+      deletedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      editedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      id: z.string().uuid(),
+      reactions: z.array(
+        z.object({ emoji: z.string(), users: z.array(z.string()) })
+      ),
+      senderId: z.string(),
+      thread: z.object({
+        latestReplyAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
+        omittedReplyCount: z.number().int(),
+        preview: z
+          .union([
+            z.array(
+              z.object({
+                attachments: z.array(
+                  z.object({
+                    createdAt: z.string().datetime({ offset: true }),
+                    entityId: z.string(),
+                    entityType: z.string(),
+                    id: z.string().uuid(),
+                  })
+                ),
+                content: z.string(),
+                contentTruncated: z.boolean(),
+                createdAt: z.string().datetime({ offset: true }),
+                editedAt: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
+                id: z.string().uuid(),
+                reactions: z.array(
+                  z.object({ emoji: z.string(), users: z.array(z.string()) })
+                ),
+                senderId: z.string(),
+                threadId: z.string().uuid(),
+                updatedAt: z.string().datetime({ offset: true }),
+              })
+            ),
+            z.null(),
+          ])
+          .optional(),
+        replyCount: z.number().int(),
+        threadId: z.string().uuid(),
+      }),
+      updatedAt: z.string().datetime({ offset: true }),
+    }),
+    replyCount: z.number().int().gte(0),
+    threadId: z.string().uuid(),
+  }),
 });
 
 export const ReadChat = z.object({ chatId: z.string() });
@@ -1117,6 +1938,20 @@ export const TextEditorCodeExecutionResponse = z.object({
     }
   }),
   tool_use_id: z.string(),
+});
+
+export const ReadThread = z.object({
+  contentType: z.enum([
+    'channel',
+    'channel-message',
+    'chat-thread',
+    'chat-message',
+    'project',
+  ]),
+  ids: z.array(z.string()),
+  messagesSince: z
+    .union([z.string().datetime({ offset: true }), z.null()])
+    .default(null),
 });
 
 export const ReadResponse = z.object({

@@ -3,9 +3,9 @@ mod tests;
 
 use crate::domain::{
     models::{
-        ChannelAttachment, ChannelAttachmentType, ChannelMessageFilters, ChannelParticipant,
-        CountedReaction, MessageAttachment, MessagePageDirection, ParticipantRole, ThreadData,
-        ThreadReplyRow, TopLevelMessageRow,
+        ChannelAttachment, ChannelAttachmentType, ChannelMessageFilters, ChannelMessageKind,
+        ChannelParticipant, CountedReaction, MessageAttachment, MessagePageDirection,
+        ParticipantRole, ResolvedChannelMessage, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{ChannelMessagesRepo, TopLevelMessagesQueryResult},
 };
@@ -29,7 +29,7 @@ impl PgChannelMessagesRepo {
 }
 
 /// Intermediate row for the top-level messages query.
-#[derive(Debug)]
+#[derive(Debug, sqlx::FromRow)]
 struct TopLevelRow {
     id: Uuid,
     channel_id: Uuid,
@@ -39,6 +39,15 @@ struct TopLevelRow {
     updated_at: chrono::DateTime<chrono::Utc>,
     edited_at: Option<chrono::DateTime<chrono::Utc>>,
     deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Intermediate row for resolving a message id.
+#[derive(Debug, sqlx::FromRow)]
+struct ResolvedMessageRow {
+    id: Uuid,
+    channel_id: Uuid,
+    thread_id: Option<Uuid>,
+    created_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// Intermediate row for the merged thread data query (stats + preview replies).
@@ -136,7 +145,10 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         } else {
             Some(&filters.message_ids)
         };
-        let last_activity = filters.last_activity;
+        let created_after = filters.created_after;
+        let created_before = filters.created_before;
+        let activity_after = filters.activity_after;
+        let activity_before = filters.activity_before;
         let notification_filter_active = !filters.notification_filters.is_empty();
         let notification_user_id = match (notification_filter_active, notification_user_id.as_ref())
         {
@@ -151,94 +163,9 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
 
         let (rows, has_more_newer) = match direction {
             MessagePageDirection::Older => {
-                let rows = if notification_filter_active {
-                    sqlx::query_as!(
-                        TopLevelRow,
-                        r#"
-                        WITH done_top_level AS (
-                            SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
-                            FROM notification n
-                            JOIN user_notification un ON un.notification_id = n.id
-                            JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
-                            WHERE $8::bool IS NOT NULL
-                              AND un.user_id = $7::text
-                              AND un.deleted_at IS NULL
-                              AND un.done = $8
-                              AND n.event_item_type = 'channel'
-                              AND n.event_item_id = $1::uuid::text
-                              AND n.metadata->>'messageId' IS NOT NULL
-                              AND msg.channel_id = $1
-                              AND msg.deleted_at IS NULL
-                        ),
-                        seen_top_level AS (
-                            SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
-                            FROM notification n
-                            JOIN user_notification un ON un.notification_id = n.id
-                            JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
-                            WHERE $9::bool IS NOT NULL
-                              AND un.user_id = $7::text
-                              AND un.deleted_at IS NULL
-                              AND (un.seen_at IS NOT NULL) = $9
-                              AND n.event_item_type = 'channel'
-                              AND n.event_item_id = $1::uuid::text
-                              AND n.metadata->>'messageId' IS NOT NULL
-                              AND msg.channel_id = $1
-                              AND msg.deleted_at IS NULL
-                        )
-                        SELECT
-                            m.id,
-                            m.channel_id,
-                            m.sender_id,
-                            m.content,
-                            m.created_at,
-                            m.updated_at,
-                            m.edited_at::timestamptz AS "edited_at?",
-                            m.deleted_at::timestamptz AS "deleted_at?"
-                        FROM comms_messages m
-                        WHERE m.channel_id = $1
-                          AND m.thread_id IS NULL
-                          AND (m.deleted_at IS NULL OR EXISTS (
-                              SELECT 1 FROM comms_messages r
-                              WHERE r.thread_id = m.id AND r.deleted_at IS NULL
-                          ))
-                          AND ($2::timestamptz IS NULL OR (m.created_at, m.id) < ($2, $3))
-                          AND ($5::uuid[] IS NULL OR m.id = ANY($5))
-                          AND ($6::timestamptz IS NULL OR (
-                              m.created_at > $6
-                              OR EXISTS (
-                                  SELECT 1 FROM comms_messages r
-                                  WHERE r.thread_id = m.id
-                                    AND r.deleted_at IS NULL
-                                    AND r.created_at > $6
-                              )
-                          ))
-                          AND ($8::bool IS NULL OR EXISTS (
-                              SELECT 1 FROM done_top_level dt
-                              WHERE dt.top_level_id = m.id
-                          ))
-                          AND ($9::bool IS NULL OR EXISTS (
-                              SELECT 1 FROM seen_top_level st
-                              WHERE st.top_level_id = m.id
-                          ))
-                        ORDER BY m.created_at DESC, m.id DESC
-                        LIMIT $4
-                        "#,
-                        channel_id,
-                        cursor_created_at,
-                        cursor_id,
-                        limit_i64,
-                        message_ids_filter as Option<&[Uuid]>,
-                        last_activity,
-                        notification_user_id,
-                        notification_done,
-                        notification_seen,
-                    )
-                    .fetch_all(&self.pool)
-                    .await?
-                } else {
-                    sqlx::query_as!(
-                        TopLevelRow,
-                        r#"
+                let rows = sqlx::query_as!(
+                    TopLevelRow,
+                    r#"
                     SELECT
                         m.id,
                         m.channel_id,
@@ -257,120 +184,80 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                       ))
                       AND ($2::timestamptz IS NULL OR (m.created_at, m.id) < ($2, $3))
                       AND ($5::uuid[] IS NULL OR m.id = ANY($5))
-                      AND ($6::timestamptz IS NULL OR (
-                          m.created_at > $6
+                      AND ($6::timestamptz IS NULL OR m.created_at >= $6)
+                      AND ($7::timestamptz IS NULL OR m.created_at < $7)
+                      AND (
+                          ($8::timestamptz IS NULL AND $9::timestamptz IS NULL)
+                          OR (
+                              ($8::timestamptz IS NULL OR m.created_at >= $8)
+                              AND ($9::timestamptz IS NULL OR m.created_at < $9)
+                          )
                           OR EXISTS (
                               SELECT 1 FROM comms_messages r
                               WHERE r.thread_id = m.id
                                 AND r.deleted_at IS NULL
-                                AND r.created_at > $6
+                                AND ($8::timestamptz IS NULL OR r.created_at >= $8)
+                                AND ($9::timestamptz IS NULL OR r.created_at < $9)
                           )
+                      )
+                      AND ($10::bool = FALSE OR (
+                          ($11::bool IS NULL OR EXISTS (
+                              SELECT 1
+                              FROM notification n
+                              JOIN user_notification un ON un.notification_id = n.id
+                              JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
+                              WHERE un.user_id = $13::text
+                                AND un.deleted_at IS NULL
+                                AND un.done = $11
+                                AND n.event_item_type = 'channel'
+                                AND n.event_item_id = $1::uuid::text
+                                AND n.metadata->>'messageId' IS NOT NULL
+                                AND msg.channel_id = $1
+                                AND msg.deleted_at IS NULL
+                                AND COALESCE(msg.thread_id, msg.id) = m.id
+                          ))
+                          AND ($12::bool IS NULL OR EXISTS (
+                              SELECT 1
+                              FROM notification n
+                              JOIN user_notification un ON un.notification_id = n.id
+                              JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
+                              WHERE un.user_id = $13::text
+                                AND un.deleted_at IS NULL
+                                AND (un.seen_at IS NOT NULL) = $12
+                                AND n.event_item_type = 'channel'
+                                AND n.event_item_id = $1::uuid::text
+                                AND n.metadata->>'messageId' IS NOT NULL
+                                AND msg.channel_id = $1
+                                AND msg.deleted_at IS NULL
+                                AND COALESCE(msg.thread_id, msg.id) = m.id
+                          ))
                       ))
                     ORDER BY m.created_at DESC, m.id DESC
                     LIMIT $4
                     "#,
-                        channel_id,
-                        cursor_created_at,
-                        cursor_id,
-                        limit_i64,
-                        message_ids_filter as Option<&[Uuid]>,
-                        last_activity,
-                    )
-                    .fetch_all(&self.pool)
-                    .await?
-                };
+                    channel_id,
+                    cursor_created_at,
+                    cursor_id,
+                    limit_i64,
+                    message_ids_filter as Option<&[Uuid]>,
+                    created_after,
+                    created_before,
+                    activity_after,
+                    activity_before,
+                    notification_filter_active,
+                    notification_done,
+                    notification_seen,
+                    notification_user_id,
+                )
+                .fetch_all(&self.pool)
+                .await?;
 
                 (rows, cursor_created_at.is_some())
             }
             MessagePageDirection::Newer => {
-                let mut rows = if notification_filter_active {
-                    sqlx::query_as!(
-                        TopLevelRow,
-                        r#"
-                        WITH done_top_level AS (
-                            SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
-                            FROM notification n
-                            JOIN user_notification un ON un.notification_id = n.id
-                            JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
-                            WHERE $8::bool IS NOT NULL
-                              AND un.user_id = $7::text
-                              AND un.deleted_at IS NULL
-                              AND un.done = $8
-                              AND n.event_item_type = 'channel'
-                              AND n.event_item_id = $1::uuid::text
-                              AND n.metadata->>'messageId' IS NOT NULL
-                              AND msg.channel_id = $1
-                              AND msg.deleted_at IS NULL
-                        ),
-                        seen_top_level AS (
-                            SELECT DISTINCT COALESCE(msg.thread_id, msg.id) AS top_level_id
-                            FROM notification n
-                            JOIN user_notification un ON un.notification_id = n.id
-                            JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
-                            WHERE $9::bool IS NOT NULL
-                              AND un.user_id = $7::text
-                              AND un.deleted_at IS NULL
-                              AND (un.seen_at IS NOT NULL) = $9
-                              AND n.event_item_type = 'channel'
-                              AND n.event_item_id = $1::uuid::text
-                              AND n.metadata->>'messageId' IS NOT NULL
-                              AND msg.channel_id = $1
-                              AND msg.deleted_at IS NULL
-                        )
-                        SELECT
-                            m.id,
-                            m.channel_id,
-                            m.sender_id,
-                            m.content,
-                            m.created_at,
-                            m.updated_at,
-                            m.edited_at::timestamptz AS "edited_at?",
-                            m.deleted_at::timestamptz AS "deleted_at?"
-                        FROM comms_messages m
-                        WHERE m.channel_id = $1
-                          AND m.thread_id IS NULL
-                          AND (m.deleted_at IS NULL OR EXISTS (
-                              SELECT 1 FROM comms_messages r
-                              WHERE r.thread_id = m.id AND r.deleted_at IS NULL
-                          ))
-                          AND ($2::timestamptz IS NOT NULL AND (m.created_at, m.id) > ($2, $3))
-                          AND ($5::uuid[] IS NULL OR m.id = ANY($5))
-                          AND ($6::timestamptz IS NULL OR (
-                              m.created_at > $6
-                              OR EXISTS (
-                                  SELECT 1 FROM comms_messages r
-                                  WHERE r.thread_id = m.id
-                                    AND r.deleted_at IS NULL
-                                    AND r.created_at > $6
-                              )
-                          ))
-                          AND ($8::bool IS NULL OR EXISTS (
-                              SELECT 1 FROM done_top_level dt
-                              WHERE dt.top_level_id = m.id
-                          ))
-                          AND ($9::bool IS NULL OR EXISTS (
-                              SELECT 1 FROM seen_top_level st
-                              WHERE st.top_level_id = m.id
-                          ))
-                        ORDER BY m.created_at ASC, m.id ASC
-                        LIMIT $4
-                        "#,
-                        channel_id,
-                        cursor_created_at,
-                        cursor_id,
-                        limit_i64 + 1,
-                        message_ids_filter as Option<&[Uuid]>,
-                        last_activity,
-                        notification_user_id,
-                        notification_done,
-                        notification_seen,
-                    )
-                    .fetch_all(&self.pool)
-                    .await?
-                } else {
-                    sqlx::query_as!(
-                        TopLevelRow,
-                        r#"
+                let mut rows = sqlx::query_as!(
+                    TopLevelRow,
+                    r#"
                     SELECT
                         m.id,
                         m.channel_id,
@@ -389,28 +276,73 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                       ))
                       AND ($2::timestamptz IS NOT NULL AND (m.created_at, m.id) > ($2, $3))
                       AND ($5::uuid[] IS NULL OR m.id = ANY($5))
-                      AND ($6::timestamptz IS NULL OR (
-                          m.created_at > $6
+                      AND ($6::timestamptz IS NULL OR m.created_at >= $6)
+                      AND ($7::timestamptz IS NULL OR m.created_at < $7)
+                      AND (
+                          ($8::timestamptz IS NULL AND $9::timestamptz IS NULL)
+                          OR (
+                              ($8::timestamptz IS NULL OR m.created_at >= $8)
+                              AND ($9::timestamptz IS NULL OR m.created_at < $9)
+                          )
                           OR EXISTS (
                               SELECT 1 FROM comms_messages r
                               WHERE r.thread_id = m.id
                                 AND r.deleted_at IS NULL
-                                AND r.created_at > $6
+                                AND ($8::timestamptz IS NULL OR r.created_at >= $8)
+                                AND ($9::timestamptz IS NULL OR r.created_at < $9)
                           )
+                      )
+                      AND ($10::bool = FALSE OR (
+                          ($11::bool IS NULL OR EXISTS (
+                              SELECT 1
+                              FROM notification n
+                              JOIN user_notification un ON un.notification_id = n.id
+                              JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
+                              WHERE un.user_id = $13::text
+                                AND un.deleted_at IS NULL
+                                AND un.done = $11
+                                AND n.event_item_type = 'channel'
+                                AND n.event_item_id = $1::uuid::text
+                                AND n.metadata->>'messageId' IS NOT NULL
+                                AND msg.channel_id = $1
+                                AND msg.deleted_at IS NULL
+                                AND COALESCE(msg.thread_id, msg.id) = m.id
+                          ))
+                          AND ($12::bool IS NULL OR EXISTS (
+                              SELECT 1
+                              FROM notification n
+                              JOIN user_notification un ON un.notification_id = n.id
+                              JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
+                              WHERE un.user_id = $13::text
+                                AND un.deleted_at IS NULL
+                                AND (un.seen_at IS NOT NULL) = $12
+                                AND n.event_item_type = 'channel'
+                                AND n.event_item_id = $1::uuid::text
+                                AND n.metadata->>'messageId' IS NOT NULL
+                                AND msg.channel_id = $1
+                                AND msg.deleted_at IS NULL
+                                AND COALESCE(msg.thread_id, msg.id) = m.id
+                          ))
                       ))
                     ORDER BY m.created_at ASC, m.id ASC
                     LIMIT $4
                     "#,
-                        channel_id,
-                        cursor_created_at,
-                        cursor_id,
-                        limit_i64 + 1,
-                        message_ids_filter as Option<&[Uuid]>,
-                        last_activity,
-                    )
-                    .fetch_all(&self.pool)
-                    .await?
-                };
+                    channel_id,
+                    cursor_created_at,
+                    cursor_id,
+                    limit_i64 + 1,
+                    message_ids_filter as Option<&[Uuid]>,
+                    created_after,
+                    created_before,
+                    activity_after,
+                    activity_before,
+                    notification_filter_active,
+                    notification_done,
+                    notification_seen,
+                    notification_user_id,
+                )
+                .fetch_all(&self.pool)
+                .await?;
 
                 let has_more_newer = rows.len() > limit_usize;
                 if has_more_newer {
@@ -510,23 +442,24 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn get_thread_replies(&self, parent_id: Uuid) -> Result<Vec<ThreadReplyRow>, Self::Err> {
-        let rows = sqlx::query_as::<_, ThreadReplyOnlyRow>(
+        let rows = sqlx::query_as!(
+            ThreadReplyOnlyRow,
             r#"
             SELECT
                 id,
-                thread_id,
+                thread_id AS "thread_id!",
                 sender_id,
                 content,
                 created_at,
                 updated_at,
-                edited_at::timestamptz AS edited_at
+                edited_at::timestamptz AS "edited_at?"
             FROM comms_messages
             WHERE thread_id = $1
               AND deleted_at IS NULL
             ORDER BY created_at ASC, id ASC
             "#,
+            parent_id,
         )
-        .bind(parent_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -760,6 +693,42 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             updated_at: r.updated_at,
             edited_at: r.edited_at,
             deleted_at: r.deleted_at,
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn resolve_message(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<Option<ResolvedChannelMessage>, Self::Err> {
+        let row = sqlx::query_as!(
+            ResolvedMessageRow,
+            r#"
+            SELECT id, channel_id, thread_id, created_at
+            FROM comms_messages
+            WHERE id = $1
+              AND channel_id = $2
+            "#,
+            message_id,
+            channel_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| {
+            let kind = if r.thread_id.is_some() {
+                ChannelMessageKind::ThreadReply
+            } else {
+                ChannelMessageKind::TopLevelMessage
+            };
+            ResolvedChannelMessage {
+                message_id: r.id,
+                channel_id: r.channel_id,
+                kind,
+                thread_id: r.thread_id.unwrap_or(r.id),
+                created_at: r.created_at,
+            }
         }))
     }
 

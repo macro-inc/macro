@@ -368,7 +368,7 @@ export function CommandMenuInner(props: {
   return (
     <div class="flex flex-col">
       {/* Search Input */}
-      <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted/50">
+      <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted">
         <Show
           when={showBackButton()}
           fallback={
@@ -428,12 +428,12 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
   const remainingCount = () => Math.max(0, props.entities.length - 2);
 
   return (
-    <div class="flex items-center gap-2 px-3 py-2 bg-panel border-b border-edge-muted/50">
+    <div class="flex items-center gap-2 px-3 py-2 bg-panel border-b border-edge-muted">
       <For each={displayEntities()}>
         {(entity) => {
           return (
             <div
-              class={cn('bg-edge/20 px-2 py-1 truncate text-xs rounded-xs', {
+              class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
                 'max-w-[50%]': props.entities.length === 2,
               })}
             >
@@ -602,7 +602,7 @@ function CategoryFilterTabs() {
   const list = CATEGORIES.map((c) => ({ value: c.id, label: c.label }));
 
   return (
-    <div class="px-1.5 h-10 border-b border-edge-muted/50">
+    <div class="px-1.5 h-10 border-b border-edge-muted">
       <Tabs
         list={list}
         value={CommandState.categoryFilter()}

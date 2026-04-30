@@ -29,7 +29,7 @@ export function SearchContentHitRow(props: SearchContentHitRowProps) {
   return (
     <div
       class={cn(
-        'ph-no-capture flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-edge/10 gap-4 hover:bg-edge/20'
+        'ph-no-capture flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-edge gap-4 hover:bg-edge'
       )}
       onClick={handleClick}
       role="button"

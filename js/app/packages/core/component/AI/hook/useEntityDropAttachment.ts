@@ -1,13 +1,12 @@
-import { match, P } from 'ts-pattern';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant';
 import type { Attachment, Attachments } from '@core/component/AI/types';
-import { asFileType } from '@core/component/AI/util';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { EntityDragData, EntityDragEvent } from '@entity';
+import type { EntityType } from '@service-cognition/generated/schemas/entityType';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import type { AttachmentType } from '@service-cognition/generated/schemas';
 import { type Accessor, createMemo } from 'solid-js';
+import { match, P } from 'ts-pattern';
 
 /**
  * Hook to handle entity drag-and-drop for chat attachments.
@@ -60,7 +59,6 @@ export function useEntityDropAttachment(
     if (!data || data.dragType !== 'entity') return;
 
     const entityId = data.id;
-    const entityName = data.name;
     const entityType = data.type;
     const fileType = 'fileType' in data ? data.fileType : undefined;
 
@@ -71,66 +69,31 @@ export function useEntityDropAttachment(
       return;
     }
 
-    // Build the attachment based on entity type
-    const attachment = match(entityType)
-      .with('document', () => {
-        const validFileType = asFileType(fileType);
-        if (!validFileType) return;
-        return {
-          id: `${entityId}-document-attachment`,
-          attachmentId: entityId,
-          attachmentType: 'document' satisfies AttachmentType,
-          metadata: {
-            type: 'document',
-            document_type: validFileType,
-            document_name: entityName,
-          },
-        } satisfies Attachment;
-      })
-      .with('project', () => {
-        return {
-          id: `${entityId}-project-attachment`,
-          attachmentId: entityId,
-          attachmentType: 'project' satisfies AttachmentType,
-          metadata: {
-            type: 'project',
-            project_name: entityName,
-          },
-        } satisfies Attachment;
-      })
+    const attachment: Attachment | undefined = match(entityType)
+      .with('document', () => ({
+        entity_id: entityId,
+        entity_type: 'document' as EntityType,
+      }))
+      .with('project', () => ({
+        entity_id: entityId,
+        entity_type: 'project' as EntityType,
+      }))
       .with(P.union('channel', 'channel_message'), () => {
-        const channelType =
-          'channelType' in data ? data.channelType : 'organization';
         const channelId =
           'channelId' in data ? (data.channelId as string) : entityId;
-
-        // TODO: channel_message attachments only reference the full channel, not the message
         return {
-          id: `${channelId}-channel-attachment`,
-          attachmentId: channelId,
-          attachmentType: 'channel' satisfies AttachmentType,
-          metadata: {
-            type: 'channel',
-            channel_type: channelType,
-            channel_name: entityName,
-          },
-        } satisfies Attachment;
+          entity_id: channelId,
+          entity_type: 'channel' as EntityType,
+        };
       })
-      .with('email', () => {
-        return {
-          id: `${entityId}-email-attachment`,
-          attachmentId: entityId,
-          attachmentType: 'email' satisfies AttachmentType,
-          metadata: {
-            type: 'email',
-            email_subject: entityName,
-          },
-        } satisfies Attachment;
-      })
+      .with('email', () => ({
+        entity_id: entityId,
+        entity_type: 'email_thread' as EntityType,
+      }))
       .with('chat', () => undefined)
       .with('call', () => undefined)
       .with('automation', () => undefined)
-      .exhaustive() satisfies Attachment | undefined;
+      .exhaustive();
 
     if (attachment) {
       attachments.addAttachment(attachment);

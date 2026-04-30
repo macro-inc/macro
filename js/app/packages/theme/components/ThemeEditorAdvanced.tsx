@@ -32,7 +32,7 @@ export function ThemeEditorAdvanced(){
       <style>{`
         .theme-editor-advanced-input::selection {
           background-color: var(--a0);
-          color: var(--b1);
+          color: var(--b0);
         }
 
         .theme-editor-advanced-input.invalid {
@@ -42,7 +42,7 @@ export function ThemeEditorAdvanced(){
 
       <div
         style="
-          background-color: var(--b1);
+          background-color: var(--b0);
           font-size: var(--text-xs);
           scrollbar-width: none;
           position: relative;
@@ -64,7 +64,7 @@ export function ThemeEditorAdvanced(){
         >
           <div
             style="
-              background-color: var(--color-edge-muted);
+              background-color: var(--b3);
               box-sizing: border-box;
               overflow-x: hidden;
               display: grid;
@@ -73,8 +73,8 @@ export function ThemeEditorAdvanced(){
           >
             <div
               style="
-                border-bottom: 1px solid var(--color-edge-muted);
-                background-color: var(--b1);
+                border-bottom: 1px solid var(--b3);
+                background-color: var(--b0);
                 align-items: center;
                 position: absolute;
                 padding: 0 20px;
@@ -121,13 +121,13 @@ export function ThemeEditorAdvanced(){
                   <div
                     style="
                       font-family: var(--font-mono);
-                      background-color: var(--b1);
+                      background-color: var(--b0);
                     "
                   >
                     <div
                       style="
-                      background-color: var(--color-edge-muted);
                       grid-template-columns: 140px 1fr 80px;
+                      background-color: var(--b3);
                       align-items: center;
                       display: grid;
                       height: 41px;
@@ -136,7 +136,7 @@ export function ThemeEditorAdvanced(){
                     >
                       <div
                         style="
-                        background-color: var(--b1);
+                        background-color: var(--b0);
                         box-sizing: border-box;
                         align-items: center;
                         padding: 0 20px;
@@ -153,7 +153,7 @@ export function ThemeEditorAdvanced(){
 
                       <div
                         style="
-                        background-color: var(--b1);
+                        background-color: var(--b0);
                         box-sizing: border-box;
                         align-items: center;
                         white-space: nowrap;
@@ -164,6 +164,18 @@ export function ThemeEditorAdvanced(){
                       "
                       >
                         <input
+                          style="
+                            color: var(--color-ink-extra-muted);
+                            font-family: var(--font-mono);
+                            font-size: var(--text-xs);
+                            background: transparent;
+                            font-weight: 300;
+                            outline: none;
+                            border: none;
+                            width: 100%;
+                          "
+                          class="theme-editor-advanced-input"
+                          value={inputValue()}
                           onInput={(e) => {
                             setColor(
                               colorValue,
@@ -172,25 +184,13 @@ export function ThemeEditorAdvanced(){
                               setIsSetByInput
                             );
                           }}
-                          class="theme-editor-advanced-input"
-                          value={inputValue()}
                           type="text"
-                          style="
-                            outline: none;
-                            border: none;
-                            width: 100%;
-                            font-family: var(--font-mono);
-                            font-size: var(--text-xs);
-                            font-weight: 300;
-                            color: var(--color-ink-extra-muted);
-                            background: transparent;
-                          "
                         />
                       </div>
 
                       <div
                         style="
-                        background-color: var(--b1);
+                        background-color: var(--b0);
                         box-sizing: border-box;
                         white-space: nowrap;
                         align-items: center;

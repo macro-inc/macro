@@ -25,10 +25,7 @@ import {
 } from '@core/component/AI/util/storage';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import {
-  DEV_MODE_ENV,
-  ENABLE_SNAPSHOT_NODE,
-} from '@core/constant/featureFlags';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -100,7 +97,6 @@ function ChatInner(props: {
     },
     block: 'chat',
     showOpenTabs: true,
-    useSnapshotForDocuments: ENABLE_SNAPSHOT_NODE,
   });
 
   // Sync isGenerating from controller phase

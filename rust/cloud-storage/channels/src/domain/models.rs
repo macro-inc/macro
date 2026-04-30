@@ -30,11 +30,24 @@ pub struct ChannelMessageFilters {
     /// When non-empty, only return messages with these IDs.
     #[serde(default)]
     pub message_ids: Vec<Uuid>,
-    /// When set, only return top-level messages that have activity after this
-    /// timestamp. Activity means either the message itself was created after
-    /// this time, or a thread reply was created after this time.
+    /// When set, only return top-level messages created at or after this timestamp.
     #[serde(default)]
-    pub last_activity: Option<DateTime<Utc>>,
+    pub created_after: Option<DateTime<Utc>>,
+    /// When set, only return top-level messages created before this timestamp.
+    #[serde(default)]
+    pub created_before: Option<DateTime<Utc>>,
+    /// When set, only return top-level messages with channel activity at or after
+    /// this timestamp. Activity means either the message itself was created after
+    /// this time, or a thread reply was created after this time.
+    ///
+    /// Accepts the legacy JSON field `last_activity` for backwards compatibility.
+    #[serde(default, alias = "last_activity")]
+    pub activity_after: Option<DateTime<Utc>>,
+    /// When set, only return top-level messages with channel activity before this
+    /// timestamp. Activity means either the parent message or at least one thread
+    /// reply falls in the requested activity window.
+    #[serde(default)]
+    pub activity_before: Option<DateTime<Utc>>,
     /// When set, only return top-level messages where the message itself or
     /// any active thread reply has a notification for the requesting user that
     /// matches these notification state constraints.
@@ -61,6 +74,30 @@ impl NotificationFilters {
     pub fn is_empty(&self) -> bool {
         self.done.is_none() && self.seen.is_none()
     }
+}
+
+/// Where a channel message sits in the channel/thread model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChannelMessageKind {
+    /// A top-level message in the channel timeline.
+    TopLevelMessage,
+    /// A reply inside a top-level message's thread.
+    ThreadReply,
+}
+
+/// Resolution metadata for any channel message id.
+#[derive(Debug, Clone)]
+pub struct ResolvedChannelMessage {
+    /// The requested message id.
+    pub message_id: Uuid,
+    /// Channel this message belongs to.
+    pub channel_id: Uuid,
+    /// Whether the message is top-level or a thread reply.
+    pub kind: ChannelMessageKind,
+    /// The top-level parent/thread id. Equals `message_id` for top-level messages.
+    pub thread_id: Uuid,
+    /// When the requested message was created.
+    pub created_at: DateTime<Utc>,
 }
 
 /// Direction for cursor-based message pagination.

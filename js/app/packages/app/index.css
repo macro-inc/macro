@@ -81,16 +81,19 @@
   --color-accent-ink:      var(--a0);
   --color-accent:          var(--a0);
   --color-focus:           var(--a0);
+  --color-accent-bg:       oklch(from var(--a0) l c h / 0.15);
 
+  --color-panel:           var(--b0); /* block background */
+  --color-page:            var(--b0); /* page background */
+  --color-menu:            var(--b0); /* menu background */
   --color-dialog:          var(--b0); /* dialog, e.g. dialog background */
   --color-input:           var(--b0); /* input, e.g. chat/channel input */
-  --color-menu:            var(--b0); /* menu background */
-  --color-button:          var(--b1); /* dialog, e.g. dialog background */
-  --color-panel:           var(--b1); /* block background */
-  --color-active:          var(--b2); /* elements that are selected or activated */
+  --color-button:          var(--b0); /* dialog, e.g. dialog background */
+  --color-message:         var(--b0); /* message background */
+  --color-active:          var(--b1); /* elements that are selected or activated */
   --color-hover:           var(--b2); /* hover, e.g. hover state for buttons/items */
-  --color-message:         var(--b3); /* message background */
-  --color-page:            var(--b3); /* page background */
+  --color-overlay:         oklch(from var(--b2) l c h / 0.5); /* overlay, e.g. modal background */
+  --color-edge-muted:      var(--b3); /* muted edge */
   --color-edge:            var(--b4); /* edge (border) */
 
   --color-ink:             var(--c0);
@@ -98,11 +101,6 @@
   --color-ink-extra-muted: var(--c2);
   --color-ink-disabled:    var(--c3);
   --color-ink-placeholder: var(--c4);
-
-  /* these are fucked */
-  --color-edge-muted:  color-mix(in srgb, var(--b4), var(--b1) 50%); /* muted edge */
-  --color-overlay:     oklch(from var(--b2) l c h / 0.5); /* overlay, e.g. modal background */
-  --color-accent-bg:   oklch(from var(--a0) l c h / 0.15);
 
   /* Below are hardcoded colors */
   --color-failure:     oklch(0.637 0.237 25.331);

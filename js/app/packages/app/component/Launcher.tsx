@@ -447,7 +447,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
       <div
         class={cn(
-          'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-click duration-200 transition-color border border-edge/50',
+          'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-click duration-200 transition-color border border-edge',
           textFg()
         )}
         style={{ background: props.focused ? 'currentColor' : 'transparent' }}
@@ -695,7 +695,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
   return (
     <div class="bg-menu ring-1 ring-edge-muted rounded-sm">
-      <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted/50">
+      <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
           <style>{`

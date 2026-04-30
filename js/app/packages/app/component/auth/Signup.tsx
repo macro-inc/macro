@@ -81,7 +81,7 @@ export function Signup() {
         </div>
 
         <div class="w-full max-w-105 login-card">
-          <Panel>
+          <Panel depth={1}>
             <div class="login-stagger">
               <div class="flex items-center justify-center py-10">
                 <LogoIcon class="size-20 text-accent" />
