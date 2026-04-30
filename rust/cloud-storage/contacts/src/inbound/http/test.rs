@@ -25,7 +25,7 @@ impl ContactsService for MockService {
                 "macro|contact3@test.com",
             ]
             .into_iter()
-            .map(|s| MacroUserIdStr::try_from_email(s).unwrap())
+            .map(|s| MacroUserIdStr::try_from(s.to_string()).unwrap())
             .collect();
             return Ok(contacts);
         } else if user_id.as_ref() == "macro|many@test.com" {
@@ -39,7 +39,7 @@ impl ContactsService for MockService {
                 "macro|contact10@test.com",
             ]
             .into_iter()
-            .map(|s| MacroUserIdStr::try_from_email(s).unwrap())
+            .map(|s| MacroUserIdStr::try_from(s.to_string()).unwrap())
             .collect();
             return Ok(contacts);
         }
