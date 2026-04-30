@@ -1,9 +1,9 @@
-import type { ThemeMentionDecoratorProps } from '@lexical-core';
-import type { ThemeV2 } from '@theme/types/themeTypes';
-import { isThemeV2 } from '@theme/utils/themeValidation';
 import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
-import { applyTheme } from '@theme/utils/themeUtils';
+import type { ThemeMentionDecoratorProps } from '@lexical-core';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { isThemeV2 } from '@theme/utils/themeValidation';
+import type { ThemeV2 } from '@theme/types/themeTypes';
+import { applyTheme } from '@theme/utils/themeUtils';
 
 export function ThemeMention(props: ThemeMentionDecoratorProps) {
   const { openSettings } = useSettingsState();
@@ -36,8 +36,11 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
   };
 
   return (
-    <span class="pointer-events-auto mx-0.5" onClick={handleClick}>
-      <span class="inline-flex items-center gap-0.75 align-baseline px-1 py-px rounded-[3px] border border-edge-muted">
+      <button
+        class="pointer-events-auto mx-0.5 inline-flex items-center gap-0.75 align-baseline px-1 py-px rounded-[3px] border border-edge-muted bg-transparent"
+        onClick={handleClick}
+        type="button"
+      >
         <span class="inline-flex items-center gap-0.5">
           <span
             class="inline-block size-2.5 rounded-xs border border-edge-muted"
@@ -53,7 +56,6 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
           />
         </span>
         <span class="mx-0.5 cursor-default">{props.name}</span>
-      </span>
-    </span>
+    </button>
   );
 }
