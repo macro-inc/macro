@@ -48,9 +48,12 @@ export const useEntityActionHotkeys = (
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
 
+  const group = createHotkeyGroup();
+
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
     notificationSource: () => notificationSource,
+    hotkeyGroup: group,
   });
 
   const deleteAction = makeDeleteAction({
@@ -118,8 +121,6 @@ export const useEntityActionHotkeys = (
       openPropertyEditor(entities, mode, property);
     }
   };
-
-  const group = createHotkeyGroup();
 
   // Mark Done - 'e', not included in Hotkey Group so that we can use it from inside of blocks
   registerHotkey({

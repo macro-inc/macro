@@ -182,7 +182,10 @@ export interface HotkeyRegistrationOptions {
 export type HotkeyGroup = {
   /** Add a hotkey registration to this group */
   add: <T extends RegisterHotkeyReturn>(registration: T) => T;
-  /** Dispose all hotkeys in this group */
+  /** Register an arbitrary function to run when the group is disposed.
+   *  Use this to tie non-hotkey resources to the group's lifetime. */
+  addDisposer: (dispose: () => void) => void;
+  /** Dispose all hotkeys and registered disposers in this group */
   dispose: () => void;
 };
 
