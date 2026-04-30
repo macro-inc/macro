@@ -382,7 +382,11 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
 
   const members = createMemo(() => {
     const unsorted = teamQuery.data?.members ?? [];
-    return [...unsorted].sort((a, b) => (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3));
+    return [...unsorted].sort((a, b) => {
+      const roleCompare = (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
+      if (roleCompare !== 0) return roleCompare;
+      return a.user_id.localeCompare(b.user_id);
+    });
   });
 
   const isOwner = createMemo(() => {
