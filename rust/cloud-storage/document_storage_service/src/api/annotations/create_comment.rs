@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+#[allow(unused_imports)]
 use crate::{
     api::{
         annotations::{CommentNotifContext, compute_notification_recipients},

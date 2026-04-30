@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use crate::api::context::{AppState, DocumentPermissionJwtSecretKey};
 use axum::{
     Extension, Json,

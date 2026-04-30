@@ -8,6 +8,7 @@ use axum::{
 use model::response::{GenericErrorResponse, GenericResponse};
 use sqlx::PgPool;
 
+#[allow(unused_imports)]
 use crate::{
     api::context::ApiContext,
     model::{

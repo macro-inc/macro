@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+#[allow(unused_imports)]
 use crate::{api::context::ApiContext, service::conn_gateway::update_live_comment_state};
 use axum::{
     Json,
