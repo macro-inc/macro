@@ -1139,6 +1139,44 @@ async fn get_call_records_by_user_attended_none_returns_all(
     Ok(())
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_returns_archived_summary(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let summary = "AI-generated summary of the archived call.";
+    sqlx::query!(
+        r#"UPDATE call_records SET summary = $2 WHERE id = $1"#,
+        CALL_ARCHIVED,
+        summary,
+    )
+    .execute(&pool)
+    .await?;
+
+    let records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
+        .await?;
+
+    let active = records
+        .iter()
+        .find(|r| r.call_id == CALL1)
+        .expect("active call missing");
+    assert!(active.is_active);
+    assert!(active.summary.is_none());
+
+    let archived = records
+        .iter()
+        .find(|r| r.call_id == CALL_ARCHIVED)
+        .expect("archived call missing");
+    assert!(!archived.is_active);
+    assert_eq!(archived.summary.as_deref(), Some(summary));
+
+    Ok(())
+}
+
 // -- delete_call_record -------------------------------------------------------
 
 #[sqlx::test(

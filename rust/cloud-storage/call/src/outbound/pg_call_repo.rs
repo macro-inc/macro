@@ -954,6 +954,7 @@ impl CallRepository for PgCallRepo {
                 egress_id,
                 recording_key,
                 NULL::text as "custom_name",
+                NULL::text as "summary",
                 true as "is_active!"
             FROM calls c
             WHERE EXISTS (
@@ -979,6 +980,7 @@ impl CallRepository for PgCallRepo {
                 egress_id,
                 recording_key,
                 custom_name,
+                summary,
                 false as "is_active!"
             FROM call_records cr
             WHERE EXISTS (
@@ -1060,7 +1062,7 @@ impl CallRepository for PgCallRepo {
                 recording_url: None,
                 channel_name: None,
                 custom_name: row.custom_name,
-                summary: None,
+                summary: row.summary,
                 is_active: row.is_active,
                 participants,
                 transcript: Vec::new(),
