@@ -20,6 +20,8 @@ export { ChannelCallButton } from './ChannelCallButton';
 export { ChannelCallTab } from './ChannelCallTab';
 export { ChannelCallAutoJoin } from './ChannelCallAutoJoin';
 export { CallEventSync } from './CallEventSync';
+export { CallStartedNotifier } from './CallStartedNotifier';
+export { joinChannelCall } from './join-channel-call';
 export { openChannelCallTab } from './open-channel-call-tab';
 export {
   InCallPanel,
