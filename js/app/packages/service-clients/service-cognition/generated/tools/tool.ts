@@ -23,7 +23,7 @@ type ToolParserMap = {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
   };
-  GetThread: { call: types.ReadThread; response: types.GetThreadResponse };
+  GetThread: { call: types.GetThread; response: types.GetThreadResponse };
   ListCallRecords: {
     call: types.ListCallRecords;
     response: types.ListCallRecordsResponse;
@@ -94,7 +94,7 @@ const toolParserMap = {
     call: schemas.GetEntityProperties,
     response: schemas.GetEntityPropertiesResponse,
   },
-  GetThread: { call: schemas.ReadThread, response: schemas.GetThreadResponse },
+  GetThread: { call: schemas.GetThread, response: schemas.GetThreadResponse },
   ListCallRecords: {
     call: schemas.ListCallRecords,
     response: schemas.ListCallRecordsResponse,
@@ -182,7 +182,7 @@ type ToolDataMap = {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
   };
-  GetThread: { call: types.ReadThread; response: types.GetThreadResponse };
+  GetThread: { call: types.GetThread; response: types.GetThreadResponse };
   ListCallRecords: {
     call: types.ListCallRecords;
     response: types.ListCallRecordsResponse;

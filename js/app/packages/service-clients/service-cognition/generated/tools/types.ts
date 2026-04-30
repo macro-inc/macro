@@ -1015,6 +1015,19 @@ export interface ToolPropertyOption {
   id: string;
 }
 /**
+ * Retrieve an email thread and its messages. Returns the thread metadata and message contents including sender, recipients, subject, and body text. Use this to read the contents of a specific email conversation.
+ */
+export interface GetThread {
+  /**
+   * Maximum number of messages to return (default 10).
+   */
+  limit?: number | null;
+  /**
+   * The ID of the email thread to retrieve.
+   */
+  threadId: string;
+}
+/**
  * Response from the GetThread tool.
  */
 export interface GetThreadResponse {
@@ -1842,19 +1855,6 @@ export interface ReadMetadataResponse {
 }
 export interface ReadResponse {
   content: ReadThreadReadContent;
-}
-/**
- * Retrieve an email thread and its messages. Returns the thread metadata and message contents including sender, recipients, subject, and body text. Use this to read the contents of a specific email conversation.
- */
-export interface GetThread {
-  /**
-   * Maximum number of messages to return (default 10).
-   */
-  limit?: number | null;
-  /**
-   * The ID of the email thread to retrieve.
-   */
-  threadId: string;
 }
 /**
  * Read threaded content by ID(s). Supports reading channels, chats, and projects by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s). For documents, use ReadContent or ReadMetadata instead.

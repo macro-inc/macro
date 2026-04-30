@@ -364,7 +364,7 @@ export const GetEntityPropertiesResponse = z.object({
   summary: z.string(),
 });
 
-export const ReadThread = z.object({
+export const GetThread = z.object({
   limit: z.union([z.number().int(), z.null()]).default(null),
   threadId: z.string().uuid(),
 });
@@ -1938,6 +1938,20 @@ export const TextEditorCodeExecutionResponse = z.object({
     }
   }),
   tool_use_id: z.string(),
+});
+
+export const ReadThread = z.object({
+  contentType: z.enum([
+    'channel',
+    'channel-message',
+    'chat-thread',
+    'chat-message',
+    'project',
+  ]),
+  ids: z.array(z.string()),
+  messagesSince: z
+    .union([z.string().datetime({ offset: true }), z.null()])
+    .default(null),
 });
 
 export const ReadResponse = z.object({
