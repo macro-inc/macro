@@ -1,14 +1,13 @@
 import { uploadProfilePicture } from '@core/component/ProfilePicture';
 import EditableField from '@core/component/EditableField';
 import { capitalize } from '@block-pdf/util/StringUtils';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
 import { useLogout } from '@core/auth/logout';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { Modal, Overlay, Content, Header, Message, ButtonBar } from '@core/component/Modal';
 import { toast } from '@core/component/Toast/Toast';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { Panel } from '@ui';
 import {
   blockNameToFileExtensions,
@@ -26,6 +25,7 @@ import {
   useProfilePictureUrl,
 } from '@core/signal/profilePicture';
 import IconUpload from '@macro-icons/macro-upload.svg';
+import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
 import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
 import { createMemo, createResource, createSignal, Show } from 'solid-js';
@@ -181,7 +181,10 @@ export function Account() {
                       },
                     }}
                   >
-                    <DeprecatedTextButton text="Upload" icon={IconUpload} theme="accent" />
+                    <Button variant="secondary" size="sm" depth={3}>
+                      <IconUpload class="size-4" />
+                      Upload
+                    </Button>
                   </div>
                   <UserIcon
                     id={userId() as string}
@@ -232,11 +235,14 @@ export function Account() {
                   {capitalize(licenseStatus() ?? '')}
                 </span>
                 <Show when={!hasPaidAccess()}>
-                  <DeprecatedTextButton
-                    theme="accent"
-                    text="Upgrade"
+                  <Button
+                    variant="accent"
+                    size="sm"
+                    depth={3}
                     onClick={() => showPaywall()}
-                  />
+                  >
+                    Upgrade
+                  </Button>
                 </Show>
               </div>
             </Row>
@@ -248,19 +254,25 @@ export function Account() {
                 <Show
                   when={!emailActive()}
                   fallback={
-                    <DeprecatedTextButton
-                      theme="base"
-                      text="Disable"
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      depth={3}
                       onClick={() => setShowEmailModal(true)}
-                    />
+                    >
+                      Disable
+                    </Button>
                   }
                 >
                   <Show when={!showEnableEmailModal()}>
-                    <DeprecatedTextButton
-                      theme="base"
-                      text="Enable"
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      depth={3}
                       onClick={() => setShowEnableEmailModal(true)}
-                    />
+                    >
+                      Enable
+                    </Button>
                   </Show>
                 </Show>
               </Row>
@@ -276,18 +288,24 @@ export function Account() {
                 <Show
                   when={!githubLinkExists()}
                   fallback={
-                    <DeprecatedTextButton
-                      theme="base"
-                      text="Disable"
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      depth={3}
                       onClick={handleGithubDisable}
-                    />
+                    >
+                      Disable
+                    </Button>
                   }
                 >
-                  <DeprecatedTextButton
-                    theme="base"
-                    text="Enable"
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    depth={3}
                     onClick={handleGithubEnable}
-                  />
+                  >
+                    Enable
+                  </Button>
                 </Show>
               </Show>
             </Row>
@@ -297,11 +315,15 @@ export function Account() {
             </div>
 
             <div class="flex items-center justify-end h-10 px-6">
-              <DeprecatedTextButton
-                text="Logout"
-                theme="base"
+              <Button
+                variant="secondary"
+                size="sm"
+                depth={3}
                 onClick={logoutHandler}
-              />
+              >
+                <SignOutIcon class="size-4" />
+                Logout
+              </Button>
             </div>
 
             <Show when={showEnableEmailModal()}>
@@ -310,19 +332,25 @@ export function Account() {
                   Email requires additional Google permissions. Select the permissions on sign-in to enable.
                 </div>
                 <div class="ml-auto flex flex-row">
-                  <DeprecatedTextButton
-                    theme="clear"
-                    text="Logout"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    depth={3}
                     onClick={() => {
                       setShowEnableEmailModal(false);
                       logout();
                     }}
-                  />
-                  <DeprecatedTextButton
-                    theme="clear"
-                    text="Cancel"
+                  >
+                    Logout
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    depth={3}
                     onClick={() => setShowEnableEmailModal(false)}
-                  />
+                  >
+                    Cancel
+                  </Button>
                 </div>
               </div>
             </Show>
@@ -333,9 +361,10 @@ export function Account() {
                   Disabling will clear all email data from Macro
                 </div>
                 <div class="ml-auto flex flex-row">
-                  <DeprecatedTextButton
-                    theme="clear"
-                    text="Confirm"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    depth={3}
                     onClick={async () => {
                       setShowEmailModal(false);
                       await disconnectEmail().match(
@@ -347,19 +376,24 @@ export function Account() {
                         },
                       );
                     }}
-                  />
-                  <DeprecatedTextButton
-                    theme="clear"
-                    text="Cancel"
+                  >
+                    Confirm
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    depth={3}
                     onClick={() => setShowEmailModal(false)}
-                  />
+                  >
+                    Cancel
+                  </Button>
                 </div>
               </div>
             </Show>
 
             <Show when={isNativeMobilePlatform()}>
               <div class="border-t border-edge pt-4">
-                <Button variant="destructive" onClick={() => setShowDeleteModal(true)}>
+                <Button variant="destructive" depth={3} onClick={() => setShowDeleteModal(true)}>
                   Delete Account
                 </Button>
                 <Modal open={showDeleteModal()} onOpenChange={setShowDeleteModal}>
@@ -371,10 +405,10 @@ export function Account() {
                       permanent and cannot be undone.
                     </Message>
                     <ButtonBar>
-                      <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+                      <Button variant="secondary" depth={3} onClick={() => setShowDeleteModal(false)}>
                         Cancel
                       </Button>
-                      <Button variant="destructive" onClick={() => {
+                      <Button variant="destructive" depth={3} onClick={() => {
                         setShowDeleteModal(false);
                         setShowDeleteConfirmModal(true);
                       }}>
@@ -392,10 +426,10 @@ export function Account() {
                       data. This cannot be undone.
                     </Message>
                     <ButtonBar>
-                      <Button variant="secondary" onClick={() => setShowDeleteConfirmModal(false)}>
+                      <Button variant="secondary" depth={3} onClick={() => setShowDeleteConfirmModal(false)}>
                         Cancel
                       </Button>
-                      <Button variant="destructive" onClick={deleteAccountHandler}>
+                      <Button variant="destructive" depth={3} onClick={deleteAccountHandler}>
                         Delete My Account
                       </Button>
                     </ButtonBar>
@@ -445,11 +479,14 @@ function NotificationSettings(props: {
 
   return (
     <Row label="Notifications">
-      <DeprecatedTextButton
-        theme="base"
-        text={props.settings.isEnabled() ? "Disable" : "Enable"}
+      <Button
+        variant="secondary"
+        size="sm"
+        depth={3}
         onClick={handleToggle}
-      />
+      >
+        {props.settings.isEnabled() ? "Disable" : "Enable"}
+      </Button>
     </Row>
   );
 }
@@ -497,7 +534,7 @@ function BundleUpdateRow() {
               </span>
               <Show when={action()}>
                 {(a) => (
-                  <Button variant="accent" size="sm" onClick={a().action}>
+                  <Button variant="accent" size="sm" depth={3} onClick={a().action}>
                     {a().label}
                   </Button>
                 )}
