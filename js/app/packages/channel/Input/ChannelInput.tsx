@@ -180,8 +180,8 @@ export function ChannelInput(props: ChannelInputProps) {
   });
 
   return (
-    <Panel depth={2}>
-      <Input.Root input={inputState.view()} commands={inputState.commands}>
+    <Input.Root input={inputState.view()} commands={inputState.commands}>
+      <Panel depth={2}>
         <Input.DropZone
           onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
           onDragEnd={() => inputState.setIsDraggedOver(false)}
@@ -231,7 +231,7 @@ export function ChannelInput(props: ChannelInputProps) {
             </Input.Footer>
           </Input.Layout>
         </Input.DropZone>
-      </Input.Root>
-    </Panel>
+      </Panel>
+    </Input.Root>
   );
 }
