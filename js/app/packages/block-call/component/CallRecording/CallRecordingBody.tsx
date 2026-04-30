@@ -21,6 +21,7 @@ import {
 } from './CallRecordingMediaColumn';
 import { CallRecordingMetaStrip } from './CallRecordingMetaStrip';
 import { CallRecordingSplitHeader } from './CallRecordingSplitHeader';
+import { CallRecordingSummarySection } from './CallRecordingSummary';
 import { CallRecordingTranscriptColumn } from './CallRecordingTranscriptColumn';
 import {
   isCallRecordingStackedLayout,
@@ -209,6 +210,7 @@ export function CallRecordingBody(props: {
         onToggleTranscript={toggleTranscript}
         onToggleParticipants={toggleParticipants}
       />
+      <CallRecordingSummarySection record={record} />
       <div
         ref={setContainerRef}
         class={cn(
