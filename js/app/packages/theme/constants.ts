@@ -1,4 +1,4 @@
-import type { ThemeV1 } from './types/themeTypes';
+import type { ThemeV2 } from './types/themeTypes';
 
 export const DEFAULT_LIGHT_THEME: DefaultTheme = 'Macro Light';
 export const DEFAULT_DARK_THEME: DefaultTheme = 'Macro Dark';
@@ -7,7 +7,8 @@ export const DEFAULT_THEMES = [
   {
     id: 'Macro Dark',
     name: 'Macro Dark',
-    version: 1,
+    version: 2,
+    depth: 0.15,
     tokens: {
       a0: { l: 0.75, c: 0.20, h:  59 },
       a1: { l: 0.75, c: 0.20, h:  99 },
@@ -29,7 +30,8 @@ export const DEFAULT_THEMES = [
   {
     id: 'Macro Light',
     name: 'Macro Light',
-    version: 1,
+    version: 2,
+    depth: 0.15,
     tokens: {
       a0: { l: 0.65, c: 0.20, h:  59 },
       a1: { l: 0.65, c: 0.20, h:  99 },
@@ -51,7 +53,8 @@ export const DEFAULT_THEMES = [
   {
     id: 'Moon',
     name: 'Moon',
-    version: 1,
+    version: 2,
+    depth: 0.15,
     tokens: {
       a0: { l: 0.69, c: 0.17, h: 274 },
       a1: { l: 0.69, c: 0.17, h: 314 },
@@ -74,6 +77,7 @@ export const DEFAULT_THEMES = [
     id: 'Bleach',
     name: 'Bleach',
     version: 1,
+    depth: 0.15,
     tokens: {
       a0: { l: 0.61, c: 0.37, h:  14 },
       a1: { l: 0.61, c: 0.37, h:  54 },
@@ -92,6 +96,6 @@ export const DEFAULT_THEMES = [
       c4: { l: 0.71, c: 0.00, h:  14 },
     },
   }
-] as const satisfies ReadonlyArray<ThemeV1>;
+] as const satisfies ReadonlyArray<ThemeV2>;
 
 type DefaultTheme = (typeof DEFAULT_THEMES)[number]['id'];
