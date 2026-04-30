@@ -236,8 +236,8 @@ export const DEFAULT_THEMES = [
     },
   },
   {
-    id: 'Perpetrate',
-    name: 'Perpetrate',
+    id: 'Rain',
+    name: 'Rain',
     version: 2,
     depth: 0.137,
     tokens: {
