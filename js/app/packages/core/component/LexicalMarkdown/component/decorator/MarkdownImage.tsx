@@ -356,7 +356,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
             (state() === 'ok' || state() === 'error')
           }
         >
-          <div class="w-full h-full absolute top-0 left-0 pointer-events-none bg-edge" />
+          <div class="w-full h-full absolute top-0 left-0 pointer-events-none bg-edge/10" />
           <MediaButtons
             delete={interactable() ? deleteImage : undefined}
             enlarge={state() === 'ok' ? viewFull : undefined}
