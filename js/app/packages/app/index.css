@@ -90,8 +90,8 @@
   --color-input:           var(--b0); /* input, e.g. chat/channel input */
   --color-button:          var(--b0); /* dialog, e.g. dialog background */
   --color-message:         var(--b0); /* message background */
-  --color-active:          var(--b1); /* elements that are selected or activated */
   --color-hover:           var(--b2); /* hover, e.g. hover state for buttons/items */
+  --color-active:          var(--b2); /* elements that are selected or activated */
   --color-overlay:         oklch(from var(--b2) l c h / 0.5); /* overlay, e.g. modal background */
   --color-edge-muted:      var(--b3); /* muted edge */
   --color-edge:            var(--b4); /* edge (border) */

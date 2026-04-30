@@ -11,6 +11,7 @@ import {
   createSignal,
 } from 'solid-js';
 import { Hotkey } from './Hotkey';
+import { Panel } from '@ui';
 
 const TOOLTIP_DELAY = 250;
 
@@ -101,9 +102,12 @@ export function Tooltip(props: TooltipProps) {
           }}
         >
           <Show when={!props.unstyled} fallback={tooltipContent()}>
-            <div class="flex items-center justify-center bg-panel p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm border border-edge-muted shadow-md shadow-[#000]/05">
+            <Panel
+              depth={3}
+              class="flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm shadow-md shadow-[#000]/05"
+            >
               {tooltipContent()}
-            </div>
+            </Panel>
           </Show>
           {/* Note disabling arrows for now. I think its more on-brand - seamus */}
           {/*<CorvuTooltip.Arrow />*/}

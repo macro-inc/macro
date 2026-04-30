@@ -102,12 +102,12 @@ function NotificationStackRow(props: {
   };
 
   return (
-    <Layer depth={2}>
+    <Layer depth={0}>
       <ContextMenu>
         <ContextMenu.Trigger class="size-full">
           <div
             class={cn(
-              'flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-message gap-4 hover:bg-edge min-w-0 overflow-hidden'
+              'flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-message gap-4 hover:bg-hover min-w-0 overflow-hidden'
             )}
             onClick={handleClick}
             role="button"

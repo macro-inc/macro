@@ -48,6 +48,7 @@ import TextSuper from '@icon/regular/text-superscript.svg';
 import TextT from '@icon/regular/text-t.svg';
 import TextUnderline from '@icon/regular/text-underline.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Layer } from '@ui';
 import type { ElementName } from '@lexical-core';
 import { toast } from 'core/component/Toast/Toast';
 import type { ValidHotkey } from 'core/hotkey/types';
@@ -954,11 +955,13 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                         disabled={buttonIsDisabled()}
                       />
                       <DropdownMenu.Portal>
-                        <DropdownMenu.SubContent>
-                          <TableInsert
-                            onMenuClose={() => setMoreOptionsOpen(false)}
-                          />
-                        </DropdownMenu.SubContent>
+                        <Layer depth={2}>
+                          <DropdownMenu.SubContent>
+                            <TableInsert
+                              onMenuClose={() => setMoreOptionsOpen(false)}
+                            />
+                          </DropdownMenu.SubContent>
+                        </Layer>
                       </DropdownMenu.Portal>
                     </DropdownMenu.Sub>
                   </DropdownMenuContent>

@@ -6,6 +6,7 @@ import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { useSplitPanel } from '../layoutUtils';
 import { useDrawerControl, useDrawerGroup } from './SplitDrawerContext';
+import { Layer } from '@ui';
 
 const BUFFER_SIZE = 48; // tw 3rem;
 
@@ -114,32 +115,34 @@ export function SplitDrawer(
   return (
     <Show when={drawerControl.isOpen()}>
       <ScopedPortal scope="split">
-        <div
-          class="inset-px bg-modal-overlay absolute"
-          style={{ top: `${contentOffsetTop()}px` }}
-          onClick={drawerControl.close}
-        />
-        <div class={getPositionClasses()} style={{ ...getSizeStyle() }}>
-          <div class={getGradientMaskClasses()} />
-          <div class="flex items-center justify-start gap-2 shrink-0 px-2">
-            <Show when={props.title}>
-              <h3 class="text-md font-medium text-content-secondary shrink truncate my-3">
-                {props.title}
-              </h3>
-            </Show>
-            <div class="grow" />
-            <DeprecatedIconButton
-              icon={CloseIcon}
-              theme="clear"
-              size="sm"
-              tooltip={{ label: 'Close' }}
-              onClick={drawerControl.close}
-            />
+        <Layer depth={2}>
+          <div
+            class="inset-px bg-modal-overlay absolute"
+            style={{ top: `${contentOffsetTop()}px` }}
+            onClick={drawerControl.close}
+          />
+          <div class={getPositionClasses()} style={{ ...getSizeStyle() }}>
+            <div class={getGradientMaskClasses()} />
+            <div class="flex items-center justify-start gap-2 shrink-0 px-2">
+              <Show when={props.title}>
+                <h3 class="text-md font-medium text-content-secondary shrink truncate my-3">
+                  {props.title}
+                </h3>
+              </Show>
+              <div class="grow" />
+              <DeprecatedIconButton
+                icon={CloseIcon}
+                theme="clear"
+                size="sm"
+                tooltip={{ label: 'Close' }}
+                onClick={drawerControl.close}
+              />
+            </div>
+            <div class="size-full overflow-hidden">
+              <DrawerInner id={props.id}>{props.children}</DrawerInner>
+            </div>
           </div>
-          <div class="size-full overflow-hidden">
-            <DrawerInner id={props.id}>{props.children}</DrawerInner>
-          </div>
-        </div>
+        </Layer>
       </ScopedPortal>
     </Show>
   );

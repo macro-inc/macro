@@ -526,7 +526,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             clickOutside(el, () => clickOutsideHandler);
           }}
         >
-          <Panel active class="py-2">
+          <Panel depth={2} active class="py-2">
             <Show
               when={controller.combinedItems().length > 0}
               fallback={<div class="px-2 text-ink-extra-muted">No results</div>}

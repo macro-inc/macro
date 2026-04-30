@@ -71,6 +71,7 @@ import {
 import { FormatTools } from './FormatTools';
 import { Button } from '@ui/components/Button';
 import { Dynamic } from 'solid-js/web';
+import { Layer } from '@ui';
 
 const MENU_ID = 'markdown-popup';
 
@@ -650,16 +651,18 @@ export function MarkdownPopup(props: {
       </ScopedPortal>
       <Show when={showPopup() && anchorRef()}>
         <ScopedPortal scope="local">
-          <GeneralizedPopup
-            PopupComponents={MarkdownPopupToolbar}
-            anchor={{
-              ref: anchorRef()!,
-              blockId: `${blockId}`,
-              blockType: 'md',
-            }}
-            useBlockBoundary={true}
-            ref={setMenuRef}
-          />
+          <Layer depth={2}>
+            <GeneralizedPopup
+              PopupComponents={MarkdownPopupToolbar}
+              anchor={{
+                ref: anchorRef()!,
+                blockId: `${blockId}`,
+                blockType: 'md',
+              }}
+              useBlockBoundary={true}
+              ref={setMenuRef}
+            />
+          </Layer>
         </ScopedPortal>
       </Show>
       <Show when={highlightLocation()}>

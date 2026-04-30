@@ -1,5 +1,6 @@
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Combobox } from '@kobalte/core/combobox';
+import { Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import XIcon from '@icon/regular/x.svg';
@@ -233,32 +234,48 @@ const FilterChip = (props: {
           </DropdownMenu.Trigger>
 
           <DropdownMenu.Portal>
-            <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
-              <For each={props.filter.categoryOptions}>
-                {(option) => {
-                  const active = () =>
-                    props.filter.isOptionActive
-                      ? props.filter.isOptionActive(option.id)
-                      : props.isOptionActive(option.id);
-                  const isSingleSelect = () => props.filter.multiple === false;
-                  return (
-                    <DropdownMenu.Item
-                      class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-highlighted:bg-ink/5 cursor-default"
-                      onSelect={() => {
-                        if (active()) return;
-                        if (props.filter.onReplace) {
-                          props.filter.onReplace(option.id);
-                        } else {
-                          props.onReplace(option.id);
-                        }
-                      }}
-                    >
-                      <Show
-                        when={isSingleSelect()}
-                        fallback={
+            <Layer depth={2}>
+              <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
+                <For each={props.filter.categoryOptions}>
+                  {(option) => {
+                    const active = () =>
+                      props.filter.isOptionActive
+                        ? props.filter.isOptionActive(option.id)
+                        : props.isOptionActive(option.id);
+                    const isSingleSelect = () =>
+                      props.filter.multiple === false;
+                    return (
+                      <DropdownMenu.Item
+                        class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-highlighted:bg-ink/5 cursor-default"
+                        onSelect={() => {
+                          if (active()) return;
+                          if (props.filter.onReplace) {
+                            props.filter.onReplace(option.id);
+                          } else {
+                            props.onReplace(option.id);
+                          }
+                        }}
+                      >
+                        <Show
+                          when={isSingleSelect()}
+                          fallback={
+                            <span
+                              class={cn(
+                                'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                                active()
+                                  ? 'bg-accent border-accent'
+                                  : 'border-edge'
+                              )}
+                            >
+                              <Show when={active()}>
+                                <CheckIcon class="size-2.5 text-page" />
+                              </Show>
+                            </span>
+                          }
+                        >
                           <span
                             class={cn(
-                              'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                              'size-4 flex items-center justify-center shrink-0 rounded-full border transition-colors',
                               active()
                                 ? 'bg-accent border-accent'
                                 : 'border-edge'
@@ -268,41 +285,30 @@ const FilterChip = (props: {
                               <CheckIcon class="size-2.5 text-page" />
                             </Show>
                           </span>
-                        }
-                      >
+                        </Show>
+
+                        <Show when={option.icon}>
+                          {(icon) => (
+                            <span class="size-4 flex items-center justify-center shrink-0">
+                              {icon()()}
+                            </span>
+                          )}
+                        </Show>
+
                         <span
                           class={cn(
-                            'size-4 flex items-center justify-center shrink-0 rounded-full border transition-colors',
-                            active() ? 'bg-accent border-accent' : 'border-edge'
+                            'flex-1 truncate',
+                            active() ? 'text-ink' : 'text-ink-muted'
                           )}
                         >
-                          <Show when={active()}>
-                            <CheckIcon class="size-2.5 text-page" />
-                          </Show>
+                          {option.label}
                         </span>
-                      </Show>
-
-                      <Show when={option.icon}>
-                        {(icon) => (
-                          <span class="size-4 flex items-center justify-center shrink-0">
-                            {icon()()}
-                          </span>
-                        )}
-                      </Show>
-
-                      <span
-                        class={cn(
-                          'flex-1 truncate',
-                          active() ? 'text-ink' : 'text-ink-muted'
-                        )}
-                      >
-                        {option.label}
-                      </span>
-                    </DropdownMenu.Item>
-                  );
-                }}
-              </For>
-            </DropdownMenu.Content>
+                      </DropdownMenu.Item>
+                    );
+                  }}
+                </For>
+              </DropdownMenu.Content>
+            </Layer>
           </DropdownMenu.Portal>
         </DropdownMenu>
       </Show>

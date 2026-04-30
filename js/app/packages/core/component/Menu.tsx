@@ -5,6 +5,7 @@ import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
 import CaretRight from '@icon/regular/caret-right.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -453,32 +454,36 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
       <Show
         when={props.submenu}
         fallback={
-          <ContextMenu.Content
-            class={cn(
-              !props.overrideStyling && MENU_CONTENT_CLASS,
-              props.class,
-              props.width && menuWidths[props.width],
-              props.mobileFullScreen &&
-                isMobile() &&
-                'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
-            )}
-            onOpenAutoFocus={props.onOpenAutoFocus}
-            ref={contentRef}
-            onCloseAutoFocus={props.onCloseAutoFocus}
-          >
-            {props.children}
-          </ContextMenu.Content>
+          <Layer depth={2}>
+            <ContextMenu.Content
+              class={cn(
+                !props.overrideStyling && MENU_CONTENT_CLASS,
+                props.class,
+                props.width && menuWidths[props.width],
+                props.mobileFullScreen &&
+                  isMobile() &&
+                  'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
+              )}
+              onOpenAutoFocus={props.onOpenAutoFocus}
+              ref={contentRef}
+              onCloseAutoFocus={props.onCloseAutoFocus}
+            >
+              {props.children}
+            </ContextMenu.Content>
+          </Layer>
         }
       >
-        <ContextMenu.SubContent
-          class={cn(
-            MENU_CONTENT_CLASS,
-            props.class,
-            props.width && menuWidths[props.width]
-          )}
-        >
-          {props.children}
-        </ContextMenu.SubContent>
+        <Layer depth={2}>
+          <ContextMenu.SubContent
+            class={cn(
+              MENU_CONTENT_CLASS,
+              props.class,
+              props.width && menuWidths[props.width]
+            )}
+          >
+            {props.children}
+          </ContextMenu.SubContent>
+        </Layer>
       </Show>
     </MobileConditionalOverlay>
   );
@@ -491,7 +496,22 @@ export function DropdownMenuContent(props: ParentProps<MenuContentProps>) {
     <Show
       when={props.submenu}
       fallback={
-        <DropdownMenu.Content
+        <Layer depth={2}>
+          <DropdownMenu.Content
+            class={cn(
+              MENU_CONTENT_CLASS,
+              local.class,
+              local.width && menuWidths[local.width]
+            )}
+            {...rest}
+          >
+            {local.children}
+          </DropdownMenu.Content>
+        </Layer>
+      }
+    >
+      <Layer depth={2}>
+        <DropdownMenu.SubContent
           class={cn(
             MENU_CONTENT_CLASS,
             local.class,
@@ -500,19 +520,8 @@ export function DropdownMenuContent(props: ParentProps<MenuContentProps>) {
           {...rest}
         >
           {local.children}
-        </DropdownMenu.Content>
-      }
-    >
-      <DropdownMenu.SubContent
-        class={cn(
-          MENU_CONTENT_CLASS,
-          local.class,
-          local.width && menuWidths[local.width]
-        )}
-        {...rest}
-      >
-        {local.children}
-      </DropdownMenu.SubContent>
+        </DropdownMenu.SubContent>
+      </Layer>
     </Show>
   );
 }
