@@ -156,7 +156,7 @@ export function Account() {
       style="scrollbar-width: none;"
     >
       <div class="max-w-2xl mx-auto p-2">
-        <Panel depth={3}>
+        <Panel depth={2}>
           <div class="text-ink">
             <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
               <div class="text-sm">Account</div>
@@ -193,7 +193,13 @@ export function Account() {
                 </div>
               </Show>
             </div>
-            <div class="flex flex-col gap-2 p-6">
+            <div class="grid gap-px bg-edge border-b border-edge">
+
+            <Row label="Email">
+              <span class="ph-no-capture text-sm text-ink-muted">
+                {email() ?? ''}
+              </span>
+            </Row>
 
             <Row label="First Name">
               <EditableField
@@ -219,12 +225,6 @@ export function Account() {
                 placeholder="Enter last name"
                 allowEmpty={true}
               />
-            </Row>
-
-            <Row label="Email">
-              <span class="ph-no-capture text-sm text-ink-muted">
-                {email() ?? ''}
-              </span>
             </Row>
 
             <Row label="License Status">
@@ -266,6 +266,45 @@ export function Account() {
                 </Show>
               </Row>
             </Show>
+
+            <Row label="GitHub">
+              <Show
+                when={!githubLinkExists.loading}
+                fallback={
+                  <span class="text-sm text-ink-muted">Loading…</span>
+                }
+              >
+                <Show
+                  when={!githubLinkExists()}
+                  fallback={
+                    <DeprecatedTextButton
+                      theme="base"
+                      text="Disable"
+                      onClick={handleGithubDisable}
+                    />
+                  }
+                >
+                  <DeprecatedTextButton
+                    theme="base"
+                    text="Enable"
+                    onClick={handleGithubEnable}
+                  />
+                </Show>
+              </Show>
+            </Row>
+
+            <NotificationToggle />
+
+            </div>
+
+            <div class="flex items-center h-10 px-6">
+              <DeprecatedTextButton
+                text="Logout"
+                icon={Logout}
+                theme="accent"
+                onClick={logoutHandler}
+              />
+            </div>
 
             <Show when={showEnableEmailModal()}>
               <div class="flex flex-row items-center">
@@ -320,44 +359,6 @@ export function Account() {
               </div>
             </Show>
 
-            <Row label="GitHub">
-              <Show
-                when={!githubLinkExists.loading}
-                fallback={
-                  <span class="text-sm text-ink-muted">Loading…</span>
-                }
-              >
-                <Show
-                  when={!githubLinkExists()}
-                  fallback={
-                    <DeprecatedTextButton
-                      theme="base"
-                      text="Disable"
-                      onClick={handleGithubDisable}
-                    />
-                  }
-                >
-                  <DeprecatedTextButton
-                    theme="base"
-                    text="Enable"
-                    onClick={handleGithubEnable}
-                  />
-                </Show>
-              </Show>
-            </Row>
-
-            <NotificationToggle />
-
-            <div class="border-t border-edge pt-4">
-              <div
-                class="flex flex-row items-center gap-1.5 cursor-pointer select-none"
-                onClick={logoutHandler}
-              >
-                <Logout class="w-4 h-4" />
-                <div class="text-sm">Logout</div>
-              </div>
-            </div>
-
             <Show when={isNativeMobilePlatform()}>
               <div class="border-t border-edge pt-4">
                 <Button variant="destructive" onClick={() => setShowDeleteModal(true)}>
@@ -404,7 +405,6 @@ export function Account() {
                 </Modal>
               </div>
             </Show>
-            </div>
           </div>
         </Panel>
       </div>
@@ -414,9 +414,9 @@ export function Account() {
 
 function Row(props: { label: string; children?: any }) {
   return (
-    <div class="flex items-center justify-between gap-4 h-10">
-      <div class="text-sm">{props.label}</div>
-      <div class="flex items-center">{props.children}</div>
+    <div class="grid grid-cols-[12rem_1fr] gap-px bg-edge">
+      <div class="bg-panel flex items-center justify-start h-10 px-6 text-sm">{props.label}</div>
+      <div class="bg-panel flex items-center justify-end h-10 px-6 text-right">{props.children}</div>
     </div>
   );
 }
