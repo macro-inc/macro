@@ -117,6 +117,13 @@ export function CallNarrowBody(props: {
           <AttendanceBadge attended={props.entity.attended} />
         </Show>
       </span>
+      <Show when={!hit() && props.entity.summary}>
+        {(summary) => (
+          <span class="text-ink/50 font-normal truncate text-xs">
+            {summary()}
+          </span>
+        )}
+      </Show>
     </Entity.Slot>
   );
 }
@@ -135,14 +142,23 @@ export function CallWideContent(props: {
       <Show
         when={hit()}
         fallback={
-          <span class="text-ink-extra-muted font-medium truncate">
-            <Show
-              when={props.entity.durationMs}
-              fallback={props.entity.isActive ? 'In progress' : ''}
-            >
-              {(ms) => formatCallDuration(ms())}
+          <>
+            <span class="text-ink-extra-muted font-medium truncate shrink-0">
+              <Show
+                when={props.entity.durationMs}
+                fallback={props.entity.isActive ? 'In progress' : ''}
+              >
+                {(ms) => formatCallDuration(ms())}
+              </Show>
+            </span>
+            <Show when={props.entity.summary}>
+              {(summary) => (
+                <span class="text-ink/50 font-medium truncate flex-1 min-w-0">
+                  {summary()}
+                </span>
+              )}
             </Show>
-          </span>
+          </>
         }
       >
         {(h) => (

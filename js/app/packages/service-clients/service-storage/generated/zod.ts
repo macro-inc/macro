@@ -5085,6 +5085,12 @@ export const getItemsSoupResponse = zod.object({
               startedAt: zod.iso
                 .datetime({})
                 .describe('When the call started.'),
+              summary: zod
+                .string()
+                .nullish()
+                .describe(
+                  'AI-generated summary of the call. Only set on archived\n`call_records` once summarization has run; active calls always\nreturn `None`.'
+                ),
             })
             .describe(
               'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
@@ -6756,6 +6762,12 @@ export const postItemsSoupResponse = zod.object({
               startedAt: zod.iso
                 .datetime({})
                 .describe('When the call started.'),
+              summary: zod
+                .string()
+                .nullish()
+                .describe(
+                  'AI-generated summary of the call. Only set on archived\n`call_records` once summarization has run; active calls always\nreturn `None`.'
+                ),
             })
             .describe(
               'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
@@ -8071,6 +8083,12 @@ export const postItemsSoupAstResponse = zod.object({
               startedAt: zod.iso
                 .datetime({})
                 .describe('When the call started.'),
+              summary: zod
+                .string()
+                .nullish()
+                .describe(
+                  'AI-generated summary of the call. Only set on archived\n`call_records` once summarization has run; active calls always\nreturn `None`.'
+                ),
             })
             .describe(
               'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'

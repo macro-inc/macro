@@ -575,6 +575,7 @@ export * from './soupCallRecordDurationMs';
 export * from './soupCallRecordEndedAt';
 export * from './soupCallRecordParticipant';
 export * from './soupCallRecordParticipantLeftAt';
+export * from './soupCallRecordSummary';
 export * from './soupChannel';
 export * from './soupChannelAllOf';
 export * from './soupChannelAllOfInteractedAt';

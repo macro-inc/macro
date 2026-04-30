@@ -9,6 +9,7 @@ import type { SoupCallRecordCustomName } from './soupCallRecordCustomName';
 import type { SoupCallRecordDurationMs } from './soupCallRecordDurationMs';
 import type { SoupCallRecordEndedAt } from './soupCallRecordEndedAt';
 import type { SoupCallRecordParticipant } from './soupCallRecordParticipant';
+import type { SoupCallRecordSummary } from './soupCallRecordSummary';
 
 /**
  * A call record as displayed in Soup. Excludes room_name, egress_id,
@@ -38,4 +39,8 @@ export interface SoupCallRecord {
   participants: SoupCallRecordParticipant[];
   /** When the call started. */
   startedAt: string;
+  /** AI-generated summary of the call. Only set on archived
+`call_records` once summarization has run; active calls always
+return `None`. */
+  summary?: SoupCallRecordSummary;
 }

@@ -11143,6 +11143,10 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started."
+          },
+          "summary": {
+            "type": ["string", "null"],
+            "description": "AI-generated summary of the call. Only set on archived\n`call_records` once summarization has run; active calls always\nreturn `None`."
           }
         }
       },

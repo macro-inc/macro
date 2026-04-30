@@ -55,3 +55,18 @@ fn from_record_for_user_attended_false_when_no_participants() {
     assert!(!soup.attended);
     assert!(soup.participants.is_empty());
 }
+
+#[test]
+fn from_record_for_user_passes_summary_through() {
+    let mut record = record_with_participants(&["macro|a@test.com"]);
+    record.summary = Some("AI summary".to_string());
+    let soup = SoupCallRecord::from_record_for_user(record, "macro|a@test.com");
+    assert_eq!(soup.summary.as_deref(), Some("AI summary"));
+}
+
+#[test]
+fn from_record_for_user_summary_none_when_record_has_none() {
+    let record = record_with_participants(&["macro|a@test.com"]);
+    let soup = SoupCallRecord::from_record_for_user(record, "macro|a@test.com");
+    assert!(soup.summary.is_none());
+}
