@@ -9,6 +9,10 @@ ALTER TABLE "ChatAttachment"
     ADD COLUMN "entity_type" TEXT,
     ADD COLUMN "entity_id" UUID;
 
+-- Drop rows with invalid UUIDs
+DELETE FROM "ChatAttachment"
+WHERE "attachmentId" !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+
 -- Migrate data: map old attachmentType values to EntityType values, cast id to UUID
 UPDATE "ChatAttachment"
 SET
