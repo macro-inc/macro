@@ -98,13 +98,7 @@ regex = { workspace = true }
 reqwest.workspace = true
 roles_and_permissions = { path = "../roles_and_permissions", default-features = false }
 schemars = { workspace = true }
-scribe = { path = "../scribe", features = [
-  "channel",
-  "dcs",
-  "document",
-  "email",
-  "static_file",
-] }
+comms_db_client = { path = "../comms_db_client" }
 search_service_client = { path = "../search_service_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
@@ -119,7 +113,6 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "search",
 ] }
 static_file = { path = "../static_file", features = ["attachment"] }
-static_file_service_client = { path = "../static_file_service_client" }
 stream = { path = "../stream" }
 strum = { workspace = true }
 sync_service_client = { path = "../sync_service_client" }

@@ -4,7 +4,6 @@ use ai_tools::{
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
-use document_storage_service_client::DocumentStorageServiceClient;
 use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
@@ -12,18 +11,15 @@ use documents::outbound::s3_upload_url::S3UploadUrlAdapter;
 use email::domain::ports::ReadonlyEmailPreviewAdapter;
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
-use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
+use email_service_client::EmailServiceClientExternal;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use lexical_client::LexicalClient;
-use scribe::ScribeClient;
-use scribe::document::DocumentClient;
 use search_service_client::SearchServiceClient;
 use soup::domain::service::SoupImpl;
 use soup::outbound::pg_soup_repo::PgSoupRepo;
-use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 
@@ -49,10 +45,6 @@ pub async fn build_tool_service_context(
         .email_scheduled_queue(&config.email_scheduled_queue);
 
     // Service clients
-    let dss_client = Arc::new(DocumentStorageServiceClient::new(
-        config.internal_api_secret_key.clone(),
-        config.document_storage_service_url.clone(),
-    ));
     let search_client = Arc::new(SearchServiceClient::new(
         config.internal_api_secret_key.clone(),
         config.search_service_url.clone(),
@@ -61,37 +53,12 @@ pub async fn build_tool_service_context(
         config.internal_api_secret_key.clone(),
         config.sync_service_url.clone(),
     ));
-    let email_client = Arc::new(EmailServiceClient::new(
-        config.internal_api_secret_key.clone(),
-        config.email_service_url.clone(),
-    ));
-    let sfs_client = Arc::new(StaticFileServiceClient::new(
-        config.internal_api_secret_key.clone(),
-        config.static_file_service_url.clone(),
-    ));
     let email_ext_client = Arc::new(EmailServiceClientExternal::new(
         config.email_service_url.clone(),
     ));
     let lexical_client = LexicalClient::new(
         config.internal_api_secret_key.clone(),
         config.lexical_service_url.clone(),
-    );
-
-    // Scribe
-    let scribe = Arc::new(
-        ScribeClient::new()
-            .with_document_client(
-                DocumentClient::builder()
-                    .with_dss_client(dss_client.clone())
-                    .with_lexical_client(Arc::new(lexical_client.clone()))
-                    .with_sync_service_client(sync_client.clone())
-                    .with_macro_db(pool.clone())
-                    .build(),
-            )
-            .with_channel_client(pool.clone())
-            .with_dcs_client(pool.clone())
-            .with_email_client(email_client)
-            .with_static_file_client(sfs_client),
     );
 
     // Soup service
@@ -204,7 +171,6 @@ pub async fn build_tool_service_context(
     Ok(ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
-        scribe,
         soup_service,
         email_service: email_service_for_tools,
         document_tool_context,

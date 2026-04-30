@@ -8,7 +8,6 @@ use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
-use document_storage_service_client::DocumentStorageServiceClient;
 use documents::{
     domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
     inbound::toolset::DocumentToolContext,
@@ -28,7 +27,6 @@ use mcp_auth_proxy::{
     domain::service::McpAuthProxyServiceImpl,
     outbound::{fusionauth::FusionAuthOAuthProvider, redis::RedisInflightAuth},
 };
-use scribe::{ScribeClient, document::DocumentClient};
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::LocalOrRemoteSecret;
 use soup::domain::service::SoupImpl;
@@ -137,9 +135,6 @@ async fn build_tool_context(
     let dss_url: String = env_vars.document_storage_service_url.as_ref().to_owned();
     let sync_service_url: String = env_vars.sync_service_url.as_ref().to_owned();
 
-    let document_storage_client =
-        DocumentStorageServiceClient::new(internal_auth_key.clone(), dss_url.clone());
-
     let search_service_client = SearchServiceClient::new(internal_auth_key.clone(), dss_url);
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
@@ -151,12 +146,6 @@ async fn build_tool_context(
         internal_auth_key.clone(),
         env_vars.email_service_url.as_ref().to_owned(),
     ));
-
-    let static_file_service_client =
-        Arc::new(static_file_service_client::StaticFileServiceClient::new(
-            internal_auth_key,
-            env_vars.static_file_service_url.as_ref().to_owned(),
-        ));
 
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
@@ -291,24 +280,6 @@ async fn build_tool_context(
             email_service_client.url().to_owned(),
         )),
         search_service_client: Arc::new(search_service_client),
-        scribe: Arc::new(
-            ScribeClient::new()
-                .with_document_client(
-                    DocumentClient::builder()
-                        .with_dss_client(document_storage_client)
-                        .with_lexical_client(lexical_client)
-                        .with_sync_service_client(SyncServiceClient::new(
-                            sync_service_auth_key,
-                            sync_service_url,
-                        ))
-                        .with_macro_db(db.clone())
-                        .build(),
-                )
-                .with_channel_client(db.clone())
-                .with_dcs_client(db.clone())
-                .with_email_client(email_service_client)
-                .with_static_file_client(static_file_service_client),
-        ),
         soup_service,
         email_service: email_service_for_tools,
         document_tool_context,
