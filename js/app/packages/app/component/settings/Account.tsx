@@ -25,7 +25,6 @@ import {
   type ProfilePictureItem,
   useProfilePictureUrl,
 } from '@core/signal/profilePicture';
-import Logout from '@icon/regular/sign-out.svg';
 import IconUpload from '@macro-icons/macro-upload.svg';
 import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
@@ -159,7 +158,7 @@ export function Account() {
         <Panel depth={2}>
           <div class="text-ink">
             <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
-              <div class="text-sm">Account</div>
+              <div class="text-sm font-semibold">Account</div>
               <Show when={ENABLE_PROFILE_PICTURES && userId()}>
                 <div class="flex items-center gap-2">
                   <div
@@ -203,26 +202,26 @@ export function Account() {
 
             <Row label="First Name">
               <EditableField
-                class="ph-no-capture"
+                class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
                 value={firstName()}
                 onSave={(newValue: string) => {
                   setUpdatedFirstName(newValue);
                   authServiceClient.putUserName({ first_name: newValue });
                 }}
-                placeholder="Enter first name"
+                placeholder="Enter First Name"
                 allowEmpty={true}
               />
             </Row>
 
             <Row label="Last Name">
               <EditableField
-                class="ph-no-capture"
+                class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
                 value={lastName()}
                 onSave={(newValue: string) => {
                   setUpdatedLastName(newValue);
                   authServiceClient.putUserName({ last_name: newValue });
                 }}
-                placeholder="Enter last name"
+                placeholder="Enter Last Name"
                 allowEmpty={true}
               />
             </Row>
@@ -297,11 +296,10 @@ export function Account() {
 
             </div>
 
-            <div class="flex items-center h-10 px-6">
+            <div class="flex items-center justify-end h-10 px-6">
               <DeprecatedTextButton
                 text="Logout"
-                icon={Logout}
-                theme="accent"
+                theme="base"
                 onClick={logoutHandler}
               />
             </div>
@@ -414,7 +412,7 @@ export function Account() {
 
 function Row(props: { label: string; children?: any }) {
   return (
-    <div class="grid grid-cols-[12rem_1fr] gap-px bg-edge">
+    <div class="grid grid-cols-[145px_1fr] gap-px bg-edge">
       <div class="bg-panel flex items-center justify-start h-10 px-6 text-sm">{props.label}</div>
       <div class="bg-panel flex items-center justify-end h-10 px-6 text-right">{props.children}</div>
     </div>
