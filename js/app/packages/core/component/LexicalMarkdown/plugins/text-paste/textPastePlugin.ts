@@ -6,7 +6,7 @@ import {
 } from '@core/block';
 import { isTauri } from '@core/util/platform';
 import { mergeRegister } from '@lexical/utils';
-import { parseThemeV1Json } from '@theme/utils/themeValidation';
+import { parseThemeV2Json } from '@theme/utils/themeValidation';
 import {
   $getSelection,
   $isRangeSelection,
@@ -141,16 +141,16 @@ function registerTextPastePlugin(editor: LexicalEditor) {
             event.clipboardData?.getData('text/plain') || '';
 
           // Check for theme JSON before checking for Macro URL
-          const themeV1 = parseThemeV1Json(pastedText);
-          if (themeV1) {
+          const themeV2 = parseThemeV2Json(pastedText);
+          if (themeV2) {
             const selection = $getSelection();
             if ($isRangeSelection(selection) && !selection.isCollapsed())
               return false;
 
             event.preventDefault();
             editor.dispatchCommand(INSERT_THEME_MENTION_COMMAND, {
-              name: themeV1.name,
-              data: themeV1,
+              name: themeV2.name,
+              data: themeV2,
             });
             return true;
           }

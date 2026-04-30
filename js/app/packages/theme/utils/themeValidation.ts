@@ -1,6 +1,6 @@
-import type { ThemeV1, ThemeV1Tokens } from '../types/themeTypes';
+import type { ThemeV2, ThemeV2Tokens } from '../types/themeTypes';
 
-const THEME_V1_TOKEN_KEYS: ReadonlyArray<keyof ThemeV1Tokens> = [
+const THEME_V2_TOKEN_KEYS: ReadonlyArray<keyof ThemeV2Tokens> = [
   'a0',
   'a1',
   'a2',
@@ -28,27 +28,28 @@ function isTokenValue(val: unknown): val is { l: number; c: number; h: number } 
   );
 }
 
-export function isThemeV1(data: unknown): data is ThemeV1 {
+export function isThemeV2(data: unknown): data is ThemeV2 {
   if (typeof data !== 'object' || data === null) return false;
   const obj = data as Record<string, unknown>;
 
   if (typeof obj.id !== 'string') return false;
   if (typeof obj.name !== 'string') return false;
   if (typeof obj.version !== 'number') return false;
+  if (typeof obj.depth !== 'number') return false;
   if (typeof obj.tokens !== 'object' || obj.tokens === null) return false;
 
   const tokens = obj.tokens as Record<string, unknown>;
-  for (const key of THEME_V1_TOKEN_KEYS) {
+  for (const key of THEME_V2_TOKEN_KEYS) {
     if (!isTokenValue(tokens[key])) return false;
   }
 
   return true;
 }
 
-export function parseThemeV1Json(text: string): ThemeV1 | null {
+export function parseThemeV2Json(text: string): ThemeV2 | null {
   try {
     const parsed: unknown = JSON.parse(text);
-    if (isThemeV1(parsed)) return parsed;
+    if (isThemeV2(parsed)) return parsed;
     return null;
   } catch {
     return null;

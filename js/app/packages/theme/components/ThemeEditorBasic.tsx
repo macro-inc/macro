@@ -45,7 +45,7 @@ function setHue(hue: number) {
 }
 
 function setSaturation(saturation: number) {
-  const s = saturation * themeReactive.a0.c[0]() * 0.37 * 0.8;
+  const s = saturation * themeReactive.a0.c[0]() * 0.37 * 0.6;
 
   batch(() => {
     themeReactive.b0.c[1](s);
@@ -77,17 +77,17 @@ function setContrast(contrast: number) {
   const b = c * (q - 1) + p;
 
   batch(() => {
-    themeReactive.b0.l[1](sigmoid(0.0, b));
-    themeReactive.b1.l[1](sigmoid(0.1, b));
-    themeReactive.b2.l[1](sigmoid(0.2, b));
-    themeReactive.b3.l[1](sigmoid(0.3, b));
-    themeReactive.b4.l[1](sigmoid(0.4, b));
+    themeReactive.b0.l[1](sigmoid(0.00, b));
+    themeReactive.b1.l[1](sigmoid(0.80, b));
+    themeReactive.b2.l[1](sigmoid(0.18, b));
+    themeReactive.b3.l[1](sigmoid(0.27, b));
+    themeReactive.b4.l[1](sigmoid(0.28, b));
 
-    themeReactive.c4.l[1](sigmoid(0.6, b));
-    themeReactive.c3.l[1](sigmoid(0.7, b));
-    themeReactive.c2.l[1](sigmoid(0.8, b));
-    themeReactive.c1.l[1](sigmoid(0.9, b));
-    themeReactive.c0.l[1](sigmoid(1.0, b));
+    themeReactive.c4.l[1](sigmoid(0.68, b));
+    themeReactive.c3.l[1](sigmoid(0.76, b));
+    themeReactive.c2.l[1](sigmoid(0.84, b));
+    themeReactive.c1.l[1](sigmoid(0.92, b));
+    themeReactive.c0.l[1](sigmoid(1.00, b));
   });
 }
 
@@ -498,7 +498,7 @@ export function ThemeEditorBasic(){
 
             <div
               style={{
-                'left': `${(themeReactive.b0.c[0]() / (themeReactive.a0.c[0]() * 0.8) / 0.37) * 100}%`,
+                'left': `${(themeReactive.b0.c[0]() / (themeReactive.a0.c[0]() * 0.6) / 0.37) * 100}%`,
                 'transform': 'translate(-50%, -50%)',
                 'background-color': 'var(--b0)',
                 'border': '1px solid var(--b4)',

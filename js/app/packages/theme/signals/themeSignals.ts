@@ -1,7 +1,7 @@
 import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, DEFAULT_THEMES } from '../constants';
 import { createEffect, createMemo, createSignal } from 'solid-js';
-import type { ThemeV0, ThemeV1 } from '../types/themeTypes';
-import { convertThemev0v1 } from '../utils/themeMigrations';
+import type { ThemeV0, ThemeV1, ThemeV2 } from '../types/themeTypes';
+import { convertThemev0v1, convertThemev1v2 } from '../utils/themeMigrations';
 import { makePersisted } from '@solid-primitives/storage';
 
 export const [isThemeSaved, setIsThemeSaved] = createSignal<boolean>(true);
@@ -14,18 +14,20 @@ export const [htmlColor, setHtmlColor] = makePersisted(
 );
 
 export const [userThemes, setUserThemes] = makePersisted(
-  createSignal<ThemeV1[]>([]),
+  createSignal<ThemeV2[]>([]),
   {name: 'macro-user-themes'}
 );
 setUserThemes(
   userThemes().map((theme) => {
-    if(!theme.version){return convertThemev0v1(theme as unknown as ThemeV0)}
+    if(!theme.version){return convertThemev1v2(convertThemev0v1(theme as unknown as ThemeV0))}
+    else if(theme.version === 1){return convertThemev1v2(theme as unknown as ThemeV1)}
     else{return theme}
   })
 );
 
 let convertedDefaultThemes = DEFAULT_THEMES.map((theme) => {
-  if(!theme.version){return convertThemev0v1(theme as unknown as ThemeV0)}
+  if(!theme.version){return convertThemev1v2(convertThemev0v1(theme as unknown as ThemeV0))}
+  else if(theme.version === 1){return convertThemev1v2(theme as unknown as ThemeV1)}
   else{return theme}
 });
 

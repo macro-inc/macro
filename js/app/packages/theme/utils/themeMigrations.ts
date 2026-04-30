@@ -46,7 +46,7 @@ export function convertThemev1v2(theme: ThemeV1): ThemeV2 {
     id: theme.id,
     name: theme.name,
     version: 2,
-    depth: 0.1,
+    depth: 0.15,
     tokens: {
       ...theme.tokens,
       b0, b1, b2, b3, b4,

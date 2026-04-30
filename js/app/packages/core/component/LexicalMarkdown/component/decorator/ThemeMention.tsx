@@ -1,6 +1,6 @@
 import type { ThemeMentionDecoratorProps } from '@lexical-core';
-import type { ThemeV1 } from '@theme/types/themeTypes';
-import { isThemeV1 } from '@theme/utils/themeValidation';
+import type { ThemeV2 } from '@theme/types/themeTypes';
+import { isThemeV2 } from '@theme/utils/themeValidation';
 import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
 import { applyTheme } from '@theme/utils/themeUtils';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -8,8 +8,8 @@ import { useSettingsState } from '@core/constant/SettingsState';
 export function ThemeMention(props: ThemeMentionDecoratorProps) {
   const { openSettings } = useSettingsState();
 
-  const theme = (): ThemeV1 | null => {
-    if (isThemeV1(props.data)) return props.data;
+  const theme = (): ThemeV2 | null => {
+    if (isThemeV2(props.data)) return props.data;
     return null;
   };
 
