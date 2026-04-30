@@ -5,7 +5,6 @@ import CorvuTooltip from '@corvu/tooltip';
 import type { Placement } from '@floating-ui/dom';
 import { type JSX, Show, splitProps, type ValidComponent } from 'solid-js';
 import { Layer } from './Layer';
-import { Panel } from './Panel';
 
 export type ButtonVariant =
   | 'primary'
@@ -151,10 +150,11 @@ export const Button = <T extends ValidComponent = 'button'>(
               class="z-tool-tip"
               style={{ 'max-width': 'calc(100vw - 32px)' }}
             >
-
-              <Panel depth={3} class="flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm shadow-md shadow-[#000]/5">
+              <Layer depth={3}>
+              <div class="border-edge bg-panel flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm shadow-md shadow-[#000]/5">
                 {local.tooltip}
-              </Panel>
+              </div>
+              </Layer>
             </CorvuTooltip.Content>
           </CorvuTooltip.Portal>
         </CorvuTooltip>

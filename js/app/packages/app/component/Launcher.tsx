@@ -52,6 +52,7 @@ import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
 import { cn } from '@ui/utils/classname';
 import { setAutomationComposerOpen } from '@block-automation/component';
+import { Layer } from '@ui';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -390,27 +391,28 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
   const AnimatedIcon = props.creatableBlock.animatedIcon;
 
   return (
-    <button
-      class={cn(
-        ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200',
-        `create-menu-${props.creatableBlock.label.toLowerCase()}`,
-        {
-          '-translate-y-2 text-ink bracket-offset-1': props.focused,
-          'text-ink-extra-muted': !props.focused,
-        }
-      )}
-      onClick={() => props.creatableBlock.keyDownHandler()}
-      onFocus={props.onFocus}
-      onMouseEnter={props.onMouseEnter}
-      tabindex={0}
-      ref={buttonRef}
-      onPointerEnter={() => {
-        buttonRef?.focus();
-      }}
-    >
-      {/** TODO (seamus): we need to pool/cache these canvases. they brick the color picker/or any other gl context
+    <Layer depth={2}>
+      <button
+        class={cn(
+          ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200',
+          `create-menu-${props.creatableBlock.label.toLowerCase()}`,
+          {
+            '-translate-y-2 text-ink bracket-offset-1': props.focused,
+            'text-ink-extra-muted': !props.focused,
+          }
+        )}
+        onClick={() => props.creatableBlock.keyDownHandler()}
+        onFocus={props.onFocus}
+        onMouseEnter={props.onMouseEnter}
+        tabindex={0}
+        ref={buttonRef}
+        onPointerEnter={() => {
+          buttonRef?.focus();
+        }}
+      >
+        {/** TODO (seamus): we need to pool/cache these canvases. they brick the color picker/or any other gl context
                 because they do not get garbage collected fast enough */}
-      {/*<div
+        {/*<div
         class="inset-0 absolute bg-panel opacity-2 mask-b-from-0% mask-b-to-100%"
         classList={{
           'text-ink-extra-muted opacity-2': !props.focused,
@@ -430,56 +432,57 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         />
       </div>*/}
 
-      <div
-        class={cn(
-          'absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color',
-          getIconConfig(props.creatableBlock.blockName).background,
-          {
-            'scale-y-0': !props.focused,
-            'scale-y-100': props.focused,
-          }
-        )}
-      ></div>
-
-      <div class="absolute top-1.5 left-2 z-user-highlight p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
-        <Hotkey token={props.creatableBlock.hotkeyToken} />
-      </div>
-
-      <div
-        class={cn(
-          'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-click duration-200 transition-color border border-edge',
-          textFg()
-        )}
-        style={{ background: props.focused ? 'currentColor' : 'transparent' }}
-      />
-
-      <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-user-highlight">
-        <div class="text-sm font-bold">{props.creatableBlock.label}</div>
-        <div class="size-3">
-          <PixelArrowRight />
-        </div>
-      </div>
-
-      <div
-        class={cn(
-          'w-1/3 -translate-y-1 transition-all ease-click duration-200',
-          textFg(),
-          {
-            'text-edge': !props.focused,
-            'scale-110': props.focused,
-          }
-        )}
-      >
-        <Show
-          when={ENABLE_ANIMATED_ICONS && AnimatedIcon}
-          fallback={<Dynamic component={StaticIcon} />}
-        >
-          {(Icon) => (
-            <Dynamic component={Icon()} triggerAnimation={props.focused} />
+        <div
+          class={cn(
+            'absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color',
+            getIconConfig(props.creatableBlock.blockName).background,
+            {
+              'scale-y-0': !props.focused,
+              'scale-y-100': props.focused,
+            }
           )}
-        </Show>
-      </div>
-    </button>
+        ></div>
+
+        <div class="absolute top-1.5 left-2 z-user-highlight p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
+          <Hotkey token={props.creatableBlock.hotkeyToken} />
+        </div>
+
+        <div
+          class={cn(
+            'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-click duration-200 transition-color border border-edge',
+            textFg()
+          )}
+          style={{ background: props.focused ? 'currentColor' : 'transparent' }}
+        />
+
+        <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-user-highlight">
+          <div class="text-sm font-bold">{props.creatableBlock.label}</div>
+          <div class="size-3">
+            <PixelArrowRight />
+          </div>
+        </div>
+
+        <div
+          class={cn(
+            'w-1/3 -translate-y-1 transition-all ease-click duration-200',
+            textFg(),
+            {
+              'text-edge': !props.focused,
+              'scale-110': props.focused,
+            }
+          )}
+        >
+          <Show
+            when={ENABLE_ANIMATED_ICONS && AnimatedIcon}
+            fallback={<Dynamic component={StaticIcon} />}
+          >
+            {(Icon) => (
+              <Dynamic component={Icon()} triggerAnimation={props.focused} />
+            )}
+          </Show>
+        </div>
+      </button>
+    </Layer>
   );
 };
 
@@ -784,20 +787,22 @@ export const Launcher = (props: LauncherProps) => {
         </Dialog.Overlay>
 
         <Dialog.Content>
-          <div
-            class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                props.onOpenChange(false);
-              }
-            }}
-          >
-            <LauncherInner
-              onClose={(shouldReturnFocus) =>
-                props.onOpenChange(false, shouldReturnFocus)
-              }
-            />
-          </div>
+          <Layer depth={1}>
+            <div
+              class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  props.onOpenChange(false);
+                }
+              }}
+            >
+              <LauncherInner
+                onClose={(shouldReturnFocus) =>
+                  props.onOpenChange(false, shouldReturnFocus)
+                }
+              />
+            </div>
+          </Layer>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>

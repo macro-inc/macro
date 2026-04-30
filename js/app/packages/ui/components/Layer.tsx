@@ -10,6 +10,7 @@ export function Layer(props: LayerProps) {
   const depth = () => ((props.depth ?? 0) / 5) * themeDepth();
   return (
     <div
+      data-layer-depth={props.depth}
       style={{
         'display': 'contents',
 
