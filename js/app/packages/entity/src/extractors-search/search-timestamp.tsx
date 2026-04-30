@@ -1,25 +1,26 @@
-import type { DateValue } from '@core/util/date';
-import { type ContentHitData, hitHasSender } from '../types/search';
+import { formatVideoTimestamp } from '@core/util/duration';
+import {
+  type ContentHitData,
+  hitHasSender,
+  isCallRecordHit,
+} from '../types/search';
 import { formatRelativeTimestamp } from '../utils/timestamp';
 
 interface SearchTimestampProps {
   hit?: ContentHitData;
 }
 
-function getTimestamp(hit: ContentHitData): DateValue | undefined {
-  return hitHasSender(hit) ? hit.sentAt : undefined;
-}
-
 /**
- * Displays the timestamp of a search hit (for channel/email)
+ * Displays the timestamp of a search hit (for channel/email/call_record)
  */
 export function SearchTimestamp(props: SearchTimestampProps) {
-  const timestamp = () => (props.hit ? getTimestamp(props.hit) : undefined);
-
-  const formattedTimestamp = () => {
-    const ts = timestamp();
-    return ts ? formatRelativeTimestamp(ts) : '';
+  const formatted = () => {
+    const hit = props.hit;
+    if (!hit) return '';
+    if (isCallRecordHit(hit)) return formatVideoTimestamp(hit.videoSeconds);
+    if (hitHasSender(hit)) return formatRelativeTimestamp(hit.sentAt);
+    return '';
   };
 
-  return <>{formattedTimestamp()}</>;
+  return <>{formatted()}</>;
 }

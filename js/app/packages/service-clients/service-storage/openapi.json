@@ -6597,7 +6597,13 @@
       "CallRecordTranscriptSegment": {
         "type": "object",
         "description": "A transcript segment as returned in a [`CallRecord`].",
-        "required": ["speakerId", "content", "startedAt", "sequenceNum"],
+        "required": [
+          "transcriptId",
+          "speakerId",
+          "content",
+          "startedAt",
+          "sequenceNum"
+        ],
         "properties": {
           "content": {
             "type": "string",
@@ -6629,6 +6635,11 @@
             "type": "string",
             "format": "date-time",
             "description": "When the speaker started this segment."
+          },
+          "transcriptId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable DB-row id for the segment."
           }
         }
       },

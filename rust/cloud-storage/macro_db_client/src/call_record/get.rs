@@ -9,11 +9,12 @@ pub struct CallRecordSearchBackfill {
 #[derive(Debug, Clone)]
 pub struct CallRecordMetadataRow {
     pub call_id: Uuid,
+    pub channel_id: Uuid,
     pub created_by: String,
     pub started_at: DateTime<Utc>,
     pub ended_at: DateTime<Utc>,
     pub duration_ms: i64,
-    pub channel_name: Option<String>,
+    pub custom_name: Option<String>,
     /// Whether the requesting user was a participant on the call.
     pub attended: bool,
 }
@@ -185,17 +186,17 @@ pub async fn get_call_records_metadata(
         r#"
         SELECT
             cr.id AS "call_id!",
+            cr.channel_id AS "channel_id!",
             cr.created_by AS "created_by!",
             cr.started_at AS "started_at!",
             cr.ended_at AS "ended_at!",
             cr.duration_ms AS "duration_ms!",
-            cc.name AS "channel_name?",
+            cr.custom_name AS "custom_name?",
             EXISTS (
                 SELECT 1 FROM call_record_participants crp
                 WHERE crp.call_record_id = cr.id AND crp.user_id = $2
             ) AS "attended!"
         FROM call_records cr
-        LEFT JOIN comms_channels cc ON cc.id = cr.channel_id
         WHERE cr.id = ANY($1)
         "#,
         call_ids,

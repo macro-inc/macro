@@ -16,6 +16,7 @@ export function CallRecordingTranscriptColumn(props: {
   transcriptOpen: Accessor<boolean>;
   participantsOpen: Accessor<boolean>;
   activeSequenceNum: Accessor<number | null>;
+  timelineStartMs: Accessor<number | null>;
   videoSeekGeneration: Accessor<number>;
   onToggleTranscript: () => void;
   onToggleParticipants: () => void;
@@ -58,6 +59,7 @@ export function CallRecordingTranscriptColumn(props: {
             <CallTranscript
               transcript={props.record().transcript}
               channelId={props.record().channelId}
+              timelineStartMs={props.timelineStartMs()}
               activeSequenceNum={props.activeSequenceNum()}
               videoSeekGeneration={props.videoSeekGeneration()}
               onSeekToSeconds={props.onSeekToSeconds}

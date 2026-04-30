@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT u.id as user_profile_id, mui.first_name, mui.last_name\n                FROM macro_user_info mui\n                JOIN \"User\" u ON mui.macro_user_id = u.macro_user_id\n                WHERE u.id = ANY($1)\n                ",
+  "query": "\n        SELECT u.id as user_profile_id, mui.first_name, mui.last_name\n        FROM macro_user_info mui\n        JOIN \"User\" u ON mui.macro_user_id = u.macro_user_id\n        WHERE u.id = ANY($1)\n        ",
   "describe": {
     "columns": [
       {
@@ -30,5 +30,5 @@
       true
     ]
   },
-  "hash": "32d668d355465b6e54567a087cf54754567424b802606a92cf204041a9b70bf4"
+  "hash": "940e7b0eb134ebfeff080733ed64ee795af7afc2cf14a910b0baf5838c4284e6"
 }

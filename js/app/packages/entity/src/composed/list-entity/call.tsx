@@ -1,4 +1,4 @@
-import { For, Show, Suspense } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
 import { UserGroup } from '@core/component/Properties/component/propertyValue/UserGroup';
 import type { EntityReference } from '@core/component/Properties/types';
@@ -9,7 +9,7 @@ import { formatCallDuration } from '@block-call/utils';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { AttendanceBadge } from '../../components/Badges';
-import { CallChannelName } from '../../components/CallChannelName';
+import { CallRecordName } from '../../components/CallRecordName';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
 import { SearchSender } from '../../extractors-search/search-sender';
@@ -81,9 +81,7 @@ export function CallNarrowBody(props: {
         when={hit()}
         fallback={
           <span class="text-ink-muted text-xs truncate">
-            <Suspense>
-              <CallChannelName entity={props.entity} />
-            </Suspense>
+            <CallRecordName entity={props.entity} />
           </span>
         }
       >
@@ -132,9 +130,7 @@ export function CallWideContent(props: {
   return (
     <>
       <span class="truncate">
-        <Suspense>
-          <CallChannelName entity={props.entity} />
-        </Suspense>
+        <CallRecordName entity={props.entity} />
       </span>
       <Show
         when={hit()}

@@ -18,6 +18,7 @@ aws-sdk-secretsmanager = { workspace = true }
 macro_aws_config = { path = "../macro_aws_config" }
 axum = { workspace = true }
 chrono = { workspace = true }
+comms = { path = "../comms", default-features = false, features = ["outbound"] }
 comms_db_client = { path = "../comms_db_client" }
 document_sub_type = { path = "../document_sub_type" }
 email_db_client = { path = "../email_db_client" }

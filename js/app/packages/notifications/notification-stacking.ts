@@ -1,7 +1,10 @@
 import { compareDateDesc } from '@core/util/date';
 import type { UnifiedNotification } from './types';
 import type { NotificationType } from '@core/types';
-import { isChannelNotification } from './notification-helpers';
+import {
+  isChannelNotification,
+  isDocumentCommentNotification,
+} from './notification-helpers';
 import { match } from 'ts-pattern';
 
 export interface NotificationStack {
@@ -28,13 +31,35 @@ export function getAllNotificationsFromGroup(
 }
 
 /**
- * Gets the threadId from a thread stack (replies, thread-mentions, or absorbed root sends)
+ * Gets the threadId from a thread stack (replies, thread-mentions, or absorbed root sends).
+ * Works for both channel threads and document comment threads.
+ *
+ * Returns '' for stack types that represent standalone (non-thread) groups —
+ * the "new sends" stack and orphan root mentions for either domain.
  */
 export function getThreadId(group: NotificationStack): string {
+  // Standalone-group stack types do not represent a thread.
+  if (
+    group.type === 'channel_message_send' ||
+    group.type === 'channel_mention' ||
+    group.type === 'commented_on_document' ||
+    group.type === 'mentioned_in_document_comment'
+  ) {
+    return '';
+  }
   for (const notification of group.notifications) {
     const threadId = match(notification.notification_metadata)
       .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId ?? '')
       .with({ tag: 'channel_mention' }, (m) => m.content.threadId ?? '')
+      .with({ tag: 'replied_to_document_comment_thread' }, (m) =>
+        m.content.threadId.toString()
+      )
+      .with({ tag: 'mentioned_in_document_comment' }, (m) =>
+        m.content.threadId.toString()
+      )
+      .with({ tag: 'commented_on_document' }, (m) =>
+        m.content.threadId.toString()
+      )
       .otherwise(() => '');
     if (threadId) return threadId;
   }
@@ -44,124 +69,61 @@ export function getThreadId(group: NotificationStack): string {
 /**
  * Stacks notifications by type for unrolled notification display.
  *
- * Stacking rules:
- * - Replies, thread-mentions (channel_mention with threadId), and the root send
- *   for a thread all group into a single thread stack.
- * - Root-level new message notifications are grouped into a single stack.
- * - Root mentions (channel_mention without threadId) each form their own stack.
+ * Channel rules:
+ * - Replies, thread-mentions, and the root send for a thread all group into
+ *   a single thread stack.
+ * - Root-level new sends are grouped into a single stack.
+ * - Root mentions each form their own stack.
  * - Any send/reply whose messageId matches a mention's messageId is shadowed
  *   (the mention is more informative).
+ *
+ * Document comment rules (`commented_on_document` cannot be statically
+ * distinguished as root vs. reply — the metadata only carries `commentId` and
+ * `threadId`, which come from independent id namespaces — so grouping is
+ * inferred from peers within the same threadId):
+ * - A threadId is a "thread" when it has any reply notification or 2+
+ *   notifications of any kind. All notifications for that threadId fold into
+ *   a single thread stack.
+ * - Otherwise the lone notification is treated as standalone:
+ *   - `commented_on_document` standalones bundle into a "new comments" stack.
+ *   - `mentioned_in_document_comment` standalones each form their own stack.
+ *   - A lone `replied_to_document_comment_thread` is still a thread stack.
+ * - Mention shadowing applies the same way as for channels.
  */
 export function stackNotifications(
   notifications: UnifiedNotification[]
 ): NotificationStack[] {
-  const filteredNotifications = notifications.filter(isChannelNotification);
+  const channelViews = notifications
+    .filter(isChannelNotification)
+    .map(toChannelView)
+    .filter((v): v is NormalizedView => v !== null);
 
-  const byTag = (tag: string) => (n: UnifiedNotification) =>
-    n.notification_metadata.tag === tag;
+  const docCommentViews = notifications
+    .filter(isDocumentCommentNotification)
+    .map(toDocCommentView)
+    .filter((v): v is NormalizedView => v !== null);
 
-  const allMentions = filteredNotifications.filter(byTag('channel_mention'));
+  const channelStacks = stackNormalizedViews(channelViews, {
+    send: 'channel_message_send',
+    reply: 'channel_message_reply',
+    mention: 'channel_mention',
+  });
 
-  // Thread mentions have a threadId; root mentions don't
-  const rootMentions = allMentions.filter((n) =>
-    match(n.notification_metadata)
-      .with({ tag: 'channel_mention' }, (m) => !m.content.threadId)
-      .otherwise(() => false)
+  const docCommentStacks = stackDocCommentViews(docCommentViews);
+
+  const docMentions = notifications.filter(
+    (n) => n.notification_metadata.tag === 'document_mention'
   );
-  const threadMentions = allMentions.filter((n) =>
-    match(n.notification_metadata)
-      .with({ tag: 'channel_mention' }, (m) => !!m.content.threadId)
-      .otherwise(() => false)
-  );
-
-  // All mention messageIds for shadowing sends/replies
-  const mentionedMsgIds = new Set(
-    allMentions
-      .map((n) =>
-        match(n.notification_metadata)
-          .with({ tag: 'channel_mention' }, (m) => m.content.messageId)
-          .otherwise(() => undefined)
-      )
-      .filter((id): id is string => id !== undefined)
-  );
-
-  const isShadowed = (n: UnifiedNotification) =>
-    match(n.notification_metadata)
-      .with(
-        { tag: 'channel_message_send' },
-        { tag: 'channel_message_reply' },
-        (m) => !!m.content.messageId && mentionedMsgIds.has(m.content.messageId)
-      )
-      .otherwise(() => false);
-
-  const activeThreadIds = new Set(
-    filteredNotifications
-      .map((n) =>
-        match(n.notification_metadata)
-          .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId)
-          .with(
-            { tag: 'channel_mention' },
-            (m) => m.content.threadId ?? undefined
-          )
-          .otherwise(() => undefined)
-      )
-      .filter((id): id is string => id !== undefined)
-  );
-
-  const replies = filteredNotifications
-    .filter(byTag('channel_message_reply'))
-    .filter((n) => !isShadowed(n));
-
-  const allSends = filteredNotifications.filter(byTag('channel_message_send'));
-
-  const isAbsorbedIntoThread = (n: UnifiedNotification) =>
-    match(n.notification_metadata)
-      .with({ tag: 'channel_message_send' }, (m) =>
-        activeThreadIds.has(m.content.messageId)
-      )
-      .otherwise(() => false);
-
-  // Unshadowed sends not belonging to a thread → "new messages" stack
-  const newMsgs = allSends.filter(
-    (n) => !isShadowed(n) && !isAbsorbedIntoThread(n)
-  );
-  // Unshadowed sends whose messageId is a known threadId → join thread stack
-  const absorbedSends = allSends.filter(
-    (n) => !isShadowed(n) && isAbsorbedIntoThread(n)
-  );
-
-  // Root mentions whose messageId is a known threadId → join that thread stack
-  const absorbedRootMentions = rootMentions.filter((n) =>
-    match(n.notification_metadata)
-      .with({ tag: 'channel_mention' }, (m) =>
-        activeThreadIds.has(m.content.messageId)
-      )
-      .otherwise(() => false)
-  );
-  // Root mentions with no matching thread → remain as individual stacks
-  const orphanRootMentions = rootMentions.filter((n) =>
-    match(n.notification_metadata)
-      .with(
-        { tag: 'channel_mention' },
-        (m) => !activeThreadIds.has(m.content.messageId)
-      )
-      .otherwise(() => false)
-  );
-
-  const docMentions = notifications.filter(byTag('document_mention'));
   const others = notifications.filter(
-    (n) => !isChannelNotification(n) && !byTag('document_mention')(n)
+    (n) =>
+      !isChannelNotification(n) &&
+      !isDocumentCommentNotification(n) &&
+      n.notification_metadata.tag !== 'document_mention'
   );
 
   const groups: NotificationStack[] = [
-    ...orphanRootMentions.flatMap((n) => makeStack('channel_mention', [n])),
-    ...makeStack('channel_message_send', newMsgs),
-    ...makeThreadStacks(
-      replies,
-      threadMentions,
-      absorbedSends,
-      absorbedRootMentions
-    ),
+    ...channelStacks,
+    ...docCommentStacks,
     ...makeStack('document_mention', docMentions),
     ...others.flatMap((n) => makeStack(n.notification_metadata.tag, [n])),
   ];
@@ -172,6 +134,184 @@ export function stackNotifications(
       b.notifications[0].created_at
     )
   );
+}
+
+type ViewRole = 'send' | 'reply' | 'mention';
+
+interface NormalizedView {
+  notification: UnifiedNotification;
+  role: ViewRole;
+  messageId: string;
+  threadId: string | undefined;
+}
+
+interface DomainTags {
+  send: NotificationType;
+  reply: NotificationType;
+  mention: NotificationType;
+}
+
+function toChannelView(n: UnifiedNotification): NormalizedView | null {
+  return match(n.notification_metadata)
+    .with({ tag: 'channel_message_send' }, (m) => ({
+      notification: n,
+      role: 'send' as const,
+      messageId: m.content.messageId,
+      threadId: undefined,
+    }))
+    .with({ tag: 'channel_message_reply' }, (m) => ({
+      notification: n,
+      role: 'reply' as const,
+      messageId: m.content.messageId,
+      threadId: m.content.threadId,
+    }))
+    .with({ tag: 'channel_mention' }, (m) => ({
+      notification: n,
+      role: 'mention' as const,
+      messageId: m.content.messageId,
+      threadId: m.content.threadId ?? undefined,
+    }))
+    .otherwise(() => null);
+}
+
+function toDocCommentView(n: UnifiedNotification): NormalizedView | null {
+  // commentId and threadId come from separate DB tables (Comment.id and
+  // Thread.id), so equality between them carries no meaning. Roots vs.
+  // replies are inferred at the stacking layer from peers sharing a threadId.
+  return match(n.notification_metadata)
+    .with({ tag: 'commented_on_document' }, (m) => ({
+      notification: n,
+      role: 'send' as const,
+      messageId: m.content.commentId.toString(),
+      threadId: m.content.threadId.toString(),
+    }))
+    .with({ tag: 'replied_to_document_comment_thread' }, (m) => ({
+      notification: n,
+      role: 'reply' as const,
+      messageId: m.content.commentId.toString(),
+      threadId: m.content.threadId.toString(),
+    }))
+    .with({ tag: 'mentioned_in_document_comment' }, (m) => ({
+      notification: n,
+      role: 'mention' as const,
+      messageId: m.content.commentId.toString(),
+      threadId: m.content.threadId.toString(),
+    }))
+    .otherwise(() => null);
+}
+
+function stackDocCommentViews(views: NormalizedView[]): NotificationStack[] {
+  const mentionedMsgIds = new Set(
+    views.filter((v) => v.role === 'mention').map((v) => v.messageId)
+  );
+
+  const filtered = views.filter(
+    (v) => v.role === 'mention' || !mentionedMsgIds.has(v.messageId)
+  );
+
+  const byThread = groupBy(filtered, (v) => v.threadId ?? '');
+
+  const standaloneSends: NormalizedView[] = [];
+  const stacks: NotificationStack[] = [];
+
+  for (const [threadId, group] of byThread) {
+    if (threadId === '') continue;
+
+    const isThread = group.length >= 2 || group.some((v) => v.role === 'reply');
+
+    if (isThread) {
+      stacks.push({
+        type: 'replied_to_document_comment_thread',
+        notifications: sortByRecency(group.map((v) => v.notification)),
+      });
+      continue;
+    }
+
+    const v = group[0];
+    if (v.role === 'send') {
+      standaloneSends.push(v);
+    } else if (v.role === 'mention') {
+      stacks.push({
+        type: 'mentioned_in_document_comment',
+        notifications: [v.notification],
+      });
+    }
+  }
+
+  if (standaloneSends.length > 0) {
+    stacks.push({
+      type: 'commented_on_document',
+      notifications: sortByRecency(standaloneSends.map((v) => v.notification)),
+    });
+  }
+
+  return stacks;
+}
+
+function stackNormalizedViews(
+  views: NormalizedView[],
+  tags: DomainTags
+): NotificationStack[] {
+  const mentions = views.filter((v) => v.role === 'mention');
+  const rootMentions = mentions.filter((v) => v.threadId === undefined);
+  const threadMentions = mentions.filter((v) => v.threadId !== undefined);
+
+  const mentionedMsgIds = new Set(mentions.map((v) => v.messageId));
+
+  const isShadowed = (v: NormalizedView) =>
+    (v.role === 'send' || v.role === 'reply') &&
+    mentionedMsgIds.has(v.messageId);
+
+  // A thread is "active" if it has any reply or any thread-mention.
+  const activeThreadIds = new Set(
+    views
+      .map((v) =>
+        v.role === 'reply' || (v.role === 'mention' && v.threadId !== undefined)
+          ? v.threadId
+          : undefined
+      )
+      .filter((id): id is string => id !== undefined)
+  );
+
+  const replies = views
+    .filter((v) => v.role === 'reply')
+    .filter((v) => !isShadowed(v));
+
+  const allSends = views.filter((v) => v.role === 'send');
+
+  const isAbsorbedIntoThread = (v: NormalizedView) =>
+    activeThreadIds.has(v.messageId);
+
+  const newSends = allSends.filter(
+    (v) => !isShadowed(v) && !isAbsorbedIntoThread(v)
+  );
+  const absorbedSends = allSends.filter(
+    (v) => !isShadowed(v) && isAbsorbedIntoThread(v)
+  );
+
+  const absorbedRootMentions = rootMentions.filter((v) =>
+    activeThreadIds.has(v.messageId)
+  );
+  const orphanRootMentions = rootMentions.filter(
+    (v) => !activeThreadIds.has(v.messageId)
+  );
+
+  return [
+    ...orphanRootMentions.flatMap((v) =>
+      makeStack(tags.mention, [v.notification])
+    ),
+    ...makeStack(
+      tags.send,
+      newSends.map((v) => v.notification)
+    ),
+    ...makeThreadStacks(
+      tags.reply,
+      replies,
+      threadMentions,
+      absorbedSends,
+      absorbedRootMentions
+    ),
+  ];
 }
 
 function sortByRecency(items: UnifiedNotification[]): UnifiedNotification[] {
@@ -203,22 +343,19 @@ function makeStack(
 }
 
 function makeThreadStacks(
-  replies: UnifiedNotification[],
-  threadMentions: UnifiedNotification[],
-  absorbedSends: UnifiedNotification[],
-  absorbedRootMentions: UnifiedNotification[]
+  replyTag: NotificationType,
+  replies: NormalizedView[],
+  threadMentions: NormalizedView[],
+  absorbedSends: NormalizedView[],
+  absorbedRootMentions: NormalizedView[]
 ): NotificationStack[] {
-  // Key each notification by its threadId. For absorbed root sends and root
-  // mentions, their messageId IS the threadId (they are the thread root).
-  const keyOf = (n: UnifiedNotification): string =>
-    match(n.notification_metadata)
-      .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId ?? '')
-      .with(
-        { tag: 'channel_mention' },
-        (m) => m.content.threadId ?? m.content.messageId
-      )
-      .with({ tag: 'channel_message_send' }, (m) => m.content.messageId)
-      .otherwise(() => '');
+  // Key each view by its threadId. For absorbed sends and root mentions, their
+  // messageId IS the threadId (they are the thread root).
+  const keyOf = (v: NormalizedView): string => {
+    if (v.role === 'reply') return v.threadId ?? '';
+    if (v.role === 'mention') return v.threadId ?? v.messageId;
+    return v.messageId;
+  };
 
   const byThread = groupBy(
     [...replies, ...threadMentions, ...absorbedSends, ...absorbedRootMentions],
@@ -228,7 +365,7 @@ function makeThreadStacks(
   return [...byThread.entries()]
     .filter(([threadId]) => threadId !== '')
     .map(([, group]) => ({
-      type: 'channel_message_reply' as const,
-      notifications: sortByRecency(group),
+      type: replyTag,
+      notifications: sortByRecency(group.map((v) => v.notification)),
     }));
 }

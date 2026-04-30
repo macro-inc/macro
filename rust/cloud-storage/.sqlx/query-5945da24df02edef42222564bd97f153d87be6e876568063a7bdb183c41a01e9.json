@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            cr.id AS \"call_id!\",\n            cr.channel_id AS \"channel_id!\",\n            cr.created_by AS \"created_by!\",\n            cr.started_at AS \"started_at!\",\n            cr.ended_at AS \"ended_at!\",\n            cr.duration_ms AS \"duration_ms!\",\n            cr.custom_name AS \"custom_name?\",\n            EXISTS (\n                SELECT 1 FROM call_record_participants crp\n                WHERE crp.call_record_id = cr.id AND crp.user_id = $2\n            ) AS \"attended!\"\n        FROM call_records cr\n        WHERE cr.id = ANY($1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_by!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "started_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "ended_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "duration_ms!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "custom_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "attended!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "5945da24df02edef42222564bd97f153d87be6e876568063a7bdb183c41a01e9"
+}

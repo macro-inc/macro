@@ -18,6 +18,7 @@ inbound = [
 outbound = [
   "dep:ai",
   "dep:aws-sdk-s3",
+  "comms/outbound",
   "dep:entity_access_db_utils",
   "dep:livekit-api",
   "dep:livekit-protocol",
@@ -34,6 +35,7 @@ async-trait = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
+comms = { path = "../comms", default-features = false }
 connection = { path = "../connection", default-features = false, features = [
   "ports",
 ] }

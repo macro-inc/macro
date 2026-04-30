@@ -37,6 +37,7 @@ import type {
   SoupPage,
 } from '@service-storage/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
+import { differenceInMilliseconds } from 'date-fns';
 
 type InnerSearchResult =
   | DocumentSearchResult
@@ -56,6 +57,7 @@ type TypedInnerSearchResult =
       results: CallRecordSearchResult[];
       type: 'call_record';
       callId: string;
+      callStartedAt: string;
     };
 
 const getSearchData = (data: TypedInnerSearchResult): SearchData => {
@@ -140,6 +142,11 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
         const isContentHit = !!r.transcript_id;
         if (!isContentHit) return [];
 
+        const videoSeconds = Math.max(
+          0,
+          differenceInMilliseconds(r.started_at!, data.callStartedAt) / 1000
+        );
+
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           type: 'call_record' as const,
@@ -147,6 +154,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           content: mergeAdjacentMacroEmTags(content),
           senderId: r.speaker_id!,
           sentAt: r.started_at!,
+          videoSeconds,
           location: {
             type: 'call_record' as const,
             callId: data.callId,
@@ -364,6 +372,7 @@ export const useSearchResponseItemMapper = () => {
           type: 'call_record',
           results: result.call_search_results,
           callId: result.call_id,
+          callStartedAt: result.metadata.started_at,
         });
 
         const channelName: string | undefined =
@@ -375,8 +384,7 @@ export const useSearchResponseItemMapper = () => {
           {
             type: 'call',
             id: result.call_id,
-            // NOTE: leave empty, the CallChannelName will fall back to the preview endpoint.
-            name: result.name ?? channelName ?? '',
+            name: result.name ?? channelName ?? blockNameToDefaultFile('call'),
             channelId: result.channel_id,
             channelName,
             ownerId: result.owner_id,

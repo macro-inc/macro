@@ -4,14 +4,17 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   untrack,
 } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import {
   getActiveTranscriptSequenceNum,
+  getSegmentVideoSeconds,
   sortTranscriptSegments,
 } from '../transcript-playback';
+import type { CallTranscriptTarget } from '../CallBlockAdapter';
 import {
   CallRecordingMediaColumn,
   type CallRecordingTimeUpdateSource,
@@ -25,7 +28,10 @@ import {
   shouldCoalesceSeekGenerationBump,
 } from './call-recording-utils';
 
-export function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
+export function CallRecordingBody(props: {
+  data: Accessor<CallRecord>;
+  transcriptTarget?: Accessor<CallTranscriptTarget | undefined>;
+}) {
   const record = props.data;
   const hasTranscripts = createMemo(() => record().transcript.length > 0);
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
@@ -36,6 +42,11 @@ export function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
   const sortedTranscript = createMemo(() =>
     sortTranscriptSegments(record().transcript)
   );
+
+  const timelineStartMs = createMemo(() => {
+    const ms = new Date(record().startedAt).getTime();
+    return Number.isFinite(ms) ? ms : null;
+  });
 
   const [transcriptOpen, setTranscriptOpen] = createSignal(true);
   const [participantsOpen, setParticipantsOpen] = createSignal(false);
@@ -73,6 +84,7 @@ export function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
     getActiveTranscriptSequenceNum(
       sortedTranscript(),
       playbackSeconds(),
+      timelineStartMs(),
       allowFutureLead()
     )
   );
@@ -87,14 +99,40 @@ export function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
   };
 
   const seekToSeconds = (seconds: number) => {
+    if (!Number.isFinite(seconds)) return;
     const video = videoRef();
-    if (!video || !Number.isFinite(seconds)) return;
-    const maxTime = Number.isFinite(video.duration) ? video.duration : seconds;
+    const maxTime = Number.isFinite(video?.duration ?? Number.NaN)
+      ? (video!.duration as number)
+      : seconds;
     const targetSeconds = Math.max(0, Math.min(seconds, maxTime));
-    video.currentTime = targetSeconds;
+
     setPlaybackSeconds(targetSeconds);
     setAllowFutureLead(false);
+    bumpVideoSeekGeneration(targetSeconds);
+
+    if (video) video.currentTime = targetSeconds;
   };
+
+  const goToTranscriptSegment = (transcriptId: string) => {
+    const segment = sortedTranscript().find(
+      (s) => s.transcriptId === transcriptId
+    );
+    if (!segment) return;
+    const seconds = getSegmentVideoSeconds(segment, timelineStartMs());
+    if (seconds === null) return;
+    seekToSeconds(seconds);
+  };
+
+  createEffect(
+    on(
+      () => props.transcriptTarget?.(),
+      (target) => {
+        if (!target) return;
+        if (hasTranscripts()) setTranscriptOpen(true);
+        goToTranscriptSegment(target.transcriptId);
+      }
+    )
+  );
 
   const toggleTranscript = () => {
     setTranscriptOpen((open) => {
@@ -203,6 +241,7 @@ export function CallRecordingBody(props: { data: Accessor<CallRecord> }) {
             transcriptOpen={transcriptOpen}
             participantsOpen={participantsOpen}
             activeSequenceNum={activeSequenceNum}
+            timelineStartMs={timelineStartMs}
             videoSeekGeneration={videoSeekGeneration}
             onToggleTranscript={toggleTranscript}
             onToggleParticipants={toggleParticipants}

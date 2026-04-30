@@ -71,7 +71,7 @@ export function UserTooltip(props: UserTooltipProps) {
       popoverSplit({
         type: 'component',
         id: 'task-compose',
-        params: { initialAssigneeId: props.id },
+        params: { initialAssigneeIds: [props.id] },
       });
     }
   };

@@ -81,6 +81,7 @@ export type CallRecordContentHitData = {
   content: string;
   senderId: string;
   sentAt: DateValue;
+  videoSeconds: number;
   location: CallRecordSegmentHighlightLocation;
 };
 
