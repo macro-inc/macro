@@ -1,5 +1,4 @@
 import { uploadProfilePicture } from '@core/component/ProfilePicture';
-import { TabContentRow } from '@core/component/TabContent';
 import EditableField from '@core/component/EditableField';
 import { capitalize } from '@block-pdf/util/StringUtils';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
@@ -10,7 +9,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { Modal, Overlay, Content, Header, Message, ButtonBar } from '@core/component/Modal';
 import { toast } from '@core/component/Toast/Toast';
 import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Panel } from '@ui';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
@@ -152,262 +151,272 @@ export function Account() {
   };
 
   return (
-    <div class="absolute inset-0 overflow-y-auto" style="scrollbar-width: none;">
-        <div class="p-2">
-          <div class="mb-12 text-ink">
-          <Show when={ENABLE_PROFILE_PICTURES}>
-          <TabContentRow
-            isLoading={!userId()}
-            text="Profile Picture"
-            subtext={''}
-          >
-            <Show when={userId()}>
-              <div class="flex items-center">
-                <UserIcon id={userId() as string} isDeleted={false} size="lg" />
-                <div
-                  class="ml-2"
-                  use:fileSelector={{
-                    acceptedFileExtensions: blockNameToFileExtensions.image,
-                    acceptedMimeTypes: blockNameToMimeTypes.image,
-                    onSelect: async (files: File[]) => {
-                      let response = await uploadProfilePicture(files[0]);
-                      if (!response || !userId()) return;
-                      let { url } = response;
-                      let pic: ProfilePictureItem = {
-                        _createdAt: new Date(),
-                        url,
-                        id: userId()!,
-                        loading: false,
-                      };
-                      // update the cache directly to force a reload
-                      const [_, controls] = useProfilePictureUrl(userId());
-                      controls.mutate(pic);
-                    },
-                  }}
+    <div
+      class="h-full overflow-y-auto"
+      style="scrollbar-width: none;"
+    >
+      <div class="max-w-2xl mx-auto p-2">
+        <Panel depth={3}>
+          <div class="text-ink">
+            <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
+              <div class="text-sm">Account</div>
+              <Show when={ENABLE_PROFILE_PICTURES && userId()}>
+                <div class="flex items-center gap-2">
+                  <div
+                    use:fileSelector={{
+                      acceptedFileExtensions: blockNameToFileExtensions.image,
+                      acceptedMimeTypes: blockNameToMimeTypes.image,
+                      onSelect: async (files: File[]) => {
+                        let response = await uploadProfilePicture(files[0]);
+                        if (!response || !userId()) return;
+                        let { url } = response;
+                        let pic: ProfilePictureItem = {
+                          _createdAt: new Date(),
+                          url,
+                          id: userId()!,
+                          loading: false,
+                        };
+                        // update the cache directly to force a reload
+                        const [_, controls] = useProfilePictureUrl(userId());
+                        controls.mutate(pic);
+                      },
+                    }}
+                  >
+                    <DeprecatedTextButton text="Upload" icon={IconUpload} theme="accent" />
+                  </div>
+                  <UserIcon
+                    id={userId() as string}
+                    isDeleted={false}
+                    size="md"
+                    class="bg-transparent"
+                  />
+                </div>
+              </Show>
+            </div>
+            <div class="flex flex-col gap-2 p-6">
+
+            <Row label="First Name">
+              <EditableField
+                class="ph-no-capture"
+                value={firstName()}
+                onSave={(newValue: string) => {
+                  setUpdatedFirstName(newValue);
+                  authServiceClient.putUserName({ first_name: newValue });
+                }}
+                placeholder="Enter first name"
+                allowEmpty={true}
+              />
+            </Row>
+
+            <Row label="Last Name">
+              <EditableField
+                class="ph-no-capture"
+                value={lastName()}
+                onSave={(newValue: string) => {
+                  setUpdatedLastName(newValue);
+                  authServiceClient.putUserName({ last_name: newValue });
+                }}
+                placeholder="Enter last name"
+                allowEmpty={true}
+              />
+            </Row>
+
+            <Row label="Email">
+              <span class="ph-no-capture text-sm text-ink-muted">
+                {email() ?? ''}
+              </span>
+            </Row>
+
+            <Row label="License Status">
+              <div class="flex items-center gap-3">
+                <span class="text-sm text-ink-muted">
+                  {capitalize(licenseStatus() ?? '')}
+                </span>
+                <Show when={!hasPaidAccess()}>
+                  <DeprecatedTextButton
+                    theme="accent"
+                    text="Upgrade"
+                    onClick={() => showPaywall()}
+                  />
+                </Show>
+              </div>
+            </Row>
+
+            <BundleUpdateRow />
+
+            <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
+              <Row label="Email">
+                <Show
+                  when={!emailActive()}
+                  fallback={
+                    <DeprecatedTextButton
+                      theme="base"
+                      text="Disable"
+                      onClick={() => setShowEmailModal(true)}
+                    />
+                  }
                 >
-                  <DeprecatedTextButton text="Upload" icon={IconUpload} theme="accent" />
+                  <Show when={!showEnableEmailModal()}>
+                    <DeprecatedTextButton
+                      theme="base"
+                      text="Enable"
+                      onClick={() => setShowEnableEmailModal(true)}
+                    />
+                  </Show>
+                </Show>
+              </Row>
+            </Show>
+
+            <Show when={showEnableEmailModal()}>
+              <div class="flex flex-row items-center">
+                <div class="text-sm">
+                  Email requires additional Google permissions. Select the permissions on sign-in to enable.
+                </div>
+                <div class="ml-auto flex flex-row">
+                  <DeprecatedTextButton
+                    theme="clear"
+                    text="Logout"
+                    onClick={() => {
+                      setShowEnableEmailModal(false);
+                      logout();
+                    }}
+                  />
+                  <DeprecatedTextButton
+                    theme="clear"
+                    text="Cancel"
+                    onClick={() => setShowEnableEmailModal(false)}
+                  />
                 </div>
               </div>
             </Show>
-          </TabContentRow>
-        </Show>
-        <TabContentRow isLoading={!userId()} text="First Name" subtext={''}>
-          <EditableField
-              class="ph-no-capture"
-            value={firstName()}
-            onSave={(newValue: string) => {
-              setUpdatedFirstName(newValue);
-              authServiceClient.putUserName({ first_name: newValue });
-            }}
-            placeholder="Enter first name"
-            allowEmpty={true}
-          />
-        </TabContentRow>
-        <TabContentRow isLoading={!userId()} text="Last Name" subtext={''}>
-          <EditableField
-              class="ph-no-capture"
-            value={lastName()}
-            onSave={(newValue: string) => {
-              setUpdatedLastName(newValue);
-              authServiceClient.putUserName({ last_name: newValue });
-            }}
-            placeholder="Enter last name"
-            allowEmpty={true}
-          />
-        </TabContentRow>
-        <TabContentRow
-          class="ph-no-capture"
-          isLoading={!email()}
-          text="Email"
-          subtext={email() ?? ''}
-        />
 
-        <div class="flex gap-4 items-center">
-          <TabContentRow
-            isLoading={!licenseStatus()}
-            text="License Status"
-            subtext={capitalize(licenseStatus() ?? '')}
-          />
-          <Show when={!hasPaidAccess()}>
-            <DeprecatedTextButton
-              theme="accent"
-              text="Upgrade"
-              onClick={() => showPaywall()}
-              class="mb-[18px]"
-            />
-          </Show>
-        </div>
-        <BundleUpdateRow />
-        <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
-          <Show
-            when={!emailActive()}
-            fallback={
-              <div
-                class={cn(
-                  'flex items-center justify-between',
-                  !showEmailModal() && 'mb-[18px]'
-                )}
+            <Show when={showEmailModal()}>
+              <div class="flex flex-row items-center">
+                <div class="text-sm">
+                  Disabling will clear all email data from Macro
+                </div>
+                <div class="ml-auto flex flex-row">
+                  <DeprecatedTextButton
+                    theme="clear"
+                    text="Confirm"
+                    onClick={async () => {
+                      setShowEmailModal(false);
+                      await disconnectEmail().match(
+                        () => {
+                          toast.success('Email disabled — clearing your email data, this may take a moment.');
+                        },
+                        () => {
+                          toast.failure('Failed to disable email. Please try again.');
+                        },
+                      );
+                    }}
+                  />
+                  <DeprecatedTextButton
+                    theme="clear"
+                    text="Cancel"
+                    onClick={() => setShowEmailModal(false)}
+                  />
+                </div>
+              </div>
+            </Show>
+
+            <Row label="GitHub">
+              <Show
+                when={!githubLinkExists.loading}
+                fallback={
+                  <span class="text-sm text-ink-muted">Loading…</span>
+                }
               >
-                <div class="text-sm">Email</div>
-                <DeprecatedTextButton
-                  theme="base"
-                  text="Disable"
-                  onClick={() => {
-                    setShowEmailModal(true);
-                  }}
-                />
+                <Show
+                  when={!githubLinkExists()}
+                  fallback={
+                    <DeprecatedTextButton
+                      theme="base"
+                      text="Disable"
+                      onClick={handleGithubDisable}
+                    />
+                  }
+                >
+                  <DeprecatedTextButton
+                    theme="base"
+                    text="Enable"
+                    onClick={handleGithubEnable}
+                  />
+                </Show>
+              </Show>
+            </Row>
+
+            <NotificationToggle />
+
+            <div class="border-t border-edge pt-4">
+              <div
+                class="flex flex-row items-center gap-1.5 cursor-pointer select-none"
+                onClick={logoutHandler}
+              >
+                <Logout class="w-4 h-4" />
+                <div class="text-sm">Logout</div>
               </div>
-            }
-          >
-            <Show when={!showEnableEmailModal()}>
-              <div class="flex items-center justify-between mb-[18px]">
-                <div class="text-sm">Email</div>
-                <DeprecatedTextButton
-                  theme="base"
-                  text="Enable"
-                  onClick={() => setShowEnableEmailModal(true)}
-                />
+            </div>
+
+            <Show when={isNativeMobilePlatform()}>
+              <div class="border-t border-edge pt-4">
+                <Button variant="destructive" onClick={() => setShowDeleteModal(true)}>
+                  Delete Account
+                </Button>
+                <Modal open={showDeleteModal()} onOpenChange={setShowDeleteModal}>
+                  <Overlay />
+                  <Content>
+                    <Header>Delete Account</Header>
+                    <Message>
+                      Are you sure you want to delete your account? This action is
+                      permanent and cannot be undone.
+                    </Message>
+                    <ButtonBar>
+                      <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+                        Cancel
+                      </Button>
+                      <Button variant="destructive" onClick={() => {
+                        setShowDeleteModal(false);
+                        setShowDeleteConfirmModal(true);
+                      }}>
+                        Delete
+                      </Button>
+                    </ButtonBar>
+                  </Content>
+                </Modal>
+                <Modal open={showDeleteConfirmModal()} onOpenChange={setShowDeleteConfirmModal}>
+                  <Overlay />
+                  <Content>
+                    <Header>Are you absolutely sure?</Header>
+                    <Message>
+                      This will permanently delete your account and all associated
+                      data. This cannot be undone.
+                    </Message>
+                    <ButtonBar>
+                      <Button variant="secondary" onClick={() => setShowDeleteConfirmModal(false)}>
+                        Cancel
+                      </Button>
+                      <Button variant="destructive" onClick={deleteAccountHandler}>
+                        Delete My Account
+                      </Button>
+                    </ButtonBar>
+                  </Content>
+                </Modal>
               </div>
             </Show>
-          </Show>
-        </Show>
-        <Show when={showEnableEmailModal()}>
-          <div class="flex flex-row items-center mb-[18px]">
-            <div class="text-sm">
-              Email requires additional Google permissions. Select the permissions on sign-in to enable.
-            </div>
-            <div class="ml-auto flex flex-row">
-              <DeprecatedTextButton
-                theme="clear"
-                text="Logout"
-                onClick={() => {
-                  setShowEnableEmailModal(false);
-                  logout();
-                }}
-              />
-              <DeprecatedTextButton
-                theme="clear"
-                text="Cancel"
-                onClick={() => {
-                  setShowEnableEmailModal(false);
-                }}
-              />
             </div>
           </div>
-        </Show>
-        <Show when={showEmailModal()}>
-          <div class="flex flex-row items-center">
-            <div class="mb-[18px] text-sm pt-4">
-              Disabling will clear all email data from Macro
-            </div>
-            <div class="ml-auto flex flex-row">
-              <DeprecatedTextButton
-                theme="clear"
-                text="Confirm"
-                onClick={async () => {
-                  setShowEmailModal(false);
-                  await disconnectEmail().match(
-                    () => {
-                      toast.success('Email disabled — clearing your email data, this may take a moment.');
-                    },
-                    () => {
-                      toast.failure('Failed to disable email. Please try again.');
-                    },
-                  );
-                }}
-              />
-              <DeprecatedTextButton
-                theme="clear"
-                text="Cancel"
-                onClick={() => {
-                  setShowEmailModal(false);
-                }}
-              />
-            </div>
-          </div>
-        </Show>
-        <div class="flex items-center justify-between mb-[18px]">
-          <div class="text-sm">GitHub</div>
-          <Show
-            when={!githubLinkExists.loading}
-            fallback={<span class="text-sm text-ink-muted h-8 flex items-center">Loading...</span>}
-          >
-            <Show
-              when={!githubLinkExists()}
-              fallback={
-                <DeprecatedTextButton
-                  theme="base"
-                  text="Disable"
-                  onClick={handleGithubDisable}
-                />
-              }
-            >
-              <DeprecatedTextButton
-                theme="base"
-                text="Enable"
-                onClick={handleGithubEnable}
-              />
-            </Show>
-          </Show>
-        </div>
-        <NotificationToggle />
-        <div class="flex flex-row justify-between items-center border-t border-edge pt-4">
-          <div
-            class="mb-4 flex flex-row justify-start items-center gap-1"
-            onClick={logoutHandler}
-          >
-            <Logout class="w-4 h-4" />
-            <div class="text-sm select-none">Logout</div>
-          </div>
-          </div>
-        <Show when={isNativeMobilePlatform()}>
-          <div class="border-t border-edge pt-4">
-            <Button variant="destructive" onClick={() => setShowDeleteModal(true)}>
-              Delete Account
-            </Button>
-            <Modal open={showDeleteModal()} onOpenChange={setShowDeleteModal}>
-              <Overlay />
-              <Content>
-                <Header>Delete Account</Header>
-                <Message>
-                  Are you sure you want to delete your account? This action is
-                  permanent and cannot be undone.
-                </Message>
-                <ButtonBar>
-                  <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
-                    Cancel
-                  </Button>
-                  <Button variant="destructive" onClick={() => {
-                    setShowDeleteModal(false);
-                    setShowDeleteConfirmModal(true);
-                  }}>
-                    Delete
-                  </Button>
-                </ButtonBar>
-              </Content>
-            </Modal>
-            <Modal open={showDeleteConfirmModal()} onOpenChange={setShowDeleteConfirmModal}>
-              <Overlay />
-              <Content>
-                <Header>Are you absolutely sure?</Header>
-                <Message>
-                  This will permanently delete your account and all associated
-                  data. This cannot be undone.
-                </Message>
-                <ButtonBar>
-                  <Button variant="secondary" onClick={() => setShowDeleteConfirmModal(false)}>
-                    Cancel
-                  </Button>
-                  <Button variant="destructive" onClick={deleteAccountHandler}>
-                    Delete My Account
-                  </Button>
-                </ButtonBar>
-              </Content>
-            </Modal>
-          </div>
-        </Show>
-        </div>
+        </Panel>
       </div>
+    </div>
+  );
+}
+
+function Row(props: { label: string; children?: any }) {
+  return (
+    <div class="flex items-center justify-between gap-4 h-10">
+      <div class="text-sm">{props.label}</div>
+      <div class="flex items-center">{props.children}</div>
     </div>
   );
 }
@@ -437,23 +446,21 @@ function NotificationSettings(props: {
 
 
   return (
-    <div class="flex items-center justify-between mb-[18px]">
-      <div class="text-sm">Notifications</div>
+    <Row label="Notifications">
       <DeprecatedTextButton
         theme="base"
         text={props.settings.isEnabled() ? "Disable" : "Enable"}
         onClick={handleToggle}
       />
-    </div>
+    </Row>
   );
 }
 
 function NotificationNotSupported() {
   return (
-    <div class="flex items-center justify-between mb-[18px]">
-      <div class="text-sm">Notifications</div>
+    <Row label="Notifications">
       <span class="text-sm text-ink-muted">Not supported on this device</span>
-    </div>
+    </Row>
   );
 }
 
@@ -485,19 +492,20 @@ function BundleUpdateRow() {
         const status = () => ctx().bundleUpdateStatus();
         const action = () => bundleUpdateAction(status(), ctx().cancelWifiWait);
         return (
-          <div class="flex items-center justify-between mb-[18px]">
-            <TabContentRow
-              text="App Update"
-              subtext={formatBundleUpdateStatus(status())}
-            />
-            <Show when={action()}>
-              {(a) => (
-                <Button variant="accent" size="sm" onClick={a().action}>
-                  {a().label}
-                </Button>
-              )}
-            </Show>
-          </div>
+          <Row label="App Update">
+            <div class="flex items-center gap-3">
+              <span class="text-sm text-ink-muted">
+                {formatBundleUpdateStatus(status())}
+              </span>
+              <Show when={action()}>
+                {(a) => (
+                  <Button variant="accent" size="sm" onClick={a().action}>
+                    {a().label}
+                  </Button>
+                )}
+              </Show>
+            </div>
+          </Row>
         );
       }}
     </Show>
