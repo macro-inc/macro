@@ -1,3 +1,4 @@
+use crate::domain::models::messages::ContactsNodes;
 use crate::domain::ports::ContactsService;
 use axum::extract::{FromRequestParts, Json, State};
 use axum::http::StatusCode;
@@ -10,6 +11,7 @@ use model_user::axum_extractor::MacroUserExtractor;
 use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::instrument;
