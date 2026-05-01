@@ -93,10 +93,6 @@ export function getAiToolsInfra(): AiToolsInfra {
       value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
     },
     {
-      name: 'SEARCH_SERVICE_URL',
-      value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
-    },
-    {
       name: ServiceUrl.EMAIL_SERVICE_URL,
       value: getServiceUrl(ServiceUrl.EMAIL_SERVICE_URL),
     },

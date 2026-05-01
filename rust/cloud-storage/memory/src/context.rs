@@ -28,7 +28,7 @@ use crate::config::Config;
 /// Builds a [`ToolServiceContext`] from environment variables and a database pool.
 ///
 /// Required env vars: `INTERNAL_API_SECRET_KEY`, `DOCUMENT_STORAGE_SERVICE_URL`,
-/// `SEARCH_SERVICE_URL`, `EMAIL_SERVICE_URL`, `SYNC_SERVICE_URL`,
+/// `EMAIL_SERVICE_URL`, `SYNC_SERVICE_URL`,
 /// `DOCUMENT_COGNITION_SERVICE_URL`, `STATIC_FILE_SERVICE_URL`,
 /// `DOCUMENT_STORAGE_BUCKET`, `DOCX_DOCUMENT_UPLOAD_BUCKET`,
 /// `EMAIL_SCHEDULED_QUEUE`,
@@ -47,7 +47,7 @@ pub async fn build_tool_service_context(
     // Service clients
     let search_client = Arc::new(SearchServiceClient::new(
         config.internal_api_secret_key.clone(),
-        config.search_service_url.clone(),
+        config.document_storage_service_url.clone(),
     ));
     let sync_client = Arc::new(SyncServiceClient::new(
         config.internal_api_secret_key.clone(),

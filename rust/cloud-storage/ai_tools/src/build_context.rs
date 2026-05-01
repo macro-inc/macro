@@ -67,7 +67,7 @@ maybe_env_var! {
 /// are treated as AWS Secrets Manager secret names and resolved through the
 /// secrets manager. In `Local`, their values are used directly.
 ///
-/// Required env vars: `DOCUMENT_STORAGE_SERVICE_URL`, `SEARCH_SERVICE_URL`,
+/// Required env vars: `DOCUMENT_STORAGE_SERVICE_URL`,
 /// `EMAIL_SERVICE_URL`, `SYNC_SERVICE_URL`, `SYNC_SERVICE_AUTH_KEY`,
 /// `STATIC_FILE_SERVICE_URL`, `DOCUMENT_STORAGE_BUCKET`,
 /// `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
@@ -123,7 +123,7 @@ pub async fn build_tool_service_context_from_env(
 
     let search_client = Arc::new(SearchServiceClient::new(
         internal_api_secret_key.to_string(),
-        env.search_service_url.to_string(),
+        env.document_storage_service_url.to_string(),
     ));
     let sync_client = Arc::new(SyncServiceClient::new(
         sync_service_auth_key.clone(),
