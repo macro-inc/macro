@@ -159,7 +159,7 @@ function MemberRow(props: {
   const isMemberOwner = () => props.member.role === TeamRole.owner;
 
   return (
-    <div class="flex items-center justify-between py-2 border-b border-edge-muted last:border-b-0 gap-2">
+    <div class="flex items-center justify-between py-2 px-6 border-b border-edge-muted last:border-b-0 gap-2">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="shrink-0">
           <UserIcon id={props.member.user_id} isDeleted={false} size="md" />
@@ -480,16 +480,22 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
       <div class="relative flex items-center justify-between h-10 px-6 shrink-0 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
         <div class="text-sm font-semibold">Team</div>
         <Show when={isOwner()}>
-          <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowDeleteTeamModal(true)}>
-            <TrashIcon class="size-4" />
-            Delete Team
-          </Button>
+          <div class="flex items-center gap-2">
+            <Button variant="secondary" size="sm" class="rounded-xs" onClick={() => setShowInviteModal(true)}>
+              <PlusIcon class="size-4" />
+              Invite
+            </Button>
+            <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowDeleteTeamModal(true)}>
+              <TrashIcon class="size-4" />
+              Delete Team
+            </Button>
+          </div>
         </Show>
       </div>
 
       {/* Sub-header bar with team name like soup-filter */}
-      <div class="flex items-center px-2 py-1.5 border-b border-edge-muted shrink-0">
-        <div class="flex items-center justify-between w-full border border-edge rounded-sm px-3 py-2">
+      <div class="flex items-center px-2 py-2 border-b border-edge-muted shrink-0">
+              <div class="flex items-center justify-between w-full border border-edge rounded-sm px-6 py-2">
           <span class="text-sm text-ink-muted">Name</span>
           <Show
             when={isOwner()}
@@ -537,23 +543,16 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
       </div>
 
       {/* Content area */}
-      <div class="flex flex-col flex-1 overflow-hidden p-6">
+      <div class="flex flex-col flex-1 overflow-hidden">
 
         {/* Members section - scrollable */}
         <section class="flex flex-col min-h-0 flex-1">
-          <Show when={isOwner()}>
-            <div class="flex justify-end mb-2 shrink-0">
-              <Button variant="secondary" size="sm" class="rounded-xs" onClick={() => setShowInviteModal(true)}>
-                <PlusIcon class="size-4" />
-                Invite Member
-              </Button>
-            </div>
-          </Show>
+
           <Show
             when={!teamQuery.isLoading}
             fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-16" />}
           >
-            <div class="border border-edge rounded-sm px-3 overflow-y-auto min-h-0" style="scrollbar-width: none;">
+            <div class="overflow-y-auto min-h-0" style="scrollbar-width: none;">
               <For each={members()}>
                 {(member) => (
                   <MemberRow
