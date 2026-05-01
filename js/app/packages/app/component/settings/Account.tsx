@@ -160,7 +160,7 @@ export function Account() {
             <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
               <div class="text-sm font-semibold">Account</div>
             </div>
-            <div class="grid gap-px bg-edge border-b border-edge">
+            <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
 
             <Show when={ENABLE_PROFILE_PICTURES && userId()}>
               <Row label="Profile Picture">
