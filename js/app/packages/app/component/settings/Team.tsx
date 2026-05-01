@@ -492,7 +492,7 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
         </Show>
       </div>
 
-      <div class="flex items-center px-2 py-1.5 border-b border-edge-muted shrink-0">
+      <div class="flex items-center px-2 h-15.25 border-b border-edge-muted shrink-0">
         <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2">
           <span class="text-sm text-ink-muted">Name</span>
           <Show
@@ -614,7 +614,7 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
         <Dialog.Portal>
           <DialogWrapper>
             <div class="flex flex-col text-ink">
-              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
+              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
                 <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                   <XIcon />
                 </Dialog.CloseButton>
@@ -667,7 +667,7 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
         <Dialog.Portal>
           <DialogWrapper>
             <div class="flex flex-col text-ink">
-              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
+              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
                 <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                   <XIcon />
                 </Dialog.CloseButton>

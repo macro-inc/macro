@@ -157,7 +157,7 @@ export function Account() {
       <div class="max-w-2xl w-full mx-auto">
         <Panel depth={2}>
           <div class="text-ink">
-            <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
+            <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
               <div class="text-sm font-semibold">Account</div>
             </div>
             <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
@@ -447,7 +447,7 @@ export function Account() {
 
 function Row(props: { label: string; children?: any }) {
   return (
-    <div class="bg-panel flex items-center justify-between h-[61px] px-6">
+    <div class="bg-panel flex items-center justify-between h-15.25 px-6">
       <div class="text-sm">{props.label}</div>
       <div class="text-right">{props.children}</div>
     </div>
