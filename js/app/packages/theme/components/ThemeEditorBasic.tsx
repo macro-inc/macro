@@ -1,6 +1,7 @@
 import { batch, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { setThemeDepth, themeDepth } from '../signals/themeSignals';
 import { themeReactive } from '../signals/themeReactive';
+import { isMobile } from '@core/mobile/isMobile';
 
 function setLightness(lightness: number) {
   batch(() => {
@@ -334,13 +335,13 @@ export function ThemeEditorBasic(){
         <div
           onPointerDown={handleCanvasPointerDown}
           ref={canvasContainerRef}
-          style="
-            border: 1px solid var(--b4);
-            border-radius: 6px;
-            position: relative;
-            height: 250px;
-            width: 100%;
-          "
+          style={{
+            'height': isMobile() ? '140px' : '250px',
+            'border': '1px solid var(--b4)',
+            'border-radius': '6px',
+            'position': 'relative',
+            'width': '100%',
+          }}
         >
           <canvas
             style="
