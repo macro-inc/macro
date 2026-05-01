@@ -149,24 +149,32 @@ class Transcriber(Agent):
         self, chat_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ):
         content = new_message.text_content
+        # Snapshot pending state and clear unconditionally so an empty-content
+        # turn (e.g. VAD ended a turn with no final text) can't leak word
+        # offsets or speaker counts into the next turn's accumulators.
+        first_word_offset = self._pending_first_word_offset
+        last_word_offset = self._pending_last_word_offset
+        pending_speakers = self._pending_speakers
+        self._pending_first_word_offset = None
+        self._pending_last_word_offset = None
+        self._pending_speakers = Counter()
+
         if content:
             now = datetime.now(timezone.utc)
             if (
                 self._stream_t0_wall is not None
-                and self._pending_first_word_offset is not None
-                and self._pending_last_word_offset is not None
+                and first_word_offset is not None
+                and last_word_offset is not None
             ):
                 started_at = self._stream_t0_wall + timedelta(
-                    seconds=self._pending_first_word_offset
+                    seconds=first_word_offset
                 )
                 ended_at = self._stream_t0_wall + timedelta(
-                    seconds=self._pending_last_word_offset
+                    seconds=last_word_offset
                 )
             else:
                 started_at = now
                 ended_at = now
-            self._pending_first_word_offset = None
-            self._pending_last_word_offset = None
 
             extra = new_message.extra if isinstance(new_message.extra, dict) else {}
             source_id = (
@@ -181,10 +189,9 @@ class Transcriber(Agent):
             segment_id = str(uuid.uuid5(uuid.NAMESPACE_URL, segment_seed))
 
             diarized_speaker_id = None
-            if self._pending_speakers:
-                dominant_speaker, _ = self._pending_speakers.most_common(1)[0]
+            if pending_speakers:
+                dominant_speaker, _ = pending_speakers.most_common(1)[0]
                 diarized_speaker_id = self._resolve_diarized_speaker_id(dominant_speaker)
-            self._pending_speakers.clear()
 
             segment = {
                 "segmentId": segment_id,
