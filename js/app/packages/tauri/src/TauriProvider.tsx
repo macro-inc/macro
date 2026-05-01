@@ -144,10 +144,22 @@ function TauriProvider(props: { children: JSX.Element }) {
 
   onMount(() => {
     console.info('[bundle-update] registering listener');
+    let loggedDownloading = false;
     const unlistenPromise = listen<BundleUpdateStatus>(
       'bundle-update-status',
       (ev) => {
-        console.info('[bundle-update] received', JSON.stringify(ev.payload));
+        if (ev.payload.status === 'Downloading') {
+          if (!loggedDownloading) {
+            console.info(
+              '[bundle-update] received',
+              JSON.stringify(ev.payload)
+            );
+            loggedDownloading = true;
+          }
+        } else {
+          console.info('[bundle-update] received', JSON.stringify(ev.payload));
+          loggedDownloading = false;
+        }
         batch(() => {
           setBundleUpdateStatus(ev.payload);
           if (ev.payload.status !== 'WaitingForWifi') setWaitingForWifi(false);
