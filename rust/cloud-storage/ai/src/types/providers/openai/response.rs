@@ -1,6 +1,6 @@
 use crate::types::{ChatCompletionRequest, response::ChatStreamCompletionResponse};
 use anyhow::Context;
-use async_openai::types::{
+use async_openai::types::chat::{
     ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
     ChatCompletionRequestSystemMessageContent, CreateChatCompletionRequest,
     CreateChatCompletionRequestArgs, CreateChatCompletionStreamResponse,

@@ -1,5 +1,5 @@
 use crate::types::request::*;
-use async_openai::types::CreateChatCompletionRequest;
+use async_openai::types::chat::CreateChatCompletionRequest;
 
 fn failed_tool_calls() -> CreateChatCompletionRequest {
     let request = r#"

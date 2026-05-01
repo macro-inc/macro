@@ -44,7 +44,7 @@ impl ExtendedClient for AnthropicClient {
     type ResponseExtension = AnthropicResponseExtension;
     async fn chat_stream(
         &self,
-        request: async_openai::types::CreateChatCompletionRequest,
+        request: async_openai::types::chat::CreateChatCompletionRequest,
     ) -> anyhow::Result<super::traits::ExtendedOpenAIStream<Self::ResponseExtension>, AiError> {
         Ok(Box::pin(
             self.inner
