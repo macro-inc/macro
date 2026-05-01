@@ -487,58 +487,57 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
         </Show>
       </div>
 
-      {/* Content area */}
-      <div class="flex flex-col flex-1 overflow-hidden p-6">
-        {/* Details section - fixed */}
-        <section class="mb-6 shrink-0">
-          <div class="border border-edge rounded-sm px-3">
-            <div class="flex items-center justify-between py-2">
-              <span class="text-sm font-medium text-ink-muted">Name</span>
-              <Show
-                when={isOwner()}
-                fallback={<span class="text-sm text-ink">{props.teamName}</span>}
-              >
-                <div class="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={teamNameValue()}
-                    onInput={(e) => setEditingTeamName(e.currentTarget.value)}
-                    placeholder="Enter team name"
-                    class="text-sm bg-transparent border border-edge-muted rounded-xs px-2 py-1 hover:border-edge focus:border-accent outline-none text-ink w-48"
-                  />
-                  <Show when={hasTeamNameChanged()}>
-                    <div class="flex items-center gap-1 shrink-0">
-                      <Tooltip tooltip="Save">
-                        <Button
-                          variant="accent"
-                          size="icon-sm"
-                          class="rounded-xs"
-                          disabled={patchTeamMutation.isPending || !editingTeamName()?.trim()}
-                          onClick={handleSaveTeamName}
-                        >
-                          <Show when={patchTeamMutation.isPending} fallback={<CheckIcon class="size-4" />}>
-                            <SpinnerIcon class="size-4 animate-spin" />
-                          </Show>
-                        </Button>
-                      </Tooltip>
-                      <Tooltip tooltip="Cancel">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          class="rounded-xs"
-                          disabled={patchTeamMutation.isPending}
-                          onClick={handleCancelTeamNameEdit}
-                        >
-                          <XIcon class="size-4" />
-                        </Button>
-                      </Tooltip>
-                    </div>
-                  </Show>
+      {/* Sub-header bar with team name like soup-filter */}
+      <div class="flex items-center justify-between px-2 py-1.5 border-b border-edge-muted shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-ink-muted">Name</span>
+          <Show
+            when={isOwner()}
+            fallback={<span class="text-sm text-ink">{props.teamName}</span>}
+          >
+            <div class="flex items-center gap-2">
+              <input
+                type="text"
+                value={teamNameValue()}
+                onInput={(e) => setEditingTeamName(e.currentTarget.value)}
+                placeholder="Enter team name"
+                class="text-sm bg-transparent border border-edge-muted rounded-xs px-2 py-1 hover:border-edge focus:border-accent outline-none text-ink w-48"
+              />
+              <Show when={hasTeamNameChanged()}>
+                <div class="flex items-center gap-1 shrink-0">
+                  <Tooltip tooltip="Save">
+                    <Button
+                      variant="accent"
+                      size="icon-sm"
+                      class="rounded-xs"
+                      disabled={patchTeamMutation.isPending || !editingTeamName()?.trim()}
+                      onClick={handleSaveTeamName}
+                    >
+                      <Show when={patchTeamMutation.isPending} fallback={<CheckIcon class="size-4" />}>
+                        <SpinnerIcon class="size-4 animate-spin" />
+                      </Show>
+                    </Button>
+                  </Tooltip>
+                  <Tooltip tooltip="Cancel">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      class="rounded-xs"
+                      disabled={patchTeamMutation.isPending}
+                      onClick={handleCancelTeamNameEdit}
+                    >
+                      <XIcon class="size-4" />
+                    </Button>
+                  </Tooltip>
                 </div>
               </Show>
             </div>
-          </div>
-        </section>
+          </Show>
+        </div>
+      </div>
+
+      {/* Content area */}
+      <div class="flex flex-col flex-1 overflow-hidden p-6">
 
         {/* Members section - scrollable */}
         <section class="flex flex-col min-h-0 flex-1">
