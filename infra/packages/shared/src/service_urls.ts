@@ -60,7 +60,7 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
  */
 const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.SYNC_SERVICE_URL]:
-    'https://sync-service-prod.macroverse.workers.dev',
+    'https://sync-service-prod2.macroverse.workers.dev',
   [ServiceUrl.COMMS_SERVICE_URL]: 'https://comms-service.macro.com',
   [ServiceUrl.EMAIL_SERVICE_URL]: 'https://email-service.macro.com',
   [ServiceUrl.PROPERTIES_SERVICE_URL]: 'https://properties-service.macro.com',
