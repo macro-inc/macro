@@ -159,7 +159,11 @@ export function Account() {
           <div class="text-ink">
             <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
               <div class="text-sm font-semibold">Account</div>
-              <Show when={ENABLE_PROFILE_PICTURES && userId()}>
+            </div>
+            <div class="grid gap-px bg-edge border-b border-edge">
+
+            <Show when={ENABLE_PROFILE_PICTURES && userId()}>
+              <Row label="Profile Picture">
                 <div class="flex items-center gap-2">
                   <div
                     use:fileSelector={{
@@ -193,9 +197,8 @@ export function Account() {
                     class="bg-transparent"
                   />
                 </div>
-              </Show>
-            </div>
-            <div class="grid gap-px bg-edge border-b border-edge">
+              </Row>
+            </Show>
 
             <Row label="Email">
               <span class="ph-no-capture text-sm text-ink-muted">
@@ -446,9 +449,9 @@ export function Account() {
 
 function Row(props: { label: string; children?: any }) {
   return (
-    <div class="grid grid-cols-[145px_1fr] gap-px bg-edge">
-      <div class="bg-panel flex items-center justify-start h-10 px-6 text-sm">{props.label}</div>
-      <div class="bg-panel flex items-center justify-end h-10 px-6 text-right">{props.children}</div>
+    <div class="bg-panel flex items-center justify-between h-[61px] px-6">
+      <div class="text-sm">{props.label}</div>
+      <div class="text-right">{props.children}</div>
     </div>
   );
 }
