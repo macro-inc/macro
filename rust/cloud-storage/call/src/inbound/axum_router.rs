@@ -300,6 +300,7 @@ pub async fn check_active_call_handler<S: CallService, Svc: EntityAccessService>
     State(state): State<CallRouterState<S, Svc>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
 ) -> Result<axum::response::Response, CallError> {
+    println!("hello world");
     let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
 
