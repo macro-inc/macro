@@ -48,7 +48,8 @@ function LaunchDemo() {
       <div class="h-full w-full flex flex-col items-center justify-center gap-6">
         <AppStoreQr class="w-[50cqw] h-[50cqw]" />
         <p class="text-ink font-medium text-center">
-          Download on the<br/>
+          Download on the
+          <br />
           <a
             href="https://apps.apple.com/us/app/macro-app/id6743133649"
             rel="noopener noreferrer"
