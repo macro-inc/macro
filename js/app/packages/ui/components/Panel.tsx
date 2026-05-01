@@ -1,29 +1,33 @@
 import { cn } from '../utils/classname';
-import type { JSX } from 'solid-js';
+import { splitProps, type JSX } from 'solid-js';
 import { Layer } from './Layer';
 
-export type PanelProps = {
+export type PanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
   highlightColor?: string;
-  children?: JSX.Element;
   active?: boolean;
-  class?: string;
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  hidden?: boolean;
 };
 
 export function Panel(props: PanelProps) {
+  const [local, rest] = splitProps(props, ['highlightColor', 'active', 'depth', 'class', 'children', 'hidden']);
   return (
-    <Layer depth={props.depth ?? 0}>
+    <Layer depth={local.depth ?? 0}>
       <div
-        style={{'background-image': `linear-gradient(${props.active ? `${props.highlightColor || 'var(--color-accent)'}, var(--color-edge) 80%` : 'var(--color-edge)'})`}}
-        class="p-px h-full w-full box-border rounded-md overflow-clip min-h-0"
+        style={{
+          'background-image': `linear-gradient(${props.active ? `${props.highlightColor || 'var(--color-acent)'}, var(--color-edge) 80%` : 'var(--color-edge)'})`,
+          'display': local.hidden ? 'none' : 'block'
+        }}
+        class={cn("p-px h-full w-full box-border rounded-md overflow-clip min-h-0")}
       >
         <div
           class={cn(
             'h-full w-full box-border bg-panel rounded-[5px] overflow-clip',
-            props.class
+            local.class
           )}
+          {...rest}
         >
-          {props.children}
+          {local.children}
         </div>
       </div>
     </Layer>

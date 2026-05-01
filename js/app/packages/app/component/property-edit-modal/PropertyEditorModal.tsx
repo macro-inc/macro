@@ -153,7 +153,7 @@ export function PropertyEditorModal() {
       <Dialog.Portal>
         <DialogWrapper contentRef={mergeRefs(attach, setDialogRef)}>
           <div class="flex flex-col max-h-108 overflow-hidden bracket-never text-sm">
-            <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
+            <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
               <span class="pl-2 pointer-events-none">❯</span>
               <SearchInput
                 placeHolder={placeholder() || defaultPlaceholder}
@@ -300,7 +300,7 @@ function PropertyList(props: {
     >
       <div
         ref={containerRef}
-        class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden p-1"
+        class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden p-1"
       >
         <For each={filteredProperties()}>
           {(property, index) => (
@@ -484,7 +484,7 @@ function SelectPropertyEditor(props: {
   const selector = createSelector(props.selectedIndex);
 
   return (
-    <div class="p-1 max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+    <div class="p-1 max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
       <Show
         when={filteredOptions().length > 0}
         fallback={
@@ -577,7 +577,7 @@ function EntityPropertyEditor(props: {
   const selector = createSelector(props.selectedIndex);
 
   return (
-    <div class="p-1 max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+    <div class="p-1 max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
       <Show
         when={entities().length > 0}
         fallback={
@@ -767,7 +767,7 @@ function DirectEditPropertyEditor(props: {
   };
 
   return (
-    <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden p-1">
+    <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden p-1">
       <ListItem
         id="property-value-option-0"
         isSelected={true}
@@ -841,7 +841,7 @@ function DatePropertyEditor(props: {
 
   return (
     <>
-      <div class="p-1 max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+      <div class="p-1 max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
         <Show
           when={dateOptions().length > 0}
           fallback={

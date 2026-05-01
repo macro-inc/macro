@@ -36,7 +36,7 @@ export function DialogWrapper(props: DialogWrapperProps) {
           style={{ width: width }}
           onCloseAutoFocus={props.onCloseAutoFocus}
         >
-          <Panel depth={3} active>
+          <Panel depth={2} active>
             <div
               class={cn('*:max-h-[75vh]', props.class)}
               ref={props.contentRef}

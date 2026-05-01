@@ -25,6 +25,7 @@ import {
 } from '../../utils';
 import { ERROR_MESSAGES } from '../../utils/errorHandling';
 import { Dropdown, type DropdownOption } from './shared/Dropdown';
+import { Panel } from '@ui';
 
 // Derive DataTypeValue from the dropdown options
 type DataTypeValue = ReturnType<
@@ -416,7 +417,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     >
       <Dialog.Portal>
         <DialogWrapper>
-          <div class="flex flex-col overflow-hidden bracket-never text-sm">
+          <Panel depth={2} class="flex flex-col text-sm">
             <div class="flex items-center justify-between gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
               <Dialog.Title class="pl-2 text-sm font-medium">
                 Create New Property
@@ -609,7 +610,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 </Show>
               </Button>
             </div>
-          </div>
+          </Panel>
         </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
