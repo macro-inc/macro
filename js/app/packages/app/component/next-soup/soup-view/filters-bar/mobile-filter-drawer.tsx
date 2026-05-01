@@ -258,7 +258,7 @@ export const MobileFilterDrawer = () => {
                             type="button"
                             role="radio"
                             aria-checked={active()}
-                            class="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-hover transition-colors text-left"
+                            class="w-full bg-panel flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-hover transition-colors text-left not-last:mb-px"
                             onClick={() => setSort(option.value)}
                           >
                             <Show when={option.icon}>
@@ -302,7 +302,7 @@ export const MobileFilterDrawer = () => {
                     </div>
                   </Show>
 
-                  <div>
+                  <div class="flex flex-col">
                     <For each={categories()}>
                       {(category) => {
                         const activeCount = createMemo(
@@ -315,11 +315,11 @@ export const MobileFilterDrawer = () => {
                           <MobileDrawer.Section
                             as={Accordion.Item}
                             value={category.id}
-                            class="not-first:mt-3"
+                            class="mb-3"
                           >
                             <Accordion.Header>
                               <Accordion.Trigger
-                                class="w-full flex items-center justify-between px-3 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group"
+                                class="w-full flex bg-panel items-center justify-between px-3 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group mb-px"
                                 onClick={(e) =>
                                   scrollAccordionItemToTop(e, scrollRef())
                                 }
@@ -337,7 +337,7 @@ export const MobileFilterDrawer = () => {
                                 </div>
                               </Accordion.Trigger>
                             </Accordion.Header>
-                            <Accordion.Content class="pb-1">
+                            <Accordion.Content>
                               <For each={category.options}>
                                 {(option) => {
                                   const active = () =>
@@ -347,12 +347,12 @@ export const MobileFilterDrawer = () => {
                                       type="button"
                                       role="checkbox"
                                       aria-checked={active()}
-                                      class="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-hover transition-colors text-left"
+                                      class="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-hover transition-colors text-left bg-panel not-last:mb-px"
                                       onClick={() => toggleFilter(option.id)}
                                     >
                                       <span
                                         class={cn(
-                                          'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                                          'size-4 flex items-center justify-center shrink-0 border transition-colors',
                                           active()
                                             ? 'bg-accent border-accent'
                                             : 'border-edge'
@@ -385,14 +385,10 @@ export const MobileFilterDrawer = () => {
 
                   {/* Assignee section for tasks view */}
                   <Show when={isTasksView()}>
-                    <MobileDrawer.Section
-                      as={Accordion.Item}
-                      value="assignee"
-                      class="mt-3"
-                    >
+                    <MobileDrawer.Section as={Accordion.Item} value="assignee">
                       <Accordion.Header>
                         <Accordion.Trigger
-                          class="w-full flex items-center justify-between px-3 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group"
+                          class="w-full flex items-center justify-between px-3 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group bg-panel mb-px"
                           onClick={(e) =>
                             scrollAccordionItemToTop(e, scrollRef())
                           }
@@ -400,7 +396,7 @@ export const MobileFilterDrawer = () => {
                           <span class="font-medium">Assignee</span>
                           <div class="flex items-center gap-2">
                             <Show when={assigneeFilter().length > 0}>
-                              <span class="group-data-expanded:hidden size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
+                              <span class="group-data-expanded:hidden size-4 flex items-center justify-center rounded-full bg-accent text-page text-xxs font-medium leading-none">
                                 {assigneeFilter().length}
                               </span>
                             </Show>
@@ -408,9 +404,9 @@ export const MobileFilterDrawer = () => {
                           </div>
                         </Accordion.Trigger>
                       </Accordion.Header>
-                      <Accordion.Content class="pb-1">
+                      <Accordion.Content>
                         {/* Search */}
-                        <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted mb-1">
+                        <div class="flex items-center gap-2 px-3 py-2 muted bg-panel mb-px">
                           <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
                           <input
                             type="text"
@@ -423,7 +419,7 @@ export const MobileFilterDrawer = () => {
                             class="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-muted"
                           />
                         </div>
-                        <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto">
+                        <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
                           <For each={filteredAssigneeOptions()}>
                             {(option) => {
                               const active = () =>
@@ -433,7 +429,7 @@ export const MobileFilterDrawer = () => {
                                   type="button"
                                   role="checkbox"
                                   aria-checked={active()}
-                                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left"
+                                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left bg-panel not-last:mb-px"
                                   onClick={() => toggleAssignee(option.id)}
                                 >
                                   <span

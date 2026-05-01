@@ -36,6 +36,7 @@ import {
   type MobileSwipeLayout,
 } from './mobile/createMobileSwipeLayout';
 import { MobileSwipeBackContainer } from './mobile/MobileSwipeBackContainer';
+import { Layer } from '@ui';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
