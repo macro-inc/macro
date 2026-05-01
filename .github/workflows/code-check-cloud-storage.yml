@@ -200,9 +200,17 @@ jobs:
   test:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    name: test (${{ matrix.shard }}/${{ matrix.total }})
     runs-on: linux-extra-beefy
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: [1, 2]
+        total: [2]
     env:
       NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
+      NEXTEST_PARTITION: slice:${{ matrix.shard }}/${{ matrix.total }}
       NEXTEST_TEST_THREADS: '32'
     services:
       postgres:
@@ -288,7 +296,7 @@ jobs:
         run: |
           cd rust/cloud-storage
 
-          args=(--all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS")
+          args=(--all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS" --partition "$NEXTEST_PARTITION")
           if [ -n "$NEXTEST_FILTER" ]; then
             args+=(-E "$NEXTEST_FILTER")
           fi
