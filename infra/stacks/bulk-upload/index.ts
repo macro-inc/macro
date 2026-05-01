@@ -158,7 +158,9 @@ if (stack !== 'local') {
         UPLOAD_BUCKET_NAME: pulumi.interpolate`${bulkUploadBucket.bucket.bucket}`,
         INTERNAL_API_SECRET_KEY: pulumi.interpolate`${documentStorageServiceAuthKey}`,
         DSS_URL: pulumi.interpolate`${cloudStorageServiceUrl}`,
-        CONNECTION_GATEWAY_URL: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
+        CONNECTION_GATEWAY_URL: getServiceUrl(
+          ServiceUrl.CONNECTION_GATEWAY_URL
+        ),
         ENVIRONMENT: stack,
         RUST_LOG: 'upload_extractor_lambda_handler=trace',
       },
