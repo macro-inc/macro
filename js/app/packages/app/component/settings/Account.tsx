@@ -29,6 +29,9 @@ import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-sol
 import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
 import { createMemo, createResource, createSignal, Show } from 'solid-js';
+import { usePermissions } from '@core/context/user';
+import { useSettingsState } from '@core/constant/SettingsState';
+import PaywallComponent from '../paywall/PaywallComponent';
 import {
     useEmailLinks,
   useEmailLinksStatus,
@@ -86,6 +89,8 @@ export function Account() {
   const logout = useLogout();
   const { showPaywall } = usePaywallState();
   const hasPaidAccess = useHasPaidAccess();
+  const permissions = usePermissions();
+    const { toggleSettings } = useSettingsState();
   const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
   const [showEnableEmailModal, setShowEnableEmailModal] = createSignal<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
@@ -162,7 +167,16 @@ export function Account() {
             </div>
             <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
 
-            <Show when={ENABLE_PROFILE_PICTURES && userId()}>
+              <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
+                                        <div class="bg-panel px-6">
+                  <PaywallComponent
+                    hideCloseButton
+                    cb={() => {}}
+                    handleGuest={() => toggleSettings()}
+                  />
+                </div>
+              </Show>
+              <Show when={ENABLE_PROFILE_PICTURES && userId()}>
               <Row label="Profile Picture">
                 <div
                   class="relative group cursor-pointer"
