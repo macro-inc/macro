@@ -59,7 +59,7 @@ jobs:
           printf '%s\n' "$changed_files" > /tmp/changed-files
 
           # Root cargo/toolchain/CI changes can affect the whole workspace, so run all tests.
-          if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-sccache)/.*|\.github/workflows/code-check-cloud-storage\.yml)$'; then
+          if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*)$'; then
             echo "Workspace-level change detected; running all tests"
             echo "nextest_filter=" >> "$GITHUB_OUTPUT"
             exit 0
