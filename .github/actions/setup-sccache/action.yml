@@ -76,8 +76,11 @@ runs:
         trap 'rm -rf "$tmp_dir"' EXIT
 
         basename="${archive%.tar.gz}"
-        curl -fsSL "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/${archive}" \
-          | tar -xz -C "$tmp_dir"
+        release_url="https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}"
+        curl -fsSL "$release_url/$archive" -o "$tmp_dir/$archive"
+        curl -fsSL "$release_url/$archive.sha256" -o "$tmp_dir/$archive.sha256"
+        (cd "$tmp_dir" && sha256sum --check "$archive.sha256")
+        tar -xzf "$tmp_dir/$archive" -C "$tmp_dir"
         rm -f "$sccache_bin"
         mv "$tmp_dir/$basename/sccache" "$sccache_bin"
         chmod +x "$sccache_bin"

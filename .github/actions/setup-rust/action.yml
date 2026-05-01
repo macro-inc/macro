@@ -21,7 +21,7 @@ runs:
         set -euo pipefail
 
         if [[ -f rust/rust-toolchain.toml ]]; then
-          toolchain="$(grep -E '^\s*channel\s*=' rust/rust-toolchain.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          toolchain="$(grep -E '^[[:space:]]*channel[[:space:]]*=' rust/rust-toolchain.toml | sed -E 's/.*"([^"]+)".*/\1/')"
         else
           toolchain="stable"
         fi
