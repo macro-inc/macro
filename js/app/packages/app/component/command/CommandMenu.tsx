@@ -16,9 +16,11 @@ import {
   createSelector,
   createSignal,
   For,
+  Match,
   on,
   onMount,
   Show,
+  Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useSplitLayout } from '../split-layout/layout';
@@ -614,39 +616,23 @@ function CommandMenuFooter(props: {
         Navigate
       </span>
 
-      <Show
-        when={props.isInCommandScope}
-        fallback={
-          <Show
-            when={isCommand() || props.isEntityActionMode}
-            fallback={
-              <Show
-                when={isSearch()}
-                fallback={
-                  <Show when={isEntity()}>
-                    <HotkeyHint shortcut="enter" label="Open" />
-                    <HotkeyHint
-                      shortcut="shift+enter"
-                      label="Open in new split"
-                    />
-                  </Show>
-                }
-              >
-                <HotkeyHint shortcut="enter" label="Search" />
-                <HotkeyHint
-                  shortcut="shift+enter"
-                  label="Search in new split"
-                />
-              </Show>
-            }
-          >
-            <HotkeyHint shortcut="enter" label="Run action" />
-          </Show>
-        }
-      >
-        <HotkeyHint shortcut="enter" label="Run action" />
-        <HotkeyHint shortcut="escape" label="Back" />
-      </Show>
+      <Switch>
+        <Match when={props.isInCommandScope}>
+          <HotkeyHint shortcut="enter" label="Run action" />
+          <HotkeyHint shortcut="escape" label="Back" />
+        </Match>
+        <Match when={isCommand() || props.isEntityActionMode}>
+          <HotkeyHint shortcut="enter" label="Run action" />
+        </Match>
+        <Match when={isSearch()}>
+          <HotkeyHint shortcut="enter" label="Search" />
+          <HotkeyHint shortcut="shift+enter" label="Search in new split" />
+        </Match>
+        <Match when={isEntity()}>
+          <HotkeyHint shortcut="enter" label="Open" />
+          <HotkeyHint shortcut="shift+enter" label="Open in new split" />
+        </Match>
+      </Switch>
 
       <Show when={!props.isInCommandScope && !props.isEntityActionMode}>
         <HotkeyHint shortcut="tab" label="Category" />
