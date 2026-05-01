@@ -24,9 +24,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 export function SettingsPanelComponentWrapper() {
   return (
     <>
-      <SplitHeaderRight>
-        <SettingsButton />
-      </SplitHeaderRight>
+      <Show when={isMobile()}>
+        <SplitHeaderRight>
+          <SettingsButton />
+        </SplitHeaderRight>
+      </Show>
       <SettingsPanel />
     </>
   )
