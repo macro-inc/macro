@@ -50,7 +50,7 @@ jobs:
         uses: biomejs/setup-biome@v2
         with:
           version: 2.4.12
-      - uses: cachix/install-nix-action@v27
+      - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b  # v27
         if: needs.path-check.outputs.api_changed == 'true'
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
@@ -59,7 +59,7 @@ jobs:
         with:
           primary-key: nix-x86_64-linux-gen-api-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-x86_64-linux-gen-api-
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc  # v15
         if: needs.path-check.outputs.api_changed == 'true'
         with:
           name: macro-inc

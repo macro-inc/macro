@@ -163,14 +163,14 @@ jobs:
     runs-on: linux-extra-beefy
     steps:
       - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v27
+      - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-x86_64-linux-check-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-x86_64-linux-check-
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc
         with:
           name: macro-inc
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -203,14 +203,14 @@ jobs:
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v27
+      - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-x86_64-linux-test-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-x86_64-linux-test-
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc
         with:
           name: macro-inc
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
