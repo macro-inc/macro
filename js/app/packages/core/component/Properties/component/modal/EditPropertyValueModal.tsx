@@ -9,8 +9,6 @@ import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertyEditor } from '../../hooks/usePropertyEditor';
 import { formatOptionValue } from '../../utils';
 import type { PropertyApiValues, PropertyEditorProps } from '../../types';
-
-false && floatWithElement;
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
@@ -23,7 +21,7 @@ import {
   usePropertyOptionsQuery,
 } from '@queries/properties/options';
 import type { DateProperty } from '../../types';
-import { cn, Layer, Panel } from '@ui';
+import { cn, Layer } from '@ui';
 
 export function EditPropertyValueModal(props: PropertyEditorProps) {
   const propertyOptionsQuery = usePropertyOptionsQuery(
@@ -213,12 +211,14 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
           <div
             ref={mergeRefs((ref) => {
               modalRef = ref;
+              floatWithElement(ref, () => ({
+                element: () => props.anchorRef,
+              }));
             })}
             class={cn(
               'absolute border border-edge rounded sm z-action-menu max-h-96 overflow-hidden flex flex-col w-full max-w-sm'
             )}
             tabIndex={-1}
-            use:floatWithElement={{ element: () => props.anchorRef }}
             onClick={(e) => e.stopPropagation()}
           >
             <Show when={!isLoading()}>
