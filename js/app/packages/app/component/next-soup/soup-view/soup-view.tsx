@@ -274,6 +274,7 @@ export const SoupView = (props: SoupViewProps) => {
       <SoupViewContextProvider
         soup={soup}
         initialQuery={props.initialFilters}
+        initialSearchText={props.initialSearchText}
         disableLocalSearch={props.disableLocalSearch}
         additionalEntities={props.additionalEntities}
       >

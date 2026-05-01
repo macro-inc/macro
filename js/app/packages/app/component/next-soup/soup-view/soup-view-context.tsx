@@ -102,6 +102,7 @@ export const useMaybeSoupView = () => useContext(SoupViewContext);
 interface SoupViewContextProviderProps {
   soup?: SoupState;
   initialQuery?: Query;
+  initialSearchText?: string;
   disableLocalSearch?: boolean;
   /**
    * Additional client-side entities to merge into the soup item stream.
@@ -200,6 +201,7 @@ export const SoupViewContextProvider: FlowComponent<
     disableLocalSearch: props.disableLocalSearch,
     searchPaused,
     searchMentions,
+    initialText: props.initialSearchText,
   });
 
   const notificationSource = useGlobalNotificationSource();

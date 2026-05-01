@@ -121,6 +121,8 @@ interface CreateSearchStateArgs {
   disableLocalSearch?: boolean;
   searchPaused?: Accessor<boolean>;
   searchMentions?: Accessor<string[]>;
+  /** Pre-populate searchText so the service request fires on mount (skips the debounce wait for the initial value). */
+  initialText?: string;
 }
 
 export const createSearchState = ({
@@ -130,8 +132,9 @@ export const createSearchState = ({
   disableLocalSearch,
   searchPaused,
   searchMentions,
+  initialText,
 }: CreateSearchStateArgs) => {
-  const [searchText, setSearchText] = createSignal('');
+  const [searchText, setSearchText] = createSignal(initialText ?? '');
 
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
