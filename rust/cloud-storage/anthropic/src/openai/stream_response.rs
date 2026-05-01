@@ -7,10 +7,10 @@ use crate::prelude::{ServerToolUse, transform_request_web_fetch};
 use crate::types::response::{ContentDeltaEvent, StopReason, StreamEvent, Usage};
 use crate::{client::chat::Chat, prelude::CreateMessageRequestBody};
 use async_openai::error::{ApiError, OpenAIError};
-use async_openai::types::{
+use async_openai::types::chat::{
     ChatChoiceStream, ChatCompletionMessageToolCallChunk, ChatCompletionResponseStream,
-    ChatCompletionStreamResponseDelta, ChatCompletionToolType, CreateChatCompletionStreamResponse,
-    FinishReason, FunctionCallStream, Role,
+    ChatCompletionStreamResponseDelta, CreateChatCompletionStreamResponse, FinishReason,
+    FunctionCallStream, FunctionType, Role,
 };
 use async_stream::stream;
 use futures::StreamExt;
@@ -24,7 +24,7 @@ fn create_response(
     index: u32,
     delta: ChatCompletionStreamResponseDelta,
     finish_reason: Option<FinishReason>,
-    usage: Option<async_openai::types::CompletionUsage>,
+    usage: Option<async_openai::types::chat::CompletionUsage>,
 ) -> CreateChatCompletionStreamResponse {
     CreateChatCompletionStreamResponse {
         id: message_id.to_string(),
@@ -36,6 +36,7 @@ fn create_response(
         }],
         created,
         model: model.to_string(),
+        #[allow(deprecated)]
         system_fingerprint: None,
         object: "chat.completion.chunk".to_string(),
         service_tier: None,
@@ -68,7 +69,7 @@ fn create_content_delta(content: String) -> ChatCompletionStreamResponseDelta {
 fn create_tool_call_delta(
     index: u32,
     id: Option<String>,
-    type_: Option<ChatCompletionToolType>,
+    type_: Option<FunctionType>,
     name: Option<String>,
     arguments: Option<String>,
 ) -> ChatCompletionStreamResponseDelta {
@@ -119,7 +120,7 @@ impl TryFrom<PartialTool> for ServerToolUse {
     type Error = OpenAIError;
     fn try_from(value: PartialTool) -> Result<Self, Self::Error> {
         let any = serde_json::from_str::<serde_json::Value>(&value.input)
-            .map_err(OpenAIError::JSONDeserialize)?;
+            .map_err(|e| OpenAIError::JSONDeserialize(e, String::new()))?;
         Ok(Self {
             id: value.id,
             name: value.name,
@@ -154,9 +155,9 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
         while let Some(part) = stream.next().await {
             if let Err(e) = part {
                 yield Err(match e {
-                    AnthropicError::JsonDeserialize(e) => OpenAIError::JSONDeserialize(e),
-                    AnthropicError::Reqwest(e) => OpenAIError::Reqwest(e),
-                    AnthropicError::StreamError(e) => OpenAIError::StreamError(e),
+                    AnthropicError::JsonDeserialize(e) => OpenAIError::JSONDeserialize(e, String::new()),
+                    AnthropicError::Reqwest(e) => OpenAIError::StreamError(Box::new(async_openai::error::StreamError::EventStream(e.to_string()))),
+                    AnthropicError::StreamError(e) => OpenAIError::StreamError(Box::new(async_openai::error::StreamError::EventStream(e))),
                     AnthropicError::ApiError { status_code, api_error } =>  {
                         OpenAIError::ApiError(ApiError {
                             message: api_error.error.message,
@@ -192,7 +193,7 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                                         create_tool_call_delta(
                                             index,
                                             Some(id.clone()),
-                                            Some(ChatCompletionToolType::Function),
+                                            Some(FunctionType::Function),
                                             Some(name.clone()),
                                             Some(String::new()),
                                         ),
@@ -362,8 +363,8 @@ fn map_stream_lossy(stream: MessageCompletionResponseStream) -> ChatCompletionRe
     }))
 }
 
-impl From<Usage> for async_openai::types::CompletionUsage {
-    fn from(value: Usage) -> async_openai::types::CompletionUsage {
+impl From<Usage> for async_openai::types::chat::CompletionUsage {
+    fn from(value: Usage) -> async_openai::types::chat::CompletionUsage {
         Self {
             prompt_tokens: value.input_tokens,
             completion_tokens: value.output_tokens,

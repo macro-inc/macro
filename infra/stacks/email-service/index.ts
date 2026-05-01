@@ -11,6 +11,8 @@ import {
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -450,24 +452,24 @@ const containerEnvVars = [
     value: pulumi.interpolate`${INTERNAL_AUTH_KEY}`,
   },
   {
-    name: 'AUTHENTICATION_SERVICE_URL',
-    value: pulumi.interpolate`https://auth-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+    name: ServiceUrl.AUTHENTICATION_SERVICE_URL,
+    value: getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL),
   },
   {
     name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
     value: pulumi.interpolate`${AUTHENTICATION_SERVICE_INTERNAL_API_KEY}`,
   },
   {
-    name: 'STATIC_FILE_SERVICE_URL',
-    value: `https://static-file-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+    name: ServiceUrl.STATIC_FILE_SERVICE_URL,
+    value: getServiceUrl(ServiceUrl.STATIC_FILE_SERVICE_URL),
   },
   {
-    name: 'DOCUMENT_STORAGE_SERVICE_URL',
-    value: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+    name: ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL,
+    value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
   },
   {
-    name: 'CONNECTION_GATEWAY_URL',
-    value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+    name: ServiceUrl.CONNECTION_GATEWAY_URL,
+    value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
   },
   {
     name: 'NOTIFICATIONS_ENABLED',

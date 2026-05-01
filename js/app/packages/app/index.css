@@ -706,10 +706,10 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 /* Apply to the content wrapper div inside any Dialog.Portal (not the overlay).
    Keeps UI elements within device safe areas (notch, home indicator, etc.). */
 @utility safe-insets {
-  padding-top: var(--safe-top);
-  padding-bottom: var(--safe-bottom);
-  padding-left: var(--safe-left);
-  padding-right: var(--safe-right);
+  margin-top: var(--safe-top);
+  margin-bottom: var(--safe-bottom);
+  margin-left: var(--safe-left);
+  margin-right: var(--safe-right);
 }
 
 :root {

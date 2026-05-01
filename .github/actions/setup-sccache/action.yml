@@ -1,0 +1,120 @@
+name: Setup sccache
+
+description: Install sccache and configure it as RUSTC_WRAPPER.
+
+inputs:
+  version:
+    description: sccache release version to install
+    required: false
+    default: v0.15.0
+  cache-key-prefix:
+    description: Prefix for the local GitHub Actions cache key
+    required: false
+    default: sccache
+
+runs:
+  using: composite
+  steps:
+    - name: Install sccache
+      shell: bash
+      env:
+        SCCACHE_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        install_dir="$HOME/.local/bin"
+        mkdir -p "$install_dir"
+
+        sccache_bin="$install_dir/sccache"
+        echo "$install_dir" >> "$GITHUB_PATH"
+
+        existing_sccache="$(command -v sccache || true)"
+        if [[ -n "$existing_sccache" ]] && "$existing_sccache" --version >/dev/null 2>&1; then
+          installed_version="$($existing_sccache --version | awk '{print "v" $2}')"
+          if [[ "$installed_version" == "$SCCACHE_VERSION" ]]; then
+            if [[ "$existing_sccache" != "$sccache_bin" ]]; then
+              ln -sf "$existing_sccache" "$sccache_bin"
+            fi
+            echo "sccache already available: $($sccache_bin --version)"
+            exit 0
+          fi
+        fi
+
+        if [[ -x "$sccache_bin" ]] && "$sccache_bin" --version >/dev/null 2>&1; then
+          installed_version="$($sccache_bin --version | awk '{print "v" $2}')"
+          if [[ "$installed_version" == "$SCCACHE_VERSION" ]]; then
+            echo "sccache already installed: $($sccache_bin --version)"
+            exit 0
+          fi
+
+          echo "Replacing $($sccache_bin --version) with sccache ${SCCACHE_VERSION}"
+          rm -f "$sccache_bin"
+        fi
+
+        os="$(uname -s)"
+        arch="$(uname -m)"
+        case "${os}-${arch}" in
+          Linux-x86_64)
+            archive="sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+            ;;
+          Linux-aarch64|Linux-arm64)
+            archive="sccache-${SCCACHE_VERSION}-aarch64-unknown-linux-musl.tar.gz"
+            ;;
+          Darwin-arm64)
+            archive="sccache-${SCCACHE_VERSION}-aarch64-apple-darwin.tar.gz"
+            ;;
+          Darwin-x86_64)
+            archive="sccache-${SCCACHE_VERSION}-x86_64-apple-darwin.tar.gz"
+            ;;
+          *)
+            echo "Unsupported platform for sccache: ${os}-${arch}" >&2
+            exit 1
+            ;;
+        esac
+
+        tmp_dir="$(mktemp -d)"
+        trap 'rm -rf "$tmp_dir"' EXIT
+
+        basename="${archive%.tar.gz}"
+        release_url="https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}"
+        curl -fsSL "$release_url/$archive" -o "$tmp_dir/$archive"
+        curl -fsSL "$release_url/$archive.sha256" -o "$tmp_dir/$archive.sha256"
+        (cd "$tmp_dir" && sha256sum --check "$archive.sha256")
+        tar -xzf "$tmp_dir/$archive" -C "$tmp_dir"
+        rm -f "$sccache_bin"
+        mv "$tmp_dir/$basename/sccache" "$sccache_bin"
+        chmod +x "$sccache_bin"
+
+        echo "Installed sccache: $($sccache_bin --version)"
+
+    - name: Configure sccache
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        sccache_bin="$HOME/.local/bin/sccache"
+        cache_dir="$HOME/.cache/sccache"
+        mkdir -p "$cache_dir"
+
+        {
+          echo "RUSTC_WRAPPER=$sccache_bin"
+          echo "SCCACHE_DIR=$cache_dir"
+          echo "SCCACHE_CACHE_SIZE=${SCCACHE_CACHE_SIZE:-5G}"
+          echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
+        } >> "$GITHUB_ENV"
+
+        # Configure an S3 backend when SCCACHE_BUCKET is provided. AWS credentials
+        # are intentionally not persisted here; scope them to the cargo steps that
+        # actually compile code so third-party setup actions don't receive them.
+        if [[ -n "${SCCACHE_BUCKET:-}" ]]; then
+          {
+            echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
+            echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
+            echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
+          } >> "$GITHUB_ENV"
+          echo "Configured sccache for S3 bucket ${SCCACHE_BUCKET}"
+        else
+          echo "No remote sccache bucket configured; using local cached sccache directory."
+        fi
+
+        "$sccache_bin" --version

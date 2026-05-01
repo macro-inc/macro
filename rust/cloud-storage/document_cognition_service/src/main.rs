@@ -131,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
             .context("failed to create jwt validation args")?;
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
-        sync_service_auth_key,
+        internal_auth_key.as_ref().to_string(),
         config.lexical_service_url.clone(),
     ));
 

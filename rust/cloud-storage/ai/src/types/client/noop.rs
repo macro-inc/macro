@@ -14,7 +14,7 @@ impl ExtendedClient for NoOpClient {
 
     async fn chat_stream(
         &self,
-        _: async_openai::types::CreateChatCompletionRequest,
+        _: async_openai::types::chat::CreateChatCompletionRequest,
     ) -> Result<ExtendedOpenAIStream<Self::ResponseExtension>, AiError> {
         Err(anyhow!("noop").into())
     }

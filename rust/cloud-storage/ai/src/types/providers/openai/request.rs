@@ -1,7 +1,7 @@
 use crate::traits::Metadata;
 use crate::types::ChatCompletionRequest;
 use anyhow::Context;
-use async_openai::types::{
+use async_openai::types::chat::{
     ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
     ChatCompletionRequestSystemMessageContent, CreateChatCompletionRequest,
     CreateChatCompletionRequestArgs, ResponseFormat, ResponseFormatJsonSchema,

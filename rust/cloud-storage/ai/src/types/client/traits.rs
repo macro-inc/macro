@@ -2,7 +2,7 @@ use crate::tool::StreamPart;
 use crate::types::AiError;
 use anyhow::Result;
 use async_openai::error::OpenAIError;
-use async_openai::types::{CreateChatCompletionRequest, CreateChatCompletionStreamResponse};
+use async_openai::types::chat::{CreateChatCompletionRequest, CreateChatCompletionStreamResponse};
 use futures::Stream;
 use std::fmt::Debug;
 use std::future::Future;
