@@ -15,17 +15,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Restore local sccache cache
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/sccache
-          ~/.local/bin/sccache
-        key: ${{ inputs.cache-key-prefix }}-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/rust-toolchain.toml', 'rust/cloud-storage/Cargo.lock', 'rust/sync-service/Cargo.lock') }}-${{ github.job }}-${{ github.run_id }}
-        restore-keys: |
-          ${{ inputs.cache-key-prefix }}-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/rust-toolchain.toml', 'rust/cloud-storage/Cargo.lock', 'rust/sync-service/Cargo.lock') }}-
-          ${{ inputs.cache-key-prefix }}-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}-
-
     - name: Install sccache
       shell: bash
       env:

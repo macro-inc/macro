@@ -26,7 +26,13 @@ runs:
           rustup toolchain install "$toolchain" --profile minimal --component clippy --component rustfmt
         else
           echo "Rust toolchain $toolchain already installed: $(rustup run "$toolchain" rustc --version)"
-          rustup component add --toolchain "$toolchain" clippy rustfmt
+          installed_components="$(rustup component list --toolchain "$toolchain" --installed)"
+          if ! grep -q '^clippy-' <<<"$installed_components"; then
+            rustup component add --toolchain "$toolchain" clippy
+          fi
+          if ! grep -q '^rustfmt-' <<<"$installed_components"; then
+            rustup component add --toolchain "$toolchain" rustfmt
+          fi
         fi
 
         rustup default "$toolchain"
