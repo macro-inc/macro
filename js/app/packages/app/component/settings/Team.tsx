@@ -476,7 +476,6 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
 
   return (
     <div class="flex flex-col h-full overflow-hidden">
-      {/* Header bar like Account.tsx */}
       <div class="relative flex items-center justify-between h-10 px-6 shrink-0 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
         <div class="text-sm font-semibold">Team</div>
         <Show when={isOwner()}>
