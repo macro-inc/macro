@@ -6,4 +6,5 @@ export type CategoryFilter =
   | 'tasks'
   | 'documents'
   | 'chats'
-  | 'projects';
+  | 'projects'
+  | 'people';

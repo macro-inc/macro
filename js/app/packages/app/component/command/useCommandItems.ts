@@ -241,6 +241,7 @@ function useQuickAccessBuckets(): Record<
     tasks: quickAccess.useList('task'),
     chats: quickAccess.useList('chat'),
     projects: quickAccess.useList('project'),
+    people: quickAccess.useList('person'),
     commands: commandsList,
   };
 }

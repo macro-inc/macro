@@ -38,6 +38,7 @@ const CATEGORY_TO_BUCKETS: Record<CategoryFilter, string[] | null> = {
   chats: ['chat'],
   projects: ['project'],
   commands: [], // sandbox has no commands — show nothing
+  people: [], // sandbox has no people — show nothing
 };
 
 function CommandKContent(_props: LessonContentProps) {
