@@ -235,10 +235,6 @@ const notificationService = new NotificationService('notification-service', {
       value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
     },
     {
-      name: ServiceUrl.ORGANIZATION_SERVICE_URL,
-      value: getServiceUrl(ServiceUrl.ORGANIZATION_SERVICE_URL),
-    },
-    {
       name: 'SNS_APNS_PLATFORM_ARN',
       value: pulumi.interpolate`${notificationApnsPlatform.arn}`,
     },

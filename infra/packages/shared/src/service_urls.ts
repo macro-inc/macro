@@ -7,17 +7,13 @@ export enum ServiceUrl {
   SYNC_SERVICE_URL = 'SYNC_SERVICE_URL',
   COMMS_SERVICE_URL = 'COMMS_SERVICE_URL',
   EMAIL_SERVICE_URL = 'EMAIL_SERVICE_URL',
-  PROPERTIES_SERVICE_URL = 'PROPERTIES_SERVICE_URL',
-  METERING_SERVICE_URL = 'METERING_SERVICE_URL',
   STATIC_FILE_SERVICE_URL = 'STATIC_FILE_SERVICE_URL',
-  ORGANIZATION_SERVICE_URL = 'ORGANIZATION_SERVICE_URL',
   NOTIFICATION_SERVICE_URL = 'NOTIFICATION_SERVICE_URL',
   AUTHENTICATION_SERVICE_URL = 'AUTHENTICATION_SERVICE_URL',
   DOCUMENT_STORAGE_SERVICE_URL = 'DOCUMENT_STORAGE_SERVICE_URL',
   CONNECTION_GATEWAY_URL = 'CONNECTION_GATEWAY_URL',
   DOCUMENT_COGNITION_SERVICE_URL = 'DOCUMENT_COGNITION_SERVICE_URL',
   LEXICAL_SERVICE_URL = 'LEXICAL_SERVICE_URL',
-  SEARCH_SERVICE_URL = 'SEARCH_SERVICE_URL',
 }
 
 /**
@@ -35,13 +31,8 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
     'https://sync-service-dev3.macroverse.workers.dev',
   [ServiceUrl.COMMS_SERVICE_URL]: 'https://comms-service-dev.macro.com',
   [ServiceUrl.EMAIL_SERVICE_URL]: 'https://email-service-dev.macro.com',
-  [ServiceUrl.PROPERTIES_SERVICE_URL]:
-    'https://properties-service-dev.macro.com',
-  [ServiceUrl.METERING_SERVICE_URL]: 'https://metering-dev.macro.com',
   [ServiceUrl.STATIC_FILE_SERVICE_URL]:
     'https://static-file-service-dev.macro.com',
-  [ServiceUrl.ORGANIZATION_SERVICE_URL]:
-    'https://organization-service-dev.macro.com',
   [ServiceUrl.NOTIFICATION_SERVICE_URL]: 'https://notifications-dev.macro.com',
   [ServiceUrl.AUTHENTICATION_SERVICE_URL]: 'https://auth-service-dev.macro.com',
   [ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL]:
@@ -52,7 +43,6 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
     'https://document-cognition-dev.macro.com',
   [ServiceUrl.LEXICAL_SERVICE_URL]:
     'https://lexical-service-dev.macroverse.workers.dev',
-  [ServiceUrl.SEARCH_SERVICE_URL]: 'https://search-service-dev.macro.com',
 };
 
 /**
@@ -63,11 +53,7 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
     'https://sync-service-prod2.macroverse.workers.dev',
   [ServiceUrl.COMMS_SERVICE_URL]: 'https://comms-service.macro.com',
   [ServiceUrl.EMAIL_SERVICE_URL]: 'https://email-service.macro.com',
-  [ServiceUrl.PROPERTIES_SERVICE_URL]: 'https://properties-service.macro.com',
-  [ServiceUrl.METERING_SERVICE_URL]: 'https://metering.macro.com',
   [ServiceUrl.STATIC_FILE_SERVICE_URL]: 'https://static-file-service.macro.com',
-  [ServiceUrl.ORGANIZATION_SERVICE_URL]:
-    'https://organization-service.macro.com',
   [ServiceUrl.NOTIFICATION_SERVICE_URL]: 'https://notifications.macro.com',
   [ServiceUrl.AUTHENTICATION_SERVICE_URL]: 'https://auth-service.macro.com',
   [ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL]: 'https://cloud-storage.macro.com',
@@ -76,7 +62,6 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
     'https://document-cognition.macro.com',
   [ServiceUrl.LEXICAL_SERVICE_URL]:
     'https://lexical-service.macroverse.workers.dev',
-  [ServiceUrl.SEARCH_SERVICE_URL]: 'https://search-service.macro.com',
 };
 
 /**
