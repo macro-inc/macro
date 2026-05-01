@@ -34,9 +34,10 @@ export function Layer(props: LayerProps) {
         '--color-page':            'var(--b0)',
         '--color-menu':            'var(--b0)',
         '--color-dialog':          'var(--b0)',
-        '--color-input':           'var(--b0)',
+        '--color-input':           `oklch(calc(var(--b0l) + ${depth() + 0.01}) var(--b0c) var(--b0h))`,
         '--color-button':          'var(--b0)',
-        '--color-message':         'var(--b0)',
+        // TODO seamus scuffed.
+        '--color-message':         'color-mix(in oklch, var(--b1) 50%, var(--b2))',
         '--color-active':          'var(--b1)',
         '--color-hover':           'var(--b2)',
         '--color-overlay':         'oklch(from var(--b2) l c h / 0.5)',
