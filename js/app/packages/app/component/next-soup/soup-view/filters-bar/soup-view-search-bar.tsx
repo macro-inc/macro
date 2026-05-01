@@ -143,9 +143,9 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           queryFilters.replace(filters);
           soup.predicates.set(clientFilters);
         });
-        // Restore focus to the split panel so j/k navigation works. The
+        // Restore focus to the split panel so hotkey navigation works. The
         // command menu suppresses Kobalte's onCloseAutoFocus for search
-        // rows, so this stays put without needing a delay.
+        // rows so this stays put without needing a delay.
         queueMicrotask(() => panel.panelRef()?.focus({ preventScroll: true }));
       },
     });

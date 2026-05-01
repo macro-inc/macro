@@ -64,11 +64,6 @@ export function CommandMenu() {
     ? () => isListViewID(splitManager.activeSplit()?.content().id)
     : () => true; // assume list mode
 
-  // When the user picks a search row that updates the active split in place,
-  // we restore focus to the split panel ourselves. Kobalte's default behavior
-  // would restore focus to whatever was focused before the dialog opened
-  // (typically the search editor), causing the caret to briefly blink in
-  // before our setTimeout blurs it again. This flag suppresses that.
   let suppressCloseAutoFocus = false;
 
   createEffect(() => {
