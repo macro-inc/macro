@@ -105,6 +105,70 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
       }
     );
 
+    // S3 bucket for CloudFront standard access logs
+    const logBucket = new aws.s3.BucketV2(
+      `${name}-cf-logs-bucket`,
+      {
+        bucket: `static-file-cf-logs-${args.stackName}`,
+        forceDestroy: args.stackName !== 'prod',
+        tags: args.tags,
+      },
+      { parent: this }
+    );
+
+    new aws.s3.BucketOwnershipControls(
+      `${name}-cf-logs-ownership`,
+      {
+        bucket: logBucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerPreferred',
+        },
+      },
+      { parent: this }
+    );
+
+    new aws.s3.BucketAclV2(
+      `${name}-cf-logs-acl`,
+      {
+        bucket: logBucket.id,
+        accessControlPolicy: {
+          owner: {
+            id: logBucket.id.apply(() =>
+              aws.s3.getCanonicalUserId().then((r) => r.id)
+            ),
+          },
+          grants: [
+            {
+              // Grant the awslogsdelivery account FULL_CONTROL for CloudFront standard logging
+              grantee: {
+                id: 'c4c1ede66af53448b93c283ce9448c4ba468c9432aa01d700d3878632f77d2d0',
+                type: 'CanonicalUser',
+              },
+              permission: 'FULL_CONTROL',
+            },
+          ],
+        },
+      },
+      { parent: this }
+    );
+
+    new aws.s3.BucketLifecycleConfigurationV2(
+      `${name}-cf-logs-lifecycle`,
+      {
+        bucket: logBucket.id,
+        rules: [
+          {
+            id: 'expire-logs-7-days',
+            status: 'Enabled',
+            expiration: {
+              days: 7,
+            },
+          },
+        ],
+      },
+      { parent: this }
+    );
+
     const lambdaDomainName = args.imageOptimizerUrl.apply((url) =>
       url.replace('https://', '').replace(/\/+$/, '')
     );
@@ -265,6 +329,11 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
         tags: {
           Environment: args.stackName,
         },
+        loggingConfig: {
+          bucket: logBucket.bucketDomainName,
+          includeCookies: false,
+          prefix: 'cf-logs/',
+        },
         customErrorResponses: [
           {
             errorCode: 403,
@@ -278,6 +347,19 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
         parent: this,
         dependsOn: args.notFoundPage,
       }
+    );
+
+    new aws.cloudfront.MonitoringSubscription(
+      `${name}-monitoring-subscription`,
+      {
+        distributionId: this.distribution.id,
+        monitoringSubscription: {
+          realtimeMetricsSubscriptionConfig: {
+            realtimeMetricsSubscriptionStatus: 'Enabled',
+          },
+        },
+      },
+      { parent: this }
     );
 
     // Allow CloudFront to read from and Lambda to write to the bucket
