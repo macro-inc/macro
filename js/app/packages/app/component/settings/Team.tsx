@@ -488,8 +488,8 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
       </div>
 
       {/* Sub-header bar with team name like soup-filter */}
-      <div class="flex items-center justify-between px-2 py-1.5 border-b border-edge-muted shrink-0">
-        <div class="flex items-center gap-2">
+      <div class="flex items-center px-2 py-1.5 border-b border-edge-muted shrink-0">
+        <div class="flex items-center justify-between w-full border border-edge rounded-sm px-3 py-2">
           <span class="text-sm text-ink-muted">Name</span>
           <Show
             when={isOwner()}
@@ -501,7 +501,7 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                 value={teamNameValue()}
                 onInput={(e) => setEditingTeamName(e.currentTarget.value)}
                 placeholder="Enter team name"
-                class="text-sm bg-transparent border border-edge-muted rounded-xs px-2 py-1 hover:border-edge focus:border-accent outline-none text-ink w-48"
+                class="text-sm bg-transparent border-none outline-none text-ink text-right w-48"
               />
               <Show when={hasTeamNameChanged()}>
                 <div class="flex items-center gap-1 shrink-0">
