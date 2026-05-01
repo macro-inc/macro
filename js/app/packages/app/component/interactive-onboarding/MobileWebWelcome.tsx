@@ -76,7 +76,7 @@ export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
         <A
           href="/login"
           onClick={() => analytics.track('login_from_onboarding')}
-          class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between gap-2 border-none bg-transparent text-ink/50 hover:bg-hover/60 ring-1 ring-edge-muted/50"
+          class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between gap-2 border-none bg-transparent text-ink/50 hover:bg-hover/60 ring-1 ring-edge-muted"
         >
           Login
         </A>

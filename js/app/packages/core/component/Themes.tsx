@@ -26,7 +26,7 @@ export const themeColors: Record<Theme, string> = {
   contrast: 'text-menu border-ink-extra-muted',
   clear: 'text-ink border-transparent',
   selected: 'text-ink border-edge',
-  disabled: 'text-ink-disabled/50 border-edge/30',
+  disabled: 'text-ink-disabled/50 border-edge',
   green: 'text-success-ink border-success/50',
   red: 'text-failure-ink border-failure/50',
   muted: 'text-ink-muted border-transparent',

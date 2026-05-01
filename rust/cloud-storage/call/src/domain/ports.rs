@@ -11,7 +11,9 @@ use uuid::Uuid;
 
 use item_filters::ast::{LiteralTree, call::CallLiteral};
 
-use crate::domain::models::EditCallRecordRequest;
+use crate::domain::models::{
+    CustomSpeakerAssignment, EditCallRecordRequest, EditCallTranscriptRequest,
+};
 
 use super::models::{
     AddParticipantError, Call, CallActiveResponse, CallError, CallParticipant, CallRecord,
@@ -145,6 +147,17 @@ pub trait CallRepository: Send + Sync + 'static {
         recording_key: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Set `recording_started_at` on whichever row currently owns the egress —
+    /// active `calls` first, then archived `call_records` — driven by the
+    /// `egress_started` webhook. Idempotent: only sets the column when it is
+    /// still `NULL` so a duplicate or retried webhook can't overwrite a
+    /// previously captured start time.
+    fn set_recording_started_at_by_egress_id(
+        &self,
+        egress_id: &str,
+        started_at: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Insert a transcript segment for an active call.
     fn create_transcript_segment(
         &self,
@@ -217,6 +230,19 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_record_id: &Uuid,
         request: &EditCallRecordRequest,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Apply a batch of per-diarized-speaker `custom_speaker` overrides to
+    /// the archived `call_record_transcripts` rows for `call_record_id`.
+    ///
+    /// Each entry sets `custom_speaker` for every row in the call whose
+    /// `diarized_speaker_id` matches; entries with `custom_speaker = None`
+    /// clear the override. Rows whose `diarized_speaker_id` doesn't appear
+    /// in `assignments` are left untouched. Empty `assignments` is a no-op.
+    fn patch_call_transcript_custom_speakers(
+        &self,
+        call_record_id: &Uuid,
+        assignments: &[CustomSpeakerAssignment],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Persist the AI-generated summary text on the archived call record.
@@ -295,20 +321,31 @@ pub trait CallSummarizer: Send + Sync + 'static {
     /// supplied finalized `transcript` segments. The segments are expected
     /// to be ordered by `sequence_num` ascending (matching what is stored
     /// in a [`CallRecord`]).
+    ///
+    /// Returns `Ok(None)` when the transcript has no substantive content to
+    /// summarize (empty, silence, fragmented/incoherent speech). Callers
+    /// must treat `None` as "do not persist a summary" — writing a
+    /// placeholder "transcript is uninformative" line is exactly the
+    /// behavior this is meant to avoid.
     fn summarize_call(
         &self,
         call_id: &Uuid,
         transcript: Vec<CallRecordTranscriptSegment>,
-    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 
-    /// Produce a short (typically 3–6 word) display name for the call from
-    /// its already-generated summary. Used by the auto-name flow only when
-    /// the call has no user-supplied `custom_name` yet.
+    /// Produce a short display name for the call from its already-generated
+    /// summary. Used by the auto-name flow only when the call has no
+    /// user-supplied `custom_name` yet.
+    ///
+    /// Returns `Ok(None)` when the summary has no substantive content
+    /// (silence, test call, accidental recording) so the caller can leave
+    /// the existing `custom_name` untouched rather than persisting a
+    /// generic placeholder.
     fn generate_call_name(
         &self,
         call_id: &Uuid,
         summary: &str,
-    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
@@ -424,6 +461,17 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         request: EditCallRecordRequest,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Apply per-diarized-speaker `custom_speaker` overrides to a call's
+    /// transcript. Authorization is carried in the receipt; the entity must
+    /// be `EntityType::Call` and its `entity_id` must be the call's UUID.
+    /// Each `custom_speaker` (when `Some`) must parse as a `MacroUserId`;
+    /// otherwise the request is rejected with [`CallError::InvalidRequest`].
+    fn edit_call_transcript(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        request: EditCallTranscriptRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// Toggle the `share_with_team` flag on the active call identified by the

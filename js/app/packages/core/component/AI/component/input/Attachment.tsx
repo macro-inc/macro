@@ -10,6 +10,7 @@ import { toast } from '@core/component/Toast/Toast';
 import XIcon from '@icon/regular/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import Close from '@phosphor-icons/core/regular/x.svg?component-solid';
+import type { ItemType } from '@service-storage/client';
 import type { Accessor } from 'solid-js';
 import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
 
@@ -27,7 +28,7 @@ export function AttachmentList(props: AttachmentListProps) {
           <Suspense>
             <ChatAttachment
               attachment={attachment}
-              onRemove={() => props.removeAttachment(attachment.attachmentId)}
+              onRemove={() => props.removeAttachment(attachment.entity_id)}
             />
           </Suspense>
         )}
@@ -78,9 +79,9 @@ function ImageAttachment(props: {
         />
       </Show>
       <ImagePreview
-        image={{ id: props.attachment.attachmentId }}
+        image={{ id: props.attachment.entity_id }}
         variant="small"
-        isDss={isDssImage(props.attachment)}
+        isDss={false}
         onError={(e) => {
           console.error('Failed to load image', e);
           toast.failure('Failed to load image');
@@ -97,43 +98,44 @@ function ChatAttachment(props: {
 }) {
   return (
     <Switch>
-      <Match when={isImageAttachment(props.attachment)}>
+      <Match when={props.attachment.entity_type === 'static_file'}>
         <ImageAttachment
           attachment={props.attachment}
           onRemove={props.onRemove}
         />
       </Match>
       <Match
-        when={
-          props.attachment.metadata?.type !== 'image' &&
-          props.attachment.metadata
-        }
-      >
-        {(metadata) => (
-          <div class="flex items-center px-1 space-x-1 hover:bg-hover hover-transition-bg cursor-default text-sm border border-edge-muted rounded-xs">
-            <ItemPreview
-              id={props.attachment.attachmentId}
-              type={metadata().type}
-              class="flex items-center gap-1 text-sm ring-0"
-              textClass="truncate"
-              iconSize="xs"
-              disableHoverCard
-            />
-            <div
-              class="hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex"
-              onClick={(e) => {
-                e.stopPropagation();
-                props.onRemove?.();
-              }}
-            >
-              <Close
-                width={12}
-                height={12}
-                class="text-ink-muted group-hover:text-failure"
-              />
-            </div>
-          </div>
+        when={['document', 'channel', 'project', 'email_thread'].includes(
+          props.attachment.entity_type
         )}
+      >
+        <div class="flex items-center px-1 space-x-1 hover:bg-hover hover-transition-bg cursor-default text-sm border border-edge-muted rounded-xs">
+          <ItemPreview
+            id={props.attachment.entity_id}
+            type={
+              (props.attachment.entity_type === 'email_thread'
+                ? 'email'
+                : props.attachment.entity_type) as ItemType
+            }
+            class="flex items-center gap-1 text-sm ring-0"
+            textClass="truncate"
+            iconSize="xs"
+            disableHoverCard
+          />
+          <div
+            class="hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex"
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onRemove?.();
+            }}
+          >
+            <Close
+              width={12}
+              height={12}
+              class="text-ink-muted group-hover:text-failure"
+            />
+          </div>
+        </div>
       </Match>
     </Switch>
   );

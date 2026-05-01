@@ -1,22 +1,37 @@
 import { DiscussionInput } from './DiscussionInput';
 import type { InputSnapshot } from '@channel/Input/types';
 import { Message } from '@channel/Message/Message';
-import type { MessageActions } from '@channel/Message/types';
+import type {
+  MessageActionContext,
+  MessageActions,
+} from '@channel/Message/types';
 import { Thread } from '@channel/Thread/Thread';
 import { ThreadRail } from '@channel/Thread/ThreadRail';
 import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
 import { replyInputOffsetX } from '@channel/Thread/utils/thread-rail-geometry';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import { useBlockId } from '@core/block';
 import { useUserId } from '@core/context/user';
 import { useCanEdit } from '@core/signal/permissions';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { buildSimpleEntityUrl } from '@core/util/url';
+import { toast } from '@core/component/Toast/Toast';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
 import CaretRight from '@icon/bold/caret-right-bold.svg';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type { Comment } from '@service-storage/generated/schemas/comment';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import type { CreateCommentRequestMentions } from '@service-storage/generated/schemas/createCommentRequestMentions';
-import { createSignal, For, Show } from 'solid-js';
+import { useUrlParams } from '@core/component/ParamsProvider';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onMount,
+  Show,
+} from 'solid-js';
+import { URL_PARAMS } from '../constants';
 import {
   commentToApiChannelMessage,
   commentToMessageData,
@@ -51,6 +66,18 @@ export function TaskDiscussion() {
   const canEdit = useCanEdit();
   const createThread = useCreateDiscussionThread();
   const [isExpanded, setIsExpanded] = createSignal(true);
+
+  const urlParams = useUrlParams(URL_PARAMS);
+  const targetCommentId = createMemo(() => {
+    const raw = urlParams.commentId();
+    if (!raw) return null;
+    const id = Number(raw);
+    return isNaN(id) ? null : id;
+  });
+
+  createEffect(() => {
+    if (targetCommentId() !== null) setIsExpanded(true);
+  });
 
   let newThreadInputHandle: { clear: () => void } | undefined;
 
@@ -90,7 +117,12 @@ export function TaskDiscussion() {
           <div class="py-2 text-xs">
             <div>
               <For each={discussionThreads() ?? []}>
-                {(thread) => <DiscussionThread thread={thread} />}
+                {(thread) => (
+                  <DiscussionThread
+                    thread={thread}
+                    targetCommentId={targetCommentId()}
+                  />
+                )}
               </For>
             </div>
 
@@ -113,9 +145,13 @@ export function TaskDiscussion() {
   );
 }
 
-function DiscussionThread(props: { thread: CommentThread }) {
+function DiscussionThread(props: {
+  thread: CommentThread;
+  targetCommentId: number | null;
+}) {
   const userId = useUserId();
   const canEdit = useCanEdit();
+  const blockId = useBlockId();
   const createReply = useCreateDiscussionReply();
   const editComment = useEditDiscussionComment();
   const deleteComment = useDeleteDiscussionComment();
@@ -139,6 +175,21 @@ function DiscussionThread(props: { thread: CommentThread }) {
   const isOwn = (comment: Comment) =>
     (comment.sender ?? comment.owner) === userId();
 
+  const makeCopyLink =
+    (comment: Comment): ((ctx: MessageActionContext) => Promise<void>) =>
+    async () => {
+      const params: Record<string, string> = {
+        [URL_PARAMS.commentId]: String(comment.commentId),
+      };
+      try {
+        const url = buildSimpleEntityUrl({ type: 'task', id: blockId }, params);
+        await navigator.clipboard.writeText(url);
+        toast.success('Link copied to clipboard');
+      } catch {
+        toast.failure('Could not copy link');
+      }
+    };
+
   const makeActions = (comment: Comment, isRoot: boolean): MessageActions => {
     const own = isOwn(comment);
     return {
@@ -158,6 +209,7 @@ function DiscussionThread(props: { thread: CommentThread }) {
               await deleteComment(comment.commentId, {});
             }
           : undefined,
+      onCopyLink: makeCopyLink(comment),
     };
   };
 
@@ -193,6 +245,9 @@ function DiscussionThread(props: { thread: CommentThread }) {
                 editingId={editingId()}
                 onEditSave={(snapshot) => handleEdit(rootComment(), snapshot)}
                 onEditCancel={() => setEditingId(null)}
+                isHighlighted={
+                  props.targetCommentId === rootComment().commentId
+                }
               />
 
               <Show when={hasReplies() || isReplying()}>
@@ -214,6 +269,9 @@ function DiscussionThread(props: { thread: CommentThread }) {
                               handleEdit(reply, snapshot)
                             }
                             onEditCancel={() => setEditingId(null)}
+                            isHighlighted={
+                              props.targetCommentId === reply.commentId
+                            }
                           />
                         </div>
                       )}
@@ -277,51 +335,65 @@ function DiscussionMessage(props: {
   editingId: number | null;
   onEditSave: (snapshot: InputSnapshot) => void;
   onEditCancel: () => void;
+  isHighlighted?: boolean;
 }) {
   const isEditing = () => props.editingId === props.comment.commentId;
   const messageData = () => commentToMessageData(props.comment);
 
+  let containerRef: HTMLDivElement | undefined;
+  onMount(() => {
+    if (props.isHighlighted) {
+      containerRef?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
   return (
-    <Show
-      when={!isEditing()}
-      fallback={
-        <DiscussionInput
-          input={{
-            mode: 'reply',
-            placeholder: 'Edit comment...',
-            value: props.comment.text,
-          }}
-          onSend={props.onEditSave}
-          onClose={() => {
-            props.onEditCancel();
-          }}
-        />
-      }
-    >
-      <Message.Root message={messageData()} actions={props.actions}>
-        <Message.Layout class="pt-(--regular-message-padding-t)">
-          <Message.Slot placement="icon">
-            <Message.SenderIcon />
-          </Message.Slot>
-          <Message.Slot
-            placement="header"
-            class="flex items-center gap-1 min-w-0 w-full"
-          >
-            <Message.SenderName />
-            <Message.EditedIndicator />
-            <div class="grow shrink-0 min-w-0 flex justify-end group-hover/message:absolute group-hover/message:right-1 group-hover/message:-top-9 group-hover/message:p-1">
-              <Message.Timestamp
-                class="ml-auto shrink-0"
-                format="dateAndTime"
-              />
-            </div>
-          </Message.Slot>
-          <Message.Slot placement="content" class="ph-no-capture">
-            <Message.Content />
-          </Message.Slot>
-          <Message.ActionMenu />
-        </Message.Layout>
-      </Message.Root>
-    </Show>
+    <div ref={containerRef}>
+      <Show
+        when={!isEditing()}
+        fallback={
+          <DiscussionInput
+            input={{
+              mode: 'reply',
+              placeholder: 'Edit comment...',
+              value: props.comment.text,
+            }}
+            onSend={props.onEditSave}
+            onClose={() => {
+              props.onEditCancel();
+            }}
+          />
+        }
+      >
+        <Message.Root
+          message={messageData()}
+          actions={props.actions}
+          highlighted={props.isHighlighted}
+        >
+          <Message.Layout class="pt-(--regular-message-padding-t)">
+            <Message.Slot placement="icon">
+              <Message.SenderIcon />
+            </Message.Slot>
+            <Message.Slot
+              placement="header"
+              class="flex items-center gap-1 min-w-0 w-full"
+            >
+              <Message.SenderName />
+              <Message.EditedIndicator />
+              <div class="grow shrink-0 min-w-0 flex justify-end group-hover/message:absolute group-hover/message:right-1 group-hover/message:-top-9 group-hover/message:p-1">
+                <Message.Timestamp
+                  class="ml-auto shrink-0"
+                  format="dateAndTime"
+                />
+              </div>
+            </Message.Slot>
+            <Message.Slot placement="content" class="ph-no-capture">
+              <Message.Content />
+            </Message.Slot>
+            <Message.ActionMenu />
+          </Message.Layout>
+        </Message.Root>
+      </Show>
+    </div>
   );
 }

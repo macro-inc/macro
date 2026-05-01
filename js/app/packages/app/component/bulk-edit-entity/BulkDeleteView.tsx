@@ -45,7 +45,7 @@ export const BulkDeleteView = (props: {
           <For each={props.entities.slice(0, 2)}>
             {(entity) => (
               <div
-                class={cn('bg-edge/20 px-2 py-1 truncate text-xs rounded-xs', {
+                class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
                   'max-w-[50%]': props.entities.length === 2,
                 })}
               >

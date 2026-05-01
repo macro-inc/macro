@@ -11,7 +11,10 @@ use uuid::Uuid;
 
 const NO_FILTERS: ChannelMessageFilters = ChannelMessageFilters {
     message_ids: Vec::new(),
-    last_activity: None,
+    created_after: None,
+    created_before: None,
+    activity_after: None,
+    activity_before: None,
     notification_filters: NotificationFilters {
         done: None,
         seen: None,
@@ -812,7 +815,7 @@ async fn last_activity_filters_by_message_created_at(pool: Pool<Postgres>) -> an
     let repo = repo(pool);
     // msg3 created at 12:00 — only it was created after 11:30
     let filters = ChannelMessageFilters {
-        last_activity: Some(
+        activity_after: Some(
             chrono::DateTime::parse_from_rfc3339("2024-01-01T11:30:00Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc),
@@ -849,7 +852,7 @@ async fn last_activity_includes_messages_with_recent_thread_replies(
     // last_activity = 10:05 excludes msg1 (created 10:00, last reply 10:04),
     // but includes msg2 (reply at 11:01) and msg3 (created 12:00).
     let filters = ChannelMessageFilters {
-        last_activity: Some(
+        activity_after: Some(
             chrono::DateTime::parse_from_rfc3339("2024-01-01T10:05:00Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc),
@@ -881,7 +884,7 @@ async fn last_activity_combined_with_message_ids(pool: Pool<Postgres>) -> anyhow
     // Ask for msg1 and msg3, but with last_activity that excludes msg1
     let filters = ChannelMessageFilters {
         message_ids: vec![MSG1, MSG3],
-        last_activity: Some(
+        activity_after: Some(
             chrono::DateTime::parse_from_rfc3339("2024-01-01T11:00:00Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc),

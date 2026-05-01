@@ -4,7 +4,7 @@ use axum::{
     routing::{delete, post},
 };
 
-pub(in crate::api) mod backfill_calls;
+pub(in crate::api) mod backfill;
 pub(in crate::api) mod delete_document;
 pub(in crate::api) mod extract_sync;
 
@@ -12,5 +12,5 @@ pub fn router() -> Router<ApiContext> {
     Router::new()
         .route("/delete/{document_id}", delete(delete_document::handler))
         .route("/extract_sync", post(extract_sync::handler))
-        .route("/backfill/calls", post(backfill_calls::handler))
+        .nest("/backfill", backfill::router())
 }

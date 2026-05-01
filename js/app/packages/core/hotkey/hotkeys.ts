@@ -360,17 +360,21 @@ export function registerHotkey(
  * ```
  */
 export function createHotkeyGroup(): HotkeyGroup {
-  const registrations: RegisterHotkeyReturn[] = [];
+  const disposers: (() => void)[] = [];
 
   return {
     add: <T extends RegisterHotkeyReturn>(registration: T): T => {
-      registrations.push(registration);
+      disposers.push(() => registration.dispose());
       return registration;
     },
+    addDisposer: (dispose) => {
+      disposers.push(dispose);
+    },
     dispose: () => {
-      for (const registration of registrations) {
-        registration.dispose();
+      for (const fn of disposers) {
+        fn();
       }
+      disposers.length = 0;
     },
   };
 }

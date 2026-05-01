@@ -27,6 +27,7 @@
 import { type MutationOptions, useMutation } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
 import { createAssertedContextProvider } from '@core/context/createContext';
+import type { HotkeyGroup } from '@core/hotkey/types';
 
 type UndoHandler<TVariables, TContext> = (
   variables: TVariables,
@@ -51,6 +52,9 @@ export type UndoHandle = {
   id: string;
   /** Undo this specific entry, even if it is not at the top of the stack. */
   undo: (callbacks?: UndoCallbacks) => Promise<void>;
+  /** Remove this entry from both undo and redo stacks. Lifecycle hooks
+   *  do not fire. Calling `undo()` after `dispose()` is a no-op. */
+  dispose: () => void;
 };
 
 type UndoCallbacks = {
@@ -143,6 +147,10 @@ export const [MutationUndoProvider, useMutationUndoContext] =
           return {
             id: entry.id,
             undo: (callbacks) => runUndo(entry, callbacks),
+            dispose: () => {
+              setUndoStack((prev) => prev.filter((e) => e !== entry));
+              setRedoStack((prev) => prev.filter((e) => e !== entry));
+            },
           };
         },
 
@@ -195,13 +203,23 @@ export function useUndoableMutation<
       variables: TVariables,
       context: TContext | undefined
     ) => UndoLifecycle | void;
+    /** When provided, each pushed undo entry is disposed (silently
+     *  removed from both stacks) when the group is disposed. */
+    hotkeyGroup?: HotkeyGroup;
   }
 ) {
   const { pushUndo } = useMutationUndoContext();
 
   return useMutation(() => {
-    const { undoFn, redoFn, undoLabel, onPushed, onSuccess, ...opts } =
-      options();
+    const {
+      undoFn,
+      redoFn,
+      undoLabel,
+      onPushed,
+      hotkeyGroup,
+      onSuccess,
+      ...opts
+    } = options();
     return {
       ...opts,
       onSuccess: (data, variables, context, mutation) => {
@@ -214,6 +232,7 @@ export function useUndoableMutation<
             onUndone: () => lifecycleRef.current?.onUndone?.(),
             onRedone: () => lifecycleRef.current?.onRedone?.(),
           });
+          hotkeyGroup?.addDisposer(handle.dispose);
           lifecycleRef.current =
             onPushed?.(handle, variables, context) ?? undefined;
         }

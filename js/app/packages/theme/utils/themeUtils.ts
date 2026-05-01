@@ -1,5 +1,5 @@
-import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setUserThemes, systemMode, themeShouldMatchSystem, themes, userThemes} from '../signals/themeSignals';
-import type { ThemeV1, ThemeV1Tokens } from '../types/themeTypes';
+import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setThemeDepth, setUserThemes, systemMode, themeDepth, themeShouldMatchSystem, themes, userThemes} from '../signals/themeSignals';
+import type { ThemeV2, ThemeV2Tokens } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { toast } from '@core/component/Toast/Toast';
 import { batch, createEffect, on } from 'solid-js';
@@ -15,15 +15,16 @@ export async function importTheme(): Promise<void>{
   try {
     const text = await navigator.clipboard.readText();
     const parsed: unknown = JSON.parse(text);
-    if(!isThemeV1(parsed)){
+    if(!isThemeV2(parsed)){
       toast.alert('Clipboard does not contain a valid theme.');
       return;
     }
     const id = crypto.randomUUID();
-    const newTheme: ThemeV1 = {
+    const newTheme: ThemeV2 = {
       id,
       name: parsed.name,
       version: parsed.version,
+      depth: parsed.depth,
       tokens: parsed.tokens,
     };
     setUserThemes([...userThemes(), newTheme]);
@@ -34,11 +35,11 @@ export async function importTheme(): Promise<void>{
   }
 }
 
-function isThemeV1(value: unknown): value is ThemeV1 {
+function isThemeV2(value: unknown): value is ThemeV2 {
   if(typeof value !== 'object' || value === null){return false}
   const v = value as Record<string, unknown>;
-  if(typeof v.name !== 'string' || typeof v.version !== 'number' || typeof v.tokens !== 'object' || v.tokens === null){return false}
-  const tokenKeys: Array<keyof ThemeV1Tokens> = ['a0','a1','a2','a3','a4','b0','b1','b2','b3','b4','c0','c1','c2','c3','c4'];
+  if(typeof v.name !== 'string' || typeof v.version !== 'number' || typeof v.depth !== 'number' || typeof v.tokens !== 'object' || v.tokens === null){return false}
+  const tokenKeys: Array<keyof ThemeV2Tokens> = ['a0','a1','a2','a3','a4','b0','b1','b2','b3','b4','c0','c1','c2','c3','c4'];
   const tokens = v.tokens as Record<string, unknown>;
   return tokenKeys.every((key) => {
     const t = tokens[key];
@@ -71,12 +72,13 @@ export function applyTheme(id: string): void{
   setCurrentThemeId(theme.id);
 
   batch(() => {
-    (Object.keys(theme!.tokens) as Array<keyof ThemeV1Tokens>).forEach((tokenKey) => {
+    (Object.keys(theme!.tokens) as Array<keyof ThemeV2Tokens>).forEach((tokenKey) => {
       (Object.keys(theme!.tokens[tokenKey]) as Array<'l' | 'c' | 'h'>).forEach((prop) => {
           themeReactive[tokenKey][prop][1](theme!.tokens[tokenKey][prop]);
         });
       }
     );
+    setThemeDepth(theme!.depth ?? 0.15);
     queueMicrotask(() => {/* scuffed af */
       setIsThemeSaved(true);
       setHtmlColor({color: `oklch(${themeReactive.b0.l[0]()} ${themeReactive.b0.c[0]()} ${themeReactive.b0.h[0]()}deg)`});
@@ -99,8 +101,8 @@ export function invertTheme(): void{
   });
 }
 
-function getCurrentTokens(): ThemeV1Tokens{
-  const themeTokens: ThemeV1Tokens = {
+function getCurrentTokens(): ThemeV2Tokens{
+  const themeTokens: ThemeV2Tokens = {
     a0: { l: themeReactive.a0.l[0](), c: themeReactive.a0.c[0](), h: themeReactive.a0.h[0]()},
     a1: { l: themeReactive.a1.l[0](), c: themeReactive.a1.c[0](), h: themeReactive.a1.h[0]()},
     a2: { l: themeReactive.a2.l[0](), c: themeReactive.a2.c[0](), h: themeReactive.a2.h[0]()},
@@ -123,10 +125,11 @@ function getCurrentTokens(): ThemeV1Tokens{
 export function saveTheme(name: string): void{
   const id = crypto.randomUUID();
   const tokens = getCurrentTokens();
-  const newTheme: ThemeV1 = {
+  const newTheme: ThemeV2 = {
     id: id,
     name: name,
-    version: 1,
+    version: 2,
+    depth: themeDepth(),
     tokens: tokens,
   };
   setUserThemes([...userThemes(), newTheme]);

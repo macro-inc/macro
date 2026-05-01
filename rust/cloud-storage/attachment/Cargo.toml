@@ -9,8 +9,13 @@ provider = ["dep:futures"]
 
 [dependencies]
 anyhow = { workspace = true }
+serde = { workspace = true }
 thiserror = { workspace = true }
-ai = { path = "../ai" }
 macro_user_id = { path = "../macro_user_id" }
 non_empty = { path = "../non_empty" }
 futures = { workspace = true, optional = true }
+base64 = { workspace = true }
+image = { workspace = true }
+model_file_type = { path = "../model_file_type" }
+model-entity = { path = "../model-entity" }
+webp = "0.3.1"

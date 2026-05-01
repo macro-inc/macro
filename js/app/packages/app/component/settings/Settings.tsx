@@ -16,6 +16,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { SplitHeaderLeft, SplitHeaderRight } from '../split-layout/components/SplitHeader';
 import { SettingsButton } from './SettingsButton';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 /**
  * Wrapper for Settings Panel used in the split layout. Includes the correct Header button.
@@ -23,9 +24,11 @@ import { SettingsButton } from './SettingsButton';
 export function SettingsPanelComponentWrapper() {
   return (
     <>
-      <SplitHeaderRight>
-        <SettingsButton />
-      </SplitHeaderRight>
+      <Show when={isMobile()}>
+        <SplitHeaderRight>
+          <SettingsButton />
+        </SplitHeaderRight>
+      </Show>
       <SettingsPanel />
     </>
   )
@@ -160,7 +163,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   function BottomTabs() {
     return (
-    <div class="bg-panel border-t border-edge-muted h-11 px-1">
+    <div class="bg-panel border-t border-edge-muted h-11 shrink-0 px-1">
       <Tabs
         list={settingsTabs()}
         value={activeTabId()}
@@ -209,7 +212,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <Show when={activeTabId() === 'Appearance'}>
           <Appearance />
         </Show>
-        <Show when={activeTabId() === 'Shortcuts'}>
+        <Show when={activeTabId() === 'Shortcuts' && !isTouchDevice()}>
           <Shortcuts />
         </Show>
         <Show when={activeTabId() === 'Team' && teamsFlag().enabled}>

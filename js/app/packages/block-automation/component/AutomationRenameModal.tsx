@@ -91,7 +91,7 @@ function AutomationRenameModalContent(props: {
                     value={editValue()}
                     onInput={(e) => setEditValue(e.currentTarget.value)}
                     onKeyDown={handleKeyDown}
-                    class="w-full p-2 text-sm border border-edge/20 bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none selection:bg-ink selection:text-panel"
+                    class="w-full p-2 text-sm border border-edge bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none selection:bg-ink selection:text-panel"
                     placeholder="Enter title..."
                   />
                 </div>

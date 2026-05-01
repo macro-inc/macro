@@ -6,7 +6,7 @@ import {
   isCallEntity,
   isEmailEntity,
 } from '../types/entity';
-import { isSearchEntity } from '../types/search';
+import { type ContentHitData, isSearchEntity } from '../types/search';
 
 /**
  * Entities whose inline row snippet renders search hit content via
@@ -19,13 +19,13 @@ export const isSnippetEntity = (entity: EntityData): entity is SnippetEntity =>
   isEmailEntity(entity) || isCallEntity(entity);
 
 /**
- * Hit content rendered as the row snippet for a SnippetEntity:
+ * Hit rendered as the row snippet for a SnippetEntity:
  * - email: longest hit (best context window around the highlight)
  * - call: first hit (typically the first transcript match)
  */
-export const getSnippetHitContent = (
+export const getSnippetHit = (
   entity: EntityData
-): string | undefined => {
+): ContentHitData | undefined => {
   if (!isSnippetEntity(entity)) return undefined;
   if (!isSearchEntity(entity)) return undefined;
   const hits = entity.search.contentHitData;
@@ -40,9 +40,9 @@ export const getSnippetHitContent = (
         bestIdx = i;
       }
     }
-    return hits[bestIdx].content;
+    return hits[bestIdx];
   }
-  return hits[0].content;
+  return hits[0];
 };
 
 /**

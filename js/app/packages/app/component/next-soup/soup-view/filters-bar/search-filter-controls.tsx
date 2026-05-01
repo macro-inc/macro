@@ -461,7 +461,6 @@ export const INDEX_OPTIONS: {
     label: 'Email',
     icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
     queryFilters: defineQueryFilters({
-      exclude: { threadId: [NIL_UUID] },
       include: { emailImportance: true },
     }),
   },
@@ -469,9 +468,7 @@ export const INDEX_OPTIONS: {
     value: 'calls',
     label: 'Calls',
     icon: () => <EntityIcon targetType="call" size="xs" theme="monochrome" />,
-    queryFilters: defineQueryFilters({
-      exclude: { callChannelId: [NIL_UUID] },
-    }),
+    queryFilters: defineQueryFilters({}, { skipTargets: ['callf'] }),
   },
   {
     value: 'folders',

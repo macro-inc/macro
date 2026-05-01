@@ -151,7 +151,7 @@ function InviteTeamDemo(props: LessonContentProps) {
         .safeParse(value);
       setErrors((prev) => ({
         ...prev,
-        teamName: result.success ? undefined : result.error.errors[0]?.message,
+        teamName: result.success ? undefined : result.error.issues[0]?.message,
       }));
     } else if (field === 'email' && value.trim() !== '') {
       const result = z.string().email('Invalid email address').safeParse(value);
@@ -159,7 +159,7 @@ function InviteTeamDemo(props: LessonContentProps) {
         ...prev,
         emails: {
           ...prev.emails,
-          [index]: result.success ? undefined : result.error.errors[0]?.message,
+          [index]: result.success ? undefined : result.error.issues[0]?.message,
         },
       }));
     }
@@ -176,7 +176,7 @@ function InviteTeamDemo(props: LessonContentProps) {
 
     if (!result.success) {
       const newErrors: FormErrors = {};
-      for (const error of result.error.errors) {
+      for (const error of result.error.issues) {
         if (error.path[0] === 'teamName') {
           newErrors.teamName = error.message;
         } else if (

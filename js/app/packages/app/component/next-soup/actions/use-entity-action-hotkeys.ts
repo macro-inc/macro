@@ -28,10 +28,12 @@ import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { onCleanup } from 'solid-js';
 import { isListViewID } from '@app/constants/list-views';
+import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
   soup: SoupState;
+  activeSoupViewTab?: () => string | undefined;
   splitHandle?: SplitHandle;
   condition?: () => boolean;
   /** Fallback entity getter used when soup has no selection/focus (e.g., block views) */
@@ -46,9 +48,12 @@ export const useEntityActionHotkeys = (
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
 
+  const group = createHotkeyGroup();
+
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
     notificationSource: () => notificationSource,
+    hotkeyGroup: group,
   });
 
   const deleteAction = makeDeleteAction({
@@ -117,8 +122,6 @@ export const useEntityActionHotkeys = (
     }
   };
 
-  const group = createHotkeyGroup();
-
   // Mark Done - 'e', not included in Hotkey Group so that we can use it from inside of blocks
   registerHotkey({
     hotkey: ['e'],
@@ -135,6 +138,17 @@ export const useEntityActionHotkeys = (
     },
     condition: () => {
       if (condition && !condition()) return false;
+
+      const contentId = splitHandle?.content().id;
+
+      const soupViewTab = options.activeSoupViewTab?.();
+
+      if (
+        !isListViewID(contentId) ||
+        (soupViewTab && !canExecuteMarkDoneOnView(contentId, soupViewTab))
+      )
+        return false;
+
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(markDone.canExecute);
     },

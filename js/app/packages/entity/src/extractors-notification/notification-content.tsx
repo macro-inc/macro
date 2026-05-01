@@ -181,7 +181,7 @@ function DocumentMentionPills(props: { stack: NotificationStack }) {
         </For>
         <Show when={overflow() > 0}>
           <button
-            class="text-xs text-ink-muted border border-edge-muted rounded px-2 py-1 bg-panel hover:bg-edge/10 shrink-0"
+            class="text-xs text-ink-muted border border-edge-muted rounded px-2 py-1 bg-panel hover:bg-edge shrink-0"
             onClick={(e) => {
               e.stopPropagation();
               setExpanded(true);

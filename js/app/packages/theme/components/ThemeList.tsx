@@ -47,7 +47,7 @@ export function ThemeList() {
       <div
         style="
           font-family: var(--font-sans);
-          background-color: var(--b1);
+          background-color: var(--b0);
           scrollbar-width: none;
           position: relative;
           overflow: hidden;
@@ -68,9 +68,9 @@ export function ThemeList() {
         >
           <div
             style="
-              border-bottom: 1px solid var(--color-edge-muted); /* temp remove when long */
+              border-bottom: 1px solid var(--b3); /* temp remove when long */
               margin-bottom: -1px; /* temp remove when long */
-              background-color: var(--color-edge-muted);
+              background-color: var(--b3);
               box-sizing: border-box;
               overflow-x: hidden;
               display: grid;
@@ -79,8 +79,8 @@ export function ThemeList() {
           >
             <div
               style="
-                border-bottom: 1px solid var(--color-edge-muted);
-                background-color: var(--b1);
+                border-bottom: 1px solid var(--b3);
+                background-color: var(--b0);
                 align-items: center;
                 position: absolute;
                 padding: 0 20px;
@@ -114,8 +114,9 @@ export function ThemeList() {
               >
                 <div
                   style="
-                    background-color: var(--color-edge-muted);
+
                     grid-template-columns: min-content 1fr;
+                    background-color: var(--b3);
                     align-items: center;
                     display: grid;
                     height: 41px;
@@ -124,7 +125,7 @@ export function ThemeList() {
                 >
                   <div
                     style="
-                      background-color: var(--b1);
+                      background-color: var(--b0);
                       box-sizing: border-box;
                       align-items: center;
                       padding: 0 20px;
@@ -159,7 +160,7 @@ export function ThemeList() {
                     class="theme-list-item-name"
                     style="
                       transition: color var(--transition);
-                      background-color: var(--b1);
+                      background-color: var(--b0);
                       box-sizing: border-box;
                       white-space: nowrap;
                       align-items: center;

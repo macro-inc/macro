@@ -1,4 +1,5 @@
-import type { ChatAttachmentWithName } from '@service-cognition/generated/schemas';
+import type { AttachmentMetadata as GeneratedAttachmentMetadata } from '@service-cognition/generated/schemas/attachmentMetadata';
+import type { Entity } from '@service-cognition/generated/schemas/entity';
 import type { Accessor, Setter } from 'solid-js';
 
 export type {
@@ -6,7 +7,7 @@ export type {
   ChatMessageWithAttachments,
 } from '@service-cognition/generated/schemas';
 
-export type Attachment = ChatAttachmentWithName;
+export type Attachment = Entity;
 
 export type Attachments = {
   attached: Accessor<Attachment[]>;
@@ -15,7 +16,10 @@ export type Attachments = {
   removeAttachment: (id: string) => void;
 };
 
-export type AttachmentPreview = Pick<Attachment, 'attachmentType' | 'metadata'>;
+export type AttachmentPreview = {
+  entity_type: Entity['entity_type'];
+  metadata?: GeneratedAttachmentMetadata;
+};
 
 export type UploadError = 'upload' | 'extract';
 

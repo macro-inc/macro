@@ -7,12 +7,20 @@ import {
 } from '@queries/notification/user-notifications';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { isMatching, P } from 'ts-pattern';
-import { CHANNEL_EVENT_TYPES, setDoneOverride } from './notification-source';
+import {
+  CHANNEL_EVENT_TYPES,
+  DOCUMENT_COMMENT_EVENT_TYPES,
+  setDoneOverride,
+} from './notification-source';
 import type { NotificationSource } from './notification-source';
 import { type UnifiedNotification, compositeEntity } from './types';
 
 export const isChannelNotification = isMatching({
   notification_metadata: { tag: P.union(...CHANNEL_EVENT_TYPES) },
+});
+
+export const isDocumentCommentNotification = isMatching({
+  notification_metadata: { tag: P.union(...DOCUMENT_COMMENT_EVENT_TYPES) },
 });
 
 /**

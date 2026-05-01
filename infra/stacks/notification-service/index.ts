@@ -1,7 +1,13 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Queue } from '../../packages/resources';
-import { config, getMacroApiToken, stack } from '../../packages/shared';
+import {
+  config,
+  getMacroApiToken,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { PushNotificationEventHandler } from './push';
 import { NotificationService } from './service';
@@ -217,28 +223,16 @@ const notificationService = new NotificationService('notification-service', {
       value: pulumi.interpolate`${pushNotificationEventHandlerQueueName}`,
     },
     {
-      name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      name: ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
     },
     {
-      name: 'DOCUMENT_COGNITION_SERVICE_URL',
-      value: `https://document-cognition${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      name: ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL),
     },
     {
-      name: 'CONNECTION_GATEWAY_URL',
-      value: `https://connection-gateway${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
-      name: 'ORGANIZATION_SERVICE_URL',
-      value: `https://organization-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      name: ServiceUrl.CONNECTION_GATEWAY_URL,
+      value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
     },
     {
       name: 'SNS_APNS_PLATFORM_ARN',
@@ -269,8 +263,8 @@ const notificationService = new NotificationService('notification-service', {
       value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
     },
     {
-      name: 'AUTHENTICATION_SERVICE_URL',
-      value: pulumi.interpolate`https://auth-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+      name: ServiceUrl.AUTHENTICATION_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL),
     },
     {
       name: 'AUTHENTICATION_SERVICE_SECRET_KEY',

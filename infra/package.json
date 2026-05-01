@@ -12,7 +12,7 @@
     "check": "tsc --noEmit"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.2.6",
+    "@biomejs/biome": "2.4.12",
     "@types/node": "^20.8.10",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",

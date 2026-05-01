@@ -1,11 +1,11 @@
-import EyeIcon from '@phosphor-icons/core/regular/eye.svg';
+import Newspaper from '@phosphor-icons/core/regular/newspaper.svg';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
 const handler = createToolRenderer({
   name: 'ReadThread',
   render: (ctx) => (
-    <BaseTool type="call" icon={EyeIcon} renderContext={ctx.renderContext}>
+    <BaseTool type="call" icon={Newspaper} renderContext={ctx.renderContext}>
       Read{' '}
       <span class="text-accent">
         {ctx.tool.data.ids.length}{' '}

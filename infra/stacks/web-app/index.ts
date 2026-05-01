@@ -63,7 +63,7 @@ new aws.s3.BucketObjectv2(
   'app-archive',
   {
     bucket: webAppAssets.bucket,
-    key: 'app-archive.zip',
+    key: 'app/app-archive.zip',
     source: appArchive,
     acl: 'public-read',
   },

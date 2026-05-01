@@ -265,7 +265,16 @@ export function useFilterRefinements() {
       seenKeys.add(args.key);
       filters.push(
         getOrCreateChip(args.key, () => {
-          const [isPopupOpen, setPopupOpen] = createSignal(false);
+          const [isPopupOpen, _setPopupOpen] = createSignal(false);
+          // restores focus to the split panel on close
+          const setPopupOpen = (v: boolean) => {
+            if (!v) {
+              queueMicrotask(() =>
+                panel.panelRef()?.focus({ preventScroll: true })
+              );
+            }
+            _setPopupOpen(v);
+          };
           return {
             categoryLabel: args.categoryLabel,
             optionId: () => `${args.optionIdPrefix}:${args.getIds().join(',')}`,

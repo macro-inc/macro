@@ -1,3 +1,4 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useUserContext } from '@core/context/user';
 import { useInstructionsMdTextQuery } from '@queries/storage/instructions-md';
 import { authServiceClient } from '@service-auth/client';
@@ -53,8 +54,33 @@ export function useAdditionalInstructions() {
         '\nThese are system instructions provided by the user. Follow them\n';
       prompt += userInstructions;
     }
+    const openEntities = getOpenEntitiesPrompt();
+    if (openEntities) {
+      prompt += openEntities;
+    }
     return appendDate(prompt);
   };
+}
+
+function getOpenEntitiesPrompt(): string | null {
+  const manager = globalSplitManager();
+  if (!manager) return null;
+
+  const splits = manager.splits();
+  const items: string[] = [];
+  for (const split of splits) {
+    if (split.content.type === 'component') continue;
+    const handle = manager.getSplit(split.id);
+    const name = handle?.displayName();
+    const type = split.content.type;
+    if (name) {
+      items.push(`- ${name} (${type}, id: ${split.content.id})`);
+    } else {
+      items.push(`- ${type} (id: ${split.content.id})`);
+    }
+  }
+  if (items.length === 0) return null;
+  return `\nThe user currently has the following items open:\n${items.join('\n')}`;
 }
 
 function appendDate(prompt: string) {

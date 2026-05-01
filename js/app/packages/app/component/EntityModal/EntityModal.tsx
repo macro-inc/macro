@@ -37,7 +37,7 @@ export const EntityModalActionFooter = (props: {
         class={cn(
           'uppercase py-1 px-3 font-mono text-sm',
           props.isDisabled
-            ? 'bg-edge/20 text-ink-placeholder cursor-not-allowed'
+            ? 'bg-edge text-ink-placeholder cursor-not-allowed'
             : 'bg-accent text-menu'
         )}
         onClick={props.onConfirm}

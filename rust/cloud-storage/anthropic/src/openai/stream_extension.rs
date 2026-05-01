@@ -6,7 +6,7 @@ use crate::types::response::code_execution::{
 use crate::types::response::web_fetch::WebFetchResponse;
 use crate::types::response::web_search::WebSearchResponse;
 use async_openai::error::OpenAIError;
-use async_openai::types::CreateChatCompletionStreamResponse;
+use async_openai::types::chat::CreateChatCompletionStreamResponse;
 use futures::Stream;
 use std::pin::Pin;
 

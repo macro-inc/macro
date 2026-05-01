@@ -113,6 +113,7 @@ import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
+import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -174,7 +175,7 @@ type PersistedSoupViewState = {
   assigneeFilter: string[];
 };
 
-const PERSISTED_STATE_VERSION = 4;
+const PERSISTED_STATE_VERSION = 5;
 
 const listStateCache = new Map<
   string,
@@ -190,6 +191,9 @@ interface SoupViewProps {
   viewName: string;
   initialClientFilters?: SetPredicatesInput<string>;
   initialFilters?: Partial<QueryState>;
+  initialSearchText?: string;
+  /** Ignore localStorage on mount and use the supplied `initial*` values. */
+  skipPersistedState?: boolean;
   disableLocalSearch?: boolean;
   /**
    * Client-side entities to merge into the soup results. Useful for entity
@@ -270,6 +274,7 @@ export const SoupView = (props: SoupViewProps) => {
       <SoupViewContextProvider
         soup={soup}
         initialQuery={props.initialFilters}
+        initialSearchText={props.initialSearchText}
         disableLocalSearch={props.disableLocalSearch}
         additionalEntities={props.additionalEntities}
       >
@@ -309,6 +314,7 @@ export const SoupView = (props: SoupViewProps) => {
                     <SoupSearchbar
                       variant="secondary"
                       autoFocus
+                      initialValue={props.initialSearchText}
                       onDismiss={() => setNarrowSearchExpanded(false)}
                     />
                   </div>
@@ -329,7 +335,10 @@ export const SoupView = (props: SoupViewProps) => {
                   }}
                   expanded={() => (
                     <div class="w-52">
-                      <SoupSearchbar variant="secondary" />
+                      <SoupSearchbar
+                        variant="secondary"
+                        initialValue={props.initialSearchText}
+                      />
                     </div>
                   )}
                   collapsed={() => (
@@ -352,7 +361,7 @@ export const SoupView = (props: SoupViewProps) => {
                 />
               </Show>
             </SplitHeaderRight>
-            <SoupFiltersBar />
+            <SoupFiltersBar initialSearchText={props.initialSearchText} />
           </div>
           <Show when={hasLinkError()}>
             <EmailPermissionsBanner />
@@ -367,6 +376,7 @@ export const SoupView = (props: SoupViewProps) => {
               <SoupViewFileDropzone>
                 <SoupViewList
                   initialClientFilters={props.initialClientFilters}
+                  skipPersistedState={props.skipPersistedState}
                 />
               </SoupViewFileDropzone>
             </Suspense>
@@ -392,6 +402,7 @@ interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
   initialClientFilters?: SetPredicatesInput<string>;
+  skipPersistedState?: boolean;
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {
@@ -481,7 +492,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
       : (props.scopeId ?? panel.splitHotkeyScope);
   });
 
-  // Register navigation hotkeys
+  // Register navigation hotkeys on the active list scope (usually the split
+  // scope), but dispose them with the mounted SoupViewList. This keeps j/k
+  // available while the list split is active without leaking into opened blocks
+  // after the list unmounts.
   useSoupNavigationHotkeys({
     scopeId: scopeId(),
     soup,
@@ -493,6 +507,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   useEntityActionHotkeys({
     scopeId: scopeId(),
     soup,
+    activeSoupViewTab: activeTab,
     splitHandle: panel.handle,
   });
 
@@ -687,9 +702,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // Restore previewEntity synchronously so the first-render effect sees the
   // correct value and avoids a transient window where previewEntity is undefined.
-  const initialPersistedState = !persistenceDisabled
-    ? untrack(persistedState)
-    : null;
+  const initialPersistedState =
+    !persistenceDisabled && !props.skipPersistedState
+      ? untrack(persistedState)
+      : null;
   soup.setPreviewEntity(initialPersistedState?.previewEntity);
 
   // Set initial state
@@ -784,7 +800,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (restored || isProjectList) return;
     restored = true;
 
-    const cached = listStateCache.get(cacheKey);
+    const cached = props.skipPersistedState
+      ? undefined
+      : listStateCache.get(cacheKey);
     if (cached) {
       setSearchText(cached.searchText);
       soup.focus.set(cached.focus);
@@ -870,6 +888,15 @@ export const SoupViewList = (props: SoupViewListProps) => {
                         canSwipeLeft={(entityId) => {
                           const entity = entityById().get(entityId);
                           if (!entity) return false;
+
+                          const tab = activeTab();
+
+                          if (
+                            !isListViewID(contentId) ||
+                            (tab && !canExecuteMarkDoneOnView(contentId, tab))
+                          )
+                            return false;
+
                           return markDoneAction.canExecute(entity.original);
                         }}
                         onSwipeLeft={(entityId) => {

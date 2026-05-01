@@ -3,18 +3,15 @@
 use std::fmt::Write;
 use std::sync::Arc;
 
-use attachment::fmt::XmlTag;
+use attachment::fmt::{XmlTag, attrs};
 use attachment::{
-    AttachmentContent, AttachmentError, AttachmentPart, AttachmentReference, AttachmentService,
-    Attachments, ResolutionError,
+    AttachmentContent, AttachmentError, AttachmentPart, AttachmentService, Attachments,
+    ResolutionError,
 };
-use entity_access::domain::{
-    models::{AccessError, MemberParticipantRole},
-    ports::EntityAccessService,
-};
+use entity_access::domain::{models::MemberParticipantRole, ports::EntityAccessService};
 use futures::future::join_all;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use models_comms::channel::{ChannelId, ChannelMessage};
 use non_empty::NonEmpty;
 
@@ -40,16 +37,21 @@ impl<C, E> CommsAttachmentService<C, E> {
 
 impl<C: CommsRepo, E: EntityAccessService> AttachmentService for CommsAttachmentService<C, E> {
     #[tracing::instrument(skip_all)]
-    async fn resolve_attachments(
+    async fn resolve_attachments<'a>(
         &self,
         user_id: MacroUserIdStr<'_>,
-        ids: NonEmpty<&[&str]>,
-    ) -> Attachments {
+        ids: NonEmpty<&[&'a Entity<'a>]>,
+    ) -> Attachments<'a> {
         let user_id = &user_id;
-        let results = join_all(ids.iter().map(|id| async move {
-            self.resolve_one(user_id, id)
-                .await
-                .map_err(|error| ResolutionError::new(id.to_string(), error))
+        let results = join_all(ids.iter().map(|entity| async move {
+            self.resolve_one(user_id, entity).await.map_err(|error| {
+                ResolutionError::new(
+                    entity
+                        .entity_type
+                        .with_entity_string(entity.entity_id.to_string()),
+                    error,
+                )
+            })
         }))
         .await;
         Attachments::new(NonEmpty::new(results).expect("ids was non-empty"))
@@ -61,8 +63,9 @@ impl<C: CommsRepo, E: EntityAccessService> CommsAttachmentService<C, E> {
     async fn resolve_one(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        id: &str,
-    ) -> Result<AttachmentContent, AttachmentError> {
+        entity: &Entity<'_>,
+    ) -> Result<AttachmentContent<'static>, AttachmentError> {
+        let id = &*entity.entity_id;
         let channel_id =
             ChannelId(uuid::Uuid::parse_str(id).map_err(|e| AttachmentError::Internal(e.into()))?);
 
@@ -74,12 +77,7 @@ impl<C: CommsRepo, E: EntityAccessService> CommsAttachmentService<C, E> {
                 EntityType::Channel,
             )
             .await
-            .map_err(|e| match e {
-                AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
-                    AttachmentError::PermissionDenied { id: id.to_string() }
-                }
-                other => AttachmentError::Internal(anyhow::anyhow!("{other:#}")),
-            })?;
+            .map_err(|e| AttachmentError::PermissionDenied(Box::new(e)))?;
 
         let (name, messages) = tokio::join!(
             self.comms_repo.get_channel_name(channel_id),
@@ -95,10 +93,16 @@ impl<C: CommsRepo, E: EntityAccessService> CommsAttachmentService<C, E> {
         let parts = format_messages(&messages);
 
         Ok(AttachmentContent {
-            reference: AttachmentReference::Channel { id: id.to_string() },
+            reference: EntityType::Channel.with_entity_string(id.to_string()),
             name,
-            content: NonEmpty::new(vec![AttachmentPart::Content(parts)])
-                .expect("single element is non-empty"),
+            content: NonEmpty::new(vec![
+                AttachmentPart::Metadata {
+                    key: "message-limit".into(),
+                    value: MESSAGE_LIMIT.to_string(),
+                },
+                AttachmentPart::Content(parts),
+            ])
+            .expect("single element is non-empty"),
         })
     }
 }
@@ -110,13 +114,10 @@ fn format_messages(messages: &[ChannelMessage]) -> String {
 
     let mut body = String::new();
     for msg in messages {
-        let timestamp = msg.created_at.format("%Y-%m-%d %H:%M");
+        let timestamp = msg.created_at.format("%Y-%m-%d %H:%M").to_string();
         let tag = XmlTag {
             name: "message",
-            attrs: &[
-                ("sender", &msg.sender_id),
-                ("timestamp", &timestamp.to_string()),
-            ],
+            attrs: attrs(&[("sender", &msg.sender_id), ("timestamp", &timestamp)]),
             body: &msg.content,
         };
         writeln!(&mut body, "{tag}").expect("write to string");

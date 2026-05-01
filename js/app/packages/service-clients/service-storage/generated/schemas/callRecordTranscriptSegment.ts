@@ -28,4 +28,6 @@ return a speaker label. */
   speakerId: string;
   /** When the speaker started this segment. */
   startedAt: string;
+  /** Stable DB-row id for the segment. */
+  transcriptId: string;
 }

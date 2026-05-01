@@ -126,6 +126,7 @@ export type CallEntity = EntityBase & {
   attended: boolean;
   durationMs?: number;
   participantIds: string[];
+  summary?: string;
 };
 
 export type AutomationEntity = EntityBase & {

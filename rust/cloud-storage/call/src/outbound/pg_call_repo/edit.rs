@@ -7,6 +7,8 @@ use models_permissions::share_permission::channel_share_permission::UpdateOperat
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
+use crate::domain::models::CustomSpeakerAssignment;
+
 /// Update share permissions for a call record.
 ///
 /// Looks up the call's share permission ID from either the active `calls`
@@ -168,6 +170,45 @@ pub(super) async fn set_custom_name_if_null(
         r#"UPDATE call_records SET custom_name = $2 WHERE id = $1 AND custom_name IS NULL"#,
         call_id,
         custom_name,
+    )
+    .execute(transaction.as_mut())
+    .await?;
+    Ok(())
+}
+
+/// Apply per-(call_record_id, diarized_speaker_id) `custom_speaker` overrides.
+///
+/// Each entry sets `custom_speaker` for every row in the call whose
+/// `diarized_speaker_id` matches; `custom_speaker = None` clears the
+/// override. Rows whose `diarized_speaker_id` doesn't match any entry —
+/// including rows with `diarized_speaker_id IS NULL` — are untouched.
+pub(super) async fn set_custom_speakers(
+    transaction: &mut Transaction<'_, Postgres>,
+    call_record_id: &Uuid,
+    assignments: &[CustomSpeakerAssignment],
+) -> Result<(), sqlx::Error> {
+    if assignments.is_empty() {
+        return Ok(());
+    }
+    let diarized_ids: Vec<&str> = assignments
+        .iter()
+        .map(|a| a.diarized_speaker_id.as_str())
+        .collect();
+    let custom_speakers: Vec<Option<&str>> = assignments
+        .iter()
+        .map(|a| a.custom_speaker.as_deref().map(|c| c.as_ref()))
+        .collect();
+    sqlx::query!(
+        r#"
+        UPDATE call_record_transcripts AS t
+        SET custom_speaker = u.custom_speaker
+        FROM UNNEST($2::text[], $3::text[]) AS u(diarized_speaker_id, custom_speaker)
+        WHERE t.call_record_id = $1
+          AND t.diarized_speaker_id = u.diarized_speaker_id
+        "#,
+        call_record_id,
+        &diarized_ids as &[&str],
+        &custom_speakers as &[Option<&str>],
     )
     .execute(transaction.as_mut())
     .await?;

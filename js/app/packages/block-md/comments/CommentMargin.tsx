@@ -2,6 +2,7 @@ import {
   activeCommentThreadSignal,
   commentsStore,
   commentWidthSignal,
+  highlightedCommentIdSignal,
   highlightedCommentThreadsSignal,
   showCommentsPreference,
   threadStore,
@@ -80,8 +81,8 @@ const useCommentsContext = (): CommentsContextType => {
       updateComment,
     },
     inComment: true,
+    highlightedCommentId: highlightedCommentIdSignal.get,
   };
-
   return commentsContext;
 };
 

@@ -79,7 +79,7 @@ import {
   $applyDocumentMetadataFromSerialized,
   $getDocumentMetadata,
 } from './plugins';
-import { MARKDOWN_VERSION_COUNTER, STAGING_TAG } from './version';
+import { MARKDOWN_VERSION_COUNTER } from './version';
 
 /**
  * Type guard to check if the object is a LexicalEditor
@@ -219,11 +219,7 @@ export function initializeEditorWithVersionedState(
       editor.dispatchCommand(INITIALIZE_LOCAL_STATUS, peerId);
     }
     if (metadata.version > MARKDOWN_VERSION_COUNTER) {
-      if (metadata.environmentTags?.includes(STAGING_TAG)) {
-        return MarkdownEditorErrors.STAGING_VERSION_MISMATCH_ERROR;
-      } else {
-        return MarkdownEditorErrors.VERSION_MISMATCH_ERROR;
-      }
+      return MarkdownEditorErrors.VERSION_MISMATCH_ERROR;
     }
     return null;
   } catch (e) {

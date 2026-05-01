@@ -5,6 +5,12 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
+use channels::domain::service::ChannelMessagesServiceImpl;
+use channels::inbound::toolset::ChannelToolContext;
+use channels::outbound::pg_channels_repo::PgChannelMessagesRepo;
+use chat::domain::service::ChatServiceImpl;
+use chat::inbound::toolset::ChatToolContext;
+use chat::outbound::postgres::PgChatRepo;
 use connection::domain::ports::ConnectionService;
 use documents::{domain::ports::TaskPropertiesPort, inbound::toolset::DocumentToolContext};
 use email::{
@@ -13,17 +19,10 @@ use email::{
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::inbound::ai_tool::NotificationToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
-use scribe::{
-    ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
-    email::EmailClient, static_file::StaticFileClient,
-};
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
 
 pub use ai_toolset::RequestContext;
-
-pub type ToolScribe =
-    ScribeClient<DocumentClient, ChannelClient, DcsClient, EmailClient, StaticFileClient>;
 
 /// Type alias for the frecency service implementation
 pub type ToolFrecencyService = frecency::domain::services::FrecencyQueryServiceImpl<
@@ -43,6 +42,23 @@ pub type ToolCommsService = comms::domain::service::ChannelServiceImpl<
     comms::outbound::postgres::user_repo::PgUserRepo,
     frecency::outbound::postgres::FrecencyPgStorage,
 >;
+
+/// Type alias for the channel messages service implementation used by AI tools.
+pub type ToolChannelMessagesService = ChannelMessagesServiceImpl<PgChannelMessagesRepo>;
+
+/// Type alias for the channel AI tool context.
+pub type ToolChannelToolContext =
+    ChannelToolContext<ToolChannelMessagesService, ToolEntityAccessService>;
+
+/// Build the channel AI tool context from a Postgres pool.
+pub fn build_channel_tool_context(pool: sqlx::PgPool) -> ToolChannelToolContext {
+    ChannelToolContext::new(
+        ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(pool.clone())),
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool),
+        ),
+    )
+}
 
 /// No-op task properties service (not needed for AI tools)
 #[derive(Clone)]
@@ -375,6 +391,13 @@ pub type ToolNotificationService = notification::domain::service::NotificationRe
 /// Type alias for the notification tool context.
 pub type ToolNotificationToolContext = NotificationToolContext<ToolNotificationService>;
 
+/// Type alias for the chat service implementation used by AI tools.
+/// Uses an empty toolset — the read-only tool never invokes tool execution.
+pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManagementService>;
+
+/// Type alias for the chat tool context
+pub type ToolChatToolContext = ChatToolContext<ToolChatService, ToolEntityAccessService>;
+
 #[derive(Clone, Default)]
 pub struct NoOpScheduleContext;
 
@@ -389,7 +412,6 @@ pub fn no_op_schedule_context() -> NoOpScheduleContext {
 pub struct ToolServiceContext {
     pub search_service_client: Arc<search_service_client::SearchServiceClient>,
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
-    pub scribe: Arc<ToolScribe>,
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
     pub document_tool_context: ToolDocumentToolContext,
@@ -397,6 +419,8 @@ pub struct ToolServiceContext {
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
+    pub chat_tool_context: ToolChatToolContext,
+    pub channel_tool_context: ToolChannelToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
 }
 

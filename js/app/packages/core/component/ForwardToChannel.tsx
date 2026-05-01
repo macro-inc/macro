@@ -73,7 +73,7 @@ function MobileForwardToChannelLayout(
           options={props.destinationOptions}
           triggerMode="input"
           noBrackets
-          class="border-1 border-edge-muted/50 p-1"
+          class="border-1 border-edge-muted p-1"
           focusOnMount
         />
       </div>
@@ -96,7 +96,7 @@ function MobileForwardToChannelLayout(
               <div
                 class={`w-4 h-4 border ${
                   !props.canSendAsGroup()
-                    ? 'border-edge/30 peer-checked:bg-menu/20'
+                    ? 'border-edge peer-checked:bg-menu/20'
                     : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
                 }`}
               >
@@ -141,7 +141,7 @@ function MobileForwardToChannelLayout(
         </div>
       </Show>
 
-      <div class="flex-1 min-h-20 flex flex-col w-full mt-3 border-t-1 border-edge-muted/50 relative">
+      <div class="flex-1 min-h-20 flex flex-col w-full mt-3 border-t-1 border-edge-muted relative">
         <ScrollIndicators scrollRef={props.mdScrollRef} noBorderStart />
         <CustomScrollbar scrollContainer={props.mdScrollRef} />
         <div
@@ -450,7 +450,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               options={destinationOptions}
               triggerMode="input"
               noBrackets
-              class="border border-edge-muted/50 p-1"
+              class="border border-edge-muted p-1"
               focusOnMount
               horizontalScroll
             />
@@ -479,7 +479,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         </div>
 
         {/* Row 2: Optional message */}
-        <div class="grow shrink min-h-0 flex flex-col w-full border-t border-edge-muted/50">
+        <div class="grow shrink min-h-0 flex flex-col w-full border-t border-edge-muted">
           <div class="relative grow shrink min-h-0 flex flex-col">
             <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
             <CustomScrollbar scrollContainer={mdScrollRef} />
@@ -520,7 +520,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                     class={cn(
                       'w-4 h-4 border',
                       !canSendAsGroup()
-                        ? 'border-edge/30 peer-checked:bg-menu/20'
+                        ? 'border-edge peer-checked:bg-menu/20'
                         : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
                     )}
                   >

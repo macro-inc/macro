@@ -49,7 +49,7 @@ export type Access =
 export interface FunctionDefinition<
   ErrorCodes extends string = never,
   Args extends z.ZodRawShape | undefined = undefined,
-  Result extends z.ZodRawShape | undefined = undefined,
+  Result extends z.ZodRawShape | AnyZodType | undefined = undefined,
   Throws extends
     | Array<ErrorCodes extends never ? never : ErrorCodes>
     | undefined = undefined,
@@ -202,7 +202,7 @@ export class Svc<
   fn<
     NewF extends string,
     Args extends z.ZodRawShape | undefined = undefined,
-    Result extends z.ZodRawShape | undefined = undefined,
+    Result extends z.ZodRawShape | AnyZodType | undefined = undefined,
     const Throws extends Array<ErrorCodes> | undefined = undefined,
   >(
     this: Svc<ErrorCodes, Functions, Services>,
@@ -222,7 +222,11 @@ export class Svc<
       modifies: def.modifies ?? this.state.def.modifies,
       access: def.access ?? this.state.def.access,
       args: def.args ? z.object(def.args) : undefined,
-      result: def.result ? z.object(def.result) : undefined,
+      result: def.result
+        ? def.result instanceof z.ZodType
+          ? def.result
+          : z.object(def.result)
+        : undefined,
       throws: def.throws,
     };
     return this as any;
@@ -245,6 +249,13 @@ export class Svc<
 type ZodShapeToType<T extends z.ZodRawShape | undefined> =
   T extends z.ZodRawShape ? z.infer<z.ZodObject<T>> : undefined;
 
+type ZodResultToType<T extends z.ZodRawShape | AnyZodType | undefined> =
+  T extends z.ZodRawShape
+    ? z.infer<z.ZodObject<T>>
+    : T extends AnyZodType
+      ? z.infer<T>
+      : undefined;
+
 type ClientFunctionArgs<T> =
   T extends FunctionDefinition<any, infer Args, any, any>
     ? ZodShapeToType<Args>
@@ -252,10 +263,10 @@ type ClientFunctionArgs<T> =
 
 type ClientFunctionResult<T> =
   T extends FunctionDefinition<any, any, infer Result, infer Throws>
-    ? Result extends z.ZodRawShape
+    ? Result extends z.ZodRawShape | AnyZodType
       ? Throws extends string[]
-        ? MaybeResult<Throws[number], ZodShapeToType<Result>>
-        : ZodShapeToType<Result>
+        ? MaybeResult<Throws[number], ZodResultToType<Result>>
+        : ZodResultToType<Result>
       : Throws extends string[]
         ? MaybeError<Throws[number]>
         : void
@@ -316,23 +327,51 @@ export function withFetchErrors<const T extends string>(
   return [...specificErrors, ...fetchErrors];
 }
 
-type NonNullableShape<T extends z.ZodTypeAny> = T extends
-  | z.ZodOptional<infer U>
-  | z.ZodNullable<infer U>
-  ? NonNullableShape<U>
-  : T extends z.ZodObject<infer Shape>
-    ? Shape
-    : T;
+type AnyZodType = z.core.SomeType;
+
+type UnionToIntersection<U> = (
+  U extends unknown
+    ? (value: U) => void
+    : never
+) extends (value: infer I) => void
+  ? I
+  : never;
+
+type NonNullableShape<T extends AnyZodType> =
+  T extends z.ZodOptional<infer U>
+    ? NonNullableShape<U>
+    : T extends z.ZodNullable<infer U>
+      ? NonNullableShape<U>
+      : T extends z.ZodIntersection<infer Left, infer Right>
+        ? NonNullableShape<Left> & NonNullableShape<Right>
+        : T extends z.ZodUnion<infer Options>
+          ? UnionToIntersection<NonNullableShape<Options[number]>>
+          : T extends z.ZodObject<infer Shape>
+            ? Shape
+            : T;
+
+type LooseRawShape = Record<string, z.ZodAny>;
+
+type RawShapeFromSchema<T extends AnyZodType> = Extract<
+  T extends z.ZodOptional<infer U>
+    ? RawShapeFromSchema<U>
+    : T extends z.ZodNullable<infer U>
+      ? RawShapeFromSchema<U>
+      : T extends z.ZodUnion<any>
+        ? LooseRawShape
+        : NonNullableShape<T>,
+  z.ZodRawShape
+>;
 
 /**
  * Extracts the non-nullable shape of a Zod schema.
  * @param schema - The Zod schema to process.
  * @returns The non-nullable shape of the schema.
  */
-export function nonNullShape<T extends z.ZodTypeAny>(
+export function nonNullShape<T extends AnyZodType>(
   schema: T
 ): NonNullableShape<T> {
-  let currentSchema: z.ZodTypeAny = schema;
+  let currentSchema = schema as AnyZodType;
 
   // Unwrap optional and nullable types
   while (
@@ -344,26 +383,30 @@ export function nonNullShape<T extends z.ZodTypeAny>(
 
   // Handle intersection types by merging their shapes
   if (currentSchema instanceof z.ZodIntersection) {
-    const leftShape = nonNullShape(currentSchema._def.left);
-    const rightShape = nonNullShape(currentSchema._def.right);
-    return { ...leftShape, ...rightShape };
+    const leftShape = nonNullShape(currentSchema._def.left as AnyZodType);
+    const rightShape = nonNullShape(currentSchema._def.right as AnyZodType);
+    return { ...leftShape, ...rightShape } as NonNullableShape<T>;
   }
 
   // Handle union types by merging all possible shapes
   if (currentSchema instanceof z.ZodUnion) {
-    return currentSchema._def.options.map(nonNullShape);
+    return currentSchema._def.options.map((option) =>
+      nonNullShape(option as AnyZodType)
+    ) as unknown as NonNullableShape<T>;
   }
 
   // Extract object shapes
   if (currentSchema instanceof z.ZodObject) {
-    return currentSchema.shape;
+    return currentSchema.shape as NonNullableShape<T>;
   }
 
   return currentSchema as NonNullableShape<T>;
 }
 
-export function asRawShape<T extends z.ZodTypeAny>(schema: T): z.ZodRawShape {
-  let currentSchema: z.ZodTypeAny = schema;
+export function asRawShape<T extends AnyZodType>(
+  schema: T
+): RawShapeFromSchema<T> {
+  let currentSchema = schema as AnyZodType;
 
   // Unwrap optional and nullable types
   while (
@@ -375,20 +418,28 @@ export function asRawShape<T extends z.ZodTypeAny>(schema: T): z.ZodRawShape {
 
   // Handle intersection types by merging their shapes
   if (currentSchema instanceof z.ZodIntersection) {
-    const leftShape = asRawShape(currentSchema._def.left);
-    const rightShape = asRawShape(currentSchema._def.right);
-    return { ...leftShape, ...rightShape };
+    const leftShape = asRawShape(currentSchema._def.left as AnyZodType);
+    const rightShape = asRawShape(currentSchema._def.right as AnyZodType);
+    return {
+      ...(leftShape as object),
+      ...(rightShape as object),
+    } as RawShapeFromSchema<T>;
   }
 
   // Handle union types by finding a common raw shape
   if (currentSchema instanceof z.ZodUnion) {
-    const options = currentSchema._def.options.map(asRawShape);
-    return options.reduce((acc: any, shape: any) => ({ ...acc, ...shape }), {});
+    const options = currentSchema._def.options.map((option) =>
+      asRawShape(option as AnyZodType)
+    );
+    return options.reduce(
+      (acc: any, shape: any) => ({ ...acc, ...shape }),
+      {}
+    ) as RawShapeFromSchema<T>;
   }
 
   // Extract object shapes
   if (currentSchema instanceof z.ZodObject) {
-    return currentSchema.shape;
+    return currentSchema.shape as RawShapeFromSchema<T>;
   }
 
   throw new Error('Schema does not have a raw shape');

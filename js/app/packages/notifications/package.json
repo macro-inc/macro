@@ -5,7 +5,7 @@
   "types": "./index.ts",
   "dependencies": {
     "vitest": "^3.2.3",
-    "zod-validation-error": "^3.4.0"
+    "zod-validation-error": "^5.0.0"
   },
   "scripts": {
     "test": "vitest"

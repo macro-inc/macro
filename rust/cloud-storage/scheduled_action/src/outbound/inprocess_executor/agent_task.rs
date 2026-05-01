@@ -140,7 +140,7 @@ async fn run_tool_loop(
         .model(agent_task.model)
         .messages(vec![ChatMessage {
             content: ChatMessageContent::Text(agent_task.user_prompt.clone()),
-            image_urls: None,
+            attachments: None,
             role: Role::User,
         }])
         .system_prompt(system_prompt)

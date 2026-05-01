@@ -209,19 +209,22 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            if let RunEvent::Resumed = event {
-                let app = app_handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    match apply_completed_update(&app).await {
-                        Ok(true) => {
-                            tracing::info!("auto-applied pending bundle update on foreground");
+            #[cfg(feature = "auto_apply_update")]
+            {
+                if let RunEvent::Resumed = event {
+                    let app = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        match apply_completed_update(&app).await {
+                            Ok(true) => {
+                                tracing::info!("auto-applied pending bundle update on foreground");
+                            }
+                            Ok(false) => {}
+                            Err(e) => {
+                                tracing::error!("failed to auto-apply bundle update: {e}");
+                            }
                         }
-                        Ok(false) => {}
-                        Err(e) => {
-                            tracing::error!("failed to auto-apply bundle update: {e}");
-                        }
-                    }
-                });
+                    });
+                }
             }
         });
 }

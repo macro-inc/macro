@@ -183,7 +183,7 @@ export function MediaSelector() {
                 }}
               >
                 <div
-                  class="w-full hidden sm:flex p-2 mb-1 bg-edge/15 hover:bg-accent/15 hover-transition-bg transition-colors items-center justify-center gap-2"
+                  class="w-full hidden sm:flex p-2 mb-1 bg-edge hover:bg-accent/15 hover-transition-bg transition-colors items-center justify-center gap-2"
                   use:fileSelector={{
                     acceptedFileExtensions: acceptedFileExtensions,
                     acceptedMimeTypes: acceptedMimeTypes,

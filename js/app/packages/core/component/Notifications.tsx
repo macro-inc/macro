@@ -89,7 +89,7 @@ export function Notifications(props: NotificationsProps) {
                 </div>
 
                 <Show when={!notification.done}>
-                  <div class="mt-2 pt-2 border-t border-edge-muted/25 ml-4">
+                  <div class="mt-2 pt-2 border-t border-edge-muted ml-4">
                     <button
                       class="text-accent text-xs hover:text-accent-hover"
                       onClick={(e) => {

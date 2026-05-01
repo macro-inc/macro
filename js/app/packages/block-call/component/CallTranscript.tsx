@@ -13,10 +13,8 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import {
-  formatVideoTimestamp,
-  getSegmentVideoSeconds,
-} from './transcript-playback';
+import { formatVideoTimestamp } from '@core/util/duration';
+import { getSegmentVideoSeconds } from './transcript-playback';
 
 // Match the channel message grouping window (5 minutes).
 const GROUPING_WINDOW_MS = 5 * 60 * 1000;
@@ -148,6 +146,7 @@ function GroupedTranscriptSegmentRow(props: {
 export function CallTranscript(props: {
   transcript: CallRecordTranscriptSegment[];
   channelId: string;
+  timelineStartMs: number | null;
   activeSequenceNum?: number | null;
   /** Bumps when the user seeks via the native video controls (deduped in CallBlockAdapter). */
   videoSeekGeneration?: number;
@@ -168,13 +167,7 @@ export function CallTranscript(props: {
       segment,
       groupedWithPrevious: shouldGroupWithPrevious(segment, sorted[index - 1]),
     }));
-    if (sorted.length === 0) return { items, timelineStartMs: null };
-
-    const firstStartMs = new Date(sorted[0].startedAt).getTime();
-    return {
-      items,
-      timelineStartMs: Number.isFinite(firstStartMs) ? firstStartMs : null,
-    };
+    return { items };
   });
 
   const scrollActiveIntoView = (
@@ -349,7 +342,7 @@ export function CallTranscript(props: {
                         isActive={
                           item.segment.sequenceNum === props.activeSequenceNum
                         }
-                        timelineStartMs={transcriptMeta().timelineStartMs}
+                        timelineStartMs={props.timelineStartMs}
                         onSeekToSeconds={props.onSeekToSeconds}
                       />
                     </div>
@@ -362,7 +355,7 @@ export function CallTranscript(props: {
                       isActive={
                         item.segment.sequenceNum === props.activeSequenceNum
                       }
-                      timelineStartMs={transcriptMeta().timelineStartMs}
+                      timelineStartMs={props.timelineStartMs}
                       onSeekToSeconds={props.onSeekToSeconds}
                     />
                   </div>

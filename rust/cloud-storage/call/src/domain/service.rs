@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
 
-use crate::domain::models::EditCallRecordRequest;
+use crate::domain::models::{EditCallRecordRequest, EditCallTranscriptRequest};
 
 use super::models::{
     AddParticipantError, CallActiveResponse, CallError, CallRecord, CallRecordTranscriptSegment,
@@ -718,6 +718,31 @@ impl<
                     room_name = ?event.room_name,
                     "egress event"
                 );
+                // `egress_started` carries the wall-clock instant the encoder
+                // actually began capturing. Persist it so the frontend can
+                // anchor transcript-to-audio sync to the recording's true
+                // origin instead of the call-creation timestamp (which lags
+                // the recording start by the egress bootstrap window).
+                if event.event == "egress_started" {
+                    if let Some(egress_id) = &event.egress_id {
+                        let started_at =
+                            chrono::DateTime::<chrono::Utc>::from_timestamp(event.created_at, 0);
+                        if let Some(started_at) = started_at {
+                            self.repo
+                                .set_recording_started_at_by_egress_id(egress_id, started_at)
+                                .await
+                                .map_err(|e| CallError::Internal(e.into()))?;
+                        } else {
+                            tracing::warn!(
+                                egress_id,
+                                created_at = event.created_at,
+                                "egress_started webhook had unparseable created_at",
+                            );
+                        }
+                    } else {
+                        tracing::warn!("egress_started webhook missing egress_id");
+                    }
+                }
             }
             "egress_ended" => {
                 let (Some(egress_id), Some(file_url)) = (&event.egress_id, &event.file_url) else {
@@ -906,6 +931,29 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))
     }
 
+    #[tracing::instrument(err, skip(self, request), fields(num_assignments = request.assignments.len()))]
+    async fn edit_call_transcript(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        request: EditCallTranscriptRequest,
+    ) -> Result<(), CallError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::Call {
+            return Err(CallError::Internal(anyhow::anyhow!(
+                "expected Call entity in receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+
+        let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
+            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+
+        self.repo
+            .patch_call_transcript_custom_speakers(&call_id, &request.assignments)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn toggle_share_with_team(
         &self,
@@ -982,11 +1030,18 @@ impl<
             return Ok(());
         }
 
-        let summary = summarizer
+        let Some(summary) = summarizer
             .summarize_call(call_id, record.transcript)
             .await
             .inspect_err(|e| tracing::error!(error=?e, %call_id, "call summarizer failed"))
-            .map_err(|e| CallError::Internal(e.into()))?;
+            .map_err(|e| CallError::Internal(e.into()))?
+        else {
+            tracing::info!(
+                %call_id,
+                "summarizer returned no summary (uninformative transcript); skipping persistence"
+            );
+            return Ok(());
+        };
 
         self.repo
             .insert_call_summary(call_id, &summary)
@@ -999,13 +1054,19 @@ impl<
         // effort — naming failures must not fail summarization.
         if record.custom_name.is_none() {
             match summarizer.generate_call_name(call_id, &summary).await {
-                Ok(name) => {
+                Ok(Some(name)) => {
                     if let Err(e) = self.repo.set_custom_name_if_null(call_id, &name).await {
                         tracing::error!(
                             error=?e, %call_id,
                             "failed to persist ai-generated call name"
                         );
                     }
+                }
+                Ok(None) => {
+                    tracing::info!(
+                        %call_id,
+                        "ai call naming returned no title; leaving name unset"
+                    );
                 }
                 Err(e) => {
                     tracing::error!(
@@ -1062,7 +1123,14 @@ impl<
             }
 
             let summary = match summarizer.summarize_call(&call_id, record.transcript).await {
-                Ok(summary) => summary,
+                Ok(Some(summary)) => summary,
+                Ok(None) => {
+                    tracing::info!(
+                        %call_id,
+                        "summarizer returned no summary (uninformative transcript); skipping persistence"
+                    );
+                    return;
+                }
                 Err(e) => {
                     tracing::error!(error=?e, %call_id, "failed to summarize call on completion");
                     return;
@@ -1076,13 +1144,19 @@ impl<
 
             if record.custom_name.is_none() {
                 match summarizer.generate_call_name(&call_id, &summary).await {
-                    Ok(name) => {
+                    Ok(Some(name)) => {
                         if let Err(e) = repo.set_custom_name_if_null(&call_id, &name).await {
                             tracing::error!(
                                 error=?e, %call_id,
                                 "failed to persist ai-generated call name"
                             );
                         }
+                    }
+                    Ok(None) => {
+                        tracing::info!(
+                            %call_id,
+                            "ai call naming returned no title; leaving name unset"
+                        );
                     }
                     Err(e) => {
                         tracing::error!(
@@ -1126,7 +1200,7 @@ impl CallSummarizer for NoopCallSummarizer {
         &self,
         _call_id: &Uuid,
         _transcript: Vec<CallRecordTranscriptSegment>,
-    ) -> Result<String, Self::Err> {
+    ) -> Result<Option<String>, Self::Err> {
         // Type-placeholder only — [`CallServiceImpl`] must never invoke this
         // when `summarizer` is `None`, and [`NoopCallSummarizer`] is never a
         // `Some(_)` value in practice.
@@ -1139,7 +1213,7 @@ impl CallSummarizer for NoopCallSummarizer {
         &self,
         _call_id: &Uuid,
         _summary: &str,
-    ) -> Result<String, Self::Err> {
+    ) -> Result<Option<String>, Self::Err> {
         unreachable!(
             "NoopCallSummarizer::generate_call_name invoked; it exists only as a type placeholder when the optional summarizer is None"
         )

@@ -1,4 +1,6 @@
+use comms::outbound::postgres::channel_name::batch_resolve_channel_names;
 use indexmap::IndexMap;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_search::call_record::{
     CallRecordMetadata, CallRecordSearchResponseItem, CallRecordSearchResponseItemWithMetadata,
     CallRecordSearchResult,
@@ -36,9 +38,27 @@ pub(in crate::api::search) async fn enrich_call_records(
             .await
             .map_err(SearchError::InternalError)?;
 
+    let viewer_user_id = MacroUserIdStr::parse_from_str(user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?;
+    let unique_channel_ids: Vec<Uuid> = {
+        let mut seen: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
+        metadata_rows
+            .iter()
+            .filter_map(|r| seen.insert(r.channel_id).then_some(r.channel_id))
+            .collect()
+    };
+    let channel_names_by_id =
+        batch_resolve_channel_names(&ctx.db, &unique_channel_ids, viewer_user_id)
+            .await
+            .map_err(|e| SearchError::InternalError(e.into()))?;
+
+    let mut custom_name_by_id: std::collections::HashMap<Uuid, Option<String>> =
+        std::collections::HashMap::new();
     let metadata_by_id: std::collections::HashMap<Uuid, CallRecordMetadata> = metadata_rows
         .into_iter()
         .map(|row| {
+            custom_name_by_id.insert(row.call_id, row.custom_name);
+            let channel_name = channel_names_by_id.get(&row.channel_id).cloned();
             (
                 row.call_id,
                 CallRecordMetadata {
@@ -47,7 +67,7 @@ pub(in crate::api::search) async fn enrich_call_records(
                     ended_at: row.ended_at,
                     duration_ms: row.duration_ms,
                     updated_at: row.ended_at,
-                    channel_name: row.channel_name,
+                    channel_name,
                     attended: row.attended,
                 },
             )
@@ -86,7 +106,9 @@ pub(in crate::api::search) async fn enrich_call_records(
 
     let result = hits_by_call_id
         .into_iter()
-        .map(|(call_id, hits)| {
+        .map(|(call_id, mut hits)| {
+            hits.sort_by_key(|h| h.sequence_num.unwrap_or(i32::MAX));
+
             let (channel_id, participant_ids) = call_context
                 .get(&call_id)
                 .cloned()
@@ -96,7 +118,7 @@ pub(in crate::api::search) async fn enrich_call_records(
             CallRecordSearchResponseItemWithMetadata {
                 extra: CallRecordSearchResponseItem {
                     id: call_id,
-                    name: metadata.as_ref().and_then(|m| m.channel_name.clone()),
+                    name: custom_name_by_id.get(&call_id).cloned().flatten(),
                     owner_id: metadata
                         .as_ref()
                         .map(|m| m.created_by.clone())

@@ -11,6 +11,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { Layer } from '@ui';
 
 export type DropdownOption<T> = {
   value: T;
@@ -117,7 +118,7 @@ export const Dropdown = <T extends string | number>(
         ref={buttonRef}
         type="button"
         onClick={() => setIsOpen(!isOpen())}
-        class="w-full p-1.5 border border-edge-muted/50 bg-input text-sm text-ink text-left flex items-center gap-2 hover:bg-hover rounded-sm"
+        class="w-full p-1.5 border border-edge-muted bg-input text-sm text-ink text-left flex items-center gap-2 hover:bg-hover rounded-sm"
       >
         {props.renderValue?.(selectedOption()) ??
           defaultRenderValue(selectedOption())}
@@ -125,42 +126,44 @@ export const Dropdown = <T extends string | number>(
       </button>
       <Show when={isOpen()}>
         <ScopedPortal scope="local">
-          <div
-            ref={menuRef}
-            class="z-toast-region border border-edge-muted/50 bg-menu shadow-lg max-h-64 overflow-y-auto p-1"
-            style={getMenuStyle()}
-          >
-            <For each={props.options}>
-              {(option) => {
-                const isSelected = () => option.value === props.value;
-                const isDisabled = () => option.disabled ?? false;
+          <Layer depth={2}>
+            <div
+              ref={menuRef}
+              class="z-toast-region border border-edge bg-menu shadow-lg max-h-64 overflow-y-auto p-1"
+              style={getMenuStyle()}
+            >
+              <For each={props.options}>
+                {(option) => {
+                  const isSelected = () => option.value === props.value;
+                  const isDisabled = () => option.disabled ?? false;
 
-                return (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isDisabled()) {
-                        props.onChange(option.value);
-                        setIsOpen(false);
-                      }
-                    }}
-                    disabled={isDisabled()}
-                    class={cn(
-                      'w-full p-1.5 text-sm text-left flex items-center justify-between',
-                      isDisabled()
-                        ? 'opacity-50 cursor-not-allowed'
-                        : isSelected()
-                          ? 'bg-active text-ink'
-                          : 'hover:bg-hover/50 text-ink'
-                    )}
-                  >
-                    {props.renderOption?.(option, isSelected()) ??
-                      defaultRenderOption(option, isSelected())}
-                  </button>
-                );
-              }}
-            </For>
-          </div>
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isDisabled()) {
+                          props.onChange(option.value);
+                          setIsOpen(false);
+                        }
+                      }}
+                      disabled={isDisabled()}
+                      class={cn(
+                        'w-full p-1.5 text-sm text-left flex items-center justify-between',
+                        isDisabled()
+                          ? 'opacity-50 cursor-not-allowed'
+                          : isSelected()
+                            ? 'bg-active text-ink'
+                            : 'hover:bg-hover/50 text-ink'
+                      )}
+                    >
+                      {props.renderOption?.(option, isSelected()) ??
+                        defaultRenderOption(option, isSelected())}
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
+          </Layer>
         </ScopedPortal>
       </Show>
     </div>

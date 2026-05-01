@@ -165,12 +165,23 @@ export interface ComposeTaskProps {
   initialTitle?: string;
   initialContent?: string;
   placeholder?: string;
-  initialAssigneeId?: string;
+  initialAssigneeIds?: string[];
   /**
    * When provided, replaces the default success behavior (auto-copy link +
    * toast) so the caller can handle the created task however it needs.
    */
   onSuccess?: (result: ComposeTaskSuccess) => void;
+  /**
+   * Fires when the user submits and the dialog closes but the create-task
+   * network call is still in flight. The originating editor can use this to
+   * drop in an await placeholder which onSuccess later replaces.
+   */
+  onCreateStart?: (init: { title: string; content: string }) => void;
+  /**
+   * Fires if the create-task API call fails after the dialog has been closed.
+   * Pairs with onCreateStart for placeholder cleanup.
+   */
+  onCreateFailure?: () => void;
 }
 
 export function ComposeTask(props: ComposeTaskProps) {
@@ -179,11 +190,20 @@ export function ComposeTask(props: ComposeTaskProps) {
   const currentUserId = useUserId();
 
   const getDefaultPropertyValues = (): Record<string, PropertyApiValues> => {
-    const id = props.initialAssigneeId ?? currentUserId();
+    const ids = (() => {
+      if (props.initialAssigneeIds && props.initialAssigneeIds.length > 0) {
+        return [...new Set(props.initialAssigneeIds)];
+      }
+      const id = currentUserId();
+      return id ? [id] : [];
+    })();
     return {
       [SYSTEM_PROPERTY_IDS.ASSIGNEES]: {
         valueType: 'ENTITY' as const,
-        refs: id ? [{ entity_id: id, entity_type: 'USER' as const }] : [],
+        refs: ids.map((entity_id) => ({
+          entity_id,
+          entity_type: 'USER' as const,
+        })),
       },
       [SYSTEM_PROPERTY_IDS.STATUS]: {
         valueType: 'SELECT_STRING' as const,
@@ -197,7 +217,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     if (
       !props.initialTitle &&
       !props.initialContent &&
-      !props.initialAssigneeId
+      !props.initialAssigneeIds?.length
     ) {
       const draft = loadTaskComposerDraft();
       if (draft) {
@@ -450,6 +470,11 @@ export function ComposeTask(props: ComposeTaskProps) {
       // Close the dialog immediately
       splitPanel.handle.close();
       props.onClose?.();
+      console.log(
+        '[ComposeTask] dispatching onCreateStart, hasHandler=',
+        Boolean(props.onCreateStart)
+      );
+      props.onCreateStart?.({ title: taskTitle, content: taskContent });
 
       const documentId = await createTaskWithProperties(
         taskTitle,
@@ -462,6 +487,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       setIsCreating(false);
 
       if (!documentId) {
+        props.onCreateFailure?.();
         // Restore the draft and re-open so the user can retry
         saveTaskComposerDraft(draftSnapshot);
         popoverSplit({ type: 'component', id: 'task-compose' });
@@ -612,7 +638,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           <TrashIcon />
         </Button>
       </div>
-      <div class="border-b border-edge-muted/50" />
+      <div class="border-b border-edge-muted" />
       <div class="p-2 flex-1 min-h-0 flex flex-col">
         <div class="shrink-0 flex p-2 gap-2 items-center">
           <EntityIcon targetType="task" size="sm" />
@@ -686,13 +712,13 @@ export function ComposeTask(props: ComposeTaskProps) {
       </div>
 
       <Show when={errorMessage()}>
-        <div class="w-full border-b border-edge-muted/50" />
+        <div class="w-full border-b border-edge-muted" />
         <div class="px-2 py-2">
           <div class="text-sm text-failure-ink px-3 py-2">{errorMessage()}</div>
         </div>
       </Show>
 
-      <div class="w-full border-b border-edge-muted/50" />
+      <div class="w-full border-b border-edge-muted" />
       <div class="shrink-0 flex justify-between items-center p-2 gap-2">
         <MiniToggleSwitch
           size="SM"
@@ -714,7 +740,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             <CircleSpinner width={16} height={16} />
           </Show>
           Create Task
-          <div class="text-xxs text-ink-extra-muted ml-auto border border-edge-muted/50 px-1.5 py-1 font-sans rounded-xs">
+          <div class="text-xxs text-ink-extra-muted ml-auto border border-edge-muted px-1.5 py-1 font-sans rounded-xs">
             <Hotkey shortcut="cmd+enter" />
           </div>
         </Button>

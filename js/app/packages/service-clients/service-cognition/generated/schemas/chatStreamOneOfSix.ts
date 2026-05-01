@@ -4,15 +4,16 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { ChatAttachmentWithName } from './chatAttachmentWithName';
+
 import type { ChatStreamOneOfSixType } from './chatStreamOneOfSixType';
+import type { Entity } from './entity';
 
 /**
  * The user message that initiated this stream, sent as the first item
 so other clients can add it to their local chat state.
  */
 export type ChatStreamOneOfSix = {
-  attachments: ChatAttachmentWithName[];
+  attachments: Entity[];
   chat_id: string;
   content: string;
   message_id: string;

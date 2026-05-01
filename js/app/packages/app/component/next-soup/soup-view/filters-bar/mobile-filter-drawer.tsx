@@ -410,7 +410,7 @@ export const MobileFilterDrawer = () => {
                       </Accordion.Header>
                       <Accordion.Content class="pb-1">
                         {/* Search */}
-                        <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted/50 mb-1">
+                        <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted mb-1">
                           <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
                           <input
                             type="text"
@@ -479,7 +479,7 @@ export const MobileFilterDrawer = () => {
 
             {/* Active filter chips footer */}
             <Show when={activeCount() > 0}>
-              <div class="shrink-0 border-t border-edge-muted/50 py-2">
+              <div class="shrink-0 border-t border-edge-muted py-2">
                 <ActiveFilterChips
                   filters={activeFiltersList()}
                   onRemove={removeFilter}

@@ -108,7 +108,7 @@ const IPageNumberSchema = z
     suffix: z.string(),
     digits: z.number(),
     startNum: z.number(),
-    mapper: z.function().args(z.number()).returns(z.string()),
+    mapper: z.function({ input: [z.number()], output: z.string() }),
   })
   .and(ITextBoxSchema);
 

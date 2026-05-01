@@ -13,6 +13,7 @@ import {
   TabNode,
   TextNode,
 } from 'lexical';
+import { AwaitNode } from './nodes/AwaitNode';
 import { ClassedBlockNode } from './nodes/ClassedBlockNode';
 import { CommentNode } from './nodes/CommentNode';
 import { CompletionNode } from './nodes/CompletionNode';
@@ -97,6 +98,7 @@ export const SupportedNodeTypes = [
   WatermarkNode,
   ThemeMentionNode,
   UnknownMentionNode,
+  AwaitNode,
 ] as const;
 
 export const NodeReplacements: LexicalNodeReplacement[] = [

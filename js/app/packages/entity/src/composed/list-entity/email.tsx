@@ -2,7 +2,7 @@ import { Show } from 'solid-js';
 import { DraftBadge } from '../../components/Badges';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
-import { getSnippetHitContent } from '../../extractors-search/snippet-entity';
+import { getSnippetHit } from '../../extractors-search/snippet-entity';
 import type { EmailEntity } from '../../types/entity';
 
 export function EmailIdentity(props: { entity: EmailEntity }) {
@@ -25,10 +25,10 @@ function EmailSnippet(props: {
 }) {
   return (
     <Show
-      when={props.showHitSnippet && getSnippetHitContent(props.entity)}
+      when={props.showHitSnippet && getSnippetHit(props.entity)}
       fallback={props.entity.snippet}
     >
-      {(content) => <HitSnippet content={content()} chars={props.chars} />}
+      {(hit) => <HitSnippet content={hit().content} chars={props.chars} />}
     </Show>
   );
 }

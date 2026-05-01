@@ -9,16 +9,20 @@ export function sortTranscriptSegments(
 export function getActiveTranscriptSequenceNum(
   sortedTranscript: CallRecordTranscriptSegment[],
   playbackSeconds: number,
+  timelineStartMs: number | null,
   allowFutureLead = true
 ): number | null {
-  if (sortedTranscript.length === 0 || playbackSeconds < 0) return null;
-  const firstStartMs = new Date(sortedTranscript[0].startedAt).getTime();
-  if (!Number.isFinite(firstStartMs)) return null;
+  if (
+    sortedTranscript.length === 0 ||
+    playbackSeconds < 0 ||
+    timelineStartMs === null ||
+    !Number.isFinite(timelineStartMs)
+  )
+    return null;
 
   // Bias slightly earlier so short segments feel responsive.
   const ACTIVE_LEAD_MS = 250;
-  const rawTimelineMs = firstStartMs + playbackSeconds * 1000;
-  if (rawTimelineMs < firstStartMs) return null;
+  const rawTimelineMs = timelineStartMs + playbackSeconds * 1000;
   const currentTimelineMs = allowFutureLead
     ? rawTimelineMs + ACTIVE_LEAD_MS
     : rawTimelineMs;
@@ -41,17 +45,6 @@ export function getActiveTranscriptSequenceNum(
   }
 
   return activeSequenceNum;
-}
-
-export function formatVideoTimestamp(totalSeconds: number): string {
-  const clamped = Math.max(0, Math.floor(totalSeconds));
-  const hours = Math.floor(clamped / 3600);
-  const minutes = Math.floor((clamped % 3600) / 60);
-  const seconds = clamped % 60;
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  }
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 export function getSegmentVideoSeconds(

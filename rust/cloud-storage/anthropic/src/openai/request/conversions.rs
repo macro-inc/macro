@@ -2,12 +2,13 @@ use crate::{
     prelude::{ClientTool, ImageSource},
     types::request::{self, SystemPrompt},
 };
-use async_openai::types::{
+use async_openai::types::chat::{
     ChatCompletionRequestAssistantMessage, ChatCompletionRequestDeveloperMessage,
     ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage,
     ChatCompletionRequestSystemMessage, ChatCompletionRequestSystemMessageContentPart,
     ChatCompletionRequestToolMessage, ChatCompletionRequestUserMessage, ChatCompletionTool,
-    ChatCompletionToolChoiceOption, CreateChatCompletionRequest,
+    ChatCompletionToolChoiceOption, ChatCompletionTools, CreateChatCompletionRequest,
+    StopConfiguration, ToolChoiceOptions,
 };
 
 #[derive(Debug, Clone)]
@@ -38,9 +39,11 @@ impl From<CreateChatCompletionRequest> for request::CreateMessageRequestBody {
         };
 
         if let Some(user) = msg.metadata.and_then(|meta| {
-            meta.get("user_id")
-                .and_then(|user| user.as_str())
-                .map(|s| s.to_string())
+            serde_json::to_value(&meta).ok().and_then(|v| {
+                v.get("user_id")
+                    .and_then(|u| u.as_str())
+                    .map(|s| s.to_string())
+            })
         }) {
             request.metadata = Some(request::Metadata {
                 user_id: Some(user.to_owned()),
@@ -48,21 +51,23 @@ impl From<CreateChatCompletionRequest> for request::CreateMessageRequestBody {
         }
         if let Some(stop_sequences) = msg.stop {
             match stop_sequences {
-                async_openai::types::Stop::String(text) => {
-                    request.stop_sequences = Some(vec![text])
-                }
-                async_openai::types::Stop::StringArray(parts) => {
-                    request.stop_sequences = Some(parts)
-                }
+                StopConfiguration::String(text) => request.stop_sequences = Some(vec![text]),
+                StopConfiguration::StringArray(parts) => request.stop_sequences = Some(parts),
             }
         }
         request.model = msg.model;
         request.stream = msg.stream;
         request.temperature = msg.temperature;
         request.tool_choice = msg.tool_choice.map(Into::into);
-        request.tools = msg
-            .tools
-            .map(|tools| tools.into_iter().map(Into::into).collect());
+        request.tools = msg.tools.map(|tools| {
+            tools
+                .into_iter()
+                .filter_map(|t| match t {
+                    ChatCompletionTools::Function(tool) => Some(tool.into()),
+                    ChatCompletionTools::Custom(_) => None,
+                })
+                .collect()
+        });
         request.top_p = msg.top_p;
 
         let mut prompt_messages = Vec::new();
@@ -182,15 +187,15 @@ impl From<ChatCompletionRequestToolMessage> for request::RequestMessage {
             tool_use_id: tool_msg.tool_call_id,
             cache_control: None,
             content: match tool_msg.content {
-                async_openai::types::ChatCompletionRequestToolMessageContent::Array(parts) => parts
+                async_openai::types::chat::ChatCompletionRequestToolMessageContent::Array(parts) => parts
                     .into_iter()
                     .map(|part| match part {
-                        async_openai::types::ChatCompletionRequestToolMessageContentPart::Text(
+                        async_openai::types::chat::ChatCompletionRequestToolMessageContentPart::Text(
                             text,
                         ) => text.text,
                     })
                     .collect::<String>(),
-                async_openai::types::ChatCompletionRequestToolMessageContent::Text(text) => text,
+                async_openai::types::chat::ChatCompletionRequestToolMessageContent::Text(text) => text,
             },
             is_err: None,
         };
@@ -205,20 +210,21 @@ impl From<ChatCompletionRequestToolMessage> for request::RequestMessage {
 impl From<ChatCompletionRequestUserMessage> for request::RequestMessage {
     fn from(user: ChatCompletionRequestUserMessage) -> Self {
         match user.content {
-            async_openai::types::ChatCompletionRequestUserMessageContent::Array(arr) => {
+            async_openai::types::chat::ChatCompletionRequestUserMessageContent::Array(arr) => {
                 let content: Vec<request::RequestContentKind> = arr.into_iter()
                     .filter_map(|part| {
                         match part {
-                            async_openai::types::ChatCompletionRequestUserMessageContentPart::ImageUrl(url) => {
+                            async_openai::types::chat::ChatCompletionRequestUserMessageContentPart::ImageUrl(url) => {
                                 Some(request::RequestContentKind::Image {
                                     cache_control: None,
                                     source: url_to_image_source(url.image_url.url)
                                 })
                             },
-                            async_openai::types::ChatCompletionRequestUserMessageContentPart::Text(text) =>
+                            async_openai::types::chat::ChatCompletionRequestUserMessageContentPart::Text(text) =>
                             Some(request::RequestContentKind::Text { text: text.text, cache_control: None, citations: vec![] }),
-                            // sound is unsupported and will fail silently
-                            async_openai::types::ChatCompletionRequestUserMessageContentPart::InputAudio(_) => None
+                            // sound and file are unsupported and will fail silently
+                            async_openai::types::chat::ChatCompletionRequestUserMessageContentPart::InputAudio(_) => None,
+                            async_openai::types::chat::ChatCompletionRequestUserMessageContentPart::File(_) => None
                         }
                     })
                     .collect();
@@ -227,10 +233,12 @@ impl From<ChatCompletionRequestUserMessage> for request::RequestMessage {
                     role: request::Role::User,
                 }
             }
-            async_openai::types::ChatCompletionRequestUserMessageContent::Text(text) => Self {
-                role: request::Role::User,
-                content: request::RequestContent::Text(text),
-            },
+            async_openai::types::chat::ChatCompletionRequestUserMessageContent::Text(text) => {
+                Self {
+                    role: request::Role::User,
+                    content: request::RequestContent::Text(text),
+                }
+            }
         }
     }
 }
@@ -240,16 +248,18 @@ impl From<ChatCompletionRequestAssistantMessage> for request::RequestMessage {
     fn from(assistant_msg: ChatCompletionRequestAssistantMessage) -> Self {
         let content = if let Some(content) = assistant_msg.content {
             match content {
-                async_openai::types::ChatCompletionRequestAssistantMessageContent::Text(text) => {
-                    request::RequestContent::Text(text)
-                }
-                async_openai::types::ChatCompletionRequestAssistantMessageContent::Array(parts) => {
+                async_openai::types::chat::ChatCompletionRequestAssistantMessageContent::Text(
+                    text,
+                ) => request::RequestContent::Text(text),
+                async_openai::types::chat::ChatCompletionRequestAssistantMessageContent::Array(
+                    parts,
+                ) => {
                     let parts = parts.into_iter()
                                         .map(|part| match part {
-                                            async_openai::types::ChatCompletionRequestAssistantMessageContentPart::Text(text) => {
+                                            async_openai::types::chat::ChatCompletionRequestAssistantMessageContentPart::Text(text) => {
                                                 request::RequestContentKind::Text { text: text.text, cache_control: None, citations: vec![]}
                                             }
-                                            async_openai::types::ChatCompletionRequestAssistantMessageContentPart::Refusal(message) => {
+                                            async_openai::types::chat::ChatCompletionRequestAssistantMessageContentPart::Refusal(message) => {
                                                 request::RequestContentKind::Text { text: message.refusal, cache_control: None, citations: vec![] }
                                             }
 
@@ -267,14 +277,21 @@ impl From<ChatCompletionRequestAssistantMessage> for request::RequestMessage {
                 // TODO handle errors better
                 // anthropic requries tool calls to be valid json, openai doesn't
                 .filter_map(|tool_call| {
-                    serde_json::from_str(&tool_call.function.arguments)
-                        .map(|good| request::RequestContentKind::ToolUse {
-                            id: tool_call.id,
-                            input: good,
-                            name: tool_call.function.name,
-                            cache_control: None,
-                        })
-                        .ok()
+                    if let async_openai::types::chat::ChatCompletionMessageToolCalls::Function(
+                        tool_call,
+                    ) = tool_call
+                    {
+                        serde_json::from_str(&tool_call.function.arguments)
+                            .map(|good| request::RequestContentKind::ToolUse {
+                                id: tool_call.id,
+                                input: good,
+                                name: tool_call.function.name,
+                                cache_control: None,
+                            })
+                            .ok()
+                    } else {
+                        None
+                    }
                 })
                 .collect()
         } else {
@@ -311,15 +328,19 @@ impl From<ChatCompletionRequestAssistantMessage> for request::RequestMessage {
 impl From<ChatCompletionToolChoiceOption> for request::ToolChoice {
     fn from(value: ChatCompletionToolChoiceOption) -> Self {
         match value {
-            ChatCompletionToolChoiceOption::Auto => Self::Auto {
+            ChatCompletionToolChoiceOption::Mode(ToolChoiceOptions::Auto) => Self::Auto {
                 disable_parallel_tool_use: false,
             },
-            ChatCompletionToolChoiceOption::Named(named) => Self::Tool {
+            ChatCompletionToolChoiceOption::Function(named) => Self::Tool {
                 name: named.function.name,
                 disable_parallel_tool_use: false,
             },
-            ChatCompletionToolChoiceOption::None => Self::None,
-            ChatCompletionToolChoiceOption::Required => Self::Any {
+            ChatCompletionToolChoiceOption::Mode(ToolChoiceOptions::None) => Self::None,
+            ChatCompletionToolChoiceOption::Mode(ToolChoiceOptions::Required) => Self::Any {
+                disable_parallel_tool_use: false,
+            },
+            ChatCompletionToolChoiceOption::AllowedTools(_)
+            | ChatCompletionToolChoiceOption::Custom(_) => Self::Auto {
                 disable_parallel_tool_use: false,
             },
         }
@@ -357,13 +378,15 @@ fn url_to_image_source(url: String) -> ImageSource {
 
 fn system_message_as_text_pars(sys_msg: &ChatCompletionRequestSystemMessage) -> Vec<&str> {
     match sys_msg.content {
-        async_openai::types::ChatCompletionRequestSystemMessageContent::Array(ref parts) => parts
-            .iter()
-            .map(|part| match part {
-                ChatCompletionRequestSystemMessageContentPart::Text(text) => text.text.as_str(),
-            })
-            .collect(),
-        async_openai::types::ChatCompletionRequestSystemMessageContent::Text(ref text) => {
+        async_openai::types::chat::ChatCompletionRequestSystemMessageContent::Array(ref parts) => {
+            parts
+                .iter()
+                .map(|part| match part {
+                    ChatCompletionRequestSystemMessageContentPart::Text(text) => text.text.as_str(),
+                })
+                .collect()
+        }
+        async_openai::types::chat::ChatCompletionRequestSystemMessageContent::Text(ref text) => {
             vec![text.as_str()]
         }
     }
@@ -371,10 +394,12 @@ fn system_message_as_text_pars(sys_msg: &ChatCompletionRequestSystemMessage) -> 
 
 fn developer_message_as_text_parts(dev_msg: &ChatCompletionRequestDeveloperMessage) -> Vec<&str> {
     match dev_msg.content {
-        async_openai::types::ChatCompletionRequestDeveloperMessageContent::Array(ref parts) => {
-            parts.iter().map(|part| part.text.as_str()).collect()
+        async_openai::types::chat::ChatCompletionRequestDeveloperMessageContent::Array(ref parts) => {
+            parts.iter().map(|part| match part {
+                async_openai::types::chat::ChatCompletionRequestDeveloperMessageContentPart::Text(t) => t.text.as_str(),
+            }).collect()
         }
-        async_openai::types::ChatCompletionRequestDeveloperMessageContent::Text(ref t) => vec![t],
+        async_openai::types::chat::ChatCompletionRequestDeveloperMessageContent::Text(ref t) => vec![t],
     }
 }
 
