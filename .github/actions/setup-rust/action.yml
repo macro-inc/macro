@@ -7,6 +7,10 @@ inputs:
     description: Configure sccache as RUSTC_WRAPPER
     required: false
     default: 'true'
+  rust-cache:
+    description: Restore Swatinem/rust-cache Cargo target cache
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -40,6 +44,7 @@ runs:
       if: ${{ inputs.sccache == 'true' }}
       uses: ./.github/actions/setup-sccache
     - name: setup rust caching
+      if: ${{ inputs.rust-cache == 'true' }}
       uses: Swatinem/rust-cache@v2
       with:
         shared-key: cloud-storage
