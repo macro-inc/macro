@@ -63,9 +63,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
       { value: 'Appearance', label: 'Appearance' },
       { value: 'Account', label: 'Account' },
     ];
-
-    tabs.push({ value: 'Shortcuts', label: 'Shortcuts' });
     if (teamsFlag().enabled) { tabs.push({ value: 'Team', label: 'Team' }) }
+    tabs.push({ value: 'Shortcuts', label: 'Shortcuts' });
     if (permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()) { tabs.push({ value: 'Subscription', label: 'Subscription' }) }
     if (ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()) { tabs.push({ value: 'Mobile App', label: 'App' }) }
     if (isNativeMobilePlatform() && DEV_MODE_ENV) { tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' }) }
@@ -170,7 +169,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         defaultValue="Appearance"
         onChange={handleTabChange}
         indicatorPosition="top"
-        class="**:data-indicator:h-[3px]"
+        class="**:data-indicator:h-0.75"
       />
     </div>
     );

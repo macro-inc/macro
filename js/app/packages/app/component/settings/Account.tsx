@@ -157,45 +157,46 @@ export function Account() {
       <div class="max-w-2xl w-full mx-auto">
         <Panel depth={2}>
           <div class="text-ink">
-            <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
+            <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
               <div class="text-sm font-semibold">Account</div>
-              <Show when={ENABLE_PROFILE_PICTURES && userId()}>
-                <div class="flex items-center gap-2">
-                  <div
-                    use:fileSelector={{
-                      acceptedFileExtensions: blockNameToFileExtensions.image,
-                      acceptedMimeTypes: blockNameToMimeTypes.image,
-                      onSelect: async (files: File[]) => {
-                        let response = await uploadProfilePicture(files[0]);
-                        if (!response || !userId()) return;
-                        let { url } = response;
-                        let pic: ProfilePictureItem = {
-                          _createdAt: new Date(),
-                          url,
-                          id: userId()!,
-                          loading: false,
-                        };
-                        // update the cache directly to force a reload
-                        const [_, controls] = useProfilePictureUrl(userId());
-                        controls.mutate(pic);
-                      },
-                    }}
-                  >
-                    <Button variant="secondary" size="sm" depth={3}>
-                      <IconUpload class="size-4" />
-                      Upload
-                    </Button>
-                  </div>
+            </div>
+            <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
+
+            <Show when={ENABLE_PROFILE_PICTURES && userId()}>
+              <Row label="Profile Picture">
+                <div
+                  class="relative group cursor-pointer"
+                  use:fileSelector={{
+                    acceptedFileExtensions: blockNameToFileExtensions.image,
+                    acceptedMimeTypes: blockNameToMimeTypes.image,
+                    onSelect: async (files: File[]) => {
+                      let response = await uploadProfilePicture(files[0]);
+                      if (!response || !userId()) return;
+                      let { url } = response;
+                      let pic: ProfilePictureItem = {
+                        _createdAt: new Date(),
+                        url,
+                        id: userId()!,
+                        loading: false,
+                      };
+                      // update the cache directly to force a reload
+                      const [_, controls] = useProfilePictureUrl(userId());
+                      controls.mutate(pic);
+                    },
+                  }}
+                >
                   <UserIcon
                     id={userId() as string}
                     isDeleted={false}
-                    size="md"
+                    size="lg"
                     class="bg-transparent"
                   />
+                  <div class="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <IconUpload class="size-5 text-white" />
+                  </div>
                 </div>
-              </Show>
-            </div>
-            <div class="grid gap-px bg-edge border-b border-edge">
+              </Row>
+            </Show>
 
             <Row label="Email">
               <span class="ph-no-capture text-sm text-ink-muted">
@@ -446,9 +447,9 @@ export function Account() {
 
 function Row(props: { label: string; children?: any }) {
   return (
-    <div class="grid grid-cols-[145px_1fr] gap-px bg-edge">
-      <div class="bg-panel flex items-center justify-start h-10 px-6 text-sm">{props.label}</div>
-      <div class="bg-panel flex items-center justify-end h-10 px-6 text-right">{props.children}</div>
+    <div class="bg-panel flex items-center justify-between h-15.25 px-6">
+      <div class="text-sm">{props.label}</div>
+      <div class="text-right">{props.children}</div>
     </div>
   );
 }
