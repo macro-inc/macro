@@ -143,12 +143,10 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           queryFilters.replace(filters);
           soup.predicates.set(clientFilters);
         });
-        // Restore focus to the split panel so j/k navigation works.
-        // Delayed past the dialog's focus restoration which fires later.
-        setTimeout(() => {
-          editor.controls.blur();
-          panel.panelRef()?.focus({ preventScroll: true });
-        }, 100);
+        // Restore focus to the split panel so j/k navigation works. The
+        // command menu suppresses Kobalte's onCloseAutoFocus for search
+        // rows, so this stays put without needing a delay.
+        queueMicrotask(() => panel.panelRef()?.focus({ preventScroll: true }));
       },
     });
     onCleanup(dispose);
