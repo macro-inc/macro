@@ -624,7 +624,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </Show>
 
       <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
-        <hr class="border-edge-muted mb-[8px]" />
+        <hr class="border-edge-muted mb-2" />
       </div>
 
       <div class="w-full px-2 flex flex-col">
@@ -800,7 +800,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
                   <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={GO_TO_LEADER_KEY} />
                   </div>
-                  <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={props.hotkey} />
                   </div>
                 </Show>
