@@ -46,7 +46,6 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'channels', label: 'Channels' },
   { id: 'dms', label: 'DMs' },
-  { id: 'people', label: 'People' },
   { id: 'documents', label: 'Documents' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'chats', label: 'Agents' },
