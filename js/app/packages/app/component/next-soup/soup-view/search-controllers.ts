@@ -4,8 +4,8 @@ import type { SplitId } from '@app/component/split-layout/layoutManager';
 
 export type SearchSplitOverrides = {
   query: string;
-  filters?: Query;
-  clientFilters?: SetPredicatesInput<string>;
+  filters: Query;
+  clientFilters: SetPredicatesInput<string>;
 };
 
 export type SearchSplitController = {

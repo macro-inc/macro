@@ -182,6 +182,8 @@ export function CommandMenuInner(props: {
 
     if (isSearchItem(item)) {
       const overrides = getCategorySearchFilters(item.category);
+      const filters = overrides?.filters ?? {};
+      const clientFilters = overrides?.clientFilters ?? {};
       const splitManager = globalSplitManager();
       const active = splitManager?.activeSplit();
       const activeContent = active?.content();
@@ -193,8 +195,8 @@ export function CommandMenuInner(props: {
         if (controller) {
           controller.applyOverrides({
             query: item.query,
-            filters: overrides?.filters,
-            clientFilters: overrides?.clientFilters,
+            filters,
+            clientFilters,
           });
           active.activate();
           CommandState.close();
@@ -209,8 +211,8 @@ export function CommandMenuInner(props: {
           id: 'search',
           params: {
             initialQuery: item.query,
-            initialFilters: overrides?.filters,
-            initialClientFilters: overrides?.clientFilters,
+            initialFilters: filters,
+            initialClientFilters: clientFilters,
           },
         },
         {

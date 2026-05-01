@@ -140,8 +140,8 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
             $getRoot().selectEnd();
           });
           editor.controls.blur();
-          if (filters !== undefined) queryFilters.replace(filters);
-          if (clientFilters !== undefined) soup.predicates.set(clientFilters);
+          queryFilters.replace(filters);
+          soup.predicates.set(clientFilters);
         });
         // Restore focus to the split panel so j/k navigation works.
         // Delayed past the dialog's focus restoration which fires later.
