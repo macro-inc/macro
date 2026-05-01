@@ -1,5 +1,7 @@
-use crate::domain::models::messages::ContactsMessage;
-use crate::domain::ports::{ContactsNotifier, ContactsRepository};
+use std::time::Duration;
+
+use crate::domain::models::messages::ContactsNodes;
+use crate::domain::ports::{ContactsNotifier, ContactsOutboxService, ContactsRepository};
 use crate::domain::service::ContactsDomainService;
 use rootcause::report;
 use sqs_worker::SQSWorker;
@@ -87,11 +89,39 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
 }
 
 /// Parses a JSON string into a [`ContactsMessage`].
-pub fn message_from_json(body: &str) -> Option<ContactsMessage> {
+fn message_from_json(body: &str) -> Option<ContactsNodes> {
     serde_json::from_str(body).ok()
 }
 
 /// Extracts and parses the body from an SQS message.
-pub fn message_from_sqs(msg: &aws_sdk_sqs::types::Message) -> Option<ContactsMessage> {
+pub(crate) fn message_from_sqs(msg: &aws_sdk_sqs::types::Message) -> Option<ContactsNodes> {
     msg.body.as_ref().and_then(|body| message_from_json(body))
+}
+
+/// Worker that periodically polls the contacts backfill outbox.
+pub struct OutboxWorker<S> {
+    /// The outbox service to poll.
+    pub service: S,
+}
+
+impl<S> OutboxWorker<S>
+where
+    S: ContactsOutboxService,
+{
+    /// Runs the outbox poll loop indefinitely.
+    pub async fn run(&self) -> ! {
+        loop {
+            let fut = self.service.poll_outbox();
+            match tokio::time::timeout(Duration::from_secs(15), fut).await {
+                Ok(Ok(())) => {}
+                Ok(Err(err)) => {
+                    tracing::error!(error=?err, "Failed to poll contacts outbox")
+                }
+                Err(_) => {
+                    tracing::error!("Contacts worker outbox poll failed due to timeout")
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    }
 }

@@ -47,11 +47,7 @@ impl ContactsService for MockService {
         Ok(vec![])
     }
 
-    async fn add_contact(
-        &self,
-        _caller: MacroUserIdStr<'_>,
-        _recipient: MacroUserIdStr<'_>,
-    ) -> Result<(), rootcause::Report> {
+    async fn add_contact_nodes(&self, _nodes: ContactsNodes) -> Result<(), rootcause::Report> {
         Ok(())
     }
 }
