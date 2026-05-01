@@ -1,0 +1,94 @@
+name: Build Rust CI Image
+
+on:
+  workflow_dispatch: {}
+
+# Create a GitHub-hosted larger image-generation runner with this label before
+# running this workflow. After it succeeds, configure linux-extra-beefy to use
+# the generated `macro-rust-ci` custom image.
+jobs:
+  build-rust-ci-image:
+    runs-on: linux-extra-beefy-image-generation
+    snapshot:
+      image-name: macro-rust-ci
+      version: 1.*
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            jq \
+            libssl-dev \
+            lld \
+            pkg-config \
+            postgresql-client \
+            unzip \
+            zstd
+
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+
+          toolchain="$(grep -E '^\s*channel\s*=' rust/rust-toolchain.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          rustup toolchain install "$toolchain" --profile minimal --component clippy --component rustfmt
+          rustup default "$toolchain"
+          rustc --version
+          cargo --version
+          cargo clippy --version
+          cargo fmt --version
+
+      - name: Install Rust CI tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo install cargo-nextest --locked
+          cargo install just --locked
+          cargo install sqlx-cli --locked
+
+          cargo nextest --version
+          just --version
+          sqlx --version
+
+      - name: Install sccache
+        shell: bash
+        env:
+          SCCACHE_VERSION: v0.15.0
+        run: |
+          set -euo pipefail
+
+          archive="sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          basename="${archive%.tar.gz}"
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+
+          curl -fsSL "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/${archive}" \
+            | tar -xz -C "$tmp_dir"
+
+          sudo install -m 0755 "$tmp_dir/$basename/sccache" /usr/local/bin/sccache
+          sccache --version
+
+      - name: Verify image contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --version
+          cargo --version
+          cargo clippy --version
+          cargo fmt --version
+          cargo nextest --version
+          just --version
+          sqlx --version
+          sccache --version
+          ld.lld --version
