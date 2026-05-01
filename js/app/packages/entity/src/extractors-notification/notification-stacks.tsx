@@ -14,7 +14,6 @@ import {
 } from '@notifications';
 import type { UnifiedNotification } from '@notifications';
 import { Button } from '@ui/components/Button';
-import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import { createEffect, type JSX, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
