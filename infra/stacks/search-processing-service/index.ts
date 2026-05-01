@@ -149,7 +149,9 @@ const searchProcessingService = new SearchProcessingService(
       },
       {
         name: 'LEXICAL_SERVICE_URL',
-        value: `https://lexical-service-${stack}.macroverse.workers.dev`,
+        value: `https://lexical-service${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macroverse.workers.dev`,
       },
       // OpenTelemetry / Datadog tracing configuration
       {

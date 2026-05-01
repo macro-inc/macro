@@ -90,7 +90,9 @@ export function getAiToolsInfra(): AiToolsInfra {
   const syncServiceUrl = `https://sync-service-${
     stack === 'dev' ? 'dev3' : 'prod2'
   }.macroverse.workers.dev`;
-  const lexicalServiceUrl = `https://lexical-service-${stack}.macroverse.workers.dev`;
+  const lexicalServiceUrl = `https://lexical-service${
+    stack === 'prod' ? '' : `-${stack}`
+  }.macroverse.workers.dev`;
   const emailServiceUrl = `https://email-service${
     stack === 'prod' ? '' : `-${stack}`
   }.macro.com`;
