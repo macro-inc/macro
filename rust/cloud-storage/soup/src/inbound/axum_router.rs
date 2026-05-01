@@ -134,7 +134,6 @@ where
         SoupRequest<R>: IntoSoupReqAst,
         R: Clone + Serialize + Send,
     {
-        println!("remove me please");
         let create_fallback = move || -> SoupQuery<R> {
             let params_sort = params
                 .sort_method

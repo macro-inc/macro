@@ -97,22 +97,12 @@ runs:
           echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
         } >> "$GITHUB_ENV"
 
-        # Cloudflare R2-compatible configuration, matching Zed's setup. To enable it,
-        # set these repository secrets: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
-        # R2_SECRET_ACCESS_KEY, and either a variable or secret named SCCACHE_BUCKET.
-        if [[ -n "${R2_ACCOUNT_ID:-}" && -n "${R2_ACCESS_KEY_ID:-}" && -n "${R2_SECRET_ACCESS_KEY:-}" && -n "${SCCACHE_BUCKET:-}" ]]; then
+        # Configure an S3 backend when SCCACHE_BUCKET is provided. AWS credentials
+        # are intentionally not persisted here; scope them to the cargo steps that
+        # actually compile code so third-party setup actions don't receive them.
+        if [[ -n "${SCCACHE_BUCKET:-}" ]]; then
           {
-            echo "SCCACHE_ENDPOINT=https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
             echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
-            echo "SCCACHE_REGION=auto"
-            echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
-            echo "AWS_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}"
-            echo "AWS_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}"
-          } >> "$GITHUB_ENV"
-          echo "Configured sccache for Cloudflare R2 bucket ${SCCACHE_BUCKET}"
-        elif [[ -n "${SCCACHE_BUCKET:-}" && -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
-          # Plain S3-compatible configuration.
-          {
             echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
             echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
           } >> "$GITHUB_ENV"
@@ -121,4 +111,4 @@ runs:
           echo "No remote sccache bucket configured; using local cached sccache directory."
         fi
 
-        "$sccache_bin" --show-stats || true
+        "$sccache_bin" --version
