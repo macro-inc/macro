@@ -10,6 +10,7 @@ import {
   getBlockNameFromEntity,
   getMentionItemName,
 } from '../utils/entityUtils';
+import { cn } from '@ui';
 
 export function MentionsMenuItem(props: {
   item: MentionItem;
@@ -81,8 +82,9 @@ export function MentionsMenuItem(props: {
         e.stopPropagation();
       }}
       on:mousemove={() => props.setIndex(props.index)}
-      class="group flex items-center p-1.5 mx-1.5"
-      classList={{ 'bg-active bracket': props.selected }}
+      class={cn('group flex items-center p-1.5 mx-1.5 rounded-xs', {
+        'bg-hover': props.selected,
+      })}
     >
       <div class="mr-2">{icon()}</div>
       <span

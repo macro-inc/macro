@@ -1,4 +1,4 @@
-import { Panel } from '@ui';
+import { cn, Panel } from '@ui';
 import { resolveEmoji, useEmojiData } from '@core/component/Emoji/emojis';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
@@ -50,8 +50,9 @@ export function EmojiItem(props: {
   return (
     <div
       on:mouseover={() => props.setIndex(props.index)}
-      class="group flex items-center p-1"
-      classList={{ 'bg-active bracket': props.selected }}
+      class={cn('group flex items-center p-1.5 mx-1.5 rounded-xs', {
+        'bg-hover': props.selected,
+      })}
       on:mousedown={(e) => {
         e.preventDefault();
         e.stopPropagation();
