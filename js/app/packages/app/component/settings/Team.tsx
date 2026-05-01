@@ -162,7 +162,7 @@ function MemberRow(props: {
     <div class="flex items-center justify-between py-2 px-6 border-b border-edge-muted last:border-b-0 gap-2">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="shrink-0">
-          <UserIcon id={props.member.user_id} isDeleted={false} size="md" />
+          <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
         </div>
         <div class="min-w-0 flex-1">
           <div class="text-sm font-medium text-ink truncate">

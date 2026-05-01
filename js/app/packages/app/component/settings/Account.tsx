@@ -164,38 +164,36 @@ export function Account() {
 
             <Show when={ENABLE_PROFILE_PICTURES && userId()}>
               <Row label="Profile Picture">
-                <div class="flex items-center gap-2">
-                  <div
-                    use:fileSelector={{
-                      acceptedFileExtensions: blockNameToFileExtensions.image,
-                      acceptedMimeTypes: blockNameToMimeTypes.image,
-                      onSelect: async (files: File[]) => {
-                        let response = await uploadProfilePicture(files[0]);
-                        if (!response || !userId()) return;
-                        let { url } = response;
-                        let pic: ProfilePictureItem = {
-                          _createdAt: new Date(),
-                          url,
-                          id: userId()!,
-                          loading: false,
-                        };
-                        // update the cache directly to force a reload
-                        const [_, controls] = useProfilePictureUrl(userId());
-                        controls.mutate(pic);
-                      },
-                    }}
-                  >
-                    <Button variant="secondary" size="sm" depth={3}>
-                      <IconUpload class="size-4" />
-                      Upload
-                    </Button>
-                  </div>
+                <div
+                  class="relative group cursor-pointer"
+                  use:fileSelector={{
+                    acceptedFileExtensions: blockNameToFileExtensions.image,
+                    acceptedMimeTypes: blockNameToMimeTypes.image,
+                    onSelect: async (files: File[]) => {
+                      let response = await uploadProfilePicture(files[0]);
+                      if (!response || !userId()) return;
+                      let { url } = response;
+                      let pic: ProfilePictureItem = {
+                        _createdAt: new Date(),
+                        url,
+                        id: userId()!,
+                        loading: false,
+                      };
+                      // update the cache directly to force a reload
+                      const [_, controls] = useProfilePictureUrl(userId());
+                      controls.mutate(pic);
+                    },
+                  }}
+                >
                   <UserIcon
                     id={userId() as string}
                     isDeleted={false}
-                    size="md"
+                    size="lg"
                     class="bg-transparent"
                   />
+                  <div class="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <IconUpload class="size-5 text-white" />
+                  </div>
                 </div>
               </Row>
             </Show>
