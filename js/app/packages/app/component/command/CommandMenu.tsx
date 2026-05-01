@@ -598,8 +598,7 @@ function CommandMenuFooter(props: {
   const isCommand = () =>
     props.selectedItem && isCommandItem(props.selectedItem);
   const isEntity = () => props.selectedItem && isEntityItem(props.selectedItem);
-  const isSearch = () =>
-    props.selectedItem && isSearchItem(props.selectedItem);
+  const isSearch = () => props.selectedItem && isSearchItem(props.selectedItem);
 
   return (
     <div class="flex items-center gap-4 px-4 py-2 bg-panel border-t border-edge-muted text-xs text-ink-extra-muted/80">
