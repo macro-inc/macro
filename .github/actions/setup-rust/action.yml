@@ -22,7 +22,13 @@ runs:
           toolchain="stable"
         fi
 
-        rustup toolchain install "$toolchain" --profile minimal --component clippy --component rustfmt
+        if ! rustup run "$toolchain" rustc --version >/dev/null 2>&1; then
+          rustup toolchain install "$toolchain" --profile minimal --component clippy --component rustfmt
+        else
+          echo "Rust toolchain $toolchain already installed: $(rustup run "$toolchain" rustc --version)"
+          rustup component add --toolchain "$toolchain" clippy rustfmt
+        fi
+
         rustup default "$toolchain"
     - name: setup sccache
       if: ${{ inputs.sccache == 'true' }}

@@ -38,6 +38,19 @@ runs:
 
         sccache_bin="$install_dir/sccache"
         echo "$install_dir" >> "$GITHUB_PATH"
+
+        existing_sccache="$(command -v sccache || true)"
+        if [[ -n "$existing_sccache" ]] && "$existing_sccache" --version >/dev/null 2>&1; then
+          installed_version="$($existing_sccache --version | awk '{print "v" $2}')"
+          if [[ "$installed_version" == "$SCCACHE_VERSION" ]]; then
+            if [[ "$existing_sccache" != "$sccache_bin" ]]; then
+              ln -sf "$existing_sccache" "$sccache_bin"
+            fi
+            echo "sccache already available: $($sccache_bin --version)"
+            exit 0
+          fi
+        fi
+
         if [[ -x "$sccache_bin" ]] && "$sccache_bin" --version >/dev/null 2>&1; then
           installed_version="$($sccache_bin --version | awk '{print "v" $2}')"
           if [[ "$installed_version" == "$SCCACHE_VERSION" ]]; then
@@ -76,6 +89,7 @@ runs:
         basename="${archive%.tar.gz}"
         curl -fsSL "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/${archive}" \
           | tar -xz -C "$tmp_dir"
+        rm -f "$sccache_bin"
         mv "$tmp_dir/$basename/sccache" "$sccache_bin"
         chmod +x "$sccache_bin"
 

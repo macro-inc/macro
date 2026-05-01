@@ -244,7 +244,17 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
+      - name: check cargo-nextest
+        id: check-cargo-nextest
+        run: |
+          if command -v cargo-nextest >/dev/null 2>&1; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+            cargo nextest --version
+          else
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: install cargo-nextest
+        if: steps.check-cargo-nextest.outputs.installed != 'true'
         uses: taiki-e/install-action@e32179aa3c2a47939bd07439bd80ddf13f99979f
       - name: install dependencies
         env:
