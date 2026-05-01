@@ -533,6 +533,7 @@ export const mapSoupPageToEntityList: (
             attended: item.data.attended,
             durationMs: item.data.durationMs ?? undefined,
             participantIds: item.data.participants.map((p) => p.userId),
+            summary: item.data.summary ?? undefined,
           } satisfies CallEntity;
         }
 

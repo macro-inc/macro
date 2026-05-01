@@ -19,7 +19,6 @@ local_auth = []
 service = ["comms_db_client"]
 
 [dependencies]
-ai_format = { path = "../ai_format" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }

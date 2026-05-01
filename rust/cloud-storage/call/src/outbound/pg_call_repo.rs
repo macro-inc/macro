@@ -463,7 +463,7 @@ impl CallRepository for PgCallRepo {
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, share_permission_id, share_with_team
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, recording_started_at, share_permission_id, share_with_team
             FROM calls
             WHERE id = $1
             FOR UPDATE
@@ -511,8 +511,8 @@ impl CallRepository for PgCallRepo {
         // The record keeps the same id as the original call.
         sqlx::query!(
             r#"
-            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, share_permission_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, recording_started_at, share_permission_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             "#,
             call_id,
             call.channel_id,
@@ -523,6 +523,7 @@ impl CallRepository for PgCallRepo {
             duration_ms,
             call.egress_id,
             call.recording_key,
+            call.recording_started_at,
             &call.share_permission_id,
         )
         .execute(tx.as_mut())
@@ -621,6 +622,45 @@ impl CallRepository for PgCallRepo {
         Ok(result.rows_affected() > 0)
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn set_recording_started_at_by_egress_id(
+        &self,
+        egress_id: &str,
+        started_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, Self::Err> {
+        let active = sqlx::query!(
+            r#"
+            UPDATE calls
+               SET recording_started_at = $2
+             WHERE egress_id = $1
+               AND recording_started_at IS NULL
+            "#,
+            egress_id,
+            started_at,
+        )
+        .execute(&self.pool)
+        .await?;
+        if active.rows_affected() > 0 {
+            return Ok(true);
+        }
+
+        // Fall through: if the call already archived (rare race), persist on
+        // the archived row instead.
+        let archived = sqlx::query!(
+            r#"
+            UPDATE call_records
+               SET recording_started_at = $2
+             WHERE egress_id = $1
+               AND recording_started_at IS NULL
+            "#,
+            egress_id,
+            started_at,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(archived.rows_affected() > 0)
+    }
+
     #[tracing::instrument(err, skip(self, segment))]
     async fn create_transcript_segment(
         &self,
@@ -647,6 +687,59 @@ impl CallRepository for PgCallRepo {
         )
         .execute(&self.pool)
         .await?;
+
+        // The agent's first-audio-frame wall-clock is a more accurate
+        // recording-timeline anchor than the `egress_started` webhook's
+        // envelope time (which fires when egress bootstraps, ~seconds
+        // before any audio frame is encoded). Overwrite the column when:
+        //   - it's still NULL (no webhook yet), OR
+        //   - the existing value is at exact second precision (i.e., from
+        //     the webhook, which stores `from_timestamp(secs, 0)`), OR
+        //   - the new value is earlier than the existing agent value
+        //     (across multiple participants, take the earliest first-audio).
+        if let Some(stream_started_at) = segment.stream_started_at {
+            let active = sqlx::query!(
+                r#"
+                UPDATE calls
+                SET recording_started_at = $1
+                WHERE id = $2
+                  AND (
+                    recording_started_at IS NULL
+                    OR recording_started_at = date_trunc('second', recording_started_at)
+                    OR $1 < recording_started_at
+                  )
+                "#,
+                stream_started_at,
+                call_id,
+            )
+            .execute(&self.pool)
+            .await?;
+
+            // Race fallback: if `archive_call` moved the row to `call_records`
+            // between transcript-ingest's lookup and now, the active UPDATE
+            // affects 0 rows. Apply the same conditional update to the
+            // archived row (same id is reused on archive). Mirrors
+            // `set_recording_started_at_by_egress_id`.
+            if active.rows_affected() == 0 {
+                sqlx::query!(
+                    r#"
+                    UPDATE call_records
+                    SET recording_started_at = $1
+                    WHERE id = $2
+                      AND (
+                        recording_started_at IS NULL
+                        OR recording_started_at = date_trunc('second', recording_started_at)
+                        OR $1 < recording_started_at
+                      )
+                    "#,
+                    stream_started_at,
+                    call_id,
+                )
+                .execute(&self.pool)
+                .await?;
+            }
+        }
+
         Ok(())
     }
 
@@ -669,7 +762,7 @@ impl CallRepository for PgCallRepo {
         // Try active `calls` first.
         if let Some(active) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, recording_started_at
             FROM calls
             WHERE id = $1
             "#,
@@ -731,6 +824,7 @@ impl CallRepository for PgCallRepo {
                 ended_at: None,
                 duration_ms: None,
                 egress_id: active.egress_id,
+                recording_started_at: active.recording_started_at,
                 recording_key: active.recording_key,
                 recording_url: None,
                 channel_name: None,
@@ -745,7 +839,7 @@ impl CallRepository for PgCallRepo {
         // Fall back to archived `call_records`.
         let Some(archived) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, custom_name, summary
+            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, recording_started_at, custom_name, summary
             FROM call_records
             WHERE id = $1
             "#,
@@ -811,6 +905,7 @@ impl CallRepository for PgCallRepo {
             ended_at: Some(archived.ended_at),
             duration_ms: Some(archived.duration_ms),
             egress_id: archived.egress_id,
+            recording_started_at: archived.recording_started_at,
             recording_key: archived.recording_key,
             recording_url: None,
             channel_name: None,
@@ -953,7 +1048,9 @@ impl CallRepository for PgCallRepo {
                 NULL::bigint as "duration_ms",
                 egress_id,
                 recording_key,
+                recording_started_at,
                 NULL::text as "custom_name",
+                NULL::text as "summary",
                 true as "is_active!"
             FROM calls c
             WHERE EXISTS (
@@ -978,7 +1075,9 @@ impl CallRepository for PgCallRepo {
                 duration_ms as "duration_ms",
                 egress_id,
                 recording_key,
+                recording_started_at,
                 custom_name,
+                summary,
                 false as "is_active!"
             FROM call_records cr
             WHERE EXISTS (
@@ -1056,11 +1155,12 @@ impl CallRepository for PgCallRepo {
                 ended_at: row.ended_at,
                 duration_ms: row.duration_ms,
                 egress_id: row.egress_id,
+                recording_started_at: row.recording_started_at,
                 recording_key: row.recording_key,
                 recording_url: None,
                 channel_name: None,
                 custom_name: row.custom_name,
-                summary: None,
+                summary: row.summary,
                 is_active: row.is_active,
                 participants,
                 transcript: Vec::new(),

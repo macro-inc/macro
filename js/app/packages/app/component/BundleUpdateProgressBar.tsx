@@ -1,12 +1,8 @@
-import { toast } from '@core/component/Toast/Toast';
 import { useTauri } from '@macro/tauri';
-import { invoke } from '@tauri-apps/api/core';
-import { Show, createEffect, createMemo, on } from 'solid-js';
+import { Show, createMemo } from 'solid-js';
 
 export function BundleUpdateProgressBar() {
   const tauri = useTauri();
-
-  const status = createMemo(() => tauri?.bundleUpdateStatus().status);
 
   const progress = createMemo(() => {
     const s = tauri?.bundleUpdateStatus();
@@ -20,22 +16,6 @@ export function BundleUpdateProgressBar() {
         return null;
     }
   });
-
-  createEffect(
-    on(status, (cur, prev) => {
-      if (prev !== 'Completed' && cur === 'Completed') {
-        toast.success('Update downloaded', 'Tap to apply update', [
-          {
-            label: 'Update',
-            onClick: () =>
-              invoke('perform_update').catch((e) =>
-                console.error('[bundle-update] perform_update failed', e)
-              ),
-          },
-        ]);
-      }
-    })
-  );
 
   return (
     <Show when={progress() !== null}>

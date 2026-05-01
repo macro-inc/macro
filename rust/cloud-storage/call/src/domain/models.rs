@@ -142,6 +142,13 @@ pub struct TranscriptSegmentRequest {
     pub ended_at: Option<DateTime<Utc>>,
     /// Whether this is a final transcription (not interim).
     pub is_final: bool,
+    /// Wall-clock when the transcriber's STT stream first received audio
+    /// for this participant. The server takes the earliest non-null value
+    /// across all participants and uses it to overwrite the
+    /// `egress_started`-derived `recording_started_at`, which is too early
+    /// (it stamps egress bootstrap, not first audio frame).
+    #[serde(default)]
+    pub stream_started_at: Option<DateTime<Utc>>,
 }
 
 /// Edit call request
@@ -256,6 +263,11 @@ pub struct CallRecord {
     pub duration_ms: Option<i64>,
     /// Recording egress ID, if any.
     pub egress_id: Option<String>,
+    /// When the egress recording actually began. `None` until the
+    /// `egress_started` webhook arrives (typically a few seconds after
+    /// `started_at`). Frontend should anchor transcript-to-audio sync to
+    /// this value when present, falling back to `started_at` otherwise.
+    pub recording_started_at: Option<DateTime<Utc>>,
     /// S3 object key for the call recording (internal, not serialized).
     #[serde(skip_serializing)]
     pub recording_key: Option<String>,

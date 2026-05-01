@@ -27,12 +27,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isErr } from '@core/util/maybeResult';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
-import {
-  CommentNode,
-  CustomCodeNode,
-  InlineSearchNode,
-  peerIdPlugin,
-} from '@lexical-core';
+import { CommentNode, InlineSearchNode, peerIdPlugin } from '@lexical-core';
 import { storageServiceClient } from '@service-storage/client';
 import type { SyncServiceVersionID } from '@service-storage/generated/schemas/syncServiceVersionID';
 import { syncServiceClient } from '@service-sync/client';
@@ -401,7 +396,7 @@ function DocumentPreview(props: {
     .use(
       peerIdPlugin({
         peerId: () => undefined,
-        nodes: [InlineSearchNode, CommentNode, CustomCodeNode],
+        nodes: [InlineSearchNode, CommentNode],
       })
     );
 

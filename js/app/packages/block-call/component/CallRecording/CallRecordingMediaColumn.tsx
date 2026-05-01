@@ -3,6 +3,7 @@ import type { Accessor, Setter } from 'solid-js';
 import { Show } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { CallRecordingParticipantsSection } from './CallRecordingParticipants';
+import { CallRecordingSummarySection } from './CallRecordingSummary';
 import { CallRecordingVideo } from './CallRecordingVideo';
 
 export type CallRecordingTimeUpdateSource = 'playback' | 'seeking' | 'seeked';
@@ -49,6 +50,8 @@ export function CallRecordingMediaColumn(props: {
           </div>
         </Show>
       </Show>
+
+      <CallRecordingSummarySection record={props.record} />
 
       <div
         class={cn(

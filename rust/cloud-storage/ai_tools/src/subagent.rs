@@ -20,7 +20,7 @@ pub struct SubagentResponse {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "Subagent",
-    description = "Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, and call tools. Use this for tasks that require multiple tool calls or independent research."
+    description = "Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research."
 )]
 pub struct Subagent {
     #[schemars(

@@ -254,7 +254,7 @@ export function FloatingEquationMenu() {
               )}
             </div>
             <h3 class="text-sm font-medium text-ink">Rendered LaTeX</h3>
-            <div class="min-h-12 max-h-40 w-full p-2 border border-edge rounded-md bg-edge/20 overflow-auto">
+            <div class="min-h-12 max-h-40 w-full p-2 border border-edge rounded-md bg-edge overflow-auto">
               <Equation equation={equation()} inline={inline()} />
             </div>
           </div>
@@ -274,7 +274,7 @@ export function FloatingEquationMenu() {
               <button
                 onClick={handleSubmit}
                 disabled={!equation()}
-                class="px-3 py-1.5 bg-accent/80 text-menu rounded-md hover:bg-accent transition disabled:bg-edge/80 disabled:cursor-not-allowed flex items-center gap-1.5 text-sm font-medium"
+                class="px-3 py-1.5 bg-accent/80 text-menu rounded-md hover:bg-accent transition disabled:bg-edge disabled:cursor-not-allowed flex items-center gap-1.5 text-sm font-medium"
               >
                 <Check class="w-4 h-4" />
                 {isNewEquation() ? 'Insert' : 'Update'}

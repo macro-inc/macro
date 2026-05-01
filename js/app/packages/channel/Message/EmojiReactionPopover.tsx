@@ -1,5 +1,6 @@
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import { Popover } from '@kobalte/core/popover';
+import { Layer } from '@ui';
 import { createSignal, splitProps, type JSX } from 'solid-js';
 
 type EmojiReactionPopoverPlacement = 'top' | 'right' | 'bottom' | 'left';
@@ -41,40 +42,42 @@ export function EmojiReactionPopover(props: EmojiReactionPopoverProps) {
         {local.trigger}
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content class="z-modal">
-          <Popover.Arrow class="fill-menu" />
-          <div
-            class="w-[258px] h-[315px] pl-2 pt-2 rounded-md flex flex-col bg-menu shadow-lg border border-edge-muted"
-            role="dialog"
-            aria-label="Emoji search"
-          >
-            <div class="flex pr-2 w-full">
-              <div class="flex flex-row items-center text-ink gap-1 border border-edge-muted rounded-md px-2 py-1 text-xs w-full">
-                <input
-                  value={query()}
-                  onInput={(event) => setQuery(event.currentTarget.value)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Escape') return;
-                    event.preventDefault();
+        <Layer depth={3}>
+          <Popover.Content class="z-modal">
+            <Popover.Arrow class="fill-menu" />
+            <div
+              class="w-[258px] h-[315px] pl-2 pt-2 rounded-md flex flex-col bg-menu shadow-lg border border-edge"
+              role="dialog"
+              aria-label="Emoji search"
+            >
+              <div class="flex pr-2 w-full">
+                <div class="flex flex-row items-center text-ink gap-1 border border-edge-muted rounded-md px-2 py-1 text-xs w-full">
+                  <input
+                    value={query()}
+                    onInput={(event) => setQuery(event.currentTarget.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Escape') return;
+                      event.preventDefault();
+                      local.onOpenChange(false);
+                    }}
+                    placeholder="Search emojis"
+                    role="searchbox"
+                    aria-label="Search emojis"
+                  />
+                </div>
+              </div>
+              <div class="grow overflow-y-auto overflow-x-hidden mt-2">
+                <EmojiSelector
+                  nameFilter={query()}
+                  onEmojiClick={(emoji) => {
+                    local.onEmojiSelect(emoji.emoji);
                     local.onOpenChange(false);
                   }}
-                  placeholder="Search emojis"
-                  role="searchbox"
-                  aria-label="Search emojis"
                 />
               </div>
             </div>
-            <div class="grow overflow-y-auto overflow-x-hidden mt-2">
-              <EmojiSelector
-                nameFilter={query()}
-                onEmojiClick={(emoji) => {
-                  local.onEmojiSelect(emoji.emoji);
-                  local.onOpenChange(false);
-                }}
-              />
-            </div>
-          </div>
-        </Popover.Content>
+          </Popover.Content>
+        </Layer>
       </Popover.Portal>
     </Popover>
   );

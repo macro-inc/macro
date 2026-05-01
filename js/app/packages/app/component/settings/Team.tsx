@@ -54,6 +54,51 @@ const tierOptions: TierOption[] = [
   { value: TeamUserTier.Opus, label: 'Opus' },
 ];
 
+type RoleOption = { value: TeamRole; label: string };
+
+const roleOptions: RoleOption[] = [
+  { value: TeamRole.member, label: 'Member' },
+  { value: TeamRole.admin, label: 'Admin' },
+];
+
+function RoleSelect(props: { value: TeamRole; onChange: (role: TeamRole) => void; disabled?: boolean }) {
+  const selectedOption = () => roleOptions.find((o) => o.value === props.value) ?? roleOptions[0];
+
+  return (
+    <Select<RoleOption>
+      options={roleOptions}
+      value={selectedOption()}
+      onChange={(opt) => opt && props.onChange(opt.value)}
+      optionValue="value"
+      optionTextValue="label"
+      gutter={4}
+      placement="bottom-end"
+      disabled={props.disabled}
+      itemComponent={(itemProps: { item: CollectionNode<RoleOption> }) => (
+        <Select.Item
+          item={itemProps.item}
+          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+        >
+          <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+          <Select.ItemIndicator>
+            <CheckIcon class="w-3 h-3" />
+          </Select.ItemIndicator>
+        </Select.Item>
+      )}
+    >
+      <Select.Trigger as={Button} class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-[expanded]:bg-ink/10" disabled={props.disabled}>
+        <Select.Value<RoleOption>>{(state) => state.selectedOption().label}</Select.Value>
+        <CaretDownIcon class="w-3 h-3 text-ink-muted" />
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+          <Select.Listbox />
+        </Select.Content>
+      </Select.Portal>
+    </Select>
+  );
+}
+
 function TierSelect(props: { value: string; onChange: (tier: TeamUserTier) => void }) {
   const selectedOption = () => tierOptions.find((o) => o.value === props.value) ?? tierOptions[0];
 
@@ -78,7 +123,7 @@ function TierSelect(props: { value: string; onChange: (tier: TeamUserTier) => vo
         </Select.Item>
       )}
     >
-      <Select.Trigger as={Button} class="rounded-xs">
+      <Select.Trigger as={Button} class="rounded-xs px-2 py-1 text-xs data-[expanded]:bg-ink/10">
         <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
         <CaretDownIcon class="w-3 h-3 text-ink-muted" />
       </Select.Trigger>
@@ -107,8 +152,10 @@ function MemberRow(props: {
   isCurrentUser: boolean;
   onRemove: () => void;
   onTierChange: (tier: TeamUserTier) => void;
+  onRoleChange: (role: TeamRole) => void;
 }) {
   const [displayName] = useDisplayName(tryMacroId(props.member.user_id));
+  const isMemberOwner = () => props.member.role === TeamRole.owner;
 
   return (
     <div class="flex items-center justify-between py-2 border-b border-edge-muted last:border-b-0 gap-2">
@@ -121,21 +168,29 @@ function MemberRow(props: {
             {displayName()}
             {props.isCurrentUser && <span class="text-ink-muted font-normal"> (you)</span>}
           </div>
-          <div class="text-xs text-ink-muted">{props.member.role}</div>
+          <Show
+            when={props.isOwner && !isMemberOwner()}
+            fallback={<span class="text-xs text-ink-muted py-0.5 capitalize">{props.member.role}</span>}
+          >
+            <RoleSelect
+              value={props.member.role}
+              onChange={props.onRoleChange}
+            />
+          </Show>
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <Show
           when={props.isOwner}
-          fallback={<span class="text-xs text-ink-muted">{props.member.tier}</span>}
+          fallback={<span class="text-xs text-ink-muted py-1">{props.member.tier}</span>}
         >
           <TierSelect value={props.member.tier} onChange={props.onTierChange} />
         </Show>
         <Show when={props.isOwner}>
           <Show
-            when={!props.isCurrentUser && props.member.role !== TeamRole.owner}
+            when={!props.isCurrentUser && !isMemberOwner()}
             fallback={
-              <Tooltip tooltip={props.member.role === TeamRole.owner ? "Cannot remove team owner" : "Cannot remove yourself"}>
+              <Tooltip tooltip={isMemberOwner() ? "Cannot remove team owner" : "Cannot remove yourself"}>
                 <Button variant="ghost" size="sm" disabled class="rounded-xs opacity-50 cursor-not-allowed">
                   <TrashIcon class="w-4 h-4" />
                 </Button>
@@ -327,7 +382,11 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
 
   const members = createMemo(() => {
     const unsorted = teamQuery.data?.members ?? [];
-    return [...unsorted].sort((a, b) => (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3));
+    return [...unsorted].sort((a, b) => {
+      const roleCompare = (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
+      if (roleCompare !== 0) return roleCompare;
+      return a.user_id.localeCompare(b.user_id);
+    });
   });
 
   const isOwner = createMemo(() => {
@@ -525,6 +584,17 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                         error: 'Failed to update member tier',
                       }
                     );
+                  }}
+                  onRoleChange={(newRole) => {
+                    if (!props.teamId) return;
+                    patchTeamMutation.mutate({
+                      teamId: props.teamId,
+                      request: {
+                        user_role_updates: [
+                          { team_user_id: member.user_id, role: newRole },
+                        ],
+                      },
+                    });
                   }}
                 />
               )}

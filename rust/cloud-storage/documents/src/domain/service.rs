@@ -489,6 +489,25 @@ impl<
             .map_err(|e| DocumentError::Internal(e.into()))
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn get_project_name(&self, project_id: &str) -> Result<String, DocumentError> {
+        self.repo
+            .get_project_name(project_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_project_children(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<model_entity::Entity<'static>>, DocumentError> {
+        self.repo
+            .get_project_children(project_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
     async fn get_short_id(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,

@@ -4,21 +4,18 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { ChatAttachmentWithName } from './chatAttachmentWithName';
+
 import type { ChatMessageContent } from './chatMessageContent';
-import type { ChatMessageWithAttachmentsModel } from './chatMessageWithAttachmentsModel';
+import type { Entity } from './entity';
 import type { Role } from './role';
 
 export interface ChatMessageWithAttachments {
   /** The ids of the attachments used to generate the message */
-  attachments: ChatAttachmentWithName[];
+  attachments: Entity[];
   /** Message content */
   content: ChatMessageContent;
   /** The chat message id */
   id: string;
-  /** The model used to generate the message
-kill */
-  model?: ChatMessageWithAttachmentsModel;
   /** Whether the chat is from the user or system */
   role: Role;
 }

@@ -1,11 +1,17 @@
 //! impls for Attachable
 
-use crate::Attachable;
+#[cfg(test)]
+mod test;
+
+use std::borrow::Cow;
+
 use crate::fmt::{ClosedXmlTag, XmlTag};
 use crate::models::*;
+use crate::{Attachable, Attributes};
+use model_entity::Entity;
 use non_empty::NonEmpty;
 
-impl Attachable for Attachments {
+impl Attachable for Attachments<'_> {
     fn into_formatted_parts(self) -> FormattedParts {
         let parts = self
             .into_parts()
@@ -27,15 +33,15 @@ impl Attachable for Attachments {
 impl Attachable for ResolutionError {
     fn into_formatted_parts(self) -> FormattedParts {
         XmlTag {
-            name: "unavailable_attachment",
-            attrs: &[("id", self.id.as_str())],
+            name: "attachment",
+            attrs: self.reference.attributes(),
             body: self.error,
         }
         .into_formatted_parts()
     }
 }
 
-impl Attachable for AttachmentPart {
+impl Attachable for AttachmentPart<'_> {
     fn into_formatted_parts(self) -> FormattedParts {
         match self {
             AttachmentPart::Content(text) => FormattedParts::one(TextOrImage::Text(text)),
@@ -43,7 +49,10 @@ impl Attachable for AttachmentPart {
             AttachmentPart::ImageError(e) => e.into_formatted_parts(),
             AttachmentPart::Metadata { key, value } => ClosedXmlTag {
                 name: "metadata",
-                attrs: &[("key", &key), ("value", &value)],
+                attrs: vec![
+                    (Cow::Borrowed("key"), Cow::Owned(key)),
+                    (Cow::Borrowed("value"), Cow::Owned(value)),
+                ],
             }
             .into_formatted_parts(),
             AttachmentPart::Child(child) => match *child {
@@ -55,7 +64,7 @@ impl Attachable for AttachmentPart {
     }
 }
 
-impl Attachable for NonEmpty<Vec<AttachmentPart>> {
+impl Attachable for NonEmpty<Vec<AttachmentPart<'_>>> {
     fn into_formatted_parts(self) -> FormattedParts {
         let parts = self
             .into_inner()
@@ -66,28 +75,26 @@ impl Attachable for NonEmpty<Vec<AttachmentPart>> {
                 acc
             });
 
-        FormattedParts::new(NonEmpty::new(parts).expect("this will not be empty"))
+        FormattedParts::new(NonEmpty::new(parts).expect("attachments is non empty"))
     }
 }
 
-impl Attachable for AttachmentContent {
+impl Attachable for AttachmentContent<'_> {
     fn into_formatted_parts(self) -> FormattedParts {
-        let attributes = self.reference.as_attributes();
-        let tag = XmlTag {
-            attrs: attributes.as_slice(),
+        XmlTag {
+            attrs: self.reference.attributes(),
             name: "attachment",
             body: self.content,
-        };
-        tag.into_formatted_parts()
+        }
+        .into_formatted_parts()
     }
 }
 
-impl Attachable for AttachmentReference {
+impl Attachable for Entity<'_> {
     fn into_formatted_parts(self) -> FormattedParts {
-        let attrs = self.as_attributes();
         ClosedXmlTag {
             name: "attachment_reference",
-            attrs: &attrs,
+            attrs: self.attributes(),
         }
         .into_formatted_parts()
     }

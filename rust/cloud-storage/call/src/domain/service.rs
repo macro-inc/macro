@@ -718,6 +718,31 @@ impl<
                     room_name = ?event.room_name,
                     "egress event"
                 );
+                // `egress_started` carries the wall-clock instant the encoder
+                // actually began capturing. Persist it so the frontend can
+                // anchor transcript-to-audio sync to the recording's true
+                // origin instead of the call-creation timestamp (which lags
+                // the recording start by the egress bootstrap window).
+                if event.event == "egress_started" {
+                    if let Some(egress_id) = &event.egress_id {
+                        let started_at =
+                            chrono::DateTime::<chrono::Utc>::from_timestamp(event.created_at, 0);
+                        if let Some(started_at) = started_at {
+                            self.repo
+                                .set_recording_started_at_by_egress_id(egress_id, started_at)
+                                .await
+                                .map_err(|e| CallError::Internal(e.into()))?;
+                        } else {
+                            tracing::warn!(
+                                egress_id,
+                                created_at = event.created_at,
+                                "egress_started webhook had unparseable created_at",
+                            );
+                        }
+                    } else {
+                        tracing::warn!("egress_started webhook missing egress_id");
+                    }
+                }
             }
             "egress_ended" => {
                 let (Some(egress_id), Some(file_url)) = (&event.egress_id, &event.file_url) else {
@@ -1005,11 +1030,18 @@ impl<
             return Ok(());
         }
 
-        let summary = summarizer
+        let Some(summary) = summarizer
             .summarize_call(call_id, record.transcript)
             .await
             .inspect_err(|e| tracing::error!(error=?e, %call_id, "call summarizer failed"))
-            .map_err(|e| CallError::Internal(e.into()))?;
+            .map_err(|e| CallError::Internal(e.into()))?
+        else {
+            tracing::info!(
+                %call_id,
+                "summarizer returned no summary (uninformative transcript); skipping persistence"
+            );
+            return Ok(());
+        };
 
         self.repo
             .insert_call_summary(call_id, &summary)
@@ -1091,7 +1123,14 @@ impl<
             }
 
             let summary = match summarizer.summarize_call(&call_id, record.transcript).await {
-                Ok(summary) => summary,
+                Ok(Some(summary)) => summary,
+                Ok(None) => {
+                    tracing::info!(
+                        %call_id,
+                        "summarizer returned no summary (uninformative transcript); skipping persistence"
+                    );
+                    return;
+                }
                 Err(e) => {
                     tracing::error!(error=?e, %call_id, "failed to summarize call on completion");
                     return;
@@ -1161,7 +1200,7 @@ impl CallSummarizer for NoopCallSummarizer {
         &self,
         _call_id: &Uuid,
         _transcript: Vec<CallRecordTranscriptSegment>,
-    ) -> Result<String, Self::Err> {
+    ) -> Result<Option<String>, Self::Err> {
         // Type-placeholder only — [`CallServiceImpl`] must never invoke this
         // when `summarizer` is `None`, and [`NoopCallSummarizer`] is never a
         // `Some(_)` value in practice.

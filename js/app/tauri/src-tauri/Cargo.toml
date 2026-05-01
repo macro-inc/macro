@@ -17,7 +17,8 @@ name = "app_lib"
 tauri-build = { version = "2.3.1", features = [] }
 
 [features]
-default = []
+auto_apply_update = []
+default = ["auto_apply_update"]
 
 [dependencies]
 http = "1"
@@ -30,13 +31,13 @@ serde_json = "1.0"
 tracing-oslog = { version = "0.3" }
 
 nom = "8.0.0"
-reqwest = { workspace = true, features = [
-  "cookies",
-] }
+reqwest = { workspace = true, features = ["cookies"] }
 serde_qs = "0.15.0"
 tauri = { workspace = true, features = [] }
 tauri-plugin-deep-link = "=2.4.5"
-tauri-plugin-http = { git = "https://github.com/seanaye/plugins-workspace", branch = "seanaye/feat/websocket-cookies", features = ["unsafe-headers"] }
+tauri-plugin-http = { git = "https://github.com/seanaye/plugins-workspace", branch = "seanaye/feat/websocket-cookies", features = [
+  "unsafe-headers",
+] }
 tauri-plugin-log = { version = "2", features = ["tracing"] }
 tauri-plugin-opener = "2"
 tauri-plugin-safe-area-insets = "0.1.0"
@@ -52,9 +53,9 @@ tauri-plugin-notification = "2"
 # push notifications for mobile (when app is closed)
 macro_bundle_updater_plugin = { path = "../macro_bundle_updater_plugin" }
 navigation_plugin = { path = "../navigation_plugin" }
+tauri-plugin-device-info = "1.0.1"
 tauri-plugin-notifications = { git = "https://github.com/macro-inc/tauri-plugins", rev = "61520093d5c7fcd60a2ed354dc150ca9556519a4" }
 tauri-plugin-os = "2"
-tauri-plugin-device-info = "1.0.1"
 tauri-plugin-virtual-keyboard = { git = "https://github.com/voxelbee/tauri-plugin-virtual-keyboard", branch = "main" }
 
 
@@ -62,8 +63,8 @@ tauri-plugin-virtual-keyboard = { git = "https://github.com/voxelbee/tauri-plugi
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
-tauri-plugin-haptics = "2"
 tauri-plugin-auth = { git = "https://github.com/macro-inc/tauri-plugins", rev = "61520093d5c7fcd60a2ed354dc150ca9556519a4" }
+tauri-plugin-haptics = "2"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 tauri-plugin-input-accessory = { path = "../input_accessory_plugin" }

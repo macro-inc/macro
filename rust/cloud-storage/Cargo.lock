@@ -45,18 +45,16 @@ dependencies = [
 name = "ai"
 version = "0.1.0"
 dependencies = [
- "ai_format",
  "ai_toolset",
  "anthropic",
  "anyhow",
  "async-openai",
  "async-stream",
  "async-trait",
- "base64 0.22.1",
+ "attachment",
  "chrono",
  "const_format",
  "futures",
- "image",
  "lazy_static",
  "macro_user_id",
  "model_file_type",
@@ -68,19 +66,9 @@ dependencies = [
  "serde_json",
  "strum",
  "thiserror 2.0.17",
- "tiktoken-rs",
  "tokio",
  "tracing",
  "utoipa",
- "webp",
-]
-
-[[package]]
-name = "ai_format"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "models_properties",
 ]
 
 [[package]]
@@ -88,22 +76,22 @@ name = "ai_tools"
 version = "0.1.0"
 dependencies = [
  "ai",
- "ai_format",
  "ai_toolset",
  "anthropic",
  "anyhow",
  "async-trait",
+ "attachment",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
  "call",
+ "channels",
  "chat",
  "chrono",
  "comms",
  "connection",
  "cool_asserts",
  "dateparser",
- "document_storage_service_client",
  "documents",
  "email",
  "email_service_client",
@@ -120,6 +108,7 @@ dependencies = [
  "macro_env_var",
  "macro_user_id",
  "model",
+ "model-entity",
  "model_notifications",
  "models_dcs",
  "models_email",
@@ -127,6 +116,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "models_search",
+ "non_empty",
  "notification",
  "properties",
  "rand 0.9.3",
@@ -134,7 +124,6 @@ dependencies = [
  "remote_env_var",
  "rootcause",
  "schemars",
- "scribe",
  "search_service_client",
  "secretsmanager_client",
  "serde",
@@ -142,7 +131,6 @@ dependencies = [
  "soup",
  "sqlx",
  "sqs_client",
- "static_file_service_client",
  "strum",
  "sync_service_client",
  "tokio",
@@ -593,12 +581,17 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 name = "attachment"
 version = "0.1.0"
 dependencies = [
- "ai",
  "anyhow",
+ "base64 0.22.1",
  "futures",
+ "image",
  "macro_user_id",
+ "model-entity",
+ "model_file_type",
  "non_empty",
+ "serde",
  "thiserror 2.0.17",
+ "webp",
 ]
 
 [[package]]
@@ -1884,7 +1877,9 @@ dependencies = [
 name = "channels"
 version = "0.1.0"
 dependencies = [
+ "ai",
  "anyhow",
+ "async-trait",
  "axum",
  "chrono",
  "entity_access",
@@ -1895,6 +1890,7 @@ dependencies = [
  "model-error-response",
  "model_user",
  "models_pagination",
+ "schemars",
  "serde",
  "serde_json",
  "sqlx",
@@ -2149,7 +2145,6 @@ dependencies = [
 name = "comms_service"
 version = "0.1.0"
 dependencies = [
- "ai_format",
  "anyhow",
  "async-trait",
  "aws-sdk-secretsmanager",
@@ -3069,13 +3064,13 @@ version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "ai",
- "ai_format",
  "ai_tools",
  "ai_toolset",
  "anyhow",
  "async-openai",
  "async-stream",
  "async-trait",
+ "attachment",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -3085,6 +3080,7 @@ dependencies = [
  "chat",
  "chrono",
  "comms",
+ "comms_db_client",
  "comms_service_client",
  "connection_gateway",
  "cookie",
@@ -3123,6 +3119,7 @@ dependencies = [
  "models_dcs",
  "models_opensearch",
  "models_permissions",
+ "non_empty",
  "notification",
  "properties",
  "readonly_pool",
@@ -3131,7 +3128,6 @@ dependencies = [
  "reqwest",
  "roles_and_permissions",
  "schemars",
- "scribe",
  "search_service_client",
  "secretsmanager_client",
  "serde",
@@ -3139,7 +3135,7 @@ dependencies = [
  "soup",
  "sqlx",
  "sqs_client",
- "static_file_service_client",
+ "static_file",
  "stream",
  "strum",
  "sync_service_client",
@@ -3323,6 +3319,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "tiktoken-rs",
  "tokio",
  "tracing",
  "urlencoding",
@@ -4585,6 +4582,7 @@ dependencies = [
  "macro_uuid",
  "mockall",
  "model",
+ "model-entity",
  "model-error-response",
  "models_permissions",
  "redis",
@@ -6504,7 +6502,6 @@ dependencies = [
  "call",
  "chat",
  "comms",
- "document_storage_service_client",
  "documents",
  "email",
  "email_service_client",
@@ -6526,14 +6523,12 @@ dependencies = [
  "readonly_pool",
  "redis",
  "rmcp",
- "scribe",
  "search_service_client",
  "secretsmanager_client",
  "serde_json",
  "soup",
  "sqlx",
  "sqs_client",
- "static_file_service_client",
  "sync_service_client",
  "tokio",
  "tracing",
@@ -6564,9 +6559,9 @@ dependencies = [
  "ai_toolset",
  "anyhow",
  "axum",
+ "call",
  "chrono",
  "comms",
- "document_storage_service_client",
  "documents",
  "email",
  "email_service_client",
@@ -6585,14 +6580,12 @@ dependencies = [
  "model_user",
  "properties",
  "readonly_pool",
- "scribe",
  "search_service_client",
  "serde",
  "serde_json",
  "soup",
  "sqlx",
  "sqs_client",
- "static_file_service_client",
  "sync_service_client",
  "thiserror 2.0.17",
  "tokio",
@@ -6732,7 +6725,6 @@ name = "model"
 version = "0.1.0"
 dependencies = [
  "ai",
- "ai_format",
  "anyhow",
  "axum",
  "base64 0.22.1",
@@ -6740,6 +6732,7 @@ dependencies = [
  "document_sub_type",
  "doppleganger",
  "macro_user_id",
+ "model-entity",
  "model-error-response",
  "model_file_type",
  "model_user",
@@ -7198,6 +7191,10 @@ dependencies = [
 [[package]]
 name = "non_empty"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "noop_proc_macro"
@@ -9567,48 +9564,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scribe"
-version = "0.1.0"
-dependencies = [
- "ai",
- "ai_format",
- "anyhow",
- "base64 0.22.1",
- "bytes",
- "chat",
- "chrono",
- "comms_db_client",
- "derive_builder",
- "document_storage_service_client",
- "doppleganger",
- "email_service_client",
- "futures",
- "lexical_client",
- "macro_client_errors",
- "macro_db_client",
- "macro_user_id",
- "model",
- "models_comms",
- "models_dcs",
- "models_email",
- "models_permissions",
- "models_properties",
- "models_sfs",
- "properties_db_client",
- "reqwest",
- "s3_client",
- "serde",
- "serde_json",
- "sqlx",
- "static_file_service_client",
- "sync_service_client",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "sct"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10702,6 +10657,21 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
+name = "static_file"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "attachment",
+ "futures",
+ "macro_user_id",
+ "mime",
+ "model-entity",
+ "non_empty",
+ "reqwest",
+ "tracing",
+]
 
 [[package]]
 name = "static_file_service"

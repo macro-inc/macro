@@ -7,6 +7,7 @@ import { type Accessor, createMemo, type Setter, Show } from 'solid-js';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
 import { plainTextToHtml } from '../util/plainTextToHtml';
 import { BaseInput } from './BaseInput';
+import { Layer } from '@ui';
 
 interface EmailInputProps {
   replyingTo: Accessor<ApiMessage | undefined>;
@@ -39,16 +40,18 @@ export function EmailInput(props: EmailInputProps) {
 
   return (
     <Show when={ctx.drafts.initialDraftsSettled()}>
-      <BaseInput
-        replyingTo={props.replyingTo}
-        draft={props.draft}
-        preloadedHtml={draftHTML()}
-        sideEffectOnSend={afterSend}
-        onMarkDone={ctx.archiveThread}
-        setShowReply={props.setShowReply}
-        markdownDomRef={props.markdownDomRef}
-        isEditingExisting={props.replyingTo() == null && props.draft != null}
-      />
+      <Layer depth={2}>
+        <BaseInput
+          replyingTo={props.replyingTo}
+          draft={props.draft}
+          preloadedHtml={draftHTML()}
+          sideEffectOnSend={afterSend}
+          onMarkDone={ctx.archiveThread}
+          setShowReply={props.setShowReply}
+          markdownDomRef={props.markdownDomRef}
+          isEditingExisting={props.replyingTo() == null && props.draft != null}
+        />
+      </Layer>
     </Show>
   );
 }

@@ -71,7 +71,6 @@ export function SplitContainer(
             panel.handle.isSpotLight(),
           'opacity-100': panel.isPanelActive() || panel.handle.isSpotLight(),
           'size-full': !panel.handle.isSpotLight(),
-          'opacity-85': !panel.isPanelActive() && !isMobile(),
         }}
         ref={(ref) => {
           setRef(ref);
@@ -101,6 +100,7 @@ export function SplitContainer(
               multipleSplits() &&
               !panel.handle.isSpotLight()
             }
+            depth={1}
           >
             <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
               <SplitHeader ref={setHeaderRef} />

@@ -241,6 +241,7 @@ The migration included comprehensive indexes:
 ### Database Query Management
 
 - Always run tests between changes that involve changes to db queries
+- Never run `cargo test` with `SQLX_OFFLINE=true`. Tests are designed to validate against the live local Postgres; offline mode forces sqlx macros to consult the cached `.sqlx` data and can either surface confusing "type annotations needed" errors when a query was not in the cache or hide regressions where a query no longer matches the schema. If tests fail with sqlx "no cached data" errors, run `just prepare_db` (with `--tests` when the failure is in test code) — do not flip offline mode on. `SQLX_OFFLINE=true` is fine for `cargo check` / `cargo build` / `cargo clippy` only.
 
 ### Rust Error Handling
 

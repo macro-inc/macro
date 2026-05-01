@@ -10,6 +10,7 @@ import type { CallRecordDurationMs } from './callRecordDurationMs';
 import type { CallRecordEgressId } from './callRecordEgressId';
 import type { CallRecordEndedAt } from './callRecordEndedAt';
 import type { CallRecordParticipant } from './callRecordParticipant';
+import type { CallRecordRecordingStartedAt } from './callRecordRecordingStartedAt';
 import type { CallRecordRecordingUrl } from './callRecordRecordingUrl';
 import type { CallRecordSummary } from './callRecordSummary';
 import type { CallRecordTranscriptSegment } from './callRecordTranscriptSegment';
@@ -40,6 +41,11 @@ archived `call_records`; active calls always return `None`. */
   isActive: boolean;
   /** Participants (both active and historic). */
   participants: CallRecordParticipant[];
+  /** When the egress recording actually began. `None` until the
+`egress_started` webhook arrives (typically a few seconds after
+`started_at`). Frontend should anchor transcript-to-audio sync to
+this value when present, falling back to `started_at` otherwise. */
+  recordingStartedAt?: CallRecordRecordingStartedAt;
   /** Presigned URL for the call recording, if available. */
   recordingUrl?: CallRecordRecordingUrl;
   /** The RTC room name. */

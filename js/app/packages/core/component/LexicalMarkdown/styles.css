@@ -567,6 +567,11 @@ mark {
   background-color: rgb(from var(--color-accent) r g b / 0.2);
 }
 
+/* Await placeholders are visible only on the originating peer. */
+.macro-await-node:not(.local) {
+  display: none;
+}
+
 .md-diff:not(.external) .md-diff-delete {
   padding: 0 2rem 0 4rem;
   background: rgb(from var(--color-failure-bg) r g b / 0.25);

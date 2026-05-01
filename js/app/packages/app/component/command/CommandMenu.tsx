@@ -2,6 +2,7 @@ import { DialogWrapper } from '@core/component/DialogWrapper';
 import {
   isCommandItem,
   isEntityItem,
+  isSearchItem,
   type CommandMenuItem,
 } from './useCommandItems';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
@@ -15,9 +16,11 @@ import {
   createSelector,
   createSignal,
   For,
+  Match,
   on,
   onMount,
   Show,
+  Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useSplitLayout } from '../split-layout/layout';
@@ -36,6 +39,8 @@ import { InlineEntity, type EntityData } from '@entity';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isListViewID } from '@app/constants/list-views';
 import { useAnalytics } from '@app/component/analytics-context';
+import { getCategorySearchFilters } from './category-search-filters';
+import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -59,6 +64,8 @@ export function CommandMenu() {
     ? () => isListViewID(splitManager.activeSplit()?.content().id)
     : () => true; // assume list mode
 
+  let suppressCloseAutoFocus = false;
+
   createEffect(() => {
     const open = CommandState.isOpen();
     if (!isListMode()) {
@@ -66,16 +73,32 @@ export function CommandMenu() {
     }
     if (open) {
       CommandState.onMenuOpen();
+      suppressCloseAutoFocus = false;
     } else {
       CommandState.onMenuClose();
     }
   });
 
+  const handleSelect = (item: CommandMenuItem) => {
+    if (isSearchItem(item)) suppressCloseAutoFocus = true;
+  };
+
   return (
     <Dialog open={CommandState.isOpen()} onOpenChange={CommandState.setIsOpen}>
       <Dialog.Portal>
-        <DialogWrapper contentRef={setCommandMenuRef}>
-          <CommandMenuInner commandMenuRef={commandMenuRef} />
+        <DialogWrapper
+          contentRef={setCommandMenuRef}
+          onCloseAutoFocus={(event) => {
+            if (suppressCloseAutoFocus) {
+              event.preventDefault();
+              suppressCloseAutoFocus = false;
+            }
+          }}
+        >
+          <CommandMenuInner
+            commandMenuRef={commandMenuRef}
+            onSelect={handleSelect}
+          />
         </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
@@ -92,6 +115,9 @@ export function CommandMenuInner(props: {
   const analytics = useAnalytics();
 
   const { openWithSplit } = useSplitLayout();
+
+  const canOpenInNewSplit = () =>
+    globalSplitManager()?.canAppendSplit() ?? false;
 
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
@@ -169,6 +195,52 @@ export function CommandMenuInner(props: {
           }
         );
       }
+      CommandState.close();
+      CommandState.setQuery('');
+      return;
+    }
+
+    if (isSearchItem(item)) {
+      const overrides = getCategorySearchFilters(item.category);
+      const filters = overrides?.filters ?? {};
+      const clientFilters = overrides?.clientFilters ?? {};
+      const splitManager = globalSplitManager();
+      const active = splitManager?.activeSplit();
+      const activeContent = active?.content();
+      const activeIsSearch =
+        activeContent?.type === 'component' && activeContent.id === 'search';
+
+      if (!openInNewSplit && activeIsSearch && active) {
+        const controller = getSearchSplit(active.id);
+        if (controller) {
+          controller.applyOverrides({
+            query: item.query,
+            filters,
+            clientFilters,
+          });
+          active.activate();
+          CommandState.close();
+          CommandState.setQuery('');
+          return;
+        }
+      }
+
+      openWithSplit(
+        {
+          type: 'component',
+          id: 'search',
+          params: {
+            initialQuery: item.query,
+            initialFilters: filters,
+            initialClientFilters: clientFilters,
+          },
+        },
+        {
+          referredFrom: 'kommand-menu',
+          preferNewSplit: openInNewSplit,
+          allowDuplicate: true,
+        }
+      );
       CommandState.close();
       CommandState.setQuery('');
       return;
@@ -368,7 +440,7 @@ export function CommandMenuInner(props: {
   return (
     <div class="flex flex-col">
       {/* Search Input */}
-      <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted/50">
+      <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted">
         <Show
           when={showBackButton()}
           fallback={
@@ -417,6 +489,7 @@ export function CommandMenuInner(props: {
         selectedItem={selectedItem()}
         isInCommandScope={isInCommandScope()}
         isEntityActionMode={isEntityActionMode()}
+        canOpenInNewSplit={canOpenInNewSplit()}
       />
     </div>
   );
@@ -428,12 +501,12 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
   const remainingCount = () => Math.max(0, props.entities.length - 2);
 
   return (
-    <div class="flex items-center gap-2 px-3 py-2 bg-panel border-b border-edge-muted/50">
+    <div class="flex items-center gap-2 px-3 py-2 bg-panel border-b border-edge-muted">
       <For each={displayEntities()}>
         {(entity) => {
           return (
             <div
-              class={cn('bg-edge/20 px-2 py-1 truncate text-xs rounded-xs', {
+              class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
                 'max-w-[50%]': props.entities.length === 2,
               })}
             >
@@ -546,10 +619,12 @@ function CommandMenuFooter(props: {
   selectedItem: CommandMenuItem | undefined;
   isInCommandScope: boolean;
   isEntityActionMode?: boolean;
+  canOpenInNewSplit: boolean;
 }) {
   const isCommand = () =>
     props.selectedItem && isCommandItem(props.selectedItem);
   const isEntity = () => props.selectedItem && isEntityItem(props.selectedItem);
+  const isSearch = () => props.selectedItem && isSearchItem(props.selectedItem);
 
   return (
     <div class="flex items-center gap-4 px-4 py-2 bg-panel border-t border-edge-muted text-xs text-ink-extra-muted/80">
@@ -565,25 +640,27 @@ function CommandMenuFooter(props: {
         Navigate
       </span>
 
-      <Show
-        when={props.isInCommandScope}
-        fallback={
-          <Show
-            when={isCommand() || props.isEntityActionMode}
-            fallback={
-              <Show when={isEntity()}>
-                <HotkeyHint shortcut="enter" label="Open" />
-                <HotkeyHint shortcut="shift+enter" label="Open in new split" />
-              </Show>
-            }
-          >
-            <HotkeyHint shortcut="enter" label="Run action" />
+      <Switch>
+        <Match when={props.isInCommandScope}>
+          <HotkeyHint shortcut="enter" label="Run action" />
+          <HotkeyHint shortcut="escape" label="Back" />
+        </Match>
+        <Match when={isCommand() || props.isEntityActionMode}>
+          <HotkeyHint shortcut="enter" label="Run action" />
+        </Match>
+        <Match when={isSearch()}>
+          <HotkeyHint shortcut="enter" label="Search" />
+          <Show when={props.canOpenInNewSplit}>
+            <HotkeyHint shortcut="shift+enter" label="Search in new split" />
           </Show>
-        }
-      >
-        <HotkeyHint shortcut="enter" label="Run action" />
-        <HotkeyHint shortcut="escape" label="Back" />
-      </Show>
+        </Match>
+        <Match when={isEntity()}>
+          <HotkeyHint shortcut="enter" label="Open" />
+          <Show when={props.canOpenInNewSplit}>
+            <HotkeyHint shortcut="shift+enter" label="Open in new split" />
+          </Show>
+        </Match>
+      </Switch>
 
       <Show when={!props.isInCommandScope && !props.isEntityActionMode}>
         <HotkeyHint shortcut="tab" label="Category" />
@@ -602,7 +679,7 @@ function CategoryFilterTabs() {
   const list = CATEGORIES.map((c) => ({ value: c.id, label: c.label }));
 
   return (
-    <div class="px-1.5 h-10 border-b border-edge-muted/50">
+    <div class="px-1.5 h-10 border-b border-edge-muted">
       <Tabs
         list={list}
         value={CommandState.categoryFilter()}

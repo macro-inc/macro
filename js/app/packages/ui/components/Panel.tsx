@@ -7,16 +7,14 @@ export type PanelProps = {
   children?: JSX.Element;
   active?: boolean;
   class?: string;
-  depth?: number;
+  depth?: 0 | 1 | 2 | 3 | 4 | 5;
 };
 
 export function Panel(props: PanelProps) {
   return (
     <Layer depth={props.depth ?? 0}>
       <div
-        style={{
-          'background-image': `linear-gradient(${props.active ? `${props.highlightColor || 'var(--color-accent)'}, var(--color-edge-muted) 80%` : 'var(--color-edge-muted)'})`,
-        }}
+        style={{'background-image': `linear-gradient(${props.active ? `${props.highlightColor || 'var(--color-accent)'}, var(--color-edge) 80%` : 'var(--color-edge)'})`}}
         class="p-px h-full w-full box-border rounded-md overflow-clip min-h-0"
       >
         <div

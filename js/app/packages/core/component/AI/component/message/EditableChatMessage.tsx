@@ -7,7 +7,6 @@ import {
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import type { Attachment, Model } from '@core/component/AI/types';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
-import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
 import { onMount } from 'solid-js';
 import { useAnalytics } from '@app/component/analytics-context';
 
@@ -32,7 +31,6 @@ function EditableChatMessageInner(props: {
     },
     block: 'chat',
     showOpenTabs: true,
-    useSnapshotForDocuments: ENABLE_SNAPSHOT_NODE,
   });
 
   onMount(() => {

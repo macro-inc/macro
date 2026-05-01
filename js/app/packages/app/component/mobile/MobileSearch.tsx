@@ -388,7 +388,7 @@ function CategoryFilterTabs() {
           SearchState.setCategoryFilter(value as CategoryFilter);
         }
       }}
-      class="border-b border-edge-muted/50"
+      class="border-b border-edge-muted"
     >
       <div class="relative">
         <ScrollIndicators
@@ -406,7 +406,7 @@ function CategoryFilterTabs() {
               <Tabs.Trigger
                 value={category.id}
                 class={cn(
-                  'px-2 py-1 text-xs border first:border-l border-l-0 border-edge-muted/50 font-semibold',
+                  'px-2 py-1 text-xs border first:border-l border-l-0 border-edge-muted font-semibold',
                   SearchState.categoryFilter() === category.id
                     ? 'text-ink pattern bg-edge-muted'
                     : 'text-ink-muted/70 hover:text-ink hover:bg-hover'

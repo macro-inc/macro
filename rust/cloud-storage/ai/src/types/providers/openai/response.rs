@@ -18,7 +18,7 @@ impl TryFrom<ChatCompletionRequest> for CreateChatCompletionRequest {
         let system_message =
             ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
                 content: ChatCompletionRequestSystemMessageContent::Text(
-                    value.system_prompt.to_string(),
+                    value.system_prompt.instructions,
                 ),
                 name: None,
             });

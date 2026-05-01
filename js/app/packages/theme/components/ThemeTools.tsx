@@ -38,11 +38,11 @@ export function ThemeTools() {
     <div
       style={{
         'grid-template-columns': ` min-content 1fr repeat(${columnCount()}, min-content)`,
-        'border-bottom': '1px solid var(--color-edge-muted)',
         'padding': '0 12px 0 20px' /* (41 - 32) / 2 */,
+        'border-bottom': '1px solid var(--b3)',
         'gap': '4.5px' /* (41 - 32) / 2 */,
         'font-family': 'var(--font-sans)',
-        'background-color': 'var(--b1)',
+        'background-color': 'var(--b0)',
         'scrollbar-width': 'none',
         'align-items': 'center',
         'overflow': 'hidden',

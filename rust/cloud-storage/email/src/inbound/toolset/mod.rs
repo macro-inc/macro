@@ -17,7 +17,7 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
-pub use get_thread::{GetThreadResponse, ReadThread};
+pub use get_thread::{GetThread, GetThreadResponse};
 pub use list_labels::{ListLabels, ListLabelsResponse, ToolLabel};
 pub use send_email::{SendEmail, SendEmailResponse};
 pub use update_thread_labels::{UpdateThreadLabels, UpdateThreadLabelsResponse};
@@ -98,6 +98,6 @@ where
 {
     AsyncToolSet::new()
         .add_tool::<UpdateThreadLabels, EmailToolContext<T, G, E>>()
-        .add_tool::<ReadThread, EmailToolContext<T, G, E>>()
+        .add_tool::<GetThread, EmailToolContext<T, G, E>>()
         .add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
 }

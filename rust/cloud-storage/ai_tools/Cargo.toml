@@ -9,7 +9,8 @@ test-support = []
 
 [dependencies]
 ai = { path = "../ai" }
-ai_format = { path = "../ai_format" }
+attachment = { path = "../attachment" }
+non_empty = { path = "../non_empty" }
 ai_toolset = { path = "../ai_toolset" }
 anthropic = { path = "../anthropic" }
 anyhow.workspace = true
@@ -18,13 +19,13 @@ axum = { workspace = true, features = ["macros"] }
 aws-sdk-sqs.workspace = true
 call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }
+channels = { path = "../channels", features = ["ai_tools", "outbound"] }
 chrono.workspace = true
 dateparser.workspace = true
 comms = { path = "../comms", features = ["outbound"] }
 connection = { path = "../connection", default-features = false, features = [
   "ports",
 ] }
-document_storage_service_client = { path = "../document_storage_service_client" }
 documents = { path = "../documents", features = ["ai_tools"] }
 email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }
@@ -40,6 +41,7 @@ macro_db_client = { path = "../macro_db_client" }
 macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
+model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 models_dcs = { path = "../models_dcs" }
 models_email = { path = "../models_email" }
@@ -52,13 +54,6 @@ rand.workspace = true
 readonly_pool = { path = "../readonly_pool" }
 rootcause = { workspace = true }
 schemars.workspace = true
-scribe = { path = "../scribe", features = [
-  "channel",
-  "dcs",
-  "document",
-  "email",
-  "static_file",
-] }
 search_service_client = { path = "../search_service_client" }
 serde.workspace = true
 serde_json.workspace = true
@@ -66,7 +61,6 @@ properties = { path = "../properties", features = ["ai_tools"] }
 soup = { path = "../soup", features = ["ai_tools", "outbound"] }
 sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }
 sqlx.workspace = true
-static_file_service_client = { path = "../static_file_service_client" }
 strum.workspace = true
 sync_service_client = { path = "../sync_service_client" }
 tokio.workspace = true

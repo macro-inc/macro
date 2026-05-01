@@ -16,7 +16,7 @@ export function FatalError(props: FatalErrorProps) {
 
   return (
     <div class="min-h-screen flex items-center justify-center bg-panel">
-      <div class="max-w-md w-full p-8 bg-panel rounded-xl shadow-lg shadow-edge/30">
+      <div class="max-w-md w-full p-8 bg-panel rounded-xl shadow-lg shadow-edge">
         <div class="text-center">
           <h1 class="text-2xl font-bold text-failure mb-4">
             Something went terribly wrong

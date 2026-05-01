@@ -12,9 +12,6 @@ pub struct ReadResponse {
     pub content: ReadContent,
 }
 
-// TODO: this should be hoisted to "ai_format" so that consistent formats can be used everywhere
-// TODO: tool calls should be formatted with xml tags not json
-// TODO: We should minimize nested context
 #[derive(Debug, JsonSchema, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]

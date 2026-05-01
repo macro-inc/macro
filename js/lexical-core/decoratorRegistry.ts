@@ -1,4 +1,5 @@
 import type { Klass, LexicalNode } from 'lexical';
+import type { AwaitDecoratorProps, AwaitNode } from './nodes/AwaitNode';
 import type {
   ContactMentionDecoratorProps,
   ContactMentionNode,
@@ -128,6 +129,10 @@ export interface NodeDecoratorMap {
   UnknownMentionNode: {
     klass: typeof UnknownMentionNode;
     props: UnknownMentionDecoratorProps;
+  };
+  AwaitNode: {
+    klass: typeof AwaitNode;
+    props: AwaitDecoratorProps;
   };
 }
 

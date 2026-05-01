@@ -4,11 +4,9 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { ChatAttachmentWithName } from './chatAttachmentWithName';
+import type { Entity } from './entity';
 
 /**
  * Attachments for the message
  */
-export type HttpSendChatMessageRequestAttachments =
-  | ChatAttachmentWithName[]
-  | null;
+export type HttpSendChatMessageRequestAttachments = Entity[] | null;

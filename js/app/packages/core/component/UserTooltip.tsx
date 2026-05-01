@@ -80,7 +80,7 @@ export function UserTooltip(props: UserTooltipProps) {
     'px-3 text-xs w-full justify-start hover:bg-hover/20 rounded-xs';
 
   return (
-    <Panel active>
+    <Panel depth={2} active>
       <div class="bg-panel text-ink box-border border-accent overflow-hidden max-w-lg">
         <div class="flex items-center gap-2 p-2">
           <div class="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted pointer-events-none">
@@ -123,7 +123,7 @@ export function UserTooltip(props: UserTooltipProps) {
         </div>
 
         <Show when={props.email || props.id}>
-          <div class="border-t border-edge/20"></div>
+          <div class="border-t border-edge"></div>
           <div class="p-2 flex flex-col gap-0">
             <Show when={props.email}>
               <Button onClick={handleCopyEmail} class={buttonStyle}>

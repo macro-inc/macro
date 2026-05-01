@@ -8,7 +8,6 @@ version = "0.1.0"
 default = ["ai_tools", "inbound", "outbound", "ports"]
 ai_tools = ["dep:async-trait", "dep:schemars", "inbound", "ports"]
 attachment = [
-  "dep:attachment",
   "dep:futures",
   "inbound",
 ]
@@ -27,6 +26,7 @@ ports = []
 ai = { path = "../ai" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
+attachment = { path = "../attachment" }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
@@ -48,7 +48,6 @@ unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
 
 # Attachment (attachment provider)
-attachment = { path = "../attachment", optional = true }
 futures = { workspace = true, optional = true }
 
 # AI tools (toolset adapter)

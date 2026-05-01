@@ -23,7 +23,7 @@ type ToolParserMap = {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
   };
-  GetThread: { call: types.ReadThread; response: types.GetThreadResponse };
+  GetThread: { call: types.GetThread; response: types.GetThreadResponse };
   ListCallRecords: {
     call: types.ListCallRecords;
     response: types.ListCallRecordsResponse;
@@ -36,6 +36,18 @@ type ToolParserMap = {
   ReadCallRecord: {
     call: types.ReadCallRecord;
     response: types.ReadCallRecordResponse;
+  };
+  ReadChannelMessageContext: {
+    call: types.ReadChannelMessageContext;
+    response: types.ReadChannelMessageContextResponse;
+  };
+  ReadChannelMessages: {
+    call: types.ReadChannelMessages;
+    response: types.ReadChannelMessagesResponse;
+  };
+  ReadChannelThread: {
+    call: types.ReadChannelThread;
+    response: types.ReadChannelThreadResponse;
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
@@ -82,7 +94,7 @@ const toolParserMap = {
     call: schemas.GetEntityProperties,
     response: schemas.GetEntityPropertiesResponse,
   },
-  GetThread: { call: schemas.ReadThread, response: schemas.GetThreadResponse },
+  GetThread: { call: schemas.GetThread, response: schemas.GetThreadResponse },
   ListCallRecords: {
     call: schemas.ListCallRecords,
     response: schemas.ListCallRecordsResponse,
@@ -98,6 +110,18 @@ const toolParserMap = {
   ReadCallRecord: {
     call: schemas.ReadCallRecord,
     response: schemas.ReadCallRecordResponse,
+  },
+  ReadChannelMessageContext: {
+    call: schemas.ReadChannelMessageContext,
+    response: schemas.ReadChannelMessageContextResponse,
+  },
+  ReadChannelMessages: {
+    call: schemas.ReadChannelMessages,
+    response: schemas.ReadChannelMessagesResponse,
+  },
+  ReadChannelThread: {
+    call: schemas.ReadChannelThread,
+    response: schemas.ReadChannelThreadResponse,
   },
   ReadChat: { call: schemas.ReadChat, response: schemas.ReadChatResponse },
   ReadContent: {
@@ -158,7 +182,7 @@ type ToolDataMap = {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
   };
-  GetThread: { call: types.ReadThread; response: types.GetThreadResponse };
+  GetThread: { call: types.GetThread; response: types.GetThreadResponse };
   ListCallRecords: {
     call: types.ListCallRecords;
     response: types.ListCallRecordsResponse;
@@ -171,6 +195,18 @@ type ToolDataMap = {
   ReadCallRecord: {
     call: types.ReadCallRecord;
     response: types.ReadCallRecordResponse;
+  };
+  ReadChannelMessageContext: {
+    call: types.ReadChannelMessageContext;
+    response: types.ReadChannelMessageContextResponse;
+  };
+  ReadChannelMessages: {
+    call: types.ReadChannelMessages;
+    response: types.ReadChannelMessagesResponse;
+  };
+  ReadChannelThread: {
+    call: types.ReadChannelThread;
+    response: types.ReadChannelThreadResponse;
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };

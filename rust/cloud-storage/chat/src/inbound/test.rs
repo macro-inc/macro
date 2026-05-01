@@ -11,7 +11,7 @@ use tower::util::ServiceExt;
 
 use super::*;
 use crate::domain::models::{
-    ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs,
+    ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs, Result,
 };
 use crate::domain::ports::ChatService;
 use ai_toolset::tool_object::UserToolResponse;
@@ -30,7 +30,7 @@ impl ChatService for MockService {
         &self,
         _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         _args: CreateChatArgs,
-    ) -> Result<String, ChatErr> {
+    ) -> Result<String> {
         Ok("test-chat-id".to_string())
     }
 
@@ -38,7 +38,7 @@ impl ChatService for MockService {
     async fn get_chat(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<GetChatResponse, ChatErr> {
+    ) -> Result<GetChatResponse> {
         let chat_id = entity_access_receipt.entity().entity_id.clone();
         Ok(GetChatResponse {
             chat: ChatResponse {
@@ -50,11 +50,6 @@ impl ChatService for MockService {
                 model: None,
                 created_at: None,
                 updated_at: None,
-                attachments: Vec::new(),
-                token_count: None,
-                available_models: Vec::new(),
-                web_citations: Vec::new(),
-                is_persistent: false,
             },
             user_access_level: AccessLevel::Owner,
         })
@@ -63,21 +58,21 @@ impl ChatService for MockService {
     async fn copy_chat(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<String, ChatErr> {
+    ) -> Result<String> {
         Ok("copied-chat-id".to_string())
     }
 
     async fn delete(
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Ok(())
     }
 
     async fn permanently_delete(
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -85,21 +80,21 @@ impl ChatService for MockService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         _args: PatchChatArgs,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Ok(())
     }
 
     async fn revert_delete(
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Ok(())
     }
 
     async fn get_permissions(
         &self,
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<models_permissions::share_permission::SharePermissionV2, ChatErr> {
+    ) -> Result<models_permissions::share_permission::SharePermissionV2> {
         Err(ChatErr::Unknown(anyhow::anyhow!("not implemented")))
     }
 
@@ -109,7 +104,7 @@ impl ChatService for MockService {
         _message_id: &str,
         _tool_call_id: &str,
         _new_args: serde_json::Value,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -119,7 +114,7 @@ impl ChatService for MockService {
         _message_id: &str,
         _tool_call_id: &str,
         _response: UserToolResponse<serde_json::Value>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -129,7 +124,7 @@ impl ChatService for MockService {
         _message_id: &str,
         _tool_call_id: &str,
         _args: Option<serde_json::Value>,
-    ) -> Result<serde_json::Value, ChatErr> {
+    ) -> Result<serde_json::Value> {
         Ok(serde_json::json!({
             "argsWasProvided": _args.is_some(),
             "args": _args,
@@ -141,7 +136,7 @@ impl ChatService for MockService {
         _receipt: EntityAccessReceipt<OwnerAccessLevel>,
         _message_id: &str,
         _tool_call_id: &str,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Ok(())
     }
 }
@@ -153,35 +148,35 @@ impl ChatService for ErrorService {
         &self,
         _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         _args: CreateChatArgs,
-    ) -> Result<String, ChatErr> {
+    ) -> Result<String> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn get_chat(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<GetChatResponse, ChatErr> {
+    ) -> Result<GetChatResponse> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn copy_chat(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<String, ChatErr> {
+    ) -> Result<String> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn delete(
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn permanently_delete(
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
@@ -189,21 +184,21 @@ impl ChatService for ErrorService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         _args: PatchChatArgs,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn revert_delete(
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn get_permissions(
         &self,
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<models_permissions::share_permission::SharePermissionV2, ChatErr> {
+    ) -> Result<models_permissions::share_permission::SharePermissionV2> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
@@ -213,7 +208,7 @@ impl ChatService for ErrorService {
         _message_id: &str,
         _tool_call_id: &str,
         _new_args: serde_json::Value,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
@@ -223,7 +218,7 @@ impl ChatService for ErrorService {
         _message_id: &str,
         _tool_call_id: &str,
         _response: UserToolResponse<serde_json::Value>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
@@ -233,7 +228,7 @@ impl ChatService for ErrorService {
         _message_id: &str,
         _tool_call_id: &str,
         _args: Option<serde_json::Value>,
-    ) -> Result<serde_json::Value, ChatErr> {
+    ) -> Result<serde_json::Value> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
@@ -242,7 +237,7 @@ impl ChatService for ErrorService {
         _receipt: EntityAccessReceipt<OwnerAccessLevel>,
         _message_id: &str,
         _tool_call_id: &str,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 }
@@ -254,35 +249,35 @@ impl ChatService for NotFoundService {
         &self,
         _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         _args: CreateChatArgs,
-    ) -> Result<String, ChatErr> {
+    ) -> Result<String> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn get_chat(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<GetChatResponse, ChatErr> {
+    ) -> Result<GetChatResponse> {
         Err(ChatErr::NotFound)
     }
 
     async fn copy_chat(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<String, ChatErr> {
+    ) -> Result<String> {
         Err(ChatErr::NotFound)
     }
 
     async fn delete(
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn permanently_delete(
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
@@ -290,21 +285,21 @@ impl ChatService for NotFoundService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         _args: PatchChatArgs,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn revert_delete(
         &self,
         _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
     async fn get_permissions(
         &self,
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<models_permissions::share_permission::SharePermissionV2, ChatErr> {
+    ) -> Result<models_permissions::share_permission::SharePermissionV2> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
@@ -314,7 +309,7 @@ impl ChatService for NotFoundService {
         _message_id: &str,
         _tool_call_id: &str,
         _new_args: serde_json::Value,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::NotFound)
     }
 
@@ -324,7 +319,7 @@ impl ChatService for NotFoundService {
         _message_id: &str,
         _tool_call_id: &str,
         _response: UserToolResponse<serde_json::Value>,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::NotFound)
     }
 
@@ -334,7 +329,7 @@ impl ChatService for NotFoundService {
         _message_id: &str,
         _tool_call_id: &str,
         _args: Option<serde_json::Value>,
-    ) -> Result<serde_json::Value, ChatErr> {
+    ) -> Result<serde_json::Value> {
         Err(ChatErr::NotFound)
     }
 
@@ -343,7 +338,7 @@ impl ChatService for NotFoundService {
         _receipt: EntityAccessReceipt<OwnerAccessLevel>,
         _message_id: &str,
         _tool_call_id: &str,
-    ) -> Result<(), ChatErr> {
+    ) -> Result<()> {
         Err(ChatErr::NotFound)
     }
 }
@@ -360,7 +355,8 @@ impl EntityAccessService for MockAccessService {
         _user_org_id: Option<i64>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<entity_access::domain::models::EntityAccessReceipt<T>, AccessError> {
+    ) -> std::result::Result<entity_access::domain::models::EntityAccessReceipt<T>, AccessError>
+    {
         unreachable!("not used by ChatAccessLevelExtractor")
     }
 
@@ -369,7 +365,7 @@ impl EntityAccessService for MockAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<Option<AccessLevel>, AccessError> {
+    ) -> std::result::Result<Option<AccessLevel>, AccessError> {
         Ok(Some(AccessLevel::Owner))
     }
 
@@ -379,7 +375,7 @@ impl EntityAccessService for MockAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
         _required_level: AccessLevel,
-    ) -> Result<AccessLevel, AccessError> {
+    ) -> std::result::Result<AccessLevel, AccessError> {
         Ok(AccessLevel::Owner)
     }
 
@@ -388,7 +384,7 @@ impl EntityAccessService for MockAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
         _required_level: AccessLevel,
-    ) -> Result<AccessLevel, AccessError> {
+    ) -> std::result::Result<AccessLevel, AccessError> {
         Ok(AccessLevel::Owner)
     }
 
@@ -398,7 +394,7 @@ impl EntityAccessService for MockAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
         _user_org_id: Option<i64>,
-    ) -> Result<EntityPermission, AccessError> {
+    ) -> std::result::Result<EntityPermission, AccessError> {
         Ok(EntityPermission::AccessLevel {
             access_level: AccessLevel::Owner,
         })
@@ -408,21 +404,23 @@ impl EntityAccessService for MockAccessService {
         &self,
         _entity_id: &str,
         _entity_type: EntityType,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+    ) -> std::result::Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         Ok(vec![])
     }
 
     async fn get_call_channel(
         &self,
         _call_id: &sqlx::types::Uuid,
-    ) -> Result<Option<entity_access::domain::models::CallChannelInfo>, AccessError> {
+    ) -> std::result::Result<Option<entity_access::domain::models::CallChannelInfo>, AccessError>
+    {
         unimplemented!()
     }
 
     async fn get_call_channel_by_channel_id(
         &self,
         _channel_id: &sqlx::types::Uuid,
-    ) -> Result<Option<entity_access::domain::models::CallChannelInfo>, AccessError> {
+    ) -> std::result::Result<Option<entity_access::domain::models::CallChannelInfo>, AccessError>
+    {
         unimplemented!()
     }
 }

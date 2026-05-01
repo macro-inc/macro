@@ -2,6 +2,7 @@ import { Entity, type EntityData } from '@entity';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
+import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { createEmailsInfiniteQuery } from '@macro-entity';
 import type { EmailEntity } from '@entity';
@@ -13,7 +14,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  on,
   onCleanup,
   onMount,
   Show,
@@ -274,50 +274,16 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return localResults;
   });
 
-  // Sort entities with selected items first when not searching
-  const sortedEntities = createMemo(
-    on([searchTerm, filteredEntities], () => {
-      const term = searchTerm();
-      const filteredResults = filteredEntities();
-
-      // When there's a search term, return results as-is
-      if (term) {
-        return filteredResults;
-      }
-
-      // When browsing (no search), show selected entities first, then others
-      // (self is already sorted to top within filteredEntities)
-      const selectedIds = props.selectedOptions();
-      const entityIdsInResults = new Set(filteredResults.map((e) => e.id));
-
-      // Partition filtered results into selected and unselected
-      const selected: CombinedEntity[] = [];
-      const unselected: CombinedEntity[] = [];
-
-      for (const entity of filteredResults) {
-        if (selectedIds.has(entity.id)) {
-          selected.push(entity);
-        } else {
-          unselected.push(entity);
-        }
-      }
-
-      // Add missing selected entities that aren't in the visible results
-      const allAvailableEntities = entities();
-      for (const selectedId of selectedIds) {
-        if (!entityIdsInResults.has(selectedId)) {
-          const actualEntity = allAvailableEntities.find(
-            (e) => e.id === selectedId
-          );
-          if (actualEntity) {
-            selected.push(actualEntity);
-          }
-        }
-      }
-
-      return [...selected, ...unselected];
-    })
-  );
+  // Sort entities with selected items first when not searching. Self is
+  // already pinned to the top within `filteredEntities`; this layers
+  // selected-first on top of that ordering.
+  const sortedEntities = useSelectedFirst({
+    items: filteredEntities,
+    allItems: entities,
+    selectedIds: props.selectedOptions,
+    searchQuery: searchTerm,
+    getId: (e: CombinedEntity) => e.id,
+  });
 
   const toggleEntity = (entity: CombinedEntity) => {
     const newSelected = new Set(props.selectedOptions());

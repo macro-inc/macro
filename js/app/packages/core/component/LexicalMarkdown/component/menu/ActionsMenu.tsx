@@ -1,4 +1,4 @@
-import { Panel } from '@ui';
+import { cn, Panel } from '@ui';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { fuzzyFilter } from '@core/util/fuzzy';
@@ -84,8 +84,9 @@ export function ActionsMenuItem(props: {
         props.setOpen(false);
       }}
       on:mouseover={() => props.setIndex(props.index)}
-      class="p-1 mx-1.5"
-      classList={{ 'bg-active bracket': props.selected }}
+      class={cn('group flex items-center p-1.5 mx-1.5 rounded-xs', {
+        'bg-hover': props.selected,
+      })}
     >
       <div class="flex flex-row gap-2 items-center w-full">
         <div class="size-6 flex items-center justify-center text-ink-extra-muted">
@@ -318,7 +319,7 @@ export function ActionMenu(props: {
           use:clickOutside={clickOutsideHandler}
           ref={menuRef}
         >
-          <Panel active class="py-2">
+          <Panel depth={2} active class="py-2">
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{

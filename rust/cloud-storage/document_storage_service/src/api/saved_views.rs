@@ -225,7 +225,7 @@ struct SavedViewParams {
 #[utoipa::path(
     tag = "saved_views",
     delete,
-    path = "/saved_views",
+    path = "/saved_views/{saved_view_id}",
     params(
         ("saved_view_id" = String, Path, description = "The id of the saved view to delete")
     ),
