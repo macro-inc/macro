@@ -116,7 +116,7 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    new aws.s3.BucketOwnershipControls(
+    const logBucketOwnership = new aws.s3.BucketOwnershipControls(
       `${name}-cf-logs-ownership`,
       {
         bucket: logBucket.id,
@@ -139,7 +139,6 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
           },
           grants: [
             {
-              // Grant the awslogsdelivery account FULL_CONTROL for CloudFront standard logging
               grantee: {
                 id: 'c4c1ede66af53448b93c283ce9448c4ba468c9432aa01d700d3878632f77d2d0',
                 type: 'CanonicalUser',
@@ -149,7 +148,7 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
           ],
         },
       },
-      { parent: this }
+      { parent: this, dependsOn: [logBucketOwnership] }
     );
 
     new aws.s3.BucketLifecycleConfigurationV2(
