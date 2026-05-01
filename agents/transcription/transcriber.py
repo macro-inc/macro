@@ -70,12 +70,20 @@ class Transcriber(Agent):
         # Word counts per Deepgram speaker int, accumulated across final
         # transcripts inside a single user turn and cleared on turn completion.
         self._pending_speakers: Counter[int] = Counter()
-        # Earliest speech-start and latest speech-end wall clocks observed
-        # across FINAL transcripts within the current turn. Derived from
-        # Deepgram word-level timing so segments line up with the audio
-        # rather than the end-of-turn callback.
-        self._pending_started_at: datetime | None = None
-        self._pending_ended_at: datetime | None = None
+        # Wall-clock estimate of the STT stream's t=0 (the moment Deepgram
+        # began consuming this participant's audio). Each FINAL gives us
+        # an upper bound — `now() - words[-1].end_time` is at most
+        # `true_t0 + final_delivery_lag` — so the MIN across FINALs
+        # converges to the true value. Used to translate Deepgram's
+        # stream-relative word offsets into absolute UTC for segment
+        # timestamps and to anchor the recording timeline on the server.
+        self._stream_t0_wall: datetime | None = None
+        # Min/max Deepgram-stream-relative word offsets (seconds) seen
+        # across FINALs within the current turn. Combined with
+        # `_stream_t0_wall` these give started_at/ended_at without baking
+        # in FINAL-delivery lag.
+        self._pending_first_word_offset: float | None = None
+        self._pending_last_word_offset: float | None = None
         # Deepgram's speaker ints are only unique within one streaming session.
         # Namespace them with a nonce regenerated per Transcriber so a reconnect
         # doesn't silently merge two different humans under the same UUID.
@@ -102,24 +110,32 @@ class Transcriber(Agent):
                 alt = event.alternatives[0] if event.alternatives else None
                 words = list(getattr(alt, "words", None) or ())
                 if words:
-                    # Deepgram word.start/end are seconds relative to the STT
-                    # stream start; we don't expose that anchor here. Pin
-                    # speech_end to "now" (FINAL arrives ~immediately after
-                    # speech ends + endpointing) and back-calculate the start
-                    # from the word-span duration.
-                    speech_end = datetime.now(timezone.utc)
-                    span = max(words[-1].end_time - words[0].start_time, 0.0)
-                    speech_start = speech_end - timedelta(seconds=span)
+                    first_offset = words[0].start_time
+                    last_offset = words[-1].end_time
+
+                    # Refine stream-t0 estimate. `now() - last_word.end_time`
+                    # bounds true_t0 from above (because now() arrives at
+                    # least final_delivery_lag after the last word ended);
+                    # the MIN across FINALs is our best estimate.
+                    implied_t0 = datetime.now(timezone.utc) - timedelta(
+                        seconds=last_offset
+                    )
                     if (
-                        self._pending_started_at is None
-                        or speech_start < self._pending_started_at
+                        self._stream_t0_wall is None
+                        or implied_t0 < self._stream_t0_wall
                     ):
-                        self._pending_started_at = speech_start
+                        self._stream_t0_wall = implied_t0
+
                     if (
-                        self._pending_ended_at is None
-                        or speech_end > self._pending_ended_at
+                        self._pending_first_word_offset is None
+                        or first_offset < self._pending_first_word_offset
                     ):
-                        self._pending_ended_at = speech_end
+                        self._pending_first_word_offset = first_offset
+                    if (
+                        self._pending_last_word_offset is None
+                        or last_offset > self._pending_last_word_offset
+                    ):
+                        self._pending_last_word_offset = last_offset
 
                     for word in words:
                         speaker = getattr(word, "speaker", None)
@@ -135,10 +151,22 @@ class Transcriber(Agent):
         content = new_message.text_content
         if content:
             now = datetime.now(timezone.utc)
-            started_at = self._pending_started_at or now
-            ended_at = self._pending_ended_at or now
-            self._pending_started_at = None
-            self._pending_ended_at = None
+            if (
+                self._stream_t0_wall is not None
+                and self._pending_first_word_offset is not None
+                and self._pending_last_word_offset is not None
+            ):
+                started_at = self._stream_t0_wall + timedelta(
+                    seconds=self._pending_first_word_offset
+                )
+                ended_at = self._stream_t0_wall + timedelta(
+                    seconds=self._pending_last_word_offset
+                )
+            else:
+                started_at = now
+                ended_at = now
+            self._pending_first_word_offset = None
+            self._pending_last_word_offset = None
 
             extra = new_message.extra if isinstance(new_message.extra, dict) else {}
             source_id = (
@@ -165,6 +193,15 @@ class Transcriber(Agent):
                 "content": content,
                 "startedAt": started_at.isoformat(),
                 "endedAt": ended_at.isoformat(),
+                # Sent so the server can anchor `recording_started_at` to
+                # the earliest first-audio-frame instant across participants
+                # rather than the egress webhook envelope time (which fires
+                # before any audio is captured).
+                "streamStartedAt": (
+                    self._stream_t0_wall.isoformat()
+                    if self._stream_t0_wall is not None
+                    else None
+                ),
                 "isFinal": True,
             }
             max_attempts = 3

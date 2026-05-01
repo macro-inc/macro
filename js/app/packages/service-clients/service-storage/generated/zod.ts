@@ -1210,6 +1210,12 @@ export const ingestTranscriptBody = zod
     startedAt: zod.iso
       .datetime({})
       .describe('When the speaker started talking for this segment.'),
+    streamStartedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        "Wall-clock when the transcriber's STT stream first received audio\nfor this participant. The server takes the earliest non-null value\nacross all participants and uses it to overwrite the\n`egress_started`-derived `recording_started_at`, which is too early\n(it stamps egress bootstrap, not first audio frame)."
+      ),
   })
   .describe('A transcript segment from LiveKit Inference STT.');
 

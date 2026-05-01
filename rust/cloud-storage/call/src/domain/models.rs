@@ -142,6 +142,13 @@ pub struct TranscriptSegmentRequest {
     pub ended_at: Option<DateTime<Utc>>,
     /// Whether this is a final transcription (not interim).
     pub is_final: bool,
+    /// Wall-clock when the transcriber's STT stream first received audio
+    /// for this participant. The server takes the earliest non-null value
+    /// across all participants and uses it to overwrite the
+    /// `egress_started`-derived `recording_started_at`, which is too early
+    /// (it stamps egress bootstrap, not first audio frame).
+    #[serde(default)]
+    pub stream_started_at: Option<DateTime<Utc>>,
 }
 
 /// Edit call request

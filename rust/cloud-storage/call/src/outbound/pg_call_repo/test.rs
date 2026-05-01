@@ -694,6 +694,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
         started_at: now,
         ended_at: Some(now),
         is_final: true,
+        stream_started_at: None,
     };
     let seg2 = TranscriptSegmentRequest {
         segment_id: "seg-002".to_string(),
@@ -703,6 +704,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
         started_at: now,
         ended_at: Some(now),
         is_final: true,
+        stream_started_at: None,
     };
 
     repo.create_transcript_segment(&CALL1, &seg1).await?;
@@ -752,6 +754,7 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
         started_at: now,
         ended_at: Some(now),
         is_final: true,
+        stream_started_at: None,
     };
     repo.create_transcript_segment(&CALL1, &seg).await?;
 
@@ -812,6 +815,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
             started_at: now,
             ended_at: Some(now),
             is_final: true,
+            stream_started_at: None,
         },
     )
     .await?;
@@ -825,6 +829,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
             started_at: now,
             ended_at: Some(now),
             is_final: true,
+            stream_started_at: None,
         },
     )
     .await?;
