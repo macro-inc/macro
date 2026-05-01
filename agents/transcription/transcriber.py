@@ -108,7 +108,7 @@ class Transcriber(Agent):
                     # speech ends + endpointing) and back-calculate the start
                     # from the word-span duration.
                     speech_end = datetime.now(timezone.utc)
-                    span = max(words[-1].end - words[0].start, 0.0)
+                    span = max(words[-1].end_time - words[0].start_time, 0.0)
                     speech_start = speech_end - timedelta(seconds=span)
                     if (
                         self._pending_started_at is None
