@@ -79,7 +79,12 @@ runs:
         release_url="https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}"
         curl -fsSL "$release_url/$archive" -o "$tmp_dir/$archive"
         curl -fsSL "$release_url/$archive.sha256" -o "$tmp_dir/$archive.sha256"
-        (cd "$tmp_dir" && sha256sum --check "$archive.sha256")
+        expected_sha256="$(tr -d '[:space:]' < "$tmp_dir/$archive.sha256")"
+        if [[ ! "$expected_sha256" =~ ^[0-9a-fA-F]{64}$ ]]; then
+          echo "Invalid checksum file for $archive" >&2
+          exit 1
+        fi
+        (cd "$tmp_dir" && printf '%s  %s\n' "$expected_sha256" "$archive" | sha256sum --check -)
         tar -xzf "$tmp_dir/$archive" -C "$tmp_dir"
         rm -f "$sccache_bin"
         mv "$tmp_dir/$basename/sccache" "$sccache_bin"
