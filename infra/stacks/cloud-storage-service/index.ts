@@ -6,6 +6,8 @@ import {
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -516,10 +518,8 @@ const cloudStorageService = new CloudStorageService(
         value: pulumi.interpolate`${INTERNAL_API_SECRET_KEY}`,
       },
       {
-        name: 'CONNECTION_GATEWAY_URL',
-        value: `https://connection-gateway${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        name: ServiceUrl.CONNECTION_GATEWAY_URL,
+        value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
       },
       {
         name: 'BULK_UPLOAD_REQUESTS_TABLE',
@@ -536,16 +536,16 @@ const cloudStorageService = new CloudStorageService(
         value: pulumi.interpolate`${SYNC_SERVICE_AUTH_KEY}`,
       },
       {
-        name: 'SYNC_SERVICE_URL',
-        value: `https://sync-service-${stack === 'dev' ? 'dev3' : 'prod2'}.macroverse.workers.dev`,
+        name: ServiceUrl.SYNC_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
       },
       {
         name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
         value: pulumi.interpolate`${AUTHENTICATION_SERVICE_SECRET_KEY}`,
       },
       {
-        name: 'AUTHENTICATION_SERVICE_URL',
-        value: `https://auth-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+        name: ServiceUrl.AUTHENTICATION_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL),
       },
       {
         name: 'MACRO_API_TOKEN_ISSUER',
