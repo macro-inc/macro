@@ -477,7 +477,7 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
   return (
     <div class="flex flex-col h-full overflow-hidden">
       {/* Header bar like Account.tsx */}
-      <div class="relative flex items-center justify-between h-10 px-6 shrink-0 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
+      <div class="relative flex items-center justify-between h-10 px-6 shrink-0 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
         <div class="text-sm font-semibold">Team</div>
         <Show when={isOwner()}>
           <div class="flex items-center gap-2">
@@ -493,9 +493,8 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
         </Show>
       </div>
 
-      {/* Sub-header bar with team name like soup-filter */}
-      <div class="flex items-center px-2 py-2 border-b border-edge-muted shrink-0">
-              <div class="flex items-center justify-between w-full border border-edge rounded-sm px-6 py-2">
+      <div class="flex items-center px-2 py-1.5 border-b border-edge-muted shrink-0">
+        <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2">
           <span class="text-sm text-ink-muted">Name</span>
           <Show
             when={isOwner()}
@@ -542,10 +541,8 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
         </div>
       </div>
 
-      {/* Content area */}
       <div class="flex flex-col flex-1 overflow-hidden">
 
-        {/* Members section - scrollable */}
         <section class="flex flex-col min-h-0 flex-1">
 
           <Show
@@ -595,7 +592,6 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
           </Show>
         </section>
 
-        {/* Pending Invites section - fixed at bottom */}
         <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
           <section class="mt-6 shrink-0">
             <h3 class="text-sm font-medium mb-2">Pending Invites</h3>

@@ -151,10 +151,10 @@ export function Account() {
 
   return (
     <div
-      class="h-full overflow-y-auto"
+      class="h-full overflow-y-auto p-2"
       style="scrollbar-width: none;"
     >
-      <div class="max-w-2xl mx-auto p-2">
+      <div class="max-w-2xl w-full mx-auto">
         <Panel depth={2}>
           <div class="text-ink">
             <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
