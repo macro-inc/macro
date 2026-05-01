@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use config::{Config, Environment};
-use contacts::domain::service::ContactsDomainService;
+use contacts::domain::service::{ContactsDomainService, ContactsOutboxServiceImpl};
 use contacts::inbound::http::{ApiDoc, AppState};
-use contacts::inbound::worker::ContactsWorker;
+use contacts::inbound::worker::{ContactsWorker, OutboxWorker};
 use contacts::outbound::gateway::ConnectionGatewayNotifier;
 use contacts::outbound::repository::DbContactsRepository;
 use macro_entrypoint::MacroEntrypoint;
@@ -76,6 +76,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let repository = DbContactsRepository::new(db.clone());
+    let outbox_repo = DbContactsRepository::new(db.clone());
     let service = Arc::new(ContactsDomainService {
         repository,
         notifier,
@@ -84,6 +85,16 @@ async fn main() -> anyhow::Result<()> {
     let worker = ContactsWorker::new(sqs_worker, service.clone());
     tokio::spawn(async move {
         worker.poll().await;
+    });
+
+    let outbox_worker = OutboxWorker {
+        service: ContactsOutboxServiceImpl {
+            outbox_repo,
+            inner_service: service.clone(),
+        },
+    };
+    tokio::spawn(async move {
+        outbox_worker.run().await;
     });
 
     let jwt_args = macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
