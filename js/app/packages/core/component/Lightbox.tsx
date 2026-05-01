@@ -275,10 +275,10 @@ export function Lightbox(props: LightboxProps) {
     <div
       class="fixed inset-0 z-modal flex items-center justify-center"
       style={{
-        'padding-top': 'max(var(--safe-top), 0.5rem)',
-        'padding-bottom': 'max(var(--safe-bottom), 1.5rem)',
-        'padding-left': 'max(var(--safe-left), 0.5rem)',
-        'padding-right': 'max(var(--safe-right), 0.5rem)',
+        'margin-top': 'max(var(--safe-top), 0.5rem)',
+        'margin-bottom': 'max(var(--safe-bottom), 1.5rem)',
+        'margin-left': 'max(var(--safe-left), 0.5rem)',
+        'margin-right': 'max(var(--safe-right), 0.5rem)',
       }}
     >
       <Dialog.Content class="flex items-center justify-center bg-panel">
