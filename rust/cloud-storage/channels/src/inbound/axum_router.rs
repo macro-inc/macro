@@ -292,7 +292,6 @@ async fn channel_messages_response<S: ChannelMessagesService, Svc>(
     filters: &ChannelMessageFilters,
     notification_user_id: Option<MacroUserIdStr<'static>>,
 ) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
-    println!("hello world");
     let limit = params.limit.unwrap_or(50).clamp(1, 100);
     let (query, direction, has_cursor) = parse_messages_query(cursor);
 
