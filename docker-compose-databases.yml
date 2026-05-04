@@ -69,10 +69,10 @@ networks:
 volumes:
   db:
     name: macro_postgres_data
-    driver: local
+    external: true
   cache:
     name: macro_redis_data
-    driver: local
+    external: true
   opensearch_data:
     name: macro_opensearch_data
-    driver: local
+    external: true

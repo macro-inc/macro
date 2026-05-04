@@ -10,6 +10,10 @@ get_fusionauth_env:
 # Starts up the local FusionAuth instance. This should only be used during setup/testing.
 start *ARGS:
   @echo "Starting fusionauth"
+  test -f .env || just get_fusionauth_env
+  docker network create auth 2>/dev/null || true
+  docker volume create fusionauth_db_data >/dev/null
+  docker volume create fusionauth_config >/dev/null
   docker-compose up {{ ARGS }}
 
 # Stops the local FusionAuth instance. This should only be used for setup/testing.
