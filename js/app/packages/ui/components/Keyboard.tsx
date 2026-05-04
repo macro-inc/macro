@@ -1,4 +1,30 @@
-import { createSignal, onMount, onCleanup } from 'solid-js';
+import { createSignal, onMount, onCleanup, type Accessor } from 'solid-js';
+
+export function useKeyboardPressed(): Accessor<string[]> {
+  const [pressed, setPressed] = createSignal<string[]>([]);
+
+  onMount(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.code;
+      setPressed((prev) => prev.includes(key) ? prev : [...prev, key]);
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const key = e.code;
+      setPressed((prev) => prev.filter((k) => k !== key));
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    onCleanup(() => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    });
+  });
+
+  return pressed;
+}
 
 interface KeyRectProps {
   height: number;
@@ -65,33 +91,13 @@ function KeyRect(props: KeyRectProps) {
 
 interface KeyboardProps {
   highlight?: string[];
+  pressed?: string[];
 }
 
 export function Keyboard(props: KeyboardProps) {
   // Temp highlight array for debugging
   const highlight = () => props.highlight ?? ["KeyU"];
-
-  const [pressed, setPressed] = createSignal<string[]>([]);
-
-  onMount(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const key = e.code;
-      setPressed((prev) => prev.includes(key) ? prev : [...prev, key]);
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      const key = e.code;
-      setPressed((prev) => prev.filter((k) => k !== key));
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
-    onCleanup(() => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    });
-  });
+  const pressed = () => props.pressed ?? [];
 
   return (
     <svg
