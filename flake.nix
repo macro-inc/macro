@@ -59,7 +59,7 @@
           let
             sqlxFilter = path: _type: builtins.match ".*\\.sqlx/.*\\.json$" path != null;
             pdfiumFilter = path: _type: builtins.match ".*pdfium-lib/.*\\.(so|dylib)$" path != null;
-            assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas)$" path != null;
+            assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql)$" path != null;
             srcFilter = path: type: (sqlxFilter path type) || (pdfiumFilter path type) || (assetFilter path type) || (craneLib.filterCargoSources path type);
             cloudStorageSrc = pkgs.lib.cleanSourceWith {
               src = ./rust/cloud-storage;
@@ -152,6 +152,31 @@
               "--bin document_cognition_service_models"
               "--bin gen_tool_schemas"
             ];
+          }
+        );
+
+        # Pre-built nextest archive — packages all compiled test binaries plus their
+        # metadata into a single tar.zst. CI fetches this archive and runs
+        # `cargo nextest run --archive-file` outside the sandbox so tests can hit
+        # postgres/redis services. Built in nix → cached by cachix.
+        nextestArchive = craneLib.mkCargoDerivation (
+          commonArgs
+          // {
+            cargoArtifacts = workspaceArtifacts;
+            pname = "cloud-storage-nextest-archive";
+            doCheck = false;
+            nativeBuildInputs = commonArgs.nativeBuildInputs or [ ] ++ [ pkgs.cargo-nextest ];
+            buildPhaseCargoCommand = ''
+              cargo nextest archive \
+                --cargo-profile dev \
+                --locked --all-features \
+                --workspace --lib --bins --tests \
+                --archive-file nextest-archive.tar.zst
+            '';
+            installPhaseCommand = ''
+              mkdir -p $out
+              cp nextest-archive.tar.zst $out/
+            '';
           }
         );
 
@@ -340,7 +365,7 @@
         };
 
         packages = {
-          inherit cargoArtifacts workspaceArtifacts openApiBins;
+          inherit cargoArtifacts workspaceArtifacts openApiBins nextestArchive;
           default = cargoArtifacts;
         };
 

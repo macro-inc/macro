@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT (1) as exists\n            FROM \"ThreadAnchor\"\n            WHERE \"threadId\" = $1 AND \"anchorId\" = $2\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8060554f4ebb4875e06e40ad1bd4777c4d8069e54d785b91a5ef710e33aa5ad3"
+}

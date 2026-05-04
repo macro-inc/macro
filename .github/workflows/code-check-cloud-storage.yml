@@ -216,12 +216,11 @@ jobs:
         with:
           name: macro-inc
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: restore crane dependency artifacts
+      - name: build nextest archive
+        id: archive
         run: |
-          ARTIFACTS=$(nix build .#cargoArtifacts --no-link --print-out-paths)
-          mkdir -p rust/cloud-storage/target
-          zstd -d "$ARTIFACTS/target.tar.zst" --stdout | tar -xf - -C rust/cloud-storage/target
-          chmod -R +w rust/cloud-storage/target
+          ARCHIVE=$(nix build .#nextestArchive --no-link --print-out-paths)
+          echo "path=$ARCHIVE/nextest-archive.tar.zst" >> "$GITHUB_OUTPUT"
       - name: prepare tests
         run: |
           nix develop --command just rust/cloud-storage/setup_test_envs
@@ -245,9 +244,14 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          cd rust/cloud-storage
-
-          args=(--all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS")
+          # Run tests from the pre-built nextest archive (built in nix sandbox,
+          # cached via cachix). Build-time flags like --all-features are baked
+          # into the archive — only runtime options are passed here.
+          args=(
+            --archive-file "${{ steps.archive.outputs.path }}"
+            --workspace-remap "$GITHUB_WORKSPACE/rust/cloud-storage"
+            --test-threads "$NEXTEST_TEST_THREADS"
+          )
           if [ -n "$NEXTEST_FILTER" ]; then
             args+=(-E "$NEXTEST_FILTER")
           fi

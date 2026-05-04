@@ -53,6 +53,7 @@ impl JwtValidationArgs {
     }
 
     #[cfg(feature = "testing")]
+    #[allow(dead_code)]
     /// create a new instance of Self with all empty values
     pub fn new_testing() -> Self {
         Self {
