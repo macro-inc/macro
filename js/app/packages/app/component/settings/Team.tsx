@@ -875,7 +875,12 @@ function TeamManagement(props: {
     string | undefined
   >(undefined);
 
-  const hasValidInvites = () => invites().length > 0;
+  const hasValidInvites = () => {
+    const inv = invites();
+    const hasNonEmptyEmail = inv.some((i) => i.email.trim() !== '');
+    const hasNoErrors = !inviteErrors().some((e) => e !== undefined);
+    return hasNonEmptyEmail && hasNoErrors;
+  };
 
   const validateInvites = () => {
     const { errors, hasError } = validateInviteEmails(invites());
