@@ -79,7 +79,9 @@ export const SoupFiltersBar = () => {
             isOptionActive={isOptionActive}
           />
           <div class="flex-1" />
-          <Tooltip tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}>
+          <Tooltip
+            tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
+          >
             <Button
               variant={soup.previewEntity() ? 'primary' : 'ghost'}
               size="sm"
