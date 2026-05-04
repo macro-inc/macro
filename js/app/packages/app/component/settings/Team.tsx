@@ -1,4 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
+import { PLAN_FEATURES } from '../paywall/plans';
 import PlusIcon from '@icon/regular/plus.svg';
 import UsersIcon from '@icon/regular/users.svg';
 import TrashIcon from '@icon/regular/trash.svg';
@@ -26,6 +27,7 @@ import {
   Show,
   Suspense,
   Switch,
+  type ValidComponent,
 } from 'solid-js';
 import type { CollectionNode } from '@kobalte/core';
 import {
@@ -66,12 +68,19 @@ const roleOrder: Record<string, number> = {
   [TeamRole.member]: 2,
 };
 
-type TierOption = { value: TeamUserTier; label: string };
+type TierOption = { value: TeamUserTier; label: string; description: string };
+
+const getTierDescription = (tier: 'haiku' | 'sonnet' | 'opus'): string => {
+  const aiAgent = PLAN_FEATURES.find((f) => f.label === 'AI Agent')?.values[tier] ?? '';
+  const aiCalls = PLAN_FEATURES.find((f) => f.label === 'AI tool calls')?.values[tier] ?? '';
+  const storage = PLAN_FEATURES.find((f) => f.label === 'Storage')?.values[tier] ?? '';
+  return `${aiAgent} · ${aiCalls} calls · ${storage}`;
+};
 
 const tierOptions: TierOption[] = [
-  { value: TeamUserTier.Haiku, label: 'Haiku' },
-  { value: TeamUserTier.Sonnet, label: 'Sonnet' },
-  { value: TeamUserTier.Opus, label: 'Opus' },
+  { value: TeamUserTier.Haiku, label: 'Level 1', description: getTierDescription('haiku') },
+  { value: TeamUserTier.Sonnet, label: 'Level 2', description: getTierDescription('sonnet') },
+  { value: TeamUserTier.Opus, label: 'Level 3', description: getTierDescription('opus') },
 ];
 
 type RoleOption = { value: TeamRole; label: string };
@@ -133,6 +142,8 @@ function RoleSelect(props: {
 function TierSelect(props: {
   value: string;
   onChange: (tier: TeamUserTier) => void;
+  triggerClass?: string;
+  triggerAs?: ValidComponent;
 }) {
   const selectedOption = () =>
     tierOptions.find((o) => o.value === props.value) ?? tierOptions[0];
@@ -151,7 +162,10 @@ function TierSelect(props: {
           item={itemProps.item}
           class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
         >
-          <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+          <div class="flex flex-col">
+            <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+            <span class="text-xs text-ink/50">{itemProps.item.rawValue.description}</span>
+          </div>
           <Select.ItemIndicator>
             <CheckIcon class="w-3 h-3" />
           </Select.ItemIndicator>
@@ -159,8 +173,9 @@ function TierSelect(props: {
       )}
     >
       <Select.Trigger
-        as={Button}
-        class="rounded-xs px-2 py-1 text-xs data-[expanded]:bg-ink/10"
+        as={props.triggerAs}
+        tabIndex={0}
+        class={props.triggerClass ?? 'rounded-xs px-2 py-1 text-xs data-[expanded]:bg-ink/10'}
       >
         <Select.Value<TierOption>>
           {(state) => state.selectedOption().label}
@@ -168,7 +183,7 @@ function TierSelect(props: {
         <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[220px] p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -209,48 +224,11 @@ function InviteEntryRow(props: {
           )}
         />
         <Show when={props.showTier}>
-          <Select<TierOption>
-            options={tierOptions}
-            value={
-              tierOptions.find((o) => o.value === props.entry.tier) ??
-              tierOptions[0]
-            }
-            onChange={(opt) => opt && props.onTierChange(opt.value)}
-            optionValue="value"
-            optionTextValue="label"
-            gutter={4}
-            placement="bottom-end"
-            itemComponent={(itemProps: {
-              item: CollectionNode<TierOption>;
-            }) => (
-              <Select.Item
-                item={itemProps.item}
-                class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
-              >
-                <Select.ItemLabel>
-                  {itemProps.item.rawValue.label}
-                </Select.ItemLabel>
-                <Select.ItemIndicator>
-                  <CheckIcon class="w-3 h-3" />
-                </Select.ItemIndicator>
-              </Select.Item>
-            )}
-          >
-            <Select.Trigger
-              tabIndex={0}
-              class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink outline-none focus:border-accent/50 shrink-0"
-            >
-              <Select.Value<TierOption>>
-                {(state) => state.selectedOption().label}
-              </Select.Value>
-              <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
-            </Select.Trigger>
-            <Select.Portal>
-              <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
-                <Select.Listbox />
-              </Select.Content>
-            </Select.Portal>
-          </Select>
+          <TierSelect
+            value={props.entry.tier}
+            onChange={props.onTierChange}
+            triggerClass="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink outline-none focus:border-accent/50 shrink-0"
+          />
         </Show>
         <Show when={props.showRemove}>
           <Tooltip tooltip="Remove">
@@ -447,7 +425,7 @@ function MemberRow(props: {
             <span class="text-xs text-ink-muted py-1">{props.member.tier}</span>
           }
         >
-          <TierSelect value={props.member.tier} onChange={props.onTierChange} />
+          <TierSelect value={props.member.tier} onChange={props.onTierChange} triggerAs={Button} />
         </Show>
         <Show when={props.isOwner}>
           <Show
@@ -494,7 +472,7 @@ function InviteRow(props: {
   onCancel: () => void;
 }) {
   return (
-    <div class="flex items-center justify-between py-2 border-b border-edge-muted last:border-b-0">
+    <div class="flex items-center justify-between py-2 border-b border-edge-muted last:border-b-0 gap-2">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
           <EnvelopeIcon class="size-4 text-accent" />
@@ -593,12 +571,9 @@ function TeamInvites() {
 
   return (
     <Show when={invites().length > 0}>
-      <section class="mb-6">
+      <section class="px-6 py-4">
         <header class="mb-2">
-          <h3 class="text-sm font-medium">Pending Invitations</h3>
-          <p class="text-xs text-ink-muted">
-            You've been invited to join a team.
-          </p>
+          <h3 class="text-sm font-medium">You've been invited to join a team</h3>
         </header>
         <div class="border border-edge rounded-sm px-3">
           <For each={invites()}>
@@ -1133,9 +1108,9 @@ function TeamManagement(props: {
         </section>
 
         <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
-          <section class="mt-6 shrink-0">
+          <section class="px-6 py-4 shrink-0 border-t border-edge-muted">
             <h3 class="text-sm font-medium mb-2">Pending Invites</h3>
-            <div class="border border-edge rounded-md px-3">
+            <div class="border border-edge rounded-sm px-3">
               <For each={invitesQuery.data?.invites ?? []}>
                 {(invite) => (
                   <InviteRow
