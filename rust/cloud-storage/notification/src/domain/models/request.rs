@@ -311,7 +311,7 @@ pub struct UpdateNotificationsRequest<'a> {
 }
 
 /// Optional filters for listing user notifications.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct NotificationListFilters {
     /// Filter by done status. `None` means include both done and not-done notifications.
     pub done: Option<bool>,

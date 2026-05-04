@@ -9,7 +9,6 @@ type CallStartedNotificationMetadata = {
   tag: 'call-started';
   content: {
     channel_name?: string | null;
-    channelName?: string | null;
   };
 };
 
@@ -111,10 +110,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'ai_response' }, (m) => m.content.summary || '')
     .with({ tag: 'channel_invite' }, () => '')
     .with({ tag: 'invite_to_team' }, () => '')
-    .with(
-      { tag: 'call-started' },
-      (m) => m.content.channel_name ?? m.content.channelName ?? ''
-    )
+    .with({ tag: 'call-started' }, (m) => m.content.channel_name ?? '')
     .exhaustive();
 }
 

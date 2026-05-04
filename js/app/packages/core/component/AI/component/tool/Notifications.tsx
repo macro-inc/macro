@@ -29,7 +29,7 @@ const formatList = (items: string[]) => {
 
 const formatNotificationFilters = (filters: ListNotificationsTool) => {
   const statusFilters = [filters.done ? 'done' : 'not done'];
-  if (filters.seen !== null) {
+  if (filters.seen != null) {
     statusFilters.push(filters.seen ? 'seen' : 'unseen');
   }
 
