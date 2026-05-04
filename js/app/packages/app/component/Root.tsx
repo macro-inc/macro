@@ -173,7 +173,7 @@ function OfflineFallback(props: { onRetry: () => void }) {
         class="mt-2"
         disabled={retrying()}
         onClick={handleRetry}
-        variant='primary'
+        variant="primary"
       >
         {retrying() ? 'Retrying…' : 'Retry'}
       </Button>
@@ -230,9 +230,7 @@ function BasePathComponent() {
       <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
-        <Navigate
-          href={`/welcome${window.location.search}`}
-        />
+        <Navigate href={`/welcome${window.location.search}`} />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
         <Navigate href={redirectPath} />

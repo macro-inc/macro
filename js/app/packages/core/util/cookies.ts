@@ -19,7 +19,10 @@ const LOGIN_STORAGE_KEY = 'macro:login';
 
 /** Check if the user appears to be authenticated based on the login cookie or localStorage fallback. */
 export function hasLoginCookie(): boolean {
-  if (typeof localStorage !== 'undefined' && localStorage.getItem(LOGIN_STORAGE_KEY) === 'true') {
+  if (
+    typeof localStorage !== 'undefined' &&
+    localStorage.getItem(LOGIN_STORAGE_KEY) === 'true'
+  ) {
     return true;
   }
   if (typeof document === 'undefined') return false;
