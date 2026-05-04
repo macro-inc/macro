@@ -13,8 +13,6 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import TrashIcon from '@icon/regular/trash-simple.svg';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
-import CaretDownIcon from '@icon/regular/caret-down.svg';
-import CheckIcon from '@icon/regular/check.svg';
 import {
   invalidateUserTeams,
   useCreateTeamWithInvitesMutation,
@@ -25,8 +23,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useOnboarding } from '../onboarding-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ENABLE_TEAM_INVITE_TIERS_OVERRIDE } from '@core/constant/featureFlags';
-import { Select } from '@kobalte/core/select';
-import type { CollectionNode } from '@kobalte/core';
+import { TierSelect } from '@app/component/teams/TierSelect';
 import type { PaidPlanTier } from '@app/component/paywall/plans';
 
 const inviteFormSchema = z.object({
@@ -42,67 +39,6 @@ const inviteFormSchema = z.object({
 
 const INVITE_FORM_ID = 'invite-team-form';
 const TEAM_NAME_MAX_LENGTH = 50;
-
-type TierOption = { value: PaidPlanTier; label: string };
-
-const tierOptions: TierOption[] = [
-  { value: 'haiku', label: 'Haiku' },
-  { value: 'sonnet', label: 'Sonnet' },
-  { value: 'opus', label: 'Opus' },
-];
-
-function InviteTierSelect(props: {
-  value: PaidPlanTier;
-  onChange: (tier: PaidPlanTier) => void;
-  disabled?: boolean;
-}) {
-  const selectedOption = () =>
-    tierOptions.find((o) => o.value === props.value) ?? tierOptions[0];
-
-  return (
-    <Select<TierOption>
-      options={tierOptions}
-      value={selectedOption()}
-      onChange={(opt) => opt && props.onChange(opt.value)}
-      optionValue="value"
-      optionTextValue="label"
-      gutter={4}
-      placement="bottom-end"
-      disabled={props.disabled}
-      itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
-        <Select.Item
-          item={itemProps.item}
-          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
-        >
-          <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
-          <Select.ItemIndicator>
-            <CheckIcon class="w-3 h-3" />
-          </Select.ItemIndicator>
-        </Select.Item>
-      )}
-    >
-      <Select.Trigger
-        class={cn(
-          'bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm rounded-xs border bg-panel text-ink outline-none shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
-          props.disabled
-            ? 'border-edge/50 opacity-50 cursor-not-allowed'
-            : 'border-edge'
-        )}
-        disabled={props.disabled}
-      >
-        <Select.Value<TierOption>>
-          {(state) => state.selectedOption().label}
-        </Select.Value>
-        <CaretDownIcon class="w-3 h-3 text-ink/40 shrink-0" />
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
-          <Select.Listbox />
-        </Select.Content>
-      </Select.Portal>
-    </Select>
-  );
-}
 
 function InviteTeamContent() {
   return (
@@ -412,10 +348,11 @@ function InviteTeamDemo(props: LessonContentProps) {
                         )}
                       />
                       <Show when={showTier()}>
-                        <InviteTierSelect
+                        <TierSelect
                           value={entry().tier}
                           onChange={(tier) => updateTier(index, tier)}
                           disabled={isPending()}
+                          triggerClass="bracket-never flex items-center justify-between gap-1 w-28 px-3 py-2 text-base border border-edge rounded-xs bg-panel text-ink outline-none shrink-0 hover:bg-ink/5 data-[expanded]:bg-ink/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel [&>svg]:data-[expanded]:rotate-180 [&>svg]:transition-transform"
                         />
                       </Show>
                       <Tooltip
