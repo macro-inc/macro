@@ -18,6 +18,8 @@ interface OnboardingContextValue {
   setSelectedPlan: (tier: PlanTier | null) => void;
   invitedMembers: () => InvitedMember[];
   setInvitedMembers: (members: InvitedMember[]) => void;
+  teamName: () => string;
+  setTeamName: (name: string) => void;
   /** Cost for the current user's seat */
   userSeatCost: () => number;
   /** Total cost for all invited team members */
@@ -33,6 +35,7 @@ const OnboardingContext = createContext<OnboardingContextValue>();
 export function OnboardingProvider(props: ParentProps) {
   const [selectedPlan, setSelectedPlan] = createSignal<PlanTier | null>(null);
   const [invitedMembers, setInvitedMembers] = createSignal<InvitedMember[]>([]);
+  const [teamName, setTeamName] = createSignal('');
 
   const userSeatCost = createMemo(() => {
     const tier = selectedPlan();
@@ -57,6 +60,8 @@ export function OnboardingProvider(props: ParentProps) {
     setSelectedPlan,
     invitedMembers,
     setInvitedMembers,
+    teamName,
+    setTeamName,
     userSeatCost,
     teamSeatsCost,
     totalCost,

@@ -53,18 +53,22 @@ function InviteTeamDemo(props: LessonContentProps) {
   const analytics = useAnalytics();
   const onboarding = useOnboarding();
 
+  const handleBack = () => {
+    onboarding.setInvitedMembers([]);
+    onboarding.setTeamName('');
+    props.goToLesson('team-choice');
+  };
+
   const [teamName, setTeamName] = createSignal('');
   const [emails, setEmails] = createSignal<string[]>(['']);
   const [errors, setErrors] = createSignal<FormErrors>({});
 
-  // Sync valid emails to onboarding context for cost calculation
-  // Default invited members to Level 1 (haiku) tier
-  createEffect(() => {
-    const validMembers = emails()
+  const syncInvitedMembers = (emailList: string[]) => {
+    const validMembers = emailList
       .filter((e) => e.trim() !== '' && z.string().email().safeParse(e).success)
       .map((email) => ({ email, tier: 'haiku' as const }));
     onboarding.setInvitedMembers(validMembers);
-  });
+  };
 
   const createTeamMutation = useCreateTeamWithInvitesMutation({
     onSettled: () => invalidateUserTeams(),
@@ -128,11 +132,10 @@ function InviteTeamDemo(props: LessonContentProps) {
   };
 
   const updateEmail = (index: number, value: string) => {
-    setEmails((prev) => {
-      const next = [...prev];
-      next[index] = value;
-      return next;
-    });
+    const next = [...emails()];
+    next[index] = value;
+    setEmails(next);
+    syncInvitedMembers(next);
     if (errors().emails?.[index]) {
       setErrors((prev) => {
         const emailErrors = { ...prev.emails };
@@ -144,13 +147,16 @@ function InviteTeamDemo(props: LessonContentProps) {
 
   const updateTeamName = (value: string) => {
     setTeamName(value);
+    onboarding.setTeamName(value);
     if (errors().teamName) {
       setErrors((prev) => ({ ...prev, teamName: undefined }));
     }
   };
 
   const removeEmail = (index: number) => {
-    setEmails((prev) => prev.filter((_, i) => i !== index));
+    const next = emails().filter((_, i) => i !== index);
+    setEmails(next);
+    syncInvitedMembers(next);
     setErrors((prev) => {
       const emailErrors = { ...prev.emails };
       delete emailErrors[index];
@@ -231,6 +237,14 @@ function InviteTeamDemo(props: LessonContentProps) {
         onSubmit={handleSubmit}
         class="w-full max-w-lg flex flex-col gap-8 h-full"
       >
+        <button
+          type="button"
+          onClick={handleBack}
+          class="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-xs w-fit -mb-4"
+        >
+          <ArrowLeftIcon class="size-4" />
+          Back
+        </button>
         <div class="flex flex-col gap-2 shrink-0 px-2">
           <label class="text-base font-medium text-ink" for="team-name">
             Team name
@@ -383,33 +397,12 @@ function InviteTeamDemo(props: LessonContentProps) {
   );
 }
 
-function BackAction(props: LessonContentProps) {
-  const onboarding = useOnboarding();
-
-  const handleBack = () => {
-    onboarding.setInvitedMembers([]);
-    props.goToLesson('team-choice');
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={handleBack}
-      class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center gap-2 text-ink/40 hover:text-ink hover:bg-ink/5 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel"
-    >
-      <ArrowLeftIcon class="size-5" />
-      Back
-    </button>
-  );
-}
-
 export const inviteTeamLesson: LessonDefinition = {
   id: 'invite-team',
   title: 'Create your team',
   content: InviteTeamContent,
   demo: InviteTeamDemo,
   order: 90,
-  secondaryAction: BackAction,
   onContinue: () => {
     const form = document.getElementById(
       INVITE_FORM_ID
