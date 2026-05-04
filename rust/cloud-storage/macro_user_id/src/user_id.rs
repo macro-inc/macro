@@ -5,7 +5,7 @@ use crate::{
     error::ParseErr,
     lowercased::Lowercase,
 };
-use nom::{Finish, IResult, Parser, bytes::complete::tag, character::char};
+use nom::{Finish, IResult, Parser, bytes::complete::tag, character::complete::char};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
@@ -245,6 +245,7 @@ where
 
 impl<'a> MacroUserId<ArcCowStr<'a>> {
     /// attempt to create a borrowed version of self from an input string
+    #[tracing::instrument(err)]
     pub fn parse_from_str(input: &'a str) -> Result<Self, ParseErr> {
         let (_, out) = macro_user_id(input).finish().map_err(|e| e.cloned())?;
         Ok(out)
