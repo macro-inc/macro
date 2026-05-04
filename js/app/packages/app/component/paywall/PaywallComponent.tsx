@@ -10,7 +10,7 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useAnalytics } from '@app/component/analytics-context';
 import { PLANS, PLAN_FEATURES, type PaidPlanTier } from './plans';
-import SubscriptionTier from '@macro-icons/macro-subscription.svg';
+import SubscriptionTier from './SubscriptionTier';
 
 // Paid-only plans for the billing paywall — Stripe has no product for the
 // 'free' tier, so it must be excluded here. Filtered once at module scope so
@@ -184,7 +184,7 @@ const PaywallComponent = (props: PaywallComponent) => {
                         {plan.name}
                       </div>
                     </div>
-                    <SubscriptionTier class="w-7 shrink-0" style={{ fill: 'var(--b4)' }} />
+                    <SubscriptionTier class="w-7 shrink-0" tier={selectedTier() === plan.tier ? plan.tier : undefined} />
                   </div>
                   <div class="flex items-baseline gap-0.5">
                     <span class="text-3xl font-bold text-ink">
