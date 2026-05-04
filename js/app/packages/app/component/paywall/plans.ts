@@ -37,7 +37,7 @@ export interface PlanFeature {
 
 export const PLAN_FEATURES: PlanFeature[] = [
   {
-    label: 'AI tool calls',
+    label: 'AI Tool Calls',
         values: {
           free: '—',
           haiku: '1,000',
