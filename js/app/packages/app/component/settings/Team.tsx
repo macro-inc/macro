@@ -1,4 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
+import { PLAN_FEATURES } from '../paywall/plans';
 import PlusIcon from '@icon/regular/plus.svg';
 import UsersIcon from '@icon/regular/users.svg';
 import TrashIcon from '@icon/regular/trash.svg';
@@ -66,12 +67,19 @@ const roleOrder: Record<string, number> = {
   [TeamRole.member]: 2,
 };
 
-type TierOption = { value: TeamUserTier; label: string };
+type TierOption = { value: TeamUserTier; label: string; description: string };
+
+const getTierDescription = (tier: 'haiku' | 'sonnet' | 'opus'): string => {
+  const aiAgent = PLAN_FEATURES.find((f) => f.label === 'AI Agent')?.values[tier] ?? '';
+  const aiCalls = PLAN_FEATURES.find((f) => f.label === 'AI tool calls')?.values[tier] ?? '';
+  const storage = PLAN_FEATURES.find((f) => f.label === 'Storage')?.values[tier] ?? '';
+  return `${aiAgent} · ${aiCalls} calls · ${storage}`;
+};
 
 const tierOptions: TierOption[] = [
-  { value: TeamUserTier.Haiku, label: 'Level 1' },
-  { value: TeamUserTier.Sonnet, label: 'Level 2' },
-  { value: TeamUserTier.Opus, label: 'Level 3' },
+  { value: TeamUserTier.Haiku, label: 'Level 1', description: getTierDescription('haiku') },
+  { value: TeamUserTier.Sonnet, label: 'Level 2', description: getTierDescription('sonnet') },
+  { value: TeamUserTier.Opus, label: 'Level 3', description: getTierDescription('opus') },
 ];
 
 type RoleOption = { value: TeamRole; label: string };
@@ -151,7 +159,10 @@ function TierSelect(props: {
           item={itemProps.item}
           class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
         >
-          <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+          <div class="flex flex-col">
+            <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+            <span class="text-xs text-ink/50">{itemProps.item.rawValue.description}</span>
+          </div>
           <Select.ItemIndicator>
             <CheckIcon class="w-3 h-3" />
           </Select.ItemIndicator>
@@ -168,7 +179,7 @@ function TierSelect(props: {
         <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[220px] p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
