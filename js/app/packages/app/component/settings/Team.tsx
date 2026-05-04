@@ -494,7 +494,7 @@ function InviteRow(props: {
   onCancel: () => void;
 }) {
   return (
-    <div class="flex items-center justify-between py-2 border-b border-edge-muted last:border-b-0">
+    <div class="flex items-center justify-between py-2 border-b border-edge-muted last:border-b-0 gap-2">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
           <EnvelopeIcon class="size-4 text-accent" />
@@ -593,12 +593,9 @@ function TeamInvites() {
 
   return (
     <Show when={invites().length > 0}>
-      <section class="mb-6">
+      <section class="px-6 py-4">
         <header class="mb-2">
-          <h3 class="text-sm font-medium">Pending Invitations</h3>
-          <p class="text-xs text-ink-muted">
-            You've been invited to join a team.
-          </p>
+          <h3 class="text-sm font-medium">You've been invited to join a team</h3>
         </header>
         <div class="border border-edge rounded-sm px-3">
           <For each={invites()}>
@@ -1133,9 +1130,9 @@ function TeamManagement(props: {
         </section>
 
         <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
-          <section class="mt-6 shrink-0">
+          <section class="px-6 py-4 shrink-0 border-t border-edge-muted">
             <h3 class="text-sm font-medium mb-2">Pending Invites</h3>
-            <div class="border border-edge rounded-md px-3">
+            <div class="border border-edge rounded-sm px-3">
               <For each={invitesQuery.data?.invites ?? []}>
                 {(invite) => (
                   <InviteRow
