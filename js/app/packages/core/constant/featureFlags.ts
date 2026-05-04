@@ -334,4 +334,6 @@ export const ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;
 
-export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV
+  ? true
+  : undefined;
