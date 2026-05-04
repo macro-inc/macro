@@ -8,12 +8,57 @@ interface KeyState {
 
 type KeyboardState = Record<string, KeyState>;
 
+/**
+ * A shortcut may have multiple alternative `combos` (e.g. "press `c` OR `cmd+k`").
+ * Each combo is a list of groups; each group is a list of equivalent `e.code`
+ * values (e.g. `cmd` -> [`MetaLeft`, `MetaRight`]). The shortcut is active if
+ * any combo's groups all match the currently pressed set, with no extras.
+ */
 interface Shortcut {
-  keys: string[];
+  combos: string[][][];
   active: boolean;
 }
 
 type ShortcutsState = Record<string, Shortcut>;
+
+const MODIFIER_CODES: Record<string, string[]> = {
+  cmd:   ['MetaLeft'],
+  meta:  ['MetaLeft'],
+  ctrl:  ['ControlLeft'],
+  shift: ['ShiftLeft'],
+  opt:   ['AltLeft'],
+  alt:   ['AltLeft'],
+};
+
+const SYMBOL_CODE: Record<string, string> = {
+  '/':  'Slash',
+  '\\': 'Backslash',
+  ';':  'Semicolon',
+  "'":  'Quote',
+  ',':  'Comma',
+  '.':  'Period',
+  '-':  'Minus',
+  '=':  'Equal',
+  '`':  'Backquote',
+  '[':  'BracketLeft',
+  ']':  'BracketRight',
+};
+
+const NAMED_CODE: Record<string, string> = {
+  enter:      'Enter',
+  space:      'Space',
+  tab:        'Tab',
+  escape:     'Escape',
+  esc:        'Escape',
+  backspace:  'Backspace',
+  delete:     'Backspace',
+  arrowup:    'ArrowUp',
+  arrowdown:  'ArrowDown',
+  arrowleft:  'ArrowLeft',
+  arrowright: 'ArrowRight',
+  capslock:   'CapsLock',
+  fn:         'Fn',
+};
 
 interface KeyDef {
   name: string;
@@ -134,25 +179,88 @@ export function setHighlight(names: string[]): void {
   }
 }
 
-export function registerShortcut(id: string, keys: string[]): void {
-  setShortcuts(id, { keys, active: false });
+export function clearHighlight(): void {
+  setHighlight([]);
+}
+
+/**
+ * Parse a human-readable combo string (e.g. `cmd+k`, `shift+arrowdown`) into
+ * groups of equivalent `e.code` values. Unknown tokens are dropped.
+ */
+export function parseShortcut(combo: string): string[][] {
+  return combo
+    .split('+')
+    .map(tokenToCodes)
+    .filter((group) => group.length > 0);
+}
+
+function tokenToCodes(token: string): string[] {
+  const lower = token.toLowerCase();
+  if (lower in MODIFIER_CODES) return MODIFIER_CODES[lower];
+  if (token in SYMBOL_CODE)    return [SYMBOL_CODE[token]];
+  if (lower in NAMED_CODE)     return [NAMED_CODE[lower]];
+  if (/^[a-z]$/.test(lower))   return [`Key${lower.toUpperCase()}`];
+  if (/^[0-9]$/.test(lower))   return [`Digit${lower}`];
+  return [];
+}
+
+let nextShortcutId = 0;
+
+/**
+ * Register a shortcut described by one or more combo strings.
+ * Returns an opaque id used to read `shortcuts[id].active` or
+ * to highlight the keys via {@link highlightShortcut}.
+ */
+export function registerShortcut(combos: string[]): string {
+  const id = `shortcut-${nextShortcutId++}`;
+  setShortcuts(id, {
+    combos: combos.map(parseShortcut),
+    active: false,
+  });
+  return id;
 }
 
 export function unregisterShortcut(id: string): void {
   setShortcuts(produce((s) => { delete s[id]; }));
 }
 
+/** Highlight every key referenced by a registered shortcut. */
+export function highlightShortcut(id: string): void {
+  const s = shortcuts[id];
+  if (!s) {
+    clearHighlight();
+    return;
+  }
+  const codes = new Set<string>();
+  for (const combo of s.combos) {
+    for (const group of combo) {
+      for (const code of group) codes.add(code);
+    }
+  }
+  setHighlight([...codes]);
+}
+
+function comboMatches(combo: string[][], pressed: Set<string>): boolean {
+  if (combo.length === 0) return false;
+  // Every pressed key must belong to some group (no extras allowed).
+  for (const code of pressed) {
+    if (!combo.some((g) => g.includes(code))) return false;
+  }
+  // Every group must be satisfied by at least one pressed key.
+  for (const group of combo) {
+    if (!group.some((k) => pressed.has(k))) return false;
+  }
+  return true;
+}
+
 function recomputeShortcuts() {
-  // Collect currently pressed keys.
   const pressed = new Set<string>();
   for (const name in keyboard) {
     if (keyboard[name].pressed) pressed.add(name);
   }
-  // A shortcut is active iff its keys are exactly the set of currently pressed keys.
   for (const id in shortcuts) {
     const s = shortcuts[id];
-    const isActive =
-      s.keys.length === pressed.size && s.keys.every((k) => pressed.has(k));
+    const isActive = s.combos.some((c) => comboMatches(c, pressed));
     if (s.active !== isActive) setShortcuts(id, 'active', isActive);
   }
 }

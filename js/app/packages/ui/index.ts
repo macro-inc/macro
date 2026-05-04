@@ -5,9 +5,12 @@ export {
   Keyboard,
   keyboard,
   setHighlight,
+  clearHighlight,
   shortcuts,
   registerShortcut,
   unregisterShortcut,
+  highlightShortcut,
+  parseShortcut,
 } from './components/Keyboard';
 export { Button } from './components/Button';
 export { Layer } from './components/Layer';
