@@ -3,6 +3,7 @@ import { Hotkey } from '@core/component/Hotkey';
 import { Panel } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { For, Index, type JSX } from 'solid-js';
+import { Keyboard } from '@ui';
 
 const cmdOrCtrl = IS_MAC ? 'cmd' : 'ctrl';
 
@@ -20,56 +21,42 @@ const shortcutSections: ShortcutSection[] = [
   {
     title: 'Core',
     items: [
-      { keys: ['c'], description: 'Open the create menu' },
-      { keys: [`${cmdOrCtrl}+k`], description: 'Open the command menu' },
-      {
-        keys: ['g'],
-        description: (
-          <>
-            Go to a view (e.g. <Kbd shortcut="g" /> then <Kbd shortcut="i" /> for inbox)
-          </>
-        ),
-      },
-      { keys: ['/'], description: 'Go to search view' },
+      { keys: ['c']             , description: 'Open the create menu'   },
+      { keys: [`${cmdOrCtrl}+k`], description: 'Open the command menu'  },
+      { keys: ['g']             , description: 'Go to a view'           },
+      { keys: ['/']             , description: 'Go to search view'      },
       { keys: [`${cmdOrCtrl}+f`], description: 'Search in current view' },
-      { keys: [`${cmdOrCtrl}+j`], description: 'Focus AI chat' },
-      { keys: [`${cmdOrCtrl}+;`], description: 'Open settings panel' },
-    ],
-  },
-  {
-    title: 'Unified List',
-    items: [
-      { keys: ['j', 'arrowdown'], description: 'Move down' },
-      { keys: ['k', 'arrowup'], description: 'Move up' },
-      { keys: ['shift+j', 'shift+arrowdown'], description: `Select down` },
-      { keys: ['shift+k', 'shift+arrowup'], description: `Select up` },
-      { keys: ['e'], description: 'Mark done' },
-      {
-        keys: ['x'],
-        description: (
-          <>
-            Select items (then <Kbd shortcut={`${cmdOrCtrl}+k`} /> to bring up actions)
-          </>
-        ),
-      },
-      { keys: ['f'], description: 'Open filter menu' },
-      { keys: ['h', 'arrowleft'], description: 'Collapse item' },
-      { keys: ['l', 'arrowright'], description: 'Expand item' },
-      { keys: ['space'], description: 'Preview item' },
-      { keys: ['click', 'enter'], description: 'Open item in current split' },
-      { keys: ['shift+click', 'shift+enter'], description: 'Open item in a new split' },
+      { keys: [`${cmdOrCtrl}+j`], description: 'Focus AI chat'          },
+      { keys: [`${cmdOrCtrl}+;`], description: 'Open settings panel'    },
     ],
   },
   {
     title: 'Splits',
     items: [
-      { keys: ['\\', `${cmdOrCtrl}+\\`], description: 'Create a split' },
-      { keys: [`cmd+escape`], description: 'Go home / close split'},
-      { keys: ['shift+escape'], description: 'Spotlight split' },
-      { keys: ['shift+h', 'shift+arrowleft'], description: 'Focus split to the left' },
-      { keys: ['shift+l', 'shift+arrowright'], description: 'Focus split to the right' },
-      { keys: [`opt+[`], description: 'Go back in current split' },
-      { keys: [`opt+]`], description: 'Go forward in current split' },
+      { keys: ['\\']                         , description: 'Create a split'              },
+      { keys: [`cmd+escape`]                 , description: 'Go home / close split'       },
+      { keys: ['shift+escape']               , description: 'Spotlight split'             },
+      { keys: ['shift+h', 'shift+arrowleft'] , description: 'Focus split to the left'     },
+      { keys: ['shift+l', 'shift+arrowright'], description: 'Focus split to the right'    },
+      { keys: [`opt+[`]                      , description: 'Go back in current split'    },
+      { keys: [`opt+]`]                      , description: 'Go forward in current split' },
+    ],
+  },
+  {
+    title: 'Unified List',
+    items: [
+      { keys: ['j', 'arrowdown']            , description: 'Move down'                  },
+      { keys: ['k', 'arrowup']              , description: 'Move up'                    },
+      { keys: ['shift+j', 'shift+arrowdown'], description: 'Select down'                },
+      { keys: ['shift+k', 'shift+arrowup']  , description: 'Select up'                  },
+      { keys: ['e']                         , description: 'Mark done'                  },
+      { keys: ['x']                         , description: 'Select items'               },
+      { keys: ['f']                         , description: 'Open filter menu'           },
+      { keys: ['h', 'arrowleft']            , description: 'Collapse item'              },
+      { keys: ['l', 'arrowright']           , description: 'Expand item'                },
+      { keys: ['space']                     , description: 'Preview item'               },
+      { keys: ['enter']                     , description: 'Open item in current split' },
+      { keys: ['shift+enter']               , description: 'Open item in a new split'   },
     ],
   },
 ];
@@ -129,14 +116,31 @@ function ShortcutsContent() {
         <div class="text-sm font-semibold">Keyboard Shortcuts</div>
       </div>
 
-      <div class="flex-1 overflow-auto p-6">
-        <p class="text-ink-muted text-sm mb-6">
-          Shortcuts without a {cmdOrCtrl}/option modifier key require text inputs to be unfocused. For example, pressing <kbd>j</kbd> in a document will insert a j, but will move down the list if the document text is unfocused.
-        </p>
+      <div class="flex-1 overflow-auto px-6 py-2 @container">
+        <Keyboard/>
 
-        <For each={shortcutSections}>
-          {(section) => <ShortcutSectionComponent section={section} />}
-        </For>
+        <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
+
+          {/* Core - left column */}
+          <ShortcutSectionComponent section={shortcutSections[0]} />
+
+          {/* Splits - right column */}
+          <ShortcutSectionComponent section={shortcutSections[1]} />
+
+          {/* Unified List - spans both columns with its own 2-column layout */}
+          <div class="@[600px]:col-span-2">
+            <div class="mb-3">
+              <h3 class="font-medium text-lg mb-2 flex items-center gap-2">
+                {shortcutSections[2].title}
+              </h3>
+              <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
+                <For each={shortcutSections[2].items}>
+                  {(item) => <ShortcutRow item={item} spacer="or" />}
+                </For>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
