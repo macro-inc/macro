@@ -180,6 +180,8 @@ const emailSchema = z.string().email();
 
 type InviteEntry = { email: string; tier: TeamUserTier };
 
+const EMPTY_INVITE: InviteEntry = { email: '', tier: TeamUserTier.Haiku };
+
 function InviteEntryRow(props: {
   entry: InviteEntry;
   onEmailChange: (email: string) => void;
@@ -638,9 +640,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   const [teamNameError, setTeamNameError] = createSignal<string | undefined>(
     undefined
   );
-  const [invites, setInvites] = createSignal<InviteEntry[]>([
-    { email: '', tier: TeamUserTier.Haiku },
-  ]);
+  const [invites, setInvites] = createSignal<InviteEntry[]>([EMPTY_INVITE]);
   const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
     []
   );
@@ -865,9 +865,7 @@ function TeamManagement(props: {
   const [showCancelInviteModal, setShowCancelInviteModal] =
     createSignal<TeamInviteDetails | null>(null);
   const [showInviteModal, setShowInviteModal] = createSignal(false);
-  const [invites, setInvites] = createSignal<InviteEntry[]>([
-    { email: '', tier: TeamUserTier.Haiku },
-  ]);
+  const [invites, setInvites] = createSignal<InviteEntry[]>([EMPTY_INVITE]);
   const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
     []
   );
@@ -995,7 +993,7 @@ function TeamManagement(props: {
 
   const handleInviteModalClose = (open: boolean) => {
     if (!open) {
-      setInvites([]);
+      setInvites([EMPTY_INVITE]);
       setInviteErrors([]);
       setShowInviteModal(false);
     }
