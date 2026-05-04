@@ -132,6 +132,40 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Inviting a user with a specific tier stores that tier in the database.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_invite_stores_tier(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let invites = vec![Email::parse_from_str("opus-user@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites, TeamUserTier::Opus)
+        .await?;
+
+    assert_eq!(invited.len(), 1);
+
+    let row = sqlx::query!(
+        r#"
+        SELECT tier as "tier!: TeamUserTier"
+        FROM team_invite
+        WHERE email = 'opus-user@macro.com'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(row.tier, TeamUserTier::Opus);
+
+    Ok(())
+}
+
 /// Re-inviting an already-invited user within the 5-minute window should not
 /// return them (rate limited), so the result should be empty.
 #[sqlx::test(
