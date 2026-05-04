@@ -22,16 +22,17 @@ false && folderSelector;
 
 const DEFAULT_EMPTY_MESSAGE = 'No items to show.';
 
-function getRandomArcanumGraphic() {
-  const graphicStyle = 'h-72 m-8 mt-32 @max-sm:mt-20 opacity-60';
+function getRandomArcanumGraphic(
+  className = 'h-72 m-8 mt-32 @max-sm:mt-20 opacity-60'
+) {
   const arcanumGraphics = [
-    <Arcanum001 class={graphicStyle} />,
-    <Arcanum002 class={graphicStyle} />,
-    <Arcanum004 class={graphicStyle} />,
-    <Arcanum005 class={graphicStyle} />,
-    <Arcanum006 class={graphicStyle} />,
-    <Arcanum007 class={graphicStyle} />,
-    <Arcanum009 class={graphicStyle} />,
+    <Arcanum001 class={className} />,
+    <Arcanum002 class={className} />,
+    <Arcanum004 class={className} />,
+    <Arcanum005 class={className} />,
+    <Arcanum006 class={className} />,
+    <Arcanum007 class={className} />,
+    <Arcanum009 class={className} />,
   ];
   const randomIndex = Math.floor(Math.random() * arcanumGraphics.length);
   return arcanumGraphics[randomIndex];
@@ -180,15 +181,20 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
 
 function AgentsEmptyState() {
   return (
-    <div class="size-full flex items-start justify-center overflow-y-auto p-8">
-      <div class="w-full max-w-2xl flex flex-col gap-4">
-        <div>
-          <h2 class="text-xl text-ink">Connect AI to Macro</h2>
-          <p class="mt-1 text-sm text-ink-muted">
-            Use Macro with your favorite AI chat client or code editor via MCP.
-          </p>
+    <div class="size-full relative overflow-hidden">
+      <div class="absolute inset-0 flex flex-col items-center pointer-events-none p-4">
+        {getRandomArcanumGraphic('h-72 m-8 mt-32 @max-sm:mt-20 opacity-5')}
+      </div>
+      <div class="relative size-full flex flex-col items-center overflow-y-auto p-4">
+        <div class="w-full max-w-2xl mt-32 @max-sm:mt-20 px-4 pb-8 flex flex-col gap-4">
+          <div>
+            <p class="mt-1 text-sm text-ink-extra-muted">
+              Create an agent above, or use Macro with your favorite AI chat client or code editor via
+              MCP.
+            </p>
+          </div>
+          <McpSetupCards />
         </div>
-        <McpSetupCards />
       </div>
     </div>
   );
