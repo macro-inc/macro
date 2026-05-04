@@ -14,7 +14,7 @@
  */
 
 /** Google Ads account ID (the `AW-...` prefix). */
-const GOOGLE_ADS_ID = 'AW-11035820781';
+export const GOOGLE_ADS_ID = 'AW-11035820781';
 
 /**
  * Per-action conversion labels from the Ads UI.
