@@ -139,8 +139,10 @@ export function Keyboard(props: { keys?: string[] }): JSX.Element {
       xmlns="http://www.w3.org/2000/svg"
       style={{
         'stroke-linejoin': 'round',
+        'box-sizing': 'border-box',
         'stroke-linecap': 'round',
         'stroke-width': '0.0572',
+        'margin-bottom': '12px',
         'display': 'block',
         'width': '100%',
         'fill': 'none',
