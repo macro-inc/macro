@@ -330,11 +330,18 @@ function InviteEmailsInput(props: {
     props.onChange(updated);
   };
 
+  let containerRef: HTMLDivElement | undefined;
+
   const addRow = () => {
     props.onChange([
       ...props.invites,
       { email: '', tier: props.defaultTier ?? TeamUserTier.Haiku },
     ]);
+    requestAnimationFrame(() => {
+      const inputs = containerRef?.querySelectorAll('input[type="text"]');
+      const lastInput = inputs?.[inputs.length - 1] as HTMLInputElement | undefined;
+      lastInput?.focus();
+    });
   };
 
   const removeRow = (index: number) => {
@@ -342,10 +349,17 @@ function InviteEmailsInput(props: {
     props.onErrorsChange(props.errors.filter((_, i) => i !== index));
   };
 
+  const lastInvite = () => props.invites[props.invites.length - 1];
+  const lastError = () => props.errors[props.errors.length - 1];
+  const canAddRow = () => {
+    const last = lastInvite();
+    return last?.email.trim() !== '' && !lastError();
+  };
+
   return (
-    <div class="flex flex-col gap-2">
+    <div ref={containerRef} class="flex flex-col gap-2">
       <Show when={props.invites.length > 0}>
-        <div class="flex flex-col gap-2 max-h-48 overflow-y-auto">
+        <div class="flex flex-col gap-2 max-h-72 overflow-y-auto">
           <Index each={props.invites}>
             {(entry, index) => (
               <InviteEntryRow
@@ -366,6 +380,7 @@ function InviteEmailsInput(props: {
         variant="secondary"
         class="bracket-never rounded-xs w-full justify-center focus:border-accent/50"
         tabIndex={0}
+        disabled={!canAddRow()}
         onClick={addRow}
       >
         <PlusIcon class="size-4" />
