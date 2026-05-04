@@ -318,7 +318,7 @@ impl DocumentSyncSession {
                         path::SNAPSHOT => return self.snapshot_handler(req, document_id).await,
                         path::ACTIVE_PEERS_MARKER => return self.active_peer_ids_handler().await,
                         path::INITIALIZE => {
-                            or_unauth!(claims.has_permission(&AccessLevel::Owner).then_some(()));
+                            or_unauth!(claims.has_permission(&AccessLevel::Edit).then_some(()));
                             return self.initialize_handler(req, document_id).await;
                         }
                         path::DEBUG_DUMP_OPERATIONS => {
