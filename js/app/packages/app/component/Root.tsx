@@ -16,7 +16,12 @@ import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal'
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
-import { getLoginCookieOptions, updateCookie } from '@core/util/cookies';
+import {
+  getLoginCookieOptions,
+  hasLoginCookie,
+  syncLoginStorage,
+  updateCookie,
+} from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
@@ -101,10 +106,10 @@ function useSyncLoginCookie() {
   createEffect(() => {
     if (!userInfoQuery.isSuccess) return;
 
-    const { value, ...options } = getLoginCookieOptions(
-      userInfoQuery.data.authenticated ?? false
-    );
+    const authenticated = userInfoQuery.data.authenticated ?? false;
+    const { value, ...options } = getLoginCookieOptions(authenticated);
     updateCookie('login', value, options);
+    syncLoginStorage(authenticated);
   });
 }
 
@@ -192,11 +197,14 @@ function BasePathComponent() {
   return (
     <Switch>
       <Match when={userInfoQuery.isLoading}>{null}</Match>
+      <Match when={userInfoQuery.isError && hasLoginCookie()}>
+        <Navigate href={redirectPath} />
+      </Match>
       <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
         <Navigate
-          href={`${isNativeMobilePlatform() ? '/welcome' : '/welcome'}${window.location.search}`}
+          href={`/welcome${window.location.search}`}
         />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
