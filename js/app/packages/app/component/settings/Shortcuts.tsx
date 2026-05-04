@@ -3,7 +3,7 @@ import { Hotkey } from '@core/component/Hotkey';
 import { Panel } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { For, Index, type JSX } from 'solid-js';
-import { Keyboard, useKeyboardPressed } from '@ui';
+import { Keyboard } from '@ui';
 
 const cmdOrCtrl = IS_MAC ? 'cmd' : 'ctrl';
 
@@ -110,8 +110,6 @@ function ShortcutSectionComponent(props: { section: ShortcutSection }) {
 }
 
 function ShortcutsContent() {
-  const pressed = useKeyboardPressed();
-
   return (
     <div class="flex flex-col h-full overflow-hidden">
       <div class="relative flex items-center justify-between h-10 px-6 shrink-0 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
@@ -119,7 +117,7 @@ function ShortcutsContent() {
       </div>
 
       <div class="flex-1 overflow-auto px-6 py-2 @container">
-        <Keyboard pressed={pressed()} />
+        <Keyboard />
 
         <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
 

@@ -1,48 +1,182 @@
-import { createSignal, onMount, onCleanup, type Accessor } from 'solid-js';
+import { For, type JSX } from 'solid-js';
+import { createStore, produce } from 'solid-js/store';
 
-export function useKeyboardPressed(): Accessor<string[]> {
-  const [pressed, setPressed] = createSignal<string[]>([]);
-
-  onMount(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const key = e.code;
-      setPressed((prev) => prev.includes(key) ? prev : [...prev, key]);
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      const key = e.code;
-      setPressed((prev) => prev.filter((k) => k !== key));
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
-    onCleanup(() => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    });
-  });
-
-  return pressed;
+interface KeyState {
+  pressed: boolean;
+  highlighted: boolean;
 }
 
-interface KeyRectProps {
+type KeyboardState = Record<string, KeyState>;
+
+interface Shortcut {
+  keys: string[];
+  active: boolean;
+}
+
+type ShortcutsState = Record<string, Shortcut>;
+
+interface KeyDef {
+  name: string;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
   height: number;
   labelX: number;
   labelY: number;
-  label: string;
-  width: number;
-  name: string;
-  x: number;
-  y: number;
-  highlight?: string[];
-  pressed?: string[];
 }
 
+const KEYS: KeyDef[] = [
+  // Row 1: Function keys
+  { name: 'Escape',       label: 'esc',   x:  0.0763, y:  0.0763, width: 2.8473, height: 1.8473, labelX:  1.50, labelY:  1.0228 },
+  { name: 'F1',           label: 'F1',    x:  3.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX:  4.00, labelY:  1.0228 },
+  { name: 'F2',           label: 'F2',    x:  5.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX:  6.00, labelY:  1.0228 },
+  { name: 'F3',           label: 'F3',    x:  7.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX:  8.00, labelY:  1.0228 },
+  { name: 'F4',           label: 'F4',    x:  9.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX: 10.00, labelY:  1.0228 },
+  { name: 'F5',           label: 'F5',    x: 11.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX: 12.00, labelY:  1.0228 },
+  { name: 'F6',           label: 'F6',    x: 13.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX: 14.00, labelY:  1.0228 },
+  { name: 'F7',           label: 'F7',    x: 15.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX: 16.00, labelY:  1.0228 },
+  { name: 'F8',           label: 'F8',    x: 17.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX: 18.00, labelY:  1.0228 },
+  { name: 'F9',           label: 'F9',    x: 19.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX: 20.00, labelY:  1.0228 },
+  { name: 'F10',          label: 'F10',   x: 21.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX: 22.00, labelY:  1.0228 },
+  { name: 'F11',          label: 'F11',   x: 23.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX: 24.00, labelY:  1.0228 },
+  { name: 'F12',          label: 'F12',   x: 25.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX: 26.00, labelY:  1.0228 },
+  { name: 'F13',          label: 'F13',   x: 27.0763, y:  0.0763, width: 1.8473, height: 1.8473, labelX: 28.00, labelY:  1.0228 },
+  // Row 2: Number row
+  { name: 'Backquote',    label: '`',     x:  0.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX:  1.00, labelY:  3.0228 },
+  { name: 'Digit1',       label: '1',     x:  2.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX:  3.00, labelY:  3.0228 },
+  { name: 'Digit2',       label: '2',     x:  4.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX:  5.00, labelY:  3.0228 },
+  { name: 'Digit3',       label: '3',     x:  6.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX:  7.00, labelY:  3.0228 },
+  { name: 'Digit4',       label: '4',     x:  8.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX:  9.00, labelY:  3.0228 },
+  { name: 'Digit5',       label: '5',     x: 10.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX: 11.00, labelY:  3.0228 },
+  { name: 'Digit6',       label: '6',     x: 12.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX: 13.00, labelY:  3.0228 },
+  { name: 'Digit7',       label: '7',     x: 14.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX: 15.00, labelY:  3.0228 },
+  { name: 'Digit8',       label: '8',     x: 16.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX: 17.00, labelY:  3.0228 },
+  { name: 'Digit9',       label: '9',     x: 18.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX: 19.00, labelY:  3.0228 },
+  { name: 'Digit0',       label: '0',     x: 20.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX: 21.00, labelY:  3.0228 },
+  { name: 'Minus',        label: '-',     x: 22.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX: 23.00, labelY:  3.0228 },
+  { name: 'Equal',        label: '=',     x: 24.0763, y:  2.0763, width: 1.8473, height: 1.8473, labelX: 25.00, labelY:  3.0228 },
+  { name: 'Backspace',    label: 'del',   x: 26.0763, y:  2.0763, width: 2.8473, height: 1.8473, labelX: 27.50, labelY:  3.0228 },
+  // Row 3: QWERTY row
+  { name: 'Tab',          label: 'tab',   x:  0.0763, y:  4.0763, width: 2.8473, height: 1.8473, labelX:  1.50, labelY:  5.0228 },
+  { name: 'KeyQ',         label: 'Q',     x:  3.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX:  4.00, labelY:  5.0228 },
+  { name: 'KeyW',         label: 'W',     x:  5.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX:  6.00, labelY:  5.0228 },
+  { name: 'KeyE',         label: 'E',     x:  7.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX:  8.00, labelY:  5.0228 },
+  { name: 'KeyR',         label: 'R',     x:  9.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX: 10.00, labelY:  5.0228 },
+  { name: 'KeyT',         label: 'T',     x: 11.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX: 12.00, labelY:  5.0228 },
+  { name: 'KeyY',         label: 'Y',     x: 13.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX: 14.00, labelY:  5.0228 },
+  { name: 'KeyU',         label: 'U',     x: 15.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX: 16.00, labelY:  5.0228 },
+  { name: 'KeyI',         label: 'I',     x: 17.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX: 18.00, labelY:  5.0228 },
+  { name: 'KeyO',         label: 'O',     x: 19.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX: 20.00, labelY:  5.0228 },
+  { name: 'KeyP',         label: 'P',     x: 21.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX: 22.00, labelY:  5.0228 },
+  { name: 'BracketLeft',  label: '[',     x: 23.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX: 24.00, labelY:  5.0228 },
+  { name: 'BracketRight', label: ']',     x: 25.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX: 26.00, labelY:  5.0228 },
+  { name: 'Backslash',    label: '\\',    x: 27.0763, y:  4.0763, width: 1.8473, height: 1.8473, labelX: 28.00, labelY:  5.0228 },
+  // Row 4: Home row
+  { name: 'CapsLock',     label: 'caps',  x:  0.0763, y:  6.0763, width: 3.3473, height: 1.8473, labelX:  1.75, labelY:  7.0228 },
+  { name: 'KeyA',         label: 'A',     x:  3.5763, y:  6.0763, width: 1.8473, height: 1.8473, labelX:  4.50, labelY:  7.0228 },
+  { name: 'KeyS',         label: 'S',     x:  5.5763, y:  6.0763, width: 1.8473, height: 1.8473, labelX:  6.50, labelY:  7.0228 },
+  { name: 'KeyD',         label: 'D',     x:  7.5763, y:  6.0763, width: 1.8473, height: 1.8473, labelX:  8.50, labelY:  7.0228 },
+  { name: 'KeyF',         label: 'F',     x:  9.5763, y:  6.0763, width: 1.8473, height: 1.8473, labelX: 10.50, labelY:  7.0228 },
+  { name: 'KeyG',         label: 'G',     x: 11.5763, y:  6.0763, width: 1.8473, height: 1.8473, labelX: 12.50, labelY:  7.0228 },
+  { name: 'KeyH',         label: 'H',     x: 13.5763, y:  6.0763, width: 1.8473, height: 1.8473, labelX: 14.50, labelY:  7.0228 },
+  { name: 'KeyJ',         label: 'J',     x: 15.5763, y:  6.0763, width: 1.8473, height: 1.8473, labelX: 16.50, labelY:  7.0228 },
+  { name: 'KeyK',         label: 'K',     x: 17.5763, y:  6.0763, width: 1.8473, height: 1.8473, labelX: 18.50, labelY:  7.0228 },
+  { name: 'KeyL',         label: 'L',     x: 19.5763, y:  6.0763, width: 1.8473, height: 1.8473, labelX: 20.50, labelY:  7.0228 },
+  { name: 'Semicolon',    label: ';',     x: 21.5763, y:  6.0763, width: 1.8473, height: 1.8473, labelX: 22.50, labelY:  7.0228 },
+  { name: 'Quote',        label: "'",     x: 23.5763, y:  6.0763, width: 1.8473, height: 1.8473, labelX: 24.50, labelY:  7.0228 },
+  { name: 'Enter',        label: 'enter', x: 25.5763, y:  6.0763, width: 3.3473, height: 1.8473, labelX: 27.25, labelY:  7.0228 },
+  // Row 5: Bottom letter row
+  { name: 'ShiftLeft',    label: 'shift', x:  0.0763, y:  8.0763, width: 4.3473, height: 1.8473, labelX:  2.25, labelY:  9.0228 },
+  { name: 'KeyZ',         label: 'Z',     x:  4.5763, y:  8.0763, width: 1.8473, height: 1.8473, labelX:  5.50, labelY:  9.0228 },
+  { name: 'KeyX',         label: 'X',     x:  6.5763, y:  8.0763, width: 1.8473, height: 1.8473, labelX:  7.50, labelY:  9.0228 },
+  { name: 'KeyC',         label: 'C',     x:  8.5763, y:  8.0763, width: 1.8473, height: 1.8473, labelX:  9.50, labelY:  9.0228 },
+  { name: 'KeyV',         label: 'V',     x: 10.5763, y:  8.0763, width: 1.8473, height: 1.8473, labelX: 11.50, labelY:  9.0228 },
+  { name: 'KeyB',         label: 'B',     x: 12.5763, y:  8.0763, width: 1.8473, height: 1.8473, labelX: 13.50, labelY:  9.0228 },
+  { name: 'KeyN',         label: 'N',     x: 14.5763, y:  8.0763, width: 1.8473, height: 1.8473, labelX: 15.50, labelY:  9.0228 },
+  { name: 'KeyM',         label: 'M',     x: 16.5763, y:  8.0763, width: 1.8473, height: 1.8473, labelX: 17.50, labelY:  9.0228 },
+  { name: 'Comma',        label: ',',     x: 18.5763, y:  8.0763, width: 1.8473, height: 1.8473, labelX: 19.50, labelY:  9.0228 },
+  { name: 'Period',       label: '.',     x: 20.5763, y:  8.0763, width: 1.8473, height: 1.8473, labelX: 21.50, labelY:  9.0228 },
+  { name: 'Slash',        label: '/',     x: 22.5763, y:  8.0763, width: 1.8473, height: 1.8473, labelX: 23.50, labelY:  9.0228 },
+  { name: 'ShiftRight',   label: 'shift', x: 24.5763, y:  8.0763, width: 4.3473, height: 1.8473, labelX: 26.75, labelY:  9.0228 },
+  // Row 6: Bottom row
+  { name: 'Fn',           label: 'fn',    x:  0.0763, y: 10.0763, width: 1.8473, height: 1.8473, labelX:  1.00, labelY: 11.0228 },
+  { name: 'ControlLeft',  label: 'ctrl',  x:  2.0763, y: 10.0763, width: 1.8473, height: 1.8473, labelX:  3.00, labelY: 11.0228 },
+  { name: 'AltLeft',      label: 'opt',   x:  4.0763, y: 10.0763, width: 1.8473, height: 1.8473, labelX:  5.00, labelY: 11.0228 },
+  { name: 'MetaLeft',     label: 'cmd',   x:  6.0763, y: 10.0763, width: 2.3473, height: 1.8473, labelX:  7.25, labelY: 11.0228 },
+  { name: 'Space',        label: 'space', x:  8.5763, y: 10.0763, width: 9.8473, height: 1.8473, labelX: 13.50, labelY: 11.0228 },
+  { name: 'MetaRight',    label: 'cmd',   x: 18.5763, y: 10.0763, width: 2.3473, height: 1.8473, labelX: 19.75, labelY: 11.0228 },
+  { name: 'AltRight',     label: 'opt',   x: 21.0763, y: 10.0763, width: 1.8473, height: 1.8473, labelX: 22.00, labelY: 11.0228 },
+  { name: 'ArrowLeft',    label: '◂',     x: 23.0763, y: 10.0763, width: 1.8473, height: 1.8473, labelX: 24.00, labelY: 11.0228 },
+  { name: 'ArrowUp',      label: '▴',     x: 25.0763, y: 10.0763, width: 1.8473, height: 0.8473, labelX: 26.00, labelY: 10.5000 },
+  { name: 'ArrowDown',    label: '▾',     x: 25.0763, y: 11.0763, width: 1.8473, height: 0.8473, labelX: 26.00, labelY: 11.5000 },
+  { name: 'ArrowRight',   label: '▸',     x: 27.0763, y: 10.0763, width: 1.8473, height: 1.8473, labelX: 28.00, labelY: 11.0228 },
+];
 
-function KeyRect(props: KeyRectProps) {
-  const isHighlighted = () => props.highlight?.includes(props.name);
-  const isPressed = () => props.pressed?.includes(props.name);
+function initialKeyboardState(): KeyboardState {
+  const state: KeyboardState = {};
+  for (const key of KEYS) {
+    state[key.name] = { pressed: false, highlighted: false };
+  }
+  return state;
+}
+
+export const [keyboard, setKeyboard] = createStore<KeyboardState>(initialKeyboardState());
+export const [shortcuts, setShortcuts] = createStore<ShortcutsState>({});
+
+export function setHighlight(names: string[]): void {
+  const next = new Set(names);
+  for (const key of KEYS) {
+    const shouldHighlight = next.has(key.name);
+    if (keyboard[key.name].highlighted !== shouldHighlight) {
+      setKeyboard(key.name, 'highlighted', shouldHighlight);
+    }
+  }
+}
+
+export function registerShortcut(id: string, keys: string[]): void {
+  setShortcuts(id, { keys, active: false });
+}
+
+export function unregisterShortcut(id: string): void {
+  setShortcuts(produce((s) => { delete s[id]; }));
+}
+
+function recomputeShortcuts() {
+  // Collect currently pressed keys.
+  const pressed = new Set<string>();
+  for (const name in keyboard) {
+    if (keyboard[name].pressed) pressed.add(name);
+  }
+  // A shortcut is active iff its keys are exactly the set of currently pressed keys.
+  for (const id in shortcuts) {
+    const s = shortcuts[id];
+    const isActive =
+      s.keys.length === pressed.size && s.keys.every((k) => pressed.has(k));
+    if (s.active !== isActive) setShortcuts(id, 'active', isActive);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (e) => {
+    const name = e.code;
+    if (keyboard[name] && !keyboard[name].pressed) {
+      setKeyboard(name, 'pressed', true);
+      recomputeShortcuts();
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    const name = e.code;
+    if (keyboard[name]?.pressed) {
+      setKeyboard(name, 'pressed', false);
+      recomputeShortcuts();
+    }
+  });
+}
+
+function KeyRect(props: { def: KeyDef }) {
+  const isHighlighted = () => keyboard[props.def.name].highlighted;
+  const isPressed = () => keyboard[props.def.name].pressed;
 
   function getSolid() {
     if (isPressed() && isHighlighted()) {return 'var(--a0)'}
@@ -65,10 +199,10 @@ function KeyRect(props: KeyRectProps) {
           'fill': getTransparent(),
           'stroke': getSolid(),
         }}
-        height={props.height}
-        width={props.width}
-        x={props.x}
-        y={props.y}
+        height={props.def.height}
+        width={props.def.width}
+        x={props.def.x}
+        y={props.def.y}
         ry="0.2"
       />
       <text
@@ -80,25 +214,16 @@ function KeyRect(props: KeyRectProps) {
           'font-size': '0.4',
           'stroke': 'none',
         }}
-        x={props.labelX}
-        y={props.labelY}
+        x={props.def.labelX}
+        y={props.def.labelY}
       >
-        {props.label}
+        {props.def.label}
       </text>
     </>
   );
 };
 
-interface KeyboardProps {
-  highlight?: string[];
-  pressed?: string[];
-}
-
-export function Keyboard(props: KeyboardProps) {
-  // Temp highlight array for debugging
-  const highlight = () => props.highlight ?? ["KeyU"];
-  const pressed = () => props.pressed ?? [];
-
+export function Keyboard(): JSX.Element {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -112,90 +237,9 @@ export function Keyboard(props: KeyboardProps) {
       }}
       viewBox="0 0 29 12"
     >
-      {/* Row 1: Function keys */}
-      <KeyRect name="Escape"     label="esc"   x={ 0.0763} y={ 0.0763} width={2.8473} height={1.8473} labelX={ 1.50} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F1"         label="F1"    x={ 3.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={ 4.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F2"         label="F2"    x={ 5.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={ 6.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F3"         label="F3"    x={ 7.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={ 8.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F4"         label="F4"    x={ 9.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={10.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F5"         label="F5"    x={11.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={12.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F6"         label="F6"    x={13.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={14.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F7"         label="F7"    x={15.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={16.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F8"         label="F8"    x={17.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={18.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F9"         label="F9"    x={19.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={20.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F10"        label="F10"   x={21.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={22.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F11"        label="F11"   x={23.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={24.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F12"        label="F12"   x={25.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={26.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="F13"        label="F13"   x={27.0763} y={ 0.0763} width={1.8473} height={1.8473} labelX={28.00} labelY={ 1.0228} highlight={highlight()} pressed={pressed()} />
-      {/* Row 2: Number row */}
-      <KeyRect name="Backquote"  label="`"     x={ 0.0763} y={ 2.0763} width={1.8473} height={1.8473}  labelX={1.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Digit1"     label="1"     x={ 2.0763} y={ 2.0763} width={1.8473} height={1.8473}  labelX={3.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Digit2"     label="2"     x={ 4.0763} y={ 2.0763} width={1.8473} height={1.8473}  labelX={5.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Digit3"     label="3"     x={ 6.0763} y={ 2.0763} width={1.8473} height={1.8473}  labelX={7.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Digit4"     label="4"     x={ 8.0763} y={ 2.0763} width={1.8473} height={1.8473}  labelX={9.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Digit5"     label="5"     x={10.0763} y={ 2.0763} width={1.8473} height={1.8473} labelX={11.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Digit6"     label="6"     x={12.0763} y={ 2.0763} width={1.8473} height={1.8473} labelX={13.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Digit7"     label="7"     x={14.0763} y={ 2.0763} width={1.8473} height={1.8473} labelX={15.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Digit8"     label="8"     x={16.0763} y={ 2.0763} width={1.8473} height={1.8473} labelX={17.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Digit9"     label="9"     x={18.0763} y={ 2.0763} width={1.8473} height={1.8473} labelX={19.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Digit0"     label="0"     x={20.0763} y={ 2.0763} width={1.8473} height={1.8473} labelX={21.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Minus"      label="-"     x={22.0763} y={ 2.0763} width={1.8473} height={1.8473} labelX={23.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Equal"      label="="     x={24.0763} y={ 2.0763} width={1.8473} height={1.8473} labelX={25.00} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Backspace"  label="del"   x={26.0763} y={ 2.0763} width={2.8473} height={1.8473} labelX={27.50} labelY={ 3.0228} highlight={highlight()} pressed={pressed()} />
-      {/* Row 3: QWERTY row */}
-      <KeyRect name="Tab"        label="tab"   x={ 0.0763} y={ 4.0763} width={2.8473} height={1.8473} labelX={ 1.50} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyQ"       label="Q"     x={ 3.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={ 4.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyW"       label="W"     x={ 5.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={ 6.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyE"       label="E"     x={ 7.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={ 8.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyR"       label="R"     x={ 9.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={10.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyT"       label="T"     x={11.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={12.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyY"       label="Y"     x={13.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={14.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyU"       label="U"     x={15.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={16.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyI"       label="I"     x={17.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={18.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyO"       label="O"     x={19.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={20.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyP"       label="P"     x={21.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={22.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="BracketLeft"  label="["   x={23.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={24.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="BracketRight" label="]"   x={25.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={26.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Backslash"  label="\"     x={27.0763} y={ 4.0763} width={1.8473} height={1.8473} labelX={28.00} labelY={ 5.0228} highlight={highlight()} pressed={pressed()} />
-      {/* Row 4: Home row */}
-      <KeyRect name="CapsLock"   label="caps"  x={ 0.0763} y={ 6.0763} width={3.3473} height={1.8473} labelX={ 1.75} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyA"       label="A"     x={ 3.5763} y={ 6.0763} width={1.8473} height={1.8473} labelX={ 4.50} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyS"       label="S"     x={ 5.5763} y={ 6.0763} width={1.8473} height={1.8473} labelX={ 6.50} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyD"       label="D"     x={ 7.5763} y={ 6.0763} width={1.8473} height={1.8473} labelX={ 8.50} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyF"       label="F"     x={ 9.5763} y={ 6.0763} width={1.8473} height={1.8473} labelX={10.50} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyG"       label="G"     x={11.5763} y={ 6.0763} width={1.8473} height={1.8473} labelX={12.50} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyH"       label="H"     x={13.5763} y={ 6.0763} width={1.8473} height={1.8473} labelX={14.50} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyJ"       label="J"     x={15.5763} y={ 6.0763} width={1.8473} height={1.8473} labelX={16.50} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyK"       label="K"     x={17.5763} y={ 6.0763} width={1.8473} height={1.8473} labelX={18.50} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyL"       label="L"     x={19.5763} y={ 6.0763} width={1.8473} height={1.8473} labelX={20.50} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Semicolon"  label=";"     x={21.5763} y={ 6.0763} width={1.8473} height={1.8473} labelX={22.50} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Quote"      label="'"     x={23.5763} y={ 6.0763} width={1.8473} height={1.8473} labelX={24.50} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Enter"      label="enter" x={25.5763} y={ 6.0763} width={3.3473} height={1.8473} labelX={27.25} labelY={ 7.0228} highlight={highlight()} pressed={pressed()} />
-      {/* Row 5: Bottom letter row */}
-      <KeyRect name="ShiftLeft"  label="shift" x={ 0.0763} y={ 8.0763} width={4.3473} height={1.8473} labelX={ 2.25} labelY={ 9.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyZ"       label="Z"     x={ 4.5763} y={ 8.0763} width={1.8473} height={1.8473} labelX={ 5.50} labelY={ 9.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyX"       label="X"     x={ 6.5763} y={ 8.0763} width={1.8473} height={1.8473} labelX={ 7.50} labelY={ 9.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyC"       label="C"     x={ 8.5763} y={ 8.0763} width={1.8473} height={1.8473} labelX={ 9.50} labelY={ 9.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyV"       label="V"     x={10.5763} y={ 8.0763} width={1.8473} height={1.8473} labelX={11.50} labelY={ 9.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyB"       label="B"     x={12.5763} y={ 8.0763} width={1.8473} height={1.8473} labelX={13.50} labelY={ 9.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyN"       label="N"     x={14.5763} y={ 8.0763} width={1.8473} height={1.8473} labelX={15.50} labelY={ 9.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="KeyM"       label="M"     x={16.5763} y={ 8.0763} width={1.8473} height={1.8473} labelX={17.50} labelY={ 9.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Comma"      label=","     x={18.5763} y={ 8.0763} width={1.8473} height={1.8473} labelX={19.50} labelY={ 9.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Period"     label="."     x={20.5763} y={ 8.0763} width={1.8473} height={1.8473} labelX={21.50} labelY={ 9.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Slash"      label="/"     x={22.5763} y={ 8.0763} width={1.8473} height={1.8473} labelX={23.50} labelY={ 9.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="ShiftRight" label="shift" x={24.5763} y={ 8.0763} width={4.3473} height={1.8473} labelX={26.75} labelY={ 9.0228} highlight={highlight()} pressed={pressed()} />
-      {/* Row 6: Bottom row */}
-      <KeyRect name="Fn"         label="fn"    x={ 0.0763} y={10.0763} width={1.8473} height={1.8473} labelX={ 1.00} labelY={11.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="ControlLeft" label="ctrl" x={ 2.0763} y={10.0763} width={1.8473} height={1.8473} labelX={ 3.00} labelY={11.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="AltLeft"    label="opt"   x={ 4.0763} y={10.0763} width={1.8473} height={1.8473} labelX={ 5.00} labelY={11.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="MetaLeft"   label="cmd"   x={ 6.0763} y={10.0763} width={2.3473} height={1.8473} labelX={ 7.25} labelY={11.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="Space"      label="space" x={ 8.5763} y={10.0763} width={9.8473} height={1.8473} labelX={13.50} labelY={11.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="MetaRight"  label="cmd"   x={18.5763} y={10.0763} width={2.3473} height={1.8473} labelX={19.75} labelY={11.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="AltRight"   label="opt"   x={21.0763} y={10.0763} width={1.8473} height={1.8473} labelX={22.00} labelY={11.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="ArrowLeft"  label="◂"     x={23.0763} y={10.0763} width={1.8473} height={1.8473} labelX={24.00} labelY={11.0228} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="ArrowUp"    label="▴"     x={25.0763} y={10.0763} width={1.8473} height={0.8473} labelX={26.00} labelY={10.5000} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="ArrowDown"  label="▾"     x={25.0763} y={11.0763} width={1.8473} height={0.8473} labelX={26.00} labelY={11.5000} highlight={highlight()} pressed={pressed()} />
-      <KeyRect name="ArrowRight" label="▸"     x={27.0763} y={10.0763} width={1.8473} height={1.8473} labelX={28.00} labelY={11.0228} highlight={highlight()} pressed={pressed()} />
+      <For each={KEYS}>
+        {(key) => <KeyRect def={key} />}
+      </For>
     </svg>
   );
 }

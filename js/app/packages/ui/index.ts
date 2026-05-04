@@ -1,7 +1,14 @@
 /* components */
 export { SegmentedControl } from './components/SegmentedControl';
 export { TabbedControl } from './components/TabbedControl';
-export { Keyboard, useKeyboardPressed } from './components/Keyboard';
+export {
+  Keyboard,
+  keyboard,
+  setHighlight,
+  shortcuts,
+  registerShortcut,
+  unregisterShortcut,
+} from './components/Keyboard';
 export { Button } from './components/Button';
 export { Layer } from './components/Layer';
 export { Panel } from './components/Panel';
