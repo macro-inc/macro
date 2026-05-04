@@ -1,9 +1,11 @@
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
+import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 import { fileSelector } from '@core/directive/fileSelector';
 import { folderSelector } from '@core/directive/folderSelector';
 import { useEmailLinksStatus } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
+import type { ListView } from '@app/constants/list-views';
 import type { ViewId } from '@core/types/view';
 import { handleFolderSelect } from '@core/util/upload';
 import { createMemo, Match, Show, Switch } from 'solid-js';
@@ -37,6 +39,7 @@ function getRandomArcanumGraphic() {
 
 export function EmptyState(props: {
   viewId?: ViewId;
+  listView?: ListView;
   search?: boolean;
   hasRefinementsFromBase?: boolean;
   onClearFilters?: () => void;
@@ -57,6 +60,9 @@ export function EmptyState(props: {
               : undefined
           }
         />
+      </Match>
+      <Match when={props.listView === 'agents'}>
+        <AgentsEmptyState />
       </Match>
       <Match when={props.viewId === 'noise' && !emailActive()}>
         <EmptyStateInner message={'Email not connected.'} />
@@ -167,6 +173,22 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
             <p class="text-ink-muted"></p>
           </div>
         </Show>
+      </div>
+    </div>
+  );
+}
+
+function AgentsEmptyState() {
+  return (
+    <div class="size-full flex items-start justify-center overflow-y-auto p-8">
+      <div class="w-full max-w-2xl flex flex-col gap-4">
+        <div>
+          <h2 class="text-xl text-ink">Connect AI to Macro</h2>
+          <p class="mt-1 text-sm text-ink-muted">
+            Use Macro with your favorite AI chat client or code editor via MCP.
+          </p>
+        </div>
+        <McpSetupCards />
       </div>
     </div>
   );

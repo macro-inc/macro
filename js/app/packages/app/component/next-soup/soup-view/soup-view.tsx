@@ -893,6 +893,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   </Match>
                   <Match when={!rows().length}>
                     <EmptyState
+                      listView={currentView()}
                       search={!!searchText()}
                       hasRefinementsFromBase={hasActiveRefinements()}
                       onClearFilters={resetToTabDefaults}
