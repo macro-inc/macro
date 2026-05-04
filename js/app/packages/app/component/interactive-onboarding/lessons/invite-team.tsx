@@ -3,7 +3,7 @@ import {
   createMemo,
   createSignal,
   Index,
-  on,
+  onMount,
   Show,
 } from 'solid-js';
 import { Tooltip } from '@core/component/Tooltip';
@@ -58,15 +58,23 @@ function InviteTeamDemo(props: LessonContentProps) {
   const showTier = () => tierFlag().enabled;
 
   const handleBack = () => {
-    onboarding.setInvitedMembers([]);
-    onboarding.setTeamName('');
     props.goToLesson('team-choice');
   };
 
-  const [teamName, setTeamName] = createSignal('');
-  const [inviteEntries, setInviteEntries] = createSignal<InviteEntry[]>([
-    { email: '', tier: 'haiku' },
-  ]);
+  const initialEntries = (): InviteEntry[] => {
+    const members = onboarding.invitedMembers();
+    if (members.length > 0) {
+      return members
+        .filter((m) => m.tier !== 'free')
+        .map((m) => ({ email: m.email, tier: m.tier as PaidPlanTier }));
+    }
+    return [{ email: '', tier: 'haiku' }];
+  };
+
+  const [teamName, setTeamName] = createSignal(onboarding.teamName());
+  const [inviteEntries, setInviteEntries] = createSignal<InviteEntry[]>(
+    initialEntries()
+  );
   const [errors, setErrors] = createSignal<FormErrors>({});
 
   const emails = () => inviteEntries().map((e) => e.email);
@@ -99,18 +107,18 @@ function InviteTeamDemo(props: LessonContentProps) {
     return 'text-ink/40';
   };
 
-  createEffect(
-    on(
-      isValid,
-      (valid) => {
-        props.onComplete('Continue', { skipFocus: true });
-        if (!valid) {
-          props.onUnready();
-        }
-      },
-      { defer: false }
-    )
-  );
+  const updateReadyState = () => {
+    if (isValid()) {
+      props.onComplete('Continue', { skipFocus: true });
+    } else {
+      props.onUnready();
+    }
+  };
+
+  onMount(() => {
+    queueMicrotask(updateReadyState);
+  });
+  createEffect(updateReadyState);
 
   const canAddEmail = () => {
     const entries = inviteEntries();

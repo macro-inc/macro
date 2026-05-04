@@ -66,6 +66,7 @@ function ReviewPayDemo(props: LessonContentProps) {
       string,
       { plan: (typeof PLANS)[number]; count: number }
     > = {};
+    const order: string[] = [];
     for (const member of onboarding.invitedMembers()) {
       const plan = PLANS.find((p) => p.tier === member.tier);
       if (plan) {
@@ -73,10 +74,11 @@ function ReviewPayDemo(props: LessonContentProps) {
           groups[member.tier].count++;
         } else {
           groups[member.tier] = { plan, count: 1 };
+          order.push(member.tier);
         }
       }
     }
-    return Object.values(groups).sort((a, b) => b.plan.price - a.plan.price);
+    return order.map((tier) => groups[tier]);
   });
 
   const handleCheckout = () => {
@@ -102,7 +104,11 @@ function ReviewPayDemo(props: LessonContentProps) {
   };
 
   const handleBack = () => {
-    props.goToLesson('team-choice');
+    if (hasTeam()) {
+      props.goToLesson('invite-team');
+    } else {
+      props.goToLesson('team-choice');
+    }
   };
 
   return (
@@ -144,7 +150,7 @@ function ReviewPayDemo(props: LessonContentProps) {
             </div>
           </div>
 
-          <div class="flex flex-col gap-2 text-sm">
+          <div class="flex flex-col gap-1 text-sm">
             <div class="flex justify-between py-2 border-b border-ink/10">
               <span class="text-ink/60">
                 Your seat · {selectedPlan()?.name}
@@ -196,10 +202,15 @@ function ReviewPayDemo(props: LessonContentProps) {
                   </span>
                 }
               >
-                <div class="flex flex-col gap-1">
+                <div class="flex flex-col gap-1.5">
                   <For each={onboarding.invitedMembers()}>
                     {(member) => (
-                      <span class="text-sm text-ink/70">{member.email}</span>
+                      <div class="flex items-center justify-between text-sm">
+                        <span class="text-ink/70">{member.email}</span>
+                        <span class="text-xs text-ink/40">
+                          {PLANS.find((p) => p.tier === member.tier)?.name}
+                        </span>
+                      </div>
                     )}
                   </For>
                 </div>

@@ -3,6 +3,7 @@ import UsersIcon from '@icon/regular/users.svg';
 import UserIcon from '@icon/regular/user.svg';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import type { LessonContentProps, LessonDefinition } from '../types';
+import { useOnboarding } from '../onboarding-context';
 
 function TeamChoiceContent() {
   return (
@@ -13,6 +14,8 @@ function TeamChoiceContent() {
 }
 
 function TeamChoiceDemo(props: LessonContentProps) {
+  const onboarding = useOnboarding();
+
   createEffect(() => {
     props.onUnready();
   });
@@ -26,6 +29,8 @@ function TeamChoiceDemo(props: LessonContentProps) {
   };
 
   const handleChooseSolo = () => {
+    onboarding.setInvitedMembers([]);
+    onboarding.setTeamName('');
     props.skipLesson('invite-team');
     props.advance();
   };

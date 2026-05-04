@@ -115,6 +115,7 @@ function OnboardingCostSummary() {
       string,
       { plan: (typeof PLANS)[number]; count: number }
     > = {};
+    const order: string[] = [];
     for (const member of onboarding.invitedMembers()) {
       const plan = PLANS.find((p) => p.tier === member.tier);
       if (plan) {
@@ -122,10 +123,11 @@ function OnboardingCostSummary() {
           groups[member.tier].count++;
         } else {
           groups[member.tier] = { plan, count: 1 };
+          order.push(member.tier);
         }
       }
     }
-    return Object.values(groups).sort((a, b) => b.plan.price - a.plan.price);
+    return order.map((tier) => groups[tier]);
   };
 
   const hasTeam = () =>
@@ -155,23 +157,21 @@ function OnboardingCostSummary() {
           </div>
         </div>
         <Show when={hasTeam()}>
-          <div class="flex flex-col gap-0.5 mt-1.5 text-xs text-ink/40">
+          <div class="flex flex-col gap-1.5 mt-1.5 text-xs text-ink/40">
             <div class="flex justify-between">
               <span>{selectedPlan()?.name}</span>
               <span>${onboarding.userSeatCost()}/mo</span>
             </div>
-            <div class="mt-1">
-              {teamByTier().map((group) => (
-                <div class="flex justify-between italic">
-                  <span>
-                    Team · {group.plan.name} ×{group.count}
-                  </span>
-                  <span class="border-b border-dashed border-ink/40">
-                    ${group.plan.price * group.count}/mo
-                  </span>
-                </div>
-              ))}
-            </div>
+            {teamByTier().map((group) => (
+              <div class="flex justify-between italic">
+                <span>
+                  Team · {group.plan.name} ×{group.count}
+                </span>
+                <span class="border-b border-dashed border-ink/40">
+                  ${group.plan.price * group.count}/mo
+                </span>
+              </div>
+            ))}
           </div>
           <div class="flex justify-between items-center mt-2 pt-2 border-t border-ink/10 text-xs">
             <span class="text-ink/40 flex items-center gap-1">
