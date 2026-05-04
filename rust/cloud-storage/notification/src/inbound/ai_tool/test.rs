@@ -28,7 +28,7 @@ fn test_list_notifications_deserialization() {
     assert_eq!(tool.limit, None);
     assert_eq!(tool.done, None);
     assert_eq!(tool.seen, None);
-    assert!(!tool.important_emails_only);
+    assert!(tool.important_emails_only);
     assert_eq!(tool.include_types, None);
     assert_eq!(tool.entities, None);
 

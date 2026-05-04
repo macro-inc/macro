@@ -1155,7 +1155,7 @@ export interface ListNotifications {
    */
   entities?: NotificationEntityRef[] | null;
   /**
-   * If true, omit new-email notifications for email threads that are not marked Important. Non-email notifications are still returned. Defaults to false.
+   * If true, omit new-email notifications for email threads that are not marked Important. Non-email notifications are still returned. Defaults to true.
    */
   importantEmailsOnly?: boolean;
   /**

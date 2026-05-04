@@ -518,7 +518,7 @@ export const ListNotifications = z.object({
       z.null(),
     ])
     .default(null),
-  importantEmailsOnly: z.boolean().default(false),
+  importantEmailsOnly: z.boolean().default(true),
   includeTypes: z
     .union([
       z.array(
