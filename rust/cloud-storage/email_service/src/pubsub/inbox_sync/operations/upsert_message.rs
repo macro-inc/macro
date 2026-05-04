@@ -540,6 +540,7 @@ async fn send_notifications(
         recipient_ids: HashSet::from([recipient]),
     }
     .into_request()
+    .with_apns()
     .with_conn_gateway();
 
     if let Err(e) = ctx

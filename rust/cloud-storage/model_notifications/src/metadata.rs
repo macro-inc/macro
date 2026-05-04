@@ -222,6 +222,23 @@ impl NotificationTitle for NewEmailMetadata {
     }
 }
 
+impl NotificationExtIos for NewEmailMetadata {
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.thread_id)
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        alert_apns(self, sender_id, notification_id, None).ok()
+    }
+}
+
 impl notification::domain::models::Notification for AiResponseMetadata {
     const TYPE_NAME: &'static str = "ai_response";
 }
