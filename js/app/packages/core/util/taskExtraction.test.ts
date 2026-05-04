@@ -21,7 +21,10 @@ vi.mock('@core/component/LexicalMarkdown/utils', () => ({
   $elementNodeToMarkdown: vi.fn(),
 }));
 
-import { extractCheckboxesFromMarkdown } from './taskExtraction';
+import {
+  extractCheckboxesFromMarkdown,
+  trimEdgeUserMentions,
+} from './taskExtraction';
 
 describe('extractCheckboxesFromMarkdown', () => {
   it('should extract single unchecked checkbox', () => {
@@ -200,5 +203,61 @@ Some notes below.
 
     expect(result).toHaveLength(1);
     expect(result[0].rawLine).toBe('  - [ ] Indented with spaces');
+  });
+});
+
+describe('trimEdgeUserMentions', () => {
+  const aliceMention =
+    '<m-user-mention>{"userId":"u1","email":"alice@test.com"}</m-user-mention>';
+  const bobMention =
+    '<m-user-mention>{"userId":"u2","email":"bob@test.com"}</m-user-mention>';
+
+  it('trims a leading user mention', () => {
+    expect(trimEdgeUserMentions(`${aliceMention} fix the search bug`)).toBe(
+      'fix the search bug'
+    );
+  });
+
+  it('trims a trailing user mention', () => {
+    expect(trimEdgeUserMentions(`fix the search bug ${aliceMention}`)).toBe(
+      'fix the search bug'
+    );
+  });
+
+  it('trims mentions on both ends', () => {
+    expect(
+      trimEdgeUserMentions(`${aliceMention} fix the search bug ${bobMention}`)
+    ).toBe('fix the search bug');
+  });
+
+  it('trims multiple consecutive mentions at edges', () => {
+    expect(
+      trimEdgeUserMentions(
+        `${aliceMention} ${bobMention} fix the search bug ${aliceMention} ${bobMention}`
+      )
+    ).toBe('fix the search bug');
+  });
+
+  it('preserves mentions in the middle', () => {
+    const input = `${aliceMention} ping ${bobMention} about the bug`;
+    expect(trimEdgeUserMentions(input)).toBe(
+      `ping ${bobMention} about the bug`
+    );
+  });
+
+  it('returns empty string when content is only mentions', () => {
+    expect(trimEdgeUserMentions(`${aliceMention} ${bobMention}`)).toBe('');
+  });
+
+  it('handles surrounding whitespace', () => {
+    expect(
+      trimEdgeUserMentions(`  ${aliceMention}   fix the bug   ${bobMention}  `)
+    ).toBe('fix the bug');
+  });
+
+  it('leaves text without edge mentions unchanged', () => {
+    expect(trimEdgeUserMentions('fix the search bug')).toBe(
+      'fix the search bug'
+    );
   });
 });
