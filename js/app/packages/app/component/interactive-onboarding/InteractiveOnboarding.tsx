@@ -39,6 +39,8 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 import { OnboardingProvider, useOnboarding } from './onboarding-context';
 import { PLANS } from '@app/component/paywall/plans';
+import { Tooltip } from '@core/component/Tooltip';
+import InfoIcon from '@icon/regular/info.svg';
 
 export default function InteractiveOnboarding() {
   const isAuthenticated = useIsAuthenticated();
@@ -106,7 +108,10 @@ function OnboardingCostSummary() {
 
   // Group all seats (user + team) by tier
   const seatsByTier = () => {
-    const groups: Record<string, { plan: (typeof PLANS)[number]; count: number }> = {};
+    const groups: Record<
+      string,
+      { plan: (typeof PLANS)[number]; count: number }
+    > = {};
 
     // Add user's seat
     const userTier = onboarding.selectedPlan();
@@ -134,7 +139,10 @@ function OnboardingCostSummary() {
   };
 
   const teamByTier = () => {
-    const groups: Record<string, { plan: (typeof PLANS)[number]; count: number }> = {};
+    const groups: Record<
+      string,
+      { plan: (typeof PLANS)[number]; count: number }
+    > = {};
     for (const member of onboarding.invitedMembers()) {
       const plan = PLANS.find((p) => p.tier === member.tier);
       if (plan) {
@@ -173,7 +181,9 @@ function OnboardingCostSummary() {
             <div class="mt-1">
               {teamByTier().map((group) => (
                 <div class="flex justify-between italic">
-                  <span>Team · {group.plan.name} ×{group.count}</span>
+                  <span>
+                    Team · {group.plan.name} ×{group.count}
+                  </span>
                   <span class="border-b border-dashed border-ink/40">
                     ${group.plan.price * group.count}/mo
                   </span>
@@ -182,8 +192,15 @@ function OnboardingCostSummary() {
             </div>
           </div>
           <div class="flex justify-between items-center mt-2 pt-2 border-t border-ink/10 text-xs">
-            <span class="text-ink/40">Total with team</span>
-            <span class="text-ink/50 font-medium">${onboarding.totalCost()}/mo</span>
+            <span class="text-ink/40 flex items-center gap-1">
+              Total with team
+              <Tooltip tooltip="Team charges begin when members accept their invite">
+                <InfoIcon class="size-3 text-ink/30" />
+              </Tooltip>
+            </span>
+            <span class="text-ink/50 font-medium">
+              ${onboarding.totalCost()}/mo
+            </span>
           </div>
         </Show>
       </div>
