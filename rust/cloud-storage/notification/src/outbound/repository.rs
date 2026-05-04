@@ -41,16 +41,31 @@ type UserNotificationListRow = (
     Option<String>,
 );
 
-fn build_user_notifications_query<'a>(
+struct UserNotificationsQueryArgs<'a> {
     user_id: &'a str,
     event_item_ids: Option<&'a [String]>,
     limit: i64,
     cursor_id: Option<Uuid>,
     cursor_timestamp: Option<DateTime<Utc>>,
-    filters: &NotificationListFilters,
+    filters: &'a NotificationListFilters,
     include_types: &'a [String],
     entity_tokens: &'a [String],
+}
+
+fn build_user_notifications_query<'a>(
+    args: UserNotificationsQueryArgs<'a>,
 ) -> QueryBuilder<'a, Postgres> {
+    let UserNotificationsQueryArgs {
+        user_id,
+        event_item_ids,
+        limit,
+        cursor_id,
+        cursor_timestamp,
+        filters,
+        include_types,
+        entity_tokens,
+    } = args;
+
     let mut builder = QueryBuilder::new(
         r#"
             SELECT
@@ -708,16 +723,16 @@ impl NotificationDbOps for PgPool {
         let include_types = filters.include_type_tokens();
         let entity_tokens = filters.entity_tokens();
 
-        let rows = build_user_notifications_query(
-            user_id.as_ref(),
-            None,
-            query_limit,
-            cursor_id.copied(),
-            cursor_timestamp.copied(),
-            &filters,
-            &include_types,
-            &entity_tokens,
-        )
+        let rows = build_user_notifications_query(UserNotificationsQueryArgs {
+            user_id: user_id.as_ref(),
+            event_item_ids: None,
+            limit: query_limit,
+            cursor_id: cursor_id.copied(),
+            cursor_timestamp: cursor_timestamp.copied(),
+            filters: &filters,
+            include_types: &include_types,
+            entity_tokens: &entity_tokens,
+        })
         .build_query_as::<UserNotificationListRow>()
         .fetch_all(self)
         .await?;
@@ -806,16 +821,16 @@ impl NotificationDbOps for PgPool {
         let include_types = filters.include_type_tokens();
         let entity_tokens = filters.entity_tokens();
 
-        let rows = build_user_notifications_query(
-            user_id.as_ref(),
-            Some(&event_item_ids),
-            query_limit,
-            cursor_id.copied(),
-            cursor_timestamp.copied(),
-            &filters,
-            &include_types,
-            &entity_tokens,
-        )
+        let rows = build_user_notifications_query(UserNotificationsQueryArgs {
+            user_id: user_id.as_ref(),
+            event_item_ids: Some(&event_item_ids),
+            limit: query_limit,
+            cursor_id: cursor_id.copied(),
+            cursor_timestamp: cursor_timestamp.copied(),
+            filters: &filters,
+            include_types: &include_types,
+            entity_tokens: &entity_tokens,
+        })
         .build_query_as::<UserNotificationListRow>()
         .fetch_all(self)
         .await?;
