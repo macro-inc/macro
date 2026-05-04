@@ -311,7 +311,7 @@ export const ENABLE_APP_STORE_QR_CODE = resolveFeatureFlag(
 
 export const ENABLE_RAIL_CHAT_TASK_COMMENTS = resolveFeatureFlag(
   'RAIL_CHAT_TASK_COMMENTS',
-  DEV_MODE_ENV
+  true,
 );
 
 // skips over posthog and sets the ENABLE_TEAMS feature to true if we are in dev mode
