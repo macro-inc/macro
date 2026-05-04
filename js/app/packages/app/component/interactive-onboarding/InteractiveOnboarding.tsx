@@ -106,38 +106,6 @@ function OnboardingCostSummary() {
     return PLANS.find((p) => p.tier === tier);
   };
 
-  // Group all seats (user + team) by tier
-  const seatsByTier = () => {
-    const groups: Record<
-      string,
-      { plan: (typeof PLANS)[number]; count: number }
-    > = {};
-
-    // Add user's seat
-    const userTier = onboarding.selectedPlan();
-    if (userTier) {
-      const plan = PLANS.find((p) => p.tier === userTier);
-      if (plan) {
-        groups[userTier] = { plan, count: 1 };
-      }
-    }
-
-    // Add team members' seats
-    for (const member of onboarding.invitedMembers()) {
-      const plan = PLANS.find((p) => p.tier === member.tier);
-      if (plan) {
-        if (groups[member.tier]) {
-          groups[member.tier].count++;
-        } else {
-          groups[member.tier] = { plan, count: 1 };
-        }
-      }
-    }
-
-    // Sort by price descending
-    return Object.values(groups).sort((a, b) => b.plan.price - a.plan.price);
-  };
-
   const teamByTier = () => {
     const groups: Record<
       string,
@@ -157,7 +125,8 @@ function OnboardingCostSummary() {
   };
 
   const hasTeam = () =>
-    onboarding.invitedMembers().length > 0 || onboarding.teamName().trim() !== '';
+    onboarding.invitedMembers().length > 0 ||
+    onboarding.teamName().trim() !== '';
 
   return (
     <Show when={selectedPlan() && selectedPlan()!.price > 0}>
@@ -171,7 +140,9 @@ function OnboardingCostSummary() {
           </div>
           <div class="flex items-center gap-1.5 min-w-0 ml-4">
             <Show when={hasTeam() && onboarding.teamName()}>
-              <span class="text-xs text-ink/50 truncate max-w-[50ch]">{onboarding.teamName()}</span>
+              <span class="text-xs text-ink/50 truncate max-w-[50ch]">
+                {onboarding.teamName()}
+              </span>
               <span class="text-ink/30">·</span>
             </Show>
             <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium shrink-0">

@@ -57,7 +57,9 @@ function ReviewPayDemo(props: LessonContentProps) {
 
           <div class="flex flex-col gap-3">
             <div class="flex justify-between items-center">
-              <span class="text-ink/70">Your seat ({selectedPlan()?.name})</span>
+              <span class="text-ink/70">
+                Your seat ({selectedPlan()?.name})
+              </span>
               <span class="text-ink">${onboarding.userSeatCost()}/mo</span>
             </div>
 
