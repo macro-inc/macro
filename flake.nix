@@ -172,7 +172,8 @@
             let
               openApiFiles = pkgs.lib.cleanSourceWith {
                 src = ./js/app/packages/service-clients;
-                filter = path: _type: pkgs.lib.hasSuffix "openapi.json" path;
+                filter = path: type:
+                  type == "directory" || pkgs.lib.hasSuffix "openapi.json" (baseNameOf path);
               };
               crateToDir = {
                 document_storage_service = "service-storage";
