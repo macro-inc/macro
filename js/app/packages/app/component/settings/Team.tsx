@@ -27,6 +27,7 @@ import {
   Show,
   Suspense,
   Switch,
+  type ValidComponent,
 } from 'solid-js';
 import type { CollectionNode } from '@kobalte/core';
 import {
@@ -141,6 +142,8 @@ function RoleSelect(props: {
 function TierSelect(props: {
   value: string;
   onChange: (tier: TeamUserTier) => void;
+  triggerClass?: string;
+  triggerAs?: ValidComponent;
 }) {
   const selectedOption = () =>
     tierOptions.find((o) => o.value === props.value) ?? tierOptions[0];
@@ -170,8 +173,9 @@ function TierSelect(props: {
       )}
     >
       <Select.Trigger
-        as={Button}
-        class="rounded-xs px-2 py-1 text-xs data-[expanded]:bg-ink/10"
+        as={props.triggerAs}
+        tabIndex={0}
+        class={props.triggerClass ?? 'rounded-xs px-2 py-1 text-xs data-[expanded]:bg-ink/10'}
       >
         <Select.Value<TierOption>>
           {(state) => state.selectedOption().label}
@@ -220,48 +224,11 @@ function InviteEntryRow(props: {
           )}
         />
         <Show when={props.showTier}>
-          <Select<TierOption>
-            options={tierOptions}
-            value={
-              tierOptions.find((o) => o.value === props.entry.tier) ??
-              tierOptions[0]
-            }
-            onChange={(opt) => opt && props.onTierChange(opt.value)}
-            optionValue="value"
-            optionTextValue="label"
-            gutter={4}
-            placement="bottom-end"
-            itemComponent={(itemProps: {
-              item: CollectionNode<TierOption>;
-            }) => (
-              <Select.Item
-                item={itemProps.item}
-                class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
-              >
-                <Select.ItemLabel>
-                  {itemProps.item.rawValue.label}
-                </Select.ItemLabel>
-                <Select.ItemIndicator>
-                  <CheckIcon class="w-3 h-3" />
-                </Select.ItemIndicator>
-              </Select.Item>
-            )}
-          >
-            <Select.Trigger
-              tabIndex={0}
-              class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink outline-none focus:border-accent/50 shrink-0"
-            >
-              <Select.Value<TierOption>>
-                {(state) => state.selectedOption().label}
-              </Select.Value>
-              <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
-            </Select.Trigger>
-            <Select.Portal>
-              <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
-                <Select.Listbox />
-              </Select.Content>
-            </Select.Portal>
-          </Select>
+          <TierSelect
+            value={props.entry.tier}
+            onChange={props.onTierChange}
+            triggerClass="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink outline-none focus:border-accent/50 shrink-0"
+          />
         </Show>
         <Show when={props.showRemove}>
           <Tooltip tooltip="Remove">
@@ -458,7 +425,7 @@ function MemberRow(props: {
             <span class="text-xs text-ink-muted py-1">{props.member.tier}</span>
           }
         >
-          <TierSelect value={props.member.tier} onChange={props.onTierChange} />
+          <TierSelect value={props.member.tier} onChange={props.onTierChange} triggerAs={Button} />
         </Show>
         <Show when={props.isOwner}>
           <Show
