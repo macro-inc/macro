@@ -22,16 +22,16 @@ function KeyRect(props: KeyRectProps) {
         ry="0.2"
       />
       <text
-        x={props.labelX}
-        y={props.labelY}
-        text-anchor="middle"
-        dominant-baseline="central"
         style={{
           'font-family': 'var(--font-mono)',
+          'dominant-baseline': 'central',
+          'text-anchor': 'middle',
           'fill': 'var(--b4)',
           'font-size': '0.4',
           'stroke': 'none',
         }}
+        x={props.labelX}
+        y={props.labelY}
       >
         {props.label}
       </text>
