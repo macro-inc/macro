@@ -22,6 +22,7 @@ export const SelectValue: Component<PropertyValueProps> = (props) => {
 
   const handleClick = (e: MouseEvent) => {
     if (props.canEdit && !props.property.isMetadata) {
+      e.stopPropagation();
       props.onEdit?.(props.property, e.currentTarget as HTMLElement);
     }
   };
