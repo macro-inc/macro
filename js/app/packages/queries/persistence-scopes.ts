@@ -1,5 +1,6 @@
 import { partialMatchKey, type QueryKey } from '@tanstack/query-core';
 import { hasLoginCookie } from '@core/util/cookies';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { authKeys } from './auth/keys';
 import { channelKeys } from './channel/keys';
 import { createPersistenceKey, type PersistScope } from './persistence';
@@ -38,15 +39,19 @@ export function createQueryPersistenceScopes(
       shouldPersist: (queryKey) =>
         partialMatchKey(queryKey, ['email', 'threadMessages']),
     },
-    {
-      store: createPerQueryIDBStore({
-        dbName: createPersistenceKey('user-info', 1),
-      }),
-      maxAge: { value: 7, unit: 'd' },
-      buster,
-      shouldPersist: (queryKey) =>
-        partialMatchKey(queryKey, authKeys.userInfo.queryKey),
-      shouldRestore: () => hasLoginCookie(),
-    },
+    ...(isNativeMobilePlatform()
+      ? [
+          {
+            store: createPerQueryIDBStore({
+              dbName: createPersistenceKey('user-info', 1),
+            }),
+            maxAge: { value: 7, unit: 'd' },
+            buster,
+            shouldPersist: (queryKey: QueryKey) =>
+              partialMatchKey(queryKey, authKeys.userInfo.queryKey),
+            shouldRestore: hasLoginCookie,
+          } satisfies PersistScope,
+        ]
+      : []),
   ];
 }

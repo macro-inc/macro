@@ -15,6 +15,8 @@ export type LoginCookieOptions = {
   sameSite: 'Lax';
 };
 
+import { isTauri } from '@core/util/platform';
+
 const LOGIN_STORAGE_KEY = 'macro:login';
 
 /** Check if the user appears to be authenticated based on the login cookie or localStorage fallback. */
@@ -36,7 +38,7 @@ export function hasLoginCookie(): boolean {
   return false;
 }
 
-/** Sync the login state to localStorage (for environments where cookies don't persist, e.g. Tauri iOS). */
+/** Sync the login state to localStorage for environments where cookies don't persist, e.g. Tauri. */
 export function syncLoginStorage(isAuthenticated: boolean) {
   if (typeof localStorage === 'undefined') return;
   if (isAuthenticated) {

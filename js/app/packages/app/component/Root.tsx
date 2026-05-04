@@ -157,12 +157,12 @@ const rootPreload: RoutePreloadFunc = async (args) => {
   }
 };
 
-function OfflineFallback(props: { onRetry: () => void }) {
+function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
   const [retrying, setRetrying] = createSignal(false);
 
   const handleRetry = async () => {
     setRetrying(true);
-    props.onRetry();
+    await props.onRetry();
     setRetrying(false);
   };
 
@@ -223,8 +223,11 @@ function BasePathComponent() {
   return (
     <Switch>
       <Match when={userInfoQuery.isLoading}>{null}</Match>
-      {/* If no service AND no persisted query (fresh install or user hasn't opened app since cutoff) AND user has been previously logged in => show offline fallback instead of log in screen */}
-      <Match when={userInfoQuery.isError && hasLoginCookie()}>
+      <Match
+        when={
+          userInfoQuery.isError && hasLoginCookie() && isNativeMobilePlatform()
+        }
+      >
         <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
       </Match>
       <Match
