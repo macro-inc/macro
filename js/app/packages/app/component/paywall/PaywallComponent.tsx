@@ -136,7 +136,7 @@ const PaywallComponent = (props: PaywallComponent) => {
   };
 
   return (
-    <div class="space-y-6 sm:space-y-8 w-full">
+    <div class="space-y-2 w-full">
       <div class="relative w-full text-center">
         <Show when={!props.hideCloseButton}>
           <button
@@ -162,8 +162,8 @@ const PaywallComponent = (props: PaywallComponent) => {
         </Show>
       </div>
 
-      <div class="mx-auto mt-6 w-full max-w-2xl">
-        <div class="gap-3 sm:gap-4 grid grid-cols-1 sm:grid-cols-3">
+      <div class="w-full">
+        <div class="gap-2 grid grid-cols-1 sm:grid-cols-3">
           <For each={PAID_PLANS}>
             {(plan) => (
               <button
@@ -209,7 +209,7 @@ const PaywallComponent = (props: PaywallComponent) => {
         </div>
       </div>
 
-      <div class="mx-auto mt-8 max-w-2xl text-center">
+      <div class="w-full">
         <Show
           when={hasPaid() && currentTier() && selectedTier() !== currentTier()}
           fallback={
