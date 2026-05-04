@@ -5,6 +5,7 @@ export type AppEvents = {
   onboarding_start: Record<string, unknown>;
   onboarding_step: Record<string, unknown>; // payload -
   onboarding_completed: Record<string, unknown>;
+  onboarding_team_created: Record<string, unknown>;
   login_from_onboarding: Record<string, unknown>;
   mobile_web_welcome_viewed: Record<string, unknown>;
   mobile_web_signup_sent_viewed: Record<string, unknown>;

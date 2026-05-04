@@ -18,6 +18,7 @@ import {
 } from '@queries/team';
 import { useEmail } from '@core/context/user';
 import type { LessonContentProps, LessonDefinition } from '../types';
+import { useAnalytics } from '@app/component/analytics-context';
 
 const inviteFormSchema = z.object({
   teamName: z
@@ -47,12 +48,19 @@ type FormErrors = {
 };
 
 function InviteTeamDemo(props: LessonContentProps) {
+  const analytics = useAnalytics();
+
   const [teamName, setTeamName] = createSignal('');
   const [emails, setEmails] = createSignal<string[]>(['']);
   const [errors, setErrors] = createSignal<FormErrors>({});
 
   const createTeamMutation = useCreateTeamWithInvitesMutation({
     onSettled: () => invalidateUserTeams(),
+    onSuccess(data) {
+      analytics.track('onboarding_team_created', {
+        teamId: data.id,
+      });
+    },
   });
   const userEmail = useEmail();
 
