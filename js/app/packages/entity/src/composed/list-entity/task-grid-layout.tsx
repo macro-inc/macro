@@ -1,12 +1,10 @@
 import { createMemo, For, Show, Suspense } from 'solid-js';
 import { cn } from '@ui/utils/classname';
-import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
 import { Modals } from '@core/component/Properties/component/modal';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
 } from '@core/component/Properties/context/PropertiesContext';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import type {
   Property,
   PropertyApiValues,
@@ -17,34 +15,45 @@ import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
 import { Entity } from '../../entity';
+import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { soupPropertyToProperty } from '../../extractors-property';
 import {
   isProjectContainedEntity,
   type EntityData,
   type EntityWithProperties,
 } from '../../types/entity';
+import { ListPropertyValue } from './list-property-value';
 import type { LayoutProps } from './shared';
+import {
+  TASK_GRID_COLUMNS,
+  TASK_GRID_TEMPLATE_AREAS,
+  TASK_GRID_TEMPLATE_COLUMNS,
+  type TaskGridColumn,
+} from './task-grid-template';
 
-const TASK_GRID_COLUMNS = [
-  {
-    id: 'status',
-    defId: SYSTEM_PROPERTY_IDS.STATUS,
-    width: 'minmax(9rem, 10%)',
-    condensed: false,
-  },
-  {
-    id: 'priority',
-    defId: SYSTEM_PROPERTY_IDS.PRIORITY,
-    width: 'minmax(9rem, 10%)',
-    condensed: false,
-  },
-  {
-    id: 'assignees',
-    defId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-    width: 'minmax(3rem, 10%)',
-    condensed: true,
-  },
-] as const;
+const EPOCH = new Date(0).toISOString();
+
+/**
+ * Build a placeholder Property for a column when the entity doesn't yet have
+ * the property attached. Lets the editor open and create the property on save.
+ */
+function buildStubProperty(col: TaskGridColumn): Property {
+  const stubSoup: SoupProperty = {
+    definition: {
+      id: col.defId,
+      display_name: col.label,
+      data_type: col.dataType,
+      is_metadata: false,
+      is_multi_select: col.isMultiSelect,
+      is_system: true,
+      owner: { scope: 'system' },
+      specific_entity_type: col.specificEntityType,
+      created_at: EPOCH,
+      updated_at: EPOCH,
+    },
+  };
+  return soupPropertyToProperty(stubSoup);
+}
 
 export function TaskGridLayout(props: LayoutProps) {
   const entity = () => props.entity as EntityWithProperties<EntityData>;
@@ -80,9 +89,6 @@ export function TaskGridLayout(props: LayoutProps) {
       saveOne(property, { valueType: 'DATE', value: date }),
   };
 
-  const propertyCols = TASK_GRID_COLUMNS.map((c) => c.width).join(' ');
-  const propertyAreas = TASK_GRID_COLUMNS.map((c) => c.id).join(' ');
-
   return (
     <PropertiesProvider
       entityType={EntityType.TASK}
@@ -99,8 +105,8 @@ export function TaskGridLayout(props: LayoutProps) {
           'gap-2 grid grid-rows-[1fr]'
         )}
         style={{
-          'grid-template-columns': `1rem minmax(0, 60%) ${propertyCols} 8ch`,
-          'grid-template-areas': `"indicator content ${propertyAreas} timestamp"`,
+          'grid-template-columns': TASK_GRID_TEMPLATE_COLUMNS,
+          'grid-template-areas': TASK_GRID_TEMPLATE_AREAS,
         }}
       >
         <Entity.Slot placement="indicator" class="relative size-full group">
@@ -153,14 +159,9 @@ export function TaskGridLayout(props: LayoutProps) {
               placement={col.id}
               class="flex items-center min-w-0 overflow-hidden text-xs ph-no-capture"
             >
-              <Show when={propertyMap().get(col.defId)}>
-                {(property) => (
-                  <PropertyValue
-                    property={property()}
-                    condensed={col.condensed}
-                  />
-                )}
-              </Show>
+              <ListPropertyValue
+                property={propertyMap().get(col.defId) ?? buildStubProperty(col)}
+              />
             </Entity.Slot>
           )}
         </For>

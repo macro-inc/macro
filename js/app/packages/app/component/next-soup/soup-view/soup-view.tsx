@@ -46,6 +46,7 @@ import {
   type SearchLocation,
   type ProjectEntity,
   TaskListEntity,
+  TaskListHeader,
 } from '@entity';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
@@ -884,6 +885,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                     />
                   </Match>
                   <Match when={rows().length}>
+                    <Show when={currentView() === 'tasks'}>
+                      <TaskListHeader />
+                    </Show>
                     <ListLayoutProvider ref={localEntityListRef}>
                       <EntityRowProvider
                         container={localEntityListRef}
