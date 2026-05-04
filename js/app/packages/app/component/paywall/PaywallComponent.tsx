@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { Button } from '@ui/components/Button';
 import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
@@ -212,36 +212,39 @@ const PaywallComponent = (props: PaywallComponent) => {
         <Show
           when={hasPaid() && currentTier() && selectedTier() !== currentTier()}
           fallback={
-            <button
+            <Button
               onClick={handleContinue}
-              class={cn(
-                'w-full px-4 py-2 sm:px-6 sm:py-3 font-medium transition-none hover:transition text-sm sm:text-base border border-transparent',
-                hasPaid()
-                  ? 'bg-active text-ink border-edge hover:bg-hover hover:border-edge'
-                  : 'bg-accent text-page hover:bg-accent-ink'
-              )}
+              variant="secondary"
+              size="lg"
+              depth={3}
+              class="w-full"
             >
               <Show when={!hasPaid()} fallback={'Manage Subscription'}>
                 Get {PLANS.find((p) => p.tier === selectedTier())?.name}
               </Show>
-            </button>
+            </Button>
           }
         >
-          <button
+          <Button
             onClick={handleUpdateTier}
             disabled={updating()}
-            class="w-full px-4 py-2 sm:px-6 sm:py-3 font-medium transition-none hover:transition text-sm sm:text-base border border-transparent bg-accent text-page hover:bg-accent-ink disabled:opacity-60"
+            variant="secondary"
+            size="lg"
+            depth={3}
+            class="w-full border-accent/30 bg-accent/10 text-accent hover:bg-accent/20"
           >
             {updating() ? 'Updating…' : 'Update Subscription'}
-          </button>
+          </Button>
         </Show>
         <Show when={!hasPaid() && props.handleGuest}>
-          <button
+          <Button
             onClick={() => props.handleGuest?.()}
-            class="mt-3 text-xs text-ink/40 hover:text-ink/60 underline"
+            variant="link"
+            size="sm"
+            class="mt-3 text-ink/40 hover:text-ink/60"
           >
             Continue with free plan
-          </button>
+          </Button>
         </Show>
       </div>
     </div>
