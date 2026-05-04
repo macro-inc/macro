@@ -1,23 +1,23 @@
+import { MediaImage } from '@channel/Media/MediaImage';
+import { MediaVideo } from '@channel/Media/MediaVideo';
+import { EntityIcon } from '@core/component/EntityIcon';
 import {
   staticFileIdEndpoint,
   staticFileSizedEndpoint,
 } from '@core/constant/servers';
-import { EntityIcon } from '@core/component/EntityIcon';
 import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
 import XIcon from '@icon/regular/x.svg';
-import { MediaImage } from '@channel/Media/MediaImage';
-import { MediaVideo } from '@channel/Media/MediaVideo';
 import { cn } from '@ui/utils/classname';
 import {
   children,
   createMemo,
   createSignal,
   For,
+  type JSX,
   Match,
   Show,
-  splitProps,
   Switch,
-  type JSX,
+  splitProps,
 } from 'solid-js';
 import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
 import type { MediaItem } from '@channel/Media/media-items';
@@ -61,61 +61,70 @@ function MediaAttachmentItem(props: {
   onRemove: (attachment: InputAttachmentData) => void;
   onOpen?: () => void;
 }) {
+  const isPending = () => !!props.attachment.pending;
   const mediaSrc = () =>
     props.attachment.kind === 'image'
       ? staticFileSizedEndpoint(props.attachment.id, 'medium')
       : staticFileIdEndpoint(props.attachment.id);
 
+  const removeButton = () => (
+    <RemoveButton
+      attachment={props.attachment}
+      onRemove={props.onRemove}
+      class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+    />
+  );
+
+  const pendingOverlay = () => (
+    <Show when={isPending()}>
+      <div class="absolute inset-0 flex items-center justify-center rounded-2xl">
+        <SpinnerIcon class="w-4 h-4 animate-spin" />
+      </div>
+    </Show>
+  );
+
   return (
     <div class="ph-no-capture relative group">
-      <Show
-        when={!props.attachment.pending && props.attachment.kind === 'image'}
+      <Switch
         fallback={
-          <Show
-            when={
-              !props.attachment.pending && props.attachment.kind === 'video'
-            }
-            fallback={
-              <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge-muted rounded-md bg-menu">
-                <SpinnerIcon class="w-4 h-4 animate-spin" />
-              </div>
-            }
-          >
-            <button type="button" onClick={() => props.onOpen?.()}>
-              <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
-                <MediaVideo.Preview
-                  src={mediaSrc()}
-                  class="size-full object-cover"
-                />
-                <MediaVideo.PlayOverlay />
-              </MediaVideo.Root>
-            </button>
-            <RemoveButton
-              attachment={props.attachment}
-              onRemove={props.onRemove}
-              class="absolute -top-2 -right-2 z-10 rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-            />
-          </Show>
+          <div class="size-23 rounded-2xl border border-edge bg-menu" />
         }
       >
-        <MediaImage.Root>
+        <Match
+          when={
+            props.attachment.kind === 'image' &&
+            (!isPending() || props.attachment.previewSrc)
+          }
+        >
+          <MediaImage.Root>
+            <button type="button" onClick={() => props.onOpen?.()}>
+              <MediaImage.Image
+                src={mediaSrc()}
+                previewSrc={props.attachment.previewSrc}
+                class="size-23 select-none rounded-2xl border border-edge object-cover"
+                width={92}
+                height={92}
+                loading="lazy"
+                fallback={<MediaImage.Fallback square />}
+              />
+            </button>
+          </MediaImage.Root>
+        </Match>
+
+        <Match when={props.attachment.kind === 'video' && !isPending()}>
           <button type="button" onClick={() => props.onOpen?.()}>
-            <MediaImage.Image
-              src={mediaSrc()}
-              class="size-23 select-none rounded-2xl border border-edge object-cover"
-              width={92}
-              height={92}
-              loading="lazy"
-              fallback={<MediaImage.Fallback square />}
-            />
+            <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
+              <MediaVideo.Preview
+                src={mediaSrc()}
+                class="size-full object-cover"
+              />
+              <MediaVideo.PlayOverlay />
+            </MediaVideo.Root>
           </button>
-          <RemoveButton
-            attachment={props.attachment}
-            onRemove={props.onRemove}
-            class="absolute -top-2 -right-2 z-10 rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-          />
-        </MediaImage.Root>
-      </Show>
+        </Match>
+      </Switch>
+      {pendingOverlay()}
+      {removeButton()}
     </div>
   );
 }

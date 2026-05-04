@@ -1,7 +1,14 @@
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { cn } from '@ui/utils/classname';
 import { internalDrag } from '@core/directive/internalDragState';
-import { type ParentProps, type JSX, Show, createSignal } from 'solid-js';
+import {
+  type ParentProps,
+  type JSX,
+  Show,
+  createEffect,
+  createSignal,
+  on,
+} from 'solid-js';
 false && internalDrag;
 const ATTACHMENT_TILE_SIZE = 92;
 
@@ -51,6 +58,8 @@ function Fallback(props: {
 
 function Image(props: {
   src: string;
+  // A source for image preview, e.g. used when we have a local url we can display while the image gets uploaded, as in iOS when sharing images.
+  previewSrc?: string;
   onOpen?: () => void;
   class?: string;
   width?: number;
@@ -61,9 +70,33 @@ function Image(props: {
 }) {
   const [loaded, setLoaded] = createSignal(false);
 
+  createEffect(
+    on(
+      () => props.src,
+      () => {
+        setLoaded(false);
+      }
+    )
+  );
+
   return (
     <>
-      <Show when={!loaded()}>{props.fallback}</Show>
+      <Show when={!loaded()}>
+        <Show when={props.previewSrc} fallback={props.fallback}>
+          {(previewSrc) => (
+            <img
+              class={cn(props.class, props.onOpen && 'cursor-pointer')}
+              src={previewSrc()}
+              alt="preview"
+              width={props.width}
+              height={props.height}
+              style={props.style}
+              loading={props.loading}
+              onClick={() => props.onOpen?.()}
+            />
+          )}
+        </Show>
+      </Show>
       <img
         class={cn(props.class, props.onOpen && 'cursor-pointer')}
         classList={{ invisible: !loaded(), absolute: !loaded() }}

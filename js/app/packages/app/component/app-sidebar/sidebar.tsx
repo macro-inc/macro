@@ -49,6 +49,7 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useAnalytics } from '@app/component/analytics-context';
+import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import {
   InviteModal,
@@ -329,22 +330,12 @@ export const registerSidebarHotkeys = ({
           content?.type === 'component' &&
           content.id === 'search'
         ) {
-          const splitEl = document.querySelector(
-            `[data-split-id="${activeSplit.id}"]`
-          );
-          const searchContainer =
-            splitEl?.querySelector<HTMLElement>('[data-soup-search]');
-          if (searchContainer) {
-            const editable =
-              searchContainer.querySelector<HTMLElement>('[contenteditable]') ??
-              searchContainer;
-            editable.focus();
-            return true;
-          }
+          requestSearchFocus(activeSplit.id);
+          return true;
         }
       }
 
-      openWithSplit(
+      const handle = openWithSplit(
         {
           type: 'component',
           id: link.id,
@@ -355,6 +346,9 @@ export const registerSidebarHotkeys = ({
           allowDuplicate: true,
         }
       );
+      if (link.id === 'search' && handle) {
+        requestSearchFocus(handle.id);
+      }
       return true;
     };
 
@@ -772,12 +766,15 @@ const SidebarLink = (props: SidebarLinkProps) => {
             if (e.button === 1) return;
 
             e.preventDefault();
-            layout.openWithSplit(content(), {
+            const handle = layout.openWithSplit(content(), {
               preferNewSplit: e.shiftKey,
               mergeHistory: false,
               allowDuplicate: true,
               referredFrom: 'sidebar',
             });
+            if (props.id === 'search' && handle) {
+              requestSearchFocus(handle.id);
+            }
             layoutManager?.returnFocus();
           }}
         >

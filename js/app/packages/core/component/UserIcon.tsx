@@ -103,7 +103,7 @@ export function UserIcon(props: UserIconProps) {
     <div
       onMouseDown={props.suppressClick ? undefined : getOrCreateDm}
       class={cn(
-        'relative inline-flex shrink-0 overflow-hidden rounded-full bg-ink-extra-muted text-panel leading-none',
+        'relative shrink-0 overflow-hidden rounded-full bg-ink-extra-muted text-panel',
         sizeClasses().container,
         props.class
       )}

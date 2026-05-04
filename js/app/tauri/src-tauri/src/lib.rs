@@ -6,14 +6,24 @@ use reqwest::cookie::CookieStore;
 use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
 use serde::Serialize;
+#[cfg(target_os = "ios")]
+use share_target::cleanup_stale_staged_shared_files;
+use share_target::{
+    PendingShareFilesState, clear_shared_files, get_pending_share_filenames,
+    maybe_handle_share_deep_link, pop_shared_files, upload_shared_file_to_presigned_url,
+};
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
 
 mod tauri_protocol;
+
+pub(crate) const APP_SCHEME: &str = "macro";
 use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
+
+mod share_target;
 
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
@@ -171,12 +181,17 @@ pub fn run() {
                 h(ctx.webview_label(), request, responder);
             }
         })
+        .manage(PendingShareFilesState::default())
         .invoke_handler(tauri::generate_handler![
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
-            macro_bundle_updater_plugin::inbound::plugin::clear_bundle
+            macro_bundle_updater_plugin::inbound::plugin::clear_bundle,
+            get_pending_share_filenames,
+            pop_shared_files,
+            clear_shared_files,
+            upload_shared_file_to_presigned_url,
         ])
         .setup(|app| {
             // Restore persisted bundle root on startup
@@ -203,6 +218,8 @@ pub fn run() {
             }
 
             app.chain(attach_deep_link_handler);
+            #[cfg(target_os = "ios")]
+            cleanup_stale_staged_shared_files(&app.handle());
 
             Ok(())
         })
@@ -292,9 +309,13 @@ fn attach_deep_link_handler(app: &mut tauri::App) {
             .next()
             .ok_or_else(|| report!("expected at least 1 url"))?;
 
+        if maybe_handle_share_deep_link(handle, &url) {
+            return Ok(());
+        }
+
         // Universal/App links come in as https:// URLs, custom scheme links come in as macro://
         let macro_scheme = match url.scheme() {
-            "macro" => MacroScheme::new(url)?,
+            s if s == APP_SCHEME => MacroScheme::new(url)?,
             "http" | "https" => MacroScheme::from_url(&url)?,
             scheme => {
                 return Err(report!("unexpected deep link scheme: {}", scheme));

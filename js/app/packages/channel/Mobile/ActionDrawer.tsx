@@ -240,7 +240,7 @@ export function ActionDrawer() {
                     <button
                       type="button"
                       data-message-action={action.id}
-                      class="flex items-center gap-3 px-4 py-3 text-sm text-ink hover:bg-hover hover-transition-bg text-left not-last:border-b border-page"
+                      class="flex items-center gap-3 px-4 py-3 text-sm text-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-panel"
                       ref={(el) => {
                         const getTarget = action.getFocusTarget;
                         if (getTarget) focusInput(el, () => ({ getTarget }));
@@ -265,7 +265,7 @@ export function ActionDrawer() {
                     <button
                       type="button"
                       data-message-action={action.id}
-                      class="flex items-center gap-3 px-4 py-3 text-sm text-failure-ink hover:bg-hover hover-transition-bg text-left not-last:border-b border-panel"
+                      class="flex items-center gap-3 px-4 py-3 text-sm text-failure-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-panel"
                       ref={(el) => {
                         const getTarget = action.getFocusTarget;
                         if (getTarget) focusInput(el, () => ({ getTarget }));

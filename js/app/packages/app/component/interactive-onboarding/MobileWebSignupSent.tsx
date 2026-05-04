@@ -5,7 +5,12 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { MOBILE_WEB_SIGNUP_LEAD_VALUE } from '@app/lib/analytics/leadValues';
 
-export default function MobileWebSignupSent() {
+type Props = {
+  /** Email submitted on the prior step — used as the Google conversion `transaction_id` for dedup. */
+  email?: string;
+};
+
+export default function MobileWebSignupSent(props: Props) {
   const analytics = useAnalytics();
 
   onMount(() => {
@@ -20,6 +25,11 @@ export default function MobileWebSignupSent() {
     };
     analytics.trackMeta('Lead', leadPayload);
     analytics.trackMeta('CompleteRegistration', leadPayload);
+    analytics.trackGoogleConversion('mobile_web_lead', {
+      value: MOBILE_WEB_SIGNUP_LEAD_VALUE,
+      currency: 'USD',
+      transaction_id: props.email,
+    });
   });
 
   return (
