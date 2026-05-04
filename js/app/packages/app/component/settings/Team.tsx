@@ -287,6 +287,15 @@ function getEmailError(
   return undefined;
 }
 
+function validateInviteEmails(invites: InviteEntry[]): {
+  errors: (string | undefined)[];
+  hasError: boolean;
+} {
+  const emails = invites.map((i) => i.email);
+  const errors = invites.map((inv, i) => getEmailError(inv.email, emails, i));
+  return { errors, hasError: errors.some((e) => e !== undefined) };
+}
+
 function InviteEmailsInput(props: {
   invites: InviteEntry[];
   onChange: (invites: InviteEntry[]) => void;
@@ -653,21 +662,8 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   };
 
   const validateInvites = () => {
-    const currentInvites = invites();
-    const newErrors: (string | undefined)[] = [];
-    let hasError = false;
-
-    for (let i = 0; i < currentInvites.length; i++) {
-      const email = currentInvites[i].email.trim();
-      if (email !== '' && !emailSchema.safeParse(email).success) {
-        newErrors[i] = 'Invalid email address';
-        hasError = true;
-      } else {
-        newErrors[i] = undefined;
-      }
-    }
-
-    setInviteErrors(newErrors);
+    const { errors, hasError } = validateInviteEmails(invites());
+    setInviteErrors(errors);
     return !hasError;
   };
 
@@ -882,21 +878,8 @@ function TeamManagement(props: {
   const hasValidInvites = () => invites().length > 0;
 
   const validateInvites = () => {
-    const currentInvites = invites();
-    const newErrors: (string | undefined)[] = [];
-    let hasError = false;
-
-    for (let i = 0; i < currentInvites.length; i++) {
-      const email = currentInvites[i].email.trim();
-      if (email !== '' && !emailSchema.safeParse(email).success) {
-        newErrors[i] = 'Invalid email address';
-        hasError = true;
-      } else {
-        newErrors[i] = undefined;
-      }
-    }
-
-    setInviteErrors(newErrors);
+    const { errors, hasError } = validateInviteEmails(invites());
+    setInviteErrors(errors);
     return !hasError;
   };
 
