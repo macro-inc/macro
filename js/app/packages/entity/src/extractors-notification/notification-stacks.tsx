@@ -137,7 +137,7 @@ function NotificationStackRow(props: {
               >
                 <UnreadIndicator active />
               </span>
-              <div class="shrink-0 flex items-center bg-[orange]">
+              <div class="shrink-0">
                 <NotificationSenderIcon stack={props.stack} size="xs" />
               </div>
               <span class="ph-no-capture truncate min-w-0">

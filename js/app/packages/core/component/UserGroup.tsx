@@ -29,13 +29,13 @@ export function UserGroup(props: UserGroupProps) {
     return match(size())
       .with('xs', () => ({
         userIcon: 'size-4',
-        wrapper: 'p-[2px] bg-[lime]',
+        wrapper: 'p-[2px]',
         overlap: '-mr-3',
         counter: 'size-5 text-[10px] -mr-2 border-2',
       }))
       .with('sm', () => ({
         userIcon: 'size-6',
-        wrapper: 'p-[2px] bg-[blue]',
+        wrapper: 'p-[2px]',
         overlap: '-mr-4',
         counter: 'size-6 text-xs -mr-3 border-2',
       }))
@@ -61,12 +61,12 @@ export function UserGroup(props: UserGroupProps) {
   };
 
   return (
-    <div class="flex items-center shrink-0 bg-[teal]">
+    <div class="flex items-center shrink-0">
       <For each={displayUserIds()}>
         {(userId) => (
           <div
             class={cn(
-              'rounded-full bg-[yellow]',
+              'rounded-full',
               sizeClasses().wrapper,
               sizeClasses().overlap
             )}
