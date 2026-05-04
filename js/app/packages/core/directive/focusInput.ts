@@ -103,8 +103,6 @@ export function focusInput(
   const anchor = positionNear ?? el;
 
   const handleClick = () => {
-    const target = getTarget();
-    if (!target) return;
     triggerFocusInput(getTarget, anchor);
   };
 

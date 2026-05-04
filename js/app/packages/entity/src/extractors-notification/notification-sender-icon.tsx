@@ -41,10 +41,11 @@ export function NotificationSenderIcon(props: NotificationSenderIconProps) {
     return [];
   };
 
+  const hasSenders = () => senderIds().length > 0;
   const hasMultipleSenders = () => senderIds().length > 1;
 
   return (
-    <Show when={senderIds().length > 0}>
+    <Show when={hasSenders()}>
       <Show
         when={hasMultipleSenders()}
         fallback={

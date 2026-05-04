@@ -1,3 +1,5 @@
+import { GOOGLE_ADS_ID } from '@app/lib/analytics/googleConversions';
+
 export const initializeGoogleAnalytics = () => {
   const G_ID = 'G-52HPEL3FTV';
 
@@ -7,12 +9,16 @@ export const initializeGoogleAnalytics = () => {
   gaScript.async = true;
   document.head.appendChild(gaScript);
 
+  // Registering the AW account on page load is what lets gtag pick up
+  // ?gclid=… from the URL into the _gcl_aw cookie, so subsequent
+  // gtag('event', 'conversion', ...) fires can be attributed to the ad click.
   const gaInit = document.createElement('script');
   gaInit.innerHTML = `
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
     gtag('config', '${G_ID}', { send_page_view: false });
+    gtag('config', '${GOOGLE_ADS_ID}');
   `;
   document.head.appendChild(gaInit);
 

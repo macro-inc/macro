@@ -46,10 +46,7 @@ export function SoupEntityActionDrawer() {
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
         <MobileDrawer.Content aria-label="Entity actions">
-          {/* Drag handle */}
-          <div class="flex justify-center pt-3 pb-2 shrink-0">
-            <div class="w-10 h-1 rounded-full bg-edge-muted" />
-          </div>
+          <MobileDrawer.Handle />
 
           {/* Entity preview */}
           <Show when={drawerState.entity()}>

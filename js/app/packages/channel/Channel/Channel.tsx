@@ -49,7 +49,10 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { openChatWithInput } from '@app/component/ChatWithAgentButton';
 import { useChannelName, useChannelActivity } from '@core/context/channels';
 import { buildMentionMarkdownString, markdownToPlainText } from '@lexical-core';
-import { extractUserMentions } from '@core/util/taskExtraction';
+import {
+  extractUserMentions,
+  trimEdgeUserMentions,
+} from '@core/util/taskExtraction';
 import { createActivityTracker } from '@channel/activity-tracker';
 import {
   invalidateChannelsActivity,
@@ -245,7 +248,8 @@ export function Channel(props: ChannelProps) {
       messageEditor.start(message);
     },
     onCreateTask: (ctx) => {
-      const plainText = markdownToPlainText(ctx.message.content).trim();
+      const trimmedMarkdown = trimEdgeUserMentions(ctx.message.content);
+      const plainText = markdownToPlainText(trimmedMarkdown).trim();
       const title =
         plainText.length > 70 ? `${plainText.slice(0, 70)}...` : plainText;
       const mentionedUserIds = extractUserMentions(ctx.message.content);

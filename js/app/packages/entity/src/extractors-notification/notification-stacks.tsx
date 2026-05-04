@@ -185,7 +185,6 @@ export function NotificationStacks(props: NotificationStacksProps) {
   const notifications = () => props.entity.notifications?.() ?? [];
   const validNotifications = () =>
     filterNotDoneNotifications(filterValidNotifications(notifications()));
-
   const [stacks, setStacks] = createStore<NotificationStack[]>([]);
 
   createEffect(() => {

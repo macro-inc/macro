@@ -75,32 +75,67 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
   );
 }
 
-type MobileDrawerSectionProps<T extends ValidComponent = 'div'> =
-  ComponentProps<T> & {
-    as?: T;
-  };
+type ExtendDiv<T extends ValidComponent = 'div'> = ComponentProps<T> & {
+  as?: T;
+};
+
+/**
+ * Component for rendering style Drawer Section Labels.
+ */
+function MobileDrawerSectionLabel<T extends ValidComponent = 'div'>(
+  props: ExtendDiv<T>
+) {
+  const [local, rest] = splitProps(props, ['as', 'class', 'children']);
+  return (
+    <Dynamic
+      component={local.as ?? 'div'}
+      class={cn(
+        'px-3 pb-2 text-xs font-medium text-ink-muted uppercase tracking-wide',
+        local.class
+      )}
+      {...rest}
+    >
+      {local.children}
+    </Dynamic>
+  );
+}
 
 /**
  * Component for rendering styled Drawer sections.
  */
 function MobileDrawerSection<T extends ValidComponent = 'div'>(
-  props: MobileDrawerSectionProps<T>
+  props: ExtendDiv<T>
 ) {
-  const [local, rest] = splitProps(props as MobileDrawerSectionProps, [
-    'as',
-    'class',
-    'children',
-  ]);
+  const [local, rest] = splitProps(props, ['as', 'class', 'children']);
   return (
     <Layer depth={2}>
       <Dynamic
         component={(local.as ?? 'div') as ValidComponent}
-        class={cn('rounded-2xl mx-3 overflow-clip', local.class as string)}
+        class={cn('rounded-2xl mx-3 overflow-clip', local.class)}
         {...rest}
       >
         {local.children}
       </Dynamic>
     </Layer>
+  );
+}
+
+/**
+ * Component for rendering the standard mobile drawer drag handle.
+ */
+function MobileDrawerHandle<T extends ValidComponent = 'div'>(
+  props: ExtendDiv<T>
+) {
+  const [local, rest] = splitProps(props, ['as', 'class', 'children']);
+
+  return (
+    <Dynamic
+      component={local.as ?? 'div'}
+      class={cn('flex justify-center pt-3 pb-2 shrink-0', local.class)}
+      {...rest}
+    >
+      {local.children ?? <div class="w-10 h-1 rounded-full bg-edge-muted" />}
+    </Dynamic>
   );
 }
 
@@ -123,6 +158,8 @@ export const MobileDrawer = Object.assign(
     Overlay: Drawer.Overlay,
     Content: MobileDrawerContent,
     Close: Drawer.Close,
+    Handle: MobileDrawerHandle,
     Section: MobileDrawerSection,
+    Label: MobileDrawerSectionLabel,
   }
 );

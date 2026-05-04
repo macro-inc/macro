@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>NotificationServiceExtension</string>
+	<string>Share to Macro</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -17,15 +17,29 @@
 	<key>CFBundlePackageType</key>
 	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
-	<string>$(MARKETING_VERSION)</string>
+	<string>2.0.2</string>
 	<key>CFBundleVersion</key>
 	<string>142</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>macro</string>
+	</array>
 	<key>NSExtension</key>
 	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>NSExtensionActivationRule</key>
+			<dict>
+				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
+				<integer>10</integer>
+				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+				<integer>5</integer>
+			</dict>
+		</dict>
 		<key>NSExtensionPointIdentifier</key>
-		<string>com.apple.usernotifications.service</string>
+		<string>com.apple.share-services</string>
 		<key>NSExtensionPrincipalClass</key>
-		<string>$(PRODUCT_MODULE_NAME).NotificationService</string>
+		<string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
 	</dict>
 </dict>
 </plist>
