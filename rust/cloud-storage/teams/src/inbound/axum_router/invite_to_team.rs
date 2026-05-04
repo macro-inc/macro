@@ -7,7 +7,10 @@ use macro_user_id::{email::Email, lowercased::Lowercase};
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 
-use crate::domain::{model::{InviteUsersToTeamError, TeamUserTier}, team_repo::TeamService};
+use crate::domain::{
+    model::{InviteUsersToTeamError, TeamUserTier},
+    team_repo::TeamService,
+};
 
 use super::{TeamPathParam, TeamRouterState, middleware::TeamAccessRoleExtractor};
 
