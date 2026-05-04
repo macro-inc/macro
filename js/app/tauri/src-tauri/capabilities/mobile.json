@@ -14,7 +14,6 @@
     "haptics:allow-vibrate",
     "log:default",
     "auth:allow-authenticate",
-    "device-info:default",
-    "mobile-sharetarget:default"
+    "device-info:default"
   ]
 }
