@@ -61,12 +61,12 @@ export function UserGroup(props: UserGroupProps) {
   };
 
   return (
-    <div class="flex items-center shrink-0">
+    <div class="flex items-center shrink-0 w-fit pr-3">
       <For each={displayUserIds()}>
         {(userId) => (
           <div
             class={cn(
-              'rounded-full',
+              'bg-panel rounded-full',
               sizeClasses().wrapper,
               sizeClasses().overlap
             )}
