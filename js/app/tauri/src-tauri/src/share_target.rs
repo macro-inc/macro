@@ -510,7 +510,12 @@ pub(crate) async fn upload_shared_file_to_presigned_url(
                 .len();
 
             let body = reqwest::blocking::Body::sized(file, size);
-            let mut request = reqwest::blocking::Client::new().put(upload_url).body(body);
+            let client = reqwest::blocking::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(30))
+                .timeout(std::time::Duration::from_secs(300))
+                .build()
+                .map_err(|error| format!("failed to build HTTP client: {error}"))?;
+            let mut request = client.put(upload_url).body(body);
 
             if !mime_type.is_empty() {
                 request = request.header(CONTENT_TYPE, mime_type);

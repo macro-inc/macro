@@ -131,8 +131,12 @@ export function ShareTargetProvider(props: {
       return;
     }
 
+    let nextRequestId = 0;
+
     const loadPendingShareFiles = async (filenames: string[]) => {
       if (filenames.length === 0) return;
+
+      const requestId = ++nextRequestId;
 
       const previousFilenames = pendingShareFileNames();
       const previousFiles = pendingShareFiles();
@@ -147,6 +151,9 @@ export function ShareTargetProvider(props: {
 
       try {
         const files = await popSharedFiles(filenames);
+
+        if (requestId !== nextRequestId) return;
+
         if (files.length === 0) {
           clearLoadedPendingShare(previousFiles);
           return;
@@ -160,6 +167,7 @@ export function ShareTargetProvider(props: {
           );
         }
       } catch (error) {
+        if (requestId !== nextRequestId) return;
         clearLoadedPendingShare(previousFiles);
         console.error('failed to load pending share files', error);
       }
