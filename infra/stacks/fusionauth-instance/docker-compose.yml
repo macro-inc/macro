@@ -6,10 +6,13 @@ name: macro
 services:
   db:
     image: postgres:16.0-bookworm
+    env_file:
+      - path: .env
+        required: false
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
@@ -22,6 +25,9 @@ services:
 
   fusionauth:
     image: fusionauth/fusionauth-app:1.62.1
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       db:
         condition: service_healthy
@@ -29,16 +35,15 @@ services:
       #   condition: service_healthy
     environment:
       DATABASE_URL: jdbc:postgresql://db:5432/fusionauth
-      DATABASE_ROOT_USERNAME: ${POSTGRES_USER}
-      DATABASE_ROOT_PASSWORD: ${POSTGRES_PASSWORD}
-      DATABASE_USERNAME: ${DATABASE_USER}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_ROOT_USERNAME: ${POSTGRES_USER:-postgres}
+      DATABASE_ROOT_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DATABASE_USERNAME: ${DATABASE_USER:-fusionauth}
       FUSIONAUTH_APP_KICKSTART_FILE: /usr/local/fusionauth/kickstart/kickstart.json
       FUSIONAUTH_APP_MEMORY: 512M 
       FUSIONAUTH_APP_RUNTIME_MODE: development
       FUSIONAUTH_APP_URL: http://fusionauth:9011
     healthcheck:
-      test: curl --silent --fail http://localhost:9011/api/status -o /dev/null -w "%{http_code}"
+      test: ["CMD-SHELL", "curl -s http://localhost:9011/api/status | grep -q '\"status\":\"Ok\"'"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -54,8 +59,10 @@ services:
 volumes:
   db_data:
     name: fusionauth_db_data
+    external: true
   fusionauth_config:
     name: fusionauth_config
+    external: true
 
 networks:
   auth-internal:
