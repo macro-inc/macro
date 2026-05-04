@@ -19,11 +19,236 @@ use models_pagination::{CreatedAt, Query};
 use rootcause::Report;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder};
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
+
+type UserNotificationListRow = (
+    String,
+    Uuid,
+    String,
+    String,
+    bool,
+    bool,
+    DateTime<Utc>,
+    Option<DateTime<Utc>>,
+    DateTime<Utc>,
+    Option<DateTime<Utc>>,
+    serde_json::Value,
+    String,
+    Option<String>,
+);
+
+fn build_user_notifications_query<'a>(
+    user_id: &'a str,
+    event_item_ids: Option<&'a [String]>,
+    limit: i64,
+    cursor_id: Option<Uuid>,
+    cursor_timestamp: Option<DateTime<Utc>>,
+    filters: &NotificationListFilters,
+    include_types: &'a [String],
+    entity_tokens: &'a [String],
+) -> QueryBuilder<'a, Postgres> {
+    let mut builder = QueryBuilder::new(
+        r#"
+            SELECT
+                un.user_id as owner_id,
+                un.notification_id,
+                n.event_item_id,
+                n.event_item_type,
+                un.sent,
+                un.done,
+                un.created_at::timestamptz as created_at,
+                un.seen_at::timestamptz as viewed_at,
+                un.created_at::timestamptz as updated_at,
+                un.deleted_at::timestamptz as deleted_at,
+                n.metadata as notification_metadata,
+                n.notification_event_type as notification_event_type,
+                n.sender_id as sender_id
+            FROM user_notification un
+            JOIN notification n ON n.id = un.notification_id
+            WHERE un.user_id = "#,
+    );
+    builder.push_bind(user_id);
+
+    push_event_item_ids_filter(&mut builder, event_item_ids);
+    push_notification_status_filters(&mut builder, filters);
+    push_important_emails_only_filter(&mut builder, filters.important_emails_only);
+    push_include_types_filter(&mut builder, include_types);
+    push_entities_filter(&mut builder, entity_tokens);
+    push_cursor_filter(&mut builder, cursor_timestamp, cursor_id);
+
+    builder.push(" ORDER BY un.created_at DESC, un.notification_id DESC LIMIT ");
+    builder.push_bind(limit);
+
+    builder
+}
+
+fn push_event_item_ids_filter<'a>(
+    builder: &mut QueryBuilder<'a, Postgres>,
+    event_item_ids: Option<&'a [String]>,
+) {
+    if let Some(event_item_ids) = event_item_ids {
+        builder.push(" AND n.event_item_id = ANY(");
+        builder.push_bind(event_item_ids);
+        builder.push(")");
+    }
+}
+
+fn push_notification_status_filters(
+    builder: &mut QueryBuilder<'_, Postgres>,
+    filters: &NotificationListFilters,
+) {
+    builder.push(" AND un.deleted_at IS NULL");
+
+    if let Some(done) = filters.done {
+        builder.push(" AND un.done = ");
+        builder.push_bind(done);
+    }
+
+    if let Some(seen) = filters.seen {
+        builder.push(" AND (un.seen_at IS NOT NULL) = ");
+        builder.push_bind(seen);
+    }
+}
+
+fn push_important_emails_only_filter(
+    builder: &mut QueryBuilder<'_, Postgres>,
+    important_emails_only: bool,
+) {
+    if important_emails_only {
+        builder.push(
+            r#"
+            AND (
+                n.notification_event_type <> 'new_email'
+                OR n.event_item_type <> 'email_thread'
+                OR EXISTS (
+                    SELECT 1
+                    FROM email_threads important_thread
+                    JOIN email_messages important_message
+                        ON important_message.thread_id = important_thread.id
+                    JOIN email_message_labels important_message_label
+                        ON important_message_label.message_id = important_message.id
+                    JOIN email_labels important_label
+                        ON important_label.id = important_message_label.label_id
+                    WHERE important_thread.id::text = n.event_item_id
+                      AND important_label.link_id = important_thread.link_id
+                      AND important_label.name = 'IMPORTANT'
+                )
+            )"#,
+        );
+    }
+}
+
+fn push_include_types_filter(builder: &mut QueryBuilder<'_, Postgres>, include_types: &[String]) {
+    if !include_types.is_empty() {
+        builder.push(" AND (");
+        let mut needs_or = false;
+        for clause in [
+            include_types
+                .iter()
+                .any(|t| t == "email")
+                .then_some("n.event_item_type = 'email_thread'"),
+            include_types.iter().any(|t| t == "message").then_some(
+                r#"(
+                    n.notification_event_type IN ('channel_mention', 'channel_message_reply', 'channel_message_send')
+                    OR n.metadata ? 'messageId'
+                    OR n.metadata ? 'message_id'
+                )"#,
+            ),
+            include_types
+                .iter()
+                .any(|t| t == "channel")
+                .then_some("n.event_item_type = 'channel'"),
+            include_types.iter().any(|t| t == "document").then_some(
+                "n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') <> 'task'",
+            ),
+            include_types.iter().any(|t| t == "task").then_some(
+                "n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') = 'task'",
+            ),
+            include_types
+                .iter()
+                .any(|t| t == "project")
+                .then_some("n.event_item_type = 'project'"),
+            include_types
+                .iter()
+                .any(|t| t == "chat")
+                .then_some("n.event_item_type = 'chat'"),
+            include_types
+                .iter()
+                .any(|t| t == "call")
+                .then_some("n.event_item_type = 'call'"),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if needs_or {
+                builder.push(" OR ");
+            }
+            builder.push("(");
+            builder.push(clause);
+            builder.push(")");
+            needs_or = true;
+        }
+        builder.push(")");
+    }
+}
+
+fn push_entities_filter<'a>(builder: &mut QueryBuilder<'a, Postgres>, entity_tokens: &'a [String]) {
+    if !entity_tokens.is_empty() {
+        builder.push(" AND (");
+
+        builder.push("(n.event_item_type = 'email_thread' AND 'email:' || n.event_item_id = ANY(");
+        builder.push_bind(entity_tokens);
+        builder.push(")) OR ");
+
+        builder.push("(n.event_item_type = 'channel' AND 'channel:' || n.event_item_id = ANY(");
+        builder.push_bind(entity_tokens);
+        builder.push(")) OR ");
+
+        builder.push("(n.event_item_type = 'document' AND 'document:' || n.event_item_id = ANY(");
+        builder.push_bind(entity_tokens);
+        builder.push(")) OR ");
+
+        builder.push("(n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') = 'task' AND 'task:' || n.event_item_id = ANY(");
+        builder.push_bind(entity_tokens);
+        builder.push(")) OR ");
+
+        builder.push("(n.event_item_type = 'project' AND 'project:' || n.event_item_id = ANY(");
+        builder.push_bind(entity_tokens);
+        builder.push(")) OR ");
+
+        builder.push("(n.event_item_type = 'chat' AND 'chat:' || n.event_item_id = ANY(");
+        builder.push_bind(entity_tokens);
+        builder.push(")) OR ");
+
+        builder.push("(n.event_item_type = 'call' AND 'call:' || n.event_item_id = ANY(");
+        builder.push_bind(entity_tokens);
+        builder.push(")) OR ");
+
+        builder.push("('message:' || COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = ANY(");
+        builder.push_bind(entity_tokens);
+        builder.push("))");
+
+        builder.push(")");
+    }
+}
+
+fn push_cursor_filter(
+    builder: &mut QueryBuilder<'_, Postgres>,
+    cursor_timestamp: Option<DateTime<Utc>>,
+    cursor_id: Option<Uuid>,
+) {
+    if let (Some(cursor_timestamp), Some(cursor_id)) = (cursor_timestamp, cursor_id) {
+        builder.push(" AND (un.created_at, un.notification_id) < (");
+        builder.push_bind(cursor_timestamp);
+        builder.push(", ");
+        builder.push_bind(cursor_id);
+        builder.push(")");
+    }
+}
 
 /// Local representation of the `notification_device_type_option` Postgres enum
 /// for compile-time checked sqlx queries.
@@ -483,103 +708,17 @@ impl NotificationDbOps for PgPool {
         let include_types = filters.include_type_tokens();
         let entity_tokens = filters.entity_tokens();
 
-        type Row = (
-            String,
-            Uuid,
-            String,
-            String,
-            bool,
-            bool,
-            DateTime<Utc>,
-            Option<DateTime<Utc>>,
-            DateTime<Utc>,
-            Option<DateTime<Utc>>,
-            serde_json::Value,
-            String,
-            Option<String>,
-        );
-
-        let rows = sqlx::query_as::<_, Row>(
-            r#"
-            SELECT
-                un.user_id as owner_id,
-                un.notification_id,
-                n.event_item_id,
-                n.event_item_type,
-                un.sent,
-                un.done,
-                un.created_at::timestamptz as created_at,
-                un.seen_at::timestamptz as viewed_at,
-                un.created_at::timestamptz as updated_at,
-                un.deleted_at::timestamptz as deleted_at,
-                n.metadata as notification_metadata,
-                n.notification_event_type as notification_event_type,
-                n.sender_id as sender_id
-            FROM user_notification un
-            JOIN notification n ON n.id = un.notification_id
-            WHERE un.user_id = $1
-            AND un.deleted_at IS NULL
-            AND ($5::bool IS NULL OR un.done = $5)
-            AND ($6::bool IS NULL OR (un.seen_at IS NOT NULL) = $6)
-            AND (
-                $7::bool = FALSE
-                OR n.notification_event_type <> 'new_email'
-                OR n.event_item_type <> 'email_thread'
-                OR EXISTS (
-                    SELECT 1
-                    FROM email_threads important_thread
-                    JOIN email_messages important_message
-                        ON important_message.thread_id = important_thread.id
-                    JOIN email_message_labels important_message_label
-                        ON important_message_label.message_id = important_message.id
-                    JOIN email_labels important_label
-                        ON important_label.id = important_message_label.label_id
-                    WHERE important_thread.id::text = n.event_item_id
-                      AND important_label.link_id = important_thread.link_id
-                      AND important_label.name = 'IMPORTANT'
-                )
-            )
-            AND (
-                cardinality($8::text[]) = 0
-                OR ('email' = ANY($8) AND n.event_item_type = 'email_thread')
-                OR ('message' = ANY($8) AND (
-                    n.notification_event_type IN ('channel_mention', 'channel_message_reply', 'channel_message_send')
-                    OR n.metadata ? 'messageId'
-                    OR n.metadata ? 'message_id'
-                ))
-                OR ('channel' = ANY($8) AND n.event_item_type = 'channel')
-                OR ('document' = ANY($8) AND n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') <> 'task')
-                OR ('task' = ANY($8) AND n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') = 'task')
-                OR ('project' = ANY($8) AND n.event_item_type = 'project')
-                OR ('chat' = ANY($8) AND n.event_item_type = 'chat')
-                OR ('call' = ANY($8) AND n.event_item_type = 'call')
-            )
-            AND (
-                cardinality($9::text[]) = 0
-                OR (n.event_item_type = 'email_thread' AND 'email:' || n.event_item_id = ANY($9))
-                OR (n.event_item_type = 'channel' AND 'channel:' || n.event_item_id = ANY($9))
-                OR (n.event_item_type = 'document' AND 'document:' || n.event_item_id = ANY($9))
-                OR (n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') = 'task' AND 'task:' || n.event_item_id = ANY($9))
-                OR (n.event_item_type = 'project' AND 'project:' || n.event_item_id = ANY($9))
-                OR (n.event_item_type = 'chat' AND 'chat:' || n.event_item_id = ANY($9))
-                OR (n.event_item_type = 'call' AND 'call:' || n.event_item_id = ANY($9))
-                OR ('message:' || COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = ANY($9))
-            )
-            AND (($3::timestamptz IS NULL)
-                OR (un.created_at, un.notification_id) < ($3, $4))
-            ORDER BY un.created_at DESC, un.notification_id DESC
-            LIMIT $2
-            "#,
+        let rows = build_user_notifications_query(
+            user_id.as_ref(),
+            None,
+            query_limit,
+            cursor_id.copied(),
+            cursor_timestamp.copied(),
+            &filters,
+            &include_types,
+            &entity_tokens,
         )
-        .bind(user_id.as_ref())
-        .bind(query_limit)
-        .bind(cursor_timestamp)
-        .bind(cursor_id)
-        .bind(filters.done)
-        .bind(filters.seen)
-        .bind(filters.important_emails_only)
-        .bind(&include_types)
-        .bind(&entity_tokens)
+        .build_query_as::<UserNotificationListRow>()
         .fetch_all(self)
         .await?;
 
@@ -667,105 +806,17 @@ impl NotificationDbOps for PgPool {
         let include_types = filters.include_type_tokens();
         let entity_tokens = filters.entity_tokens();
 
-        type Row = (
-            String,
-            Uuid,
-            String,
-            String,
-            bool,
-            bool,
-            DateTime<Utc>,
-            Option<DateTime<Utc>>,
-            DateTime<Utc>,
-            Option<DateTime<Utc>>,
-            serde_json::Value,
-            String,
-            Option<String>,
-        );
-
-        let rows = sqlx::query_as::<_, Row>(
-            r#"
-            SELECT
-                un.user_id as owner_id,
-                un.notification_id,
-                n.event_item_id,
-                n.event_item_type,
-                un.sent,
-                un.done,
-                un.created_at::timestamptz as created_at,
-                un.seen_at::timestamptz as viewed_at,
-                un.created_at::timestamptz as updated_at,
-                un.deleted_at::timestamptz as deleted_at,
-                n.metadata as notification_metadata,
-                n.notification_event_type as notification_event_type,
-                n.sender_id as sender_id
-            FROM user_notification un
-            JOIN notification n ON n.id = un.notification_id
-            WHERE un.user_id = $1
-            AND n.event_item_id = ANY($2)
-            AND un.deleted_at IS NULL
-            AND ($6::bool IS NULL OR un.done = $6)
-            AND ($7::bool IS NULL OR (un.seen_at IS NOT NULL) = $7)
-            AND (
-                $8::bool = FALSE
-                OR n.notification_event_type <> 'new_email'
-                OR n.event_item_type <> 'email_thread'
-                OR EXISTS (
-                    SELECT 1
-                    FROM email_threads important_thread
-                    JOIN email_messages important_message
-                        ON important_message.thread_id = important_thread.id
-                    JOIN email_message_labels important_message_label
-                        ON important_message_label.message_id = important_message.id
-                    JOIN email_labels important_label
-                        ON important_label.id = important_message_label.label_id
-                    WHERE important_thread.id::text = n.event_item_id
-                      AND important_label.link_id = important_thread.link_id
-                      AND important_label.name = 'IMPORTANT'
-                )
-            )
-            AND (
-                cardinality($9::text[]) = 0
-                OR ('email' = ANY($9) AND n.event_item_type = 'email_thread')
-                OR ('message' = ANY($9) AND (
-                    n.notification_event_type IN ('channel_mention', 'channel_message_reply', 'channel_message_send')
-                    OR n.metadata ? 'messageId'
-                    OR n.metadata ? 'message_id'
-                ))
-                OR ('channel' = ANY($9) AND n.event_item_type = 'channel')
-                OR ('document' = ANY($9) AND n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') <> 'task')
-                OR ('task' = ANY($9) AND n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') = 'task')
-                OR ('project' = ANY($9) AND n.event_item_type = 'project')
-                OR ('chat' = ANY($9) AND n.event_item_type = 'chat')
-                OR ('call' = ANY($9) AND n.event_item_type = 'call')
-            )
-            AND (
-                cardinality($10::text[]) = 0
-                OR (n.event_item_type = 'email_thread' AND 'email:' || n.event_item_id = ANY($10))
-                OR (n.event_item_type = 'channel' AND 'channel:' || n.event_item_id = ANY($10))
-                OR (n.event_item_type = 'document' AND 'document:' || n.event_item_id = ANY($10))
-                OR (n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') = 'task' AND 'task:' || n.event_item_id = ANY($10))
-                OR (n.event_item_type = 'project' AND 'project:' || n.event_item_id = ANY($10))
-                OR (n.event_item_type = 'chat' AND 'chat:' || n.event_item_id = ANY($10))
-                OR (n.event_item_type = 'call' AND 'call:' || n.event_item_id = ANY($10))
-                OR ('message:' || COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = ANY($10))
-            )
-            AND (($4::timestamptz IS NULL)
-                OR (un.created_at, un.notification_id) < ($4, $5))
-            ORDER BY un.created_at DESC, un.notification_id DESC
-            LIMIT $3
-            "#,
+        let rows = build_user_notifications_query(
+            user_id.as_ref(),
+            Some(&event_item_ids),
+            query_limit,
+            cursor_id.copied(),
+            cursor_timestamp.copied(),
+            &filters,
+            &include_types,
+            &entity_tokens,
         )
-        .bind(user_id.as_ref())
-        .bind(&event_item_ids)
-        .bind(query_limit)
-        .bind(cursor_timestamp)
-        .bind(cursor_id)
-        .bind(filters.done)
-        .bind(filters.seen)
-        .bind(filters.important_emails_only)
-        .bind(&include_types)
-        .bind(&entity_tokens)
+        .build_query_as::<UserNotificationListRow>()
         .fetch_all(self)
         .await?;
 
