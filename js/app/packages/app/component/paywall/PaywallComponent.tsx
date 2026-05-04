@@ -184,9 +184,7 @@ const PaywallComponent = (props: PaywallComponent) => {
                         {plan.name}
                       </div>
                     </div>
-                    {selectedTier() === plan.tier && (
-                                          <SubscriptionTier class="w-3 sm:w-4 h-3 sm:h-4 shrink-0" />
-                                        )}
+                    <SubscriptionTier class="w-7 shrink-0" style={{ fill: 'var(--b4)' }} />
                   </div>
                   <div class="flex items-baseline gap-0.5">
                     <span class="text-3xl font-bold text-ink">
