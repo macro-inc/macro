@@ -292,7 +292,7 @@ function getEmailError(
 function InviteEmailsInput(props: {
   invites: InviteEntry[];
   onChange: (invites: InviteEntry[]) => void;
-  errors: () => (string | undefined)[];
+  errors: (string | undefined)[];
   onErrorsChange: (errors: (string | undefined)[]) => void;
   defaultTier?: TeamUserTier;
 }) {
@@ -318,7 +318,7 @@ function InviteEmailsInput(props: {
       existingEmails(),
       index
     );
-    const next = [...props.errors()];
+    const next = [...props.errors];
     next[index] = error;
     props.onErrorsChange(next);
     return !error;
@@ -370,8 +370,8 @@ function InviteEmailsInput(props: {
     const updated = [...props.invites];
     updated[index] = { ...updated[index], email };
     props.onChange(updated);
-    if (props.errors()[index]) {
-      const next = [...props.errors()];
+    if (props.errors[index]) {
+      const next = [...props.errors];
       next[index] = undefined;
       props.onErrorsChange(next);
     }
@@ -385,7 +385,7 @@ function InviteEmailsInput(props: {
 
   const removeInvite = (index: number) => {
     props.onChange(props.invites.filter((_, i) => i !== index));
-    props.onErrorsChange(props.errors().filter((_, i) => i !== index));
+    props.onErrorsChange(props.errors.filter((_, i) => i !== index));
   };
 
   return (
@@ -401,7 +401,7 @@ function InviteEmailsInput(props: {
                 onTierChange={(tier) => updateTier(index, tier)}
                 onRemove={() => removeInvite(index)}
                 showTier={showTier()}
-                error={props.errors()[index]}
+                error={props.errors[index]}
               />
             )}
           </Index>
