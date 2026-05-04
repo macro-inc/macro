@@ -2,6 +2,7 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
+  enqueuePreviewWakeup,
   isAccessiblePreviewItem,
   useItemPreview,
   type ItemEntity,
@@ -20,6 +21,7 @@ import {
   Match,
   Switch,
   Suspense,
+  createEffect,
   type ComponentProps,
   type Accessor,
 } from 'solid-js';
@@ -35,6 +37,10 @@ import { cn } from '@ui/utils/classname';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   const [item] = useItemPreview(entity);
+
+  createEffect(() => {
+    enqueuePreviewWakeup(item());
+  });
 
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
 

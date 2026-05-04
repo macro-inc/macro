@@ -19,3 +19,4 @@ export {
   isChannelPreviewItem,
   isPreviewItemNoAccess,
 } from './types';
+export { enqueueDocumentWakeup, enqueuePreviewWakeup } from './wakeup';

@@ -3,6 +3,7 @@ import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
 import type { DateValue } from '@core/util/date';
+import { enqueueDocumentWakeup } from '@queries/preview';
 import { stackNotifications } from '@notifications';
 import {
   getStreamState,
@@ -105,6 +106,10 @@ function MaybeEntityRow(props: {
 export function ListEntity(props: ListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
+
+  createEffect(() => {
+    enqueueDocumentWakeup(props.entity);
+  });
 
   subscribeToStreamState(props.entity.id, props.entity.type);
   const streamState = getStreamState(props.entity.id);

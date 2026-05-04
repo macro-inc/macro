@@ -1,7 +1,7 @@
 import { Hotkey } from '@core/component/Hotkey';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import type { HotkeySequenceStep } from '@core/component/Tooltip';
-import { For, Match, Show, Switch } from 'solid-js';
+import { createEffect, For, Match, Show, Switch } from 'solid-js';
 import {
   isCommandItem,
   isEntityItem,
@@ -10,6 +10,7 @@ import {
   type SearchItem,
 } from './useCommandItems';
 import { Entity, type EntityData } from '@entity';
+import { enqueueDocumentWakeup } from '@queries/preview';
 import { cn } from '@ui/utils/classname';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
@@ -109,6 +110,10 @@ function CommandDisplay(props: { item: CommandMenuItem }) {
 }
 
 function EntityDisplay(props: { entity: EntityData }) {
+  createEffect(() => {
+    enqueueDocumentWakeup(props.entity);
+  });
+
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
       <div class="size-5 p-0.5 flex items-center justify-center text-ink-muted shrink-0">
