@@ -167,7 +167,7 @@ export function Account() {
             </div>
             <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
               <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
-                <div class="bg-panel px-6">
+                <div class="bg-panel px-6 py-2">
                   <PaywallComponent
                     hideCloseButton
                     cb={() => {}}

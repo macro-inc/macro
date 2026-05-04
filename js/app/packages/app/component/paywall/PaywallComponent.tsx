@@ -137,8 +137,7 @@ const PaywallComponent = (props: PaywallComponent) => {
   };
 
   return (
-    <div class="space-y-2 w-full">
-      <div class="relative w-full text-center">
+      <div class="space-y-2 w-full">
         <Show when={!props.hideCloseButton}>
           <button
             onClick={props.cb}
@@ -148,20 +147,21 @@ const PaywallComponent = (props: PaywallComponent) => {
           </button>
         </Show>
         <Show when={!hasPaid()}>
-          <div class="space-y-6 sm:space-y-8">
-            <div class="text-center">
-              <h2 class="mb-2 font-semibold text-ink text-xl sm:text-2xl">
-                Choose your plan
-              </h2>
-              <Show when={props.errorKey}>
-                <p class="mb-4 text-failure-ink text-sm sm:text-base">
-                  {PaywallMessages[props.errorKey as PaywallKey]}
-                </p>
-              </Show>
+          <div class="relative w-full text-center">
+            <div class="space-y-6 sm:space-y-8">
+              <div class="text-center">
+                <h2 class="mb-2 font-semibold text-ink text-xl sm:text-2xl">
+                  Choose your plan
+                </h2>
+                <Show when={props.errorKey}>
+                  <p class="mb-4 text-failure-ink text-sm sm:text-base">
+                    {PaywallMessages[props.errorKey as PaywallKey]}
+                  </p>
+                </Show>
+              </div>
             </div>
           </div>
         </Show>
-      </div>
 
       <div class="w-full">
         <div class="gap-2 grid grid-cols-1 sm:grid-cols-3">
