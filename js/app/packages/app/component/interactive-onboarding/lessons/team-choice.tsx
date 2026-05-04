@@ -2,8 +2,14 @@ import { createEffect } from 'solid-js';
 import UsersIcon from '@icon/regular/users.svg';
 import UserIcon from '@icon/regular/user.svg';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
+import SpinnerIcon from '@icon/regular/spinner.svg';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import { useOnboarding } from '../onboarding-context';
+import { useOnboardingCheckoutMutation } from '../use-onboarding-checkout';
+import { useAnalytics } from '@app/component/analytics-context';
+import { useIsAuthenticated } from '@core/auth';
+import { toast } from '@core/component/Toast/Toast';
+import type { PaidPlanTier } from '@app/component/paywall/plans';
 
 function TeamChoiceContent() {
   return (
@@ -15,6 +21,24 @@ function TeamChoiceContent() {
 
 function TeamChoiceDemo(props: LessonContentProps) {
   const onboarding = useOnboarding();
+  const analytics = useAnalytics();
+  const isAuthenticated = useIsAuthenticated();
+
+  const checkoutMutation = useOnboardingCheckoutMutation({
+    onSuccess: (result) => {
+      analytics.track('subscription_start', {
+        type: onboarding.selectedPlan(),
+        seats: 1,
+      });
+      window.location.href = result.checkoutUrl;
+    },
+    onError: (error) => {
+      console.error('Checkout error:', error);
+      toast.failure(
+        error.message || 'Failed to start checkout. Please try again.'
+      );
+    },
+  });
 
   createEffect(() => {
     props.onUnready();
@@ -29,10 +53,21 @@ function TeamChoiceDemo(props: LessonContentProps) {
   };
 
   const handleChooseSolo = () => {
+    const tier = onboarding.selectedPlan();
+    if (!tier || tier === 'free' || checkoutMutation.isPending) return;
+
+    if (!isAuthenticated()) {
+      toast.failure('Please sign in to continue');
+      props.goToLesson('about-us');
+      return;
+    }
+
     onboarding.setInvitedMembers([]);
     onboarding.setTeamName('');
-    props.skipLesson('invite-team');
-    props.advance();
+
+    checkoutMutation.mutate({
+      tier: tier as PaidPlanTier,
+    });
   };
 
   return (
@@ -50,7 +85,8 @@ function TeamChoiceDemo(props: LessonContentProps) {
           <button
             type="button"
             onClick={handleChooseTeam}
-            class="flex items-center gap-4 p-5 rounded-md border border-accent/50 bg-accent/5 hover:bg-accent/10 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel"
+            disabled={checkoutMutation.isPending}
+            class="flex items-center gap-4 p-5 rounded-md border border-accent/50 bg-accent/5 hover:bg-accent/10 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div class="shrink-0 size-11 rounded-full bg-accent/20 flex items-center justify-center">
               <UsersIcon class="size-5 text-accent" />
@@ -68,10 +104,15 @@ function TeamChoiceDemo(props: LessonContentProps) {
           <button
             type="button"
             onClick={handleChooseSolo}
-            class="flex items-center gap-4 p-5 rounded-md border border-edge bg-panel hover:bg-ink/5 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel"
+            disabled={checkoutMutation.isPending}
+            class="flex items-center gap-4 p-5 rounded-md border border-edge bg-panel hover:bg-ink/5 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div class="shrink-0 size-11 rounded-full bg-ink/10 flex items-center justify-center">
-              <UserIcon class="size-5 text-ink/60" />
+              {checkoutMutation.isPending ? (
+                <SpinnerIcon class="size-5 text-ink/60 animate-spin" />
+              ) : (
+                <UserIcon class="size-5 text-ink/60" />
+              )}
             </div>
             <div class="flex flex-col gap-0.5">
               <span class="text-base font-medium text-ink">Continue solo</span>
