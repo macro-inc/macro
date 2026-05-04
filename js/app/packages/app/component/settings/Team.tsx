@@ -41,6 +41,8 @@ import { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import { formatRelativeTimestamp } from '@entity';
+import { ENABLE_TEAM_INVITE_TIERS_OVERRIDE } from '@core/constant/featureFlags';
+import { useFeatureFlag, ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { z } from 'zod';
 
 const roleOrder: Record<string, number> = {
@@ -156,6 +158,7 @@ function InviteEntryRow(props: {
   onEmailChange: (email: string) => void;
   onTierChange: (tier: TeamUserTier) => void;
   onRemove: () => void;
+  showTier: boolean;
 }) {
   return (
     <div class="flex items-center gap-2">
@@ -165,36 +168,38 @@ function InviteEntryRow(props: {
         onInput={(e) => props.onEmailChange(e.currentTarget.value)}
         class="flex-1 min-w-0 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
       />
-      <Select<TierOption>
-        options={tierOptions}
-        value={tierOptions.find((o) => o.value === props.entry.tier) ?? tierOptions[0]}
-        onChange={(opt) => opt && props.onTierChange(opt.value)}
-        optionValue="value"
-        optionTextValue="label"
-        gutter={4}
-        placement="bottom-end"
-        itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
-          <Select.Item
-            item={itemProps.item}
-            class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
-          >
-            <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
-            <Select.ItemIndicator>
-              <CheckIcon class="w-3 h-3" />
-            </Select.ItemIndicator>
-          </Select.Item>
-        )}
-      >
-        <Select.Trigger tabIndex={0} class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0">
-          <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
-          <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
-        </Select.Trigger>
-        <Select.Portal>
-          <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
-            <Select.Listbox />
-          </Select.Content>
-        </Select.Portal>
-      </Select>
+      <Show when={props.showTier}>
+        <Select<TierOption>
+          options={tierOptions}
+          value={tierOptions.find((o) => o.value === props.entry.tier) ?? tierOptions[0]}
+          onChange={(opt) => opt && props.onTierChange(opt.value)}
+          optionValue="value"
+          optionTextValue="label"
+          gutter={4}
+          placement="bottom-end"
+          itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
+            <Select.Item
+              item={itemProps.item}
+              class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+            >
+              <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+              <Select.ItemIndicator>
+                <CheckIcon class="w-3 h-3" />
+              </Select.ItemIndicator>
+            </Select.Item>
+          )}
+        >
+          <Select.Trigger tabIndex={0} class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0">
+            <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
+            <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
+          </Select.Trigger>
+          <Select.Portal>
+            <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+              <Select.Listbox />
+            </Select.Content>
+          </Select.Portal>
+        </Select>
+      </Show>
       <Button variant="secondary" class="bracket-never rounded-xs w-12 shrink-0 focus:border-accent/50" tabIndex={0} onClick={props.onRemove}>
         <XIcon class="size-4" />
       </Button>
@@ -210,6 +215,9 @@ function InviteEmailsInput(props: {
   let inputRef: HTMLInputElement | undefined;
   const [inputValue, setInputValue] = createSignal('');
   const [inputTier, setInputTier] = createSignal<TeamUserTier>(props.defaultTier ?? TeamUserTier.Haiku);
+
+  const tierFlag = useFeatureFlag('enable-team-invite-tiers', { enabledOverride: ENABLE_TEAM_INVITE_TIERS_OVERRIDE });
+  const showTier = () => tierFlag().enabled;
 
   const addEmails = () => {
     const newEmails = parseEmails(inputValue());
@@ -262,6 +270,7 @@ function InviteEmailsInput(props: {
                 onEmailChange={(email) => updateEmail(index(), email)}
                 onTierChange={(tier) => updateTier(index(), tier)}
                 onRemove={() => removeInvite(index())}
+                showTier={showTier()}
               />
             )}
           </For>
@@ -277,36 +286,38 @@ function InviteEmailsInput(props: {
           placeholder="Enter email address"
           class="flex-1 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
         />
-        <Select<TierOption>
-          options={tierOptions}
-          value={tierOptions.find((o) => o.value === inputTier()) ?? tierOptions[0]}
-          onChange={(opt) => opt && setInputTier(opt.value)}
-          optionValue="value"
-          optionTextValue="label"
-          gutter={4}
-          placement="bottom-end"
-          itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
-            <Select.Item
-              item={itemProps.item}
-              class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
-            >
-              <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
-              <Select.ItemIndicator>
-                <CheckIcon class="w-3 h-3" />
-              </Select.ItemIndicator>
-            </Select.Item>
-          )}
-        >
-          <Select.Trigger tabIndex={0} class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0">
-            <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
-            <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
-          </Select.Trigger>
-          <Select.Portal>
-            <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
-              <Select.Listbox />
-            </Select.Content>
-          </Select.Portal>
-        </Select>
+        <Show when={showTier()}>
+          <Select<TierOption>
+            options={tierOptions}
+            value={tierOptions.find((o) => o.value === inputTier()) ?? tierOptions[0]}
+            onChange={(opt) => opt && setInputTier(opt.value)}
+            optionValue="value"
+            optionTextValue="label"
+            gutter={4}
+            placement="bottom-end"
+            itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
+              <Select.Item
+                item={itemProps.item}
+                class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+              >
+                <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+                <Select.ItemIndicator>
+                  <CheckIcon class="w-3 h-3" />
+                </Select.ItemIndicator>
+              </Select.Item>
+            )}
+          >
+            <Select.Trigger tabIndex={0} class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0">
+              <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
+              <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
+            </Select.Trigger>
+            <Select.Portal>
+              <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+                <Select.Listbox />
+              </Select.Content>
+            </Select.Portal>
+          </Select>
+        </Show>
         <Button
           variant="secondary"
           class="bracket-never rounded-xs w-12 shrink-0 focus:border-accent/50"
