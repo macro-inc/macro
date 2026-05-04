@@ -70,7 +70,7 @@ jobs:
       - name: Check TypeScript types from API
         if: needs.path-check.outputs.api_changed == 'true'
         working-directory: js/app
-        run: OPENAPI_BINS_DIR=$(nix build --print-out-paths .#packages.x86_64-linux.openApiBins)/bin bun run gen-api -- --check
+        run: OPENAPI_BINS_DIR=$(nix build --print-out-paths ${{ github.workspace }}#packages.x86_64-linux.openApiBins)/bin bun run gen-api -- --check
       - name: Check Types
         working-directory: js/app
         run: |
