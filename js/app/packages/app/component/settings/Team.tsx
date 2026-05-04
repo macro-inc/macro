@@ -1,5 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import PlusIcon from '@icon/regular/plus.svg';
+import UsersIcon from '@icon/regular/users.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import SpinnerIcon from '@icon/regular/spinner.svg';
 import EnvelopeIcon from '@icon/regular/envelope.svg';
@@ -22,6 +23,7 @@ import {
   useTeamQuery,
   usePatchTeamMutation,
   useDeleteTeamMutation,
+  useCreateTeamWithInvitesMutation,
 } from '@queries/team/teams';
 import {
   useTeamInvitesQuery,
@@ -334,17 +336,119 @@ function TeamInvites() {
   );
 }
 
-function EmptyTeamState() {
+function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
+  const [teamName, setTeamName] = createSignal('');
+  const [inviteEmails, setInviteEmails] = createSignal('');
+
+  const createTeamMutation = useCreateTeamWithInvitesMutation();
+
+  const parsedEmails = () => parseEmails(inviteEmails());
+  const canCreate = () => teamName().trim().length > 0;
+
+  const handleCreate = () => {
+    const name = teamName().trim();
+    if (!name) return;
+
+    const emails = parsedEmails();
+    createTeamMutation.mutate(
+      { name, emails: emails.length > 0 ? emails : undefined },
+      { onSuccess: props.onClose }
+    );
+  };
+
   return (
-    <div class="flex flex-col items-center justify-center py-12 text-center">
-      <div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mb-4">
-        <PlusIcon class="size-6 text-accent" />
+    <Dialog open={props.open} onOpenChange={(open) => !open && props.onClose()}>
+      <Dialog.Portal>
+        <DialogWrapper>
+          <div class="flex flex-col text-ink">
+            <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
+              <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+                <XIcon />
+              </Dialog.CloseButton>
+              <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+                Create Team
+              </Dialog.Title>
+            </div>
+            <div class="p-3 flex flex-col gap-3">
+              <div class="flex flex-col gap-1">
+                <label class="text-sm text-ink-muted">Team name</label>
+                <input
+                  type="text"
+                  value={teamName()}
+                  onInput={(e) => setTeamName(e.currentTarget.value)}
+                  placeholder="My Team"
+                  class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+                />
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-sm text-ink-muted">Invite members (optional)</label>
+                <textarea
+                  placeholder={'name@company.com\ncolleague@company.com'}
+                  value={inviteEmails()}
+                  onInput={(e) => setInviteEmails(e.currentTarget.value)}
+                  rows={3}
+                  class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none focus:border-accent/50 resize-none leading-relaxed"
+                />
+                <p class="text-xs text-ink-muted">
+                  Enter email addresses separated by commas, spaces, or new lines.
+                </p>
+              </div>
+              <Show when={inviteEmails().trim() && parsedEmails().length > 0}>
+                <p class="text-xs text-ink-muted">
+                  {parsedEmails().length} member{parsedEmails().length !== 1 ? 's' : ''} will be invited
+                </p>
+              </Show>
+              <div class="flex justify-end gap-1 pt-2">
+                <Button
+                  variant="ghost"
+                  class="rounded-xs"
+                  disabled={createTeamMutation.isPending}
+                  onClick={props.onClose}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="accent"
+                  class="rounded-xs"
+                  disabled={!canCreate() || createTeamMutation.isPending}
+                  onClick={handleCreate}
+                >
+                  <Show when={createTeamMutation.isPending} fallback="Create Team">
+                    <SpinnerIcon class="size-4 animate-spin" />
+                  </Show>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogWrapper>
+      </Dialog.Portal>
+    </Dialog>
+  );
+}
+
+function EmptyTeamState() {
+  const [showCreateModal, setShowCreateModal] = createSignal(false);
+
+  return (
+    <>
+      <div class="flex flex-col items-center justify-center py-12 text-center px-6">
+        <div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mb-4">
+          <UsersIcon class="size-6 text-accent" />
+        </div>
+        <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
+        <p class="text-xs text-ink-muted max-w-xs mb-4">
+          Create a team to collaborate with others and manage access together.
+        </p>
+        <Button variant="accent" class="rounded-xs" onClick={() => setShowCreateModal(true)}>
+          <PlusIcon class="size-4" />
+          Create Team
+        </Button>
       </div>
-      <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
-      <p class="text-xs text-ink-muted max-w-xs">
-        You're not part of a team. When someone invites you to join their team, you'll see the invitation here.
-      </p>
-    </div>
+
+      <Show when={showCreateModal()}>
+        <CreateTeamDialog open={showCreateModal()} onClose={() => setShowCreateModal(false)} />
+      </Show>
+    </>
   );
 }
 
@@ -825,30 +929,26 @@ function TeamContent() {
   const hasInvites = () => (userInvitesQuery.data?.invites?.length ?? 0) > 0;
 
   return (
-    <div class="h-full">
-      <Switch>
-        <Match when={team()} keyed>
-          {(t) => <TeamManagement teamId={t.id} teamName={t.name} ownerId={t.owner_id} />}
-        </Match>
-        <Match when={hasInvites()}>
-          <TeamInvites />
-        </Match>
-        <Match when={true}>
-          <EmptyTeamState />
-        </Match>
-      </Switch>
-    </div>
+    <Switch>
+      <Match when={team()} keyed>
+        {(t) => <TeamManagement teamId={t.id} teamName={t.name} ownerId={t.owner_id} />}
+      </Match>
+      <Match when={hasInvites()}>
+        <TeamInvites />
+      </Match>
+      <Match when={true}>
+        <EmptyTeamState />
+      </Match>
+    </Switch>
   );
 }
 
 export function Team() {
   return (
-    <div
-      class="h-full overflow-hidden flex justify-center p-2"
-    >
-      <div class="max-w-2xl w-full h-full">
-        <Panel depth={2} class="h-full overflow-hidden">
-          <div class="text-ink h-full">
+    <div class="flex justify-center p-2">
+      <div class="max-w-2xl w-full">
+        <Panel depth={2}>
+          <div class="text-ink">
             <Suspense fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />}>
               <TeamContent />
             </Suspense>
