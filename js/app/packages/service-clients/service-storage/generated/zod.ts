@@ -3893,10 +3893,6 @@ export const createInstructionsHandlerResponse = zod.object({
   documentId: zod.string(),
 });
 
-export const bulkWakeupSyncServiceDocumentsBody = zod.object({
-  document_ids: zod.array(zod.string()),
-});
-
 /**
  * @summary Gets the items the user has access to
  */
@@ -10105,6 +10101,10 @@ export const patchViewHandlerParams = zod.object({
 export const patchViewHandlerBody = zod.object({
   config: zod.unknown().optional(),
   name: zod.string().nullish(),
+});
+
+export const bulkWakeupSyncServiceDocumentsBody = zod.object({
+  document_ids: zod.array(zod.string()),
 });
 
 /**
