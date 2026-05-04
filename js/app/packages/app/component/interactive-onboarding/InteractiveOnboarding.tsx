@@ -151,22 +151,27 @@ function OnboardingCostSummary() {
   return (
     <Show when={selectedPlan() && selectedPlan()!.price > 0}>
       <div class="px-4 py-3 border-t border-ink/10">
-        <div class="flex items-baseline gap-1">
-          <span class="text-3xl font-bold text-accent">
-            ${onboarding.totalCost()}
-          </span>
-          <span class="text-ink/40">/mo</span>
+        <div class="flex items-center justify-between">
+          <div class="flex items-baseline gap-1">
+            <span class="text-3xl font-bold text-accent">
+              ${onboarding.totalCost()}
+            </span>
+            <span class="text-ink/40">/mo</span>
+          </div>
+          <Show when={onboarding.invitedMembers().length > 0}>
+            <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium">
+              Team plan
+            </span>
+          </Show>
         </div>
-        <div class="flex flex-col gap-0.5 mt-2 text-xs text-ink/50">
+        <div class="flex flex-col gap-0.5 mt-1.5 text-xs text-ink/40">
           <div class="flex justify-between">
-            <span>Your {selectedPlan()?.name} seat</span>
+            <span>{selectedPlan()?.name}</span>
             <span>${onboarding.userSeatCost()}/mo</span>
           </div>
           {teamByTier().map((group) => (
             <div class="flex justify-between">
-              <span>
-                {group.plan.name} team {group.count === 1 ? 'seat' : 'seats'} ×{group.count}
-              </span>
+              <span>Team · {group.plan.name} ×{group.count}</span>
               <span>${group.plan.price * group.count}/mo</span>
             </div>
           ))}
