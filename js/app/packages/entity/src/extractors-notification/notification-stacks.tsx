@@ -137,7 +137,7 @@ function NotificationStackRow(props: {
               >
                 <UnreadIndicator active />
               </span>
-              <div class="shrink-0">
+              <div class="shrink-0 flex items-center bg-[orange]">
                 <NotificationSenderIcon stack={props.stack} size="xs" />
               </div>
               <span class="ph-no-capture truncate min-w-0">
@@ -185,7 +185,6 @@ export function NotificationStacks(props: NotificationStacksProps) {
   const notifications = () => props.entity.notifications?.() ?? [];
   const validNotifications = () =>
     filterNotDoneNotifications(filterValidNotifications(notifications()));
-
   const [stacks, setStacks] = createStore<NotificationStack[]>([]);
 
   createEffect(() => {
