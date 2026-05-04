@@ -35,6 +35,18 @@ where
         .with_state(state)
 }
 
+#[utoipa::path(
+    tag = "sync_service",
+    post,
+    path = "/internal/sync_service/wakeup",
+    operation_id = "bulk_wakeup_sync_service_documents",
+    request_body = BulkWakeupRequest,
+    responses(
+        (status = 202, description = "Wakeups accepted for fire-and-forget dispatch", body = BulkWakeupResponse),
+        (status = 400, description = "Malformed request or missing internal auth header"),
+        (status = 401, description = "Invalid internal auth header"),
+    )
+)]
 pub async fn bulk_wakeup_handler<Svc>(
     State(state): State<SyncServiceRouterState<Svc>>,
     Json(request): Json<BulkWakeupRequest>,

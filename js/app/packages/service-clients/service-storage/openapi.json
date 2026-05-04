@@ -3807,6 +3807,40 @@
         }
       }
     },
+    "/internal/sync_service/wakeup": {
+      "post": {
+        "tags": ["sync_service"],
+        "operationId": "bulk_wakeup_sync_service_documents",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkWakeupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Wakeups accepted for fire-and-forget dispatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkWakeupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or missing internal auth header"
+          },
+          "401": {
+            "description": "Invalid internal auth header"
+          }
+        }
+      }
+    },
     "/items/soup": {
       "get": {
         "tags": ["soup::inbound::axum_router"],
@@ -6359,6 +6393,28 @@
           "sha": {
             "type": "string",
             "description": "The sha of the bom part content\nThere is an index on sha for more performant queries based on it."
+          }
+        }
+      },
+      "BulkWakeupRequest": {
+        "type": "object",
+        "required": ["document_ids"],
+        "properties": {
+          "document_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BulkWakeupResponse": {
+        "type": "object",
+        "required": ["dispatched"],
+        "properties": {
+          "dispatched": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       },

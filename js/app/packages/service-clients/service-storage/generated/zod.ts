@@ -3893,6 +3893,10 @@ export const createInstructionsHandlerResponse = zod.object({
   documentId: zod.string(),
 });
 
+export const bulkWakeupSyncServiceDocumentsBody = zod.object({
+  document_ids: zod.array(zod.string()),
+});
+
 /**
  * @summary Gets the items the user has access to
  */
