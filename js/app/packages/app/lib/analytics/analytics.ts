@@ -1,5 +1,9 @@
 import type { AppEvents, AppEventNames } from '@app/lib/analytics/app-events';
 import {
+  type GoogleConversionAction,
+  googleConversionSendTo,
+} from '@app/lib/analytics/googleConversions';
+import {
   initializeGoogleAnalytics,
   initializeMetaPixel,
 } from '@app/lib/analytics/providers';
@@ -215,6 +219,35 @@ export const createAnalytics = () => {
     sendEvent('meta-pixel', event, data);
   };
 
+  /**
+   * Fires a Google Ads conversion via `gtag('event', 'conversion', ...)`.
+   * `action` is typed to `GoogleConversionAction`, resolved to its `AW-{id}/{label}`
+   * `send_to` via `googleConversionSendTo`.
+   *
+   * Pass `transaction_id` whenever possible — Google dedupes server-side on it,
+   * which matters here because both call sites fire from `onMount` and a refresh
+   * re-fires. A user id (post-signup) or the submitted email (mobile lead capture)
+   * are both fine.
+   *
+   * Per-action `value` lets a single campaign optimize across multiple primaries
+   * (Smart Bidding sums values across the goal). See `googleConversions.ts`.
+   */
+  const trackGoogleConversion = (
+    action: GoogleConversionAction,
+    data?: { value?: number; currency?: string; transaction_id?: string }
+  ) => {
+    if (disabled) return;
+
+    try {
+      gtag('event', 'conversion', {
+        send_to: googleConversionSendTo(action),
+        ...data,
+      });
+    } catch (e) {
+      console.error('[Analytics] Failed to send Google Ads conversion:', e);
+    }
+  };
+
   const identify = (userID: string, info: Partial<UserIdentifyInfo>) => {
     if (disabled) return;
 
@@ -288,6 +321,7 @@ export const createAnalytics = () => {
     initializeProviders,
     track,
     trackMeta,
+    trackGoogleConversion,
     identify,
     reset,
     pageView,
@@ -298,6 +332,10 @@ export type AnalyticsInterface = {
   posthog: PostHog;
   track: TrackFn;
   trackMeta: (event: MetaStandardEvent, data?: Record<string, unknown>) => void;
+  trackGoogleConversion: (
+    action: GoogleConversionAction,
+    data?: { value?: number; currency?: string; transaction_id?: string }
+  ) => void;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
   reset: () => void;
   pageView: (pageTitle: string, opts?: PageViewOptions) => void;

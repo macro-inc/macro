@@ -1,5 +1,9 @@
 export const initializeGoogleAnalytics = () => {
   const G_ID = 'G-52HPEL3FTV';
+  // Registering the AW account on page load is what lets gtag pick up
+  // ?gclid=… from the URL into the _gcl_aw cookie, so subsequent
+  // gtag('event', 'conversion', ...) fires can be attributed to the ad click.
+  const AW_ID = 'AW-11035820781';
 
   // Google Analytics
   const gaScript = document.createElement('script');
@@ -13,6 +17,7 @@ export const initializeGoogleAnalytics = () => {
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
     gtag('config', '${G_ID}', { send_page_view: false });
+    gtag('config', '${AW_ID}');
   `;
   document.head.appendChild(gaInit);
 
