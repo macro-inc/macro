@@ -13,7 +13,8 @@ export type ButtonVariant =
   | 'destructive'
   | 'ghost'
   | 'link'
-  | 'accent';
+  | 'accent'
+  | 'active';
 
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon-sm' | 'icon-md' | 'icon-lg';
 
@@ -44,6 +45,8 @@ const variantStyles: Record<ButtonVariant, string> = {
   link: 'bg-transparent text-accent underline-offset-2 not-disabled:hover:underline not-disabled:active:text-accent/80 disabled:text-ink-extra-muted',
   accent:
     'bg-accent text-panel not-disabled:hover:bg-accent/90 not-disabled:active:bg-accent/80 disabled:bg-ink-extra-muted',
+  active:
+    'bg-accent/10 text-accent border border-accent/30 not-disabled:hover:bg-accent/20 not-disabled:active:bg-accent/25 disabled:opacity-50',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {

@@ -228,10 +228,10 @@ const PaywallComponent = (props: PaywallComponent) => {
           <Button
             onClick={handleUpdateTier}
             disabled={updating()}
-            variant="secondary"
+            variant="active"
             size="lg"
             depth={3}
-            class="w-full border-accent/30 bg-accent/10 text-accent hover:bg-accent/20"
+            class="w-full"
           >
             {updating() ? 'Updating…' : 'Update Subscription'}
           </Button>
