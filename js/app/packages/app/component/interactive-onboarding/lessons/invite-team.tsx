@@ -12,6 +12,7 @@ import { cn } from '@ui/utils/classname';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import TrashIcon from '@icon/regular/trash-simple.svg';
+import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import {
   invalidateUserTeams,
   useCreateTeamWithInvitesMutation,
@@ -371,25 +372,26 @@ function InviteTeamDemo(props: LessonContentProps) {
   );
 }
 
-function SkipAction(props: LessonContentProps) {
+function BackAction(props: LessonContentProps) {
   return (
     <button
       type="button"
-      onClick={() => props.advance()}
-      class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between text-ink/40 hover:text-ink hover:bg-ink/5 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel"
+      onClick={() => props.goToLesson('team-choice')}
+      class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center gap-2 text-ink/40 hover:text-ink hover:bg-ink/5 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel"
     >
-      Skip for now
+      <ArrowLeftIcon class="size-5" />
+      Back
     </button>
   );
 }
 
 export const inviteTeamLesson: LessonDefinition = {
   id: 'invite-team',
-  title: 'Set up your team',
+  title: 'Create your team',
   content: InviteTeamContent,
   demo: InviteTeamDemo,
   order: 90,
-  secondaryAction: SkipAction,
+  secondaryAction: BackAction,
   onContinue: () => {
     const form = document.getElementById(
       INVITE_FORM_ID

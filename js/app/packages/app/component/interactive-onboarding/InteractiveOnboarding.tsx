@@ -112,7 +112,11 @@ function InteractiveOnboardingInner() {
       if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
         return false;
       if (l.id === 'about-us' && isAuthenticated()) return false;
-      if (l.id === 'invite-team' && !inviteTeamEnabled().enabled) return false;
+      if (
+        (l.id === 'team-choice' || l.id === 'invite-team') &&
+        !inviteTeamEnabled().enabled
+      )
+        return false;
       return true;
     })
   );
