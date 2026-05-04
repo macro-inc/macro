@@ -1,3 +1,8 @@
+# Freeze the Docker Compose project name so every checkout/worktree uses the
+# same local FusionAuth containers, networks, and Compose-managed resources.
+# Local setup is single-instance by design.
+name: macro
+
 services:
   db:
     image: postgres:16.0-bookworm

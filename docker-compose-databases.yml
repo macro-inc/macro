@@ -1,3 +1,8 @@
+# Freeze the Docker Compose project name so every checkout/worktree uses the
+# same local database containers and Compose-managed resources.
+# Local setup is single-instance by design.
+name: macro
+
 services: 
   postgres:
     image: postgres:16
