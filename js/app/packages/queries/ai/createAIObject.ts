@@ -10,6 +10,34 @@ import { z } from 'zod';
 
 type ChatMessage = OpenAI.ChatCompletionMessageParam;
 type ChatModel = OpenAI.ChatModel | (string & {});
+type JsonObject = Record<string, unknown>;
+
+export type AIObjectSchemaViolation = {
+  path: string;
+  message: string;
+};
+
+export class AIObjectSchemaError extends Error {
+  constructor(public readonly violations: readonly AIObjectSchemaViolation[]) {
+    super(
+      [
+        'Zod schema is not compatible with OpenAI strict structured outputs.',
+        ...violations.map((violation) => `- ${violation.message}`),
+      ].join('\n')
+    );
+    this.name = 'AIObjectSchemaError';
+  }
+}
+
+export class AIObjectParseError extends Error {
+  constructor(
+    public readonly content: string,
+    public readonly parseError: unknown
+  ) {
+    super('AI object completion returned invalid JSON');
+    this.name = 'AIObjectParseError';
+  }
+}
 
 export class AIObjectValidationError<T> extends Error {
   constructor(public readonly zodError: z.ZodError<T>) {
@@ -26,7 +54,13 @@ export type CreateAIObjectOptions<
   SolidMutationOptions<z.infer<Schema>, Error, Variables, OnMutateResult>,
   'mutationFn'
 > & {
-  /** Zod v4 schema used for OpenAI structured outputs and final validation. */
+  /**
+   * Zod v4 schema used for OpenAI structured outputs and final validation.
+   *
+   * OpenAI `strict: true` requires every object property to be required. Use
+   * `.nullable()` for values the model may omit semantically; `.optional()` is
+   * rejected before sending the request.
+   */
   schema: Schema;
   /** Name sent to OpenAI for the json_schema response format. */
   schemaName?: string;
@@ -57,13 +91,124 @@ function defaultSchemaName(schema: z.ZodType): string {
   );
 }
 
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function formatJsonPath(path: readonly string[]): string {
+  if (path.length === 0) {
+    return '$';
+  }
+
+  return `$${path.map((part) => `.${part}`).join('')}`;
+}
+
+function collectStrictSchemaViolations(
+  schema: unknown,
+  path: readonly string[] = []
+): AIObjectSchemaViolation[] {
+  if (!isJsonObject(schema)) {
+    return [];
+  }
+
+  const violations: AIObjectSchemaViolation[] = [];
+  const properties = schema.properties;
+  const type = schema.type;
+  const isObjectSchema =
+    type === 'object' || (Array.isArray(type) && type.includes('object'));
+
+  if (isObjectSchema) {
+    if (schema.additionalProperties !== false) {
+      violations.push({
+        path: formatJsonPath(path),
+        message: `${formatJsonPath(path)} must set additionalProperties: false.`,
+      });
+    }
+
+    if (isJsonObject(properties)) {
+      const required = schema.required;
+      const requiredProperties = new Set(
+        Array.isArray(required)
+          ? required.filter(
+              (property): property is string => typeof property === 'string'
+            )
+          : []
+      );
+
+      for (const property of Object.keys(properties)) {
+        if (!requiredProperties.has(property)) {
+          violations.push({
+            path: formatJsonPath([...path, property]),
+            message: `${formatJsonPath([
+              ...path,
+              property,
+            ])} is optional. OpenAI strict structured outputs require every object property to be required; use .nullable() instead of .optional().`,
+          });
+        }
+      }
+    }
+  }
+
+  if (isJsonObject(properties)) {
+    for (const [property, propertySchema] of Object.entries(properties)) {
+      violations.push(
+        ...collectStrictSchemaViolations(propertySchema, [...path, property])
+      );
+    }
+  }
+
+  const items = schema.items;
+  if (isJsonObject(items)) {
+    violations.push(...collectStrictSchemaViolations(items, [...path, '[]']));
+  } else if (Array.isArray(items)) {
+    for (const [index, item] of items.entries()) {
+      violations.push(
+        ...collectStrictSchemaViolations(item, [...path, `[${index}]`])
+      );
+    }
+  }
+
+  for (const key of ['anyOf', 'oneOf', 'allOf'] as const) {
+    const schemas = schema[key];
+    if (!Array.isArray(schemas)) {
+      continue;
+    }
+
+    for (const childSchema of schemas) {
+      violations.push(...collectStrictSchemaViolations(childSchema, path));
+    }
+  }
+
+  for (const key of ['$defs', 'definitions'] as const) {
+    const definitions = schema[key];
+    if (!isJsonObject(definitions)) {
+      continue;
+    }
+
+    for (const [name, definition] of Object.entries(definitions)) {
+      violations.push(
+        ...collectStrictSchemaViolations(definition, [...path, key, name])
+      );
+    }
+  }
+
+  return violations;
+}
+
 function toJsonSchema(schema: z.ZodType) {
-  return z.toJSONSchema(schema, {
+  const jsonSchema = z.toJSONSchema(schema, {
     target: 'draft-07',
     unrepresentable: 'throw',
     cycles: 'throw',
     reused: 'inline',
   });
+
+  const violations = collectStrictSchemaViolations(jsonSchema);
+  if (violations.length > 0) {
+    throw new AIObjectSchemaError(violations);
+  }
+
+  return jsonSchema;
 }
 
 function stringifyVariables(variables: unknown): string {
@@ -127,7 +272,13 @@ async function generateAIObject<Schema extends z.ZodType, Variables>(
     throw new Error('AI object completion returned no content');
   }
 
-  const parsedJson = JSON.parse(content);
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(content);
+  } catch (error) {
+    throw new AIObjectParseError(content, error);
+  }
+
   const parsedObject = options.schema.safeParse(parsedJson);
   if (!parsedObject.success) {
     throw new AIObjectValidationError(parsedObject.error);
