@@ -31,13 +31,13 @@ function TeamChoiceDemo(props: LessonContentProps) {
         <button
           type="button"
           onClick={handleChooseTeam}
-          class="flex items-center gap-4 p-4 rounded-sm border border-edge bg-panel hover:bg-ink/5 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel transition-colors"
+          class="flex items-center gap-4 p-5 rounded-md border border-accent/50 bg-accent/5 hover:bg-accent/10 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel"
         >
-          <div class="shrink-0 size-10 rounded-full bg-accent/10 flex items-center justify-center">
+          <div class="shrink-0 size-11 rounded-full bg-accent/20 flex items-center justify-center">
             <UsersIcon class="size-5 text-accent" />
           </div>
           <div class="flex flex-col gap-0.5">
-            <span class="text-base font-medium text-ink">Create a team</span>
+            <span class="text-base font-semibold text-ink">Create a team</span>
             <span class="text-sm text-ink/50">
               Collaborate with others in a shared workspace
             </span>
@@ -47,9 +47,9 @@ function TeamChoiceDemo(props: LessonContentProps) {
         <button
           type="button"
           onClick={handleChooseSolo}
-          class="flex items-center gap-4 p-4 rounded-sm border border-edge bg-panel hover:bg-ink/5 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel transition-colors"
+          class="flex items-center gap-4 p-5 rounded-md border border-edge bg-panel hover:bg-ink/5 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel"
         >
-          <div class="shrink-0 size-10 rounded-full bg-ink/10 flex items-center justify-center">
+          <div class="shrink-0 size-11 rounded-full bg-ink/10 flex items-center justify-center">
             <UserIcon class="size-5 text-ink/60" />
           </div>
           <div class="flex flex-col gap-0.5">
