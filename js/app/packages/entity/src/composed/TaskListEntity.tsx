@@ -1,0 +1,206 @@
+import './ListEntity.css';
+import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { isMobile } from '@core/mobile/isMobile';
+import type { DateValue } from '@core/util/date';
+import {
+  getStreamState,
+  subscribeToStreamState,
+} from '@service-connection/stream-events';
+import { mergeRefs } from '@solid-primitives/refs';
+import { cn } from '@ui/utils/classname';
+import {
+  createSignal,
+  type JSX,
+  Match,
+  type Ref,
+  Show,
+  Switch,
+  useContext,
+} from 'solid-js';
+import { Entity } from '../entity';
+import type { EntityRowConfig } from '../extractors-notification';
+import { type ProjectEntity, type TaskEntity } from '../types/entity';
+import {
+  isWithNotification,
+  type WithNotification,
+} from '../types/notification';
+import { type SearchLocation } from '../types/search';
+import { createEntityDraggable } from '../utils/draggable';
+import { unreadFilterFn } from '../utils/filter';
+import {
+  filterNotDoneNotifications,
+  filterValidNotifications,
+} from '../utils/notification';
+import { useIsShared } from '../utils/shared';
+import {
+  hasSearchContentHits,
+  type LayoutProps,
+  useCharacterCount,
+  useListLayout,
+} from './list-entity/shared';
+import { NarrowLayout } from './list-entity/narrow-layout';
+import { TaskGridLayout } from './list-entity/task-grid-layout';
+
+interface TaskListEntityProps {
+  entity: WithNotification<TaskEntity>;
+  onClick?: (event: MouseEvent) => void;
+  timestamp?: DateValue | null;
+  ref?: Ref<HTMLDivElement>;
+  checked?: boolean;
+  highlighted?: boolean;
+  hovered?: boolean;
+  hideContentHits?: boolean;
+  onChecked?: (checked: boolean, shiftKey: boolean) => void;
+  onMouseMove?: () => void;
+  onProjectClick?: (
+    entity: ProjectEntity,
+    e: PointerEvent | MouseEvent
+  ) => void;
+  onContentHitClick?: (
+    e: PointerEvent | MouseEvent,
+    location?: SearchLocation
+  ) => void;
+  entityRowConfig?: EntityRowConfig;
+}
+
+function MaybeEntityRow(props: {
+  entityId: string;
+  children: JSX.Element;
+  config?: EntityRowConfig;
+}) {
+  const ctx = useContext(EntityRowContext);
+  return (
+    <Show when={isMobile() && ctx} fallback={props.children}>
+      <EntityRow
+        entityId={props.entityId}
+        swipeLeftColor={props.config?.swipeLeftColor}
+        swipeLeftRevealedComponent={props.config?.swipeLeftRevealedComponent}
+        swipeRightColor={props.config?.swipeRightColor}
+        swipeRightRevealedComponent={props.config?.swipeRightRevealedComponent}
+      >
+        {props.children}
+      </EntityRow>
+    </Show>
+  );
+}
+
+/**
+ * Task-specific list entity that renders properties (Status, Priority,
+ * Assignees, Due Date) in fixed-width grid columns so they line up
+ * vertically across rows in a list.
+ */
+export function TaskListEntity(props: TaskListEntityProps) {
+  const unread = () => unreadFilterFn(props.entity);
+  const isShared = useIsShared(props.entity);
+
+  subscribeToStreamState(props.entity.id, props.entity.type);
+  const streamState = getStreamState(props.entity.id);
+
+  const hasNotifications = () => {
+    if (!isWithNotification(props.entity)) return false;
+    return (
+      filterNotDoneNotifications(
+        filterValidNotifications(props.entity.notifications?.())
+      ).length > 0
+    );
+  };
+
+  const [snippetContainerRef, setSnippetContainerRef] = createSignal<
+    HTMLElement | undefined
+  >();
+  const chars = useCharacterCount(snippetContainerRef);
+
+  const showHitSnippet = () =>
+    !props.hideContentHits && hasSearchContentHits(props.entity);
+
+  const showContentHits = () => showHitSnippet();
+
+  const layoutProps = (): LayoutProps => ({
+    entity: props.entity,
+    checked: props.checked,
+    onChecked: props.onChecked,
+    unread: unread(),
+    isShared: isShared(),
+    hasNotifications: hasNotifications(),
+    showHitSnippet: showHitSnippet(),
+    streamState: streamState(),
+    setSnippetContainerRef,
+    chars: chars(),
+    onProjectClick: props.onProjectClick,
+  });
+
+  const draggable = createEntityDraggable({
+    entity: props.entity,
+    splitId: useSplitPanel()?.handle?.id,
+  });
+
+  const isWide = useListLayout()?.isWide ?? (() => true);
+
+  return (
+    <Entity.Root
+      entity={props.entity}
+      onClick={(e) => {
+        if (e.metaKey && props.onChecked) {
+          props.onChecked(!props.checked, e.shiftKey);
+          return;
+        }
+        props.onClick?.(e);
+      }}
+      ref={mergeRefs(props.ref, draggable)}
+      class={cn(
+        'soup-list-entity @container/entity w-full relative group/narrow flex flex-col',
+        {
+          'min-h-10': !isMobile(),
+          'bg-accent/5': props.checked,
+          'hover:bg-hover/30':
+            !props.checked && !props.highlighted && !props.hovered,
+          'bg-hover/20': props.hovered && !props.highlighted && !props.checked,
+          'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1':
+            props.highlighted && !isMobile(),
+        }
+      )}
+      onMouseMove={props.onMouseMove}
+    >
+      <div
+        data-accent-bar
+        class={cn('absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0', {
+          'opacity-100': props.highlighted && !isMobile(),
+        })}
+      />
+
+      <Switch>
+        <Match when={isWide()}>
+          <MaybeEntityRow
+            entityId={props.entity.id}
+            config={props.entityRowConfig}
+          >
+            <TaskGridLayout {...layoutProps()} />
+          </MaybeEntityRow>
+        </Match>
+        <Match when={true}>
+          <MaybeEntityRow
+            entityId={props.entity.id}
+            config={props.entityRowConfig}
+          >
+            <NarrowLayout {...layoutProps()} />
+          </MaybeEntityRow>
+        </Match>
+      </Switch>
+
+      <Show when={showContentHits()}>
+        <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0">
+          <div
+            class={cn('min-w-0 flex-1 overflow-hidden ml-4 @lg/entity:ml-6')}
+          >
+            <Entity.Search.ContentHits
+              entity={props.entity}
+              onClick={props.onContentHitClick}
+              visibleCount={0}
+            />
+          </div>
+        </div>
+      </Show>
+    </Entity.Root>
+  );
+}
