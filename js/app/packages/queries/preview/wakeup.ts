@@ -7,6 +7,8 @@ const WAKEUP_TTL_MS = 60 * 1000;
 const WAKEUP_DEBOUNCE_MS = 200;
 const WAKEUP_MAX_BATCH_SIZE = 100;
 
+export const BULK_DOCUMENT_WAKEUP_FEATURE_FLAG = 'enable-bulk-document-wakeup';
+
 const recentWakeups = new Map<string, number>();
 
 function cleanupRecentWakeups(now: number) {

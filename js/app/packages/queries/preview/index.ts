@@ -19,4 +19,8 @@ export {
   isChannelPreviewItem,
   isPreviewItemNoAccess,
 } from './types';
-export { enqueueDocumentWakeup, enqueuePreviewWakeup } from './wakeup';
+export {
+  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
+  enqueueDocumentWakeup,
+  enqueuePreviewWakeup,
+} from './wakeup';

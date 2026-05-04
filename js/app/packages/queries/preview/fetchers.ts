@@ -7,7 +7,6 @@ import { emailClient } from '@service-email/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
-import { enqueueDocumentWakeup } from './wakeup';
 
 async function fetchChannelPreviews(
   channelIds: string[]
@@ -89,12 +88,6 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
 
     switch (doc.type) {
       case 'access':
-        enqueueDocumentWakeup({
-          id: doc.document_id,
-          type: 'document',
-          fileType: doc.file_type,
-          subType: doc.sub_type,
-        });
         return {
           ...base,
           access: 'access' as const,

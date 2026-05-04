@@ -1,9 +1,13 @@
 import './ListEntity.css';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { isMobile } from '@core/mobile/isMobile';
 import type { DateValue } from '@core/util/date';
-import { enqueueDocumentWakeup } from '@queries/preview';
+import {
+  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
+  enqueueDocumentWakeup,
+} from '@queries/preview';
 import { stackNotifications } from '@notifications';
 import {
   getStreamState,
@@ -106,8 +110,11 @@ function MaybeEntityRow(props: {
 export function ListEntity(props: ListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
+  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
 
   createEffect(() => {
+    if (!bulkWakeupEnabled().enabled) return;
+
     enqueueDocumentWakeup(props.entity);
   });
 

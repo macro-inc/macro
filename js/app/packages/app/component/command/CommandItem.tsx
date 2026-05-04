@@ -10,7 +10,11 @@ import {
   type SearchItem,
 } from './useCommandItems';
 import { Entity, type EntityData } from '@entity';
-import { enqueueDocumentWakeup } from '@queries/preview';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
+  enqueueDocumentWakeup,
+} from '@queries/preview';
 import { cn } from '@ui/utils/classname';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
@@ -110,7 +114,11 @@ function CommandDisplay(props: { item: CommandMenuItem }) {
 }
 
 function EntityDisplay(props: { entity: EntityData }) {
+  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
+
   createEffect(() => {
+    if (!bulkWakeupEnabled().enabled) return;
+
     enqueueDocumentWakeup(props.entity);
   });
 
