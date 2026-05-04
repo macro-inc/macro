@@ -17,7 +17,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::{CreatedAt, Query};
 use rootcause::Report;
-use rootcause::prelude::ResultExt;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use sqlx::PgPool;
@@ -25,66 +24,6 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
-
-#[derive(sqlx::FromRow)]
-struct RawUserNotificationRow {
-    owner_id: String,
-    notification_id: Uuid,
-    event_item_id: String,
-    event_item_type: String,
-    sent: bool,
-    done: bool,
-    created_at: DateTime<Utc>,
-    viewed_at: Option<DateTime<Utc>>,
-    updated_at: DateTime<Utc>,
-    deleted_at: Option<DateTime<Utc>>,
-    notification_metadata: serde_json::Value,
-    notification_event_type: String,
-    sender_id: Option<String>,
-}
-
-impl RawUserNotificationRow {
-    fn into_user_notification<T: DeserializeOwned>(
-        self,
-    ) -> Result<UserNotificationRow<T>, Report<Uuid>> {
-        let entity = EntityType::from_str(&self.event_item_type)
-            .map_err(|e| rootcause::report!(e))
-            .attach(self.event_item_type)
-            .context(self.notification_id)?
-            .with_entity_string(self.event_item_id);
-
-        let sender_id = self
-            .sender_id
-            .map(|s| MacroUserIdStr::parse_from_str(&s).map(CowLike::into_owned))
-            .transpose()
-            .map_err(|e| rootcause::report!(e))
-            .context(self.notification_id)?;
-
-        let owner_id = MacroUserIdStr::parse_from_str(&self.owner_id)
-            .map(CowLike::into_owned)
-            .map_err(|e| rootcause::report!(e))
-            .context(self.notification_id)?;
-
-        let notification_metadata = serde_json::from_value::<T>(self.notification_metadata)
-            .map_err(|e| rootcause::report!(e))
-            .context(self.notification_id)?;
-
-        Ok(UserNotificationRow {
-            owner_id,
-            notification_id: self.notification_id,
-            notification_event_type: self.notification_event_type,
-            entity,
-            sent: self.sent,
-            done: self.done,
-            created_at: self.created_at,
-            viewed_at: self.viewed_at,
-            updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
-            notification_metadata,
-            sender_id,
-        })
-    }
-}
 
 /// Local representation of the `notification_device_type_option` Postgres enum
 /// for compile-time checked sqlx queries.
@@ -544,7 +483,23 @@ impl NotificationDbOps for PgPool {
         let include_types = filters.include_type_tokens();
         let entity_tokens = filters.entity_tokens();
 
-        let rows = sqlx::query_as::<_, RawUserNotificationRow>(
+        type Row = (
+            String,
+            Uuid,
+            String,
+            String,
+            bool,
+            bool,
+            DateTime<Utc>,
+            Option<DateTime<Utc>>,
+            DateTime<Utc>,
+            Option<DateTime<Utc>>,
+            serde_json::Value,
+            String,
+            Option<String>,
+        );
+
+        let rows = sqlx::query_as::<_, Row>(
             r#"
             SELECT
                 un.user_id as owner_id,
@@ -628,16 +583,74 @@ impl NotificationDbOps for PgPool {
         .fetch_all(self)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(RawUserNotificationRow::into_user_notification::<T>)
-            .inspect(|r| {
-                if let Err(e) = r {
-                    tracing::warn!("skipping invalid notification: {e:?}");
+        let mut notifications = Vec::with_capacity(rows.len());
+        for row in rows {
+            let (
+                owner_id,
+                notification_id,
+                event_item_id,
+                event_item_type,
+                sent,
+                done,
+                created_at,
+                viewed_at,
+                updated_at,
+                deleted_at,
+                notification_metadata,
+                notification_event_type,
+                sender_id,
+            ) = row;
+
+            let entity = match EntityType::from_str(&event_item_type) {
+                Ok(entity_type) => entity_type.with_entity_string(event_item_id),
+                Err(e) => {
+                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    continue;
                 }
-            })
-            .filter_map(Result::ok)
-            .collect())
+            };
+            let sender_id = match sender_id
+                .map(|s| MacroUserIdStr::parse_from_str(&s).map(CowLike::into_owned))
+                .transpose()
+            {
+                Ok(sender_id) => sender_id,
+                Err(e) => {
+                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    continue;
+                }
+            };
+            let owner_id = match MacroUserIdStr::parse_from_str(&owner_id).map(CowLike::into_owned)
+            {
+                Ok(owner_id) => owner_id,
+                Err(e) => {
+                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    continue;
+                }
+            };
+            let notification_metadata = match serde_json::from_value::<T>(notification_metadata) {
+                Ok(metadata) => metadata,
+                Err(e) => {
+                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    continue;
+                }
+            };
+
+            notifications.push(UserNotificationRow {
+                owner_id,
+                notification_id,
+                notification_event_type,
+                entity,
+                sent,
+                done,
+                created_at,
+                viewed_at,
+                updated_at,
+                deleted_at,
+                notification_metadata,
+                sender_id,
+            });
+        }
+
+        Ok(notifications)
     }
 
     async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
@@ -654,7 +667,23 @@ impl NotificationDbOps for PgPool {
         let include_types = filters.include_type_tokens();
         let entity_tokens = filters.entity_tokens();
 
-        let rows = sqlx::query_as::<_, RawUserNotificationRow>(
+        type Row = (
+            String,
+            Uuid,
+            String,
+            String,
+            bool,
+            bool,
+            DateTime<Utc>,
+            Option<DateTime<Utc>>,
+            DateTime<Utc>,
+            Option<DateTime<Utc>>,
+            serde_json::Value,
+            String,
+            Option<String>,
+        );
+
+        let rows = sqlx::query_as::<_, Row>(
             r#"
             SELECT
                 un.user_id as owner_id,
@@ -740,16 +769,74 @@ impl NotificationDbOps for PgPool {
         .fetch_all(self)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(RawUserNotificationRow::into_user_notification::<T>)
-            .inspect(|r| {
-                if let Err(e) = r {
-                    tracing::warn!("skipping invalid notification: {e:?}");
+        let mut notifications = Vec::with_capacity(rows.len());
+        for row in rows {
+            let (
+                owner_id,
+                notification_id,
+                event_item_id,
+                event_item_type,
+                sent,
+                done,
+                created_at,
+                viewed_at,
+                updated_at,
+                deleted_at,
+                notification_metadata,
+                notification_event_type,
+                sender_id,
+            ) = row;
+
+            let entity = match EntityType::from_str(&event_item_type) {
+                Ok(entity_type) => entity_type.with_entity_string(event_item_id),
+                Err(e) => {
+                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    continue;
                 }
-            })
-            .filter_map(Result::ok)
-            .collect())
+            };
+            let sender_id = match sender_id
+                .map(|s| MacroUserIdStr::parse_from_str(&s).map(CowLike::into_owned))
+                .transpose()
+            {
+                Ok(sender_id) => sender_id,
+                Err(e) => {
+                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    continue;
+                }
+            };
+            let owner_id = match MacroUserIdStr::parse_from_str(&owner_id).map(CowLike::into_owned)
+            {
+                Ok(owner_id) => owner_id,
+                Err(e) => {
+                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    continue;
+                }
+            };
+            let notification_metadata = match serde_json::from_value::<T>(notification_metadata) {
+                Ok(metadata) => metadata,
+                Err(e) => {
+                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    continue;
+                }
+            };
+
+            notifications.push(UserNotificationRow {
+                owner_id,
+                notification_id,
+                notification_event_type,
+                entity,
+                sent,
+                done,
+                created_at,
+                viewed_at,
+                updated_at,
+                deleted_at,
+                notification_metadata,
+                sender_id,
+            });
+        }
+
+        Ok(notifications)
     }
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
