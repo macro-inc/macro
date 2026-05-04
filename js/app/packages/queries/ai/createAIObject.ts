@@ -6,7 +6,6 @@ import {
   useMutation,
 } from '@tanstack/solid-query';
 import type OpenAI from 'openai';
-import { onCleanup } from 'solid-js';
 import { z } from 'zod';
 
 type ChatMessage = OpenAI.ChatCompletionMessageParam;
@@ -47,26 +46,7 @@ export type CreateAIObjectResult<
   Schema extends z.ZodType,
   Variables = string,
   OnMutateResult = unknown,
-> = UseMutationResult<z.infer<Schema>, Error, Variables, OnMutateResult> & {
-  /** Alias for TanStack mutation `data`, matching Vercel's object terminology. */
-  readonly object: z.infer<Schema> | undefined;
-  /** Alias for TanStack mutation `mutate`, matching Vercel's submit terminology. */
-  submit: UseMutationResult<
-    z.infer<Schema>,
-    Error,
-    Variables,
-    OnMutateResult
-  >['mutate'];
-  /** Alias for TanStack mutation `mutateAsync`. */
-  submitAsync: UseMutationResult<
-    z.infer<Schema>,
-    Error,
-    Variables,
-    OnMutateResult
-  >['mutateAsync'];
-  /** Abort the in-flight completion request. */
-  stop: () => void;
-};
+> = UseMutationResult<z.infer<Schema>, Error, Variables, OnMutateResult>;
 
 function defaultSchemaName(schema: z.ZodType): string {
   return (
@@ -117,30 +97,26 @@ function buildMessages<Variables>(
 
 async function generateAIObject<Schema extends z.ZodType, Variables>(
   options: CreateAIObjectOptions<Schema, Variables>,
-  variables: Variables,
-  signal?: AbortSignal
+  variables: Variables
 ): Promise<z.infer<Schema>> {
-  const response = await dcsCompletion(
-    {
-      model: options.model ?? 'gpt-4o-mini',
-      messages: buildMessages(options, variables),
-      ...(options.temperature === undefined
-        ? {}
-        : { temperature: options.temperature }),
-      ...(options.maxTokens === undefined
-        ? {}
-        : { max_tokens: options.maxTokens }),
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: options.schemaName ?? defaultSchemaName(options.schema),
-          strict: true,
-          schema: toJsonSchema(options.schema),
-        },
+  const response = await dcsCompletion({
+    model: options.model ?? 'gpt-4o-mini',
+    messages: buildMessages(options, variables),
+    ...(options.temperature === undefined
+      ? {}
+      : { temperature: options.temperature }),
+    ...(options.maxTokens === undefined
+      ? {}
+      : { max_tokens: options.maxTokens }),
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: options.schemaName ?? defaultSchemaName(options.schema),
+        strict: true,
+        schema: toJsonSchema(options.schema),
       },
     },
-    { signal }
-  );
+  });
 
   if (isErr(response)) {
     throw new Error(response[0].map((error) => error.message).join(', '));
@@ -163,10 +139,8 @@ async function generateAIObject<Schema extends z.ZodType, Variables>(
 /**
  * TanStack mutation for DCS structured object generation.
  *
- * This intentionally behaves like `useMutation`: pass standard mutation options
- * (`onSuccess`, `onError`, `onSettled`, `retry`, etc.) and call `mutate` or
- * `mutateAsync`. `submit`/`submitAsync` and `object` are small aliases for folks
- * used to Vercel AI SDK's `useObject` naming.
+ * This behaves like `useMutation`: pass standard mutation options (`onSuccess`,
+ * `onError`, `onSettled`, `retry`, etc.) and call `mutate` or `mutateAsync`.
  *
  * @example
  * ```tsx
@@ -178,7 +152,6 @@ async function generateAIObject<Schema extends z.ZodType, Variables>(
  *
  * mutation.mutate('Quarterly planning notes');
  * mutation.data?.title;
- * mutation.object?.title;
  * ```
  */
 export function createAIObject<
@@ -188,51 +161,8 @@ export function createAIObject<
 >(
   options: CreateAIObjectOptions<Schema, Variables, OnMutateResult>
 ): CreateAIObjectResult<Schema, Variables, OnMutateResult> {
-  let abortController: AbortController | undefined;
-
-  const stop = () => {
-    abortController?.abort();
-    abortController = undefined;
-  };
-
-  const mutation = useMutation<
-    z.infer<Schema>,
-    Error,
-    Variables,
-    OnMutateResult
-  >(() => ({
+  return useMutation<z.infer<Schema>, Error, Variables, OnMutateResult>(() => ({
     ...options,
-    mutationFn: async (variables) => {
-      stop();
-      abortController = new AbortController();
-      return await generateAIObject(options, variables, abortController.signal);
-    },
-    onSettled: (...args) => {
-      abortController = undefined;
-      options.onSettled?.(...args);
-    },
+    mutationFn: async (variables) => await generateAIObject(options, variables),
   }));
-
-  onCleanup(stop);
-
-  Object.defineProperties(mutation, {
-    object: {
-      get: () => mutation.data,
-      enumerable: true,
-    },
-    submit: {
-      get: () => mutation.mutate,
-      enumerable: true,
-    },
-    submitAsync: {
-      get: () => mutation.mutateAsync,
-      enumerable: true,
-    },
-    stop: {
-      value: stop,
-      enumerable: true,
-    },
-  });
-
-  return mutation as CreateAIObjectResult<Schema, Variables, OnMutateResult>;
 }
