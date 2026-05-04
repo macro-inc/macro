@@ -10,7 +10,7 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useAnalytics } from '@app/component/analytics-context';
 import { PLANS, PLAN_FEATURES, type PaidPlanTier } from './plans';
-import SubscriptionTier from '@macro-icons/macro-subscription-tier.svg';
+import SubscriptionTier from '@macro-icons/macro-subscription.svg';
 
 // Paid-only plans for the billing paywall — Stripe has no product for the
 // 'free' tier, so it must be excluded here. Filtered once at module scope so
