@@ -755,7 +755,9 @@ function InteractiveOnboardingInner() {
                     </div>
 
                     {/* Cost Summary */}
-                    <OnboardingCostSummary />
+                    <Show when={lesson().definition.id !== 'review-pay'}>
+                      <OnboardingCostSummary />
+                    </Show>
 
                     {/* Footer */}
                     <div class="flex flex-col gap-3 px-4 py-3 border-t border-ink/10">

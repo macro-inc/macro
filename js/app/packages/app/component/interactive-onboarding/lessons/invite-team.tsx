@@ -13,13 +13,8 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import TrashIcon from '@icon/regular/trash-simple.svg';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
-import {
-  invalidateUserTeams,
-  useCreateTeamWithInvitesMutation,
-} from '@queries/team';
 import { useEmail } from '@core/context/user';
 import type { LessonContentProps, LessonDefinition } from '../types';
-import { useAnalytics } from '@app/component/analytics-context';
 import { useOnboarding } from '../onboarding-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ENABLE_TEAM_INVITE_TIERS_OVERRIDE } from '@core/constant/featureFlags';
@@ -56,7 +51,6 @@ type FormErrors = {
 type InviteEntry = { email: string; tier: PaidPlanTier };
 
 function InviteTeamDemo(props: LessonContentProps) {
-  const analytics = useAnalytics();
   const onboarding = useOnboarding();
   const tierFlag = useFeatureFlag('enable-team-invite-tiers', {
     enabledOverride: ENABLE_TEAM_INVITE_TIERS_OVERRIDE,
@@ -87,14 +81,6 @@ function InviteTeamDemo(props: LessonContentProps) {
     onboarding.setInvitedMembers(validMembers);
   };
 
-  const createTeamMutation = useCreateTeamWithInvitesMutation({
-    onSettled: () => invalidateUserTeams(),
-    onSuccess(data) {
-      analytics.track('onboarding_team_created', {
-        teamId: data.id,
-      });
-    },
-  });
   const userEmail = useEmail();
 
   const emailPlaceholder = createMemo(() => {
@@ -105,7 +91,6 @@ function InviteTeamDemo(props: LessonContentProps) {
   });
 
   const isValid = () => teamName().trim().length > 0;
-  const isPending = () => createTeamMutation.isPending;
 
   const charCountColor = () => {
     const len = teamName().length;
@@ -116,12 +101,10 @@ function InviteTeamDemo(props: LessonContentProps) {
 
   createEffect(
     on(
-      () => [isValid(), isPending()] as const,
-      ([valid, pending]) => {
-        props.onComplete(pending ? 'Creating...' : 'Create team', {
-          skipFocus: true,
-        });
-        if (!valid || pending) {
+      isValid,
+      (valid) => {
+        props.onComplete('Continue', { skipFocus: true });
+        if (!valid) {
           props.onUnready();
         }
       },
@@ -139,7 +122,7 @@ function InviteTeamDemo(props: LessonContentProps) {
   };
 
   const addEmailField = () => {
-    if (!canAddEmail() || isPending()) return;
+    if (!canAddEmail()) return;
     const newIndex = inviteEntries().length;
     setInviteEntries((prev) => [...prev, { email: '', tier: 'haiku' }]);
     requestAnimationFrame(() => {
@@ -215,9 +198,8 @@ function InviteTeamDemo(props: LessonContentProps) {
     }
   };
 
-  const handleSubmit = async (e: SubmitEvent) => {
+  const handleSubmit = (e: SubmitEvent) => {
     e.preventDefault();
-    if (isPending()) return;
 
     const result = inviteFormSchema.safeParse({
       teamName: teamName(),
@@ -242,16 +224,7 @@ function InviteTeamDemo(props: LessonContentProps) {
     }
 
     setErrors({});
-
-    try {
-      await createTeamMutation.mutateAsync({
-        name: result.data.teamName,
-        emails: result.data.emails.length > 0 ? result.data.emails : undefined,
-      });
-      props.advance();
-    } catch {
-      // Error is displayed in the form via createTeamMutation.error
-    }
+    props.advance();
   };
 
   return (
@@ -280,14 +253,14 @@ function InviteTeamDemo(props: LessonContentProps) {
             onInput={(e) => updateTeamName(e.currentTarget.value)}
             onBlur={() => validateField('teamName', 0, teamName())}
             placeholder="Enter your team name"
-            disabled={isPending()}
+            disabled={false}
             aria-describedby="team-name-counter"
             class={cn(
               'w-[calc(100%-36px)] px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
               errors().teamName
                 ? 'border-failure focus-visible:ring-failure'
                 : 'border-edge focus-visible:ring-accent',
-              isPending() && 'opacity-50 cursor-not-allowed'
+              false
             )}
           />
           <div class="flex justify-between items-center w-[calc(100%-36px)]">
@@ -335,7 +308,7 @@ function InviteTeamDemo(props: LessonContentProps) {
                           validateField('email', index, e.currentTarget.value)
                         }
                         placeholder={emailPlaceholder()}
-                        disabled={isPending()}
+                        disabled={false}
                         aria-labelledby="invite-members-label"
                         aria-describedby="invite-members-description"
                         aria-invalid={!!errors().emails?.[index]}
@@ -344,14 +317,14 @@ function InviteTeamDemo(props: LessonContentProps) {
                           errors().emails?.[index]
                             ? 'border-failure focus-visible:ring-failure'
                             : 'border-edge focus-visible:ring-accent',
-                          isPending() && 'opacity-50 cursor-not-allowed'
+                          false
                         )}
                       />
                       <Show when={showTier()}>
                         <TierSelect
                           value={entry().tier}
                           onChange={(tier) => updateTier(index, tier)}
-                          disabled={isPending()}
+                          disabled={false}
                           triggerClass="bracket-never flex items-center justify-between gap-1 w-28 px-3 py-2 text-base border border-edge rounded-xs bg-panel text-ink outline-none shrink-0 hover:bg-ink/5 data-[expanded]:bg-ink/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel [&>svg]:data-[expanded]:rotate-180 [&>svg]:transition-transform"
                         />
                       </Show>
@@ -368,7 +341,7 @@ function InviteTeamDemo(props: LessonContentProps) {
                               ? updateEmail(0, '')
                               : removeEmail(index)
                           }
-                          disabled={isPending()}
+                          disabled={false}
                           aria-label={
                             inviteEntries().length > 1
                               ? `Remove email ${index + 1}`
@@ -376,7 +349,7 @@ function InviteTeamDemo(props: LessonContentProps) {
                           }
                           class={cn(
                             'shrink-0 p-1.5 text-ink/40 hover:text-ink hover:bg-ink/5 rounded-xs bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
-                            isPending() && 'opacity-50 cursor-not-allowed'
+                            false
                           )}
                         >
                           <Show
@@ -402,11 +375,11 @@ function InviteTeamDemo(props: LessonContentProps) {
             <button
               type="button"
               onClick={addEmailField}
-              disabled={!canAddEmail() || isPending()}
+              disabled={!canAddEmail()}
               aria-label="Add another email invite"
               class={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm rounded-xs bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
-                canAddEmail() && !isPending()
+                canAddEmail()
                   ? 'text-ink bg-ink/8 hover:bg-ink/12'
                   : 'text-ink/30 bg-ink/4 cursor-not-allowed'
               )}
@@ -419,12 +392,6 @@ function InviteTeamDemo(props: LessonContentProps) {
             You can always invite more people later from Settings
           </p>
         </div>
-
-        <Show when={createTeamMutation.error}>
-          <p class="text-sm text-failure-ink px-2" role="alert">
-            {createTeamMutation.error?.message ?? 'Failed to create team'}
-          </p>
-        </Show>
       </form>
     </div>
   );

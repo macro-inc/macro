@@ -1,14 +1,21 @@
-import { createSignal, createMemo, Show, For } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import type { LessonContentProps, LessonDefinition } from '../types';
-import { stripeServiceClient } from '@service-stripe/client';
 import { useAnalytics } from '@app/component/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { Tooltip } from '@core/component/Tooltip';
 import { useOnboarding } from '../onboarding-context';
-import { PLANS } from '@app/component/paywall/plans';
+import {
+  PLANS,
+  PLAN_FEATURES,
+  type PaidPlanTier,
+} from '@app/component/paywall/plans';
 import { useIsAuthenticated } from '@core/auth';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
+import ArrowRightIcon from '@icon/regular/arrow-right.svg';
+import InfoIcon from '@icon/regular/info.svg';
+import LockIcon from '@icon/regular/lock.svg';
 import { Button } from '@ui/components/Button';
+import { useOnboardingCheckoutMutation } from '../use-onboarding-checkout';
 
 function ReviewPayContent() {
   return (
@@ -22,12 +29,37 @@ function ReviewPayDemo(props: LessonContentProps) {
   const analytics = useAnalytics();
   const onboarding = useOnboarding();
   const isAuthenticated = useIsAuthenticated();
-  const [loading, setLoading] = createSignal(false);
+
+  const checkoutMutation = useOnboardingCheckoutMutation({
+    onSuccess: (result) => {
+      analytics.track('subscription_start', {
+        type: onboarding.selectedPlan(),
+        seats: onboarding.seatCount(),
+        teamId: result.teamId,
+      });
+      if (result.teamId) {
+        analytics.track('onboarding_team_created', {
+          teamId: result.teamId,
+        });
+      }
+      window.location.href = result.checkoutUrl;
+    },
+    onError: (error) => {
+      console.error('Checkout error:', error);
+      toast.failure(
+        error.message || 'Failed to start checkout. Please try again.'
+      );
+    },
+  });
 
   const selectedPlan = () => {
     const tier = onboarding.selectedPlan();
     return PLANS.find((p) => p.tier === tier);
   };
+
+  const hasTeam = () =>
+    onboarding.invitedMembers().length > 0 ||
+    onboarding.teamName().trim() !== '';
 
   const teamByTier = createMemo(() => {
     const groups: Record<
@@ -47,9 +79,9 @@ function ReviewPayDemo(props: LessonContentProps) {
     return Object.values(groups).sort((a, b) => b.plan.price - a.plan.price);
   });
 
-  const handleCheckout = async () => {
+  const handleCheckout = () => {
     const tier = onboarding.selectedPlan();
-    if (!tier || tier === 'free' || loading()) return;
+    if (!tier || tier === 'free' || checkoutMutation.isPending) return;
 
     if (!isAuthenticated()) {
       toast.failure('Please sign in to continue');
@@ -57,30 +89,16 @@ function ReviewPayDemo(props: LessonContentProps) {
       return;
     }
 
-    setLoading(true);
-    try {
-      const successUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?subscriptionSuccess=true&type=${tier}`;
-      const url = await stripeServiceClient.createCheckoutSession({
-        tier,
-        successUrl,
-      });
-      if (!url) {
-        throw new Error('No checkout URL returned');
-      }
-      analytics.track('subscription_start', {
-        type: tier,
-        seats: onboarding.seatCount(),
-      });
-      window.location.href = url;
-    } catch (error) {
-      console.error('Checkout error:', error);
-      toast.failure(
-        error instanceof Error
-          ? error.message
-          : 'Failed to start checkout. Please try again.'
-      );
-      setLoading(false);
-    }
+    const teamName = onboarding.teamName();
+    const members = onboarding
+      .invitedMembers()
+      .filter((m) => m.tier !== 'free')
+      .map((m) => ({ email: m.email, tier: m.tier as PaidPlanTier }));
+
+    checkoutMutation.mutate({
+      tier: tier as PaidPlanTier,
+      team: teamName ? { name: teamName, members } : undefined,
+    });
   };
 
   const handleBack = () => {
@@ -98,47 +116,136 @@ function ReviewPayDemo(props: LessonContentProps) {
         Back
       </button>
       <div class="flex-1 flex items-center justify-center">
-        <div class="w-full max-w-sm flex flex-col items-center text-center gap-8">
-          <div class="flex flex-col items-center gap-1">
-            <div class="flex items-baseline gap-1">
-              <span class="text-5xl font-bold text-ink">
-                ${onboarding.totalCost()}
+        <div class="w-full max-w-sm flex flex-col gap-6">
+          <div class="flex flex-col gap-3">
+            <Show when={hasTeam() && onboarding.teamName()}>
+              <div class="flex flex-col gap-0.5">
+                <span class="text-xs text-ink/40 uppercase tracking-wide">
+                  Team
+                </span>
+                <span class="text-xl font-semibold text-ink">
+                  {onboarding.teamName()}
+                </span>
+              </div>
+            </Show>
+            <div class="flex items-baseline justify-between">
+              <div class="flex items-end gap-1.5">
+                <span class="text-4xl font-bold text-accent leading-none">
+                  $
+                  {hasTeam()
+                    ? onboarding.totalCost()
+                    : onboarding.userSeatCost()}
+                </span>
+                <span class="text-ink/50 text-base pb-0.5">/month</span>
+              </div>
+              <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium">
+                {hasTeam() ? 'Team plan' : selectedPlan()?.name}
               </span>
-              <span class="text-ink/50 text-lg">/mo</span>
             </div>
-            <span class="text-ink/40 text-sm">per month</span>
           </div>
 
-          <div class="w-full flex flex-col text-sm">
-            <div class="flex justify-between py-3 border-b border-edge-muted">
+          <div class="flex flex-col gap-2 text-sm">
+            <div class="flex justify-between py-2 border-b border-ink/10">
               <span class="text-ink/60">
                 Your seat · {selectedPlan()?.name}
               </span>
-              <span class="text-ink">${onboarding.userSeatCost()}/mo</span>
+              <span>
+                <span class="text-ink">${onboarding.userSeatCost()}</span>
+                <span class="text-ink/40"> /month</span>
+              </span>
             </div>
             <For each={teamByTier()}>
               {(group) => (
-                <div class="flex justify-between py-3 border-b border-edge-muted">
+                <div class="flex justify-between py-2 border-b border-ink/10">
                   <span class="text-ink/60">
                     Team · {group.plan.name} × {group.count}
                   </span>
-                  <span class="text-ink">
-                    ${group.plan.price * group.count}/mo
+                  <span>
+                    <span class="text-ink">${group.plan.price * group.count}</span>
+                    <span class="text-ink/40"> /month</span>
                   </span>
                 </div>
               )}
             </For>
+            <Show when={onboarding.invitedMembers().length > 0}>
+              <div class="flex justify-between items-center py-2">
+                <span class="text-ink/60 flex items-center gap-1">
+                  Total
+                  <Tooltip tooltip="Team charges begin when members accept their invite">
+                    <InfoIcon class="size-3.5 text-ink/40" />
+                  </Tooltip>
+                </span>
+                <span>
+                  <span class="text-ink font-medium">${onboarding.totalCost()}</span>
+                  <span class="text-ink/40"> /month</span>
+                </span>
+              </div>
+            </Show>
           </div>
 
-          <Button
-            variant="accent"
-            size="lg"
-            onClick={handleCheckout}
-            disabled={loading()}
-            class="w-full rounded-xs"
-          >
-            {loading() ? 'Loading...' : 'Continue to payment'}
-          </Button>
+          <Show when={hasTeam()}>
+            <div class="flex flex-col gap-2">
+              <span class="text-xs text-ink/40 uppercase tracking-wide">
+                Invites
+              </span>
+              <Show
+                when={onboarding.invitedMembers().length > 0}
+                fallback={
+                  <span class="text-sm text-ink/40 italic">
+                    No members invited yet
+                  </span>
+                }
+              >
+                <div class="flex flex-col gap-1">
+                  <For each={onboarding.invitedMembers()}>
+                    {(member) => (
+                      <span class="text-sm text-ink/70">{member.email}</span>
+                    )}
+                  </For>
+                </div>
+              </Show>
+              <span class="text-xs text-ink/40">
+                You can invite members anytime from Settings
+              </span>
+            </div>
+          </Show>
+
+          <div class="flex flex-col gap-2">
+            <span class="text-xs text-ink/40 uppercase tracking-wide">
+              What's included
+            </span>
+            <div class="flex flex-col gap-1">
+              <For each={PLAN_FEATURES}>
+                {(feature) => (
+                  <div class="flex justify-between text-sm">
+                    <span class="text-ink/60">{feature.label}</span>
+                    <span class="text-ink">
+                      {feature.values[onboarding.selectedPlan() ?? 'free']}
+                    </span>
+                  </div>
+                )}
+              </For>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <Button
+              variant="accent"
+              size="lg"
+              onClick={handleCheckout}
+              disabled={checkoutMutation.isPending}
+              class="w-full rounded-xs"
+            >
+              {checkoutMutation.isPending
+                ? 'Loading...'
+                : 'Continue to payment'}
+              <ArrowRightIcon class="size-4" />
+            </Button>
+            <span class="text-xs text-ink/40 flex items-center justify-center gap-1">
+              <LockIcon class="size-3" />
+              Secure checkout via Stripe
+            </span>
+          </div>
         </div>
       </div>
     </div>
