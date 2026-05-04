@@ -15,7 +15,6 @@ import { Dynamic } from 'solid-js/web';
 import type { ListView } from '@app/constants/list-views';
 import { runCreateAction, setCreateMenuOpen } from '../../Launcher';
 import { useAnalytics } from '@app/component/analytics-context';
-import { cn } from '@ui/utils/classname';
 import { Layer } from '@ui';
 
 const ICON_ANIMATION_DURATION_MS = 500;
