@@ -3,7 +3,7 @@ import { storageServiceClient } from '@service-storage/client';
 import { isErr } from '@core/util/maybeResult';
 import type { PreviewItem } from './types';
 
-const WAKEUP_TTL_MS = 55 * 1000;
+const WAKEUP_TTL_MS = 60 * 1000;
 const WAKEUP_DEBOUNCE_MS = 200;
 const WAKEUP_MAX_BATCH_SIZE = 100;
 
