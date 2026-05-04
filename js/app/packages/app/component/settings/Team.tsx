@@ -43,6 +43,8 @@ import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInvi
 import { formatRelativeTimestamp } from '@entity';
 import { ENABLE_TEAM_INVITE_TIERS_OVERRIDE } from '@core/constant/featureFlags';
 import { useFeatureFlag, ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { useHasPaidAccess } from '@core/auth/license';
+import { usePaywallState } from '@core/constant/PaywallState';
 import { z } from 'zod';
 
 const roleOrder: Record<string, number> = {
@@ -597,6 +599,8 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
 
 function EmptyTeamState() {
   const [showCreateModal, setShowCreateModal] = createSignal(false);
+  const hasPaidAccess = useHasPaidAccess();
+  const { showPaywall } = usePaywallState();
 
   return (
     <>
@@ -605,13 +609,27 @@ function EmptyTeamState() {
           <UsersIcon class="size-6 text-accent" />
         </div>
         <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
-        <p class="text-xs text-ink-muted max-w-xs mb-4">
-          Create a team to collaborate with others and manage access together.
-        </p>
-        <Button variant="accent" class="rounded-xs" onClick={() => setShowCreateModal(true)}>
-          <PlusIcon class="size-4" />
-          Create Team
-        </Button>
+        <Show
+          when={hasPaidAccess()}
+          fallback={
+            <>
+              <p class="text-xs text-ink-muted max-w-xs mb-4">
+                Teams are available on paid plans. Upgrade to create and manage teams.
+              </p>
+              <Button variant="accent" class="rounded-xs" onClick={() => showPaywall()}>
+                Upgrade
+              </Button>
+            </>
+          }
+        >
+          <p class="text-xs text-ink-muted max-w-xs mb-4">
+            Create a team to collaborate with others and manage access together.
+          </p>
+          <Button variant="accent" class="rounded-xs" onClick={() => setShowCreateModal(true)}>
+            <PlusIcon class="size-4" />
+            Create Team
+          </Button>
+        </Show>
       </div>
 
       <Show when={showCreateModal()}>
