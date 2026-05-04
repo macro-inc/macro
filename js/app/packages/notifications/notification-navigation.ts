@@ -203,10 +203,11 @@ function getSupportedHandler(
     .with('invite_to_team', () => null)
     .with(
       'call-started',
-      () => async (lm: SplitManager, newSplit: boolean = false) =>
-        openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
-          newSplit,
-        })
+      () =>
+        async (lm: SplitManager, newSplit: boolean = false) =>
+          openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
+            newSplit,
+          })
     )
     .with('task_assigned', () => {
       const meta = notification.notification_metadata;
