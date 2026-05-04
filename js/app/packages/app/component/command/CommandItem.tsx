@@ -14,6 +14,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueueDocumentWakeup,
+  isWakeableDocument,
 } from '@queries/preview';
 import { cn } from '@ui/utils/classname';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
@@ -118,6 +119,7 @@ function EntityDisplay(props: { entity: EntityData }) {
 
   createEffect(() => {
     if (!bulkWakeupEnabled().enabled) return;
+    if (!isWakeableDocument(props.entity)) return;
 
     enqueueDocumentWakeup(props.entity);
   });

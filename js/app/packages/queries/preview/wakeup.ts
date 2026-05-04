@@ -1,6 +1,7 @@
 import { AsyncBatcher } from '@tanstack/pacer';
 import { storageServiceClient } from '@service-storage/client';
 import { isErr } from '@core/util/maybeResult';
+import type { ItemLike } from '@core/constant/allBlocks';
 import type { PreviewItem } from './types';
 
 const WAKEUP_TTL_MS = 60 * 1000;
@@ -64,22 +65,25 @@ function enqueueDocumentIdWakeup(documentId: string) {
   documentWakeupBatcher.addItem(documentId);
 }
 
-type WakeableEntity = {
+export type WakeableDocument = ItemLike & {
   id: string;
-  type?: string;
-  fileType?: string | null;
-  subType?: { type?: string | null } | null;
+  type: 'document';
+  fileType: 'md';
 };
 
-export function enqueueDocumentWakeup(item: WakeableEntity) {
-  if (item.type !== 'document') return;
-  if (item.fileType !== 'md' && item.subType?.type !== 'task') return;
+export function isWakeableDocument(
+  item: ItemLike & { id: string }
+): item is WakeableDocument {
+  return item.type === 'document' && item.fileType === 'md';
+}
 
+export function enqueueDocumentWakeup(item: WakeableDocument) {
   enqueueDocumentIdWakeup(item.id);
 }
 
 export function enqueuePreviewWakeup(item: PreviewItem) {
   if (item.loading || item.access !== 'access') return;
+  if (!isWakeableDocument(item)) return;
 
   enqueueDocumentWakeup(item);
 }

@@ -7,6 +7,7 @@ import type { DateValue } from '@core/util/date';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueueDocumentWakeup,
+  isWakeableDocument,
 } from '@queries/preview';
 import { stackNotifications } from '@notifications';
 import {
@@ -114,6 +115,7 @@ export function ListEntity(props: ListEntityProps) {
 
   createEffect(() => {
     if (!bulkWakeupEnabled().enabled) return;
+    if (!isWakeableDocument(props.entity)) return;
 
     enqueueDocumentWakeup(props.entity);
   });
