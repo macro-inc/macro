@@ -3,7 +3,9 @@ import { ThemeEditorBasic } from '@theme/components/ThemeEditorBasic';
 import ThemeTools from '@theme/components/ThemeTools';
 import ThemeList from '@theme/components/ThemeList';
 
+import { isMobile } from '@core/mobile/isMobile';
 import { Panel } from '@ui';
+import { cn } from '@ui/utils/classname';
 
 export function Appearance() {
   return (
@@ -27,9 +29,11 @@ export function Appearance() {
         <Panel depth={2}>
           <ThemeList />
         </Panel>
-        <Panel depth={2}>
-          <ThemeEditorAdvanced />
-        </Panel>
+        <div class={cn('contents', isMobile() && 'hidden')}>
+          <Panel depth={2}>
+            <ThemeEditorAdvanced />
+          </Panel>
+        </div>
       </div>
     </div>
   );

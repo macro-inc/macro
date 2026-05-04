@@ -6,6 +6,8 @@ import {
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -282,16 +284,12 @@ const service = new AuthenticationService('authentication-service', {
       value: pulumi.interpolate`${SERVICE_INTERNAL_AUTH_KEY}`,
     },
     {
-      name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      name: ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
     },
     {
-      name: 'NOTIFICATION_SERVICE_URL',
-      value: `https://notifications${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      name: ServiceUrl.NOTIFICATION_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.NOTIFICATION_SERVICE_URL),
     },
     {
       name: 'NOTIFICATION_QUEUE',

@@ -314,8 +314,8 @@ function ToastContent(props: {
       <Panel
         highlightColor={accentColor()}
         active
-        class="relative w-[90vw] sm:w-md px-2 sm:p-3"
-        depth={3}
+        class="relative w-[90vw] sm:w-md p-2 sm:p-3"
+        depth={2}
       >
         <Switch>
           {/* ── Embed layout ── */}

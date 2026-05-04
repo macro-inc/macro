@@ -11,7 +11,7 @@ import { useSplitPanelOrThrow } from '../layoutUtils';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
-import { Panel } from '@ui';
+import { Layer, Panel } from '@ui';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobile } from '@core/mobile/isMobile';
 
@@ -85,13 +85,15 @@ export function SplitContainer(
         <Show
           when={!isMobile()}
           fallback={
-            <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
-              <SplitHeader ref={setHeaderRef} />
-              <SplitToolbar ref={setToolbarRef} />
-              <div class="@container/split size-full overflow-hidden relative">
-                {props.children}
+            <Layer depth={1}>
+              <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
+                <SplitHeader ref={setHeaderRef} />
+                <SplitToolbar ref={setToolbarRef} />
+                <div class="@container/split size-full overflow-hidden relative">
+                  {props.children}
+                </div>
               </div>
-            </div>
+            </Layer>
           }
         >
           <Panel

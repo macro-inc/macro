@@ -687,6 +687,59 @@ impl CallRepository for PgCallRepo {
         )
         .execute(&self.pool)
         .await?;
+
+        // The agent's first-audio-frame wall-clock is a more accurate
+        // recording-timeline anchor than the `egress_started` webhook's
+        // envelope time (which fires when egress bootstraps, ~seconds
+        // before any audio frame is encoded). Overwrite the column when:
+        //   - it's still NULL (no webhook yet), OR
+        //   - the existing value is at exact second precision (i.e., from
+        //     the webhook, which stores `from_timestamp(secs, 0)`), OR
+        //   - the new value is earlier than the existing agent value
+        //     (across multiple participants, take the earliest first-audio).
+        if let Some(stream_started_at) = segment.stream_started_at {
+            let active = sqlx::query!(
+                r#"
+                UPDATE calls
+                SET recording_started_at = $1
+                WHERE id = $2
+                  AND (
+                    recording_started_at IS NULL
+                    OR recording_started_at = date_trunc('second', recording_started_at)
+                    OR $1 < recording_started_at
+                  )
+                "#,
+                stream_started_at,
+                call_id,
+            )
+            .execute(&self.pool)
+            .await?;
+
+            // Race fallback: if `archive_call` moved the row to `call_records`
+            // between transcript-ingest's lookup and now, the active UPDATE
+            // affects 0 rows. Apply the same conditional update to the
+            // archived row (same id is reused on archive). Mirrors
+            // `set_recording_started_at_by_egress_id`.
+            if active.rows_affected() == 0 {
+                sqlx::query!(
+                    r#"
+                    UPDATE call_records
+                    SET recording_started_at = $1
+                    WHERE id = $2
+                      AND (
+                        recording_started_at IS NULL
+                        OR recording_started_at = date_trunc('second', recording_started_at)
+                        OR $1 < recording_started_at
+                      )
+                    "#,
+                    stream_started_at,
+                    call_id,
+                )
+                .execute(&self.pool)
+                .await?;
+            }
+        }
+
         Ok(())
     }
 

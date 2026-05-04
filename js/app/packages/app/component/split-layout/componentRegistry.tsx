@@ -13,6 +13,8 @@ import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/compose/Compose';
 import { SettingsPanelComponentWrapper } from '../settings/Settings';
+import type { Query } from '@app/component/next-soup/filters/filter-store/types';
+import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
 
@@ -239,16 +241,30 @@ registerComponent(
   })
 );
 
+type SearchComponentParams = {
+  initialQuery?: string;
+  initialFilters?: Query;
+  initialClientFilters?: SetPredicatesInput<string>;
+};
+
 registerComponent(
   'search',
-  withAuth(() => {
+  withAuth((params: SearchComponentParams = {}) => {
     usePageViewTracking('search');
     const preset = getViewPreset('search');
+    const hasExplicitParams =
+      params.initialQuery !== undefined ||
+      params.initialFilters !== undefined ||
+      params.initialClientFilters !== undefined;
     return (
       <SoupView
         viewName="Search"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
+        initialFilters={params.initialFilters ?? preset?.filters}
+        initialClientFilters={
+          params.initialClientFilters ?? preset?.clientFilters
+        }
+        initialSearchText={params.initialQuery}
+        skipPersistedState={hasExplicitParams}
       />
     );
   })

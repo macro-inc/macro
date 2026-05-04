@@ -38,6 +38,7 @@ import { commsServiceClient } from '@service-comms/client';
 import InfoIcon from '@icon/regular/info.svg';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
+import { Panel } from '@ui';
 
 export function ChannelCompose() {
   const [channelName, setChannelName] = createSignal<string>('');
@@ -260,60 +261,67 @@ export function ChannelCompose() {
             </div>
           </div>
         </Show>
-        <ChannelInputContainer>
-          <Input.Root input={inputState.view()} commands={inputState.commands}>
-            <Input.DropZone
-              onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
-              onDragEnd={() => inputState.setIsDraggedOver(false)}
+        <div class="p-2">
+          <ChannelInputContainer>
+            <Input.Root
+              input={inputState.view()}
+              commands={inputState.commands}
             >
-              <Input.Layout>
-                <Input.DropOverlay />
-                <Input.FormatRibbon>
-                  <FormatButtons
-                    selectionState={() => markdownEditor.selection}
-                    onInlineFormat={(format) =>
-                      applyInlineFormat(markdownEditor.lexical, format)
-                    }
-                    onNodeFormat={(format) =>
-                      applyNodeFormat(markdownEditor.lexical, format)
-                    }
-                  />
-                </Input.FormatRibbon>
-                <Input.EditorShell
-                  ref={setScrollContainer}
-                  onClick={(event) => {
-                    if (!isMobile()) {
-                      event.stopPropagation();
-                      markdownEditor.controls.focus();
-                    }
-                  }}
+              <Panel depth={2}>
+                <Input.DropZone
+                  onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
+                  onDragEnd={() => inputState.setIsDraggedOver(false)}
                 >
-                  <Input.Editor>
-                    <MarkdownShell
-                      config={markdownEditor}
-                      placeholder={placeholder()}
-                      autofocus={false}
-                      class="text-sm"
-                    />
-                  </Input.Editor>
-                </Input.EditorShell>
-                <Input.Attachments kind="media" />
-                <Input.Attachments kind="document" />
-                <Input.Footer>
-                  <Input.Actions>
-                    <Input.Actions.Left>
-                      <Input.AttachFilesAction />
-                      <Input.ToggleFormatAction />
-                    </Input.Actions.Left>
-                    <Input.Actions.Right>
-                      <Input.SendAction />
-                    </Input.Actions.Right>
-                  </Input.Actions>
-                </Input.Footer>
-              </Input.Layout>
-            </Input.DropZone>
-          </Input.Root>
-        </ChannelInputContainer>
+                  <Input.Layout>
+                    <Input.DropOverlay />
+                    <Input.FormatRibbon>
+                      <FormatButtons
+                        selectionState={() => markdownEditor.selection}
+                        onInlineFormat={(format) =>
+                          applyInlineFormat(markdownEditor.lexical, format)
+                        }
+                        onNodeFormat={(format) =>
+                          applyNodeFormat(markdownEditor.lexical, format)
+                        }
+                      />
+                    </Input.FormatRibbon>
+                    <Input.EditorShell
+                      ref={setScrollContainer}
+                      onClick={(event) => {
+                        if (!isMobile()) {
+                          event.stopPropagation();
+                          markdownEditor.controls.focus();
+                        }
+                      }}
+                    >
+                      <Input.Editor>
+                        <MarkdownShell
+                          config={markdownEditor}
+                          placeholder={placeholder()}
+                          autofocus={false}
+                          class="text-sm"
+                        />
+                      </Input.Editor>
+                    </Input.EditorShell>
+                    <Input.Attachments kind="media" />
+                    <Input.Attachments kind="document" />
+                    <Input.Footer>
+                      <Input.Actions>
+                        <Input.Actions.Left>
+                          <Input.AttachFilesAction />
+                          <Input.ToggleFormatAction />
+                        </Input.Actions.Left>
+                        <Input.Actions.Right>
+                          <Input.SendAction />
+                        </Input.Actions.Right>
+                      </Input.Actions>
+                    </Input.Footer>
+                  </Input.Layout>
+                </Input.DropZone>
+              </Panel>
+            </Input.Root>
+          </ChannelInputContainer>
+        </div>
       </div>
     </>
   );

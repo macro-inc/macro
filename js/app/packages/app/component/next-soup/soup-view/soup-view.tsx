@@ -191,6 +191,9 @@ interface SoupViewProps {
   viewName: string;
   initialClientFilters?: SetPredicatesInput<string>;
   initialFilters?: Partial<QueryState>;
+  initialSearchText?: string;
+  /** Ignore localStorage on mount and use the supplied `initial*` values. */
+  skipPersistedState?: boolean;
   disableLocalSearch?: boolean;
   /**
    * Client-side entities to merge into the soup results. Useful for entity
@@ -271,6 +274,7 @@ export const SoupView = (props: SoupViewProps) => {
       <SoupViewContextProvider
         soup={soup}
         initialQuery={props.initialFilters}
+        initialSearchText={props.initialSearchText}
         disableLocalSearch={props.disableLocalSearch}
         additionalEntities={props.additionalEntities}
       >
@@ -310,6 +314,7 @@ export const SoupView = (props: SoupViewProps) => {
                     <SoupSearchbar
                       variant="secondary"
                       autoFocus
+                      initialValue={props.initialSearchText}
                       onDismiss={() => setNarrowSearchExpanded(false)}
                     />
                   </div>
@@ -330,7 +335,10 @@ export const SoupView = (props: SoupViewProps) => {
                   }}
                   expanded={() => (
                     <div class="w-52">
-                      <SoupSearchbar variant="secondary" />
+                      <SoupSearchbar
+                        variant="secondary"
+                        initialValue={props.initialSearchText}
+                      />
                     </div>
                   )}
                   collapsed={() => (
@@ -353,7 +361,7 @@ export const SoupView = (props: SoupViewProps) => {
                 />
               </Show>
             </SplitHeaderRight>
-            <SoupFiltersBar />
+            <SoupFiltersBar initialSearchText={props.initialSearchText} />
           </div>
           <Show when={hasLinkError()}>
             <EmailPermissionsBanner />
@@ -368,6 +376,7 @@ export const SoupView = (props: SoupViewProps) => {
               <SoupViewFileDropzone>
                 <SoupViewList
                   initialClientFilters={props.initialClientFilters}
+                  skipPersistedState={props.skipPersistedState}
                 />
               </SoupViewFileDropzone>
             </Suspense>
@@ -393,6 +402,7 @@ interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
   initialClientFilters?: SetPredicatesInput<string>;
+  skipPersistedState?: boolean;
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {
@@ -692,9 +702,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // Restore previewEntity synchronously so the first-render effect sees the
   // correct value and avoids a transient window where previewEntity is undefined.
-  const initialPersistedState = !persistenceDisabled
-    ? untrack(persistedState)
-    : null;
+  const initialPersistedState =
+    !persistenceDisabled && !props.skipPersistedState
+      ? untrack(persistedState)
+      : null;
   soup.setPreviewEntity(initialPersistedState?.previewEntity);
 
   // Set initial state
@@ -789,7 +800,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (restored || isProjectList) return;
     restored = true;
 
-    const cached = listStateCache.get(cacheKey);
+    const cached = props.skipPersistedState
+      ? undefined
+      : listStateCache.get(cacheKey);
     if (cached) {
       setSearchText(cached.searchText);
       soup.focus.set(cached.focus);

@@ -89,9 +89,9 @@
   --color-dialog:          var(--b0); /* dialog, e.g. dialog background */
   --color-input:           var(--b0); /* input, e.g. chat/channel input */
   --color-button:          var(--b0); /* dialog, e.g. dialog background */
-  --color-message:         var(--b0); /* message background */
+  --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2)); /* message background */
   --color-hover:           var(--b2); /* hover, e.g. hover state for buttons/items */
-  --color-active:          var(--b2); /* elements that are selected or activated */
+  --color-active:          var(--b1); /* elements that are selected or activated */
   --color-overlay:         oklch(from var(--b2) l c h / 0.5); /* overlay, e.g. modal background */
   --color-edge-muted:      var(--b3); /* muted edge */
   --color-edge:            var(--b4); /* edge (border) */
@@ -706,10 +706,10 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 /* Apply to the content wrapper div inside any Dialog.Portal (not the overlay).
    Keeps UI elements within device safe areas (notch, home indicator, etc.). */
 @utility safe-insets {
-  padding-top: var(--safe-top);
-  padding-bottom: var(--safe-bottom);
-  padding-left: var(--safe-left);
-  padding-right: var(--safe-right);
+  margin-top: var(--safe-top);
+  margin-bottom: var(--safe-bottom);
+  margin-left: var(--safe-left);
+  margin-right: var(--safe-right);
 }
 
 :root {

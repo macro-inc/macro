@@ -4,12 +4,12 @@ use std::error::Error;
 use std::io::{Write, stdout};
 use std::sync::Arc;
 
-use async_openai::types::CreateChatCompletionRequestArgs;
-use async_openai::types::{
-    ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessageArgs,
-    ChatCompletionRequestMessage, ChatCompletionRequestToolMessageArgs,
-    ChatCompletionRequestUserMessageArgs, ChatCompletionToolArgs, ChatCompletionToolType,
-    FinishReason, FunctionCall, FunctionObjectArgs,
+use async_openai::types::chat::{
+    ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls,
+    ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
+    ChatCompletionRequestToolMessageArgs, ChatCompletionRequestUserMessageArgs, ChatCompletionTool,
+    ChatCompletionTools, CreateChatCompletionRequestArgs, FinishReason, FunctionCall,
+    FunctionObjectArgs,
 };
 use futures::StreamExt;
 use rand::prelude::*;
@@ -19,28 +19,23 @@ use tokio::sync::Mutex;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user_prompt = "What's the weather like in Boston and Atlanta?";
-    let tools = vec![
-        ChatCompletionToolArgs::default()
-            .r#type(ChatCompletionToolType::Function)
-            .function(
-                FunctionObjectArgs::default()
-                    .name("get_current_weather")
-                    .description("Get the current weather in a given location")
-                    .parameters(json!({
-                        "type": "object",
-                        "properties": {
-                            "location": {
-                                "type": "string",
-                                "description": "The city and state, e.g. San Francisco, CA",
-                            },
-                            "unit": { "type": "string", "enum": ["celsius", "fahrenheit"] },
-                        },
-                        "required": ["location"],
-                    }))
-                    .build()?,
-            )
+    let tools = vec![ChatCompletionTool {
+        function: FunctionObjectArgs::default()
+            .name("get_current_weather")
+            .description("Get the current weather in a given location")
+            .parameters(json!({
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "The city and state, e.g. San Francisco, CA",
+                    },
+                    "unit": { "type": "string", "enum": ["celsius", "fahrenheit"] },
+                },
+                "required": ["location"],
+            }))
             .build()?,
-    ];
+    }];
     let request = CreateChatCompletionRequestArgs::default()
         .max_tokens(6000_u32)
         .model("claude-haiku-4-5")
@@ -48,7 +43,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .content(user_prompt)
             .build()?
             .into()])
-        .tools(tools.clone())
+        .tools(
+            tools
+                .iter()
+                .cloned()
+                .map(ChatCompletionTools::Function)
+                .collect::<Vec<_>>(),
+        )
         .build()?;
 
     let client = anthropic::client::Client::dangerously_try_from_env(None);
@@ -74,7 +75,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let state = states_lock.entry(key).or_insert_with(|| {
                                 ChatCompletionMessageToolCall {
                                     id: tool_call_data.id.clone().unwrap_or_default(),
-                                    r#type: ChatCompletionToolType::Function,
                                     function: FunctionCall {
                                         name: tool_call_data
                                             .function
@@ -142,10 +142,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .into(),
                             ];
 
-                            let tool_calls: Vec<ChatCompletionMessageToolCall> =
+                            let tool_calls: Vec<ChatCompletionMessageToolCalls> =
                                 function_responses_lock
                                     .iter()
-                                    .map(|tc| tc.0.clone())
+                                    .map(|tc| {
+                                        ChatCompletionMessageToolCalls::Function(tc.0.clone())
+                                    })
                                     .collect();
 
                             let assistant_messages: ChatCompletionRequestMessage =
@@ -177,7 +179,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .max_tokens(6000_u32)
                                 .model("claude-haiku-4-5")
                                 .messages(messages)
-                                .tools(tools.clone())
+                                .tools(
+                                    tools
+                                        .iter()
+                                        .cloned()
+                                        .map(ChatCompletionTools::Function)
+                                        .collect::<Vec<_>>(),
+                                )
                                 .build()
                                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 

@@ -52,7 +52,11 @@ build_lambdas:
 
 # Copies over necessary .env files for sqlx tests
 setup_test_envs:
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./contacts_db_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./contacts/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./delete_chat_handler/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./integration_tests/test_pdf_modification_data_deserialize/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_sfs_delete_handler/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./scheduled_action/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./notification_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./notification/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./properties_db_client/.env

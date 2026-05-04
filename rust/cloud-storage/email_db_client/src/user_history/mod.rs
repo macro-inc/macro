@@ -166,13 +166,9 @@ pub async fn get_thread_summary_info(
             updated_at: row.last_message_ts,
             // if the last time the user viewed the thread was before the most recent message came in,
             // the user hasn't viewed the most recent message.
-            viewed_at: row.viewed_at.and_then(|viewed| {
-                if viewed >= row.last_message_ts {
-                    Some(viewed)
-                } else {
-                    None
-                }
-            }),
+            viewed_at: row
+                .viewed_at
+                .filter(|&viewed| viewed >= row.last_message_ts),
             sender: row.sender,
             pretty_sender: row.pretty_sender,
             is_read: row.is_read,

@@ -66,6 +66,9 @@ export const MarkdownShell: Component<
       });
     }
 
+    const hasInitialContent =
+      props.initialState !== undefined || props.initialValue !== undefined;
+
     if (props.initialState) {
       initializeEditorWithState(editor, props.initialState);
     } else if (props.initialValue) {
@@ -75,6 +78,12 @@ export const MarkdownShell: Component<
     }
 
     didInitializeContent = true;
+
+    // The deferred markdownState effect misses the synchronous change inside
+    // init, so push the initial value out to onChange manually.
+    if (hasInitialContent) {
+      builderConfig.handlers.onChange?.(markdownState());
+    }
   };
 
   // Track editable state

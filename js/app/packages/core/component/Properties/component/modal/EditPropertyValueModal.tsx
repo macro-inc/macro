@@ -9,8 +9,6 @@ import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertyEditor } from '../../hooks/usePropertyEditor';
 import { formatOptionValue } from '../../utils';
 import type { PropertyApiValues, PropertyEditorProps } from '../../types';
-
-false && floatWithElement;
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
@@ -23,10 +21,7 @@ import {
   usePropertyOptionsQuery,
 } from '@queries/properties/options';
 import type { DateProperty } from '../../types';
-
-// Common CSS classes
-const MODAL_BASE =
-  'absolute z-action-menu bg-menu border border-edge-muted max-h-96 overflow-hidden flex flex-col w-full max-w-sm';
+import { cn, Layer } from '@ui';
 
 export function EditPropertyValueModal(props: PropertyEditorProps) {
   const propertyOptionsQuery = usePropertyOptionsQuery(
@@ -212,120 +207,128 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
           handleClose();
         }}
       >
-        <div
-          ref={mergeRefs((ref) => {
-            modalRef = ref;
-          })}
-          class={MODAL_BASE}
-          tabIndex={-1}
-          use:floatWithElement={{ element: () => props.anchorRef }}
-          // All properties that reach this modal (select, entity, and date types) should auto-save
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Show when={!isLoading()}>
-            <div class="bg-dialog text-ink">
-              <div>
-                <Show
-                  when={
-                    props.property.valueType === 'SELECT_STRING' ||
-                    props.property.valueType === 'SELECT_NUMBER'
-                  }
-                  fallback={
-                    <Show
-                      when={props.property.valueType === 'ENTITY'}
-                      fallback={
-                        <Show when={props.property.valueType === 'DATE'}>
-                          <PropertyDateSelector
-                            property={props.property as DateProperty}
-                            selectedDate={selectedDate()}
-                            onSelectDate={(date) => setSelectedDate(date)}
-                            onClose={handleClose}
-                          />
-                        </Show>
-                      }
-                    >
-                      <PropertyEntitySelector
-                        config={{
-                          isMultiSelect: props.property.isMultiSelect,
-                          placeholder: `${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`,
-                          specificEntityType: props.property.specificEntityType,
-                          selfFilter: {
-                            entityType: currentEntityType,
-                            blockId,
-                          },
-                        }}
-                        selectedOptions={() => {
-                          const refs = selectedEntityRefs();
-                          return entityReferencesToIdSet(refs);
-                        }}
-                        setSelectedOptions={(newOptions, entityInfo) => {
-                          const currentRefs = selectedEntityRefs();
-                          const updatedRefs = updateEntityReferences(
-                            currentRefs,
-                            newOptions,
-                            entityInfo
-                          );
-                          setSelectedEntityRefs(updatedRefs);
-                        }}
-                        onClose={handleClose}
-                      />
-                    </Show>
-                  }
-                >
-                  <PropertyOptionSelector
-                    config={{
-                      isMultiSelect: props.property.isMultiSelect,
-                      placeholder: `${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`,
-                      inputType:
-                        props.property.valueType === 'SELECT_NUMBER'
-                          ? 'number'
-                          : 'text',
-                      canAddOption: props.property.isSystemProperty
-                        ? undefined
-                        : (query) => {
-                            if (props.property.valueType === 'SELECT_STRING')
-                              return true;
-                            if (props.property.valueType === 'SELECT_NUMBER') {
-                              const n = parseFloat(query);
-                              return !isNaN(n) && Number.isFinite(n);
-                            }
-                            return false;
-                          },
-                    }}
-                    options={propertyOptions().map((opt) => ({
-                      id: opt.id,
-                      label: formatOptionValue(opt),
-                    }))}
-                    isLoading={false}
-                    error={null}
-                    selectedOptions={selectedOptions}
-                    onToggleOption={toggleOption}
-                    onAddOption={
-                      props.property.isSystemProperty ? undefined : addOption
+        <Layer depth={2}>
+          <div
+            ref={mergeRefs((ref) => {
+              modalRef = ref;
+              floatWithElement(ref, () => ({
+                element: () => props.anchorRef,
+              }));
+            })}
+            class={cn(
+              'absolute border border-edge rounded sm z-action-menu max-h-96 overflow-hidden flex flex-col w-full max-w-sm'
+            )}
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Show when={!isLoading()}>
+              <div class="bg-dialog text-ink">
+                <div>
+                  <Show
+                    when={
+                      props.property.valueType === 'SELECT_STRING' ||
+                      props.property.valueType === 'SELECT_NUMBER'
                     }
-                    onClose={handleClose}
-                  />
+                    fallback={
+                      <Show
+                        when={props.property.valueType === 'ENTITY'}
+                        fallback={
+                          <Show when={props.property.valueType === 'DATE'}>
+                            <PropertyDateSelector
+                              property={props.property as DateProperty}
+                              selectedDate={selectedDate()}
+                              onSelectDate={(date) => setSelectedDate(date)}
+                              onClose={handleClose}
+                            />
+                          </Show>
+                        }
+                      >
+                        <PropertyEntitySelector
+                          config={{
+                            isMultiSelect: props.property.isMultiSelect,
+                            placeholder: `${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`,
+                            specificEntityType:
+                              props.property.specificEntityType,
+                            selfFilter: {
+                              entityType: currentEntityType,
+                              blockId,
+                            },
+                          }}
+                          selectedOptions={() => {
+                            const refs = selectedEntityRefs();
+                            return entityReferencesToIdSet(refs);
+                          }}
+                          setSelectedOptions={(newOptions, entityInfo) => {
+                            const currentRefs = selectedEntityRefs();
+                            const updatedRefs = updateEntityReferences(
+                              currentRefs,
+                              newOptions,
+                              entityInfo
+                            );
+                            setSelectedEntityRefs(updatedRefs);
+                          }}
+                          onClose={handleClose}
+                        />
+                      </Show>
+                    }
+                  >
+                    <PropertyOptionSelector
+                      config={{
+                        isMultiSelect: props.property.isMultiSelect,
+                        placeholder: `${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`,
+                        inputType:
+                          props.property.valueType === 'SELECT_NUMBER'
+                            ? 'number'
+                            : 'text',
+                        canAddOption: props.property.isSystemProperty
+                          ? undefined
+                          : (query) => {
+                              if (props.property.valueType === 'SELECT_STRING')
+                                return true;
+                              if (
+                                props.property.valueType === 'SELECT_NUMBER'
+                              ) {
+                                const n = parseFloat(query);
+                                return !isNaN(n) && Number.isFinite(n);
+                              }
+                              return false;
+                            },
+                      }}
+                      options={propertyOptions().map((opt) => ({
+                        id: opt.id,
+                        label: formatOptionValue(opt),
+                      }))}
+                      isLoading={false}
+                      error={null}
+                      selectedOptions={selectedOptions}
+                      onToggleOption={toggleOption}
+                      onAddOption={
+                        props.property.isSystemProperty ? undefined : addOption
+                      }
+                      onClose={handleClose}
+                    />
+                  </Show>
+                </div>
+                <Show when={props.property.isMultiSelect}>
+                  <div class="border-t border-edge-muted px-2 py-1.5 flex justify-end gap-1">
+                    <button
+                      class="text-xs text-ink-muted hover:text-ink px-2 py-1"
+                      onClick={() => props.onClose()}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      class="text-xs text-ink-muted hover:text-ink px-2 py-1"
+                      onClick={handleClose}
+                    >
+                      Done
+                    </button>
+                  </div>
                 </Show>
               </div>
-              <Show when={props.property.isMultiSelect}>
-                <div class="border-t border-edge-muted px-2 py-1.5 flex justify-end gap-1">
-                  <button
-                    class="text-xs text-ink-muted hover:text-ink px-2 py-1"
-                    onClick={() => props.onClose()}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    class="text-xs text-ink-muted hover:text-ink px-2 py-1"
-                    onClick={handleClose}
-                  >
-                    Done
-                  </button>
-                </div>
-              </Show>
-            </div>
-          </Show>
-        </div>
+            </Show>
+          </div>
+        </Layer>
       </div>
     </ScopedPortal>
   );

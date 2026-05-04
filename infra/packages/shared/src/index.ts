@@ -48,3 +48,5 @@ export {
   getAiToolsServiceRoleArns,
   type AiToolsInfra,
 } from './ai_tools';
+
+export * from './service_urls';

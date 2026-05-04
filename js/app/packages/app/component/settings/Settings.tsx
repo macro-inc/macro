@@ -16,6 +16,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { SplitHeaderLeft, SplitHeaderRight } from '../split-layout/components/SplitHeader';
 import { SettingsButton } from './SettingsButton';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 /**
  * Wrapper for Settings Panel used in the split layout. Includes the correct Header button.
@@ -23,9 +24,11 @@ import { SettingsButton } from './SettingsButton';
 export function SettingsPanelComponentWrapper() {
   return (
     <>
-      <SplitHeaderRight>
-        <SettingsButton />
-      </SplitHeaderRight>
+      <Show when={isMobile()}>
+        <SplitHeaderRight>
+          <SettingsButton />
+        </SplitHeaderRight>
+      </Show>
       <SettingsPanel />
     </>
   )
@@ -60,9 +63,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
       { value: 'Appearance', label: 'Appearance' },
       { value: 'Account', label: 'Account' },
     ];
-
-    tabs.push({ value: 'Shortcuts', label: 'Shortcuts' });
     if (teamsFlag().enabled) { tabs.push({ value: 'Team', label: 'Team' }) }
+    tabs.push({ value: 'Shortcuts', label: 'Shortcuts' });
     if (permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()) { tabs.push({ value: 'Subscription', label: 'Subscription' }) }
     if (ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()) { tabs.push({ value: 'Mobile App', label: 'App' }) }
     if (isNativeMobilePlatform() && DEV_MODE_ENV) { tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' }) }
@@ -160,14 +162,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   function BottomTabs() {
     return (
-    <div class="bg-panel border-t border-edge-muted h-11 px-1">
+    <div class="bg-panel border-t border-edge-muted h-11 shrink-0 px-1">
       <Tabs
         list={settingsTabs()}
         value={activeTabId()}
         defaultValue="Appearance"
         onChange={handleTabChange}
         indicatorPosition="top"
-        class="**:data-indicator:h-[3px]"
+        class="**:data-indicator:h-0.75"
       />
     </div>
     );
@@ -209,7 +211,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <Show when={activeTabId() === 'Appearance'}>
           <Appearance />
         </Show>
-        <Show when={activeTabId() === 'Shortcuts'}>
+        <Show when={activeTabId() === 'Shortcuts' && !isTouchDevice()}>
           <Shortcuts />
         </Show>
         <Show when={activeTabId() === 'Team' && teamsFlag().enabled}>

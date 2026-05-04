@@ -36,6 +36,7 @@ import { windowSearchMatch } from '@core/util/searchHighlight';
 import { TailSpinner } from '@core/component/TailSpinner';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import { Layer } from '@ui';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -52,16 +53,18 @@ export function MobileSearchOuter() {
   return (
     <Dialog open={SearchState.isOpen()} onOpenChange={SearchState.setIsOpen}>
       <Dialog.Portal>
-        <Dialog.Content
-          class={cn(
-            'fixed inset-0 z-modal flex flex-col h-[calc(var(--dvh,1dvh)*100)] pt-(--safe-top) pl-(--safe-left) pr-(--safe-right)',
-            {
-              'pb-(--safe-bottom)': !virtualKeyboardVisible(),
-            }
-          )}
-        >
-          <MobileSearchInner />
-        </Dialog.Content>
+        <Layer depth={2}>
+          <Dialog.Content
+            class={cn(
+              'fixed inset-0 z-modal flex flex-col h-[calc(var(--dvh,1dvh)*100)] pt-(--safe-top) pl-(--safe-left) pr-(--safe-right)',
+              {
+                'pb-(--safe-bottom)': !virtualKeyboardVisible(),
+              }
+            )}
+          >
+            <MobileSearchInner />
+          </Dialog.Content>
+        </Layer>
       </Dialog.Portal>
     </Dialog>
   );

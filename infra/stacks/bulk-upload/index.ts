@@ -1,7 +1,12 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { DynamoDBTable } from '../../packages/resources';
-import { config, stack } from '../../packages/shared';
+import {
+  config,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 import { BulkUploadBucket } from './upload-bucket';
 import { UploadExtractorLambdaHandler } from './upload-extractor-lambda-handler';
 import { UploadExtractorLambdaTrigger } from './upload-extractor-lambda-trigger';
@@ -120,16 +125,6 @@ if (stack !== 'local') {
     throw new Error('document_storage_service_auth_key must be set');
   }
 
-  const connectionGatewayStack = new pulumi.StackReference(
-    'connection-gateway-stack',
-    {
-      name: `macro-inc/connection-gateway/${stack}`,
-    }
-  );
-  const connectionGatewayUrl = connectionGatewayStack
-    .getOutput('connectionGatewayUrl')
-    .apply((arn) => arn as string);
-
   const documentStorageServiceAuthKey = aws.secretsmanager
     .getSecretVersionOutput({
       secretId: documentStorageServiceAuthKeyName,
@@ -163,7 +158,9 @@ if (stack !== 'local') {
         UPLOAD_BUCKET_NAME: pulumi.interpolate`${bulkUploadBucket.bucket.bucket}`,
         INTERNAL_API_SECRET_KEY: pulumi.interpolate`${documentStorageServiceAuthKey}`,
         DSS_URL: pulumi.interpolate`${cloudStorageServiceUrl}`,
-        CONNECTION_GATEWAY_URL: pulumi.interpolate`${connectionGatewayUrl}`,
+        CONNECTION_GATEWAY_URL: getServiceUrl(
+          ServiceUrl.CONNECTION_GATEWAY_URL
+        ),
         ENVIRONMENT: stack,
         RUST_LOG: 'upload_extractor_lambda_handler=trace',
       },

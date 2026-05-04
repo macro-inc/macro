@@ -14,7 +14,11 @@ import { useSoup } from '../../soup-context';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { useAnalytics } from '@app/component/analytics-context';
 
-export const SoupFiltersBar = () => {
+interface SoupFiltersBarProps {
+  initialSearchText?: string;
+}
+
+export const SoupFiltersBar = (props: SoupFiltersBarProps = {}) => {
   const {
     resetToTabDefaults,
     activeFiltersList,
@@ -71,7 +75,11 @@ export const SoupFiltersBar = () => {
     <Switch>
       <Match when={isComponentListView('search')}>
         <div class="w-full flex flex-col gap-2 p-2 border-b border-edge-muted">
-          <SoupSearchbar autoFocus placeholder="Search, @mention contacts" />
+          <SoupSearchbar
+            autoFocus={!props.initialSearchText}
+            placeholder="Search, @mention contacts"
+            initialValue={props.initialSearchText}
+          />
           <div class="flex items-start gap-2">
             <UnifiedFilterDropdown />
             <ActiveFilterChips

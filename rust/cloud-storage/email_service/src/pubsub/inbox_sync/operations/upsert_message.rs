@@ -1,3 +1,5 @@
+use contacts::domain::ports::ContactsIngress;
+
 use crate::convert::{map_message_resource_to_service, map_thread_resources_to_service};
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::operations::shared::notify_search;
@@ -9,7 +11,6 @@ use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment}
 use email_db_client::threads;
 use email_utils::dedupe_emails;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::contacts::ConnectionsMessage;
 use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
 use models_email::db::address::EmailRecipientType;
@@ -337,24 +338,28 @@ async fn handle_contacts_sync(
         return Ok(());
     }
 
-    // Build users list: current user at index 0, connection targets after
-    let mut users = vec![link.macro_id.to_string()];
-    users.extend(
-        connection_emails
-            .iter()
-            .map(|email| format!("macro|{email}")),
-    );
+    let users: std::collections::HashSet<MacroUserIdStr<'static>> =
+        std::iter::once(Ok(link.macro_id.clone()))
+            .chain(
+                connection_emails
+                    .iter()
+                    .map(|email| MacroUserIdStr::try_from_email(email)),
+            )
+            .collect::<Result<_, _>>()
+            .map_err(|e| {
+                ProcessingError::NonRetryable(DetailedError {
+                    reason: FailureReason::SqsEnqueueFailed,
+                    source: anyhow::anyhow!(e).context("invalid user email for contacts"),
+                })
+            })?;
 
-    // Create connections from current user (index 0) to each other user
-    let connections = (1..users.len()).map(|i| (0, i)).collect();
-
-    ctx.sqs_client
-        .enqueue_contacts_add_connection(ConnectionsMessage { users, connections })
+    ctx.contacts_ingress
+        .enqueue_contacts(users)
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::SqsEnqueueFailed,
-                source: e.context(format!(
+                source: anyhow::anyhow!("{e:?}").context(format!(
                     "Failed to enqueue contacts message for {}",
                     link.macro_id
                 )),

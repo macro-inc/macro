@@ -138,7 +138,7 @@ async fn build_tool_context(
     let search_service_client = SearchServiceClient::new(internal_auth_key.clone(), dss_url);
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
-        sync_service_auth_key.clone(),
+        internal_auth_key.clone(),
         env_vars.lexical_service_url.as_ref().to_owned(),
     ));
 

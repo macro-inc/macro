@@ -1,5 +1,7 @@
 use crate::api::channels::create_channel::to_lowercase;
 use crate::api::context::AppState;
+use contacts::domain::ports::ContactsIngress;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::iter;
 
 use anyhow::Result;
@@ -110,11 +112,18 @@ pub async fn handler(
                     "unable to create private channel".to_string(),
                 )
             })?;
-            let sqs_client = &ctx.sqs_client;
             let mut recipients = recipients.clone();
             recipients.push(user_id.clone());
-            sqs_client
-                .enqueue_contacts_create_channel(recipients, &id.to_string())
+            let contacts_users = recipients
+                .into_iter()
+                .map(MacroUserIdStr::try_from)
+                .collect::<Result<std::collections::HashSet<_>, _>>()
+                .map_err(|e| {
+                    tracing::error!(error=?e, "invalid user id for contacts");
+                    (StatusCode::BAD_REQUEST, "invalid user id".to_string())
+                })?;
+            ctx.contacts_ingress
+                .enqueue_contacts(contacts_users)
                 .await
                 .map_err(|e| {
                     tracing::error!(error=?e, "unable to create 'add participant' SQS message");

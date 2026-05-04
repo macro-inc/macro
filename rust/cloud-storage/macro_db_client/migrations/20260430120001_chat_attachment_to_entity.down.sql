@@ -2,6 +2,20 @@
 
 BEGIN;
 
+-- Backfill old columns for rows inserted after the up migration
+UPDATE "ChatAttachment"
+SET
+    "old_attachmentType" = CASE "entity_type"
+        WHEN 'document'     THEN 'document'
+        WHEN 'static_file'  THEN 'image'
+        WHEN 'channel'      THEN 'channel'
+        WHEN 'email_thread' THEN 'email'
+        WHEN 'project'      THEN 'project'
+        ELSE 'document'
+    END,
+    "old_attachmentId" = "entity_id"::TEXT
+WHERE "old_attachmentType" IS NULL;
+
 -- Restore NOT NULL on old columns
 ALTER TABLE "ChatAttachment"
     ALTER COLUMN "old_attachmentType" SET NOT NULL;

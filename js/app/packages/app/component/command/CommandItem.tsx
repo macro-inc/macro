@@ -5,11 +5,14 @@ import { For, Match, Show, Switch } from 'solid-js';
 import {
   isCommandItem,
   isEntityItem,
+  isSearchItem,
   type CommandMenuItem,
+  type SearchItem,
 } from './useCommandItems';
 import { Entity, type EntityData } from '@entity';
 import { cn } from '@ui/utils/classname';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
+import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import { Dynamic } from 'solid-js/web';
 
 export interface CommandItemProps {
@@ -116,9 +119,25 @@ function EntityDisplay(props: { entity: EntityData }) {
   );
 }
 
+function SearchDisplay(props: { item: SearchItem }) {
+  return (
+    <div class="flex items-center gap-2 flex-1 min-w-0">
+      <div class="size-5 flex items-center justify-center text-ink-muted shrink-0">
+        <SearchIcon class="size-4" />
+      </div>
+      <span class="truncate text-ink">
+        Search for <span class="text-ink">“{props.item.query}”</span>
+      </span>
+    </div>
+  );
+}
+
 function ItemDisplay(props: { item: CommandMenuItem }) {
   return (
     <Switch>
+      <Match when={isSearchItem(props.item) && props.item}>
+        {(item) => <SearchDisplay item={item()} />}
+      </Match>
       <Match when={isCommandItem(props.item) && props.item}>
         {(item) => <CommandDisplay item={item()} />}
       </Match>

@@ -1,7 +1,8 @@
 use crate::types::Model;
 use crate::types::OpenRouterClient;
 use anyhow::Result;
-use async_openai::types::{CreateCompletionRequestArgs, Prompt};
+use async_openai::types::chat::Prompt;
+use async_openai::types::completions::CreateCompletionRequestArgs;
 
 pub async fn simple_completion(prompt: &str, request: &str, model: Model) -> Result<String> {
     let client = OpenRouterClient::new();

@@ -65,9 +65,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
-  "contacts",
   "search",
 ] }
+contacts = { path = "../contacts" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
