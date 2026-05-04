@@ -772,6 +772,16 @@ const SidebarLink = (props: SidebarLinkProps) => {
             if (e.button === 1) return;
 
             e.preventDefault();
+            const currentContent = layoutManager?.activeSplit()?.content();
+            const isSameContent =
+              currentContent?.type === 'component' &&
+              currentContent?.id === props.id;
+
+            if (isSameContent && !e.shiftKey) {
+              layoutManager?.returnFocus();
+              return;
+            }
+
             layout.openWithSplit(content(), {
               preferNewSplit: e.shiftKey,
               mergeHistory: false,

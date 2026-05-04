@@ -1114,18 +1114,11 @@ export function createSplitLayout(
     const shouldReplace = !options.preferNewSplit || shouldReplaceWhenFull;
 
     if (splitHandle && shouldReplace) {
-      const currentContent = splitHandle.content();
-      const isSameContent =
-        currentContent?.type === content.type &&
-        currentContent?.id === content.id;
-
-      if (!isSameContent) {
-        splitHandle.replace({
-          next: content,
-          referredFrom: options.referredFrom ?? null,
-          mergeHistory: options.mergeHistory,
-        });
-      }
+      splitHandle.replace({
+        next: content,
+        referredFrom: options.referredFrom ?? null,
+        mergeHistory: options.mergeHistory,
+      });
 
       if (options.activate !== false) {
         splitHandle.activate();
