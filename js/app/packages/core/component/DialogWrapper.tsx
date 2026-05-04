@@ -9,6 +9,7 @@ export interface DialogWrapperProps {
   width?: string;
   overlayRef?: Ref<HTMLDivElement>;
   contentRef?: Ref<HTMLDivElement>;
+  onOpenAutoFocus?: (event: Event) => void;
   onCloseAutoFocus?: (event: Event) => void;
 }
 
@@ -34,6 +35,7 @@ export function DialogWrapper(props: DialogWrapperProps) {
             'max-w-[calc(100vw-16px)] mt-40 mx-auto overflow-hidden portal-scope'
           )}
           style={{ width: width }}
+          onOpenAutoFocus={props.onOpenAutoFocus}
           onCloseAutoFocus={props.onCloseAutoFocus}
         >
           <Panel depth={2} active>

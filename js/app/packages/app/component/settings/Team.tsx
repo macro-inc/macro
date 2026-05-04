@@ -43,7 +43,7 @@ import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import { formatRelativeTimestamp } from '@entity';
 import { ENABLE_TEAM_INVITE_TIERS_OVERRIDE } from '@core/constant/featureFlags';
-import { useFeatureFlag, ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth/license';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { z } from 'zod';
@@ -222,6 +222,17 @@ function InviteEntryRow(props: {
   );
 }
 
+function getEmailError(email: string, existingEmails: string[], excludeIndex?: number): string | undefined {
+  const trimmed = email.trim();
+  if (trimmed === '') return undefined;
+  if (!emailSchema.safeParse(trimmed).success) return 'Invalid email address';
+  const isDuplicate = existingEmails.some(
+    (existing, i) => i !== excludeIndex && existing.toLowerCase() === trimmed.toLowerCase()
+  );
+  if (isDuplicate) return 'Email already added';
+  return undefined;
+}
+
 function InviteEmailsInput(props: {
   invites: InviteEntry[];
   onChange: (invites: InviteEntry[]) => void;
@@ -237,21 +248,10 @@ function InviteEmailsInput(props: {
   const tierFlag = useFeatureFlag('enable-team-invite-tiers', { enabledOverride: ENABLE_TEAM_INVITE_TIERS_OVERRIDE });
   const showTier = () => tierFlag().enabled;
 
+  const existingEmails = () => props.invites.map((i) => i.email);
+
   const validateEmail = (index: number) => {
-    const email = props.invites[index]?.email?.trim() ?? '';
-    let error: string | undefined;
-
-    if (email !== '' && !emailSchema.safeParse(email).success) {
-      error = 'Invalid email address';
-    } else if (email !== '') {
-      const isDuplicate = props.invites.some(
-        (inv, i) => i !== index && inv.email.toLowerCase() === email.toLowerCase()
-      );
-      if (isDuplicate) {
-        error = 'Email already added';
-      }
-    }
-
+    const error = getEmailError(props.invites[index]?.email ?? '', existingEmails(), index);
     const next = [...props.errors()];
     next[index] = error;
     props.onErrorsChange(next);
@@ -259,29 +259,14 @@ function InviteEmailsInput(props: {
   };
 
   const validateInput = () => {
-    const value = inputValue().trim();
-    if (value === '') {
-      setInputError(undefined);
-      return true;
-    }
-    if (!emailSchema.safeParse(value).success) {
-      setInputError('Invalid email address');
-      return false;
-    }
-    const existingEmails = new Set(props.invites.map((i) => i.email.toLowerCase()));
-    if (existingEmails.has(value.toLowerCase())) {
-      setInputError('Email already added');
-      return false;
-    }
-    setInputError(undefined);
-    return true;
+    const error = getEmailError(inputValue(), existingEmails());
+    setInputError(error);
+    return !error;
   };
 
   const handleInputChange = (value: string) => {
     setInputValue(value);
-    if (inputError()) {
-      setInputError(undefined);
-    }
+    if (inputError()) setInputError(undefined);
   };
 
   const addEmails = () => {
@@ -291,20 +276,18 @@ function InviteEmailsInput(props: {
       return;
     }
 
-    const existingEmails = new Set(props.invites.map((i) => i.email.toLowerCase()));
-    const uniqueNew = newEmails.filter((e) => !existingEmails.has(e.toLowerCase()));
+    const existing = new Set(existingEmails().map((e) => e.toLowerCase()));
+    const uniqueNew = newEmails.filter((e) => !existing.has(e.toLowerCase()));
 
-    if (uniqueNew.length === 0 && newEmails.length > 0) {
+    if (uniqueNew.length === 0) {
       setInputError('Email already added');
       return;
     }
 
-    if (uniqueNew.length > 0) {
-      props.onChange([
-        ...props.invites,
-        ...uniqueNew.map((email) => ({ email, tier: inputTier() })),
-      ]);
-    }
+    props.onChange([
+      ...props.invites,
+      ...uniqueNew.map((email) => ({ email, tier: inputTier() })),
+    ]);
     setInputValue('');
     setInputError(undefined);
     inputRef?.focus();
@@ -623,6 +606,7 @@ const teamNameSchema = z
   );
 
 function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
+  let teamNameInputRef: HTMLInputElement | undefined;
   const [teamName, setTeamName] = createSignal('');
   const [teamNameError, setTeamNameError] = createSignal<string | undefined>(undefined);
   const [invites, setInvites] = createSignal<InviteEntry[]>([]);
@@ -695,7 +679,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   return (
     <Dialog open={props.open} onOpenChange={(open) => !open && props.onClose()}>
       <Dialog.Portal>
-        <DialogWrapper>
+        <DialogWrapper onOpenAutoFocus={(e) => { e.preventDefault(); teamNameInputRef?.focus(); }}>
           <div class="flex flex-col text-ink">
             <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
               <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
@@ -714,6 +698,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
                   </span>
                 </div>
                 <input
+                  ref={teamNameInputRef}
                   type="text"
                   value={teamName()}
                   onInput={(e) => handleTeamNameChange(e.currentTarget.value)}
@@ -733,7 +718,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
                 <InviteEmailsInput
                   invites={invites()}
                   onChange={setInvites}
-                  errors={inviteErrors}
+                  errors={inviteErrors()}
                   onErrorsChange={setInviteErrors}
                 />
               </div>
@@ -1257,7 +1242,7 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                 <InviteEmailsInput
                   invites={invites()}
                   onChange={setInvites}
-                  errors={inviteErrors}
+                  errors={inviteErrors()}
                   onErrorsChange={setInviteErrors}
                 />
                 <div class="flex justify-end gap-1 pt-2">
