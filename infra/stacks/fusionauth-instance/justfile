@@ -1,3 +1,7 @@
+# Freeze Docker Compose resources across checkouts/worktrees. Local setup is
+# single-instance by design; do not derive resource names from the directory.
+export COMPOSE_PROJECT_NAME := "macro"
+
 # Gets the .env variables for the FusionAuth docker-compose.
 get_fusionauth_env:
   @echo "Getting fusionauth .env file for docker-compose"

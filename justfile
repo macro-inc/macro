@@ -1,5 +1,9 @@
 set positional-arguments
 
+# Freeze Docker Compose resources across checkouts/worktrees. Local setup is
+# single-instance by design; do not derive resource names from the directory.
+export COMPOSE_PROJECT_NAME := "macro"
+
 # Creates global networks that are shared across docker-compose files
 create_networks:
   docker network create databases 2>/dev/null || true -- db network

@@ -289,6 +289,9 @@ impl IsEmpty for EmailFilters {
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct CallFilters {
+    /// Call record IDs to filter by. Empty to include all calls.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub call_ids: Vec<String>,
     /// Channel IDs to filter calls by. Empty to include all calls.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub channel_ids: Vec<String>,
@@ -305,11 +308,15 @@ pub struct CallFilters {
 impl IsEmpty for CallFilters {
     fn is_empty(&self) -> bool {
         let CallFilters {
+            call_ids,
             channel_ids,
             speaker_ids,
             attended,
         } = self;
-        channel_ids.is_empty() && speaker_ids.is_empty() && attended.is_none()
+        call_ids.is_empty()
+            && channel_ids.is_empty()
+            && speaker_ids.is_empty()
+            && attended.is_none()
     }
 }
 

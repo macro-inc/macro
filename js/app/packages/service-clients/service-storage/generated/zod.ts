@@ -5186,6 +5186,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join.'
           ),
+        call_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Call record IDs to filter by. Empty to include all calls.'
+          ),
         channel_ids: zod
           .array(zod.string())
           .optional()

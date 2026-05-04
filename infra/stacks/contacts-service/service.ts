@@ -208,6 +208,10 @@ export class ContactsService extends pulumi.ComponentResource {
                   name: 'BASE_URL',
                   value: this.domain,
                 },
+                {
+                  name: 'RUST_BACKTRACE',
+                  value: '1',
+                },
               ],
               logConfiguration: {
                 logDriver: 'awsfirelens',
