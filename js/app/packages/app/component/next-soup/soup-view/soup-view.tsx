@@ -53,6 +53,7 @@ import { emailKeys } from '@queries/email/keys';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { createEffectOnEntityTypeNotification } from '@notifications';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
 import { cn } from '@ui/utils/classname';
@@ -433,6 +434,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
     createSignal<VirtualizerHandle>();
 
   const [soupViewRef, setSoupViewRef] = createSignal<HTMLElement | undefined>();
+
+  // Track the width of the unified-list-root so we can swap to the task grid
+  // layout only when there's enough room for it (>= 960px).
+  const [unifiedListEl, setUnifiedListEl] = createSignal<HTMLDivElement>();
+  const unifiedListSize = createElementSize(unifiedListEl);
+  const isTaskGridWide = createMemo(
+    () => (unifiedListSize.width ?? 0) >= 960
+  );
 
   const focusFirstEntity = () => {
     const next = soup.navigate.toFirst();
@@ -855,6 +864,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
             maxSize={previewVisible() ? 840 : undefined}
           >
             <div
+              ref={setUnifiedListEl}
               class="@container/uList size-full unified-list-root flex flex-col"
               classList={{
                 'border-r border-edge-muted':
@@ -885,7 +895,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                     />
                   </Match>
                   <Match when={rows().length}>
-                    <Show when={currentView() === 'tasks'}>
+                    <Show when={currentView() === 'tasks' && isTaskGridWide()}>
                       <TaskListHeader />
                     </Show>
                     <ListLayoutProvider ref={localEntityListRef}>
@@ -966,6 +976,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   <Show
                                     when={
                                       currentView() === 'tasks' &&
+                                      isTaskGridWide() &&
                                       isTaskEntity(row.original) &&
                                       row.original
                                     }

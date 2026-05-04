@@ -23,7 +23,7 @@ export const TASK_GRID_COLUMNS = [
   },
   {
     id: 'assignees',
-    label: 'Assignee',
+    label: 'Assignees',
     defId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
     dataType: DataType.ENTITY,
     isMultiSelect: true,

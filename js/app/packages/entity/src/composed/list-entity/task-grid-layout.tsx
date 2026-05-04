@@ -143,7 +143,7 @@ export function TaskGridLayout(props: LayoutProps) {
           </span>
           <Show when={isProjectContainedEntity(props.entity) && props.entity}>
             {(entity) => (
-              <span class="ph-no-capture text-ink-extra-muted text-xs shrink-0 truncate">
+              <span class="ph-no-capture text-ink/50 shrink-0 truncate border border-edge-muted px-2 rounded-full py-0.5">
                 <ProjectBreadCrumb
                   entity={entity()}
                   onClick={props.onProjectClick}
@@ -157,10 +157,12 @@ export function TaskGridLayout(props: LayoutProps) {
           {(col) => (
             <Entity.Slot
               placement={col.id}
-              class="flex items-center min-w-0 overflow-hidden text-xs ph-no-capture"
+              class="flex items-center min-w-0 overflow-hidden text-sm ph-no-capture"
             >
               <ListPropertyValue
-                property={propertyMap().get(col.defId) ?? buildStubProperty(col)}
+                property={
+                  propertyMap().get(col.defId) ?? buildStubProperty(col)
+                }
               />
             </Entity.Slot>
           )}

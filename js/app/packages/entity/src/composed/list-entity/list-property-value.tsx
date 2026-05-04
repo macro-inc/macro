@@ -64,7 +64,7 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
 
 const buttonClass = (isReadOnly: boolean) =>
   cn(
-    'inline-flex items-center gap-1.5 min-w-0',
+    'inline-flex items-center gap-1 min-w-0',
     'px-1.5 py-1 leading-tight text-left rounded-sm',
     'cursor-default',
     {
@@ -90,7 +90,7 @@ const ListSelectValue: Component<{ property: Property }> = (props) => {
     if (value !== undefined) {
       return formatPropertyValue(props.property, value);
     }
-    return props.property.isMultiSelect ? 'Add' : 'Set';
+    return `No ${props.property.displayName}`;
   };
 
   return (
@@ -107,14 +107,14 @@ const ListSelectValue: Component<{ property: Property }> = (props) => {
         <Show
           when={firstValue()}
           fallback={
-            <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
+            <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted opacity-50" />
           }
         >
           {(value) => <PropertyValueIcon optionId={value()} />}
         </Show>
         <span
           class={cn('truncate flex-1', {
-            'text-ink-extra-muted': firstValue() === undefined,
+            'text-ink-extra-muted opacity-50': firstValue() === undefined,
           })}
         >
           {displayText()}
@@ -157,9 +157,9 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
           when={hasValues()}
           fallback={
             <>
-              <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
-              <span class="truncate flex-1 text-ink-extra-muted">
-                {props.property.isMultiSelect ? 'Add' : 'Set'}
+              <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted opacity-50" />
+              <span class="truncate flex-1 text-ink-extra-muted opacity-50">
+                No {props.property.displayName}
               </span>
             </>
           }
@@ -187,12 +187,11 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
                 )}
               </For>
               <Show when={entities().length > 3}>
-                <div class="size-4 rounded-full text-ink text-xxs flex items-center justify-center">
+                <div class="size-4 rounded-full text-ink text-xs flex items-center justify-center">
                   +{entities().length - 3}
                 </div>
               </Show>
             </div>
-            <span class="flex-1" />
           </Show>
         </Show>
         <Show when={!isReadOnly()}>
