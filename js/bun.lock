@@ -99,7 +99,6 @@
         "tabbable": "^6.2.0",
         "tailwind-merge": "^3.4.0",
         "tailwindcss": "^4.2.4",
-        "tauri-plugin-mobile-sharetarget-api": "^2.0.0",
         "tauri-plugin-safe-area-insets": "^0.1.0",
         "ts-pattern": "^5.9.0",
         "unicode-emoji-json": "^0.8.0",
@@ -2944,8 +2943,6 @@
     "tapable": ["tapable@2.3.3", "", {}, "sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A=="],
 
     "tauri-plugin-device-info-api": ["tauri-plugin-device-info-api@1.0.1", "", { "dependencies": { "@tauri-apps/api": "^2.0.0" } }, "sha512-d2QoatWeQ6X09fdEDdWSKzBVSZv9x8LpksJP/gfv4WeRmZwJRsLLMf1++qOw7PdOmQlNoKHFcKXPZlr2n4irdg=="],
-
-    "tauri-plugin-mobile-sharetarget-api": ["tauri-plugin-mobile-sharetarget-api@2.0.0", "", { "dependencies": { "@tauri-apps/api": "^2.0.0" } }, "sha512-zvxm12K1QYxaMEUQ9gC3uVmP9oNJ5z1k5/dw8mwqREMo1fubPqkI+JnYIL+ThJJXwyhcHP9+CouSmPwmgb89aA=="],
 
     "tauri-plugin-safe-area-insets": ["tauri-plugin-safe-area-insets@0.1.0", "", { "dependencies": { "@tauri-apps/api": ">=2.0.0-beta.6" } }, "sha512-NhtxSQdU7+laTJiO4WZFlTB1CBzRlNE5EuHflGAGXS55fiwOkkaWztfNishFQO+eZtb9i5jLHX3Yho48lnqcRQ=="],
 

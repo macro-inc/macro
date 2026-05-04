@@ -16,6 +16,8 @@ use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
 
 mod tauri_protocol;
+
+pub(crate) const APP_SCHEME: &str = "macro";
 use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -139,8 +141,7 @@ pub fn run() {
             .plugin(tauri_plugin_safe_area_insets::init())
             .plugin(tauri_plugin_notifications::init())
             .plugin(tauri_plugin_virtual_keyboard::init())
-            .plugin(tauri_plugin_auth::init())
-            .plugin(tauri_plugin_mobile_sharetarget::init());
+            .plugin(tauri_plugin_auth::init());
     }
 
     // Window origin differs by platform:
@@ -314,7 +315,7 @@ fn attach_deep_link_handler(app: &mut tauri::App) {
 
         // Universal/App links come in as https:// URLs, custom scheme links come in as macro://
         let macro_scheme = match url.scheme() {
-            "macro" => MacroScheme::new(url)?,
+            s if s == APP_SCHEME => MacroScheme::new(url)?,
             "http" | "https" => MacroScheme::from_url(&url)?,
             scheme => {
                 return Err(report!("unexpected deep link scheme: {}", scheme));

@@ -67,7 +67,6 @@ tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-auth = { git = "https://github.com/macro-inc/tauri-plugins", rev = "61520093d5c7fcd60a2ed354dc150ca9556519a4" }
-tauri-plugin-mobile-sharetarget = "2"
 tauri-plugin-haptics = "2"
 
 [target.'cfg(target_os = "ios")'.dependencies]
