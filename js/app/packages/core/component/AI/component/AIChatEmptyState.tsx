@@ -1,64 +1,12 @@
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import { Button } from '@ui/components/Button';
-import { createSignal, For } from 'solid-js';
-
-export const MACRO_MCP_URL = 'https://mcp-server.macro.com/mcp';
-
-export const MACRO_MCP_CONFIG = JSON.stringify(
-  {
-    mcpServers: {
-      macro: {
-        type: 'http',
-        url: MACRO_MCP_URL,
-      },
-    },
-  },
-  null,
-  2
-);
-
-export const CLI_COMMANDS = [
-  {
-    key: 'claude-cli',
-    label: 'Claude Code',
-    command: `claude mcp add --transport http macro ${MACRO_MCP_URL}`,
-  },
-  {
-    key: 'codex-cli',
-    label: 'Codex CLI',
-    command: `codex mcp add macro --url ${MACRO_MCP_URL}`,
-  },
-] as const;
-
-export const WEB_CLIENTS = [
-  {
-    key: 'claude-web',
-    label: 'Claude.ai',
-    hint: 'Settings → Connectors → Add custom connector',
-  },
-  {
-    key: 'chatgpt-web',
-    label: 'ChatGPT',
-    hint: 'Settings → Apps → Advanced settings → enable Developer mode, then Create App',
-  },
-] as const;
+import { For } from 'solid-js';
+import { CLI_COMMANDS, MACRO_MCP_CONFIG } from './mcpConstants';
+import { useClipboardCopy } from './useClipboardCopy';
 
 export function AiChatEmptyState() {
-  const [copiedKey, setCopiedKey] = createSignal<string | null>(null);
-
-  const handleCopy = async (key: string, text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedKey(key);
-      setTimeout(
-        () => setCopiedKey((current) => (current === key ? null : current)),
-        2000
-      );
-    } catch (err) {
-      console.error('Failed to copy MCP setup instructions', err);
-    }
-  };
+  const { copiedKey, copy } = useClipboardCopy();
 
   return (
     <div class="w-full p-4 text-ink md:p-5">
@@ -85,7 +33,7 @@ export function AiChatEmptyState() {
                     variant={copiedKey() === item.key ? 'secondary' : 'ghost'}
                     size="sm"
                     class="shrink-0"
-                    onClick={() => handleCopy(item.key, item.command)}
+                    onClick={() => copy(item.key, item.command)}
                   >
                     {copiedKey() === item.key ? (
                       <>
@@ -121,7 +69,7 @@ export function AiChatEmptyState() {
                 variant={copiedKey() === 'json' ? 'secondary' : 'ghost'}
                 size="sm"
                 class="shrink-0"
-                onClick={() => handleCopy('json', MACRO_MCP_CONFIG)}
+                onClick={() => copy('json', MACRO_MCP_CONFIG)}
               >
                 {copiedKey() === 'json' ? (
                   <>

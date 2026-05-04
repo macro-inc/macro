@@ -9,7 +9,8 @@ import {
   MACRO_MCP_CONFIG,
   MACRO_MCP_URL,
   WEB_CLIENTS,
-} from './AIChatEmptyState';
+} from './mcpConstants';
+import { useClipboardCopy } from './useClipboardCopy';
 
 function CollapsibleCard(props: {
   label: string;
@@ -74,20 +75,7 @@ function CollapsibleCard(props: {
 }
 
 export function McpSetupCards(props: { class?: string }) {
-  const [copiedKey, setCopiedKey] = createSignal<string | null>(null);
-
-  const handleCopy = async (key: string, text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedKey(key);
-      setTimeout(
-        () => setCopiedKey((current) => (current === key ? null : current)),
-        2000
-      );
-    } catch (err) {
-      console.error('Failed to copy MCP setup instructions', err);
-    }
-  };
+  const { copiedKey, copy } = useClipboardCopy();
 
   return (
     <div class={cn('w-full max-w-2xl flex flex-col gap-3', props.class)}>
@@ -98,7 +86,7 @@ export function McpSetupCards(props: { class?: string }) {
             copyKey={item.key}
             copyValue={item.command}
             copiedKey={copiedKey}
-            onCopy={handleCopy}
+            onCopy={copy}
           />
         )}
       </For>
@@ -112,7 +100,7 @@ export function McpSetupCards(props: { class?: string }) {
             copyValue={MACRO_MCP_URL}
             copyLabel="Copy URL"
             copiedKey={copiedKey}
-            onCopy={handleCopy}
+            onCopy={copy}
           />
         )}
       </For>
@@ -122,7 +110,7 @@ export function McpSetupCards(props: { class?: string }) {
         copyKey="json"
         copyValue={MACRO_MCP_CONFIG}
         copiedKey={copiedKey}
-        onCopy={handleCopy}
+        onCopy={copy}
       />
     </div>
   );

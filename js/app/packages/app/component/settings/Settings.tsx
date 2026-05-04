@@ -157,7 +157,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   }
 
   const handleTabChange = (value: string) => {
-    if (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts' || value === 'Mobile App' || value === 'MCP' || value === 'Team') {
+    if (settingsTabs().some((tab) => tab.value === value)) {
       setActiveTabId(value as SettingsTab);
     }
   }

@@ -25,17 +25,18 @@ const DEFAULT_EMPTY_MESSAGE = 'No items to show.';
 function getRandomArcanumGraphic(
   className = 'h-72 m-8 mt-32 @max-sm:mt-20 opacity-60'
 ) {
-  const arcanumGraphics = [
-    <Arcanum001 class={className} />,
-    <Arcanum002 class={className} />,
-    <Arcanum004 class={className} />,
-    <Arcanum005 class={className} />,
-    <Arcanum006 class={className} />,
-    <Arcanum007 class={className} />,
-    <Arcanum009 class={className} />,
+  const arcanumComponents = [
+    Arcanum001,
+    Arcanum002,
+    Arcanum004,
+    Arcanum005,
+    Arcanum006,
+    Arcanum007,
+    Arcanum009,
   ];
-  const randomIndex = Math.floor(Math.random() * arcanumGraphics.length);
-  return arcanumGraphics[randomIndex];
+  const RandomGraphic =
+    arcanumComponents[Math.floor(Math.random() * arcanumComponents.length)];
+  return <RandomGraphic class={className} />;
 }
 
 export function EmptyState(props: {
