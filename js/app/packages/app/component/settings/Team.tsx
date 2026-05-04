@@ -69,9 +69,9 @@ const roleOrder: Record<string, number> = {
 type TierOption = { value: TeamUserTier; label: string };
 
 const tierOptions: TierOption[] = [
-  { value: TeamUserTier.Haiku, label: 'Haiku' },
-  { value: TeamUserTier.Sonnet, label: 'Sonnet' },
-  { value: TeamUserTier.Opus, label: 'Opus' },
+  { value: TeamUserTier.Haiku, label: 'Level 1' },
+  { value: TeamUserTier.Sonnet, label: 'Level 2' },
+  { value: TeamUserTier.Opus, label: 'Level 3' },
 ];
 
 type RoleOption = { value: TeamRole; label: string };
