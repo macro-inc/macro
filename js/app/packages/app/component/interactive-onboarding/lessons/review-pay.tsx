@@ -116,79 +116,78 @@ function ReviewPayDemo(props: LessonContentProps) {
       <button
         type="button"
         onClick={handleBack}
-        class="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-xs w-fit mb-auto"
+        class="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-xs w-fit mb-6"
       >
         <ArrowLeftIcon class="size-4" />
         Back
       </button>
-      <div class="flex-1 flex items-center justify-center">
+      <div class="flex-1 flex items-start justify-start">
         <Show
           when={hasTeam()}
           fallback={
-            /* Solo layout - single column card */
-            <div class="w-full max-w-sm">
-              <div class="border border-edge rounded-sm overflow-hidden bg-ink/[0.02]">
-                {/* Price */}
-                <div class="px-4 py-4 border-b border-edge flex items-baseline justify-between">
-                  <div class="flex items-end gap-1.5">
-                    <span class="text-4xl font-bold text-accent leading-none">
-                      ${onboarding.userSeatCost()}
-                    </span>
-                    <span class="text-ink/50 text-base pb-0.5">/month</span>
-                  </div>
-                  <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium">
-                    {selectedPlan()?.name}
+            /* Solo layout - single column full size */
+            <div class="w-full h-full border border-edge rounded-sm bg-ink/[0.02] flex flex-col">
+              {/* Price */}
+              <div class="px-5 py-4 border-b border-edge flex items-baseline justify-between">
+                <div class="flex items-end gap-1.5">
+                  <span class="text-4xl font-bold text-ink leading-none">
+                    ${onboarding.userSeatCost()}
                   </span>
+                  <span class="text-ink/50 text-base pb-0.5">/month</span>
                 </div>
+                <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium">
+                  {selectedPlan()?.name}
+                </span>
+              </div>
 
-                {/* What's included */}
-                <div class="px-4 py-3 border-b border-edge">
-                  <span class="text-xs text-ink/40 uppercase tracking-wide">
-                    What's included
-                  </span>
-                  <div class="flex flex-col gap-1 mt-2">
-                    <For each={PLAN_FEATURES}>
-                      {(feature) => (
-                        <div class="flex justify-between text-sm">
-                          <span class="text-ink/60">{feature.label}</span>
-                          <span class="text-ink">
-                            {feature.values[onboarding.selectedPlan() ?? 'free']}
-                          </span>
-                        </div>
-                      )}
-                    </For>
-                  </div>
+              {/* What's included */}
+              <div class="px-5 py-4 border-b border-edge">
+                <span class="text-xs text-ink/40 uppercase tracking-wide">
+                  What's included
+                </span>
+                <div class="flex flex-col gap-1 mt-2">
+                  <For each={PLAN_FEATURES}>
+                    {(feature) => (
+                      <div class="flex justify-between text-sm">
+                        <span class="text-ink/60">{feature.label}</span>
+                        <span class="text-ink">
+                          {feature.values[onboarding.selectedPlan() ?? 'free']}
+                        </span>
+                      </div>
+                    )}
+                  </For>
                 </div>
+              </div>
 
-                {/* CTA */}
-                <div class="px-4 py-4 flex flex-col gap-2">
-                  <Button
-                    variant="accent"
-                    size="lg"
-                    onClick={handleCheckout}
-                    disabled={checkoutMutation.isPending}
-                    class="w-full rounded-xs"
-                  >
-                    {checkoutMutation.isPending
-                      ? 'Loading...'
-                      : 'Continue to payment'}
-                    <ArrowRightIcon class="size-4" />
-                  </Button>
-                  <span class="text-xs text-ink/40 flex items-center justify-center gap-1">
-                    <LockIcon class="size-3" />
-                    Secure checkout via Stripe
-                  </span>
-                </div>
+              {/* CTA */}
+              <div class="px-5 py-4 flex flex-col gap-2 mt-auto">
+                <Button
+                  variant="accent"
+                  size="lg"
+                  onClick={handleCheckout}
+                  disabled={checkoutMutation.isPending}
+                  class="w-full rounded-xs"
+                >
+                  {checkoutMutation.isPending
+                    ? 'Loading...'
+                    : 'Continue to payment'}
+                  <ArrowRightIcon class="size-4" />
+                </Button>
+                <span class="text-xs text-ink/40 flex items-center justify-center gap-1">
+                  <LockIcon class="size-3" />
+                  Secure checkout via Stripe
+                </span>
               </div>
             </div>
           }
         >
-          {/* Team layout - single column card */}
-          <div class="w-full max-w-sm">
-            <div class="border border-edge rounded-sm overflow-hidden bg-ink/[0.02]">
+          {/* Team layout - two columns inside card */}
+          <div class="w-full h-full border border-edge rounded-sm bg-ink/[0.02] flex">
+            {/* Left column */}
+            <div class="flex-[2] border-r border-edge flex flex-col">
               {/* Header */}
               <Show when={onboarding.teamName()}>
-                <div class="px-4 py-3 border-b border-edge">
+                <div class="px-5 py-3 border-b border-edge">
                   <span class="text-xs text-ink/40 uppercase tracking-wide">
                     Team
                   </span>
@@ -199,9 +198,9 @@ function ReviewPayDemo(props: LessonContentProps) {
               </Show>
 
               {/* Price */}
-              <div class="px-4 py-4 border-b border-edge flex items-baseline justify-between">
+              <div class="px-5 py-4 border-b border-edge flex items-baseline justify-between">
                 <div class="flex items-end gap-1.5">
-                  <span class="text-4xl font-bold text-accent leading-none">
+                  <span class="text-4xl font-bold text-ink leading-none">
                     ${onboarding.totalCost()}
                   </span>
                   <span class="text-ink/50 text-base pb-0.5">/month</span>
@@ -211,41 +210,13 @@ function ReviewPayDemo(props: LessonContentProps) {
                 </span>
               </div>
 
-              {/* Invites */}
-              <div class="px-4 py-3 border-b border-edge">
+              {/* Summary */}
+              <div class="px-5 py-4 border-b border-edge">
                 <span class="text-xs text-ink/40 uppercase tracking-wide">
-                  Invites ({onboarding.invitedMembers().length})
+                  Summary
                 </span>
-                <Show
-                  when={onboarding.invitedMembers().length > 0}
-                  fallback={
-                    <p class="text-sm text-ink/40 italic mt-2">
-                      No members invited yet
-                    </p>
-                  }
-                >
-                  <div class="flex flex-col gap-1.5 overflow-y-auto max-h-24 mt-2">
-                    <For each={onboarding.invitedMembers()}>
-                      {(member) => (
-                        <div class="flex items-center justify-between text-sm">
-                          <span class="text-ink/70">{member.email}</span>
-                          <span class="text-xs text-ink/40">
-                            {PLANS.find((p) => p.tier === member.tier)?.name}
-                          </span>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                </Show>
-                <p class="text-xs text-ink/40 mt-2">
-                  You can invite members anytime from Settings
-                </p>
-              </div>
-
-              {/* Pricing breakdown */}
-              <div class="px-4 py-3 border-b border-edge">
-                <div class="flex flex-col text-sm">
-                  <div class="flex justify-between py-2 border-b border-ink/10">
+                <div class="flex flex-col text-sm mt-2">
+                  <div class={`flex justify-between py-2 ${onboarding.invitedMembers().length > 0 ? 'border-b border-ink/10' : ''}`}>
                     <span class="text-ink/60">
                       Your seat · {selectedPlan()?.name}
                     </span>
@@ -286,10 +257,52 @@ function ReviewPayDemo(props: LessonContentProps) {
                     </div>
                   </Show>
                 </div>
+
+                {/* What's included - inline when no invites */}
+                <Show when={onboarding.invitedMembers().length === 0}>
+                  <div class="mt-4 pt-4 border-t border-ink/10">
+                    <span class="text-xs text-ink/40 uppercase tracking-wide">
+                      What's included
+                    </span>
+                    <div class="flex flex-col gap-1 mt-2">
+                      <For each={PLAN_FEATURES}>
+                        {(feature) => (
+                          <div class="flex justify-between text-sm">
+                            <span class="text-ink/60">{feature.label}</span>
+                            <span class="text-ink">
+                              {feature.values[onboarding.selectedPlan() ?? 'free']}
+                            </span>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
               </div>
 
+              {/* What's included - separate section when has invites */}
+              <Show when={onboarding.invitedMembers().length > 0}>
+                <div class="px-5 py-4 border-b border-edge">
+                  <span class="text-xs text-ink/40 uppercase tracking-wide">
+                    What's included · {selectedPlan()?.name}
+                  </span>
+                  <div class="flex flex-col gap-1 mt-2">
+                    <For each={PLAN_FEATURES}>
+                      {(feature) => (
+                        <div class="flex justify-between text-sm">
+                          <span class="text-ink/60">{feature.label}</span>
+                          <span class="text-ink">
+                            {feature.values[onboarding.selectedPlan() ?? 'free']}
+                          </span>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+
               {/* CTA */}
-              <div class="px-4 py-4 flex flex-col gap-2">
+              <div class="px-5 py-4 flex flex-col gap-2 mt-auto">
                 <Button
                   variant="accent"
                   size="lg"
@@ -307,6 +320,37 @@ function ReviewPayDemo(props: LessonContentProps) {
                   Secure checkout via Stripe
                 </span>
               </div>
+            </div>
+
+            {/* Right column - Invites */}
+            <div class="flex-1 px-5 py-4 flex flex-col">
+              <span class="text-xs text-ink/40 uppercase tracking-wide">
+                Invites ({onboarding.invitedMembers().length})
+              </span>
+              <Show
+                when={onboarding.invitedMembers().length > 0}
+                fallback={
+                  <p class="text-sm text-ink/40 italic mt-2">
+                    No members invited yet
+                  </p>
+                }
+              >
+                <div class="flex flex-col gap-1.5 overflow-y-auto flex-1 mt-2">
+                  <For each={onboarding.invitedMembers()}>
+                    {(member) => (
+                      <div class="flex items-center justify-between text-sm">
+                        <span class="text-ink/70 truncate mr-2">{member.email}</span>
+                        <span class="text-xs text-ink/40 shrink-0">
+                          {PLANS.find((p) => p.tier === member.tier)?.name}
+                        </span>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </Show>
+              <p class="text-xs text-ink/40 mt-auto pt-2">
+                You can invite more from Settings
+              </p>
             </div>
           </div>
         </Show>
