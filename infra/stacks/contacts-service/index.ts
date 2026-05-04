@@ -67,7 +67,7 @@ const secretKeyArns = [
 let containerEnvVars = [
   {
     name: 'RUST_LOG',
-    value: `contacts_service=${stack === 'prod' ? 'info' : 'debug'},contacts_db_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
+    value: `warn,contacts_service=${stack === 'prod' ? 'info' : 'debug'},contacts=${stack === 'prod' ? 'info' : 'debug'},contacts_db_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
   },
   {
     name: 'ENVIRONMENT',
