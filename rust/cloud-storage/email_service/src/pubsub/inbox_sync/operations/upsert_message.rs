@@ -601,5 +601,30 @@ async fn filter_notifiable_message(
         return Ok(None);
     }
 
+    // 3. filter out noise emails (mirrors frontend isNoiseEmail: hasDepriority && !hasPriority)
+    let has_depriority = labels.iter().any(|label| {
+        matches!(
+            label.name.as_str(),
+            service::label::system_labels::CATEGORY_UPDATES
+                | service::label::system_labels::CATEGORY_PROMOTIONS
+                | service::label::system_labels::CATEGORY_SOCIAL
+                | service::label::system_labels::CATEGORY_FORUMS
+        )
+    });
+
+    if has_depriority {
+        let has_priority = labels.iter().any(|label| {
+            matches!(
+                label.name.as_str(),
+                service::label::system_labels::CATEGORY_PERSONAL
+                    | service::label::system_labels::IMPORTANT
+            )
+        });
+
+        if !has_priority {
+            return Ok(None);
+        }
+    }
+
     Ok(Some(new_message))
 }

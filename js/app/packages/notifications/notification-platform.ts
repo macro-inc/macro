@@ -81,10 +81,7 @@ export async function maybeHandlePlatformNotification(
   splitLayoutManager: SplitManager
 ) {
   // Ignore notification types that should not show as browser notifications
-  if (
-    notification.notification_metadata.tag === 'document_mention' ||
-    notification.notification_metadata.tag === 'new_email'
-  ) {
+  if (notification.notification_metadata.tag === 'document_mention') {
     return;
   }
 
