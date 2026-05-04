@@ -439,9 +439,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   // layout only when there's enough room for it (>= 960px).
   const [unifiedListEl, setUnifiedListEl] = createSignal<HTMLDivElement>();
   const unifiedListSize = createElementSize(unifiedListEl);
-  const isTaskGridWide = createMemo(
-    () => (unifiedListSize.width ?? 0) >= 960
-  );
+  const isTaskGridWide = createMemo(() => (unifiedListSize.width ?? 0) >= 960);
 
   const focusFirstEntity = () => {
     const next = soup.navigate.toFirst();
