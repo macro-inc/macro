@@ -898,7 +898,7 @@ function EmptyTeamState() {
         </div>
         <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
         <Show
-          when={hasPaidAccess() || true}
+          when={hasPaidAccess()}
           fallback={
             <>
               <p class="text-xs text-ink-muted max-w-xs mb-4">
