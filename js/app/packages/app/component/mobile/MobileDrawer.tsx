@@ -1,6 +1,7 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
 import Drawer from '@corvu/drawer';
+import { Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   onCleanup,
@@ -56,19 +57,21 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
   });
 
   return (
-    <Drawer.Content
-      onFocusIn={(e: FocusEvent) => {
-        scrollToFocusedInput(e);
-      }}
-      class={cn(
-        'bottom-[var(--virtual-keyboard-height,0)] fixed left-0 right-0 z-modal bg-page rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
-        virtualKeyboardVisible()
-          ? 'pb-0 max-h-[calc(80vh-var(--virtual-keyboard-height))] overflow-y-auto'
-          : 'pb-(--safe-bottom)',
-        local.class
-      )}
-      {...rest}
-    />
+    <Layer depth={1}>
+      <Drawer.Content
+        onFocusIn={(e: FocusEvent) => {
+          scrollToFocusedInput(e);
+        }}
+        class={cn(
+          'bottom-[var(--virtual-keyboard-height,0)] fixed left-0 right-0 z-modal bg-panel rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
+          virtualKeyboardVisible()
+            ? 'pb-0 max-h-[calc(80vh-var(--virtual-keyboard-height))] overflow-y-auto'
+            : 'pb-(--safe-bottom)',
+          local.class
+        )}
+        {...rest}
+      />
+    </Layer>
   );
 }
 
@@ -89,13 +92,15 @@ function MobileDrawerSection<T extends ValidComponent = 'div'>(
     'children',
   ]);
   return (
-    <Dynamic
-      component={(local.as ?? 'div') as ValidComponent}
-      class={cn('bg-menu rounded-2xl mx-3', local.class as string)}
-      {...rest}
-    >
-      {local.children}
-    </Dynamic>
+    <Layer depth={2}>
+      <Dynamic
+        component={(local.as ?? 'div') as ValidComponent}
+        class={cn('rounded-2xl mx-3 overflow-clip', local.class as string)}
+        {...rest}
+      >
+        {local.children}
+      </Dynamic>
+    </Layer>
   );
 }
 

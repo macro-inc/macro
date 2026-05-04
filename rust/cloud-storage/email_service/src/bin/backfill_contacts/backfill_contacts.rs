@@ -26,8 +26,12 @@ async fn main() -> anyhow::Result<()> {
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
-        .contacts_queue(&config.contacts_queue);
+    let contacts_ingress = contacts::domain::service::SqsContactsIngress {
+        queue: contacts::outbound::ingress::SqsContactsQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            config.contacts_queue.clone(),
+        ),
+    };
 
     println!("Processing {} macro IDs: {:?}", macro_ids.len(), macro_ids);
 
@@ -39,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
             macro_ids.len()
         );
 
-        match process::process_macro_id(&db_pool, &sqs_client, macro_id).await {
+        match process::process_macro_id(&db_pool, &contacts_ingress, macro_id).await {
             Ok(()) => {
                 println!("Completed processing for {}.", macro_id);
             }

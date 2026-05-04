@@ -1,3 +1,6 @@
+use contacts::domain::service::SqsContactsIngress;
+use contacts::outbound::ingress::SqsContactsQueue;
+
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
 use cal::{
@@ -229,6 +232,7 @@ pub(crate) struct ApiContext {
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
     pub sqs_client: Arc<sqs_client::SQS>,
+    pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
     pub sync_service_client: Arc<SyncServiceClient>,
@@ -297,6 +301,7 @@ impl From<&ApiContext> for CommsHandlerState {
             connection_gateway_client: ctx.conn_gateway_client.clone(),
             notification_ingress_service: ctx.notification_ingress_service.clone(),
             sqs_client: ctx.sqs_client.clone(),
+            contacts_ingress: ctx.contacts_ingress.clone(),
             permissions_token_secret: ctx.permissions_token_secret.clone(),
             frecency_storage: ctx.frecency_storage.clone(),
             comms_state: ctx.comms_state.clone(),

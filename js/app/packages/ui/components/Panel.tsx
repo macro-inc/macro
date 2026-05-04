@@ -15,7 +15,7 @@ export function Panel(props: PanelProps) {
     <Layer depth={local.depth ?? 0}>
       <div
         style={{
-          'background-image': `linear-gradient(${props.active ? `${props.highlightColor || 'var(--color-acent)'}, var(--color-edge) 80%` : 'var(--color-edge)'})`,
+          'background-image': `linear-gradient(${local.active ? `${local.highlightColor || 'var(--color-accent)'}, var(--color-edge) 80%` : 'var(--color-edge)'})`,
           'display': local.hidden ? 'none' : 'block'
         }}
         class={cn("p-px h-full w-full box-border rounded-md overflow-clip min-h-0")}

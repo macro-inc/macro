@@ -15,8 +15,7 @@ import { Dynamic } from 'solid-js/web';
 import type { ListView } from '@app/constants/list-views';
 import { runCreateAction, setCreateMenuOpen } from '../../Launcher';
 import { useAnalytics } from '@app/component/analytics-context';
-import { cn } from '@ui/utils/classname';
-import { isThemeDark } from '@theme/utils/themeUtils';
+import { Layer } from '@ui';
 
 const ICON_ANIMATION_DURATION_MS = 500;
 
@@ -93,24 +92,23 @@ export function SoupViewMobileCreateButton(props: {
 
   return (
     <Show when={createAction()}>
-      <button
-        type="button"
-        class={cn(
-          'absolute bottom-4 right-4 z-10 pl-3 pr-4 py-2 rounded-full bg-menu text-accent flex items-center justify-center gap-2 shadow-lg',
-          isThemeDark() && 'border border-accent/30'
-        )}
-        onPointerDown={() => {
-          hapticImpact('light');
-          setAnimating(true);
-          setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
-          createAction()?.();
-        }}
-      >
-        <div class="w-5 h-5 [&_svg]:size-5">
-          <Dynamic component={createIcon()} triggerAnimation={animating()} />
-        </div>
-        <div>Create</div>
-      </button>
+      <Layer depth={1}>
+        <button
+          type="button"
+          class="absolute bottom-4 right-4 z-10 pl-3 pr-4 py-2 rounded-full bg-panel ring text-accent flex items-center justify-center gap-2 shadow-md ring-accent/20"
+          onPointerDown={() => {
+            hapticImpact('light');
+            setAnimating(true);
+            setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
+            createAction()?.();
+          }}
+        >
+          <div class="w-5 h-5 [&_svg]:size-5">
+            <Dynamic component={createIcon()} triggerAnimation={animating()} />
+          </div>
+          <div>Create</div>
+        </button>
+      </Layer>
     </Show>
   );
 }

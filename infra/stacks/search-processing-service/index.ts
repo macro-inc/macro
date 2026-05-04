@@ -1,6 +1,12 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, getSearchEventQueue, stack } from '../../packages/shared';
+import {
+  config,
+  getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { SearchProcessingService } from './service';
 
@@ -148,10 +154,8 @@ const searchProcessingService = new SearchProcessingService(
         value: '3', // 3 workers per instance
       },
       {
-        name: 'LEXICAL_SERVICE_URL',
-        value: `https://lexical-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macroverse.workers.dev`,
+        name: ServiceUrl.LEXICAL_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
       },
       // OpenTelemetry / Datadog tracing configuration
       {

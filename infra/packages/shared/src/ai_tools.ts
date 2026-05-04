@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '../../shared';
+import { getServiceUrl, ServiceUrl, stack } from '../../shared';
 
 /**
  * Infrastructure wiring required by services that host the `ai_tools` crate
@@ -52,10 +52,6 @@ export function getAiToolsInfra(): AiToolsInfra {
   const docxUploadBucketArn: pulumi.Output<string> = cloudStorageServiceStack
     .getOutput('docxUploadBucketArn')
     .apply((v) => v as string);
-  const documentStorageServiceUrl: pulumi.Output<string> =
-    cloudStorageServiceStack
-      .getOutput('cloudStorageServiceUrl')
-      .apply((v) => v as string);
 
   const emailScheduledQueueName: pulumi.Output<string> = emailServiceStack
     .getOutput('scheduledQueueName')
@@ -87,37 +83,32 @@ export function getAiToolsInfra(): AiToolsInfra {
     .getSecretVersionOutput({ secretId: INTERNAL_AUTH_KEY_SECRET_NAME })
     .apply((s) => s.secretString);
 
-  const syncServiceUrl = `https://sync-service-${
-    stack === 'dev' ? 'dev3' : 'prod2'
-  }.macroverse.workers.dev`;
-  const lexicalServiceUrl = `https://lexical-service${
-    stack === 'prod' ? '' : `-${stack}`
-  }.macroverse.workers.dev`;
-  const emailServiceUrl = `https://email-service${
-    stack === 'prod' ? '' : `-${stack}`
-  }.macro.com`;
-  const staticFileServiceUrl = `https://static-file-service${
-    stack === 'prod' ? '' : `-${stack}`
-  }.macro.com`;
-
   const envVars: AiToolsInfra['envVars'] = [
     {
       name: 'INTERNAL_API_SECRET_KEY',
       value: pulumi.interpolate`${internalAuthKey}`,
     },
     {
-      name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: pulumi.interpolate`${documentStorageServiceUrl}`,
+      name: ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
     },
     {
-      name: 'SEARCH_SERVICE_URL',
-      value: pulumi.interpolate`${documentStorageServiceUrl}`,
+      name: ServiceUrl.EMAIL_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.EMAIL_SERVICE_URL),
     },
-    { name: 'EMAIL_SERVICE_URL', value: emailServiceUrl },
-    { name: 'SYNC_SERVICE_URL', value: syncServiceUrl },
+    {
+      name: ServiceUrl.SYNC_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
+    },
+    {
+      name: ServiceUrl.LEXICAL_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
+    },
+    {
+      name: ServiceUrl.STATIC_FILE_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.STATIC_FILE_SERVICE_URL),
+    },
     { name: 'SYNC_SERVICE_AUTH_KEY', value: SYNC_SERVICE_AUTH_KEY_SECRET_NAME },
-    { name: 'LEXICAL_SERVICE_URL', value: lexicalServiceUrl },
-    { name: 'STATIC_FILE_SERVICE_URL', value: staticFileServiceUrl },
     {
       name: 'DOCUMENT_STORAGE_BUCKET',
       value: pulumi.interpolate`${documentStorageBucketId}`,
