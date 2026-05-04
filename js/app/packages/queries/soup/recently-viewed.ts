@@ -20,7 +20,7 @@ const recentlyViewedArgs: SoupItemsQueryArgs = {
   params: { sort_method: 'viewed_at', limit: RECENTLY_VIEWED_LIMIT },
   body: {
     call_filters: {
-      channel_ids: ['00000000-0000-0000-0000-000000000000'],
+      call_ids: ['00000000-0000-0000-0000-000000000000'],
     },
   },
 };
