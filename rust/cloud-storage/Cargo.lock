@@ -3274,6 +3274,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "sqs_worker",
+ "sync_service",
  "sync_service_client",
  "system_properties",
  "thiserror 2.0.17",
@@ -10994,6 +10995,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_service"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "serde",
+ "utoipa",
+]
+
+[[package]]
 name = "sync_service_client"
 version = "0.1.0"
 dependencies = [
@@ -11001,6 +11011,7 @@ dependencies = [
  "model",
  "reqwest 0.13.3",
  "serde",
+ "sync_service",
  "tokio",
  "tracing",
 ]

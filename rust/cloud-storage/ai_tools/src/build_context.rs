@@ -38,7 +38,6 @@ use sync_service_client::SyncServiceClient;
 env_var! {
     struct ToolContextEnvVars {
         DocumentStorageServiceUrl,
-        SearchServiceUrl,
         EmailServiceUrl,
         SyncServiceUrl,
         SyncServiceAuthKey,
@@ -67,8 +66,8 @@ maybe_env_var! {
 /// are treated as AWS Secrets Manager secret names and resolved through the
 /// secrets manager. In `Local`, their values are used directly.
 ///
-/// Required env vars: `DOCUMENT_STORAGE_SERVICE_URL`,
-/// `EMAIL_SERVICE_URL`, `SYNC_SERVICE_URL`, `SYNC_SERVICE_AUTH_KEY`,
+/// Required env vars: `DOCUMENT_STORAGE_SERVICE_URL`, `EMAIL_SERVICE_URL`,
+/// `SYNC_SERVICE_URL`, `SYNC_SERVICE_AUTH_KEY`,
 /// `STATIC_FILE_SERVICE_URL`, `DOCUMENT_STORAGE_BUCKET`,
 /// `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,

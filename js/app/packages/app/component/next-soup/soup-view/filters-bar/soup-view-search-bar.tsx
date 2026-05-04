@@ -148,6 +148,9 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         // rows so this stays put without needing a delay.
         queueMicrotask(() => panel.panelRef()?.focus({ preventScroll: true }));
       },
+      focus: () => {
+        setTimeout(() => editor.controls.focus());
+      },
     });
     onCleanup(dispose);
   });

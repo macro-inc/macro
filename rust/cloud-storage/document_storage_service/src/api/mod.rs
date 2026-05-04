@@ -226,6 +226,14 @@ fn api_router(state: ApiContext) -> Router {
                     search_service::search_router()
                         .with_state(SearchHandlerState::from_ref(&state)),
                 )
+                .nest(
+                    "/sync_service",
+                    sync_service_hex::inbound::axum_router::sync_service_router(
+                        sync_service_hex::inbound::axum_router::SyncServiceRouterState {
+                            service: state.sync_service_client.clone(),
+                        },
+                    ),
+                )
                 .layer(
                     ServiceBuilder::new()
                         .layer(axum::middleware::from_fn_with_state(

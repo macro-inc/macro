@@ -3,6 +3,7 @@ import { useSearchParams } from '@solidjs/router';
 import AppStoreQr from '@macro-icons/app-store.svg';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import { useAnalytics } from '@app/component/analytics-context';
+import { useUserId } from '@core/context/user';
 import { ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
 import {
   SIGNUP_LEAD_VALUE_BY_TIER,
@@ -12,17 +13,24 @@ import {
 function LaunchContent(props: LessonContentProps) {
   const analytics = useAnalytics();
   const [searchParams] = useSearchParams();
+  const userId = useUserId();
 
   onMount(() => {
     // `type` is set on the Stripe success redirect (see choose-plan.tsx). Free
     // users skip Stripe entirely so the param is absent — default to 'free'.
     const rawTier = searchParams.type;
     const tier = (Array.isArray(rawTier) ? rawTier[0] : rawTier) ?? 'free';
+    const value = SIGNUP_LEAD_VALUE_BY_TIER[tier] ?? SIGNUP_LEAD_VALUE_DEFAULT;
     analytics.trackMeta('CompleteRegistration', {
       content_name: 'onboarding_launch',
       content_category: tier,
-      value: SIGNUP_LEAD_VALUE_BY_TIER[tier] ?? SIGNUP_LEAD_VALUE_DEFAULT,
+      value,
       currency: 'USD',
+    });
+    analytics.trackGoogleConversion('signup', {
+      value,
+      currency: 'USD',
+      transaction_id: userId(),
     });
     setTimeout(() => props.onComplete('Launch'));
   });

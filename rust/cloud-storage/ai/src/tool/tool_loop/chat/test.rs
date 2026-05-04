@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use super::MAX_RECURSIONS;
 use crate::openai_toolset::OpenAIToolSetExt;
 use crate::tool::types::{

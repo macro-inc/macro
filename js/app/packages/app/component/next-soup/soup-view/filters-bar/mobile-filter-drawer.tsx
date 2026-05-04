@@ -219,10 +219,7 @@ export const MobileFilterDrawer = () => {
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
           <MobileDrawer.Content aria-label="Filters" class="h-[80vh]">
-            {/* Drag handle */}
-            <div class="flex justify-center pt-3 pb-1 shrink-0">
-              <div class="w-10 h-1 rounded-full bg-edge-muted" />
-            </div>
+            <MobileDrawer.Handle class="pb-1" />
 
             {/* Scrollable filter list */}
             <div class="relative flex-1 min-h-0">
@@ -238,14 +235,9 @@ export const MobileFilterDrawer = () => {
               >
                 {/* Sort section */}
                 <Show when={sortOptions().length > 0}>
-                  <div class="px-4 pb-2">
-                    <span
-                      id="sort-section-label"
-                      class="text-xs font-medium text-ink-muted uppercase tracking-wide"
-                    >
-                      Sort
-                    </span>
-                  </div>
+                  <MobileDrawer.Label id="sort-section-label">
+                    Sort
+                  </MobileDrawer.Label>
                   <MobileDrawer.Section
                     role="radiogroup"
                     aria-labelledby="sort-section-label"
@@ -295,11 +287,9 @@ export const MobileFilterDrawer = () => {
                 >
                   {/* Filter section */}
                   <Show when={categories().length > 0 || isTasksView()}>
-                    <div class="px-4 pt-4 pb-2">
-                      <span class="text-xs font-medium text-ink-muted uppercase tracking-wide">
-                        Filters
-                      </span>
-                    </div>
+                    <MobileDrawer.Label class="pt-4">
+                      Filters
+                    </MobileDrawer.Label>
                   </Show>
 
                   <div class="flex flex-col">

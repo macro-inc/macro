@@ -16,7 +16,12 @@ import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal'
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
-import { getLoginCookieOptions, updateCookie } from '@core/util/cookies';
+import {
+  getLoginCookieOptions,
+  hasLoginCookie,
+  syncLoginStorage,
+  updateCookie,
+} from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
@@ -54,6 +59,7 @@ import { useHotKeyRoot } from 'core/hotkey/hotkeys';
 import { detect } from 'detect-browser';
 import {
   createEffect,
+  createSignal,
   type JSX,
   Match,
   on,
@@ -93,6 +99,7 @@ import {
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { Button } from '@ui';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -101,10 +108,10 @@ function useSyncLoginCookie() {
   createEffect(() => {
     if (!userInfoQuery.isSuccess) return;
 
-    const { value, ...options } = getLoginCookieOptions(
-      userInfoQuery.data.authenticated ?? false
-    );
+    const authenticated = userInfoQuery.data.authenticated ?? false;
+    const { value, ...options } = getLoginCookieOptions(authenticated);
     updateCookie('login', value, options);
+    syncLoginStorage(authenticated);
   });
 }
 
@@ -150,6 +157,30 @@ const rootPreload: RoutePreloadFunc = async (args) => {
   }
 };
 
+function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
+  const [retrying, setRetrying] = createSignal(false);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    await props.onRetry();
+    setRetrying(false);
+  };
+
+  return (
+    <div class="flex flex-col items-center justify-center gap-4 h-full w-full text-ink-muted">
+      <p class="text-sm">Unable to connect. Please check your network.</p>
+      <Button
+        class="mt-2"
+        disabled={retrying()}
+        onClick={handleRetry}
+        variant="primary"
+      >
+        {retrying() ? 'Retrying…' : 'Retry'}
+      </Button>
+    </div>
+  );
+}
+
 function BasePathComponent() {
   const analytics = useAnalytics();
 
@@ -193,11 +224,16 @@ function BasePathComponent() {
     <Switch>
       <Match when={userInfoQuery.isLoading}>{null}</Match>
       <Match
+        when={
+          userInfoQuery.isError && hasLoginCookie() && isNativeMobilePlatform()
+        }
+      >
+        <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
+      </Match>
+      <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
-        <Navigate
-          href={`${isNativeMobilePlatform() ? '/welcome' : '/welcome'}${window.location.search}`}
-        />
+        <Navigate href={`/welcome${window.location.search}`} />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
         <Navigate href={redirectPath} />

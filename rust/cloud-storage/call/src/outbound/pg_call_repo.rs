@@ -53,6 +53,7 @@ fn extract_channel_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
 fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
     match expr {
         Expr::Literal(CallLiteral::ChannelId(id)) => ids.push(*id),
+        Expr::Literal(CallLiteral::CallId(_)) => {}
         Expr::Literal(CallLiteral::Attended(_)) => {}
         // Speaker is transcript-segment-only; soup's call list ignores it.
         Expr::Literal(CallLiteral::Speaker(_)) => {}
@@ -61,6 +62,30 @@ fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
             collect_channel_ids(b, ids);
         }
         Expr::Not(inner) => collect_channel_ids(inner, ids),
+    }
+}
+
+/// Extract call_id UUIDs from a call filter AST.
+fn extract_call_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
+    let Some(expr) = filter else {
+        return Vec::new();
+    };
+    let mut ids = Vec::new();
+    collect_call_ids(expr, &mut ids);
+    ids
+}
+
+fn collect_call_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
+    match expr {
+        Expr::Literal(CallLiteral::CallId(id)) => ids.push(*id),
+        Expr::Literal(CallLiteral::ChannelId(_)) => {}
+        Expr::Literal(CallLiteral::Attended(_)) => {}
+        Expr::Literal(CallLiteral::Speaker(_)) => {}
+        Expr::And(a, b) | Expr::Or(a, b) => {
+            collect_call_ids(a, ids);
+            collect_call_ids(b, ids);
+        }
+        Expr::Not(inner) => collect_call_ids(inner, ids),
     }
 }
 
@@ -76,6 +101,7 @@ fn extract_attended(filter: &LiteralTree<CallLiteral>) -> Option<bool> {
 fn find_attended(expr: &Expr<CallLiteral>) -> Option<bool> {
     match expr {
         Expr::Literal(CallLiteral::Attended(b)) => Some(*b),
+        Expr::Literal(CallLiteral::CallId(_)) => None,
         Expr::Literal(CallLiteral::ChannelId(_)) => None,
         Expr::Literal(CallLiteral::Speaker(_)) => None,
         Expr::And(a, b) | Expr::Or(a, b) => find_attended(a).or_else(|| find_attended(b)),
@@ -1023,6 +1049,8 @@ impl CallRepository for PgCallRepo {
         // This mirrors `entity_access::pg_access_repo::queries::call_access`.
         let channel_ids = extract_channel_ids(filter);
         let has_channel_filter = !channel_ids.is_empty();
+        let call_ids = extract_call_ids(filter);
+        let has_call_id_filter = !call_ids.is_empty();
         let attended = extract_attended(filter);
 
         let rows = sqlx::query!(
@@ -1064,6 +1092,7 @@ impl CallRepository for PgCallRepo {
                 SELECT 1 FROM call_participants cp
                 WHERE cp.call_id = c.id AND cp.user_id = $1
             ) = $5)
+            AND ($6::bool IS FALSE OR c.id = ANY($7))
             UNION ALL
             SELECT
                 id as "call_id!",
@@ -1091,6 +1120,7 @@ impl CallRepository for PgCallRepo {
                 SELECT 1 FROM call_record_participants crp
                 WHERE crp.call_record_id = cr.id AND crp.user_id = $1
             ) = $5)
+            AND ($6::bool IS FALSE OR cr.id = ANY($7))
             ORDER BY "started_at!" DESC
             LIMIT $2
             "#,
@@ -1099,6 +1129,8 @@ impl CallRepository for PgCallRepo {
             has_channel_filter,
             &channel_ids,
             attended,
+            has_call_id_filter,
+            &call_ids,
         )
         .fetch_all(&self.pool)
         .await?;

@@ -1,6 +1,6 @@
 name: app
 options:
-  bundleIdPrefix: com.macro.dev
+  bundleIdPrefix: com.macro.app.prod
   deploymentTarget:
     iOS: 14.0
 fileGroups: [../../src]
@@ -11,7 +11,10 @@ settingGroups:
   app:
     base:
       PRODUCT_NAME: macro
-      PRODUCT_BUNDLE_IDENTIFIER: com.macro.dev
+      PRODUCT_BUNDLE_IDENTIFIER: com.macro.app.prod
+      DEVELOPMENT_TEAM: TY74Q77JBD
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
 targetTemplates:
   app:
     type: application
@@ -44,8 +47,6 @@ targets:
         UIRequiredDeviceCapabilities: [arm64, metal]
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
@@ -53,8 +54,30 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         CFBundleShortVersionString: 2.0.2
         CFBundleVersion: "142"
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - macro
+            CFBundleURLName: macro
+        NSUserActivityTypes:
+          - INSendMessageIntent
+          - NSUserActivityTypeBrowsingWeb
+        NSCameraUsageDescription: "This app needs access to the camera to take photos and videos for attachments."
+        NSMicrophoneUsageDescription: "This app needs access to the microphone to record videos for attachments."
+        NSPhotoLibraryUsageDescription: "This app needs access to your photo library to upload attachments."
+        LSApplicationQueriesSchemes:
+          - macro
     entitlements:
       path: app_iOS/app_iOS.entitlements
+      properties:
+        aps-environment: production
+        com.apple.developer.associated-domains:
+          - applinks:macro.com
+          - applinks:dev.macro.com
+          - applinks:staging.macro.com
+        com.apple.developer.usernotifications.communication: true
+        com.apple.developer.usernotifications.time-sensitive: true
+        com.apple.security.application-groups:
+          - group.com.macro.app.prod
     scheme:
       environmentVariables:
         RUST_BACKTRACE: full
@@ -72,6 +95,8 @@ targets:
     dependencies:
       - target: NotificationServiceExtension
         embed: true
+      - target: ShareExtension
+        embed: true
       - framework: libapp.a
         embed: false
       - sdk: CoreGraphics.framework
@@ -82,12 +107,46 @@ targets:
       - sdk: UIKit.framework
       - sdk: WebKit.framework
     preBuildScripts:
-      - script: cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
+      - script: export PATH="$PATH:$HOME/.cargo/bin" && cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
         name: Build Rust Code
         basedOnDependencyAnalysis: false
         outputFiles:
           - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
           - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Share to Macro
+        CFBundleShortVersionString: 2.0.2
+        CFBundleVersion: "142"
+        LSApplicationQueriesSchemes:
+          - macro
+        NSExtension:
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsImageWithMaxCount: 10
+              NSExtensionActivationSupportsMovieWithMaxCount: 5
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+    entitlements:
+      path: ShareExtension/ShareExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.macro.app.prod
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.macro.app.prod.ShareExtension
+        DEVELOPMENT_TEAM: TY74Q77JBD
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
+        ARCHS: [arm64]
+        VALID_ARCHS: arm64
+        EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
   NotificationServiceExtension:
     type: app-extension
     platform: iOS
@@ -96,11 +155,18 @@ targets:
     info:
       path: NotificationServiceExtension/Info.plist
       properties:
-        CFBundleShortVersionString: 2.0.2
+        CFBundleDisplayName: NotificationServiceExtension
+        CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: "142"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.macro.dev.NotificationServiceExtension
+        PRODUCT_BUNDLE_IDENTIFIER: com.macro.app.prod.NotificationServiceExtension
+        DEVELOPMENT_TEAM: TY74Q77JBD
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
         ARCHS: [arm64]
         VALID_ARCHS: arm64
         EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64

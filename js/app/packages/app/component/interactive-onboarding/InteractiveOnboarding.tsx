@@ -47,6 +47,9 @@ export default function InteractiveOnboarding() {
   const [mobileWebStep, setMobileWebStep] = createSignal<
     'welcome' | 'signup-sent'
   >('welcome');
+  const [submittedEmail, setSubmittedEmail] = createSignal<string | undefined>(
+    undefined
+  );
   const sendMobileWelcomeEmail = useSendMobileWelcomeEmail();
 
   // Mobile web users who aren't authenticated get a dedicated welcome screen
@@ -63,6 +66,7 @@ export default function InteractiveOnboarding() {
 
     if (isOk(result)) {
       if (result[1].sent) {
+        setSubmittedEmail(email);
         setMobileWebStep('signup-sent');
       } else {
         toast.alert('Email already sent.');
@@ -85,7 +89,7 @@ export default function InteractiveOnboarding() {
       fallback={
         <Show
           when={mobileWebStep() === 'welcome'}
-          fallback={<MobileWebSignupSent />}
+          fallback={<MobileWebSignupSent email={submittedEmail()} />}
         >
           <MobileWebWelcome onSignUp={handleMobileSignUp} />
         </Show>

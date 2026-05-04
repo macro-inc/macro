@@ -2,10 +2,8 @@
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
 import { Dialog } from '@kobalte/core/dialog';
-import { Tabs } from '@kobalte/core/tabs';
 import {
   createSignal,
-  For,
   Match,
   onCleanup,
   onMount,
@@ -22,6 +20,7 @@ import { Entity, type WithSearch, type EntityData } from '@entity';
 import { SearchContent } from '@entity/extractors-search/search-content';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { Tabs } from '@core/component/Tabs';
 import type { CategoryFilter } from '../command/types';
 import {
   type CommandMenuItem,
@@ -34,7 +33,6 @@ import { CommandItem } from '../command/CommandItem';
 import { useFullTextSearch } from '@queries/soup/useFullTextSearch';
 import { windowSearchMatch } from '@core/util/searchHighlight';
 import { TailSpinner } from '@core/component/TailSpinner';
-import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { Layer } from '@ui';
 
@@ -149,12 +147,6 @@ export function MobileSearchInner() {
 
   return (
     <div class="flex flex-col h-full bg-panel">
-      <Show
-        when={!SearchState.isInCommandScope() && !SearchState.isFullTextMode()}
-      >
-        <CategoryFilterTabs />
-      </Show>
-
       <ResultsContainer
         nameMatchItems={filteredItems()}
         fullTextItems={fullTextResults()}
@@ -166,6 +158,11 @@ export function MobileSearchInner() {
         onFullTextSearch={() => SearchState.enableFullTextMode()}
         query={SearchState.query}
       />
+      <Show
+        when={!SearchState.isInCommandScope() && !SearchState.isFullTextMode()}
+      >
+        <CategoryFilterTabs />
+      </Show>
       {/* Search Input */}
       <div class="flex items-center gap-2 bg-page px-2 border-t border-edge-muted">
         <button
@@ -381,47 +378,17 @@ function FullTextResultItem(props: {
 }
 
 function CategoryFilterTabs() {
-  const [listRef, setListRef] = createSignal<HTMLElement>();
-
   return (
-    <Tabs
-      value={SearchState.categoryFilter()}
-      onChange={(value) => {
-        if (value) {
-          SearchState.setCategoryFilter(value as CategoryFilter);
-        }
-      }}
-      class="border-b border-edge-muted"
-    >
-      <div class="relative">
-        <ScrollIndicators
-          scrollRef={listRef}
-          direction="horizontal"
-          noBorderStart
-          noBorderEnd
-        />
-        <Tabs.List
-          ref={setListRef}
-          class="flex items-center px-2 py-1.5 overflow-x-auto scrollbar-hidden"
-        >
-          <For each={CATEGORIES}>
-            {(category) => (
-              <Tabs.Trigger
-                value={category.id}
-                class={cn(
-                  'px-2 py-1 text-xs border first:border-l border-l-0 border-edge-muted font-semibold',
-                  SearchState.categoryFilter() === category.id
-                    ? 'text-ink pattern bg-edge-muted'
-                    : 'text-ink-muted/70 hover:text-ink hover:bg-hover'
-                )}
-                tabIndex={-1}
-              >
-                {category.label}
-              </Tabs.Trigger>
-            )}
-          </For>
-        </Tabs.List>
-      </div>
-    </Tabs>
+    <div class="bg-panel border-t border-edge-muted h-11 px-1 overflow-x-auto scrollbar-hidden">
+      <Tabs
+        list={CATEGORIES.map((c) => ({ value: c.id, label: c.label }))}
+        value={SearchState.categoryFilter()}
+        onChange={(value) => {
+          if (value) SearchState.setCategoryFilter(value as CategoryFilter);
+        }}
+        indicatorPosition="top"
+        class="w-max **:data-indicator:h-[3px]"
+      />
+    </div>
   );
 }

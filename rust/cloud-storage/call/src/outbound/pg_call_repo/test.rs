@@ -23,6 +23,15 @@ fn attended_filter(b: bool) -> LiteralTree<CallLiteral> {
     Some(Arc::new(Expr::Literal(CallLiteral::Attended(b))))
 }
 
+fn call_ids_filter(ids: &[Uuid]) -> LiteralTree<CallLiteral> {
+    let mut iter = ids.iter().copied().map(CallLiteral::CallId);
+    let first = iter.next()?;
+    let expr = iter.fold(Expr::Literal(first), |acc, lit| {
+        Expr::Or(Box::new(acc), Box::new(Expr::Literal(lit)))
+    });
+    Some(Arc::new(expr))
+}
+
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 const CALL1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
@@ -1141,6 +1150,39 @@ async fn get_call_records_by_user_attended_none_returns_all(
         .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
         .await?;
     assert_eq!(records.len(), 2);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_call_ids_filter_narrows_results(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let filter = call_ids_filter(&[CALL_ARCHIVED]);
+    let records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &filter)
+        .await?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].call_id, CALL_ARCHIVED);
+
+    let filter = call_ids_filter(&[CALL1, CALL_ARCHIVED]);
+    let records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &filter)
+        .await?;
+    assert_eq!(records.len(), 2);
+
+    let filter = call_ids_filter(&[Uuid::nil()]);
+    let records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &filter)
+        .await?;
+    assert!(
+        records.is_empty(),
+        "no call should match an unrelated call id"
+    );
     Ok(())
 }
 
