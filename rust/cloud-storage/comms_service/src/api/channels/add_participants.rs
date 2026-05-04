@@ -127,7 +127,9 @@ pub async fn handler(
     })
     .ok();
 
-    if matches!(channel_type, ChannelType::Private) && !channel_participants.is_empty() {
+    if matches!(channel_type, ChannelType::Private | ChannelType::Team)
+        && !channel_participants.is_empty()
+    {
         // Contacts: add participants to social graph
         let channel_participants: Vec<String> = channel_participants
             .iter()
