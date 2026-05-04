@@ -34,6 +34,10 @@ jobs:
               - '.github/workflows/web-app-check-main.yml'
             api_changed:
               - 'rust/cloud-storage/**/*.rs'
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'js/app/scripts/generate-api-schema.ts'
+              - 'js/app/scripts/services.ts'
 
   typescript:
     needs: path-check
@@ -54,7 +58,7 @@ jobs:
         if: needs.path-check.outputs.api_changed == 'true'
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: nix-community/cache-nix-action@v7
+      - uses: nix-community/cache-nix-action@d12e0f307e43ac49b7b098ea0e999f6e0b7bc02a
         if: needs.path-check.outputs.api_changed == 'true'
         with:
           primary-key: nix-x86_64-linux-gen-api-${{ hashFiles('flake.lock') }}

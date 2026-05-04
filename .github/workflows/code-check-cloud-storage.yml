@@ -36,7 +36,9 @@ jobs:
               - 'rust/rust-toolchain.toml'
               - '.github/actions/setup-rust/**'
               - '.github/actions/setup-sccache/**'
-              - .github/workflows/code-check-cloud-storage.yml
+              - '.github/workflows/code-check-cloud-storage.yml'
+              - 'flake.nix'
+              - 'flake.lock'
       - name: compute nextest package filter
         id: package-filter
         if: steps.filter.outputs.should_run == 'true'
@@ -166,7 +168,7 @@ jobs:
       - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: nix-community/cache-nix-action@v7
+      - uses: nix-community/cache-nix-action@d12e0f307e43ac49b7b098ea0e999f6e0b7bc02a
         with:
           primary-key: nix-x86_64-linux-check-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-x86_64-linux-check-
@@ -206,7 +208,7 @@ jobs:
       - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: nix-community/cache-nix-action@v7
+      - uses: nix-community/cache-nix-action@d12e0f307e43ac49b7b098ea0e999f6e0b7bc02a
         with:
           primary-key: nix-x86_64-linux-test-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-x86_64-linux-test-

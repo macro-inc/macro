@@ -19,11 +19,14 @@ use futures::stream::StreamExt;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+// Chat test infrastructure — used by #[cfg(test)] mod tests below.
+#[allow(dead_code)]
 struct ProcessedStream {
     pub new_messages: Vec<ChatCompletionRequestMessage>,
     pub tool_responses: Vec<ToolResponse>,
 }
 
+#[allow(dead_code)]
 pub struct Chat<I, T>
 where
     I: ExtendedClient + Send + Sync,

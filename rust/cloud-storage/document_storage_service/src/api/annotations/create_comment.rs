@@ -1,11 +1,7 @@
 use std::sync::Arc;
 
-#[allow(unused_imports)]
 use crate::{
-    api::{
-        annotations::{CommentNotifContext, compute_notification_recipients},
-        context::ApiContext,
-    },
+    api::annotations::{CommentNotifContext, compute_notification_recipients},
     service::conn_gateway::update_live_comment_state,
 };
 use axum::{
@@ -55,7 +51,7 @@ pub struct Params {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[axum::debug_handler(state = ApiContext)]
+#[axum::debug_handler(state = crate::api::context::ApiContext)]
 #[expect(clippy::too_many_arguments, reason = "axum handler extractors")]
 pub async fn create_comment_handler(
     State(notification_ingress_service): State<Arc<crate::api::context::NotificationIngressType>>,
