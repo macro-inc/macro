@@ -1,8 +1,8 @@
 import { IS_MAC } from '@core/constant/isMac';
-import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { Hotkey } from '@core/component/Hotkey';
+import { Panel } from '@ui';
 import { cn } from '@ui/utils/classname';
-import { createSignal, For, Index, type JSX } from 'solid-js';
+import { For, Index, type JSX } from 'solid-js';
 
 const cmdOrCtrl = IS_MAC ? 'cmd' : 'ctrl';
 
@@ -122,29 +122,36 @@ function ShortcutSectionComponent(props: { section: ShortcutSection }) {
   );
 }
 
-export function Shortcuts() {
-  const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
-
+function ShortcutsContent() {
   return (
-    <div class="absolute inset-0 bg-panel">
-      <div
-        ref={setScrollRef}
-        class="absolute inset-0 overflow-auto p-6 scrollbar-hidden"
-      >
-        <div class="max-w-2xl mx-auto">
-          <div class="mb-4">
-            <h2 class="text-xl font-semibold text-ink mb-2">Keyboard Shortcuts</h2>
-            <p class="text-ink-muted text-sm">
-              Shortcuts without a {cmdOrCtrl}/option modifier key require text inputs to be unfocused. For example, pressing <kbd>j</kbd> in a document will insert a j, but will move down the list if the document text is unfocused.
-            </p>
-          </div>
-
-          <For each={shortcutSections}>
-            {(section) => <ShortcutSectionComponent section={section} />}
-          </For>
-        </div>
+    <div class="flex flex-col h-full overflow-hidden">
+      <div class="relative flex items-center justify-between h-10 px-6 shrink-0 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
+        <div class="text-sm font-semibold">Keyboard Shortcuts</div>
       </div>
-      <CustomScrollbar scrollContainer={scrollRef} />
+
+      <div class="flex-1 overflow-auto p-6">
+        <p class="text-ink-muted text-sm mb-6">
+          Shortcuts without a {cmdOrCtrl}/option modifier key require text inputs to be unfocused. For example, pressing <kbd>j</kbd> in a document will insert a j, but will move down the list if the document text is unfocused.
+        </p>
+
+        <For each={shortcutSections}>
+          {(section) => <ShortcutSectionComponent section={section} />}
+        </For>
+      </div>
+    </div>
+  );
+}
+
+export function Shortcuts() {
+  return (
+    <div class="h-full overflow-hidden flex justify-center p-2">
+      <div class="max-w-2xl w-full h-full">
+        <Panel depth={2} class="h-full overflow-hidden">
+          <div class="text-ink h-full">
+            <ShortcutsContent />
+          </div>
+        </Panel>
+      </div>
     </div>
   );
 }

@@ -163,16 +163,16 @@ const PaywallComponent = (props: PaywallComponent) => {
           </div>
         </Show>
 
-      <div class="w-full">
-        <div class="gap-2 grid grid-cols-1 sm:grid-cols-3">
+      <div class="w-full @container">
+        <div class="gap-2 grid grid-cols-1 @[530px]:grid-cols-3">
           <For each={PAID_PLANS}>
             {(plan) => (
               <button
                 onClick={() => setUserSelectedTier(plan.tier)}
                 class="p-4 sm:p-5 border flex flex-col transition-all relative text-left"
                 classList={{
-                  'border-accent ring-1 ring-accent bg-active':
-                    selectedTier() === plan.tier,
+                  'border-accent-ink bg-active':
+                  selectedTier() === plan.tier,
                   'border-edge hover:border-edge': selectedTier() !== plan.tier,
                 }}
                 style={{ 'border-radius': '2px' }}

@@ -46,7 +46,7 @@ const variantStyles: Record<ButtonVariant, string> = {
   accent:
     'bg-accent text-panel not-disabled:hover:bg-accent/90 not-disabled:active:bg-accent/80 disabled:bg-ink-extra-muted',
   active:
-    'bg-accent/10 text-accent border border-accent/30 not-disabled:hover:bg-accent/20 not-disabled:active:bg-accent/25 disabled:opacity-50',
+      'bg-accent/8 text-accent-ink border border-accent-ink not-disabled:hover:bg-accent/20 not-disabled:active:bg-accent/25 disabled:opacity-50',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
