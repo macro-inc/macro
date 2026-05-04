@@ -48,10 +48,6 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
 
-  // Suppress autofocus when this mount was triggered by back/forward
-  // navigation so navigating back into a search split doesn't steal focus.
-  const fromHistoryNav = panel.handle.consumePendingHistoryNavigation();
-
   const [hasContent, setHasContent] = createSignal(false);
   const [latestMarkdown, setLatestMarkdown] = createSignal('');
   const [mentions, setMentions] = createSignal<string[]>([]);
@@ -176,7 +172,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
           <MarkdownShell
             config={editor}
             placeholder={props.placeholder ?? 'Search'}
-            autofocus={props.autoFocus && !fromHistoryNav}
+            autofocus={props.autoFocus}
             initialValue={props.initialValue}
             class="min-h-0! overflow-visible!"
           />

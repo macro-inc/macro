@@ -10,12 +10,6 @@ export type History<T extends object> = {
   push: (next: T) => void;
   merge: (next: T) => void;
   remove: (predicate: (item: T) => boolean) => T | null;
-  /**
-   * Returns true once if the most recent navigation was a back/forward call,
-   * then clears the flag. Used by mount-time logic that needs to behave
-   * differently on history navigation (e.g. skipping autofocus).
-   */
-  consumePendingNavigation: () => boolean;
 };
 
 const inc = (x: number) => x + 1;
@@ -23,7 +17,6 @@ const dec = (x: number) => x - 1;
 
 export function createHistory<T extends object>(): History<T> {
   let items: T[] = [];
-  let pendingNavigation = false;
   const [index, setIndex] = createSignal(-1);
 
   const canGoBack = () => {
@@ -62,14 +55,12 @@ export function createHistory<T extends object>(): History<T> {
   const back = () => {
     if (!canGoBack()) return null;
     setIndex(dec);
-    pendingNavigation = true;
     return items[index()];
   };
 
   const forward = () => {
     if (!canGoForward()) return null;
     setIndex(inc);
-    pendingNavigation = true;
     return items[index()];
   };
 
@@ -105,13 +96,6 @@ export function createHistory<T extends object>(): History<T> {
     setIndex(newIndex);
     return items[newIndex] ?? null;
   };
-
-  const consumePendingNavigation = () => {
-    const flag = pendingNavigation;
-    pendingNavigation = false;
-    return flag;
-  };
-
   return {
     get items() {
       return items;
@@ -126,6 +110,5 @@ export function createHistory<T extends object>(): History<T> {
     canGoBack,
     canGoForward,
     remove,
-    consumePendingNavigation,
   };
 }
