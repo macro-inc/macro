@@ -178,14 +178,6 @@ function TierSelect(props: {
 
 const emailSchema = z.string().email();
 
-function parseEmails(raw: string): string[] {
-  return raw
-    .split(/[,\n\s]/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-    .filter((s) => emailSchema.safeParse(s).success);
-}
-
 type InviteEntry = { email: string; tier: TeamUserTier };
 
 function InviteEntryRow(props: {
@@ -195,6 +187,7 @@ function InviteEntryRow(props: {
   onTierChange: (tier: TeamUserTier) => void;
   onRemove: () => void;
   showTier: boolean;
+  showRemove: boolean;
   error?: string;
 }) {
   return (
@@ -205,6 +198,7 @@ function InviteEntryRow(props: {
           value={props.entry.email}
           onInput={(e) => props.onEmailChange(e.currentTarget.value)}
           onBlur={() => props.onBlur()}
+          placeholder="Enter email address"
           class={cn(
             'flex-1 min-w-0 px-3 py-2 text-sm border rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none',
             props.error
@@ -256,15 +250,19 @@ function InviteEntryRow(props: {
             </Select.Portal>
           </Select>
         </Show>
-        <Button
-          variant="secondary"
-          class="bracket-never rounded-xs shrink-0 focus:border-accent/50 w-24 justify-center"
-          tabIndex={0}
-          onClick={props.onRemove}
-        >
-          <XIcon class="size-4" />
-          Remove
-        </Button>
+        <Show when={props.showRemove}>
+          <Tooltip tooltip="Remove">
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              class="bracket-never rounded-xs shrink-0 focus:border-accent/50"
+              tabIndex={0}
+              onClick={props.onRemove}
+            >
+              <XIcon class="size-4" />
+            </Button>
+          </Tooltip>
+        </Show>
       </div>
       <Show when={props.error}>
         <p class="text-xs text-failure-ink">{props.error}</p>
@@ -296,15 +294,6 @@ function InviteEmailsInput(props: {
   onErrorsChange: (errors: (string | undefined)[]) => void;
   defaultTier?: TeamUserTier;
 }) {
-  let inputRef: HTMLInputElement | undefined;
-  const [inputValue, setInputValue] = createSignal('');
-  const [inputTier, setInputTier] = createSignal<TeamUserTier>(
-    props.defaultTier ?? TeamUserTier.Haiku
-  );
-  const [inputError, setInputError] = createSignal<string | undefined>(
-    undefined
-  );
-
   const tierFlag = useFeatureFlag('enable-team-invite-tiers', {
     enabledOverride: ENABLE_TEAM_INVITE_TIERS_OVERRIDE,
   });
@@ -324,48 +313,6 @@ function InviteEmailsInput(props: {
     return !error;
   };
 
-  const validateInput = () => {
-    const error = getEmailError(inputValue(), existingEmails());
-    setInputError(error);
-    return !error;
-  };
-
-  const handleInputChange = (value: string) => {
-    setInputValue(value);
-    if (inputError()) setInputError(undefined);
-  };
-
-  const addEmails = () => {
-    const newEmails = parseEmails(inputValue());
-    if (newEmails.length === 0) {
-      validateInput();
-      return;
-    }
-
-    const existing = new Set(existingEmails().map((e) => e.toLowerCase()));
-    const uniqueNew = newEmails.filter((e) => !existing.has(e.toLowerCase()));
-
-    if (uniqueNew.length === 0) {
-      setInputError('Email already added');
-      return;
-    }
-
-    props.onChange([
-      ...props.invites,
-      ...uniqueNew.map((email) => ({ email, tier: inputTier() })),
-    ]);
-    setInputValue('');
-    setInputError(undefined);
-    inputRef?.focus();
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      addEmails();
-    }
-  };
-
   const updateEmail = (index: number, email: string) => {
     const updated = [...props.invites];
     updated[index] = { ...updated[index], email };
@@ -383,7 +330,14 @@ function InviteEmailsInput(props: {
     props.onChange(updated);
   };
 
-  const removeInvite = (index: number) => {
+  const addRow = () => {
+    props.onChange([
+      ...props.invites,
+      { email: '', tier: props.defaultTier ?? TeamUserTier.Haiku },
+    ]);
+  };
+
+  const removeRow = (index: number) => {
     props.onChange(props.invites.filter((_, i) => i !== index));
     props.onErrorsChange(props.errors.filter((_, i) => i !== index));
   };
@@ -399,90 +353,24 @@ function InviteEmailsInput(props: {
                 onEmailChange={(email) => updateEmail(index, email)}
                 onBlur={() => validateEmail(index)}
                 onTierChange={(tier) => updateTier(index, tier)}
-                onRemove={() => removeInvite(index)}
+                onRemove={() => removeRow(index)}
                 showTier={showTier()}
+                showRemove={props.invites.length > 1}
                 error={props.errors[index]}
               />
             )}
           </Index>
         </div>
       </Show>
-      <div class="flex flex-col gap-1">
-        <div class="flex gap-2 items-center">
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputValue()}
-            onInput={(e) => handleInputChange(e.currentTarget.value)}
-            onBlur={() => validateInput()}
-            onKeyDown={handleKeyDown}
-            placeholder="Enter email address"
-            class={cn(
-              'flex-1 px-3 py-2 text-sm border rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none',
-              inputError()
-                ? 'border-failure focus:border-failure'
-                : 'border-edge-muted focus:border-accent/50'
-            )}
-          />
-          <Show when={showTier()}>
-            <Select<TierOption>
-              options={tierOptions}
-              value={
-                tierOptions.find((o) => o.value === inputTier()) ??
-                tierOptions[0]
-              }
-              onChange={(opt) => opt && setInputTier(opt.value)}
-              optionValue="value"
-              optionTextValue="label"
-              gutter={4}
-              placement="bottom-end"
-              itemComponent={(itemProps: {
-                item: CollectionNode<TierOption>;
-              }) => (
-                <Select.Item
-                  item={itemProps.item}
-                  class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
-                >
-                  <Select.ItemLabel>
-                    {itemProps.item.rawValue.label}
-                  </Select.ItemLabel>
-                  <Select.ItemIndicator>
-                    <CheckIcon class="w-3 h-3" />
-                  </Select.ItemIndicator>
-                </Select.Item>
-              )}
-            >
-              <Select.Trigger
-                tabIndex={0}
-                class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0"
-              >
-                <Select.Value<TierOption>>
-                  {(state) => state.selectedOption().label}
-                </Select.Value>
-                <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
-              </Select.Trigger>
-              <Select.Portal>
-                <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
-                  <Select.Listbox />
-                </Select.Content>
-              </Select.Portal>
-            </Select>
-          </Show>
-          <Button
-            variant="secondary"
-            class="bracket-never rounded-xs shrink-0 focus:border-accent/50 w-24 justify-center"
-            tabIndex={0}
-            disabled={parseEmails(inputValue()).length === 0 || !!inputError()}
-            onClick={addEmails}
-          >
-            <PlusIcon class="size-4" />
-            Add
-          </Button>
-        </div>
-        <Show when={inputError()}>
-          <p class="text-xs text-failure-ink">{inputError()}</p>
-        </Show>
-      </div>
+      <Button
+        variant="secondary"
+        class="bracket-never rounded-xs w-full justify-center focus:border-accent/50"
+        tabIndex={0}
+        onClick={addRow}
+      >
+        <PlusIcon class="size-4" />
+        Add another
+      </Button>
     </div>
   );
 }
@@ -726,7 +614,9 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   const [teamNameError, setTeamNameError] = createSignal<string | undefined>(
     undefined
   );
-  const [invites, setInvites] = createSignal<InviteEntry[]>([]);
+  const [invites, setInvites] = createSignal<InviteEntry[]>([
+    { email: '', tier: TeamUserTier.Haiku },
+  ]);
   const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
     []
   );
@@ -964,7 +854,9 @@ function TeamManagement(props: {
   const [showCancelInviteModal, setShowCancelInviteModal] =
     createSignal<TeamInviteDetails | null>(null);
   const [showInviteModal, setShowInviteModal] = createSignal(false);
-  const [invites, setInvites] = createSignal<InviteEntry[]>([]);
+  const [invites, setInvites] = createSignal<InviteEntry[]>([
+    { email: '', tier: TeamUserTier.Haiku },
+  ]);
   const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
     []
   );
