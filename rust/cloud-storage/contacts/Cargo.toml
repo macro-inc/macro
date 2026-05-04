@@ -1,0 +1,50 @@
+[package]
+edition = "2024"
+name = "contacts"
+publish = false
+version = "0.1.0"
+
+[features]
+axum = [
+  "dep:axum",
+  "dep:axum-extra",
+  "dep:macro_auth",
+  "dep:macro_middleware",
+  "dep:model_user",
+  "dep:rate_limit",
+  "dep:redis",
+  "dep:utoipa",
+]
+default = ["axum", "inbound", "outbound", "ports"]
+inbound = ["axum", "dep:aws-sdk-sqs", "dep:sqs_worker", "ports"]
+outbound = ["dep:aws-sdk-sqs", "dep:reqwest", "dep:sqlx", "ports"]
+ports = []
+
+[dependencies]
+aws-sdk-sqs = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+macro_auth = { path = "../macro_auth", optional = true }
+macro_middleware = { path = "../macro_middleware", default-features = false, features = [
+  "auth",
+], optional = true }
+macro_user_id = { path = "../macro_user_id" }
+rootcause = { workspace = true }
+model_user = { path = "../model_user", features = ["axum"], optional = true }
+rate_limit = { path = "../rate_limit", features = ["axum"], optional = true }
+redis = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+sqs_worker = { path = "../sqs_worker", optional = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+http-body-util = { workspace = true }
+macro_auth = { path = "../macro_auth", features = ["testing"] }
+rate_limit = { path = "../rate_limit", features = ["axum", "testing"] }
+tower = { workspace = true }

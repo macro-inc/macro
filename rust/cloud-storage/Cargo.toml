@@ -7,6 +7,7 @@ members = [
   "ai_toolset",
   "analytics_client",
   "anthropic",
+  "attachment",
   "authentication_service",
   "authentication_service_client",
   "backfill_entity_access",
@@ -20,7 +21,7 @@ members = [
   "connection_gateway",
   "connection_gateway_client",
   "connection_gateway_models",
-  "contacts_db_client",
+  "contacts",
   "contacts_service",
   "convert_service",
   "cowlike",
@@ -77,6 +78,7 @@ members = [
   "mcp_service",
   "memory",
   "mention_utils",
+  "mobile_welcome_email_db_client",
   "model",
   "model_notifications",
   "model_user",
@@ -91,7 +93,6 @@ members = [
   "models_sfs",
   "models_soup",
   "models_team",
-  "mobile_welcome_email_db_client",
   "name_search",
   "non_empty",
   "notification",
@@ -131,17 +132,17 @@ members = [
   "sync_service_client",
   "system_properties",
   "teams",
+  "tools/native_app_server",
   "unfurl_service",
   "upload_extractor_lambda_handler",
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
   "user_quota",
   "worker_trigger",
-  "tools/native_app_server", "attachment",
 ]
 
 [workspace.dependencies]
-anyhow = "1.0.93"
+anyhow = "1.0.100"
 askama = "0.14"
 async-openai = { version = "0.36.1", features = ["byot", "chat-completion", "completions"] }
 async-stream = "0.3.6"
@@ -201,7 +202,7 @@ recursion = "0.5.4"
 redis = "1.0.3"
 regex = "1.11.1"
 reqwest = { version = "0.13", features = ["form", "hickory-dns", "json"] }
-rootcause = "0.11"
+rootcause = { version = "0.12" }
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1.0.214", features = ["derive"] }
@@ -259,8 +260,8 @@ doppleganger = "0.5"
 js-sys = "0.3"
 once_cell = "1.21.3"
 scraper = "0.18"
+serde_urlencoded = "0.7.1"
 strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
-serde_urlencoded = "0.7.1"
 url = "2.5.0"
 zip = "=2.4.2"

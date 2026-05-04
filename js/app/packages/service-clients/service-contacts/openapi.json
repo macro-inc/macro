@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "contacts_service",
+    "title": "contacts",
     "description": "",
     "termsOfService": "https://macro.com/terms",
     "license": {
@@ -13,6 +13,7 @@
     "/contacts": {
       "get": {
         "tags": ["contacts"],
+        "summary": "GET /contacts handler.",
         "operationId": "get_contacts",
         "responses": {
           "200": {
@@ -59,6 +60,7 @@
       },
       "post": {
         "tags": ["contacts"],
+        "summary": "POST /contacts handler.",
         "operationId": "add_contact",
         "requestBody": {
           "content": {
@@ -102,22 +104,26 @@
     "schemas": {
       "AddContactRequest": {
         "type": "object",
+        "description": "Request body for POST /contacts.",
         "required": ["user_id"],
         "properties": {
           "user_id": {
-            "type": "string"
+            "type": "string",
+            "description": "The user ID to add as a contact."
           }
         }
       },
       "GetContactsResponse": {
         "type": "object",
+        "description": "Response body for GET /contacts.",
         "required": ["contacts"],
         "properties": {
           "contacts": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "The list of contact user IDs."
           }
         }
       }

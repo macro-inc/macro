@@ -1,28 +1,25 @@
 #![recursion_limit = "256"]
-mod api;
 mod config;
-mod graph;
-mod queue;
-mod user;
+mod health;
 use std::sync::Arc;
 
 use anyhow::Context;
 use config::{Config, Environment};
-use connection_gateway_client::client::ConnectionGatewayClient;
-use contacts_service::queue::MessageQueue;
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use contacts::domain::service::{ContactsDomainService, ContactsOutboxServiceImpl};
+use contacts::inbound::http::{ApiDoc, AppState};
+use contacts::inbound::worker::{ContactsWorker, OutboxWorker};
+use contacts::outbound::gateway::ConnectionGatewayNotifier;
+use contacts::outbound::repository::DbContactsRepository;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
 use secretsmanager_client::SecretManager;
-use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use sqs_worker::SQSWorker;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
-use crate::api::Service;
-use crate::api::context::AppState;
-
-async fn connect_to_database(config: &Config) -> anyhow::Result<PgPool> {
+async fn connect_to_database(config: &Config) -> anyhow::Result<sqlx::PgPool> {
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (5, 30),
         Environment::Develop => (1, 25),
@@ -60,30 +57,51 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env().context("expected to be able to generate config")?;
 
     let db = connect_to_database(&config).await?;
-    let db_clone = db.clone();
     let sqs_worker = create_sqs_worker(&config).await;
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
     );
 
-    let internal_api_secret = secretsmanager_client
-        .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
-        .await?;
+    let notifier = if let Some(url) = config.connection_gateway_url.as_ref() {
+        let internal_api_secret = secretsmanager_client
+            .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
+            .await?;
+        Some(
+            ConnectionGatewayNotifier::new(internal_api_secret.as_ref().to_string(), url.clone())
+                .unwrap(),
+        )
+    } else {
+        None
+    };
 
-    let connection_gateway_client = config.connection_gateway_url.as_ref().map(|url| {
-        ConnectionGatewayClient::new(internal_api_secret.as_ref().to_string(), url.clone())
+    let repository = DbContactsRepository::new(db.clone());
+    let outbox_repo = DbContactsRepository::new(db.clone());
+    let service = Arc::new(ContactsDomainService {
+        repository,
+        notifier,
     });
 
-    let mut worker = MessageQueue::new(sqs_worker, db_clone, connection_gateway_client);
-
+    let worker = ContactsWorker::new(sqs_worker, service.clone());
     tokio::spawn(async move {
         worker.poll().await;
     });
 
-    let jwt_args =
-        JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
-            .await?;
+    let outbox_worker = OutboxWorker {
+        service: ContactsOutboxServiceImpl {
+            outbox_repo,
+            inner_service: service.clone(),
+        },
+    };
+    tokio::spawn(async move {
+        outbox_worker.run().await;
+    });
+
+    let jwt_args = macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
+        config.environment,
+        &secretsmanager_client,
+    )
+    .await?;
 
     let redis_client =
         redis::Client::open(config.redis_uri.as_str()).context("failed to create redis client")?;
@@ -94,14 +112,27 @@ async fn main() -> anyhow::Result<()> {
         },
     };
 
-    api::setup_and_serve(AppState {
-        config: Arc::new(config),
-        db: db.clone(),
+    let cors = macro_cors::cors_layer();
+    let port = config.port;
+
+    let app = contacts::inbound::http::api_router(AppState {
+        port,
         jwt_args,
-        internal_api_secret,
-        contacts_service: Arc::new(Service(db)),
+        contacts_service: service,
         rate_limit_service,
     })
-    .await?;
+    .layer(cors.clone())
+    .merge(health::router().layer(cors))
+    .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", ApiDoc::openapi()));
+
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
+
+    tracing::info!("contacts service is up and running on port {}", &port);
+
+    axum::serve(listener, app.into_make_service())
+        .await
+        .context("error starting service")?;
     Ok(())
 }

@@ -5,6 +5,8 @@ use comms::{
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
+use contacts::domain::service::SqsContactsIngress;
+use contacts::outbound::ingress::SqsContactsQueue;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use frecency::outbound::postgres::FrecencyPgStorage;
@@ -31,6 +33,7 @@ pub struct AppState {
     pub connection_gateway_client: Arc<ConnectionGatewayClient>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub sqs_client: Arc<sqs_client::SQS>,
+    pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub permissions_token_secret: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
     pub frecency_storage: FrecencyPgStorage,
     pub comms_state: CommsRouterState<ChannelImpl>,
