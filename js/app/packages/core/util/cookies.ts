@@ -15,8 +15,6 @@ export type LoginCookieOptions = {
   sameSite: 'Lax';
 };
 
-import { isTauri } from '@core/util/platform';
-
 const LOGIN_STORAGE_KEY = 'macro:login';
 
 /** Check if the user appears to be authenticated based on the login cookie or localStorage fallback. */
