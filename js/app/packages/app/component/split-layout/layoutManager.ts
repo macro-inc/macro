@@ -24,7 +24,7 @@ import {
   type ComponentMetaMap,
   resolveComponent,
 } from './componentRegistry';
-import { createHistory, type History } from './history';
+import { createHistory, type History, markHistoryNavigation } from './history';
 import { LIST_VIEW_ID } from '@app/constants/list-views';
 
 const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = false;
@@ -621,6 +621,7 @@ export function createSplitLayout(
     const prev = split.history.back();
     if (!prev) return;
 
+    markHistoryNavigation();
     reattach(split, prev);
   }
 
@@ -634,6 +635,7 @@ export function createSplitLayout(
     const next = split.history.forward();
     if (!next) return;
 
+    markHistoryNavigation();
     reattach(split, next);
   }
 

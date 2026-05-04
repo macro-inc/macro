@@ -1,5 +1,17 @@
 import { createSignal } from 'solid-js';
 
+let pendingHistoryNavigation = false;
+
+export function markHistoryNavigation() {
+  pendingHistoryNavigation = true;
+}
+
+export function consumeHistoryNavigation(): boolean {
+  const flag = pendingHistoryNavigation;
+  pendingHistoryNavigation = false;
+  return flag;
+}
+
 export type History<T extends object> = {
   readonly items: ReadonlyArray<T>;
   readonly index: Readonly<number>;
