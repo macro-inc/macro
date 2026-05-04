@@ -602,29 +602,46 @@ async fn filter_notifiable_message(
         return Ok(None);
     }
 
-    // 3. filter out noise emails (mirrors frontend isNoiseEmail: hasDepriority && !hasPriority)
-    let has_depriority = labels.iter().any(|label| {
-        matches!(
-            label.name.as_str(),
-            service::label::system_labels::CATEGORY_UPDATES
-                | service::label::system_labels::CATEGORY_PROMOTIONS
-                | service::label::system_labels::CATEGORY_SOCIAL
-                | service::label::system_labels::CATEGORY_FORUMS
-        )
-    });
+    // 3. filter out noise emails, mirroring the Importance(false) query in filters.rs:
+    //    noise = sender_override(false)
+    //            OR (NOT sender_override(true)
+    //                AND NOT has (CATEGORY_PERSONAL, SENT, DRAFT)  -- SENT/DRAFT already gone
+    //                AND has (CATEGORY_UPDATES, CATEGORY_PROMOTIONS, CATEGORY_SOCIAL, CATEGORY_FORUMS))
+    let sender_importance = if let Some(contact_id) = new_message.from_contact_id {
+        email_db_client::filters::get_sender_importance_override(&ctx.db, contact_id, new_message.link_id)
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to fetch sender importance override".to_string()),
+                })
+            })?
+    } else {
+        None
+    };
 
-    if has_depriority {
-        let has_priority = labels.iter().any(|label| {
-            matches!(
-                label.name.as_str(),
-                service::label::system_labels::CATEGORY_PERSONAL
-                    | service::label::system_labels::IMPORTANT
-            )
-        });
-
-        if !has_priority {
-            return Ok(None);
+    let is_noise = match sender_importance {
+        Some(false) => true,
+        Some(true) => false,
+        None => {
+            let has_depriority = labels.iter().any(|label| {
+                matches!(
+                    label.name.as_str(),
+                    service::label::system_labels::CATEGORY_UPDATES
+                        | service::label::system_labels::CATEGORY_PROMOTIONS
+                        | service::label::system_labels::CATEGORY_SOCIAL
+                        | service::label::system_labels::CATEGORY_FORUMS
+                )
+            });
+            let has_priority = labels.iter().any(|label| {
+                label.name.as_str() == service::label::system_labels::CATEGORY_PERSONAL
+            });
+            has_depriority && !has_priority
         }
+    };
+
+    if is_noise {
+        return Ok(None);
     }
 
     Ok(Some(new_message))
