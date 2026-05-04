@@ -91,7 +91,7 @@ function RoleSelect(props: { value: TeamRole; onChange: (role: TeamRole) => void
     >
       <Select.Trigger as={Button} class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-[expanded]:bg-ink/10" disabled={props.disabled}>
         <Select.Value<RoleOption>>{(state) => state.selectedOption().label}</Select.Value>
-        <CaretDownIcon class="w-3 h-3 text-ink-muted" />
+        <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
         <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
@@ -128,7 +128,7 @@ function TierSelect(props: { value: string; onChange: (tier: TeamUserTier) => vo
     >
       <Select.Trigger as={Button} class="rounded-xs px-2 py-1 text-xs data-[expanded]:bg-ink/10">
         <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
-        <CaretDownIcon class="w-3 h-3 text-ink-muted" />
+        <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
         <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
@@ -147,6 +147,178 @@ function parseEmails(raw: string): string[] {
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
     .filter((s) => emailSchema.safeParse(s).success);
+}
+
+type InviteEntry = { email: string; tier: TeamUserTier };
+
+function InviteEntryRow(props: {
+  entry: InviteEntry;
+  onEmailChange: (email: string) => void;
+  onTierChange: (tier: TeamUserTier) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div class="flex items-center gap-2">
+      <input
+        type="text"
+        value={props.entry.email}
+        onInput={(e) => props.onEmailChange(e.currentTarget.value)}
+        class="flex-1 min-w-0 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+      />
+      <Select<TierOption>
+        options={tierOptions}
+        value={tierOptions.find((o) => o.value === props.entry.tier) ?? tierOptions[0]}
+        onChange={(opt) => opt && props.onTierChange(opt.value)}
+        optionValue="value"
+        optionTextValue="label"
+        gutter={4}
+        placement="bottom-end"
+        itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
+          <Select.Item
+            item={itemProps.item}
+            class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+          >
+            <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+            <Select.ItemIndicator>
+              <CheckIcon class="w-3 h-3" />
+            </Select.ItemIndicator>
+          </Select.Item>
+        )}
+      >
+        <Select.Trigger tabIndex={0} class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0">
+          <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
+          <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
+        </Select.Trigger>
+        <Select.Portal>
+          <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+            <Select.Listbox />
+          </Select.Content>
+        </Select.Portal>
+      </Select>
+      <Button variant="secondary" class="bracket-never rounded-xs w-12 shrink-0 focus:border-accent/50" tabIndex={0} onClick={props.onRemove}>
+        <XIcon class="size-4" />
+      </Button>
+    </div>
+  );
+}
+
+function InviteEmailsInput(props: {
+  invites: InviteEntry[];
+  onChange: (invites: InviteEntry[]) => void;
+  defaultTier?: TeamUserTier;
+}) {
+  let inputRef: HTMLInputElement | undefined;
+  const [inputValue, setInputValue] = createSignal('');
+  const [inputTier, setInputTier] = createSignal<TeamUserTier>(props.defaultTier ?? TeamUserTier.Haiku);
+
+  const addEmails = () => {
+    const newEmails = parseEmails(inputValue());
+    if (newEmails.length === 0) return;
+
+    const existingEmails = new Set(props.invites.map((i) => i.email.toLowerCase()));
+    const uniqueNew = newEmails.filter((e) => !existingEmails.has(e.toLowerCase()));
+
+    if (uniqueNew.length > 0) {
+      props.onChange([
+        ...props.invites,
+        ...uniqueNew.map((email) => ({ email, tier: inputTier() })),
+      ]);
+    }
+    setInputValue('');
+    inputRef?.focus();
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addEmails();
+    }
+  };
+
+  const updateEmail = (index: number, email: string) => {
+    const updated = [...props.invites];
+    updated[index] = { ...updated[index], email };
+    props.onChange(updated);
+  };
+
+  const updateTier = (index: number, tier: TeamUserTier) => {
+    const updated = [...props.invites];
+    updated[index] = { ...updated[index], tier };
+    props.onChange(updated);
+  };
+
+  const removeInvite = (index: number) => {
+    props.onChange(props.invites.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div class="flex flex-col gap-2">
+      <Show when={props.invites.length > 0}>
+        <div class="flex flex-col gap-2 max-h-48 overflow-y-auto">
+          <For each={props.invites}>
+            {(entry, index) => (
+              <InviteEntryRow
+                entry={entry}
+                onEmailChange={(email) => updateEmail(index(), email)}
+                onTierChange={(tier) => updateTier(index(), tier)}
+                onRemove={() => removeInvite(index())}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
+      <div class="flex gap-2 items-center">
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue()}
+          onInput={(e) => setInputValue(e.currentTarget.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Enter email address"
+          class="flex-1 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+        />
+        <Select<TierOption>
+          options={tierOptions}
+          value={tierOptions.find((o) => o.value === inputTier()) ?? tierOptions[0]}
+          onChange={(opt) => opt && setInputTier(opt.value)}
+          optionValue="value"
+          optionTextValue="label"
+          gutter={4}
+          placement="bottom-end"
+          itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
+            <Select.Item
+              item={itemProps.item}
+              class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+            >
+              <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+              <Select.ItemIndicator>
+                <CheckIcon class="w-3 h-3" />
+              </Select.ItemIndicator>
+            </Select.Item>
+          )}
+        >
+          <Select.Trigger tabIndex={0} class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0">
+            <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
+            <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
+          </Select.Trigger>
+          <Select.Portal>
+            <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+              <Select.Listbox />
+            </Select.Content>
+          </Select.Portal>
+        </Select>
+        <Button
+          variant="secondary"
+          class="bracket-never rounded-xs w-12 shrink-0 focus:border-accent/50"
+          tabIndex={0}
+          disabled={parseEmails(inputValue()).length === 0}
+          onClick={addEmails}
+        >
+          Add
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function MemberRow(props: {
@@ -338,18 +510,18 @@ function TeamInvites() {
 
 function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   const [teamName, setTeamName] = createSignal('');
-  const [inviteEmails, setInviteEmails] = createSignal('');
+  const [invites, setInvites] = createSignal<InviteEntry[]>([]);
 
   const createTeamMutation = useCreateTeamWithInvitesMutation();
 
-  const parsedEmails = () => parseEmails(inviteEmails());
   const canCreate = () => teamName().trim().length > 0;
 
   const handleCreate = () => {
     const name = teamName().trim();
     if (!name) return;
 
-    const emails = parsedEmails();
+    // TODO: Update mutation to accept invites with tiers once API supports it
+    const emails = invites().map((i) => i.email);
     createTeamMutation.mutate(
       { name, emails: emails.length > 0 ? emails : undefined },
       { onSuccess: props.onClose }
@@ -382,22 +554,8 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
               </div>
               <div class="flex flex-col gap-1">
                 <label class="text-sm text-ink-muted">Invite members (optional)</label>
-                <textarea
-                  placeholder={'name@company.com\ncolleague@company.com'}
-                  value={inviteEmails()}
-                  onInput={(e) => setInviteEmails(e.currentTarget.value)}
-                  rows={3}
-                  class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none focus:border-accent/50 resize-none leading-relaxed"
-                />
-                <p class="text-xs text-ink-muted">
-                  Enter email addresses separated by commas, spaces, or new lines.
-                </p>
+                <InviteEmailsInput invites={invites()} onChange={setInvites} />
               </div>
-              <Show when={inviteEmails().trim() && parsedEmails().length > 0}>
-                <p class="text-xs text-ink-muted">
-                  {parsedEmails().length} member{parsedEmails().length !== 1 ? 's' : ''} will be invited
-                </p>
-              </Show>
               <div class="flex justify-end gap-1 pt-2">
                 <Button
                   variant="ghost"
@@ -470,11 +628,10 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
   const [showRemoveModal, setShowRemoveModal] = createSignal<TeamMember | null>(null);
   const [showCancelInviteModal, setShowCancelInviteModal] = createSignal<TeamInviteDetails | null>(null);
   const [showInviteModal, setShowInviteModal] = createSignal(false);
-  const [inviteEmails, setInviteEmails] = createSignal('');
+  const [invites, setInvites] = createSignal<InviteEntry[]>([]);
   const [editingTeamName, setEditingTeamName] = createSignal<string | undefined>(undefined);
 
-  const parsedEmails = () => parseEmails(inviteEmails());
-  const hasValidEmails = () => parsedEmails().length > 0;
+  const hasValidInvites = () => invites().length > 0;
 
   const deleteConfirmationPhrase = () => `Delete ${props.teamName}`;
   const canDeleteTeam = () => deleteConfirmation() === deleteConfirmationPhrase();
@@ -557,14 +714,16 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
   };
 
   const handleInvite = () => {
-    const emails = parsedEmails();
-    if (emails.length === 0 || !props.teamId) return;
+    const currentInvites = invites();
+    if (currentInvites.length === 0 || !props.teamId) return;
 
+    // TODO: Update mutation to send invites with tiers once API supports it
+    const emails = currentInvites.map((i) => i.email);
     inviteToTeamMutation.mutate(
       { teamId: props.teamId, request: { emails } },
       {
         onSuccess: () => {
-          setInviteEmails('');
+          setInvites([]);
           setShowInviteModal(false);
         },
       }
@@ -573,7 +732,7 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
 
   const handleInviteModalClose = (open: boolean) => {
     if (!open) {
-      setInviteEmails('');
+      setInvites([]);
       setShowInviteModal(false);
     }
   };
@@ -860,7 +1019,7 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
         <Dialog.Portal>
           <DialogWrapper>
             <div class="flex flex-col text-ink">
-              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
+              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
                 <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                   <XIcon />
                 </Dialog.CloseButton>
@@ -869,21 +1028,7 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                 </Dialog.Title>
               </div>
               <div class="p-3 flex flex-col gap-3">
-                <p class="text-sm text-ink-muted">
-                  Enter email addresses separated by commas, spaces, or new lines.
-                </p>
-                <textarea
-                  placeholder={'name@company.com\ncolleague@company.com'}
-                  value={inviteEmails()}
-                  onInput={(e) => setInviteEmails(e.currentTarget.value)}
-                  rows={4}
-                  class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none focus:border-accent/50 resize-none leading-relaxed"
-                />
-                <Show when={inviteEmails().trim() && parsedEmails().length > 0}>
-                  <p class="text-xs text-ink-muted">
-                    {parsedEmails().length} valid email{parsedEmails().length !== 1 ? 's' : ''} will be invited
-                  </p>
-                </Show>
+                <InviteEmailsInput invites={invites()} onChange={setInvites} />
                 <div class="flex justify-end gap-1 pt-2">
                   <Button
                     variant="ghost"
@@ -894,14 +1039,14 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                     Cancel
                   </Button>
                   <Button
-                    variant={hasValidEmails() ? 'accent' : 'ghost'}
+                    variant={hasValidInvites() ? 'accent' : 'ghost'}
                     class="rounded-xs"
-                    disabled={!hasValidEmails() || inviteToTeamMutation.isPending}
+                    disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
                     onClick={handleInvite}
                   >
                     <Show
                       when={inviteToTeamMutation.isPending}
-                      fallback={parsedEmails().length > 1 ? `Send ${parsedEmails().length} Invites` : 'Send Invite'}
+                      fallback={invites().length > 1 ? `Send ${invites().length} Invites` : 'Send Invite'}
                     >
                       <SpinnerIcon class="size-4 animate-spin" />
                     </Show>
