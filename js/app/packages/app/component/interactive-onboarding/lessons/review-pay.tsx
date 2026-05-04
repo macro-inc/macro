@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, createMemo, Show, For } from 'solid-js';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import { stripeServiceClient } from '@service-stripe/client';
 import { useAnalytics } from '@app/component/analytics-context';
@@ -8,6 +8,7 @@ import { useOnboarding } from '../onboarding-context';
 import { PLANS } from '@app/component/paywall/plans';
 import { useIsAuthenticated } from '@core/auth';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
+import { Button } from '@ui/components/Button';
 
 function ReviewPayContent() {
   return (
@@ -27,6 +28,24 @@ function ReviewPayDemo(props: LessonContentProps) {
     const tier = onboarding.selectedPlan();
     return PLANS.find((p) => p.tier === tier);
   };
+
+  const teamByTier = createMemo(() => {
+    const groups: Record<
+      string,
+      { plan: (typeof PLANS)[number]; count: number }
+    > = {};
+    for (const member of onboarding.invitedMembers()) {
+      const plan = PLANS.find((p) => p.tier === member.tier);
+      if (plan) {
+        if (groups[member.tier]) {
+          groups[member.tier].count++;
+        } else {
+          groups[member.tier] = { plan, count: 1 };
+        }
+      }
+    }
+    return Object.values(groups).sort((a, b) => b.plan.price - a.plan.price);
+  });
 
   const handleCheckout = async () => {
     const tier = onboarding.selectedPlan();
@@ -79,50 +98,47 @@ function ReviewPayDemo(props: LessonContentProps) {
         Back
       </button>
       <div class="flex-1 flex items-center justify-center">
-        <div class="w-full max-w-md flex flex-col gap-6">
-          <div class="flex flex-col gap-4 p-6 rounded-sm border border-edge bg-panel">
-            <h3 class="text-lg font-semibold text-ink">Order Summary</h3>
-
-            <div class="flex flex-col gap-3">
-              <div class="flex justify-between items-center">
-                <span class="text-ink/70">
-                  Your seat ({selectedPlan()?.name})
-                </span>
-                <span class="text-ink">${onboarding.userSeatCost()}/mo</span>
-              </div>
-
-              <Show when={onboarding.invitedMembers().length > 0}>
-                <div class="flex justify-between items-center">
-                  <span class="text-ink/70">
-                    Team ({onboarding.invitedMembers().length}{' '}
-                    {onboarding.invitedMembers().length === 1
-                      ? 'seat'
-                      : 'seats'}
-                    )
-                  </span>
-                  <span class="text-ink">${onboarding.teamSeatsCost()}/mo</span>
-                </div>
-              </Show>
-
-              <div class="border-t border-edge pt-3 mt-1">
-                <div class="flex justify-between items-center">
-                  <span class="text-ink font-semibold">Total</span>
-                  <span class="text-ink font-semibold text-lg">
-                    ${onboarding.totalCost()}/mo
-                  </span>
-                </div>
-              </div>
+        <div class="w-full max-w-sm flex flex-col items-center text-center gap-8">
+          <div class="flex flex-col items-center gap-1">
+            <div class="flex items-baseline gap-1">
+              <span class="text-5xl font-bold text-ink">
+                ${onboarding.totalCost()}
+              </span>
+              <span class="text-ink/50 text-lg">/mo</span>
             </div>
+            <span class="text-ink/40 text-sm">per month</span>
           </div>
 
-          <button
-            type="button"
+          <div class="w-full flex flex-col text-sm">
+            <div class="flex justify-between py-3 border-b border-edge-muted">
+              <span class="text-ink/60">
+                Your seat · {selectedPlan()?.name}
+              </span>
+              <span class="text-ink">${onboarding.userSeatCost()}/mo</span>
+            </div>
+            <For each={teamByTier()}>
+              {(group) => (
+                <div class="flex justify-between py-3 border-b border-edge-muted">
+                  <span class="text-ink/60">
+                    Team · {group.plan.name} × {group.count}
+                  </span>
+                  <span class="text-ink">
+                    ${group.plan.price * group.count}/mo
+                  </span>
+                </div>
+              )}
+            </For>
+          </div>
+
+          <Button
+            variant="accent"
+            size="lg"
             onClick={handleCheckout}
             disabled={loading()}
-            class="w-full py-3 rounded-xs text-base font-semibold bg-accent text-panel hover:bg-accent/90 disabled:opacity-60 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel transition-colors"
+            class="w-full rounded-xs"
           >
             {loading() ? 'Loading...' : 'Continue to payment'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -131,7 +147,7 @@ function ReviewPayDemo(props: LessonContentProps) {
 
 export const reviewPayLesson: LessonDefinition = {
   id: 'review-pay',
-  title: 'Review & Pay',
+  title: 'Finish setup',
   content: ReviewPayContent,
   demo: ReviewPayDemo,
   order: 95,
