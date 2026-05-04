@@ -160,14 +160,14 @@ function OnboardingCostSummary() {
         <div class="flex flex-col gap-0.5 mt-2 text-xs text-ink/50">
           <div class="flex justify-between">
             <span>Your {selectedPlan()?.name} seat</span>
-            <span>${onboarding.userSeatCost()}</span>
+            <span>${onboarding.userSeatCost()}/mo</span>
           </div>
           {teamByTier().map((group) => (
             <div class="flex justify-between">
               <span>
                 {group.plan.name} team {group.count === 1 ? 'seat' : 'seats'} ×{group.count}
               </span>
-              <span>${group.plan.price * group.count}</span>
+              <span>${group.plan.price * group.count}/mo</span>
             </div>
           ))}
         </div>
