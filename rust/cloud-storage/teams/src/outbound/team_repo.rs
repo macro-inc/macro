@@ -260,8 +260,10 @@ impl TeamRepository for TeamRepositoryImpl {
 
         let tiers: Vec<TeamUserTier> = invites.iter().map(|(_, tier)| *tier).collect();
 
-        let team_invite_ids: Vec<uuid::Uuid> =
-            invites.iter().map(|_| macro_uuid::generate_uuid_v7()).collect();
+        let team_invite_ids: Vec<uuid::Uuid> = invites
+            .iter()
+            .map(|_| macro_uuid::generate_uuid_v7())
+            .collect();
 
         let mut transaction = self.pool.begin().await?;
 

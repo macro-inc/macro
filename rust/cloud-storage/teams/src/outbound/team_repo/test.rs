@@ -121,8 +121,14 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert_eq!(invited[0].email.as_ref(), "new@macro.com");
 
     let invites = vec![
-        (Email::parse_from_str("invite@macro.com")?.lowercase(), TeamUserTier::Haiku),
-        (Email::parse_from_str("user2@user.com")?.lowercase(), TeamUserTier::Haiku),
+        (
+            Email::parse_from_str("invite@macro.com")?.lowercase(),
+            TeamUserTier::Haiku,
+        ),
+        (
+            Email::parse_from_str("user2@user.com")?.lowercase(),
+            TeamUserTier::Haiku,
+        ),
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
@@ -146,8 +152,14 @@ async fn test_invite_stores_tier(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
 
     let invites = vec![
-        (Email::parse_from_str("opus-user@macro.com")?.lowercase(), TeamUserTier::Opus),
-        (Email::parse_from_str("sonnet-user@macro.com")?.lowercase(), TeamUserTier::Sonnet),
+        (
+            Email::parse_from_str("opus-user@macro.com")?.lowercase(),
+            TeamUserTier::Opus,
+        ),
+        (
+            Email::parse_from_str("sonnet-user@macro.com")?.lowercase(),
+            TeamUserTier::Sonnet,
+        ),
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
@@ -194,7 +206,10 @@ async fn test_invite_existing_user_within_rate_limit(pool: Pool<Postgres>) -> an
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
 
     // invite@macro.com already has an invite with last_sent_at = NOW() in the fixture
-    let invites = vec![(Email::parse_from_str("invite@macro.com")?.lowercase(), TeamUserTier::Haiku)];
+    let invites = vec![(
+        Email::parse_from_str("invite@macro.com")?.lowercase(),
+        TeamUserTier::Haiku,
+    )];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
@@ -226,7 +241,10 @@ async fn test_invite_existing_user_after_rate_limit(pool: Pool<Postgres>) -> any
     .execute(&pool)
     .await?;
 
-    let invites = vec![(Email::parse_from_str("invite@macro.com")?.lowercase(), TeamUserTier::Haiku)];
+    let invites = vec![(
+        Email::parse_from_str("invite@macro.com")?.lowercase(),
+        TeamUserTier::Haiku,
+    )];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
@@ -259,8 +277,14 @@ async fn test_invite_mix_new_and_existing(pool: Pool<Postgres>) -> anyhow::Resul
     .await?;
 
     let invites = vec![
-        (Email::parse_from_str("brand-new@macro.com")?.lowercase(), TeamUserTier::Haiku),
-        (Email::parse_from_str("invite@macro.com")?.lowercase(), TeamUserTier::Haiku),
+        (
+            Email::parse_from_str("brand-new@macro.com")?.lowercase(),
+            TeamUserTier::Haiku,
+        ),
+        (
+            Email::parse_from_str("invite@macro.com")?.lowercase(),
+            TeamUserTier::Haiku,
+        ),
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
@@ -297,7 +321,10 @@ async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Res
     .await?;
 
     // First re-invite should succeed
-    let invites = vec![(Email::parse_from_str("invite@macro.com")?.lowercase(), TeamUserTier::Haiku)];
+    let invites = vec![(
+        Email::parse_from_str("invite@macro.com")?.lowercase(),
+        TeamUserTier::Haiku,
+    )];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
         .invite_users_to_team(&team_id, &user_id, invites)
@@ -309,7 +336,10 @@ async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Res
     team_repo.mark_invites_sent(&sent_ids).await?;
 
     // Second immediate re-invite should be rate limited
-    let invites = vec![(Email::parse_from_str("invite@macro.com")?.lowercase(), TeamUserTier::Haiku)];
+    let invites = vec![(
+        Email::parse_from_str("invite@macro.com")?.lowercase(),
+        TeamUserTier::Haiku,
+    )];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
         .invite_users_to_team(&team_id, &user_id, invites)
@@ -339,7 +369,10 @@ async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> a
     .await?;
 
     // First re-invite returns the invite
-    let invites = vec![(Email::parse_from_str("invite@macro.com")?.lowercase(), TeamUserTier::Haiku)];
+    let invites = vec![(
+        Email::parse_from_str("invite@macro.com")?.lowercase(),
+        TeamUserTier::Haiku,
+    )];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
         .invite_users_to_team(&team_id, &user_id, invites)
@@ -349,7 +382,10 @@ async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> a
     // Do NOT call mark_invites_sent (simulating failed notification delivery)
 
     // Second re-invite should still return the invite because last_sent_at was not updated
-    let invites = vec![(Email::parse_from_str("invite@macro.com")?.lowercase(), TeamUserTier::Haiku)];
+    let invites = vec![(
+        Email::parse_from_str("invite@macro.com")?.lowercase(),
+        TeamUserTier::Haiku,
+    )];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
         .invite_users_to_team(&team_id, &user_id, invites)
@@ -399,7 +435,10 @@ async fn test_mark_invites_sent(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     // The invite should now be rate limited
     let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
-    let invites = vec![(Email::parse_from_str("invite@macro.com")?.lowercase(), TeamUserTier::Haiku)];
+    let invites = vec![(
+        Email::parse_from_str("invite@macro.com")?.lowercase(),
+        TeamUserTier::Haiku,
+    )];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
         .invite_users_to_team(&team_id, &user_id, invites)

@@ -762,9 +762,24 @@ async fn test_invite_marks_sent_only_for_successful_notifications() {
 
     let invited_by = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let invites = vec![
-        (Email::parse_from_str("alice@example.com").unwrap().lowercase(), TeamUserTier::Haiku),
-        (Email::parse_from_str("bob@example.com").unwrap().lowercase(), TeamUserTier::Haiku),
-        (Email::parse_from_str("carol@example.com").unwrap().lowercase(), TeamUserTier::Haiku),
+        (
+            Email::parse_from_str("alice@example.com")
+                .unwrap()
+                .lowercase(),
+            TeamUserTier::Haiku,
+        ),
+        (
+            Email::parse_from_str("bob@example.com")
+                .unwrap()
+                .lowercase(),
+            TeamUserTier::Haiku,
+        ),
+        (
+            Email::parse_from_str("carol@example.com")
+                .unwrap()
+                .lowercase(),
+            TeamUserTier::Haiku,
+        ),
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
 
@@ -802,9 +817,12 @@ async fn test_invite_does_not_call_mark_sent_when_all_notifications_fail() {
         build_service(invites, fail_indices, mark_sent_calls.clone());
 
     let invited_by = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
-    let invites = vec![
-        (Email::parse_from_str("fail@example.com").unwrap().lowercase(), TeamUserTier::Haiku),
-    ];
+    let invites = vec![(
+        Email::parse_from_str("fail@example.com")
+            .unwrap()
+            .lowercase(),
+        TeamUserTier::Haiku,
+    )];
     let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
 
     service
@@ -838,8 +856,18 @@ async fn test_invite_marks_all_sent_when_all_notifications_succeed() {
 
     let invited_by = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let invites = vec![
-        (Email::parse_from_str("one@example.com").unwrap().lowercase(), TeamUserTier::Haiku),
-        (Email::parse_from_str("two@example.com").unwrap().lowercase(), TeamUserTier::Haiku),
+        (
+            Email::parse_from_str("one@example.com")
+                .unwrap()
+                .lowercase(),
+            TeamUserTier::Haiku,
+        ),
+        (
+            Email::parse_from_str("two@example.com")
+                .unwrap()
+                .lowercase(),
+            TeamUserTier::Haiku,
+        ),
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
 
