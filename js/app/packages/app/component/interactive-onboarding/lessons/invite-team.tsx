@@ -13,6 +13,8 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import TrashIcon from '@icon/regular/trash-simple.svg';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
+import CaretDownIcon from '@icon/regular/caret-down.svg';
+import CheckIcon from '@icon/regular/check.svg';
 import {
   invalidateUserTeams,
   useCreateTeamWithInvitesMutation,
@@ -21,6 +23,11 @@ import { useEmail } from '@core/context/user';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useOnboarding } from '../onboarding-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { ENABLE_TEAM_INVITE_TIERS_OVERRIDE } from '@core/constant/featureFlags';
+import { Select } from '@kobalte/core/select';
+import type { CollectionNode } from '@kobalte/core';
+import type { PaidPlanTier } from '@app/component/paywall/plans';
 
 const inviteFormSchema = z.object({
   teamName: z
@@ -36,6 +43,67 @@ const inviteFormSchema = z.object({
 const INVITE_FORM_ID = 'invite-team-form';
 const TEAM_NAME_MAX_LENGTH = 50;
 
+type TierOption = { value: PaidPlanTier; label: string };
+
+const tierOptions: TierOption[] = [
+  { value: 'haiku', label: 'Haiku' },
+  { value: 'sonnet', label: 'Sonnet' },
+  { value: 'opus', label: 'Opus' },
+];
+
+function InviteTierSelect(props: {
+  value: PaidPlanTier;
+  onChange: (tier: PaidPlanTier) => void;
+  disabled?: boolean;
+}) {
+  const selectedOption = () =>
+    tierOptions.find((o) => o.value === props.value) ?? tierOptions[0];
+
+  return (
+    <Select<TierOption>
+      options={tierOptions}
+      value={selectedOption()}
+      onChange={(opt) => opt && props.onChange(opt.value)}
+      optionValue="value"
+      optionTextValue="label"
+      gutter={4}
+      placement="bottom-end"
+      disabled={props.disabled}
+      itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
+        <Select.Item
+          item={itemProps.item}
+          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+        >
+          <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+          <Select.ItemIndicator>
+            <CheckIcon class="w-3 h-3" />
+          </Select.ItemIndicator>
+        </Select.Item>
+      )}
+    >
+      <Select.Trigger
+        class={cn(
+          'bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm rounded-xs border bg-panel text-ink outline-none shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
+          props.disabled
+            ? 'border-edge/50 opacity-50 cursor-not-allowed'
+            : 'border-edge'
+        )}
+        disabled={props.disabled}
+      >
+        <Select.Value<TierOption>>
+          {(state) => state.selectedOption().label}
+        </Select.Value>
+        <CaretDownIcon class="w-3 h-3 text-ink/40 shrink-0" />
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+          <Select.Listbox />
+        </Select.Content>
+      </Select.Portal>
+    </Select>
+  );
+}
+
 function InviteTeamContent() {
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
@@ -49,9 +117,15 @@ type FormErrors = {
   emails?: Record<number, string | undefined>;
 };
 
+type InviteEntry = { email: string; tier: PaidPlanTier };
+
 function InviteTeamDemo(props: LessonContentProps) {
   const analytics = useAnalytics();
   const onboarding = useOnboarding();
+  const tierFlag = useFeatureFlag('enable-team-invite-tiers', {
+    enabledOverride: ENABLE_TEAM_INVITE_TIERS_OVERRIDE,
+  });
+  const showTier = () => tierFlag().enabled;
 
   const handleBack = () => {
     onboarding.setInvitedMembers([]);
@@ -60,13 +134,20 @@ function InviteTeamDemo(props: LessonContentProps) {
   };
 
   const [teamName, setTeamName] = createSignal('');
-  const [emails, setEmails] = createSignal<string[]>(['']);
+  const [inviteEntries, setInviteEntries] = createSignal<InviteEntry[]>([
+    { email: '', tier: 'haiku' },
+  ]);
   const [errors, setErrors] = createSignal<FormErrors>({});
 
-  const syncInvitedMembers = (emailList: string[]) => {
-    const validMembers = emailList
-      .filter((e) => e.trim() !== '' && z.string().email().safeParse(e).success)
-      .map((email) => ({ email, tier: 'haiku' as const }));
+  const emails = () => inviteEntries().map((e) => e.email);
+
+  const syncInvitedMembers = (entries: InviteEntry[]) => {
+    const validMembers = entries
+      .filter(
+        (e) =>
+          e.email.trim() !== '' && z.string().email().safeParse(e.email).success
+      )
+      .map((entry) => ({ email: entry.email, tier: entry.tier }));
     onboarding.setInvitedMembers(validMembers);
   };
 
@@ -113,18 +194,18 @@ function InviteTeamDemo(props: LessonContentProps) {
   );
 
   const canAddEmail = () => {
-    const currentEmails = emails();
-    if (currentEmails.length === 0) {
+    const entries = inviteEntries();
+    if (entries.length === 0) {
       return true;
     }
-    const lastEmail = currentEmails[currentEmails.length - 1];
-    return lastEmail?.trim() !== '';
+    const lastEntry = entries[entries.length - 1];
+    return lastEntry?.email.trim() !== '';
   };
 
   const addEmailField = () => {
     if (!canAddEmail() || isPending()) return;
-    const newIndex = emails().length;
-    setEmails((prev) => [...prev, '']);
+    const newIndex = inviteEntries().length;
+    setInviteEntries((prev) => [...prev, { email: '', tier: 'haiku' }]);
     requestAnimationFrame(() => {
       const input = document.getElementById(`invite-email-${newIndex}`);
       input?.focus();
@@ -132,9 +213,9 @@ function InviteTeamDemo(props: LessonContentProps) {
   };
 
   const updateEmail = (index: number, value: string) => {
-    const next = [...emails()];
-    next[index] = value;
-    setEmails(next);
+    const next = [...inviteEntries()];
+    next[index] = { ...next[index], email: value };
+    setInviteEntries(next);
     syncInvitedMembers(next);
     if (errors().emails?.[index]) {
       setErrors((prev) => {
@@ -143,6 +224,13 @@ function InviteTeamDemo(props: LessonContentProps) {
         return { ...prev, emails: emailErrors };
       });
     }
+  };
+
+  const updateTier = (index: number, tier: PaidPlanTier) => {
+    const next = [...inviteEntries()];
+    next[index] = { ...next[index], tier };
+    setInviteEntries(next);
+    syncInvitedMembers(next);
   };
 
   const updateTeamName = (value: string) => {
@@ -154,8 +242,8 @@ function InviteTeamDemo(props: LessonContentProps) {
   };
 
   const removeEmail = (index: number) => {
-    const next = emails().filter((_, i) => i !== index);
-    setEmails(next);
+    const next = inviteEntries().filter((_, i) => i !== index);
+    setInviteEntries(next);
     syncInvitedMembers(next);
     setErrors((prev) => {
       const emailErrors = { ...prev.emails };
@@ -296,14 +384,14 @@ function InviteTeamDemo(props: LessonContentProps) {
               </p>
             </div>
             <div class="flex flex-col gap-3 overflow-y-auto min-h-0 p-2">
-              <Index each={emails()}>
-                {(email, index) => (
+              <Index each={inviteEntries()}>
+                {(entry, index) => (
                   <div class="flex flex-col gap-1 shrink-0">
                     <div class="flex items-center gap-2">
                       <input
                         id={`invite-email-${index}`}
                         type="email"
-                        value={email()}
+                        value={entry().email}
                         onInput={(e) =>
                           updateEmail(index, e.currentTarget.value)
                         }
@@ -323,20 +411,29 @@ function InviteTeamDemo(props: LessonContentProps) {
                           isPending() && 'opacity-50 cursor-not-allowed'
                         )}
                       />
+                      <Show when={showTier()}>
+                        <InviteTierSelect
+                          value={entry().tier}
+                          onChange={(tier) => updateTier(index, tier)}
+                          disabled={isPending()}
+                        />
+                      </Show>
                       <Tooltip
-                        tooltip={emails().length > 1 ? 'Remove' : 'Clear'}
+                        tooltip={
+                          inviteEntries().length > 1 ? 'Remove' : 'Clear'
+                        }
                         placement="top"
                       >
                         <button
                           type="button"
                           onClick={() =>
-                            emails().length === 1
+                            inviteEntries().length === 1
                               ? updateEmail(0, '')
                               : removeEmail(index)
                           }
                           disabled={isPending()}
                           aria-label={
-                            emails().length > 1
+                            inviteEntries().length > 1
                               ? `Remove email ${index + 1}`
                               : 'Clear email'
                           }
@@ -346,7 +443,7 @@ function InviteTeamDemo(props: LessonContentProps) {
                           )}
                         >
                           <Show
-                            when={emails().length > 1}
+                            when={inviteEntries().length > 1}
                             fallback={<XIcon class="size-4" />}
                           >
                             <TrashIcon class="size-4" />
@@ -364,14 +461,14 @@ function InviteTeamDemo(props: LessonContentProps) {
               </Index>
             </div>
           </div>
-          <div class="flex items-center gap-2 px-2">
+          <div class="px-2">
             <button
               type="button"
               onClick={addEmailField}
               disabled={!canAddEmail() || isPending()}
               aria-label="Add another email invite"
               class={cn(
-                'flex-1 flex items-center gap-2 px-3 py-2 text-sm rounded-xs bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel shrink-0',
+                'w-full flex items-center gap-2 px-3 py-2 text-sm rounded-xs bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
                 canAddEmail() && !isPending()
                   ? 'text-ink bg-ink/8 hover:bg-ink/12'
                   : 'text-ink/30 bg-ink/4 cursor-not-allowed'
@@ -380,7 +477,6 @@ function InviteTeamDemo(props: LessonContentProps) {
               <PlusIcon class="size-4" />
               Add another
             </button>
-            <div class="shrink-0 w-7" />
           </div>
           <p class="text-sm text-ink/40 shrink-0 px-2">
             You can always invite more people later from Settings
