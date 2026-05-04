@@ -58,6 +58,8 @@ function InviteTeamDemo(props: LessonContentProps) {
   const showTier = () => tierFlag().enabled;
 
   const handleBack = () => {
+    onboarding.setTeamName('');
+    onboarding.setInvitedMembers([]);
     props.goToLesson('team-choice');
   };
 
