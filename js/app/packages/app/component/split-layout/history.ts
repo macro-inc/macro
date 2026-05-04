@@ -1,15 +1,13 @@
 import { createSignal } from 'solid-js';
 
-let pendingHistoryNavigation = false;
+const pendingHistoryNavigation = new Set<string>();
 
-export function markHistoryNavigation() {
-  pendingHistoryNavigation = true;
+export function markHistoryNavigation(splitId: string) {
+  pendingHistoryNavigation.add(splitId);
 }
 
-export function consumeHistoryNavigation(): boolean {
-  const flag = pendingHistoryNavigation;
-  pendingHistoryNavigation = false;
-  return flag;
+export function consumeHistoryNavigation(splitId: string): boolean {
+  return pendingHistoryNavigation.delete(splitId);
 }
 
 export type History<T extends object> = {

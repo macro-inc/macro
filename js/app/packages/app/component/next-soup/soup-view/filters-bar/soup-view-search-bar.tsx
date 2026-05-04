@@ -51,7 +51,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
   // Suppress autofocus when this mount was triggered by back/forward
   // navigation so navigating back into a search split doesn't steal focus.
-  const fromHistoryNav = consumeHistoryNavigation();
+  const fromHistoryNav = consumeHistoryNavigation(panel.handle.id);
 
   const [hasContent, setHasContent] = createSignal(false);
   const [latestMarkdown, setLatestMarkdown] = createSignal('');

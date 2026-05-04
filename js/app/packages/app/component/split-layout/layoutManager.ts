@@ -621,7 +621,7 @@ export function createSplitLayout(
     const prev = split.history.back();
     if (!prev) return;
 
-    markHistoryNavigation();
+    markHistoryNavigation(split.id);
     reattach(split, prev);
   }
 
@@ -635,7 +635,7 @@ export function createSplitLayout(
     const next = split.history.forward();
     if (!next) return;
 
-    markHistoryNavigation();
+    markHistoryNavigation(split.id);
     reattach(split, next);
   }
 
