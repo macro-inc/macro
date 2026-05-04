@@ -36,16 +36,19 @@ async function uploadFileForChat(
       };
     }
 
-    let attachmentId: string;
+    let entityId: string;
+    let entityType: 'static_file' | 'document';
     switch (result.destination) {
       case 'static':
-        attachmentId = result.id;
+        entityId = result.id;
+        entityType = 'static_file';
         break;
       case 'dss':
         if (result.type !== 'document') {
           throw new Error('Unexpected upload result');
         }
-        attachmentId = result.documentId;
+        entityId = result.documentId;
+        entityType = 'document';
         break;
       default:
         throw new Error('Unexpected upload result');
@@ -54,10 +57,8 @@ async function uploadFileForChat(
     return {
       type: 'ok',
       attachment: {
-        attachmentId,
-        attachmentType: preview.attachmentType,
-        id: attachmentId,
-        metadata: preview.metadata,
+        entity_id: entityId,
+        entity_type: entityType,
       },
     };
   } catch (error) {
@@ -81,7 +82,7 @@ function previewFile(file: File): AttachmentPreview | undefined {
 
   if (SUPPORTED_IMAGE_ATTACHMENT_EXTENSIONS.includes(fileType)) {
     return {
-      attachmentType: 'image',
+      entity_type: 'static_file',
       metadata: {
         type: 'image',
         image_extension: fileType,
@@ -91,7 +92,7 @@ function previewFile(file: File): AttachmentPreview | undefined {
   }
 
   return {
-    attachmentType: 'document',
+    entity_type: 'document',
     metadata: {
       type: 'document',
       document_name: name,

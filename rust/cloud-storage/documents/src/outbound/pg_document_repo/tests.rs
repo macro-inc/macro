@@ -1,4 +1,5 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use model_entity::EntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
@@ -872,4 +873,63 @@ async fn test_comment_deletion(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert!(!comment_ids.contains(&10001));
 
     Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_get_project_name(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool);
+
+    let name = repo
+        .get_project_name("d0000000-0000-0000-0000-100000000001")
+        .await
+        .unwrap();
+    assert_eq!(name, "test_project_name");
+
+    let result = repo.get_project_name("nonexistent").await;
+    assert!(result.is_err());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_get_project_children(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool);
+
+    let children = repo
+        .get_project_children("d0000000-0000-0000-0000-100000000001")
+        .await
+        .unwrap();
+
+    assert_eq!(children.len(), 2);
+
+    let has_doc = children.iter().any(|e| {
+        e.entity_type == EntityType::Document
+            && e.entity_id == "d0000000-0000-0000-0000-000000000003"
+    });
+    assert!(has_doc, "should include the child document");
+
+    let has_sub_project = children.iter().any(|e| {
+        e.entity_type == EntityType::Project
+            && e.entity_id == "d0000000-0000-0000-0000-100000000002"
+    });
+    assert!(has_sub_project, "should include the sub-project");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_get_project_children_empty(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool);
+
+    let children = repo
+        .get_project_children("d0000000-0000-0000-0000-100000000002")
+        .await
+        .unwrap();
+
+    assert!(children.is_empty());
 }

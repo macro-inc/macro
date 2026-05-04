@@ -22,13 +22,14 @@ interface SearchContentHitRowProps {
 export function SearchContentHitRow(props: SearchContentHitRowProps) {
   const senderId = () => getSenderId(props.hit);
   const handleClick = (e: PointerEvent | MouseEvent) => {
+    e.stopPropagation();
     props.onClick?.(e, props.hit.location);
   };
 
   return (
     <div
       class={cn(
-        'ph-no-capture flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-edge/10 gap-4 hover:bg-edge/20'
+        'ph-no-capture flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-edge gap-4 hover:bg-edge'
       )}
       onClick={handleClick}
       role="button"

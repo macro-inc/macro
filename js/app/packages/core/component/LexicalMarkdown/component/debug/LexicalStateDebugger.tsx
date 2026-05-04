@@ -445,7 +445,7 @@ export function LexicalStateDebugger(props: { state: EditorState }) {
           </Show>
           <Selection
             selection={state().selection}
-            class="bg-edge/10 p-1 border border-edge"
+            class="bg-edge p-1 border border-edge"
           />
         </div>
       </Portal>

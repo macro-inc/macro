@@ -3,27 +3,23 @@
 macro_rules! non_empty_collection {
     (
         $(#[$meta:meta])*
-        $vis:vis struct $name:ident($item:ty);
+        $vis:vis struct $name:ident $(<$lt:lifetime>)? ($item:ty);
     ) => {
         $(#[$meta])*
-        $vis struct $name(NonEmpty<Vec<$item>>);
-
-        impl $name {
+        $vis struct $name $(<$lt>)? (NonEmpty<Vec<$item>>);
+        impl $(<$lt>)? $name $(<$lt>)? {
             /// Wrap a non-empty vec.
             $vis fn new(parts: NonEmpty<Vec<$item>>) -> Self {
                 Self(parts)
             }
-
             /// Build from a single item.
             $vis fn one(part: $item) -> Self {
-                Self(NonEmpty::new(vec![part]).expect("single element is non-empty"))
+                Self(NonEmpty::one(part))
             }
-
             /// Borrow the underlying parts.
             $vis fn parts(&self) -> &NonEmpty<Vec<$item>> {
                 &self.0
             }
-
             /// Consume into the underlying parts.
             $vis fn into_parts(self) -> NonEmpty<Vec<$item>> {
                 self.0
@@ -40,7 +36,6 @@ macro_rules! non_empty_collection {
                 inner.push(item);
                 Self(NonEmpty::new(inner).expect("append cannot be empty"))
             }
-
             /// Apply a function to each item.
             $vis fn map(self, f: impl FnMut($item) -> $item) -> Self {
                 Self(NonEmpty::new(self.0

@@ -1,34 +1,26 @@
-use crate::{
-    api::context::ApiContext, core::constants::DEFAULT_MAX_TOKENS,
-    model::stream::SendChatMessagePayload, service::attachment::fetch,
-};
+use crate::{core::constants::DEFAULT_MAX_TOKENS, model::stream::SendChatMessagePayload};
 
 use crate::model::chats::ChatResponse;
 
 use ai::types::{ChatCompletionRequest, MessageBuilder, RequestBuilder};
-use anyhow::{Context, Result};
-use macro_user_id::user_id::MacroUserIdStr;
-use std::sync::Arc;
+use anyhow::Result;
+use attachment::{AttachmentContent, AttachmentPart, Attachments, FormattedParts, TextOrImage};
+use model_entity::EntityType;
+use non_empty::NonEmpty;
 
-// fetch documents then build request
-#[tracing::instrument(skip(ctx, chat, incoming_message, static_system_prompt, jwt), err)]
-pub async fn build_chat_completion_request(
-    ctx: Arc<ApiContext>,
+#[tracing::instrument(
+    skip(chat, incoming_message, static_system_prompt, resolved_parts),
+    err
+)]
+pub fn build_chat_completion_request(
     chat: &ChatResponse,
     incoming_message: &SendChatMessagePayload,
     static_system_prompt: &str,
-    jwt: &str,
     user_memory: Option<&str>,
-    user_id: MacroUserIdStr<'static>,
+    resolved_parts: Vec<FormattedParts>,
 ) -> Result<ChatCompletionRequest> {
-    let attachments = fetch::fetchium(
-        ctx.scribe.clone(),
-        incoming_message.attachments.clone().unwrap_or_default(),
-        jwt,
-        user_id,
-    )
-    .await
-    .context("failed to fetch attachment content")?;
+    let attachments = merge_formatted_parts_to_attachments(resolved_parts);
+
     let mut messages = chat
         .messages
         .iter()
@@ -60,11 +52,37 @@ pub async fn build_chat_completion_request(
         system_prompt.push_str("\n</user_memory>");
     }
 
-    Ok(RequestBuilder::new()
-        .attachments(attachments)
+    let mut builder = RequestBuilder::new()
         .model(incoming_message.model)
         .messages(messages)
         .system_prompt(system_prompt)
-        .max_tokens(DEFAULT_MAX_TOKENS)
-        .build())
+        .max_tokens(DEFAULT_MAX_TOKENS);
+
+    if let Some(attachments) = attachments {
+        builder = builder.attachments(attachments);
+    }
+
+    Ok(builder.build())
+}
+
+fn merge_formatted_parts_to_attachments(
+    all_parts: Vec<FormattedParts>,
+) -> Option<Attachments<'static>> {
+    let contents: Vec<_> = all_parts
+        .into_iter()
+        .flat_map(|parts| parts.into_parts().into_inner())
+        .map(|part| {
+            let (attachment_part, entity_type) = match part {
+                TextOrImage::Text(text) => (AttachmentPart::Content(text), EntityType::Document),
+                TextOrImage::Image(data) => (AttachmentPart::Image(data), EntityType::StaticFile),
+            };
+            Ok(AttachmentContent {
+                reference: entity_type.with_entity_string(String::new()),
+                name: None,
+                content: NonEmpty::one(attachment_part),
+            })
+        })
+        .collect();
+
+    NonEmpty::new(contents).ok().map(Attachments::new)
 }

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE contacts_backfill_outbox SET applied_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "58443a6571e2b390002d7a3ba3954182467bb638a6d399b3ea8212d1a026d4fd"
+}

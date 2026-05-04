@@ -96,7 +96,7 @@ export function MinimizedThread(props: {
       >
         <div
           class={cn(
-            'flex flex-row justify-between p-0.5 gap-1 transition-transform items-center text-ink-muted border-edge-muted border relative overflow-clip rounded-sm pointer-events-auto',
+            'flex flex-row justify-between p-0.5 gap-1 transition-transform items-center text-ink-muted border-edge border relative overflow-clip rounded-sm pointer-events-auto',
             props.isActive && '-translate-x-4'
           )}
           onClick={clickHandler}

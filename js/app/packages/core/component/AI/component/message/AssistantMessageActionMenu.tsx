@@ -1,4 +1,3 @@
-import { generateTitle } from '@service-cognition/client';
 import {
   DEFAULT_MODEL,
   MODEL_PRETTYNAME,
@@ -10,11 +9,10 @@ import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid'
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import { generateTitle } from '@service-cognition/client';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
-import type { Model } from '@service-cognition/generated/schemas/model';
 import { createCallback } from '@solid-primitives/rootless';
 import { useSplitLayout } from 'app/component/split-layout/layout';
-import type { Component } from 'solid-js';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { extractMessageText } from './AssistantMessage';
@@ -25,17 +23,11 @@ type AssistantActionProps = {
 
 export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
   const modelName = () => {
-    const prettyName: string | undefined =
-      MODEL_PRETTYNAME[props.message?.model as Model];
-    if (!prettyName) return MODEL_PRETTYNAME[DEFAULT_MODEL];
-    return prettyName;
+    return MODEL_PRETTYNAME[DEFAULT_MODEL];
   };
 
   const modelIcon = () => {
-    const icon: Component | undefined =
-      MODEL_PROVIDER_ICON[props.message?.model as Model];
-    if (!icon) return MODEL_PROVIDER_ICON[DEFAULT_MODEL];
-    return icon;
+    return MODEL_PROVIDER_ICON[DEFAULT_MODEL];
   };
 
   const handleCopy = async () => {

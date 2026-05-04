@@ -2,8 +2,9 @@
 use std::error::Error;
 use std::io::{Write, stdout};
 
-use async_openai::types::ChatCompletionRequestUserMessageArgs;
-use async_openai::types::CreateChatCompletionRequestArgs;
+use async_openai::types::chat::{
+    ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs,
+};
 use futures::StreamExt;
 
 #[tokio::main]

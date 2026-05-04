@@ -723,7 +723,7 @@ export function PopupPreview(props: {
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <Panel active>
+      <Panel active depth={3}>
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>

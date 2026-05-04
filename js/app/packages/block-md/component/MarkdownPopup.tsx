@@ -71,6 +71,7 @@ import {
 import { FormatTools } from './FormatTools';
 import { Button } from '@ui/components/Button';
 import { Dynamic } from 'solid-js/web';
+import { Layer } from '@ui';
 
 const MENU_ID = 'markdown-popup';
 
@@ -449,7 +450,7 @@ export function MarkdownPopup(props: {
             </p>
             <div class="flex flex-row items-center space-x-2 w-full px-2">
               <textarea
-                class="resize-none rounded-xs w-full p-2 my-3 text-sm h-max-[800px] overflow-hidden ring-1 ring-edge/50 bg-hover"
+                class="resize-none rounded-xs w-full p-2 my-3 text-sm h-max-[800px] overflow-hidden ring-1 ring-edge bg-hover"
                 ref={setRewriteInputRef}
                 rows={1}
                 onSubmit={(e) => e.preventDefault()}
@@ -650,16 +651,18 @@ export function MarkdownPopup(props: {
       </ScopedPortal>
       <Show when={showPopup() && anchorRef()}>
         <ScopedPortal scope="local">
-          <GeneralizedPopup
-            PopupComponents={MarkdownPopupToolbar}
-            anchor={{
-              ref: anchorRef()!,
-              blockId: `${blockId}`,
-              blockType: 'md',
-            }}
-            useBlockBoundary={true}
-            ref={setMenuRef}
-          />
+          <Layer depth={2}>
+            <GeneralizedPopup
+              PopupComponents={MarkdownPopupToolbar}
+              anchor={{
+                ref: anchorRef()!,
+                blockId: `${blockId}`,
+                blockType: 'md',
+              }}
+              useBlockBoundary={true}
+              ref={setMenuRef}
+            />
+          </Layer>
         </ScopedPortal>
       </Show>
       <Show when={highlightLocation()}>

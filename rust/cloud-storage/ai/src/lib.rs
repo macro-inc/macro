@@ -6,7 +6,6 @@ mod openai_toolset;
 pub mod prompts;
 pub mod simple_completion;
 pub mod structured_output_v2;
-pub mod tokens;
 pub mod tool;
 pub mod traits;
 pub mod types;

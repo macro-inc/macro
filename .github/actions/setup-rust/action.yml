@@ -1,16 +1,50 @@
 name: Setup Rust
-description: Installs rust
+
+description: Installs Rust and configures cargo/sccache caching.
+
+inputs:
+  sccache:
+    description: Configure sccache as RUSTC_WRAPPER
+    required: false
+    default: 'true'
+  rust-cache:
+    description: Restore Swatinem/rust-cache Cargo target cache
+    required: false
+    default: 'false'
 
 runs:
   using: composite
   steps:
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-    - name: setup rust version
+    - name: setup rust toolchain
       shell: bash
-      run: rustup update stable && rustup default stable
+      run: |
+        set -euo pipefail
+
+        if [[ -f rust/rust-toolchain.toml ]]; then
+          toolchain="$(grep -E '^[[:space:]]*channel[[:space:]]*=' rust/rust-toolchain.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+        else
+          toolchain="stable"
+        fi
+
+        if ! rustup run "$toolchain" rustc --version >/dev/null 2>&1; then
+          rustup toolchain install "$toolchain" --profile minimal --component clippy --component rustfmt
+        else
+          echo "Rust toolchain $toolchain already installed: $(rustup run "$toolchain" rustc --version)"
+          installed_components="$(rustup component list --toolchain "$toolchain" --installed)"
+          if ! grep -q '^clippy-' <<<"$installed_components"; then
+            rustup component add --toolchain "$toolchain" clippy
+          fi
+          if ! grep -q '^rustfmt-' <<<"$installed_components"; then
+            rustup component add --toolchain "$toolchain" rustfmt
+          fi
+        fi
+
+        rustup default "$toolchain"
+    - name: setup sccache
+      if: ${{ inputs.sccache == 'true' }}
+      uses: ./.github/actions/setup-sccache
     - name: setup rust caching
+      if: ${{ inputs.rust-cache == 'true' }}
       uses: Swatinem/rust-cache@v2
       with:
         shared-key: cloud-storage

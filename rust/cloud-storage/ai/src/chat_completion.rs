@@ -1,6 +1,6 @@
 /* Non-streaming chat completion via Anthropic */
 use crate::types::{AnthropicClient, ChatCompletionError, ChatCompletionRequest, ExtendedClient};
-use async_openai::types::CreateChatCompletionRequest;
+use async_openai::types::chat::CreateChatCompletionRequest;
 use futures::StreamExt;
 
 #[tracing::instrument(skip(request), fields(model=?request.model, message_count=?request.messages.len()))]

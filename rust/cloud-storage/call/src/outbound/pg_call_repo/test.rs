@@ -694,6 +694,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
         started_at: now,
         ended_at: Some(now),
         is_final: true,
+        stream_started_at: None,
     };
     let seg2 = TranscriptSegmentRequest {
         segment_id: "seg-002".to_string(),
@@ -703,6 +704,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
         started_at: now,
         ended_at: Some(now),
         is_final: true,
+        stream_started_at: None,
     };
 
     repo.create_transcript_segment(&CALL1, &seg1).await?;
@@ -752,6 +754,7 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
         started_at: now,
         ended_at: Some(now),
         is_final: true,
+        stream_started_at: None,
     };
     repo.create_transcript_segment(&CALL1, &seg).await?;
 
@@ -812,6 +815,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
             started_at: now,
             ended_at: Some(now),
             is_final: true,
+            stream_started_at: None,
         },
     )
     .await?;
@@ -825,6 +829,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
             started_at: now,
             ended_at: Some(now),
             is_final: true,
+            stream_started_at: None,
         },
     )
     .await?;
@@ -1136,6 +1141,44 @@ async fn get_call_records_by_user_attended_none_returns_all(
         .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
         .await?;
     assert_eq!(records.len(), 2);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_returns_archived_summary(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let summary = "AI-generated summary of the archived call.";
+    sqlx::query!(
+        r#"UPDATE call_records SET summary = $2 WHERE id = $1"#,
+        CALL_ARCHIVED,
+        summary,
+    )
+    .execute(&pool)
+    .await?;
+
+    let records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
+        .await?;
+
+    let active = records
+        .iter()
+        .find(|r| r.call_id == CALL1)
+        .expect("active call missing");
+    assert!(active.is_active);
+    assert!(active.summary.is_none());
+
+    let archived = records
+        .iter()
+        .find(|r| r.call_id == CALL_ARCHIVED)
+        .expect("archived call missing");
+    assert!(!archived.is_active);
+    assert_eq!(archived.summary.as_deref(), Some(summary));
+
     Ok(())
 }
 

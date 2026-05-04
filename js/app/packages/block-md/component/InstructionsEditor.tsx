@@ -52,6 +52,7 @@ import {
   InlineSearchNode,
   type PeerIdValidator,
   peerIdPlugin,
+  AwaitNode,
 } from '@lexical-core';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
@@ -200,7 +201,10 @@ export function InstructionsEditor() {
     const getBlockLoroManager = blockLoroManagerSignal.get;
     const peerId = () => getBlockLoroManager()?.getPeerIdStr();
     plugins.use(
-      peerIdPlugin({ peerId, nodes: [InlineSearchNode, CommentNode] })
+      peerIdPlugin({
+        peerId,
+        nodes: [InlineSearchNode, CommentNode, AwaitNode],
+      })
     );
   }
 

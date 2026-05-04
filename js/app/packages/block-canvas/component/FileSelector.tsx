@@ -7,6 +7,7 @@ import { OldMenu } from '@core/component/OldMenu';
 import { blockAcceptedFileExtensionSet } from '@core/constant/allBlocks';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Layer } from '@ui';
 import FileText from '@phosphor-icons/core/regular/file-text.svg?component-solid';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
@@ -101,36 +102,38 @@ export function FileSelector() {
         />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          class="dropdown-menu__content"
-          onCloseAutoFocus={focusCanvas}
-        >
-          <OldMenu width="lg">
-            <div class="w-full p-1">
-              <Show
-                when={userFiles().length > 0}
-                fallback={
-                  <div class="p-4 text-center text-sm">No files found.</div>
-                }
-              >
-                <VList
-                  data={userFiles()}
-                  style={{ height: '320px', 'overflow-x': 'hidden' }}
-                  bufferSize={10 * 40}
+        <Layer depth={2}>
+          <DropdownMenu.Content
+            class="dropdown-menu__content"
+            onCloseAutoFocus={focusCanvas}
+          >
+            <OldMenu width="lg">
+              <div class="w-full p-1">
+                <Show
+                  when={userFiles().length > 0}
+                  fallback={
+                    <div class="p-4 text-center text-sm">No files found.</div>
+                  }
                 >
-                  {(item) => (
-                    <DropdownMenu.Item>
-                      <ItemOption
-                        file={item.file}
-                        type={item.type as ItemType}
-                      />
-                    </DropdownMenu.Item>
-                  )}
-                </VList>
-              </Show>
-            </div>
-          </OldMenu>
-        </DropdownMenu.Content>
+                  <VList
+                    data={userFiles()}
+                    style={{ height: '320px', 'overflow-x': 'hidden' }}
+                    bufferSize={10 * 40}
+                  >
+                    {(item) => (
+                      <DropdownMenu.Item>
+                        <ItemOption
+                          file={item.file}
+                          type={item.type as ItemType}
+                        />
+                      </DropdownMenu.Item>
+                    )}
+                  </VList>
+                </Show>
+              </div>
+            </OldMenu>
+          </DropdownMenu.Content>
+        </Layer>
       </DropdownMenu.Portal>
     </DropdownMenu>
   );

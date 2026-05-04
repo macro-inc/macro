@@ -1375,35 +1375,6 @@
           }
         }
       },
-      "ChatAttachmentWithName": {
-        "type": "object",
-        "required": ["attachmentType", "attachmentId", "id"],
-        "properties": {
-          "attachmentId": {
-            "type": "string",
-            "description": "Id of the attachment [Foreign Key to either document, chat or project]"
-          },
-          "attachmentType": {
-            "$ref": "#/components/schemas/AttachmentType",
-            "description": "Type of the attachment ['document' | 'chat' | 'project' | 'image' | 'channel']"
-          },
-          "id": {
-            "type": "string",
-            "description": "Incremented int id of the attachment (not really used for anything)"
-          },
-          "metadata": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AttachmentMetadata",
-                "description": "Metadata about the attachment, depending on the type"
-              }
-            ]
-          }
-        }
-      },
       "ChatHistory": {
         "type": "object",
         "required": ["conversation"],
@@ -1483,7 +1454,7 @@
           "attachments": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ChatAttachmentWithName"
+              "$ref": "#/components/schemas/Entity"
             },
             "description": "The ids of the attachments used to generate the message"
           },
@@ -1494,10 +1465,6 @@
           "id": {
             "type": "string",
             "description": "The chat message id"
-          },
-          "model": {
-            "type": ["string", "null"],
-            "description": "The model used to generate the message\nkill"
           },
           "role": {
             "$ref": "#/components/schemas/Role",
@@ -1582,32 +1549,8 @@
       "ChatResponse": {
         "type": "object",
         "description": "The full chat response, matching the DCS API response shape.",
-        "required": [
-          "id",
-          "userId",
-          "name",
-          "messages",
-          "attachments",
-          "availableModels",
-          "webCitations",
-          "isPersistent"
-        ],
+        "required": ["id", "userId", "name", "messages"],
         "properties": {
-          "attachments": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChatAttachmentWithName"
-            },
-            "description": "Attachment context — attachments not attached to messages.",
-            "deprecated": true
-          },
-          "availableModels": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Model"
-            },
-            "description": "Available models for the chat."
-          },
           "createdAt": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -1616,10 +1559,6 @@
           "id": {
             "type": "string",
             "description": "The chat uuid."
-          },
-          "isPersistent": {
-            "type": "boolean",
-            "description": "Whether the chat is persistent or not."
           },
           "messages": {
             "type": "array",
@@ -1647,11 +1586,6 @@
             "type": ["string", "null"],
             "description": "The project id the chat belongs to."
           },
-          "tokenCount": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "Current number of tokens in the chat."
-          },
           "updatedAt": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -1660,49 +1594,6 @@
           "userId": {
             "type": "string",
             "description": "Who the chat belongs to."
-          },
-          "webCitations": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": false,
-              "prefixItems": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "description": "A web citation associated with a chat message.",
-                    "required": ["url", "title"],
-                    "properties": {
-                      "description": {
-                        "type": ["string", "null"],
-                        "description": "A description of the cited page."
-                      },
-                      "favicon_url": {
-                        "type": ["string", "null"],
-                        "description": "The URL of the page's favicon."
-                      },
-                      "image_url": {
-                        "type": ["string", "null"],
-                        "description": "The URL of the page's image."
-                      },
-                      "title": {
-                        "type": "string",
-                        "description": "The title of the cited page."
-                      },
-                      "url": {
-                        "type": "string",
-                        "description": "The URL of the citation."
-                      }
-                    }
-                  }
-                }
-              ]
-            },
-            "description": "Message ID to web citation list."
           }
         }
       },
@@ -1759,7 +1650,7 @@
               "attachments": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/ChatAttachmentWithName"
+                  "$ref": "#/components/schemas/Entity"
                 }
               },
               "chat_id": {
@@ -2075,6 +1966,36 @@
             "$ref": "#/components/schemas/DocumentReference"
           }
         }
+      },
+      "Entity": {
+        "type": "object",
+        "description": "The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity",
+        "required": ["entity_type", "entity_id"],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "The id of that entity"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The type of entity we are describing"
+          }
+        }
+      },
+      "EntityType": {
+        "type": "string",
+        "description": "The type of an entity in Macro",
+        "enum": [
+          "user",
+          "chat",
+          "channel",
+          "document",
+          "project",
+          "email_thread",
+          "team",
+          "call",
+          "static_file"
+        ]
       },
       "ExtractionStatusEnum": {
         "oneOf": [
@@ -2658,7 +2579,7 @@
           "attachments": {
             "type": ["array", "null"],
             "items": {
-              "$ref": "#/components/schemas/ChatAttachmentWithName"
+              "$ref": "#/components/schemas/Entity"
             },
             "description": "Attachments for the message"
           },
@@ -2891,7 +2812,7 @@
               "attachments": {
                 "type": ["array", "null"],
                 "items": {
-                  "$ref": "#/components/schemas/ChatAttachmentWithName"
+                  "$ref": "#/components/schemas/Entity"
                 },
                 "description": "Use citation prompt"
               },

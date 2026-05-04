@@ -45,12 +45,14 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
   if (
     include.threadId?.length ||
     include.emailSender?.length ||
-    include.emailShared
+    include.emailShared ||
+    include.emailImportance !== undefined
   ) {
     filters.email_filters = {
       email_thread_ids: include.threadId,
       senders: include.emailSender,
       shared: include.emailShared,
+      importance: include.emailImportance,
     };
   }
 
@@ -89,9 +91,15 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
   }
 
   // Call filters
-  if (include.callChannelId?.length) {
+  if (
+    include.callChannelId?.length ||
+    include.callSpeakerId?.length ||
+    include.callAttended !== undefined
+  ) {
     filters.call_filters = {
       channel_ids: include.callChannelId,
+      speaker_ids: include.callSpeakerId,
+      attended: include.callAttended,
     };
   }
 
@@ -113,6 +121,8 @@ interface CreateSearchStateArgs {
   disableLocalSearch?: boolean;
   searchPaused?: Accessor<boolean>;
   searchMentions?: Accessor<string[]>;
+  /** Pre-populate searchText so the service request fires on mount (skips the debounce wait for the initial value). */
+  initialText?: string;
 }
 
 export const createSearchState = ({
@@ -122,8 +132,9 @@ export const createSearchState = ({
   disableLocalSearch,
   searchPaused,
   searchMentions,
+  initialText,
 }: CreateSearchStateArgs) => {
-  const [searchText, setSearchText] = createSignal('');
+  const [searchText, setSearchText] = createSignal(initialText ?? '');
 
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();

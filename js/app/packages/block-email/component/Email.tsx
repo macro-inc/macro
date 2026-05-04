@@ -480,7 +480,7 @@ function EmailContent(props: EmailViewProps) {
                       <div
                         class="macro-message-width macro-message-padding w-full border-b"
                         classList={{
-                          'border-edge-muted/50': isScrolled(),
+                          'border-edge-muted': isScrolled(),
                           'border-transparent': !isScrolled(),
                         }}
                       >

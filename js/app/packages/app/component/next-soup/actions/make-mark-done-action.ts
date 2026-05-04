@@ -14,6 +14,7 @@ import {
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import type { SoupState } from '../create-soup-state';
 import type { ListView } from '@app/constants/list-views';
+import type { HotkeyGroup } from '@core/hotkey/types';
 
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
@@ -31,6 +32,9 @@ export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
 type MakeMarkDoneOptions = {
   userId?: () => string | undefined;
   notificationSource: () => NotificationSource;
+  /** When provided, undo entries pushed by this action are dropped from
+   *  the undo stack when the group is disposed. */
+  hotkeyGroup?: HotkeyGroup;
 };
 
 type MarkDoneVariables = {
@@ -42,7 +46,7 @@ type MarkDoneVariables = {
 
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
-  const { notificationSource } = options;
+  const { notificationSource, hotkeyGroup } = options;
   const previewPanel = useMaybePreviewPanel();
   const inPreview = previewPanel !== undefined;
 
@@ -52,6 +56,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     MarkDoneVariables,
     MarkEntitiesDoneContext
   >(() => ({
+    hotkeyGroup,
     onMutate: (variables) =>
       applyEntitiesDoneOptimistic({
         emailIds: variables.emailIds,

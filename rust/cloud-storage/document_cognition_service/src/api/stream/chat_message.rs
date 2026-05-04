@@ -15,20 +15,21 @@ use ai::tool::types::StreamPart;
 use ai::types::{AssistantMessagePart, ChatMessageContent, Model};
 use ai_tools::RequestContext;
 use async_stream::stream;
+use attachment::FormattedParts;
 use axum::Json;
 use axum::extract::{Extension, Request, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
+use chat::domain::ports::MessageService;
 use chat::inbound::ChatModelAccess;
 use futures::StreamExt;
 use macro_auth::headers::AccessTokenExtractor;
 use macro_db_client::dcs::create_chat;
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::domain::MemoryService;
-use model::chat::ChatAttachmentWithName;
 use model::user::UserContext;
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
@@ -78,7 +79,7 @@ pub struct HttpSendChatMessageRequest {
     pub additional_instructions: Option<String>,
     /// Attachments for the message
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attachments: Option<Vec<ChatAttachmentWithName>>,
+    pub attachments: Option<Vec<Entity<'static>>>,
     /// Which toolset to use. Defaults to `all`
     #[serde(default)]
     pub toolset: ToolSet,
@@ -133,13 +134,30 @@ impl IntoResponse for ChatMessageError {
         (status = 403, description = "Forbidden"),
     )
 )]
-#[tracing::instrument(skip(state, model_access, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.attachment_id.as_str()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
+#[tracing::instrument(skip(state, model_access, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.entity_id.as_ref()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
 pub async fn send_chat_message(
     State(state): State<ApiContext>,
     model_access: ChatModelAccess,
     Extension(user_context): Extension<UserContext>,
     Extension(bearer): Extension<BearerToken>,
     Json(request): Json<HttpSendChatMessageRequest>,
+) -> Result<Json<SendChatMessageResponse>, ChatMessageError> {
+    Box::pin(send_chat_message_inner(
+        state,
+        model_access,
+        user_context,
+        bearer,
+        request,
+    ))
+    .await
+}
+
+async fn send_chat_message_inner(
+    state: ApiContext,
+    model_access: ChatModelAccess,
+    user_context: UserContext,
+    bearer: BearerToken,
+    request: HttpSendChatMessageRequest,
 ) -> Result<Json<SendChatMessageResponse>, ChatMessageError> {
     let now = std::time::Instant::now();
     let ctx = Arc::new(state);
@@ -224,18 +242,29 @@ pub async fn send_chat_message(
         },
     };
 
-    // Store the incoming user message
-    let user_message_id =
-        store_incoming_message(ctx.clone(), user_id.0.as_ref(), &chat, model, &payload)
-            .await
-            .map_err(|err| {
-                tracing::error!(error=?err, "failed to store incoming message");
-                ChatMessageError {
-                    error: "Failed to store message".to_string(),
-                    stream_id: Some(stream_id.clone()),
-                    status: None,
-                }
-            })?;
+    // Store the incoming user message and resolve its attachments
+    let resolved = store_incoming_message(ctx.clone(), user_id.0.as_ref(), &chat, model, &payload)
+        .await
+        .map_err(|err| {
+            tracing::error!(error=?err, "failed to store incoming message");
+            ChatMessageError {
+                error: "Failed to store message".to_string(),
+                stream_id: Some(stream_id.clone()),
+                status: None,
+            }
+        })?;
+    let user_message_id = resolved.message_id;
+
+    // Fetch all resolved attachment content for the chat (current + prior messages)
+    let all_resolved_parts: Vec<FormattedParts> = ctx
+        .message_service
+        .get_resolved_message_chain(&actual_chat_id)
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "failed to fetch resolved message chain"))
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|r| r.parts)
+        .collect();
 
     // Fetch user memory (triggers background generation if stale/missing)
     let user_memory = ctx
@@ -249,15 +278,12 @@ pub async fn send_chat_message(
     // Build the completion request
     let tools_prompt = choose_tools_prompt(&payload, ctx.all_tools_prompt);
     let ai_request = build_chat_completion_request(
-        ctx.clone(),
         &chat,
         &payload,
         tools_prompt,
-        &jwt_token,
         user_memory.as_deref(),
-        (*user_id).clone(),
+        all_resolved_parts,
     )
-    .await
     .map_err(|err| {
         tracing::error!(error=?err, "failed to build chat completion request");
         ChatMessageError {
@@ -412,7 +438,7 @@ fn stream_and_save_message(
     now: std::time::Instant,
     user_message_content: String,
     user_message_id: String,
-    user_message_attachments: Vec<ChatAttachmentWithName>,
+    user_message_attachments: Vec<Entity<'static>>,
     durable_stream_id: StreamId,
     cancellation_sub: CancellationSubscription,
 ) {
@@ -620,7 +646,7 @@ fn stream_and_save_message(
                 vec![ai::types::ChatMessage {
                     role: ai::types::Role::Assistant,
                     content: ChatMessageContent::AssistantMessageParts(resolved_parts),
-                    image_urls: None,
+                    attachments: None,
                 }]
             }
         } else {

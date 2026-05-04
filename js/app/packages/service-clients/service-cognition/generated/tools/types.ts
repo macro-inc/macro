@@ -34,6 +34,19 @@ export type CodeExecutionErrorCode =
   | 'file_not_found'
   | 'string_not_found';
 /**
+ * Type of channel timeline window to read.
+ */
+export type ChannelMessagesWindowType =
+  | 'latest'
+  | 'timeRange'
+  | 'aroundMessage'
+  | 'page'
+  | 'messages';
+/**
+ * Which part of a thread to read.
+ */
+export type ChannelThreadWindowType = 'allIfSmall' | 'latest' | 'aroundReply';
+/**
  * The content of the document
  */
 export type Content =
@@ -111,6 +124,22 @@ export type SortBy =
   | 'recently_viewed'
   | 'recently_updated'
   | 'recently_created';
+/**
+ * Direction for reading more messages around a cursor.
+ */
+export type PageDirection = 'older' | 'newer';
+/**
+ * Position of a channel message.
+ */
+export type ToolMessageKind = 'topLevelMessage' | 'threadReply';
+/**
+ * Kind of content omitted from a bounded tool response.
+ */
+export type ToolOmissionKind =
+  | 'olderMessages'
+  | 'newerMessages'
+  | 'threadReplies'
+  | 'truncatedContent';
 export type ReadThreadReadContent =
   | {
       channel_id: string;
@@ -986,6 +1015,19 @@ export interface ToolPropertyOption {
   id: string;
 }
 /**
+ * Retrieve an email thread and its messages. Returns the thread metadata and message contents including sender, recipients, subject, and body text. Use this to read the contents of a specific email conversation.
+ */
+export interface GetThread {
+  /**
+   * Maximum number of messages to return (default 10).
+   */
+  limit?: number | null;
+  /**
+   * The ID of the email thread to retrieve.
+   */
+  threadId: string;
+}
+/**
  * Response from the GetThread tool.
  */
 export interface GetThreadResponse {
@@ -1189,6 +1231,490 @@ export interface TranscriptSegment {
   startedAt: string;
 }
 /**
+ * Read the local channel and thread context around one message id. If the id is a thread reply, this resolves the parent, returns nearby top-level channel messages, and returns nearby replies around the anchor reply.
+ */
+export interface ReadChannelMessageContext {
+  /**
+   * Approximate number of newer top-level messages to include. Defaults to 3.
+   */
+  channelAfter?: number | null;
+  /**
+   * Approximate number of older top-level messages to include. Defaults to 3.
+   */
+  channelBefore?: number | null;
+  /**
+   * Channel id containing the message.
+   */
+  channelId: string;
+  /**
+   * Maximum characters to return per message/reply. Defaults to 4000, maximum 16000.
+   */
+  maxCharsPerMessage?: number | null;
+  /**
+   * Message id to anchor the context. May be top-level or a thread reply.
+   */
+  messageId: string;
+  /**
+   * Number of replies after a reply anchor to include. Defaults to 10, maximum 50.
+   */
+  threadAfter?: number | null;
+  /**
+   * Number of replies before a reply anchor to include. Defaults to 10, maximum 50.
+   */
+  threadBefore?: number | null;
+}
+/**
+ * Response from `ReadChannelMessageContext`.
+ */
+export interface ReadChannelMessageContextResponse {
+  anchor: ToolResolvedMessage;
+  channelContext: ToolChannelMessageContextWindow;
+  /**
+   * Information about omitted or truncated content.
+   */
+  omissions: ToolOmission[];
+  /**
+   * Nearby thread replies when the requested message is a reply.
+   */
+  threadContext?: ToolThreadReplyContextWindow | null;
+}
+/**
+ * Resolution details for a requested message id.
+ */
+export interface ToolResolvedMessage {
+  /**
+   * Channel id.
+   */
+  channelId: string;
+  /**
+   * When the requested message was created.
+   */
+  createdAt: string;
+  kind: ToolMessageKind;
+  /**
+   * Requested message id.
+   */
+  messageId: string;
+  /**
+   * Parent thread id. Equals `message_id` for top-level messages.
+   */
+  threadId: string;
+}
+/**
+ * Top-level channel context around an anchor or thread parent.
+ */
+export interface ToolChannelMessageContextWindow {
+  /**
+   * Newer top-level messages after the anchor/parent, in chronological order.
+   */
+  after: ToolChannelMessage[];
+  anchorOrParent: ToolChannelMessage;
+  /**
+   * Older top-level messages before the anchor/parent, in chronological order.
+   */
+  before: ToolChannelMessage[];
+}
+/**
+ * A compact top-level channel message returned by channel AI tools.
+ */
+export interface ToolChannelMessage {
+  /**
+   * Attachments on this message.
+   */
+  attachments: ToolAttachment[];
+  /**
+   * Channel id.
+   */
+  channelId: string;
+  /**
+   * Message content, possibly truncated.
+   */
+  content: string;
+  /**
+   * Whether message content was truncated.
+   */
+  contentTruncated: boolean;
+  /**
+   * When the message was created.
+   */
+  createdAt: string;
+  /**
+   * When the message was deleted, if ever.
+   */
+  deletedAt?: string | null;
+  /**
+   * When the message was edited, if ever.
+   */
+  editedAt?: string | null;
+  /**
+   * Message id.
+   */
+  id: string;
+  /**
+   * Reactions on this message.
+   */
+  reactions: ToolReaction[];
+  /**
+   * Sender user id.
+   */
+  senderId: string;
+  thread: ToolThreadSummary;
+  /**
+   * When the message was last updated.
+   */
+  updatedAt: string;
+}
+/**
+ * A compact attachment reference on a message.
+ */
+export interface ToolAttachment {
+  /**
+   * When the attachment was created.
+   */
+  createdAt: string;
+  /**
+   * Attached entity id.
+   */
+  entityId: string;
+  /**
+   * Attached entity type.
+   */
+  entityType: string;
+  /**
+   * Attachment id.
+   */
+  id: string;
+}
+/**
+ * A reaction summary on a message.
+ */
+export interface ToolReaction {
+  /**
+   * Emoji that was reacted with.
+   */
+  emoji: string;
+  /**
+   * User ids that reacted with this emoji.
+   */
+  users: string[];
+}
+/**
+ * Thread metadata attached to a top-level message.
+ */
+export interface ToolThreadSummary {
+  /**
+   * Timestamp of the latest reply, if any.
+   */
+  latestReplyAt?: string | null;
+  /**
+   * Reply count not included in `preview`.
+   */
+  omittedReplyCount: number;
+  /**
+   * Preview replies, when requested.
+   */
+  preview?: ToolThreadReply[] | null;
+  /**
+   * Total number of replies in the thread.
+   */
+  replyCount: number;
+  /**
+   * Parent thread id. This equals the top-level message id.
+   */
+  threadId: string;
+}
+/**
+ * A compact thread reply returned by channel AI tools.
+ */
+export interface ToolThreadReply {
+  /**
+   * Attachments on this reply.
+   */
+  attachments: ToolAttachment[];
+  /**
+   * Reply content, possibly truncated.
+   */
+  content: string;
+  /**
+   * Whether the reply content was truncated.
+   */
+  contentTruncated: boolean;
+  /**
+   * When the reply was created.
+   */
+  createdAt: string;
+  /**
+   * When the reply was edited, if ever.
+   */
+  editedAt?: string | null;
+  /**
+   * Reply message id.
+   */
+  id: string;
+  /**
+   * Reactions on this reply.
+   */
+  reactions: ToolReaction[];
+  /**
+   * Sender user id.
+   */
+  senderId: string;
+  /**
+   * Parent thread id.
+   */
+  threadId: string;
+  /**
+   * When the reply was last updated.
+   */
+  updatedAt: string;
+}
+/**
+ * Information about content omitted from a tool response.
+ */
+export interface ToolOmission {
+  /**
+   * Number of omitted items, when known.
+   */
+  count?: number | null;
+  /**
+   * Cursor that can be used to continue reading, when available.
+   */
+  cursor?: string | null;
+  kind: ToolOmissionKind;
+  /**
+   * Message id associated with the omission, when applicable.
+   */
+  messageId?: string | null;
+  /**
+   * Thread id associated with the omission, when applicable.
+   */
+  threadId?: string | null;
+}
+/**
+ * Thread reply context around a reply anchor.
+ */
+export interface ToolThreadReplyContextWindow {
+  /**
+   * Anchor reply, when the requested message was a thread reply.
+   */
+  anchorReply?: ToolThreadReply | null;
+  /**
+   * Number of later replies omitted from this context window.
+   */
+  omittedAfter: number;
+  /**
+   * Number of earlier replies omitted from this context window.
+   */
+  omittedBefore: number;
+  parent: ToolChannelMessage;
+  /**
+   * Replies after the anchor reply, in chronological order.
+   */
+  repliesAfter: ToolThreadReply[];
+  /**
+   * Replies before the anchor reply, in chronological order.
+   */
+  repliesBefore: ToolThreadReply[];
+  /**
+   * Parent thread id.
+   */
+  threadId: string;
+}
+/**
+ * Read a small structured window of top-level messages from a channel. Use this for latest messages, bounded time ranges, cursor continuation, or a window around a message. For full thread replies, use ReadChannelThread.
+ */
+export interface ReadChannelMessages {
+  /**
+   * Channel id to read.
+   */
+  channelId: string;
+  /**
+   * Opaque cursor returned by this tool. Required when windowType is page.
+   */
+  cursor?: string | null;
+  /**
+   * Direction to read from the cursor. Required when windowType is page.
+   */
+  direction?: PageDirection | null;
+  /**
+   * Inclusive lower bound for activity timestamps. Required when windowType is timeRange.
+   */
+  from?: string | null;
+  /**
+   * Whether to include thread preview replies on returned top-level messages. Defaults to true.
+   */
+  includeThreadPreviews?: boolean | null;
+  /**
+   * Maximum number of top-level messages to return. Defaults to 25, maximum 100.
+   */
+  limit?: number | null;
+  /**
+   * Maximum characters to return per message/reply. Defaults to 4000, maximum 16000.
+   */
+  maxCharsPerMessage?: number | null;
+  /**
+   * Anchor message id. Required when windowType is aroundMessage.
+   */
+  messageId?: string | null;
+  /**
+   * Top-level message ids to read. Required when windowType is messages.
+   */
+  messageIds?: string[];
+  /**
+   * Exclusive upper bound for activity timestamps. Required when windowType is timeRange.
+   */
+  to?: string | null;
+  windowType: ChannelMessagesWindowType;
+}
+/**
+ * Response from `ReadChannelMessages`.
+ */
+export interface ReadChannelMessagesResponse {
+  /**
+   * Channel id that was read.
+   */
+  channelId: string;
+  /**
+   * Top-level channel messages in chronological order.
+   */
+  messages: ToolChannelMessage[];
+  navigation: ToolNavigation;
+  /**
+   * Information about omitted or truncated content.
+   */
+  omissions: ToolOmission[];
+  window: ResolvedChannelMessagesWindow;
+}
+/**
+ * Navigation cursors and continuation hints for a bounded result.
+ */
+export interface ToolNavigation {
+  /**
+   * Whether newer messages are known to exist.
+   */
+  hasMoreNewer: boolean;
+  /**
+   * Whether an older cursor was returned.
+   */
+  hasMoreOlder: boolean;
+  /**
+   * Cursor for reading newer items, if available.
+   */
+  newerCursor?: string | null;
+  /**
+   * Cursor for reading older items, if available.
+   */
+  olderCursor?: string | null;
+}
+/**
+ * Resolved window metadata echoed in the response.
+ */
+export interface ResolvedChannelMessagesWindow {
+  /**
+   * Cursor direction for page windows.
+   */
+  direction?: PageDirection | null;
+  /**
+   * Inclusive lower bound for activity timestamps, for time range windows.
+   */
+  from?: string | null;
+  /**
+   * Anchor message id for around-message windows.
+   */
+  messageId?: string | null;
+  /**
+   * Requested message ids for messages windows.
+   */
+  messageIds: string[];
+  /**
+   * Exclusive upper bound for activity timestamps, for time range windows.
+   */
+  to?: string | null;
+  windowType: ChannelMessagesWindowType;
+}
+/**
+ * Read replies from a channel message thread. The messageId may be either the top-level parent message id or any reply id in the thread. Use this after ReadChannelMessages or ContentSearch finds a relevant threaded discussion.
+ */
+export interface ReadChannelThread {
+  /**
+   * Number of replies after replyId for aroundReply windows. Defaults to 10, maximum 50.
+   */
+  after?: number | null;
+  /**
+   * Number of replies before replyId for aroundReply windows. Defaults to 10, maximum 50.
+   */
+  before?: number | null;
+  /**
+   * Channel id containing the thread.
+   */
+  channelId: string;
+  /**
+   * Whether to include nearby top-level channel messages around the parent. Defaults to false.
+   */
+  includeChannelContext?: boolean | null;
+  /**
+   * Maximum number of replies to return for latest/all-if-small windows. Defaults to 25, maximum 100.
+   */
+  limit?: number | null;
+  /**
+   * Maximum characters to return per message/reply. Defaults to 4000, maximum 16000.
+   */
+  maxCharsPerMessage?: number | null;
+  /**
+   * Parent message id or any reply id in the thread.
+   */
+  messageId: string;
+  /**
+   * Reply id to center around. Required when windowType is aroundReply.
+   */
+  replyId?: string | null;
+  /**
+   * Thread window to read: latest, allIfSmall, or aroundReply. Defaults to latest.
+   */
+  windowType?: ChannelThreadWindowType | null;
+}
+/**
+ * Metadata about the thread being read.
+ */
+export interface ReadChannelThreadInfo {
+  /**
+   * Channel id containing the thread.
+   */
+  channelId: string;
+  /**
+   * Timestamp of the latest reply, if any.
+   */
+  latestReplyAt?: string | null;
+  parent: ToolChannelMessage;
+  /**
+   * Total number of replies in this thread.
+   */
+  replyCount: number;
+  /**
+   * Thread id, equal to the top-level parent message id.
+   */
+  threadId: string;
+}
+/**
+ * Response from `ReadChannelThread`.
+ */
+export interface ReadChannelThreadResponse {
+  anchor: ToolResolvedMessage;
+  /**
+   * Nearby top-level channel messages around the parent, when requested.
+   */
+  channelContext?: ToolChannelMessage[] | null;
+  /**
+   * Information about omitted or truncated content.
+   */
+  omissions: ToolOmission[];
+  /**
+   * Replies returned for the requested window, in chronological order.
+   */
+  replies: ToolThreadReply[];
+  thread: ReadChannelThreadInfo;
+}
+/**
  * Retrieve a chat thread's message history by its ID. Returns the conversation title and messages with their roles, content, and attachment references.
  */
 export interface ReadChat {
@@ -1331,19 +1857,6 @@ export interface ReadResponse {
   content: ReadThreadReadContent;
 }
 /**
- * Retrieve an email thread and its messages. Returns the thread metadata and message contents including sender, recipients, subject, and body text. Use this to read the contents of a specific email conversation.
- */
-export interface GetThread {
-  /**
-   * Maximum number of messages to return (default 10).
-   */
-  limit?: number | null;
-  /**
-   * The ID of the email thread to retrieve.
-   */
-  threadId: string;
-}
-/**
  * Read threaded content by ID(s). Supports reading channels, chats, and projects by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s). For documents, use ReadContent or ReadMetadata instead.
  *     Channel transcripts only include the latest 150 messages. Use 'messages_since' to see messages in a different time window.
  */
@@ -1471,7 +1984,7 @@ export interface SetEntityPropertyResponse {
   success: boolean;
 }
 /**
- * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, and call tools. Use this for tasks that require multiple tool calls or independent research.
+ * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.
  */
 export interface Subagent {
   /**

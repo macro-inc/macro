@@ -31,7 +31,7 @@ function ToggleButton(props: ToggleButtonProps) {
             {props.getExpandTextFn(props.itemsLength - props.visibleCount)}
           </Show>
         </button>
-        <div class="border-t border-edge-muted/50 grow" />
+        <div class="border-t border-edge-muted grow" />
       </div>
     </Show>
   );

@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
         ChannelAttachmentType, ChannelMessage, ChannelMessageFilters, ChannelParticipant,
-        MessagePageDirection, ThreadInfo, ThreadReply, TopLevelMessageRow,
+        MessagePageDirection, ResolvedChannelMessage, ThreadInfo, ThreadReply, TopLevelMessageRow,
     },
     ports::{
         ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult,
@@ -356,5 +356,18 @@ where
             .collect();
 
         Ok(replies)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn resolve_message(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<ResolvedChannelMessage, ChannelMessagesErr> {
+        self.repo
+            .resolve_message(channel_id, message_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(ChannelMessagesErr::MessageNotFound(message_id))
     }
 }

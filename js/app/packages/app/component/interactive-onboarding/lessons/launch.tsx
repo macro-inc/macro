@@ -46,8 +46,19 @@ function LaunchDemo() {
   return (
     <div class="h-full w-full flex items-center justify-center px-8 @container">
       <div class="h-full w-full flex flex-col items-center justify-center gap-6">
-        <AppStoreQr class="w-[50cqw] h-[50cqw] text-accent" />
-        <p class="text-ink font-medium">Download on the App Store</p>
+        <AppStoreQr class="w-[50cqw] h-[50cqw]" />
+        <p class="text-ink font-medium text-center">
+          Download on the
+          <br />
+          <a
+            href="https://apps.apple.com/us/app/macro-app/id6743133649"
+            rel="noopener noreferrer"
+            class="underline"
+            target="_blank"
+          >
+            App Store
+          </a>
+        </p>
       </div>
     </div>
   );

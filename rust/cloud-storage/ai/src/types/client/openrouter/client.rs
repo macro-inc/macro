@@ -6,7 +6,7 @@ use crate::types::{
 };
 
 use async_openai::Client as OpenAiClient;
-use async_openai::types::{CreateChatCompletionRequest, CreateChatCompletionStreamResponse};
+use async_openai::types::chat::{CreateChatCompletionRequest, CreateChatCompletionStreamResponse};
 use futures::StreamExt;
 
 #[derive(Clone)]

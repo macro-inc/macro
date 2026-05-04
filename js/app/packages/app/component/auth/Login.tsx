@@ -178,7 +178,7 @@ export function Login() {
         </div>
 
         <div class="w-full max-w-105 login-card">
-          <Panel>
+          <Panel depth={1}>
             <div class="login-stagger">
               <div
                 class={cn(

@@ -36,6 +36,7 @@ import { windowSearchMatch } from '@core/util/searchHighlight';
 import { TailSpinner } from '@core/component/TailSpinner';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import { Layer } from '@ui';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -52,16 +53,18 @@ export function MobileSearchOuter() {
   return (
     <Dialog open={SearchState.isOpen()} onOpenChange={SearchState.setIsOpen}>
       <Dialog.Portal>
-        <Dialog.Content
-          class={cn(
-            'fixed inset-0 z-modal flex flex-col h-[calc(var(--dvh,1dvh)*100)] pt-(--safe-top) pl-(--safe-left) pr-(--safe-right)',
-            {
-              'pb-(--safe-bottom)': !virtualKeyboardVisible(),
-            }
-          )}
-        >
-          <MobileSearchInner />
-        </Dialog.Content>
+        <Layer depth={2}>
+          <Dialog.Content
+            class={cn(
+              'fixed inset-0 z-modal flex flex-col h-[calc(var(--dvh,1dvh)*100)] pt-(--safe-top) pl-(--safe-left) pr-(--safe-right)',
+              {
+                'pb-(--safe-bottom)': !virtualKeyboardVisible(),
+              }
+            )}
+          >
+            <MobileSearchInner />
+          </Dialog.Content>
+        </Layer>
       </Dialog.Portal>
     </Dialog>
   );
@@ -388,7 +391,7 @@ function CategoryFilterTabs() {
           SearchState.setCategoryFilter(value as CategoryFilter);
         }
       }}
-      class="border-b border-edge-muted/50"
+      class="border-b border-edge-muted"
     >
       <div class="relative">
         <ScrollIndicators
@@ -406,7 +409,7 @@ function CategoryFilterTabs() {
               <Tabs.Trigger
                 value={category.id}
                 class={cn(
-                  'px-2 py-1 text-xs border first:border-l border-l-0 border-edge-muted/50 font-semibold',
+                  'px-2 py-1 text-xs border first:border-l border-l-0 border-edge-muted font-semibold',
                   SearchState.categoryFilter() === category.id
                     ? 'text-ink pattern bg-edge-muted'
                     : 'text-ink-muted/70 hover:text-ink hover:bg-hover'

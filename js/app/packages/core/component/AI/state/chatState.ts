@@ -1,5 +1,5 @@
 import type { ChatMessageWithAttachments } from '@core/component/AI/types';
-import type { ChatAttachmentWithName } from '@service-cognition/generated/schemas';
+import type { Entity } from '@service-cognition/generated/schemas/entity';
 import { match, P } from 'ts-pattern';
 
 // --- Phases ---
@@ -22,7 +22,7 @@ export type ChatEvent =
       type: 'stream_user_message';
       messageId: string;
       content: string;
-      attachments: ChatAttachmentWithName[];
+      attachments: Entity[];
     }
   | {
       type: 'stream_done';

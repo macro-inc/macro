@@ -3,7 +3,7 @@ import logging
 import os
 import uuid
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from dotenv import load_dotenv
@@ -70,6 +70,20 @@ class Transcriber(Agent):
         # Word counts per Deepgram speaker int, accumulated across final
         # transcripts inside a single user turn and cleared on turn completion.
         self._pending_speakers: Counter[int] = Counter()
+        # Wall-clock estimate of the STT stream's t=0 (the moment Deepgram
+        # began consuming this participant's audio). Each FINAL gives us
+        # an upper bound — `now() - words[-1].end_time` is at most
+        # `true_t0 + final_delivery_lag` — so the MIN across FINALs
+        # converges to the true value. Used to translate Deepgram's
+        # stream-relative word offsets into absolute UTC for segment
+        # timestamps and to anchor the recording timeline on the server.
+        self._stream_t0_wall: datetime | None = None
+        # Min/max Deepgram-stream-relative word offsets (seconds) seen
+        # across FINALs within the current turn. Combined with
+        # `_stream_t0_wall` these give started_at/ended_at without baking
+        # in FINAL-delivery lag.
+        self._pending_first_word_offset: float | None = None
+        self._pending_last_word_offset: float | None = None
         # Deepgram's speaker ints are only unique within one streaming session.
         # Namespace them with a nonce regenerated per Transcriber so a reconnect
         # doesn't silently merge two different humans under the same UUID.
@@ -94,25 +108,73 @@ class Transcriber(Agent):
                 event.type == stt_pkg.SpeechEventType.FINAL_TRANSCRIPT
             ):
                 alt = event.alternatives[0] if event.alternatives else None
-                for word in getattr(alt, "words", None) or ():
-                    speaker = getattr(word, "speaker", None)
-                    if speaker is None:
-                        speaker = getattr(word, "speaker_id", None)
-                    if speaker is not None:
-                        self._pending_speakers[int(speaker)] += 1
+                words = list(getattr(alt, "words", None) or ())
+                if words:
+                    first_offset = words[0].start_time
+                    last_offset = words[-1].end_time
+
+                    # Refine stream-t0 estimate. `now() - last_word.end_time`
+                    # bounds true_t0 from above (because now() arrives at
+                    # least final_delivery_lag after the last word ended);
+                    # the MIN across FINALs is our best estimate.
+                    implied_t0 = datetime.now(timezone.utc) - timedelta(
+                        seconds=last_offset
+                    )
+                    if (
+                        self._stream_t0_wall is None
+                        or implied_t0 < self._stream_t0_wall
+                    ):
+                        self._stream_t0_wall = implied_t0
+
+                    if (
+                        self._pending_first_word_offset is None
+                        or first_offset < self._pending_first_word_offset
+                    ):
+                        self._pending_first_word_offset = first_offset
+                    if (
+                        self._pending_last_word_offset is None
+                        or last_offset > self._pending_last_word_offset
+                    ):
+                        self._pending_last_word_offset = last_offset
+
+                    for word in words:
+                        speaker = getattr(word, "speaker", None)
+                        if speaker is None:
+                            speaker = getattr(word, "speaker_id", None)
+                        if speaker is not None:
+                            self._pending_speakers[int(speaker)] += 1
             yield event
 
     async def on_user_turn_completed(
         self, chat_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ):
         content = new_message.text_content
+        # Snapshot pending state and clear unconditionally so an empty-content
+        # turn (e.g. VAD ended a turn with no final text) can't leak word
+        # offsets or speaker counts into the next turn's accumulators.
+        first_word_offset = self._pending_first_word_offset
+        last_word_offset = self._pending_last_word_offset
+        pending_speakers = self._pending_speakers
+        self._pending_first_word_offset = None
+        self._pending_last_word_offset = None
+        self._pending_speakers = Counter()
+
         if content:
-            message_time = datetime.now(timezone.utc)
-            if new_message.created_at is not None:
-                message_time = datetime.fromtimestamp(
-                    new_message.created_at, tz=timezone.utc
+            now = datetime.now(timezone.utc)
+            if (
+                self._stream_t0_wall is not None
+                and first_word_offset is not None
+                and last_word_offset is not None
+            ):
+                started_at = self._stream_t0_wall + timedelta(
+                    seconds=first_word_offset
                 )
-            timestamp = message_time.isoformat()
+                ended_at = self._stream_t0_wall + timedelta(
+                    seconds=last_word_offset
+                )
+            else:
+                started_at = now
+                ended_at = now
 
             extra = new_message.extra if isinstance(new_message.extra, dict) else {}
             source_id = (
@@ -121,23 +183,32 @@ class Transcriber(Agent):
                 or new_message.id
             )
             segment_seed = (
-                f"{self.channel_id}:{self.participant_identity}:{source_id}:{timestamp}"
+                f"{self.channel_id}:{self.participant_identity}:{source_id}:"
+                f"{started_at.isoformat()}"
             )
             segment_id = str(uuid.uuid5(uuid.NAMESPACE_URL, segment_seed))
 
             diarized_speaker_id = None
-            if self._pending_speakers:
-                dominant_speaker, _ = self._pending_speakers.most_common(1)[0]
+            if pending_speakers:
+                dominant_speaker, _ = pending_speakers.most_common(1)[0]
                 diarized_speaker_id = self._resolve_diarized_speaker_id(dominant_speaker)
-            self._pending_speakers.clear()
 
             segment = {
                 "segmentId": segment_id,
                 "speakerId": self.participant_identity,
                 "diarizedSpeakerId": diarized_speaker_id,
                 "content": content,
-                "startedAt": timestamp,
-                "endedAt": timestamp,
+                "startedAt": started_at.isoformat(),
+                "endedAt": ended_at.isoformat(),
+                # Sent so the server can anchor `recording_started_at` to
+                # the earliest first-audio-frame instant across participants
+                # rather than the egress webhook envelope time (which fires
+                # before any audio is captured).
+                "streamStartedAt": (
+                    self._stream_t0_wall.isoformat()
+                    if self._stream_t0_wall is not None
+                    else None
+                ),
                 "isFinal": True,
             }
             max_attempts = 3

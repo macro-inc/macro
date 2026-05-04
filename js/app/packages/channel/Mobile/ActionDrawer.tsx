@@ -213,7 +213,7 @@ export function ActionDrawer() {
                       type="button"
                       title={`React ${emoji}`}
                       aria-label={`React ${emoji}`}
-                      class="size-12 flex items-center justify-center bg-edge/30 rounded-full text-[28px]"
+                      class="size-12 flex items-center justify-center bg-edge rounded-full text-[28px]"
                       onClick={(event) => handleReaction(emoji, event)}
                     >
                       {emoji}
@@ -224,7 +224,7 @@ export function ActionDrawer() {
                   type="button"
                   title="More reactions"
                   aria-label="More reactions"
-                  class="size-12 bg-edge/30 rounded-full flex items-center justify-center text-ink-muted"
+                  class="size-12 bg-edge rounded-full flex items-center justify-center text-ink-muted"
                   onClick={() => setShowEmojiSearch(true)}
                 >
                   {renderIcon(SmileyIcon, 'size-[28px]')}
@@ -240,7 +240,7 @@ export function ActionDrawer() {
                     <button
                       type="button"
                       data-message-action={action.id}
-                      class="flex items-center gap-3 px-4 py-3 text-sm text-ink hover:bg-hover hover-transition-bg text-left not-last:border-b border-page"
+                      class="flex items-center gap-3 px-4 py-3 text-sm text-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-panel"
                       ref={(el) => {
                         const getTarget = action.getFocusTarget;
                         if (getTarget) focusInput(el, () => ({ getTarget }));
@@ -265,7 +265,7 @@ export function ActionDrawer() {
                     <button
                       type="button"
                       data-message-action={action.id}
-                      class="flex items-center gap-3 px-4 py-3 text-sm text-failure-ink hover:bg-hover hover-transition-bg text-left not-last:border-b border-panel"
+                      class="flex items-center gap-3 px-4 py-3 text-sm text-failure-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-panel"
                       ref={(el) => {
                         const getTarget = action.getFocusTarget;
                         if (getTarget) focusInput(el, () => ({ getTarget }));

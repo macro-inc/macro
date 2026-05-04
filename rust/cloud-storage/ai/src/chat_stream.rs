@@ -2,7 +2,7 @@
 use crate::types::OpenRouterClient;
 use crate::types::{ChatCompletionRequest, ChatStreamCompletionResponse};
 use anyhow::{Context, Result};
-use async_openai::types::CreateChatCompletionRequest;
+use async_openai::types::chat::CreateChatCompletionRequest;
 use futures::{Stream, StreamExt};
 use std::pin::Pin;
 

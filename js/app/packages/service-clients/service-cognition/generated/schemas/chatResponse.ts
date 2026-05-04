@@ -4,33 +4,21 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { ChatAttachmentWithName } from './chatAttachmentWithName';
+
 import type { ChatMessageWithAttachments } from './chatMessageWithAttachments';
 import type { ChatResponseCreatedAt } from './chatResponseCreatedAt';
 import type { ChatResponseModel } from './chatResponseModel';
 import type { ChatResponseProjectId } from './chatResponseProjectId';
-import type { ChatResponseTokenCount } from './chatResponseTokenCount';
 import type { ChatResponseUpdatedAt } from './chatResponseUpdatedAt';
-import type { ChatResponseWebCitationsItemItem1Item } from './chatResponseWebCitationsItemItem1Item';
-import type { Model } from './model';
 
 /**
  * The full chat response, matching the DCS API response shape.
  */
 export interface ChatResponse {
-  /**
-   * Attachment context — attachments not attached to messages.
-   * @deprecated
-   */
-  attachments: ChatAttachmentWithName[];
-  /** Available models for the chat. */
-  availableModels: Model[];
   /** The time the chat was created. */
   createdAt?: ChatResponseCreatedAt;
   /** The chat uuid. */
   id: string;
-  /** Whether the chat is persistent or not. */
-  isPersistent: boolean;
   /** The messages in the chat. */
   messages: ChatMessageWithAttachments[];
   model?: ChatResponseModel;
@@ -38,12 +26,8 @@ export interface ChatResponse {
   name: string;
   /** The project id the chat belongs to. */
   projectId?: ChatResponseProjectId;
-  /** Current number of tokens in the chat. */
-  tokenCount?: ChatResponseTokenCount;
   /** The time the chat was last updated. */
   updatedAt?: ChatResponseUpdatedAt;
   /** Who the chat belongs to. */
   userId: string;
-  /** Message ID to web citation list. */
-  webCitations: [string, ChatResponseWebCitationsItemItem1Item[]][];
 }

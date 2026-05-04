@@ -11,6 +11,7 @@ import { useUserContext } from '@core/context/user';
 import { Tabs, type TabItem } from '@core/component/Tabs';
 import { batch, createMemo, For, Match, Switch } from 'solid-js';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Layer } from '@ui';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
@@ -166,24 +167,26 @@ export const CollapsedSoupViewTabs = () => {
         <ChevronDownIcon class="size-3 shrink-0" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-sm p-1">
-          <For each={list()}>
-            {(item) => (
-              <DropdownMenu.Item
-                class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-                classList={{
-                  'font-semibold': activeTab() === item.value,
-                }}
-                onSelect={() => {
-                  const view = listView();
-                  if (view) applyTabPreset(view, item.value);
-                }}
-              >
-                {item.label}
-              </DropdownMenu.Item>
-            )}
-          </For>
-        </DropdownMenu.Content>
+        <Layer depth={2}>
+          <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-sm p-1">
+            <For each={list()}>
+              {(item) => (
+                <DropdownMenu.Item
+                  class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
+                  classList={{
+                    'font-semibold': activeTab() === item.value,
+                  }}
+                  onSelect={() => {
+                    const view = listView();
+                    if (view) applyTabPreset(view, item.value);
+                  }}
+                >
+                  {item.label}
+                </DropdownMenu.Item>
+              )}
+            </For>
+          </DropdownMenu.Content>
+        </Layer>
       </DropdownMenu.Portal>
     </DropdownMenu>
   );

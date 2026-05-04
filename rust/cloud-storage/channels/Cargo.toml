@@ -5,9 +5,18 @@ publish = false
 version = "0.1.0"
 
 [features]
+ai_tools = [
+  "dep:ai",
+  "dep:async-trait",
+  "dep:entity_access",
+  "dep:schemars",
+  "entity_access/ports",
+  "ports",
+]
 inbound = [
   "dep:axum",
   "dep:entity_access",
+  "entity_access/inbound",
   "dep:model-error-response",
   "dep:model_user",
   "dep:utoipa",
@@ -21,7 +30,7 @@ ports = ["dep:tokio"]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
-entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["inbound"] }
+entity_access = { path = "../entity_access", optional = true, default-features = false }
 model-error-response = { path = "../model-error-response", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
@@ -33,6 +42,11 @@ tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
+
+# AI Tool dependencies
+ai = { path = "../ai", optional = true }
+async-trait = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
 http-body-util = { workspace = true }

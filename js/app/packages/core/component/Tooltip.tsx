@@ -11,6 +11,7 @@ import {
   createSignal,
 } from 'solid-js';
 import { Hotkey } from './Hotkey';
+import { Layer } from '@ui';
 
 const TOOLTIP_DELAY = 250;
 
@@ -101,9 +102,11 @@ export function Tooltip(props: TooltipProps) {
           }}
         >
           <Show when={!props.unstyled} fallback={tooltipContent()}>
-            <div class="flex items-center justify-center bg-panel p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm border border-edge-muted shadow-md shadow-[#000]/05">
-              {tooltipContent()}
-            </div>
+            <Layer depth={3}>
+              <div class="border-edge bg-panel flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm shadow-md shadow-[#000]/5">
+                {tooltipContent()}
+              </div>
+            </Layer>
           </Show>
           {/* Note disabling arrows for now. I think its more on-brand - seamus */}
           {/*<CorvuTooltip.Arrow />*/}
@@ -156,7 +159,7 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
           <For each={props.hotkeySequence}>
             {(step, ndx) => (
               <>
-                <div class="text-xxs rounded-sm border border-edge-muted px-1.5 py-0.25">
+                <div class="text-xxs rounded-sm border border-edge-muted px-1.5 py-px">
                   <Hotkey
                     token={step.token}
                     shortcut={step.shortcut}
@@ -172,7 +175,7 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
         </div>
       </Show>
       <Show when={hasSingleHotkey()}>
-        <div class="text-xxs rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25">
+        <div class="text-xxs rounded-sm ml-auto border border-edge-muted px-1.5 py-px">
           {props.hotkeyToken
             ? Hotkey({ token: props.hotkeyToken, class: 'flex gap-1' })
             : Hotkey({ shortcut: props.shortcut, class: 'flex gap-1' })}

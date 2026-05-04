@@ -6,6 +6,7 @@
  */
 import type { TranscriptSegmentRequestDiarizedSpeakerId } from './transcriptSegmentRequestDiarizedSpeakerId';
 import type { TranscriptSegmentRequestEndedAt } from './transcriptSegmentRequestEndedAt';
+import type { TranscriptSegmentRequestStreamStartedAt } from './transcriptSegmentRequestStreamStartedAt';
 
 /**
  * A transcript segment from LiveKit Inference STT.
@@ -27,4 +28,10 @@ tracks in a call. `None` when the provider didn't return a speaker label. */
   speakerId: string;
   /** When the speaker started talking for this segment. */
   startedAt: string;
+  /** Wall-clock when the transcriber's STT stream first received audio
+for this participant. The server takes the earliest non-null value
+across all participants and uses it to overwrite the
+`egress_started`-derived `recording_started_at`, which is too early
+(it stamps egress bootstrap, not first audio frame). */
+  streamStartedAt?: TranscriptSegmentRequestStreamStartedAt;
 }

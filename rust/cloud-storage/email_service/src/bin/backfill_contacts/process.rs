@@ -1,10 +1,12 @@
-use model::contacts::ConnectionsMessage;
-use sqs_client::SQS;
+use contacts::domain::ports::ContactsIngress;
+use contacts::domain::service::SqsContactsIngress;
+use contacts::outbound::ingress::SqsContactsQueue;
+use macro_user_id::user_id::MacroUserIdStr;
 
 /// Process contacts for a single macro ID
 pub async fn process_macro_id(
     db_pool: &sqlx::PgPool,
-    sqs_client: &SQS,
+    contacts_ingress: &SqsContactsIngress<SqsContactsQueue>,
     macro_id: &str,
 ) -> anyhow::Result<()> {
     let link = email_db_client::links::get::fetch_link_by_macro_id(db_pool, macro_id)
@@ -23,20 +25,19 @@ pub async fn process_macro_id(
         return Ok(());
     }
 
-    let mut users = vec![link.macro_id.to_string()];
-    users.extend(
-        contact_emails
-            .iter()
-            .map(|email| format!("macro|{}", email)),
-    );
+    let users: std::collections::HashSet<MacroUserIdStr<'static>> =
+        std::iter::once(Ok(link.macro_id.clone()))
+            .chain(
+                contact_emails
+                    .iter()
+                    .map(|email| MacroUserIdStr::try_from_email(email)),
+            )
+            .collect::<Result<_, _>>()?;
 
-    let connections = (1..users.len()).map(|i| (0, i)).collect::<Vec<_>>();
-
-    let connections_message = ConnectionsMessage { users, connections };
-
-    sqs_client
-        .enqueue_contacts_add_connection(connections_message)
-        .await?;
+    contacts_ingress
+        .enqueue_contacts(users)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
     Ok(())
 }

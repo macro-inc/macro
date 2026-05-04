@@ -1,3 +1,7 @@
+use std::collections::HashSet;
+
+use contacts::domain::ports::ContactsIngress;
+
 use crate::api::channels::create_channel::to_lowercase;
 use crate::api::context::{AppState, ChannelImpl};
 use crate::api::extractors::{
@@ -129,13 +133,17 @@ pub async fn handler(
             .iter()
             .map(|p| p.user_id.to_string())
             .collect();
-        let sqs_client = &ctx.sqs_client;
-        sqs_client
-            .enqueue_contacts_add_participants(
-                participants.clone(),
-                channel_participants,
-                &channel_id.to_string(),
-            )
+        let contacts_users = [participants.clone(), channel_participants]
+            .concat()
+            .into_iter()
+            .map(MacroUserIdStr::try_from)
+            .collect::<Result<HashSet<_>, _>>()
+            .map_err(|e| {
+                tracing::error!(error=?e, "invalid user id for contacts");
+                (StatusCode::BAD_REQUEST, "invalid user id".to_string())
+            })?;
+        ctx.contacts_ingress
+            .enqueue_contacts(contacts_users)
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to create 'add participant' SQS message");

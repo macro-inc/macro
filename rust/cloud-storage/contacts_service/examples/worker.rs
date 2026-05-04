@@ -1,7 +1,10 @@
 use anyhow::Context;
-use contacts_service::queue::MessageQueue;
+use contacts::domain::service::ContactsDomainService;
+use contacts::inbound::worker::ContactsWorker;
+use contacts::outbound::repository::DbContactsRepository;
 use macro_entrypoint::MacroEntrypoint;
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,7 +30,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .context("could not connect to db")?;
 
-    let mut worker = MessageQueue::new(sqs, db, None);
+    let repository = DbContactsRepository::new(db);
+    let notifier: Option<contacts::outbound::gateway::ConnectionGatewayNotifier> = None;
+    let service = Arc::new(ContactsDomainService {
+        repository,
+        notifier,
+    });
+    let worker = ContactsWorker::new(sqs, service);
     worker.poll().await;
     Ok(())
 }

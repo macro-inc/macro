@@ -19,6 +19,7 @@ import {
 } from '@core/util/create';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Layer } from '@ui';
 import PlusIcon from '@icon/regular/plus.svg';
 import { createProject } from '@queries/storage/projects';
 import { type Component, createSignal, For } from 'solid-js';
@@ -345,7 +346,9 @@ export function ProjectCreateMenu(props: { id: string }) {
         </DropdownMenu.Trigger>
       </div>
       <DropdownMenu.Portal>
-        <MenuContent projectId={props.id} />
+        <Layer depth={2}>
+          <MenuContent projectId={props.id} />
+        </Layer>
       </DropdownMenu.Portal>
     </DropdownMenu>
   );

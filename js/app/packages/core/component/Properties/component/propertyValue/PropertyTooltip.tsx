@@ -94,7 +94,7 @@ const TooltipWrapper = (props: {
         <div
           class="flex items-center gap-2 text-ink-muted"
           classList={{
-            'border-b border-edge-muted/50 pb-1.5 mb-1.5': !singleSelect(),
+            'border-b border-edge-muted pb-1.5 mb-1.5': !singleSelect(),
           }}
         >
           <PropertyDataTypeIcon

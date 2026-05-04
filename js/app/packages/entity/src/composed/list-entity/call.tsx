@@ -9,7 +9,7 @@ import { formatCallDuration } from '@block-call/utils';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { AttendanceBadge } from '../../components/Badges';
-import { CallChannelName } from '../../components/CallChannelName';
+import { CallRecordName } from '../../components/CallRecordName';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
 import { SearchSender } from '../../extractors-search/search-sender';
@@ -81,7 +81,7 @@ export function CallNarrowBody(props: {
         when={hit()}
         fallback={
           <span class="text-ink-muted text-xs truncate">
-            <CallChannelName entity={props.entity} />
+            <CallRecordName entity={props.entity} />
           </span>
         }
       >
@@ -117,6 +117,13 @@ export function CallNarrowBody(props: {
           <AttendanceBadge attended={props.entity.attended} />
         </Show>
       </span>
+      <Show when={!hit() && props.entity.summary}>
+        {(summary) => (
+          <span class="text-ink/50 font-normal truncate text-xs">
+            {summary()}
+          </span>
+        )}
+      </Show>
     </Entity.Slot>
   );
 }
@@ -130,19 +137,28 @@ export function CallWideContent(props: {
   return (
     <>
       <span class="truncate">
-        <CallChannelName entity={props.entity} />
+        <CallRecordName entity={props.entity} />
       </span>
       <Show
         when={hit()}
         fallback={
-          <span class="text-ink-extra-muted font-medium truncate">
-            <Show
-              when={props.entity.durationMs}
-              fallback={props.entity.isActive ? 'In progress' : ''}
-            >
-              {(ms) => formatCallDuration(ms())}
+          <>
+            <span class="text-ink-extra-muted font-medium truncate shrink-0">
+              <Show
+                when={props.entity.durationMs}
+                fallback={props.entity.isActive ? 'In progress' : ''}
+              >
+                {(ms) => formatCallDuration(ms())}
+              </Show>
+            </span>
+            <Show when={props.entity.summary}>
+              {(summary) => (
+                <span class="text-ink/50 font-medium truncate flex-1 min-w-0">
+                  {summary()}
+                </span>
+              )}
             </Show>
-          </span>
+          </>
         }
       >
         {(h) => (
@@ -161,7 +177,7 @@ export function CallWideContent(props: {
             </span>
             <div
               ref={props.setContainerRef}
-              class="text-ink/50 font-medium flex-1 min-w-0 overflow-hidden"
+              class="text-ink/50 font-medium flex-1 min-w-0 truncate"
             >
               <HitSnippet content={h().content} chars={props.chars} />
             </div>

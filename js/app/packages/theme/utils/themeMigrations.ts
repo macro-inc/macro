@@ -1,4 +1,4 @@
-import type { ThemeV0, ThemeV1 } from '../types/themeTypes';
+import type { ThemeV0, ThemeV1, ThemeV2 } from '../types/themeTypes';
 
 export function convertThemev0v1(theme: ThemeV0): ThemeV1 {
   return {
@@ -21,6 +21,36 @@ export function convertThemev0v1(theme: ThemeV0): ThemeV1 {
       c2: { l: theme.specification['--contrast-l-2'], c: theme.specification['--contrast-c'], h:  theme.specification['--contrast-h']            },
       c3: { l: theme.specification['--contrast-l-3'], c: theme.specification['--contrast-c'], h:  theme.specification['--contrast-h']            },
       c4: { l: theme.specification['--contrast-l-4'], c: theme.specification['--contrast-c'], h:  theme.specification['--contrast-h']            },
+    },
+  };
+}
+
+export function convertThemev1v2(theme: ThemeV1): ThemeV2 {
+  const [b0, b1, b2, b3, b4] = [
+    theme.tokens.b0,
+    theme.tokens.b1,
+    theme.tokens.b2,
+    theme.tokens.b3,
+    theme.tokens.b4,
+  ].sort((x, y) => x.l - y.l);
+
+  const [c0, c1, c2, c3, c4] = [
+    theme.tokens.c0,
+    theme.tokens.c1,
+    theme.tokens.c2,
+    theme.tokens.c3,
+    theme.tokens.c4,
+  ].sort((x, y) => (b0.l < 0.5 ? y.l - x.l : x.l - y.l));
+
+  return {
+    id: theme.id,
+    name: theme.name,
+    version: 2,
+    depth: 0.15,
+    tokens: {
+      ...theme.tokens,
+      b0, b1, b2, b3, b4,
+      c0, c1, c2, c3, c4,
     },
   };
 }
