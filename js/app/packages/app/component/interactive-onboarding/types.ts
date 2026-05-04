@@ -35,6 +35,10 @@ export interface LessonContentProps {
   scopeId: string;
   /** Programmatically mark the current lesson complete and advance to the next one. */
   advance: () => void;
+  /** Skip a specific lesson by ID without navigating to it. */
+  skipLesson: (id: LessonId) => void;
+  /** Navigate to a specific lesson by ID (un-skips it so it becomes current). */
+  goToLesson: (id: LessonId) => void;
 }
 
 export interface LessonState {

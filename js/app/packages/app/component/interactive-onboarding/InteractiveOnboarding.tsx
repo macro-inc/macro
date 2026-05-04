@@ -537,6 +537,8 @@ function InteractiveOnboardingInner() {
                             onComplete={handleLessonComplete}
                             onUnready={handleLessonUnready}
                             advance={advanceLesson}
+                            skipLesson={state.skipLesson}
+                            goToLesson={state.goToLessonById}
                             isActive={true}
                             scopeId={scopeId}
                           />
@@ -549,6 +551,8 @@ function InteractiveOnboardingInner() {
                                 onComplete={handleLessonComplete}
                                 onUnready={handleLessonUnready}
                                 advance={advanceLesson}
+                                skipLesson={state.skipLesson}
+                                goToLesson={state.goToLessonById}
                                 isActive={true}
                                 scopeId={scopeId}
                               />
@@ -573,6 +577,8 @@ function InteractiveOnboardingInner() {
                                   onComplete={handleLessonComplete}
                                   onUnready={handleLessonUnready}
                                   advance={advanceLesson}
+                                  skipLesson={state.skipLesson}
+                                  goToLesson={state.goToLessonById}
                                   isActive={true}
                                   scopeId={scopeId}
                                 />
@@ -611,6 +617,8 @@ function InteractiveOnboardingInner() {
                           onComplete={handleLessonComplete}
                           onUnready={handleLessonUnready}
                           advance={advanceLesson}
+                          skipLesson={state.skipLesson}
+                          goToLesson={state.goToLessonById}
                           isActive={true}
                           scopeId={scopeId}
                         />
@@ -633,6 +641,8 @@ function InteractiveOnboardingInner() {
                                 onComplete={handleLessonComplete}
                                 onUnready={handleLessonUnready}
                                 advance={advanceLesson}
+                                skipLesson={state.skipLesson}
+                                goToLesson={state.goToLessonById}
                                 isActive={true}
                                 scopeId={scopeId}
                               />
@@ -675,6 +685,8 @@ function InteractiveOnboardingInner() {
                             onComplete={handleLessonComplete}
                             onUnready={handleLessonUnready}
                             advance={advanceLesson}
+                            skipLesson={state.skipLesson}
+                            goToLesson={state.goToLessonById}
                             isActive={true}
                             scopeId={scopeId}
                           />
