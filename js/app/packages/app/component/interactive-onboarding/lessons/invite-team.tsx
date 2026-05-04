@@ -20,6 +20,7 @@ import {
 import { useEmail } from '@core/context/user';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import { useAnalytics } from '@app/component/analytics-context';
+import { useOnboarding } from '../onboarding-context';
 
 const inviteFormSchema = z.object({
   teamName: z
@@ -50,10 +51,20 @@ type FormErrors = {
 
 function InviteTeamDemo(props: LessonContentProps) {
   const analytics = useAnalytics();
+  const onboarding = useOnboarding();
 
   const [teamName, setTeamName] = createSignal('');
   const [emails, setEmails] = createSignal<string[]>(['']);
   const [errors, setErrors] = createSignal<FormErrors>({});
+
+  // Sync valid emails to onboarding context for cost calculation
+  // Default invited members to Level 1 (haiku) tier
+  createEffect(() => {
+    const validMembers = emails()
+      .filter((e) => e.trim() !== '' && z.string().email().safeParse(e).success)
+      .map((email) => ({ email, tier: 'haiku' as const }));
+    onboarding.setInvitedMembers(validMembers);
+  });
 
   const createTeamMutation = useCreateTeamWithInvitesMutation({
     onSettled: () => invalidateUserTeams(),
@@ -373,10 +384,17 @@ function InviteTeamDemo(props: LessonContentProps) {
 }
 
 function BackAction(props: LessonContentProps) {
+  const onboarding = useOnboarding();
+
+  const handleBack = () => {
+    onboarding.setInvitedMembers([]);
+    props.goToLesson('team-choice');
+  };
+
   return (
     <button
       type="button"
-      onClick={() => props.goToLesson('team-choice')}
+      onClick={handleBack}
       class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center gap-2 text-ink/40 hover:text-ink hover:bg-ink/5 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel"
     >
       <ArrowLeftIcon class="size-5" />

@@ -9,6 +9,7 @@ import { aboutUsLesson } from './about-us';
 import { choosePlanLesson } from './choose-plan';
 import { teamChoiceLesson } from './team-choice';
 import { inviteTeamLesson } from './invite-team';
+import { reviewPayLesson } from './review-pay';
 import { launchLesson } from './launch';
 
 export const LESSONS: LessonDefinition[] = [
@@ -22,5 +23,6 @@ export const LESSONS: LessonDefinition[] = [
   choosePlanLesson,
   teamChoiceLesson,
   inviteTeamLesson,
+  reviewPayLesson,
   launchLesson,
 ];

@@ -37,6 +37,8 @@ import { isOk } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
+import { OnboardingProvider, useOnboarding } from './onboarding-context';
+import { PLANS } from '@app/component/paywall/plans';
 
 export default function InteractiveOnboarding() {
   const isAuthenticated = useIsAuthenticated();
@@ -87,7 +89,89 @@ export default function InteractiveOnboarding() {
         </Show>
       }
     >
-      <InteractiveOnboardingInner />
+      <OnboardingProvider>
+        <InteractiveOnboardingInner />
+      </OnboardingProvider>
+    </Show>
+  );
+}
+
+function OnboardingCostSummary() {
+  const onboarding = useOnboarding();
+
+  const selectedPlan = () => {
+    const tier = onboarding.selectedPlan();
+    return PLANS.find((p) => p.tier === tier);
+  };
+
+  // Group all seats (user + team) by tier
+  const seatsByTier = () => {
+    const groups: Record<string, { plan: (typeof PLANS)[number]; count: number }> = {};
+
+    // Add user's seat
+    const userTier = onboarding.selectedPlan();
+    if (userTier) {
+      const plan = PLANS.find((p) => p.tier === userTier);
+      if (plan) {
+        groups[userTier] = { plan, count: 1 };
+      }
+    }
+
+    // Add team members' seats
+    for (const member of onboarding.invitedMembers()) {
+      const plan = PLANS.find((p) => p.tier === member.tier);
+      if (plan) {
+        if (groups[member.tier]) {
+          groups[member.tier].count++;
+        } else {
+          groups[member.tier] = { plan, count: 1 };
+        }
+      }
+    }
+
+    // Sort by price descending
+    return Object.values(groups).sort((a, b) => b.plan.price - a.plan.price);
+  };
+
+  const teamByTier = () => {
+    const groups: Record<string, { plan: (typeof PLANS)[number]; count: number }> = {};
+    for (const member of onboarding.invitedMembers()) {
+      const plan = PLANS.find((p) => p.tier === member.tier);
+      if (plan) {
+        if (groups[member.tier]) {
+          groups[member.tier].count++;
+        } else {
+          groups[member.tier] = { plan, count: 1 };
+        }
+      }
+    }
+    return Object.values(groups).sort((a, b) => b.plan.price - a.plan.price);
+  };
+
+  return (
+    <Show when={selectedPlan() && selectedPlan()!.price > 0}>
+      <div class="px-4 py-3 border-t border-ink/10">
+        <div class="flex items-baseline gap-1">
+          <span class="text-3xl font-bold text-accent">
+            ${onboarding.totalCost()}
+          </span>
+          <span class="text-ink/40">/mo</span>
+        </div>
+        <div class="flex flex-col gap-0.5 mt-2 text-xs text-ink/50">
+          <div class="flex justify-between">
+            <span>Your {selectedPlan()?.name} seat</span>
+            <span>${onboarding.userSeatCost()}</span>
+          </div>
+          {teamByTier().map((group) => (
+            <div class="flex justify-between">
+              <span>
+                {group.plan.name} team {group.count === 1 ? 'seat' : 'seats'} ×{group.count}
+              </span>
+              <span>${group.plan.price * group.count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </Show>
   );
 }
@@ -655,6 +739,9 @@ function InteractiveOnboardingInner() {
                         </div>
                       </Show>
                     </div>
+
+                    {/* Cost Summary */}
+                    <OnboardingCostSummary />
 
                     {/* Footer */}
                     <div class="flex flex-col gap-3 px-4 py-3 border-t border-ink/10">

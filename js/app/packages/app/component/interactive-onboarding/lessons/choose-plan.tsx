@@ -1,10 +1,8 @@
-import { onMount, createSignal } from 'solid-js';
+import { onMount } from 'solid-js';
 import type { LessonContentProps, LessonDefinition } from '../types';
-import { stripeServiceClient } from '@service-stripe/client';
-import { useAnalytics } from '@app/component/analytics-context';
-import { toast } from '@core/component/Toast/Toast';
 import { PlanGrid } from '@app/component/paywall/PlanGrid';
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import type { PlanTier } from '@app/component/paywall/plans';
+import { useOnboarding } from '../onboarding-context';
 
 function ChoosePlanContent(props: LessonContentProps) {
   onMount(() => props.onComplete());
@@ -17,41 +15,18 @@ function ChoosePlanContent(props: LessonContentProps) {
 }
 
 function ChoosePlanDemo(props: LessonContentProps) {
-  const analytics = useAnalytics();
-  const [loading, setLoading] = createSignal<string | null>(null);
+  const { setSelectedPlan } = useOnboarding();
 
-  const handleCheckout = async (tier: string) => {
-    if (loading()) return;
+  const handleSelectPlan = (tier: PlanTier) => {
+    setSelectedPlan(tier);
+
     if (tier === 'free') {
-      // Free bypasses Stripe, so fire subscription_success directly here to
-      // stay symmetric with the paid path (which fires it on Stripe return
-      // via Root.tsx's ?subscriptionSuccess handler).
-      analytics.track('subscription_success', { type: tier });
-      // Advance to the launch step rather than leaving onboarding.
-      props.advance();
-      return;
+      props.skipLesson('team-choice');
+      props.skipLesson('invite-team');
+      props.skipLesson('review-pay');
     }
-    setLoading(tier);
-    try {
-      // Return to the onboarding (not /app) on success so the launch step renders.
-      // `subscriptionSuccess` triggers the `completeOnParam` hook on this lesson, which
-      // pre-marks choose-plan complete in the state machine — the user lands on launch.
-      const successUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?subscriptionSuccess=true&type=${tier}`;
-      const url = await stripeServiceClient.createCheckoutSession({
-        tier,
-        successUrl,
-      });
-      analytics.track('subscription_start', { type: tier });
-      // Fire the lesson's completion analytics before leaving so the paid path
-      // has parity with the free branch. `advance()` also bumps the state machine,
-      // but we're redirecting immediately — on return, `completeOnParam` takes over.
-      props.advance();
-      window.location.href = url;
-    } catch (error) {
-      console.error('Checkout error:', error);
-      toast.failure('Failed to start checkout. Please try again.');
-      setLoading(null);
-    }
+
+    props.advance();
   };
 
   return (
@@ -62,21 +37,15 @@ function ChoosePlanDemo(props: LessonContentProps) {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              handleCheckout(plan.tier);
+              handleSelectPlan(plan.tier);
             }}
-            disabled={loading() !== null}
             class="w-full py-2 rounded-xs text-base font-semibold"
             classList={{
               'bg-accent text-panel': !!plan.highlighted,
               'bg-ink/8 text-ink hover:bg-ink/12': !plan.highlighted,
-              'opacity-60': loading() !== null,
             }}
           >
-            {loading() === plan.tier
-              ? 'Loading...'
-              : plan.tier === 'free'
-                ? 'Start free'
-                : 'Subscribe'}
+            {plan.tier === 'free' ? 'Start free' : 'Select'}
           </button>
         )}
       />
