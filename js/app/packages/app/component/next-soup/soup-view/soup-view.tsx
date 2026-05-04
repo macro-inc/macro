@@ -283,39 +283,56 @@ export const SoupView = (props: SoupViewProps) => {
             <SplitHeaderLeft>
               <div
                 class={cn('h-full flex gap-3 items-center', {
-                  'shrink-0': !narrowSearchExpanded(),
-                  'flex-1 min-w-0': narrowSearchExpanded(),
+                  'shrink-0':
+                    !narrowSearchExpanded() && !isComponentListView('search'),
+                  'flex-1 min-w-0':
+                    narrowSearchExpanded() || isComponentListView('search'),
                 })}
               >
-                <Show when={!isMobile()}>
-                  <h1 class="font-semibold text-ink select-none text-sm shrink-0">
-                    {props.viewName}
-                  </h1>
-                </Show>
-                <Show when={!narrowSearchExpanded()}>
-                  <Show when={!isMobile()}>
-                    <CollapsibleHeaderItem
-                      id="tabs"
-                      priority={1}
-                      expanded={() => <SoupViewTabs />}
-                      collapsed={() => <CollapsedSoupViewTabs />}
-                      containerClass="h-full"
-                    />
-                  </Show>
-                  <Show when={!isMobile()}>
-                    <SoupViewCreateButton />
-                  </Show>
-                  <Show when={isMobile()}>
-                    <MobileFilterDrawer />
-                  </Show>
-                </Show>
-                <Show when={narrowSearchExpanded()}>
+                <Show
+                  when={isComponentListView('search')}
+                  fallback={
+                    <>
+                      <Show when={!isMobile()}>
+                        <h1 class="font-semibold text-ink select-none text-sm shrink-0">
+                          {props.viewName}
+                        </h1>
+                      </Show>
+                      <Show when={!narrowSearchExpanded()}>
+                        <Show when={!isMobile()}>
+                          <CollapsibleHeaderItem
+                            id="tabs"
+                            priority={1}
+                            expanded={() => <SoupViewTabs />}
+                            collapsed={() => <CollapsedSoupViewTabs />}
+                            containerClass="h-full"
+                          />
+                        </Show>
+                        <Show when={!isMobile()}>
+                          <SoupViewCreateButton />
+                        </Show>
+                        <Show when={isMobile()}>
+                          <MobileFilterDrawer />
+                        </Show>
+                      </Show>
+                      <Show when={narrowSearchExpanded()}>
+                        <div class="flex-1 min-w-0">
+                          <SoupSearchbar
+                            variant="secondary"
+                            autoFocus
+                            initialValue={props.initialSearchText}
+                            onDismiss={() => setNarrowSearchExpanded(false)}
+                          />
+                        </div>
+                      </Show>
+                    </>
+                  }
+                >
                   <div class="flex-1 min-w-0">
                     <SoupSearchbar
                       variant="secondary"
-                      autoFocus
+                      placeholder="Search, @mention contacts"
                       initialValue={props.initialSearchText}
-                      onDismiss={() => setNarrowSearchExpanded(false)}
                     />
                   </div>
                 </Show>
@@ -361,7 +378,7 @@ export const SoupView = (props: SoupViewProps) => {
                 />
               </Show>
             </SplitHeaderRight>
-            <SoupFiltersBar initialSearchText={props.initialSearchText} />
+            <SoupFiltersBar />
           </div>
           <Show when={hasLinkError()}>
             <EmailPermissionsBanner />
