@@ -60,10 +60,6 @@ where
         .add_tool::<MarkNotificationsDone, NotificationToolContext<T>>()
 }
 
-fn default_important_emails_only() -> bool {
-    true
-}
-
 /// List the current user's active notifications.
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -90,14 +86,6 @@ pub struct ListNotifications {
     )]
     #[serde(default)]
     pub seen: Option<bool>,
-
-    /// If true, omit new-email notifications for email threads that are not marked Important.
-    #[schemars(
-        description = "If true, omit new-email notifications for email threads that are not marked Important. Non-email notifications are still returned. Defaults to true.",
-        default = "default_important_emails_only"
-    )]
-    #[serde(default = "default_important_emails_only")]
-    pub important_emails_only: bool,
 
     /// Filter to specific notification item types. If omitted, returns all types.
     #[schemars(
@@ -190,7 +178,6 @@ where
                 NotificationListFilters {
                     done: self.done.or(Some(false)),
                     seen: self.seen,
-                    important_emails_only: self.important_emails_only,
                     include_types: self.include_types.clone().unwrap_or_default(),
                     entities: self.entities.clone().unwrap_or_default(),
                 },

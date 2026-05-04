@@ -90,7 +90,6 @@ fn build_user_notifications_query<'a>(
 
     push_event_item_ids_filter(&mut builder, event_item_ids);
     push_notification_status_filters(&mut builder, filters);
-    push_important_emails_only_filter(&mut builder, filters.important_emails_only);
     push_include_types_filter(&mut builder, include_types);
     push_entities_filter(&mut builder, entity_tokens);
     push_cursor_filter(&mut builder, cursor_timestamp, cursor_id);
@@ -126,34 +125,6 @@ fn push_notification_status_filters(
     if let Some(seen) = filters.seen {
         builder.push(" AND (un.seen_at IS NOT NULL) = ");
         builder.push_bind(seen);
-    }
-}
-
-fn push_important_emails_only_filter(
-    builder: &mut QueryBuilder<'_, Postgres>,
-    important_emails_only: bool,
-) {
-    if important_emails_only {
-        builder.push(
-            r#"
-            AND (
-                n.notification_event_type <> 'new_email'
-                OR n.event_item_type <> 'email_thread'
-                OR EXISTS (
-                    SELECT 1
-                    FROM email_threads important_thread
-                    JOIN email_messages important_message
-                        ON important_message.thread_id = important_thread.id
-                    JOIN email_message_labels important_message_label
-                        ON important_message_label.message_id = important_message.id
-                    JOIN email_labels important_label
-                        ON important_label.id = important_message_label.label_id
-                    WHERE important_thread.id::text = n.event_item_id
-                      AND important_label.link_id = important_thread.link_id
-                      AND important_label.name = 'IMPORTANT'
-                )
-            )"#,
-        );
     }
 }
 

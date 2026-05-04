@@ -317,9 +317,6 @@ pub struct NotificationListFilters {
     pub done: Option<bool>,
     /// Filter by seen status. `None` means include both seen and unseen notifications.
     pub seen: Option<bool>,
-    /// If true, omit `new_email` notifications whose email thread is not marked important.
-    /// Non-email notifications are still included.
-    pub important_emails_only: bool,
     /// Optional user-facing notification categories to include. Empty means include all types.
     pub include_types: Vec<NotificationItemType>,
     /// Optional specific entities to include. Empty means include all entities.
@@ -332,7 +329,6 @@ impl NotificationListFilters {
         Self {
             done: Some(false),
             seen: None,
-            important_emails_only: false,
             include_types: Vec::new(),
             entities: Vec::new(),
         }

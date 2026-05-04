@@ -1155,10 +1155,6 @@ export interface ListNotifications {
    */
   entities?: NotificationEntityRef[] | null;
   /**
-   * If true, omit new-email notifications for email threads that are not marked Important. Non-email notifications are still returned. Defaults to true.
-   */
-  importantEmailsOnly?: boolean;
-  /**
    * Filter to specific notification item types. If omitted, returns all types. Example: ["email", "message"] returns only email and message notifications.
    */
   includeTypes?: NotificationItemType[] | null;

@@ -364,7 +364,6 @@ async fn test_get_user_notifications_filters_done_and_seen(pool: Pool<Postgres>)
             NotificationListFilters {
                 done: Some(true),
                 seen: Some(true),
-                important_emails_only: false,
                 include_types: Vec::new(),
                 entities: Vec::new(),
             },
@@ -381,7 +380,6 @@ async fn test_get_user_notifications_filters_done_and_seen(pool: Pool<Postgres>)
             NotificationListFilters {
                 done: None,
                 seen: Some(false),
-                important_emails_only: false,
                 include_types: Vec::new(),
                 entities: Vec::new(),
             },
@@ -406,7 +404,6 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
             NotificationListFilters {
                 done: Some(false),
                 seen: None,
-                important_emails_only: false,
                 include_types: vec![crate::domain::models::request::NotificationItemType::Document],
                 entities: Vec::new(),
             },
@@ -423,7 +420,6 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
             NotificationListFilters {
                 done: Some(false),
                 seen: None,
-                important_emails_only: false,
                 include_types: vec![crate::domain::models::request::NotificationItemType::Email],
                 entities: Vec::new(),
             },
@@ -440,7 +436,6 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
             NotificationListFilters {
                 done: Some(false),
                 seen: None,
-                important_emails_only: false,
                 include_types: Vec::new(),
                 entities: vec![crate::domain::models::request::NotificationEntityRef {
                     entity_type: crate::domain::models::request::NotificationItemType::Document,
@@ -460,7 +455,6 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
             NotificationListFilters {
                 done: Some(false),
                 seen: None,
-                important_emails_only: false,
                 include_types: Vec::new(),
                 entities: vec![crate::domain::models::request::NotificationEntityRef {
                     entity_type: crate::domain::models::request::NotificationItemType::Email,

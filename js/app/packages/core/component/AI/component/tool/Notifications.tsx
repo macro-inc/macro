@@ -47,10 +47,6 @@ const formatNotificationFilters = (filters: ListNotificationsTool) => {
     }`;
   }
 
-  if (filters.importantEmailsOnly) {
-    text += ' with important emails only';
-  }
-
   return text;
 };
 
