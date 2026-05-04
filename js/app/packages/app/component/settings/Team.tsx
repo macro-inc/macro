@@ -17,7 +17,16 @@ import { Dialog } from '@kobalte/core/dialog';
 import { Select } from '@kobalte/core/select';
 import { useUserId } from '@core/context/user';
 import { useDisplayName, tryMacroId } from '@core/user';
-import { createMemo, createSignal, For, Index, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  Index,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import type { CollectionNode } from '@kobalte/core';
 import {
   useUserTeamsQuery,
@@ -36,7 +45,10 @@ import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
 } from '@queries/team/invitations';
-import { useRemoveUserFromTeamMutation, usePatchTeamUserTierMutation } from '@queries/team/members';
+import {
+  useRemoveUserFromTeamMutation,
+  usePatchTeamUserTierMutation,
+} from '@queries/team/members';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
@@ -69,8 +81,13 @@ const roleOptions: RoleOption[] = [
   { value: TeamRole.admin, label: 'Admin' },
 ];
 
-function RoleSelect(props: { value: TeamRole; onChange: (role: TeamRole) => void; disabled?: boolean }) {
-  const selectedOption = () => roleOptions.find((o) => o.value === props.value) ?? roleOptions[0];
+function RoleSelect(props: {
+  value: TeamRole;
+  onChange: (role: TeamRole) => void;
+  disabled?: boolean;
+}) {
+  const selectedOption = () =>
+    roleOptions.find((o) => o.value === props.value) ?? roleOptions[0];
 
   return (
     <Select<RoleOption>
@@ -94,8 +111,14 @@ function RoleSelect(props: { value: TeamRole; onChange: (role: TeamRole) => void
         </Select.Item>
       )}
     >
-      <Select.Trigger as={Button} class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-[expanded]:bg-ink/10" disabled={props.disabled}>
-        <Select.Value<RoleOption>>{(state) => state.selectedOption().label}</Select.Value>
+      <Select.Trigger
+        as={Button}
+        class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-[expanded]:bg-ink/10"
+        disabled={props.disabled}
+      >
+        <Select.Value<RoleOption>>
+          {(state) => state.selectedOption().label}
+        </Select.Value>
         <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
@@ -107,8 +130,12 @@ function RoleSelect(props: { value: TeamRole; onChange: (role: TeamRole) => void
   );
 }
 
-function TierSelect(props: { value: string; onChange: (tier: TeamUserTier) => void }) {
-  const selectedOption = () => tierOptions.find((o) => o.value === props.value) ?? tierOptions[0];
+function TierSelect(props: {
+  value: string;
+  onChange: (tier: TeamUserTier) => void;
+}) {
+  const selectedOption = () =>
+    tierOptions.find((o) => o.value === props.value) ?? tierOptions[0];
 
   return (
     <Select<TierOption>
@@ -131,8 +158,13 @@ function TierSelect(props: { value: string; onChange: (tier: TeamUserTier) => vo
         </Select.Item>
       )}
     >
-      <Select.Trigger as={Button} class="rounded-xs px-2 py-1 text-xs data-[expanded]:bg-ink/10">
-        <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
+      <Select.Trigger
+        as={Button}
+        class="rounded-xs px-2 py-1 text-xs data-[expanded]:bg-ink/10"
+      >
+        <Select.Value<TierOption>>
+          {(state) => state.selectedOption().label}
+        </Select.Value>
         <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
@@ -175,42 +207,61 @@ function InviteEntryRow(props: {
           onBlur={() => props.onBlur()}
           class={cn(
             'flex-1 min-w-0 px-3 py-2 text-sm border rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none',
-            props.error ? 'border-failure focus:border-failure' : 'border-edge-muted focus:border-accent/50'
+            props.error
+              ? 'border-failure focus:border-failure'
+              : 'border-edge-muted focus:border-accent/50'
           )}
         />
-      <Show when={props.showTier}>
-        <Select<TierOption>
-          options={tierOptions}
-          value={tierOptions.find((o) => o.value === props.entry.tier) ?? tierOptions[0]}
-          onChange={(opt) => opt && props.onTierChange(opt.value)}
-          optionValue="value"
-          optionTextValue="label"
-          gutter={4}
-          placement="bottom-end"
-          itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
-            <Select.Item
-              item={itemProps.item}
-              class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+        <Show when={props.showTier}>
+          <Select<TierOption>
+            options={tierOptions}
+            value={
+              tierOptions.find((o) => o.value === props.entry.tier) ??
+              tierOptions[0]
+            }
+            onChange={(opt) => opt && props.onTierChange(opt.value)}
+            optionValue="value"
+            optionTextValue="label"
+            gutter={4}
+            placement="bottom-end"
+            itemComponent={(itemProps: {
+              item: CollectionNode<TierOption>;
+            }) => (
+              <Select.Item
+                item={itemProps.item}
+                class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+              >
+                <Select.ItemLabel>
+                  {itemProps.item.rawValue.label}
+                </Select.ItemLabel>
+                <Select.ItemIndicator>
+                  <CheckIcon class="w-3 h-3" />
+                </Select.ItemIndicator>
+              </Select.Item>
+            )}
+          >
+            <Select.Trigger
+              tabIndex={0}
+              class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0"
             >
-              <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
-              <Select.ItemIndicator>
-                <CheckIcon class="w-3 h-3" />
-              </Select.ItemIndicator>
-            </Select.Item>
-          )}
+              <Select.Value<TierOption>>
+                {(state) => state.selectedOption().label}
+              </Select.Value>
+              <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
+            </Select.Trigger>
+            <Select.Portal>
+              <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+                <Select.Listbox />
+              </Select.Content>
+            </Select.Portal>
+          </Select>
+        </Show>
+        <Button
+          variant="secondary"
+          class="bracket-never rounded-xs shrink-0 focus:border-accent/50 w-24 justify-center"
+          tabIndex={0}
+          onClick={props.onRemove}
         >
-          <Select.Trigger tabIndex={0} class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0">
-            <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
-            <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
-          </Select.Trigger>
-          <Select.Portal>
-            <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
-              <Select.Listbox />
-            </Select.Content>
-          </Select.Portal>
-        </Select>
-      </Show>
-      <Button variant="secondary" class="bracket-never rounded-xs shrink-0 focus:border-accent/50 w-24 justify-center" tabIndex={0} onClick={props.onRemove}>
           <XIcon class="size-4" />
           Remove
         </Button>
@@ -222,12 +273,17 @@ function InviteEntryRow(props: {
   );
 }
 
-function getEmailError(email: string, existingEmails: string[], excludeIndex?: number): string | undefined {
+function getEmailError(
+  email: string,
+  existingEmails: string[],
+  excludeIndex?: number
+): string | undefined {
   const trimmed = email.trim();
   if (trimmed === '') return undefined;
   if (!emailSchema.safeParse(trimmed).success) return 'Invalid email address';
   const isDuplicate = existingEmails.some(
-    (existing, i) => i !== excludeIndex && existing.toLowerCase() === trimmed.toLowerCase()
+    (existing, i) =>
+      i !== excludeIndex && existing.toLowerCase() === trimmed.toLowerCase()
   );
   if (isDuplicate) return 'Email already added';
   return undefined;
@@ -242,16 +298,26 @@ function InviteEmailsInput(props: {
 }) {
   let inputRef: HTMLInputElement | undefined;
   const [inputValue, setInputValue] = createSignal('');
-  const [inputTier, setInputTier] = createSignal<TeamUserTier>(props.defaultTier ?? TeamUserTier.Haiku);
-  const [inputError, setInputError] = createSignal<string | undefined>(undefined);
+  const [inputTier, setInputTier] = createSignal<TeamUserTier>(
+    props.defaultTier ?? TeamUserTier.Haiku
+  );
+  const [inputError, setInputError] = createSignal<string | undefined>(
+    undefined
+  );
 
-  const tierFlag = useFeatureFlag('enable-team-invite-tiers', { enabledOverride: ENABLE_TEAM_INVITE_TIERS_OVERRIDE });
+  const tierFlag = useFeatureFlag('enable-team-invite-tiers', {
+    enabledOverride: ENABLE_TEAM_INVITE_TIERS_OVERRIDE,
+  });
   const showTier = () => tierFlag().enabled;
 
   const existingEmails = () => props.invites.map((i) => i.email);
 
   const validateEmail = (index: number) => {
-    const error = getEmailError(props.invites[index]?.email ?? '', existingEmails(), index);
+    const error = getEmailError(
+      props.invites[index]?.email ?? '',
+      existingEmails(),
+      index
+    );
     const next = [...props.errors()];
     next[index] = error;
     props.onErrorsChange(next);
@@ -353,32 +419,46 @@ function InviteEmailsInput(props: {
             placeholder="Enter email address"
             class={cn(
               'flex-1 px-3 py-2 text-sm border rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none',
-              inputError() ? 'border-failure focus:border-failure' : 'border-edge-muted focus:border-accent/50'
+              inputError()
+                ? 'border-failure focus:border-failure'
+                : 'border-edge-muted focus:border-accent/50'
             )}
           />
           <Show when={showTier()}>
             <Select<TierOption>
               options={tierOptions}
-              value={tierOptions.find((o) => o.value === inputTier()) ?? tierOptions[0]}
+              value={
+                tierOptions.find((o) => o.value === inputTier()) ??
+                tierOptions[0]
+              }
               onChange={(opt) => opt && setInputTier(opt.value)}
               optionValue="value"
               optionTextValue="label"
               gutter={4}
               placement="bottom-end"
-              itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
+              itemComponent={(itemProps: {
+                item: CollectionNode<TierOption>;
+              }) => (
                 <Select.Item
                   item={itemProps.item}
                   class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
                 >
-                  <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+                  <Select.ItemLabel>
+                    {itemProps.item.rawValue.label}
+                  </Select.ItemLabel>
                   <Select.ItemIndicator>
                     <CheckIcon class="w-3 h-3" />
                   </Select.ItemIndicator>
                 </Select.Item>
               )}
             >
-              <Select.Trigger tabIndex={0} class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0">
-                <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
+              <Select.Trigger
+                tabIndex={0}
+                class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0"
+              >
+                <Select.Value<TierOption>>
+                  {(state) => state.selectedOption().label}
+                </Select.Value>
                 <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
               </Select.Trigger>
               <Select.Portal>
@@ -427,11 +507,17 @@ function MemberRow(props: {
         <div class="min-w-0 flex-1">
           <div class="text-sm font-medium text-ink truncate">
             {displayName()}
-            {props.isCurrentUser && <span class="text-ink-muted font-normal"> (you)</span>}
+            {props.isCurrentUser && (
+              <span class="text-ink-muted font-normal"> (you)</span>
+            )}
           </div>
           <Show
             when={props.isOwner && !isMemberOwner()}
-            fallback={<span class="text-xs text-ink-muted py-0.5 capitalize">{props.member.role}</span>}
+            fallback={
+              <span class="text-xs text-ink-muted py-0.5 capitalize">
+                {props.member.role}
+              </span>
+            }
           >
             <RoleSelect
               value={props.member.role}
@@ -443,7 +529,9 @@ function MemberRow(props: {
       <div class="flex items-center gap-2 shrink-0">
         <Show
           when={props.isOwner}
-          fallback={<span class="text-xs text-ink-muted py-1">{props.member.tier}</span>}
+          fallback={
+            <span class="text-xs text-ink-muted py-1">{props.member.tier}</span>
+          }
         >
           <TierSelect value={props.member.tier} onChange={props.onTierChange} />
         </Show>
@@ -451,8 +539,19 @@ function MemberRow(props: {
           <Show
             when={!props.isCurrentUser && !isMemberOwner()}
             fallback={
-              <Tooltip tooltip={isMemberOwner() ? "Cannot remove team owner" : "Cannot remove yourself"}>
-                <Button variant="ghost" size="sm" disabled class="rounded-xs opacity-50 cursor-not-allowed">
+              <Tooltip
+                tooltip={
+                  isMemberOwner()
+                    ? 'Cannot remove team owner'
+                    : 'Cannot remove yourself'
+                }
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled
+                  class="rounded-xs opacity-50 cursor-not-allowed"
+                >
                   <TrashIcon class="w-4 h-4" />
                 </Button>
               </Tooltip>
@@ -489,13 +588,21 @@ function InviteRow(props: {
         <div class="min-w-0 flex-1">
           <div class="text-sm text-ink truncate">{props.invite.email}</div>
           <div class="text-xs text-ink-muted">
-            Invited as {props.invite.team_role} · {formatRelativeTimestamp(props.invite.created_at, { condensed: true })}
+            Invited as {props.invite.team_role} ·{' '}
+            {formatRelativeTimestamp(props.invite.created_at, {
+              condensed: true,
+            })}
           </div>
         </div>
       </div>
       <Show when={props.isOwner}>
         <Tooltip tooltip="Cancel invite">
-          <Button variant="ghost" size="sm" class="shrink-0" onClick={props.onCancel}>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="shrink-0"
+            onClick={props.onCancel}
+          >
             <XIcon class="w-4 h-4" />
           </Button>
         </Tooltip>
@@ -524,11 +631,10 @@ function UserInviteRow(props: {
         </div>
         <div class="min-w-0 flex-1">
           <div class="text-sm text-ink">
-            <InviterName inviterId={props.invite.invited_by} /> invited you to join a team
+            <InviterName inviterId={props.invite.invited_by} /> invited you to
+            join a team
           </div>
-          <div class="text-xs text-ink-muted">
-            as {props.invite.team_role}
-          </div>
+          <div class="text-xs text-ink-muted">as {props.invite.team_role}</div>
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0">
@@ -565,24 +671,32 @@ function TeamInvites() {
   const invites = () => userInvitesQuery.data?.invites ?? [];
 
   const isAccepting = (inviteId: string) =>
-    joinTeamMutation.isPending && joinTeamMutation.variables?.teamInviteId === inviteId;
+    joinTeamMutation.isPending &&
+    joinTeamMutation.variables?.teamInviteId === inviteId;
   const isDeclining = (inviteId: string) =>
-    rejectMutation.isPending && rejectMutation.variables?.teamInviteId === inviteId;
+    rejectMutation.isPending &&
+    rejectMutation.variables?.teamInviteId === inviteId;
 
   return (
     <Show when={invites().length > 0}>
       <section class="mb-6">
         <header class="mb-2">
           <h3 class="text-sm font-medium">Pending Invitations</h3>
-          <p class="text-xs text-ink-muted">You've been invited to join a team.</p>
+          <p class="text-xs text-ink-muted">
+            You've been invited to join a team.
+          </p>
         </header>
         <div class="border border-edge rounded-sm px-3">
           <For each={invites()}>
             {(invite) => (
               <UserInviteRow
                 invite={invite}
-                onAccept={() => joinTeamMutation.mutate({ teamInviteId: invite.id })}
-                onDecline={() => rejectMutation.mutate({ teamInviteId: invite.id })}
+                onAccept={() =>
+                  joinTeamMutation.mutate({ teamInviteId: invite.id })
+                }
+                onDecline={() =>
+                  rejectMutation.mutate({ teamInviteId: invite.id })
+                }
                 isAccepting={isAccepting(invite.id)}
                 isDeclining={isDeclining(invite.id)}
               />
@@ -600,7 +714,8 @@ const teamNameSchema = z
   .string()
   .transform((s) => s.trim())
   .pipe(
-    z.string()
+    z
+      .string()
       .min(1, 'Team name is required')
       .max(TEAM_NAME_MAX_LENGTH, 'Team name is too long')
   );
@@ -608,9 +723,13 @@ const teamNameSchema = z
 function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   let teamNameInputRef: HTMLInputElement | undefined;
   const [teamName, setTeamName] = createSignal('');
-  const [teamNameError, setTeamNameError] = createSignal<string | undefined>(undefined);
+  const [teamNameError, setTeamNameError] = createSignal<string | undefined>(
+    undefined
+  );
   const [invites, setInvites] = createSignal<InviteEntry[]>([]);
-  const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>([]);
+  const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
+    []
+  );
 
   const createTeamMutation = useCreateTeamWithInvitesMutation();
 
@@ -679,7 +798,12 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   return (
     <Dialog open={props.open} onOpenChange={(open) => !open && props.onClose()}>
       <Dialog.Portal>
-        <DialogWrapper onOpenAutoFocus={(e) => { e.preventDefault(); teamNameInputRef?.focus(); }}>
+        <DialogWrapper
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            teamNameInputRef?.focus();
+          }}
+        >
           <div class="flex flex-col text-ink">
             <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
               <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
@@ -706,7 +830,9 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
                   placeholder="My Team"
                   class={cn(
                     'w-full px-3 py-2 text-sm border rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none',
-                    teamNameError() ? 'border-failure focus:border-failure' : 'border-edge-muted focus:border-accent/50'
+                    teamNameError()
+                      ? 'border-failure focus:border-failure'
+                      : 'border-edge-muted focus:border-accent/50'
                   )}
                 />
                 <Show when={teamNameError()}>
@@ -714,7 +840,9 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
                 </Show>
               </div>
               <div class="flex flex-col gap-1">
-                <label class="text-sm text-ink-muted">Invite members (optional)</label>
+                <label class="text-sm text-ink-muted">
+                  Invite members (optional)
+                </label>
                 <InviteEmailsInput
                   invites={invites()}
                   onChange={setInvites}
@@ -734,10 +862,17 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
                 <Button
                   variant="accent"
                   class="rounded-xs"
-                  disabled={createTeamMutation.isPending || !!teamNameError() || inviteErrors().some((e) => e !== undefined)}
+                  disabled={
+                    createTeamMutation.isPending ||
+                    !!teamNameError() ||
+                    inviteErrors().some((e) => e !== undefined)
+                  }
                   onClick={handleCreate}
                 >
-                  <Show when={createTeamMutation.isPending} fallback="Create Team">
+                  <Show
+                    when={createTeamMutation.isPending}
+                    fallback="Create Team"
+                  >
                     <SpinnerIcon class="size-4 animate-spin" />
                   </Show>
                 </Button>
@@ -763,13 +898,18 @@ function EmptyTeamState() {
         </div>
         <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
         <Show
-          when={hasPaidAccess() }
+          when={hasPaidAccess() || true}
           fallback={
             <>
               <p class="text-xs text-ink-muted max-w-xs mb-4">
-                Teams are available on paid plans. Upgrade to create and manage teams.
+                Teams are available on paid plans. Upgrade to create and manage
+                teams.
               </p>
-              <Button variant="accent" class="rounded-xs" onClick={() => showPaywall()}>
+              <Button
+                variant="accent"
+                class="rounded-xs"
+                onClick={() => showPaywall()}
+              >
                 Upgrade
               </Button>
             </>
@@ -778,7 +918,11 @@ function EmptyTeamState() {
           <p class="text-xs text-ink-muted max-w-xs mb-4">
             Create a team to collaborate with others and manage access together.
           </p>
-          <Button variant="accent" class="rounded-xs" onClick={() => setShowCreateModal(true)}>
+          <Button
+            variant="accent"
+            class="rounded-xs"
+            onClick={() => setShowCreateModal(true)}
+          >
             <PlusIcon class="size-4" />
             Create Team
           </Button>
@@ -786,13 +930,20 @@ function EmptyTeamState() {
       </div>
 
       <Show when={showCreateModal()}>
-        <CreateTeamDialog open={showCreateModal()} onClose={() => setShowCreateModal(false)} />
+        <CreateTeamDialog
+          open={showCreateModal()}
+          onClose={() => setShowCreateModal(false)}
+        />
       </Show>
     </>
   );
 }
 
-function TeamManagement(props: { teamId: string; teamName: string; ownerId: string }) {
+function TeamManagement(props: {
+  teamId: string;
+  teamName: string;
+  ownerId: string;
+}) {
   const userId = useUserId();
 
   const teamQuery = useTeamQuery(() => props.teamId);
@@ -807,12 +958,19 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
 
   const [showDeleteTeamModal, setShowDeleteTeamModal] = createSignal(false);
   const [deleteConfirmation, setDeleteConfirmation] = createSignal('');
-  const [showRemoveModal, setShowRemoveModal] = createSignal<TeamMember | null>(null);
-  const [showCancelInviteModal, setShowCancelInviteModal] = createSignal<TeamInviteDetails | null>(null);
+  const [showRemoveModal, setShowRemoveModal] = createSignal<TeamMember | null>(
+    null
+  );
+  const [showCancelInviteModal, setShowCancelInviteModal] =
+    createSignal<TeamInviteDetails | null>(null);
   const [showInviteModal, setShowInviteModal] = createSignal(false);
   const [invites, setInvites] = createSignal<InviteEntry[]>([]);
-  const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>([]);
-  const [editingTeamName, setEditingTeamName] = createSignal<string | undefined>(undefined);
+  const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
+    []
+  );
+  const [editingTeamName, setEditingTeamName] = createSignal<
+    string | undefined
+  >(undefined);
 
   const hasValidInvites = () => invites().length > 0;
 
@@ -836,7 +994,8 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
   };
 
   const deleteConfirmationPhrase = () => `Delete ${props.teamName}`;
-  const canDeleteTeam = () => deleteConfirmation() === deleteConfirmationPhrase();
+  const canDeleteTeam = () =>
+    deleteConfirmation() === deleteConfirmationPhrase();
 
   const teamNameValue = () => editingTeamName() ?? props.teamName;
   const hasTeamNameChanged = () => {
@@ -872,7 +1031,6 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
   const handleCancelTeamNameEdit = () => {
     setEditingTeamName(undefined);
   };
-
 
   const handleDeleteTeam = () => {
     if (!props.teamId) return;
@@ -954,11 +1112,21 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
         <div class="text-sm font-semibold">Team</div>
         <Show when={isOwner()}>
           <div class="flex items-center gap-2">
-            <Button variant="secondary" size="sm" class="rounded-xs" onClick={() => setShowInviteModal(true)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              class="rounded-xs"
+              onClick={() => setShowInviteModal(true)}
+            >
               <PlusIcon class="size-4" />
               Invite
             </Button>
-            <Button variant="destructive" size="sm" class="rounded-xs" onClick={() => setShowDeleteTeamModal(true)}>
+            <Button
+              variant="destructive"
+              size="sm"
+              class="rounded-xs"
+              onClick={() => setShowDeleteTeamModal(true)}
+            >
               <TrashIcon class="size-4" />
               Delete Team
             </Button>
@@ -988,10 +1156,16 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                       variant="accent"
                       size="icon-sm"
                       class="rounded-xs"
-                      disabled={patchTeamMutation.isPending || !editingTeamName()?.trim()}
+                      disabled={
+                        patchTeamMutation.isPending ||
+                        !editingTeamName()?.trim()
+                      }
                       onClick={handleSaveTeamName}
                     >
-                      <Show when={patchTeamMutation.isPending} fallback={<CheckIcon class="size-4" />}>
+                      <Show
+                        when={patchTeamMutation.isPending}
+                        fallback={<CheckIcon class="size-4" />}
+                      >
                         <SpinnerIcon class="size-4 animate-spin" />
                       </Show>
                     </Button>
@@ -1015,12 +1189,12 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
       </div>
 
       <div class="flex flex-col flex-1 overflow-hidden">
-
         <section class="flex flex-col min-h-0 flex-1">
-
           <Show
             when={!teamQuery.isLoading}
-            fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-16" />}
+            fallback={
+              <div class="animate-pulse bg-ink-extra-muted rounded h-16" />
+            }
           >
             <div class="overflow-y-auto min-h-0" style="scrollbar-width: none;">
               <For each={members()}>
@@ -1083,8 +1257,10 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
         </Show>
       </div>
 
-
-      <Dialog open={showDeleteTeamModal()} onOpenChange={handleDeleteTeamModalClose}>
+      <Dialog
+        open={showDeleteTeamModal()}
+        onOpenChange={handleDeleteTeamModalClose}
+      >
         <Dialog.Portal>
           <DialogWrapper>
             <div class="flex flex-col text-ink">
@@ -1098,11 +1274,16 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
               </div>
               <div class="p-3 flex flex-col gap-3">
                 <p>
-                  Are you sure you want to delete <span class="font-medium">{props.teamName}</span>?
-                  This action cannot be undone and all team members will lose access.
+                  Are you sure you want to delete{' '}
+                  <span class="font-medium">{props.teamName}</span>? This action
+                  cannot be undone and all team members will lose access.
                 </p>
                 <p class="text-sm text-ink-muted">
-                  Type <span class="font-medium text-ink">{deleteConfirmationPhrase()}</span> to confirm.
+                  Type{' '}
+                  <span class="font-medium text-ink">
+                    {deleteConfirmationPhrase()}
+                  </span>{' '}
+                  to confirm.
                 </p>
                 <input
                   type="text"
@@ -1126,7 +1307,10 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                     disabled={!canDeleteTeam() || deleteTeamMutation.isPending}
                     onClick={handleDeleteTeam}
                   >
-                    <Show when={deleteTeamMutation.isPending} fallback="Delete Team">
+                    <Show
+                      when={deleteTeamMutation.isPending}
+                      fallback="Delete Team"
+                    >
                       <SpinnerIcon class="size-4 animate-spin" />
                     </Show>
                   </Button>
@@ -1137,7 +1321,10 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
         </Dialog.Portal>
       </Dialog>
 
-      <Dialog open={!!showRemoveModal()} onOpenChange={() => setShowRemoveModal(null)}>
+      <Dialog
+        open={!!showRemoveModal()}
+        onOpenChange={() => setShowRemoveModal(null)}
+      >
         <Dialog.Portal>
           <DialogWrapper>
             <div class="flex flex-col text-ink">
@@ -1183,7 +1370,10 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
         </Dialog.Portal>
       </Dialog>
 
-      <Dialog open={!!showCancelInviteModal()} onOpenChange={() => setShowCancelInviteModal(null)}>
+      <Dialog
+        open={!!showCancelInviteModal()}
+        onOpenChange={() => setShowCancelInviteModal(null)}
+      >
         <Dialog.Portal>
           <DialogWrapper>
             <div class="flex flex-col text-ink">
@@ -1198,7 +1388,10 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
               <div class="p-3 flex flex-col gap-3">
                 <p>
                   Are you sure you want to cancel the invitation for{' '}
-                  <span class="font-medium">{showCancelInviteModal()?.email}</span>?
+                  <span class="font-medium">
+                    {showCancelInviteModal()?.email}
+                  </span>
+                  ?
                 </p>
                 <div class="flex justify-end gap-1 pt-2">
                   <Button
@@ -1215,7 +1408,10 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                     disabled={deleteInviteMutation.isPending}
                     onClick={handleCancelInvite}
                   >
-                    <Show when={deleteInviteMutation.isPending} fallback="Cancel Invite">
+                    <Show
+                      when={deleteInviteMutation.isPending}
+                      fallback="Cancel Invite"
+                    >
                       <SpinnerIcon class="size-4 animate-spin" />
                     </Show>
                   </Button>
@@ -1257,12 +1453,18 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                   <Button
                     variant={hasValidInvites() ? 'accent' : 'ghost'}
                     class="rounded-xs"
-                    disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
+                    disabled={
+                      !hasValidInvites() || inviteToTeamMutation.isPending
+                    }
                     onClick={handleInvite}
                   >
                     <Show
                       when={inviteToTeamMutation.isPending}
-                      fallback={invites().length > 1 ? `Send ${invites().length} Invites` : 'Send Invite'}
+                      fallback={
+                        invites().length > 1
+                          ? `Send ${invites().length} Invites`
+                          : 'Send Invite'
+                      }
                     >
                       <SpinnerIcon class="size-4 animate-spin" />
                     </Show>
@@ -1292,7 +1494,13 @@ function TeamContent() {
   return (
     <Switch>
       <Match when={team()} keyed>
-        {(t) => <TeamManagement teamId={t.id} teamName={t.name} ownerId={t.owner_id} />}
+        {(t) => (
+          <TeamManagement
+            teamId={t.id}
+            teamName={t.name}
+            ownerId={t.owner_id}
+          />
+        )}
       </Match>
       <Match when={hasInvites()}>
         <TeamInvites />
@@ -1310,7 +1518,11 @@ export function Team() {
       <div class="max-w-2xl w-full">
         <Panel depth={2}>
           <div class="text-ink">
-            <Suspense fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />}>
+            <Suspense
+              fallback={
+                <div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />
+              }
+            >
               <TeamContent />
             </Suspense>
           </div>
