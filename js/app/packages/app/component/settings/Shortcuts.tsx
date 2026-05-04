@@ -1,85 +1,78 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { Hotkey } from '@core/component/Hotkey';
-import {
-  Keyboard,
-  Panel,
-  clearHighlight,
-  highlightShortcut,
-  registerShortcut,
-  shortcuts,
-} from '@ui';
+import { Keyboard, Panel } from '@ui';
 import { cn } from '@ui/utils/classname';
-import { For, Index, type JSX } from 'solid-js';
+import { createSignal, For, Index, type JSX } from 'solid-js';
 
 const cmdOrCtrl = IS_MAC ? 'cmd' : 'ctrl';
+const CmdOrCtrl = IS_MAC ? 'MetaLeft' : 'ControlLeft';
 
-type ShortcutItem = {
-  /** Combo strings, e.g. ['cmd+k']. Multiple entries mean "any of these works". */
+interface ShortcutItem {
+  /** Display strings for `<Hotkey>`, e.g. ['cmd+k']. Multiple = "any of these works". */
   keys: string[];
+  /** `e.code` values to light up on the keyboard when this row is hovered. */
+  codes: string[];
   description: JSX.Element;
-  /** Filled in below by `register()`. */
-  id: string;
-};
+}
 
-type ShortcutSection = {
+interface ShortcutSection {
   title: string;
   items: ShortcutItem[];
-};
-
-/** Register a shortcut once and stamp its id onto the item. */
-function register(item: Omit<ShortcutItem, 'id'>): ShortcutItem {
-  return { ...item, id: registerShortcut(item.keys) };
 }
 
 const shortcutSections: ShortcutSection[] = [
   {
     title: 'Core',
     items: [
-      register({ keys: ['c']             , description: 'Open the create menu'   }),
-      register({ keys: [`${cmdOrCtrl}+k`], description: 'Open the command menu'  }),
-      register({ keys: ['g']             , description: 'Go to a view'           }),
-      register({ keys: ['/']             , description: 'Go to search view'      }),
-      register({ keys: [`${cmdOrCtrl}+f`], description: 'Search in current view' }),
-      register({ keys: [`${cmdOrCtrl}+j`], description: 'Focus AI chat'          }),
-      register({ keys: [`${cmdOrCtrl}+;`], description: 'Open settings panel'    }),
+      { keys: ['c']             , codes: ['KeyC']                   , description: 'Open the create menu'   },
+      { keys: [`${cmdOrCtrl}+k`], codes: [CmdOrCtrl, 'KeyK']        , description: 'Open the command menu'  },
+      { keys: ['g']             , codes: ['KeyG']                   , description: 'Go to a view'           },
+      { keys: ['/']             , codes: ['Slash']                  , description: 'Go to search view'      },
+      { keys: [`${cmdOrCtrl}+f`], codes: [CmdOrCtrl, 'KeyF']        , description: 'Search in current view' },
+      { keys: [`${cmdOrCtrl}+j`], codes: [CmdOrCtrl, 'KeyJ']        , description: 'Focus AI chat'          },
+      { keys: [`${cmdOrCtrl}+;`], codes: [CmdOrCtrl, 'Semicolon']   , description: 'Open settings panel'    },
     ],
   },
   {
     title: 'Splits',
     items: [
-      register({ keys: ['\\']              , description: 'Create a split'              }),
-      register({ keys: [`cmd+escape`]      , description: 'Go home / close split'       }),
-      register({ keys: ['shift+escape']    , description: 'Spotlight split'             }),
-      register({ keys: ['shift+arrowleft'] , description: 'Focus split to the left'     }),
-      register({ keys: ['shift+arrowright'], description: 'Focus split to the right'    }),
-      register({ keys: [`opt+[`]           , description: 'Go back in current split'    }),
-      register({ keys: [`opt+]`]           , description: 'Go forward in current split' }),
+      { keys: ['\\']              , codes: ['Backslash']                  , description: 'Create a split'              },
+      { keys: ['cmd+escape']      , codes: ['MetaLeft', 'Escape']         , description: 'Go home / close split'       },
+      { keys: ['shift+escape']    , codes: ['ShiftLeft', 'Escape']        , description: 'Spotlight split'             },
+      { keys: ['shift+arrowleft'] , codes: ['ShiftLeft', 'ArrowLeft']     , description: 'Focus split to the left'     },
+      { keys: ['shift+arrowright'], codes: ['ShiftLeft', 'ArrowRight']    , description: 'Focus split to the right'    },
+      { keys: ['opt+[']           , codes: ['AltLeft', 'BracketLeft']     , description: 'Go back in current split'    },
+      { keys: ['opt+]']           , codes: ['AltLeft', 'BracketRight']    , description: 'Go forward in current split' },
     ],
   },
   {
     title: 'Unified List',
     items: [
-      register({ keys: ['arrowdown']      , description: 'Move down'                  }),
-      register({ keys: ['arrowup']        , description: 'Move up'                    }),
-      register({ keys: ['shift+arrowdown'], description: 'Select down'                }),
-      register({ keys: ['shift+arrowup']  , description: 'Select up'                  }),
-      register({ keys: ['e']              , description: 'Mark done'                  }),
-      register({ keys: ['x']              , description: 'Select items'               }),
-      register({ keys: ['f']              , description: 'Open filter menu'           }),
-      register({ keys: ['arrowleft']      , description: 'Collapse item'              }),
-      register({ keys: ['arrowright']     , description: 'Expand item'                }),
-      register({ keys: ['space']          , description: 'Preview item'               }),
-      register({ keys: ['enter']          , description: 'Open item in current split' }),
-      register({ keys: ['shift+enter']    , description: 'Open item in a new split'   }),
+      { keys: ['arrowdown']      , codes: ['ArrowDown']               , description: 'Move down'                  },
+      { keys: ['arrowup']        , codes: ['ArrowUp']                 , description: 'Move up'                    },
+      { keys: ['shift+arrowdown'], codes: ['ShiftLeft', 'ArrowDown']  , description: 'Select down'                },
+      { keys: ['shift+arrowup']  , codes: ['ShiftLeft', 'ArrowUp']    , description: 'Select up'                  },
+      { keys: ['e']              , codes: ['KeyE']                    , description: 'Mark done'                  },
+      { keys: ['x']              , codes: ['KeyX']                    , description: 'Select items'               },
+      { keys: ['f']              , codes: ['KeyF']                    , description: 'Open filter menu'           },
+      { keys: ['arrowleft']      , codes: ['ArrowLeft']               , description: 'Collapse item'              },
+      { keys: ['arrowright']     , codes: ['ArrowRight']              , description: 'Expand item'                },
+      { keys: ['space']          , codes: ['Space']                   , description: 'Preview item'               },
+      { keys: ['enter']          , codes: ['Enter']                   , description: 'Open item in current split' },
+      { keys: ['shift+enter']    , codes: ['ShiftLeft', 'Enter']      , description: 'Open item in a new split'   },
     ],
   },
 ];
+
+const [hoveredCodes, setHoveredCodes] = createSignal<string[]>([]);
 
 function Kbd(props: { shortcut: string; class?: string }) {
   return (
     <span
       class={cn(
-        'inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm border border-edge-muted bg-ink/4 text-ink-muted uppercase',
+        'inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm uppercase transition-colors',
+        'border border-edge-muted bg-ink/4 text-ink-muted',
+        'group-hover:border-accent/30 group-hover:bg-accent/10 group-hover:text-accent',
         props.class
       )}
     >
@@ -89,13 +82,11 @@ function Kbd(props: { shortcut: string; class?: string }) {
 }
 
 function ShortcutRow(props: { item: ShortcutItem; spacer?: string }) {
-  const isActive = () => shortcuts[props.item.id]?.active ?? false;
-
   return (
     <div
-      class="flex items-center gap-2 py-1.5 rounded-md hover:bg-panel-secondary/50 transition-colors"
-      onMouseEnter={() => highlightShortcut(props.item.id)}
-      onMouseLeave={clearHighlight}
+      class="group flex items-center gap-2 py-1.5 rounded-md hover:bg-panel-secondary/50 transition-colors"
+      onMouseEnter={() => setHoveredCodes(props.item.codes)}
+      onMouseLeave={() => setHoveredCodes([])}
     >
       <div class="shrink-0 flex items-center gap-1 uppercase">
         <Index each={props.item.keys}>
@@ -109,11 +100,7 @@ function ShortcutRow(props: { item: ShortcutItem; spacer?: string }) {
           )}
         </Index>
       </div>
-      <span
-        class="text-sm transition-colors"
-        style={{ color: isActive() ? 'var(--a0)' : undefined }}
-        classList={{ 'text-ink-muted': !isActive() }}
-      >
+      <span class="text-sm text-ink-muted group-hover:text-accent transition-colors">
         {props.item.description}
       </span>
     </div>
@@ -143,10 +130,9 @@ function ShortcutsContent() {
       </div>
 
       <div class="flex-1 overflow-auto px-6 py-2 @container">
-        <Keyboard />
+        <Keyboard keys={hoveredCodes()} />
 
         <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
-
           {/* Core - left column */}
           <ShortcutSectionComponent section={shortcutSections[0]} />
 
@@ -175,7 +161,7 @@ function ShortcutsContent() {
 export function Shortcuts() {
   return (
     <div class="h-full overflow-hidden flex justify-center p-2">
-      <div class="max-w-2xl w-full h-full">
+      <div class="max-w-200 w-full h-full">
         <Panel depth={2} class="h-full overflow-hidden">
           <div class="text-ink h-full">
             <ShortcutsContent />

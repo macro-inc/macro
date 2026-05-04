@@ -1,74 +1,14 @@
-import { For, type JSX } from 'solid-js';
-import { createStore, produce } from 'solid-js/store';
-
-interface KeyState {
-  pressed: boolean;
-  highlighted: boolean;
-}
-
-type KeyboardState = Record<string, KeyState>;
-
-/**
- * A shortcut may have multiple alternative `combos` (e.g. "press `c` OR `cmd+k`").
- * Each combo is a list of groups; each group is a list of equivalent `e.code`
- * values (e.g. `cmd` -> [`MetaLeft`, `MetaRight`]). The shortcut is active if
- * any combo's groups all match the currently pressed set, with no extras.
- */
-interface Shortcut {
-  combos: string[][][];
-  active: boolean;
-}
-
-type ShortcutsState = Record<string, Shortcut>;
-
-const MODIFIER_CODES: Record<string, string[]> = {
-  cmd:   ['MetaLeft'],
-  meta:  ['MetaLeft'],
-  ctrl:  ['ControlLeft'],
-  shift: ['ShiftLeft'],
-  opt:   ['AltLeft'],
-  alt:   ['AltLeft'],
-};
-
-const SYMBOL_CODE: Record<string, string> = {
-  '/':  'Slash',
-  '\\': 'Backslash',
-  ';':  'Semicolon',
-  "'":  'Quote',
-  ',':  'Comma',
-  '.':  'Period',
-  '-':  'Minus',
-  '=':  'Equal',
-  '`':  'Backquote',
-  '[':  'BracketLeft',
-  ']':  'BracketRight',
-};
-
-const NAMED_CODE: Record<string, string> = {
-  enter:      'Enter',
-  space:      'Space',
-  tab:        'Tab',
-  escape:     'Escape',
-  esc:        'Escape',
-  backspace:  'Backspace',
-  delete:     'Backspace',
-  arrowup:    'ArrowUp',
-  arrowdown:  'ArrowDown',
-  arrowleft:  'ArrowLeft',
-  arrowright: 'ArrowRight',
-  capslock:   'CapsLock',
-  fn:         'Fn',
-};
+import { createMemo, For, type JSX } from 'solid-js';
 
 interface KeyDef {
-  name: string;
-  label: string;
-  x: number;
-  y: number;
-  width: number;
   height: number;
   labelX: number;
   labelY: number;
+  label: string;
+  width: number;
+  name: string;
+  x: number;
+  y: number;
 }
 
 const KEYS: KeyDef[] = [
@@ -158,155 +98,15 @@ const KEYS: KeyDef[] = [
   { name: 'ArrowRight',   label: '▸',     x: 27.0763, y: 10.0763, width: 1.8473, height: 1.8473, labelX: 28.00, labelY: 11.0228 },
 ];
 
-function initialKeyboardState(): KeyboardState {
-  const state: KeyboardState = {};
-  for (const key of KEYS) {
-    state[key.name] = { pressed: false, highlighted: false };
-  }
-  return state;
-}
-
-export const [keyboard, setKeyboard] = createStore<KeyboardState>(initialKeyboardState());
-export const [shortcuts, setShortcuts] = createStore<ShortcutsState>({});
-
-export function setHighlight(names: string[]): void {
-  const next = new Set(names);
-  for (const key of KEYS) {
-    const shouldHighlight = next.has(key.name);
-    if (keyboard[key.name].highlighted !== shouldHighlight) {
-      setKeyboard(key.name, 'highlighted', shouldHighlight);
-    }
-  }
-}
-
-export function clearHighlight(): void {
-  setHighlight([]);
-}
-
-/**
- * Parse a human-readable combo string (e.g. `cmd+k`, `shift+arrowdown`) into
- * groups of equivalent `e.code` values. Unknown tokens are dropped.
- */
-export function parseShortcut(combo: string): string[][] {
-  return combo
-    .split('+')
-    .map(tokenToCodes)
-    .filter((group) => group.length > 0);
-}
-
-function tokenToCodes(token: string): string[] {
-  const lower = token.toLowerCase();
-  if (lower in MODIFIER_CODES) return MODIFIER_CODES[lower];
-  if (token in SYMBOL_CODE)    return [SYMBOL_CODE[token]];
-  if (lower in NAMED_CODE)     return [NAMED_CODE[lower]];
-  if (/^[a-z]$/.test(lower))   return [`Key${lower.toUpperCase()}`];
-  if (/^[0-9]$/.test(lower))   return [`Digit${lower}`];
-  return [];
-}
-
-let nextShortcutId = 0;
-
-/**
- * Register a shortcut described by one or more combo strings.
- * Returns an opaque id used to read `shortcuts[id].active` or
- * to highlight the keys via {@link highlightShortcut}.
- */
-export function registerShortcut(combos: string[]): string {
-  const id = `shortcut-${nextShortcutId++}`;
-  setShortcuts(id, {
-    combos: combos.map(parseShortcut),
-    active: false,
-  });
-  return id;
-}
-
-export function unregisterShortcut(id: string): void {
-  setShortcuts(produce((s) => { delete s[id]; }));
-}
-
-/** Highlight every key referenced by a registered shortcut. */
-export function highlightShortcut(id: string): void {
-  const s = shortcuts[id];
-  if (!s) {
-    clearHighlight();
-    return;
-  }
-  const codes = new Set<string>();
-  for (const combo of s.combos) {
-    for (const group of combo) {
-      for (const code of group) codes.add(code);
-    }
-  }
-  setHighlight([...codes]);
-}
-
-function comboMatches(combo: string[][], pressed: Set<string>): boolean {
-  if (combo.length === 0) return false;
-  // Every pressed key must belong to some group (no extras allowed).
-  for (const code of pressed) {
-    if (!combo.some((g) => g.includes(code))) return false;
-  }
-  // Every group must be satisfied by at least one pressed key.
-  for (const group of combo) {
-    if (!group.some((k) => pressed.has(k))) return false;
-  }
-  return true;
-}
-
-function recomputeShortcuts() {
-  const pressed = new Set<string>();
-  for (const name in keyboard) {
-    if (keyboard[name].pressed) pressed.add(name);
-  }
-  for (const id in shortcuts) {
-    const s = shortcuts[id];
-    const isActive = s.combos.some((c) => comboMatches(c, pressed));
-    if (s.active !== isActive) setShortcuts(id, 'active', isActive);
-  }
-}
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('keydown', (e) => {
-    const name = e.code;
-    if (keyboard[name] && !keyboard[name].pressed) {
-      setKeyboard(name, 'pressed', true);
-      recomputeShortcuts();
-    }
-  });
-  window.addEventListener('keyup', (e) => {
-    const name = e.code;
-    if (keyboard[name]?.pressed) {
-      setKeyboard(name, 'pressed', false);
-      recomputeShortcuts();
-    }
-  });
-}
-
-function KeyRect(props: { def: KeyDef }) {
-  const isHighlighted = () => keyboard[props.def.name].highlighted;
-  const isPressed = () => keyboard[props.def.name].pressed;
-
-  function getSolid() {
-    if (isPressed() && isHighlighted()) {return 'var(--a0)'}
-    if (isPressed()) { return 'var(--c4)'};
-    if (isHighlighted()) return 'oklch(from var(--a0) l c h / 0.4)';
-    return 'var(--b4)';
-  };
-
-  function getTransparent() {
-    if (isPressed() && isHighlighted()) {return 'oklch(from var(--a0) l c h / 0.6'}
-    if (isPressed()) { return 'oklch(from var(--c4) l c h / 0.5)' };
-    if (isHighlighted()) return 'oklch(from var(--a0) l c h / 0.2)';
-    return 'oklch(from var(--b2) l c h / 0.2';
-  };
+function KeyRect(props: { def: KeyDef; active: boolean }) {
+  const stroke = () => (props.active ? 'var(--a0)' : 'var(--b4)');
+  const fill = () =>
+    props.active ? 'oklch(from var(--a0) l c h / 0.1)' : 'oklch(from var(--b2) l c h / 0.1)';
 
   return (
     <>
       <rect
-        style={{
-          'fill': getTransparent(),
-          'stroke': getSolid(),
-        }}
+        style={{ fill: fill(), stroke: stroke() }}
         height={props.def.height}
         width={props.def.width}
         x={props.def.x}
@@ -318,9 +118,9 @@ function KeyRect(props: { def: KeyDef }) {
           'font-family': 'var(--font-mono)',
           'dominant-baseline': 'central',
           'text-anchor': 'middle',
-          'fill': getSolid(),
           'font-size': '0.4',
           'stroke': 'none',
+          'fill': stroke(),
         }}
         x={props.def.labelX}
         y={props.def.labelY}
@@ -329,9 +129,11 @@ function KeyRect(props: { def: KeyDef }) {
       </text>
     </>
   );
-};
+}
 
-export function Keyboard(): JSX.Element {
+export function Keyboard(props: { keys?: string[] }): JSX.Element {
+  const active = createMemo(() => new Set(props.keys ?? []));
+
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -346,7 +148,7 @@ export function Keyboard(): JSX.Element {
       viewBox="0 0 29 12"
     >
       <For each={KEYS}>
-        {(key) => <KeyRect def={key} />}
+        {(key) => <KeyRect def={key} active={active().has(key.name)} />}
       </For>
     </svg>
   );

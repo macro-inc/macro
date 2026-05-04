@@ -846,7 +846,7 @@ export function Team() {
     <div
       class="h-full overflow-hidden flex justify-center p-2"
     >
-      <div class="max-w-2xl w-full h-full">
+      <div class="max-w-200 w-full h-full">
         <Panel depth={2} class="h-full overflow-hidden">
           <div class="text-ink h-full">
             <Suspense fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />}>
