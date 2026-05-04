@@ -24,7 +24,7 @@ import {
   type ComponentMetaMap,
   resolveComponent,
 } from './componentRegistry';
-import { createHistory, type History, markHistoryNavigation } from './history';
+import { createHistory, type History } from './history';
 import { LIST_VIEW_ID } from '@app/constants/list-views';
 
 const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = false;
@@ -366,6 +366,12 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
    * Returns all history items up to and including the current one.
    */
   history: () => SplitContent[];
+  /**
+   * Returns true once if the most recent content change in this split was a
+   * back/forward navigation, then clears the flag. Mount-time consumers can
+   * use this to behave differently on history navigation.
+   */
+  consumePendingHistoryNavigation: () => boolean;
   id: SplitId;
   /** Component metadata store (only available for component splits) */
   meta: () => Store<TMeta> | undefined;
@@ -621,7 +627,6 @@ export function createSplitLayout(
     const prev = split.history.back();
     if (!prev) return;
 
-    markHistoryNavigation(split.id);
     reattach(split, prev);
   }
 
@@ -635,7 +640,6 @@ export function createSplitLayout(
     const next = split.history.forward();
     if (!next) return;
 
-    markHistoryNavigation(split.id);
     reattach(split, next);
   }
 
@@ -787,6 +791,8 @@ export function createSplitLayout(
         if (!s) return [];
         return s.history.items.slice(0, s.history.index + 1) as SplitContent[];
       },
+      consumePendingHistoryNavigation: () =>
+        currentSplit.history.consumePendingNavigation(),
       close: () => {
         // If there's only one split and it's the default split, then no-op
         if (state.splits.length <= 1) {

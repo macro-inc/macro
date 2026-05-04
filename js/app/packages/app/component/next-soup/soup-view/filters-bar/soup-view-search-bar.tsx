@@ -4,7 +4,6 @@ import { cn } from '@ui/utils/classname';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { registerSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
-import { consumeHistoryNavigation } from '@app/component/split-layout/history';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Hotkey } from '@core/component/Hotkey';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
@@ -51,7 +50,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
   // Suppress autofocus when this mount was triggered by back/forward
   // navigation so navigating back into a search split doesn't steal focus.
-  const fromHistoryNav = consumeHistoryNavigation(panel.handle.id);
+  const fromHistoryNav = panel.handle.consumePendingHistoryNavigation();
 
   const [hasContent, setHasContent] = createSignal(false);
   const [latestMarkdown, setLatestMarkdown] = createSignal('');
