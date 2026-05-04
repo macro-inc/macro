@@ -12,11 +12,12 @@ import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { Button } from '@ui/components/Button';
 import { Panel } from '@ui';
+import { cn } from '@ui/utils/classname';
 import { Dialog } from '@kobalte/core/dialog';
 import { Select } from '@kobalte/core/select';
 import { useUserId } from '@core/context/user';
 import { useDisplayName, tryMacroId } from '@core/user';
-import { createMemo, createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
+import { createMemo, createSignal, For, Index, Match, Show, Suspense, Switch } from 'solid-js';
 import type { CollectionNode } from '@kobalte/core';
 import {
   useUserTeamsQuery,
@@ -158,18 +159,25 @@ type InviteEntry = { email: string; tier: TeamUserTier };
 function InviteEntryRow(props: {
   entry: InviteEntry;
   onEmailChange: (email: string) => void;
+  onBlur: () => void;
   onTierChange: (tier: TeamUserTier) => void;
   onRemove: () => void;
   showTier: boolean;
+  error?: string;
 }) {
   return (
-    <div class="flex items-center gap-2">
-      <input
-        type="text"
-        value={props.entry.email}
-        onInput={(e) => props.onEmailChange(e.currentTarget.value)}
-        class="flex-1 min-w-0 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
-      />
+    <div class="flex flex-col gap-1">
+      <div class="flex items-center gap-2">
+        <input
+          type="text"
+          value={props.entry.email}
+          onInput={(e) => props.onEmailChange(e.currentTarget.value)}
+          onBlur={() => props.onBlur()}
+          class={cn(
+            'flex-1 min-w-0 px-3 py-2 text-sm border rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none',
+            props.error ? 'border-failure focus:border-failure' : 'border-edge-muted focus:border-accent/50'
+          )}
+        />
       <Show when={props.showTier}>
         <Select<TierOption>
           options={tierOptions}
@@ -202,9 +210,14 @@ function InviteEntryRow(props: {
           </Select.Portal>
         </Select>
       </Show>
-      <Button variant="secondary" class="bracket-never rounded-xs w-12 shrink-0 focus:border-accent/50" tabIndex={0} onClick={props.onRemove}>
-        <XIcon class="size-4" />
-      </Button>
+      <Button variant="secondary" class="bracket-never rounded-xs shrink-0 focus:border-accent/50 w-24 justify-center" tabIndex={0} onClick={props.onRemove}>
+          <XIcon class="size-4" />
+          Remove
+        </Button>
+      </div>
+      <Show when={props.error}>
+        <p class="text-xs text-failure-ink">{props.error}</p>
+      </Show>
     </div>
   );
 }
@@ -212,21 +225,79 @@ function InviteEntryRow(props: {
 function InviteEmailsInput(props: {
   invites: InviteEntry[];
   onChange: (invites: InviteEntry[]) => void;
+  errors: () => (string | undefined)[];
+  onErrorsChange: (errors: (string | undefined)[]) => void;
   defaultTier?: TeamUserTier;
 }) {
   let inputRef: HTMLInputElement | undefined;
   const [inputValue, setInputValue] = createSignal('');
   const [inputTier, setInputTier] = createSignal<TeamUserTier>(props.defaultTier ?? TeamUserTier.Haiku);
+  const [inputError, setInputError] = createSignal<string | undefined>(undefined);
 
   const tierFlag = useFeatureFlag('enable-team-invite-tiers', { enabledOverride: ENABLE_TEAM_INVITE_TIERS_OVERRIDE });
   const showTier = () => tierFlag().enabled;
 
+  const validateEmail = (index: number) => {
+    const email = props.invites[index]?.email?.trim() ?? '';
+    let error: string | undefined;
+
+    if (email !== '' && !emailSchema.safeParse(email).success) {
+      error = 'Invalid email address';
+    } else if (email !== '') {
+      const isDuplicate = props.invites.some(
+        (inv, i) => i !== index && inv.email.toLowerCase() === email.toLowerCase()
+      );
+      if (isDuplicate) {
+        error = 'Email already added';
+      }
+    }
+
+    const next = [...props.errors()];
+    next[index] = error;
+    props.onErrorsChange(next);
+    return !error;
+  };
+
+  const validateInput = () => {
+    const value = inputValue().trim();
+    if (value === '') {
+      setInputError(undefined);
+      return true;
+    }
+    if (!emailSchema.safeParse(value).success) {
+      setInputError('Invalid email address');
+      return false;
+    }
+    const existingEmails = new Set(props.invites.map((i) => i.email.toLowerCase()));
+    if (existingEmails.has(value.toLowerCase())) {
+      setInputError('Email already added');
+      return false;
+    }
+    setInputError(undefined);
+    return true;
+  };
+
+  const handleInputChange = (value: string) => {
+    setInputValue(value);
+    if (inputError()) {
+      setInputError(undefined);
+    }
+  };
+
   const addEmails = () => {
     const newEmails = parseEmails(inputValue());
-    if (newEmails.length === 0) return;
+    if (newEmails.length === 0) {
+      validateInput();
+      return;
+    }
 
     const existingEmails = new Set(props.invites.map((i) => i.email.toLowerCase()));
     const uniqueNew = newEmails.filter((e) => !existingEmails.has(e.toLowerCase()));
+
+    if (uniqueNew.length === 0 && newEmails.length > 0) {
+      setInputError('Email already added');
+      return;
+    }
 
     if (uniqueNew.length > 0) {
       props.onChange([
@@ -235,6 +306,7 @@ function InviteEmailsInput(props: {
       ]);
     }
     setInputValue('');
+    setInputError(undefined);
     inputRef?.focus();
   };
 
@@ -249,6 +321,11 @@ function InviteEmailsInput(props: {
     const updated = [...props.invites];
     updated[index] = { ...updated[index], email };
     props.onChange(updated);
+    if (props.errors()[index]) {
+      const next = [...props.errors()];
+      next[index] = undefined;
+      props.onErrorsChange(next);
+    }
   };
 
   const updateTier = (index: number, tier: TeamUserTier) => {
@@ -259,76 +336,89 @@ function InviteEmailsInput(props: {
 
   const removeInvite = (index: number) => {
     props.onChange(props.invites.filter((_, i) => i !== index));
+    props.onErrorsChange(props.errors().filter((_, i) => i !== index));
   };
 
   return (
     <div class="flex flex-col gap-2">
       <Show when={props.invites.length > 0}>
         <div class="flex flex-col gap-2 max-h-48 overflow-y-auto">
-          <For each={props.invites}>
+          <Index each={props.invites}>
             {(entry, index) => (
               <InviteEntryRow
-                entry={entry}
-                onEmailChange={(email) => updateEmail(index(), email)}
-                onTierChange={(tier) => updateTier(index(), tier)}
-                onRemove={() => removeInvite(index())}
+                entry={entry()}
+                onEmailChange={(email) => updateEmail(index, email)}
+                onBlur={() => validateEmail(index)}
+                onTierChange={(tier) => updateTier(index, tier)}
+                onRemove={() => removeInvite(index)}
                 showTier={showTier()}
+                error={props.errors()[index]}
               />
             )}
-          </For>
+          </Index>
         </div>
       </Show>
-      <div class="flex gap-2 items-center">
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputValue()}
-          onInput={(e) => setInputValue(e.currentTarget.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Enter email address"
-          class="flex-1 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
-        />
-        <Show when={showTier()}>
-          <Select<TierOption>
-            options={tierOptions}
-            value={tierOptions.find((o) => o.value === inputTier()) ?? tierOptions[0]}
-            onChange={(opt) => opt && setInputTier(opt.value)}
-            optionValue="value"
-            optionTextValue="label"
-            gutter={4}
-            placement="bottom-end"
-            itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
-              <Select.Item
-                item={itemProps.item}
-                class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
-              >
-                <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
-                <Select.ItemIndicator>
-                  <CheckIcon class="w-3 h-3" />
-                </Select.ItemIndicator>
-              </Select.Item>
+      <div class="flex flex-col gap-1">
+        <div class="flex gap-2 items-center">
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputValue()}
+            onInput={(e) => handleInputChange(e.currentTarget.value)}
+            onBlur={() => validateInput()}
+            onKeyDown={handleKeyDown}
+            placeholder="Enter email address"
+            class={cn(
+              'flex-1 px-3 py-2 text-sm border rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none',
+              inputError() ? 'border-failure focus:border-failure' : 'border-edge-muted focus:border-accent/50'
             )}
+          />
+          <Show when={showTier()}>
+            <Select<TierOption>
+              options={tierOptions}
+              value={tierOptions.find((o) => o.value === inputTier()) ?? tierOptions[0]}
+              onChange={(opt) => opt && setInputTier(opt.value)}
+              optionValue="value"
+              optionTextValue="label"
+              gutter={4}
+              placement="bottom-end"
+              itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
+                <Select.Item
+                  item={itemProps.item}
+                  class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+                >
+                  <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
+                  <Select.ItemIndicator>
+                    <CheckIcon class="w-3 h-3" />
+                  </Select.ItemIndicator>
+                </Select.Item>
+              )}
+            >
+              <Select.Trigger tabIndex={0} class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0">
+                <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
+                <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
+              </Select.Trigger>
+              <Select.Portal>
+                <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+                  <Select.Listbox />
+                </Select.Content>
+              </Select.Portal>
+            </Select>
+          </Show>
+          <Button
+            variant="secondary"
+            class="bracket-never rounded-xs shrink-0 focus:border-accent/50 w-24 justify-center"
+            tabIndex={0}
+            disabled={parseEmails(inputValue()).length === 0 || !!inputError()}
+            onClick={addEmails}
           >
-            <Select.Trigger tabIndex={0} class="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink outline-none focus:border-accent/50 shrink-0">
-              <Select.Value<TierOption>>{(state) => state.selectedOption().label}</Select.Value>
-              <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
-            </Select.Trigger>
-            <Select.Portal>
-              <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
-                <Select.Listbox />
-              </Select.Content>
-            </Select.Portal>
-          </Select>
+            <PlusIcon class="size-4" />
+            Add
+          </Button>
+        </div>
+        <Show when={inputError()}>
+          <p class="text-xs text-failure-ink">{inputError()}</p>
         </Show>
-        <Button
-          variant="secondary"
-          class="bracket-never rounded-xs w-12 shrink-0 focus:border-accent/50"
-          tabIndex={0}
-          disabled={parseEmails(inputValue()).length === 0}
-          onClick={addEmails}
-        >
-          Add
-        </Button>
       </div>
     </div>
   );
@@ -521,22 +611,83 @@ function TeamInvites() {
   );
 }
 
+const TEAM_NAME_MAX_LENGTH = 50;
+
+const teamNameSchema = z
+  .string()
+  .transform((s) => s.trim())
+  .pipe(
+    z.string()
+      .min(1, 'Team name is required')
+      .max(TEAM_NAME_MAX_LENGTH, 'Team name is too long')
+  );
+
 function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   const [teamName, setTeamName] = createSignal('');
+  const [teamNameError, setTeamNameError] = createSignal<string | undefined>(undefined);
   const [invites, setInvites] = createSignal<InviteEntry[]>([]);
+  const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>([]);
 
   const createTeamMutation = useCreateTeamWithInvitesMutation();
 
-  const canCreate = () => teamName().trim().length > 0;
+  const charCountColor = () => {
+    const len = teamName().trim().length;
+    if (len > TEAM_NAME_MAX_LENGTH) return 'text-failure-ink';
+    if (len > TEAM_NAME_MAX_LENGTH - 10) return 'text-alert-ink';
+    return 'text-ink-muted';
+  };
+
+  const validateTeamName = () => {
+    const result = teamNameSchema.safeParse(teamName());
+    const error = result.success ? undefined : result.error.issues[0]?.message;
+    setTeamNameError(error);
+    return result.success;
+  };
+
+  const validateInvites = () => {
+    const currentInvites = invites();
+    const newErrors: (string | undefined)[] = [];
+    let hasError = false;
+
+    for (let i = 0; i < currentInvites.length; i++) {
+      const email = currentInvites[i].email.trim();
+      if (email !== '' && !emailSchema.safeParse(email).success) {
+        newErrors[i] = 'Invalid email address';
+        hasError = true;
+      } else {
+        newErrors[i] = undefined;
+      }
+    }
+
+    setInviteErrors(newErrors);
+    return !hasError;
+  };
+
+  const handleTeamNameChange = (value: string) => {
+    setTeamName(value);
+    if (teamNameError()) {
+      setTeamNameError(undefined);
+    }
+  };
 
   const handleCreate = () => {
-    const name = teamName().trim();
-    if (!name) return;
+    const isTeamNameValid = validateTeamName();
+    const areInvitesValid = validateInvites();
+
+    if (!isTeamNameValid || !areInvitesValid) {
+      return;
+    }
+
+    const result = teamNameSchema.safeParse(teamName());
+    if (!result.success) return;
+
+    const emails = invites()
+      .map((i) => i.email.trim())
+      .filter((email) => email !== '');
 
     // TODO: Update mutation to accept invites with tiers once API supports it
-    const emails = invites().map((i) => i.email);
     createTeamMutation.mutate(
-      { name, emails: emails.length > 0 ? emails : undefined },
+      { name: result.data, emails: emails.length > 0 ? emails : undefined },
       { onSuccess: props.onClose }
     );
   };
@@ -556,18 +707,35 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
             </div>
             <div class="p-3 flex flex-col gap-3">
               <div class="flex flex-col gap-1">
-                <label class="text-sm text-ink-muted">Team name</label>
+                <div class="flex items-center justify-between">
+                  <label class="text-sm text-ink-muted">Team name</label>
+                  <span class={cn('text-xs', charCountColor())}>
+                    {teamName().length}/{TEAM_NAME_MAX_LENGTH}
+                  </span>
+                </div>
                 <input
                   type="text"
                   value={teamName()}
-                  onInput={(e) => setTeamName(e.currentTarget.value)}
+                  onInput={(e) => handleTeamNameChange(e.currentTarget.value)}
+                  onBlur={() => validateTeamName()}
                   placeholder="My Team"
-                  class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+                  class={cn(
+                    'w-full px-3 py-2 text-sm border rounded-xs bg-transparent text-ink placeholder:text-ink/30 outline-none',
+                    teamNameError() ? 'border-failure focus:border-failure' : 'border-edge-muted focus:border-accent/50'
+                  )}
                 />
+                <Show when={teamNameError()}>
+                  <p class="text-xs text-failure-ink">{teamNameError()}</p>
+                </Show>
               </div>
               <div class="flex flex-col gap-1">
                 <label class="text-sm text-ink-muted">Invite members (optional)</label>
-                <InviteEmailsInput invites={invites()} onChange={setInvites} />
+                <InviteEmailsInput
+                  invites={invites()}
+                  onChange={setInvites}
+                  errors={inviteErrors}
+                  onErrorsChange={setInviteErrors}
+                />
               </div>
               <div class="flex justify-end gap-1 pt-2">
                 <Button
@@ -581,7 +749,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
                 <Button
                   variant="accent"
                   class="rounded-xs"
-                  disabled={!canCreate() || createTeamMutation.isPending}
+                  disabled={createTeamMutation.isPending || !!teamNameError() || inviteErrors().some((e) => e !== undefined)}
                   onClick={handleCreate}
                 >
                   <Show when={createTeamMutation.isPending} fallback="Create Team">
@@ -610,7 +778,7 @@ function EmptyTeamState() {
         </div>
         <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
         <Show
-          when={hasPaidAccess()}
+          when={hasPaidAccess() }
           fallback={
             <>
               <p class="text-xs text-ink-muted max-w-xs mb-4">
@@ -658,9 +826,29 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
   const [showCancelInviteModal, setShowCancelInviteModal] = createSignal<TeamInviteDetails | null>(null);
   const [showInviteModal, setShowInviteModal] = createSignal(false);
   const [invites, setInvites] = createSignal<InviteEntry[]>([]);
+  const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>([]);
   const [editingTeamName, setEditingTeamName] = createSignal<string | undefined>(undefined);
 
   const hasValidInvites = () => invites().length > 0;
+
+  const validateInvites = () => {
+    const currentInvites = invites();
+    const newErrors: (string | undefined)[] = [];
+    let hasError = false;
+
+    for (let i = 0; i < currentInvites.length; i++) {
+      const email = currentInvites[i].email.trim();
+      if (email !== '' && !emailSchema.safeParse(email).success) {
+        newErrors[i] = 'Invalid email address';
+        hasError = true;
+      } else {
+        newErrors[i] = undefined;
+      }
+    }
+
+    setInviteErrors(newErrors);
+    return !hasError;
+  };
 
   const deleteConfirmationPhrase = () => `Delete ${props.teamName}`;
   const canDeleteTeam = () => deleteConfirmation() === deleteConfirmationPhrase();
@@ -746,13 +934,21 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
     const currentInvites = invites();
     if (currentInvites.length === 0 || !props.teamId) return;
 
+    if (!validateInvites()) {
+      return;
+    }
+
     // TODO: Update mutation to send invites with tiers once API supports it
-    const emails = currentInvites.map((i) => i.email);
+    const emails = currentInvites
+      .map((i) => i.email.trim())
+      .filter((email) => email !== '');
+
     inviteToTeamMutation.mutate(
       { teamId: props.teamId, request: { emails } },
       {
         onSuccess: () => {
           setInvites([]);
+          setInviteErrors([]);
           setShowInviteModal(false);
         },
       }
@@ -762,6 +958,7 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
   const handleInviteModalClose = (open: boolean) => {
     if (!open) {
       setInvites([]);
+      setInviteErrors([]);
       setShowInviteModal(false);
     }
   };
@@ -1057,7 +1254,12 @@ function TeamManagement(props: { teamId: string; teamName: string; ownerId: stri
                 </Dialog.Title>
               </div>
               <div class="p-3 flex flex-col gap-3">
-                <InviteEmailsInput invites={invites()} onChange={setInvites} />
+                <InviteEmailsInput
+                  invites={invites()}
+                  onChange={setInvites}
+                  errors={inviteErrors}
+                  onErrorsChange={setInviteErrors}
+                />
                 <div class="flex justify-end gap-1 pt-2">
                   <Button
                     variant="ghost"
