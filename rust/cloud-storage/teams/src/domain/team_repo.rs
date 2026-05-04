@@ -58,6 +58,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         invited_by: &MacroUserIdStr<'_>,
         emails: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        tier: TeamUserTier,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
     /// Marks the given team invites as sent by updating their last_sent_at timestamp.
@@ -234,6 +235,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         invited_by: &MacroUserIdStr<'_>,
         emails: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        tier: TeamUserTier,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
     /// Remove user from a team.

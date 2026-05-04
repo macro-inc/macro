@@ -111,7 +111,7 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, TeamUserTier::Haiku)
         .await?;
 
     assert_eq!(invited.len(), 1);
@@ -124,7 +124,7 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, TeamUserTier::Haiku)
         .await?;
 
     assert!(invited.is_empty());
@@ -148,7 +148,7 @@ async fn test_invite_existing_user_within_rate_limit(pool: Pool<Postgres>) -> an
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, TeamUserTier::Haiku)
         .await?;
 
     // Rate limit blocks re-send, no new invite created either
@@ -180,7 +180,7 @@ async fn test_invite_existing_user_after_rate_limit(pool: Pool<Postgres>) -> any
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, TeamUserTier::Haiku)
         .await?;
 
     assert_eq!(invited.len(), 1);
@@ -215,7 +215,7 @@ async fn test_invite_mix_new_and_existing(pool: Pool<Postgres>) -> anyhow::Resul
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, TeamUserTier::Haiku)
         .await?;
 
     assert_eq!(invited.len(), 2);
@@ -250,7 +250,7 @@ async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Res
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, TeamUserTier::Haiku)
         .await?;
     assert_eq!(invited.len(), 1);
 
@@ -262,7 +262,7 @@ async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Res
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, TeamUserTier::Haiku)
         .await?;
     assert!(invited.is_empty());
 
@@ -292,7 +292,7 @@ async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> a
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, TeamUserTier::Haiku)
         .await?;
     assert_eq!(invited.len(), 1);
 
@@ -302,7 +302,7 @@ async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> a
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, TeamUserTier::Haiku)
         .await?;
     assert_eq!(invited.len(), 1);
 
@@ -352,7 +352,7 @@ async fn test_mark_invites_sent(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, TeamUserTier::Haiku)
         .await?;
     assert!(invited.is_empty());
 

@@ -7,15 +7,22 @@ use macro_user_id::{email::Email, lowercased::Lowercase};
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 
-use crate::domain::{model::InviteUsersToTeamError, team_repo::TeamService};
+use crate::domain::{model::{InviteUsersToTeamError, TeamUserTier}, team_repo::TeamService};
 
 use super::{TeamPathParam, TeamRouterState, middleware::TeamAccessRoleExtractor};
+
+fn default_tier() -> TeamUserTier {
+    TeamUserTier::Haiku
+}
 
 /// The request body to invite a user to a team
 #[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct InviteToTeamRequest {
     /// The emails of the users you want to invite to the team
     pub emails: Vec<String>,
+    /// The tier for the invited users (defaults to Haiku if not provided)
+    #[serde(default = "default_tier")]
+    pub tier: TeamUserTier,
 }
 
 /// Error type for the invite to team handler
@@ -109,7 +116,7 @@ pub async fn handler<T: TeamService>(
 
     let team_invites = state
         .service
-        .invite_users_to_team(&team_id, &user_context.macro_user_id, emails)
+        .invite_users_to_team(&team_id, &user_context.macro_user_id, emails, req.tier)
         .await
         .map_err(InviteToTeamError::InviteUsersToTeamError)?;
 

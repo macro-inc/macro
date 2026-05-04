@@ -247,6 +247,7 @@ impl TeamRepository for TeamRepositoryImpl {
         team_id: &uuid::Uuid,
         invited_by: &MacroUserIdStr<'_>,
         emails: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        tier: TeamUserTier,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
         // Convert emails to strings and macro_user_ids once
         let email_strings: Vec<String> = emails.iter().map(|e| e.as_ref().to_string()).collect();
@@ -267,22 +268,23 @@ impl TeamRepository for TeamRepositoryImpl {
         // Single query that filters out both already invited AND already on team
         let invites: Vec<(uuid::Uuid, uuid::Uuid, String)> = sqlx::query!(
         r#"
-            INSERT INTO team_invite (id, team_id, email, team_role, invited_by, created_at, last_sent_at)
-            SELECT 
+            INSERT INTO team_invite (id, team_id, email, team_role, invited_by, created_at, last_sent_at, tier)
+            SELECT
                 t.id,
                 $1::uuid,
                 t.email,
                 $2,
                 $3::text,
                 NOW(),
-                NOW()
+                NOW(),
+                $7
             FROM UNNEST($4::uuid[], $5::text[], $6::text[]) AS t(id, email, user_id)
             WHERE NOT EXISTS (
-                SELECT 1 FROM team_invite ti 
+                SELECT 1 FROM team_invite ti
                 WHERE ti.team_id = $1 AND ti.email = t.email
             )
             AND NOT EXISTS (
-                SELECT 1 FROM team_user tu 
+                SELECT 1 FROM team_user tu
                 WHERE tu.team_id = $1 AND tu.user_id = t.user_id
             )
             RETURNING id, team_id, email
@@ -292,7 +294,8 @@ impl TeamRepository for TeamRepositoryImpl {
         invited_by.as_ref(),
         &team_invite_ids[..],
         &email_strings[..],
-        &macro_user_ids[..]
+        &macro_user_ids[..],
+        tier as _
     )
     .map(|r| (r.id, r.team_id, r.email))
     .fetch_all(&mut *transaction)

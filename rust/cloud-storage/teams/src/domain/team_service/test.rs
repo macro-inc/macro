@@ -138,6 +138,7 @@ impl TeamRepository for MockTeamRepository {
         _: &uuid::Uuid,
         _: &MacroUserIdStr<'_>,
         _: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        _: TeamUserTier,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send {
         let invites = self.invites_to_return.clone();
         async move { Ok(invites) }
@@ -775,7 +776,7 @@ async fn test_invite_marks_sent_only_for_successful_notifications() {
     let emails = non_empty::NonEmpty::new(emails.as_slice()).unwrap();
 
     let result = service
-        .invite_users_to_team(&team_id, &invited_by, emails)
+        .invite_users_to_team(&team_id, &invited_by, emails, TeamUserTier::Haiku)
         .await
         .unwrap();
 
@@ -816,7 +817,7 @@ async fn test_invite_does_not_call_mark_sent_when_all_notifications_fail() {
     let emails = non_empty::NonEmpty::new(emails.as_slice()).unwrap();
 
     service
-        .invite_users_to_team(&team_id, &invited_by, emails)
+        .invite_users_to_team(&team_id, &invited_by, emails, TeamUserTier::Haiku)
         .await
         .unwrap();
 
@@ -856,7 +857,7 @@ async fn test_invite_marks_all_sent_when_all_notifications_succeed() {
     let emails = non_empty::NonEmpty::new(emails.as_slice()).unwrap();
 
     service
-        .invite_users_to_team(&team_id, &invited_by, emails)
+        .invite_users_to_team(&team_id, &invited_by, emails, TeamUserTier::Haiku)
         .await
         .unwrap();
 
