@@ -148,34 +148,44 @@ function OnboardingCostSummary() {
     return Object.values(groups).sort((a, b) => b.plan.price - a.plan.price);
   };
 
+  const hasTeam = () => onboarding.invitedMembers().length > 0;
+
   return (
     <Show when={selectedPlan() && selectedPlan()!.price > 0}>
       <div class="px-4 py-3 border-t border-ink/10">
         <div class="flex items-center justify-between">
           <div class="flex items-baseline gap-1">
             <span class="text-3xl font-bold text-accent">
-              ${onboarding.totalCost()}
+              ${onboarding.userSeatCost()}
             </span>
             <span class="text-ink/40">/mo</span>
           </div>
-          <Show when={onboarding.invitedMembers().length > 0}>
-            <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium">
-              Team plan
-            </span>
-          </Show>
+          <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium">
+            {hasTeam() ? 'Team plan' : selectedPlan()?.name}
+          </span>
         </div>
-        <div class="flex flex-col gap-0.5 mt-1.5 text-xs text-ink/40">
-          <div class="flex justify-between">
-            <span>{selectedPlan()?.name}</span>
-            <span>${onboarding.userSeatCost()}/mo</span>
-          </div>
-          {teamByTier().map((group) => (
+        <Show when={hasTeam()}>
+          <div class="flex flex-col gap-0.5 mt-1.5 text-xs text-ink/40">
             <div class="flex justify-between">
-              <span>Team · {group.plan.name} ×{group.count}</span>
-              <span>${group.plan.price * group.count}/mo</span>
+              <span>{selectedPlan()?.name}</span>
+              <span>${onboarding.userSeatCost()}/mo</span>
             </div>
-          ))}
-        </div>
+            <div class="mt-1">
+              {teamByTier().map((group) => (
+                <div class="flex justify-between italic">
+                  <span>Team · {group.plan.name} ×{group.count}</span>
+                  <span class="border-b border-dashed border-ink/40">
+                    ${group.plan.price * group.count}/mo
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div class="flex justify-between items-center mt-2 pt-2 border-t border-ink/10 text-xs">
+            <span class="text-ink/40">Total with team</span>
+            <span class="text-ink/50 font-medium">${onboarding.totalCost()}/mo</span>
+          </div>
+        </Show>
       </div>
     </Show>
   );
