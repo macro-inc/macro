@@ -6,7 +6,7 @@ import type { MediaDeviceInfo } from './CallContext';
 import { cn } from '@ui/utils/classname';
 
 const deviceRadioRowClass =
-  'flex min-w-0 items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg outline-none focus:bg-active data-[highlighted]:bg-active';
+  'flex min-w-0 items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-[highlighted]:bg-active';
 
 /** Device picker rows for use inside `DropdownMenu` + `DropdownMenuContent` only. */
 export function CallDeviceList(props: {
