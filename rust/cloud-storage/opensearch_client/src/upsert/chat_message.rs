@@ -83,7 +83,7 @@ pub(crate) async fn update_chat_metadata(
     let query = json!({
         "query": {
             "term": {
-                "chat_id": chat_id
+                "entity_id": chat_id
             }
         },
         "script": {

@@ -11,7 +11,7 @@ pub async fn delete_email_by_thread_id(
     let query = serde_json::json!({
         "query": {
             "term": {
-                "thread_id": thread_id
+                "entity_id": thread_id
             }
         },
     });
