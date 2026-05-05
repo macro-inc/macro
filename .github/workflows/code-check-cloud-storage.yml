@@ -34,7 +34,8 @@ jobs:
             should_run:
               - 'rust/cloud-storage/**'
               - 'rust/rust-toolchain.toml'
-              - '.github/actions/setup-rust/**'
+              - 'flake.nix'
+              - 'flake.lock'
               - '.github/actions/setup-sccache/**'
               - .github/workflows/code-check-cloud-storage.yml
       - name: compute nextest package filter
@@ -59,7 +60,7 @@ jobs:
           printf '%s\n' "$changed_files" > /tmp/changed-files
 
           # Root cargo/toolchain/CI changes can affect the whole workspace, so run all tests.
-          if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-sccache)/.*|\.github/workflows/code-check-cloud-storage\.yml)$'; then
+          if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|flake\.nix|flake\.lock|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-sccache)/.*|\.github/workflows/code-check-cloud-storage\.yml)$'; then
             echo "Workspace-level change detected; running all tests"
             echo "nextest_filter=" >> "$GITHUB_OUTPUT"
             exit 0
@@ -162,40 +163,37 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-extra-beefy
     env:
-      RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=lld"
+      RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=mold"
       RUSTDOCFLAGS: "-Dwarnings"
       SQLX_OFFLINE: true
     steps:
       - uses: actions/checkout@v6
         with:
           clean: false
-      - uses: ./.github/actions/setup-rust
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ github.token }}
+      - uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 1073741824
+      - uses: ./.github/actions/setup-sccache
         env:
           SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-      - name: setup lld
-        run: |
-          if ! command -v ld.lld >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y lld
-          fi
-          ld.lld --version
       - name: fmt
-        run: |
-          cd rust/cloud-storage
-          cargo fmt --check
+        run: nix develop --command bash -c "cd rust/cloud-storage && cargo fmt --check"
       - name: clippy
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          cd rust/cloud-storage
-          cargo clippy --all-features
+        run: nix develop --command bash -c "cd rust/cloud-storage && cargo clippy --all-features"
       - name: show sccache stats
         if: always()
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: sccache --show-stats || true
+        run: nix develop --command sccache --show-stats || true
 
   test:
     needs: path-check
@@ -204,7 +202,7 @@ jobs:
     env:
       NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
       NEXTEST_TEST_THREADS: '32'
-      RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=lld"
+      RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=mold"
       SQLX_OFFLINE: true
     services:
       postgres:
@@ -226,16 +224,17 @@ jobs:
       - uses: actions/checkout@v6
         with:
           clean: false
-      - uses: ./.github/actions/setup-rust
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ github.token }}
+      - uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 1073741824
+      - uses: ./.github/actions/setup-sccache
         env:
           SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-      - name: setup lld
-        run: |
-          if ! command -v ld.lld >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y lld
-          fi
-          ld.lld --version
       - uses: actions/cache@v4
         with:
           path: |
@@ -245,25 +244,6 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: check cargo-nextest
-        id: check-cargo-nextest
-        run: |
-          if command -v cargo-nextest >/dev/null 2>&1; then
-            echo "installed=true" >> "$GITHUB_OUTPUT"
-            cargo nextest --version
-          else
-            echo "installed=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: install cargo-nextest
-        if: steps.check-cargo-nextest.outputs.installed != 'true'
-        uses: taiki-e/install-action@e32179aa3c2a47939bd07439bd80ddf13f99979f
-      - name: install dependencies
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          command -v just || cargo install just --locked
-          command -v sqlx || cargo install sqlx-cli --locked
       - name: configure postgres for concurrent tests
         run: |
           postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "postgres:16" { print $1; exit }')"
@@ -279,28 +259,24 @@ jobs:
             sleep 1
           done
       - name: prepare tests
-        run: |
-          just rust/cloud-storage/setup_test_envs
-          just rust/cloud-storage/initialize_dbs
+        run: nix develop --command bash -c "just rust/cloud-storage/setup_test_envs && just rust/cloud-storage/initialize_dbs"
       - name: run tests
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           cd rust/cloud-storage
-
-          args=(--all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS")
           if [ -n "$NEXTEST_FILTER" ]; then
-            args+=(-E "$NEXTEST_FILTER")
+            nix develop --command cargo nextest run --all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS" -E "$NEXTEST_FILTER"
+          else
+            nix develop --command cargo nextest run --all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS"
           fi
-
-          cargo nextest run "${args[@]}"
       - name: show sccache stats
         if: always()
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: sccache --show-stats || true
+        run: nix develop --command sccache --show-stats || true
 
   diff-check:
     needs: path-check
