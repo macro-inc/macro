@@ -24,8 +24,9 @@ export function createThreadManager() {
           typeof val === 'function' ? val(isReplying()) : val;
         if (next) {
           setIsExpanded(true);
-          requestAnimationFrame(() => replyInputEl()?.scrollIntoView({ block: 'nearest' }))
-          
+          requestAnimationFrame(() =>
+            replyInputEl()?.scrollIntoView({ block: 'nearest' })
+          );
         }
         setIsReplyingRaw(next);
       });
