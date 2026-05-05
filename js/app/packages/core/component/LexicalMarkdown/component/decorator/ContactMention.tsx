@@ -106,7 +106,7 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
         ref={mentionRef}
         class={cn(
           'relative py-0.5 px-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink',
-          isSelectedAsNode() && 'bracket-offset-2'
+          isSelectedAsNode() && 'bg-active'
         )}
         {...navHandlers}
         onMouseEnter={() => setPopupOpen(true)}

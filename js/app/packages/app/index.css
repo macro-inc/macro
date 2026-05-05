@@ -195,108 +195,8 @@
 }
 
 
-/* NOTE: We use this as a compile-time css util in this file to be able reuse the
- * declarations while still being able to override the color. */
-@utility util-bracket-bg-image {
-  background-image:
-    conic-gradient(from 90deg at top 1px left 1px, #0000 90deg, var(--color-focus) 0),
-    conic-gradient(from 180deg at top 1px right 1px, #0000 90deg, var(--color-focus) 0),
-    conic-gradient(from 0deg at bottom 1px left 1px, #0000 90deg, var(--color-focus) 0),
-    conic-gradient(from -90deg at bottom 1px right 1px, #0000 90deg, var(--color-focus) 0);
-
-  background-position:
-    0 0,
-    100% 0,
-    0 100%,
-    100% 100%;
-
-  background-size:
-    8px 8px,
-    8px 8px,
-    8px 8px,
-    8px 8px;
-
-  background-repeat: no-repeat;
-  background-origin: border-box;
-}
-
-@utility bracket {
-  position: relative;
-
-  /* note (seamus): we !important these selectors to allow for manual brackets within a .suppress-css-brackets*/
-  &::after {
-    content: "" !important;
-    position: absolute;
-    inset: 0px !important;
-    pointer-events: none;
-    @apply util-bracket-bg-image;
-    z-index: 10;
-  }
-}
-
-/* utility to disable modality-keyboard brackets on a given self element */
-@utility bracket-never {
-  &::after {
-    content: none !important;
-  }
-}
-
-@utility bracket-offset-* {
-  position: relative;
-
-  /* note (seamus): we !important these selectors to allow for manual brackets within a .suppress-css-brackets*/
-  &::after {
-    content: "" !important;
-    position: absolute;
-    inset: calc(0px - --value(integer)px) !important;
-    pointer-events: none;
-    @apply util-bracket-bg-image;
-    z-index: 10;
-  }
-}
-
-@utility bracket-split {
-  position: relative;
-
-  &::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background:
-      conic-gradient(from 90deg at top 2px left 2px, #0000 90deg, var(--color-focus) 0) 0 0 / 20px 20px border-box no-repeat,
-      conic-gradient(from 180deg at top 2px right 2px, #0000 90deg, var(--color-focus) 0) 100% 0 / 20px 20px border-box no-repeat,
-      conic-gradient(from 0deg at bottom 2px left 2px, #0000 90deg, var(--color-focus) 0) 0 100% / 20px 20px border-box no-repeat,
-      conic-gradient(from -90deg at bottom 2px right 2px, #0000 90deg, var(--color-focus) 0) 100% 100% / 20px 20px border-box no-repeat;
-    z-index: 10;
-    }
-}
-
 @utility hide-scrollbar {
   scrollbar-width: none;
-}
-
-@utility bracket-* {
-  background-image:
-    conic-gradient(from 90deg at top 1px left 1px, #0000 90deg, var(--color-focus) 0),
-    conic-gradient(from 180deg at top 1px right 1px, #0000 90deg, var(--color-focus) 0),
-    conic-gradient(from 0deg at bottom 1px left 1px, #0000 90deg, var(--color-focus) 0),
-    conic-gradient(from -90deg at bottom 1px right 1px, #0000 90deg, var(--color-focus) 0);
-
-  background-position:
-    0 0,
-    100% 0,
-    0 100%,
-    100% 100%;
-
-  background-size:
-    --value(integer)px --value(integer)px,
-    --value(integer)px --value(integer)px,
-    --value(integer)px --value(integer)px,
-    --value(integer)px --value(integer)px;
-
-  background-repeat: no-repeat;
-  background-origin: border-box;
 }
 
 /* utils for patterned bg images */
@@ -567,64 +467,12 @@
         position: relative;
     }
 
-    html[data-modality="keyboard"] .focus-bracket-within:focus-within {
-        position: relative;
-    }
-
   code {
     @apply font-mono;
   }
 }
 
 @layer components {
-}
-/* Option to add to focusable elements */
-html[data-modality="keyboard"] .focus-bracket:focus-visible::after {
-    position: absolute;
-    display: block;
-    content: "";
-    inset: var(--focus-border-inset, 0);
-    @apply util-bracket-bg-image;
-    pointer-events: none;
-}
-
-/* Add to focusable elements that can't render ::after psuedo class like radio input */
-html[data-modality="keyboard"] .focus-bracket-within:focus-within::after {
-    position: absolute;
-    display: block;
-    content: "";
-    inset: var(--focus-border-inset, 0);
-    @apply util-bracket-bg-image;
-    pointer-events: none;
-}
-
-
-/* Applies to almost all focusable elements  */
-html[data-modality="keyboard"] :focus-visible::after {
-    position: absolute;
-    display: block;
-    content: "";
-    inset: var(--focus-border-inset, 0);
-    @apply util-bracket-bg-image;
-    pointer-events: none;
-}
-
-/* Use class 'suppress-css-brackets' to suppress the focus bracket on descendants */
-html[data-modality="keyboard"] .suppress-css-brackets *:focus-visible::after {
-    content: none;
-}
-html[data-modality="keyboard"] .suppress-css-bracket:focus-visible::after {
-    content: none;
-}
-
-/* Use class 'allow-css-brackets' to re-enable focus brackets inside a suppressed container */
-html[data-modality="keyboard"] .suppress-css-brackets .allow-css-brackets *:focus-visible::after, html[data-modality="mouse"] .suppress-css-brackets .allow-css-brackets *:focus-visible::after {
-  position: absolute;
-  display: block;
-  content: "";
-  inset: var(--focus-border-inset, 0);
-  @apply util-bracket-bg-image;
-  pointer-events: none;
 }
 
 /* Channel message hover + non-selection highlight */
@@ -669,12 +517,6 @@ html:not([data-touch-device="true"]) [data-message][data-selected] > .message-ac
 @keyframes long-press-accent-bar {
     from { opacity: 0; }
     to { opacity: 1; }
-}
-
-html[data-modality="keyboard"] input:focus-visible::after,
-html[data-modality="keyboard"] textarea:focus-visible::after,
-html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
-    display: none;
 }
 
 @utility no-select-children {

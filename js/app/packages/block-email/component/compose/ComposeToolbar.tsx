@@ -85,7 +85,7 @@ export function EmailComposeToolbar(props: {
           />
         </div>
       </Show>
-      <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
+      <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 mt-2">
         <Show
           when={!isMobile()}
           fallback={

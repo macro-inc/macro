@@ -225,7 +225,7 @@ function InviteTeamDemo(props: LessonContentProps) {
             disabled={isPending()}
             aria-describedby="team-name-counter"
             class={cn(
-              'w-[calc(100%-36px)] px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
+              'w-[calc(100%-36px)] px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
               errors().teamName
                 ? 'border-failure focus-visible:ring-failure'
                 : 'border-edge focus-visible:ring-accent',
@@ -282,7 +282,7 @@ function InviteTeamDemo(props: LessonContentProps) {
                         aria-describedby="invite-members-description"
                         aria-invalid={!!errors().emails?.[index]}
                         class={cn(
-                          'flex-1 px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
+                          'flex-1 px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
                           errors().emails?.[index]
                             ? 'border-failure focus-visible:ring-failure'
                             : 'border-edge focus-visible:ring-accent',
@@ -307,7 +307,7 @@ function InviteTeamDemo(props: LessonContentProps) {
                               : 'Clear email'
                           }
                           class={cn(
-                            'shrink-0 p-1.5 text-ink/40 hover:text-ink hover:bg-ink/5 rounded-xs bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
+                            'shrink-0 p-1.5 text-ink/40 hover:text-ink hover:bg-ink/5 rounded-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
                             isPending() && 'opacity-50 cursor-not-allowed'
                           )}
                         >
@@ -337,7 +337,7 @@ function InviteTeamDemo(props: LessonContentProps) {
               disabled={!canAddEmail() || isPending()}
               aria-label="Add another email invite"
               class={cn(
-                'flex-1 flex items-center gap-2 px-3 py-2 text-sm rounded-xs bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel shrink-0',
+                'flex-1 flex items-center gap-2 px-3 py-2 text-sm rounded-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel shrink-0',
                 canAddEmail() && !isPending()
                   ? 'text-ink bg-ink/8 hover:bg-ink/12'
                   : 'text-ink/30 bg-ink/4 cursor-not-allowed'
@@ -368,7 +368,7 @@ function SkipAction(props: LessonContentProps) {
     <button
       type="button"
       onClick={() => props.advance()}
-      class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between text-ink/40 hover:text-ink hover:bg-ink/5 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel"
+      class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between text-ink/40 hover:text-ink hover:bg-ink/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel"
     >
       Skip for now
     </button>

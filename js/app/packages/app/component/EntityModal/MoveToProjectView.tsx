@@ -413,7 +413,7 @@ export const MoveToProjectView = (props: {
         </div>
       </div>
 
-      <div class="w-full h-fit suppress-css-brackets mb-3">
+      <div class="w-full h-fit mb-3">
         <input
           type="text"
           placeholder="Search folders..."

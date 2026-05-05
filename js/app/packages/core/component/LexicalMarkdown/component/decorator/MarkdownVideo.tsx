@@ -254,7 +254,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         ref={containerRef}
         class={cn(
           'relative max-w-full my-4 grid place-items-center mx-auto',
-          isSelectedAsNode() && 'bracket-offset-4 ring-3 ring-edge-muted',
+          isSelectedAsNode() && 'ring-3 ring-edge-muted',
           state() === 'error' && 'media-error min-h-44'
         )}
         style={{

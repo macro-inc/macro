@@ -218,7 +218,7 @@ const Root: Component<MessageRootProps> = (props) => {
   return (
     <MessageContext.Provider value={ctx}>
       <div
-        class="relative flex flex-row items-stretch w-full suppress-css-brackets transition-colors duration-1000 ease"
+        class="relative flex flex-row items-stretch w-full transition-colors duration-1000 ease"
         classList={{
           'bg-accent': props.isTarget,
         }}
@@ -379,7 +379,7 @@ const Root: Component<MessageRootProps> = (props) => {
               when={props.shouldShowThreadAppendInput}
               fallback={
                 <div
-                  class="w-min -translate-x-1/2 icon-plus allow-css-brackets"
+                  class="w-min -translate-x-1/2 icon-plus"
                   style={{
                     'margin-left': `calc(var(--thread-shift) + var(--left-of-connector))`,
                   }}

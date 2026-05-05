@@ -397,7 +397,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
           ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200',
           `create-menu-${props.creatableBlock.label.toLowerCase()}`,
           {
-            '-translate-y-2 text-ink bracket-offset-1': props.focused,
+            '-translate-y-2 text-ink bg-active': props.focused,
             'text-ink-extra-muted': !props.focused,
           }
         )}

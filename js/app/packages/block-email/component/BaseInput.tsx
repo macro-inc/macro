@@ -1597,7 +1597,7 @@ export function BaseInput(props: {
             </For>
           </div>
         </div>
-        <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
+        <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2">
           <div class="flex flex-row items-center gap-1">
             <div class="relative">
               <Button

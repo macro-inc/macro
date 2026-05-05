@@ -87,7 +87,7 @@ export const SegmentedControl: ParentComponent<
               return (
                 <KSegmentedControl.Item
                   value={itemValue()}
-                  class="relative focus-bracket-within focus-within:[--focus-border-inset:-3px] -ml-px first:ml-0"
+                  class="relative -ml-px first:ml-0 focus-within:bg-active"
                   disabled={props.disabled}
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 h-full! w-full! pointer-events-none" />

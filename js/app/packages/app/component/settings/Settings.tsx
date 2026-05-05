@@ -176,7 +176,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   return (
     <div
-      class="size-full flex flex-col outline-none bracket-never"
+      class="size-full flex flex-col outline-none"
       classList={{ invisible: props.hide }}
       tabIndex={0}
       ref={settingsContainerRef}

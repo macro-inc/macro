@@ -849,7 +849,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
-        class="size-full bracket-never no-select-children"
+        class="size-full no-select-children"
         ref={(el) => {
           setSoupViewRef(el);
           attachHotkeys(el);
