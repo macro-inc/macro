@@ -4,7 +4,6 @@ import { useBlockId } from '@core/block';
 import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { Button } from '@ui/components/Button';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 // import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -285,19 +284,20 @@ export function PDFPopup(props: PDFPopupProps) {
           </div>
           <Show when={props.shareLinkProps}>
             {(shareLinkProps) => (
-              <DeprecatedTextButton
-                theme="clear"
-                icon={
-                  locationCopied()
-                    ? () => <CheckIcon class="text-success size-4" />
-                    : LinkIcon
-                }
-                text={locationCopied() ? 'Copied' : 'Share'}
+              <Button
+                variant="ghost"
                 onClick={() => {
                   setLocationCopied(true);
                   shareLinkProps().share();
                 }}
-              />
+              >
+                {locationCopied() ? (
+                  <CheckIcon class="text-success" />
+                ) : (
+                  <LinkIcon />
+                )}
+                {locationCopied() ? 'Copied' : 'Share'}
+              </Button>
             )}
           </Show>
         </div>

@@ -1,8 +1,8 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
+import { Button } from '@ui/components/Button';
 import { formatDate } from '@core/util/date';
 import {
   type Component,
@@ -233,11 +233,12 @@ function PermissionButton(props: { platformNotif: any }) {
         <Show
           when={props.platformNotif.permission() === 'granted'}
           fallback={
-            <DeprecatedTextButton
-              theme="accent"
-              text="Enable Browser Notifications"
+            <Button
+              variant="accent"
               onClick={() => props.platformNotif.requestPermission()}
-            />
+            >
+              Enable Browser Notifications
+            </Button>
           }
         >
           <div class="flex items-center gap-3 text-sm text-accent bg-accent/10 px-4 py-3 rounded-lg">
@@ -283,11 +284,12 @@ function CustomBuilder(props: {
         </div>
 
         <div class="pt-4 border-t border-edge-muted">
-          <DeprecatedTextButton
-            theme="accent"
-            text="🔔 Test Browser Notification"
+          <Button
+            variant="accent"
             onClick={() => props.onTest(props.customNotification)}
-          />
+          >
+            🔔 Test Browser Notification
+          </Button>
         </div>
 
         <div>
@@ -358,11 +360,12 @@ function NotificationDetail(props: {
               {formatDate(props.notification.created_at)}
             </p>
           </div>
-          <DeprecatedTextButton
-            theme="accent"
-            text="🔔 Test Notification"
+          <Button
+            variant="accent"
             onClick={() => props.onTest(props.notification)}
-          />
+          >
+            🔔 Test Notification
+          </Button>
         </div>
       </div>
 

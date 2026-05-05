@@ -1,4 +1,3 @@
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { parseCsv } from '@core/util/csv';
 import { createTask } from '@core/util/create';
@@ -202,9 +201,8 @@ export default function ImportLinear() {
       <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         <div class="flex items-center justify-between">
           <div class="text-lg font-medium text-ink">Import Linear CSV</div>
-          <DeprecatedTextButton
-            theme="base"
-            text="Clear"
+          <Button
+            variant="secondary"
             onClick={() => {
               setFileName('');
               setParseError('');
@@ -213,7 +211,9 @@ export default function ImportLinear() {
               setProgress({ type: 'idle' });
               setAssigneeMapping(reconcile({}));
             }}
-          />
+          >
+            Clear
+          </Button>
         </div>
 
         <div class="flex flex-col gap-2">

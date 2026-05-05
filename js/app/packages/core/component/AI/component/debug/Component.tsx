@@ -1,6 +1,6 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import type { Model } from '@core/component/AI/types';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { Button } from '@ui/components/Button';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { isErr } from '@core/util/maybeResult';
@@ -97,16 +97,18 @@ function ChatInputBoxInner() {
     <Item label="Chat input - not connected to backend">
       <div class="w-full h-full">
         <div class="flex gap-2 py-2">
-          <DeprecatedTextButton
+          <Button
             onClick={() => input.setIsGenerating(true)}
-            theme="accent"
-            text="Generate"
-          />
-          <DeprecatedTextButton
+            variant="accent"
+          >
+            Generate
+          </Button>
+          <Button
             onClick={() => input.setIsGenerating(false)}
-            theme="accent"
-            text="Stop"
-          />
+            variant="accent"
+          >
+            Stop
+          </Button>
         </div>
         <ChatInput
           editor={editor}
@@ -469,16 +471,15 @@ function TableStreamInner() {
   return (
     <Item col label="Table stream with controls">
       <div class="flex gap-x-2 items-center">
-        <DeprecatedTextButton
-          text="Stream"
-          onClick={startStream}
-          theme="accent"
-        />
-        <DeprecatedTextButton
-          text={isPaused() ? 'Resume' : 'Pause'}
+        <Button onClick={startStream} variant="accent">
+          Stream
+        </Button>
+        <Button
           onClick={() => setIsPaused((p) => !p)}
-          theme="accent"
-        />
+          variant="accent"
+        >
+          {isPaused() ? 'Resume' : 'Pause'}
+        </Button>
         <label class="flex items-center gap-x-1 text-xs">
           <input
             type="checkbox"
@@ -495,16 +496,17 @@ function TableStreamInner() {
           />
           Raw
         </label>
-        <DeprecatedTextButton
-          text="Reset"
-          theme="accent"
+        <Button
+          variant="accent"
           onClick={() => {
             setStream(undefined);
             setRawText('');
             chat.setMessages([]);
             chat.setStream(undefined);
           }}
-        />
+        >
+          Reset
+        </Button>
       </div>
       <StreamStatus stream={stream} />
       {showRaw() ? (

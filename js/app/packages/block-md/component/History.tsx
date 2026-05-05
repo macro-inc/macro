@@ -7,7 +7,6 @@ import {
   type GroupingConfig,
   getDocumentHistory,
 } from '@core/collab/time-travel';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { Button } from '@ui/components/Button';
 import {
@@ -271,12 +270,13 @@ export function History(props: HistoryProps) {
                           total={sortedHistory()!.length}
                         />
                         <div class="pr-4">
-                          <DeprecatedTextButton
-                            text="Copy Version"
-                            theme="accent"
+                          <Button
+                            variant="accent"
                             disabled={isForking()}
                             onClick={handleFork}
-                          />
+                          >
+                            Copy Version
+                          </Button>
                         </div>
                       </div>
                     );

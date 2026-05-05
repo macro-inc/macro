@@ -1,6 +1,6 @@
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { Button } from '@ui/components/Button';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { DebugSlider } from '@core/component/Slider';
 import { Bar } from '@core/component/TopBar/Bar';
@@ -434,14 +434,14 @@ function GlyphGrid(props: GlyphGridProps) {
             Sort Alhpa
           </button>
         </div>
-        <DeprecatedTextButton
+        <Button
+          variant="secondary"
           onClick={() => {
             props.onNewGlyph();
           }}
-          text="New Icon"
-          theme="base"
-          icon={Plus}
-        />
+        >
+          <Plus /> New Icon
+        </Button>
       </div>
 
       <Show
@@ -920,18 +920,12 @@ function GlyphEditor(props: GlyphEditorProps) {
                 </div>
 
                 <div class="grid grid-cols-2 gap-2 mb-4">
-                  <DeprecatedTextButton
-                    text="Clear Grid"
-                    onClick={clearAll}
-                    theme="base"
-                    icon={Erase}
-                  />
-                  <DeprecatedTextButton
-                    text="Fill Grid"
-                    onClick={fillAll}
-                    theme="base"
-                    icon={Fill}
-                  />
+                  <Button variant="secondary" onClick={clearAll}>
+                    <Erase /> Clear Grid
+                  </Button>
+                  <Button variant="secondary" onClick={fillAll}>
+                    <Fill /> Fill Grid
+                  </Button>
                 </div>
 
                 <div class="space-y-2 mb-4">
@@ -967,16 +961,12 @@ function GlyphEditor(props: GlyphEditorProps) {
 
               <div class="pt-4 border-t border-edge">
                 <div class="grid grid-cols-2 gap-2">
-                  <DeprecatedTextButton
-                    text="Cancel"
-                    onClick={props.onClose}
-                    theme="muted"
-                  />
-                  <DeprecatedTextButton
-                    text="Save"
-                    onClick={handleSave}
-                    theme="accent"
-                  />
+                  <Button variant="tertiary" onClick={props.onClose}>
+                    Cancel
+                  </Button>
+                  <Button variant="accent" onClick={handleSave}>
+                    Save
+                  </Button>
                 </div>
               </div>
             </div>
@@ -1073,30 +1063,18 @@ function GlyphSidebar(props: GlyphSidebarProps) {
         <div class="mt-6 space-y-2">
           <h4 class="font-mono text-xs text-ink-muted">Batch Operations</h4>
           <div class="grid grid-cols-1 gap-2">
-            <DeprecatedTextButton
-              text="Export to Clipboard"
-              onClick={props.onExportAll}
-              theme="base"
-              icon={Copy}
-            />
-            <DeprecatedTextButton
-              text="Import from Clipboard"
-              onClick={props.onImportAll}
-              theme="base"
-              icon={Upload}
-            />
-            <DeprecatedTextButton
-              text="Copy SVGs"
-              onClick={props.onCopyAllSVGs}
-              theme="base"
-              icon={Copy}
-            />
-            <DeprecatedTextButton
-              text="Download SVGs"
-              onClick={props.onDownloadAllSVGs}
-              theme="base"
-              icon={Download}
-            />
+            <Button variant="secondary" onClick={props.onExportAll}>
+              <Copy /> Export to Clipboard
+            </Button>
+            <Button variant="secondary" onClick={props.onImportAll}>
+              <Upload /> Import from Clipboard
+            </Button>
+            <Button variant="secondary" onClick={props.onCopyAllSVGs}>
+              <Copy /> Copy SVGs
+            </Button>
+            <Button variant="secondary" onClick={props.onDownloadAllSVGs}>
+              <Download /> Download SVGs
+            </Button>
           </div>
         </div>
       </div>
@@ -1150,17 +1128,16 @@ function GlyphSidebar(props: GlyphSidebarProps) {
               </div>
 
               <div class="flex gap-2">
-                <DeprecatedTextButton
-                  text="Copy Svg"
-                  icon={Copy}
+                <Button
+                  variant="ghost"
                   onClick={() =>
                     navigator.clipboard.writeText(svgString() || '')
                   }
-                  theme="clear"
-                />
-                <DeprecatedTextButton
-                  text="Download Svg"
-                  icon={Download}
+                >
+                  <Copy /> Copy Svg
+                </Button>
+                <Button
+                  variant="ghost"
                   onClick={() => {
                     const svg = svgString();
                     if (!svg) return;
@@ -1174,8 +1151,9 @@ function GlyphSidebar(props: GlyphSidebarProps) {
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                   }}
-                  theme="clear"
-                />
+                >
+                  <Download /> Download Svg
+                </Button>
               </div>
             </div>
           </Show>
@@ -1191,16 +1169,16 @@ function GlyphSidebar(props: GlyphSidebarProps) {
               </div>
 
               <div class="flex gap-2">
-                <DeprecatedTextButton
-                  text="Copy Base64"
-                  icon={Copy}
+                <Button
+                  variant="ghost"
                   onClick={() =>
                     navigator.clipboard.writeText(
                       props.selectedGlyph?.data || ''
                     )
                   }
-                  theme="clear"
-                />
+                >
+                  <Copy /> Copy Base64
+                </Button>
               </div>
             </div>
           </Show>

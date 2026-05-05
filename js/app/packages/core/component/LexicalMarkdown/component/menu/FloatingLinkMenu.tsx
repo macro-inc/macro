@@ -1,4 +1,3 @@
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { UnfurlLink } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
@@ -519,16 +518,16 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
             }}
           >
             <Tooltip tooltip="Apply link changes">
-              <DeprecatedTextButton
+              <Button
                 onClick={handleSubmit}
                 class="focus:ring-failure focus:ring-2 focus:ring-offset-2"
-                theme="base"
+                variant="secondary"
                 disabled={
                   !pendingLinkInfo()?.url && !pendingLinkInfo()?.linkText
                 }
-                text="Apply"
-                icon={Check}
-              />
+              >
+                <Check /> Apply
+              </Button>
             </Tooltip>
           </div>
         </MenuWrapper>

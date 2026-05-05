@@ -1,5 +1,5 @@
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { Bar } from '@core/component/TopBar/Bar';
+import { Button } from '@ui/components/Button';
 import { useContacts } from '@core/user';
 import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
 import Copy from '@phosphor-icons/core/regular/copy.svg?component-solid';
@@ -88,12 +88,9 @@ const DataDebug: Component = () => {
           </div>
         }
         center={
-          <DeprecatedTextButton
-            theme="base"
-            text="Refresh"
-            icon={Refresh}
-            onClick={handleRefresh}
-          />
+          <Button variant="secondary" onClick={handleRefresh}>
+            <Refresh /> Refresh
+          </Button>
         }
       ></Bar>
       <div class="flex flex-col gap-6 p-6 overflow-scroll">

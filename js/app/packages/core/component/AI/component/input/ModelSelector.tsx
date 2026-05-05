@@ -5,9 +5,10 @@ import {
   Model,
 } from '@core/component/AI/constant';
 import type { TModel } from '@core/component/AI/types';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
+import { Button } from '@ui/components/Button';
 import type { Accessor } from 'solid-js';
 import { For } from 'solid-js';
 
@@ -27,12 +28,14 @@ export function ModelSelector(props: ModelSelectorProps) {
   return (
     <DropdownMenu>
       <DropdownMenu.Trigger>
-        <DeprecatedTextButton
-          theme="clear"
-          text={MODEL_PRETTYNAME[model()]}
-          icon={MODEL_PROVIDER_ICON[model()]}
-          showChevron
-        />
+        {(() => {
+          const Icon = MODEL_PROVIDER_ICON[model()];
+          return (
+            <Button variant="ghost">
+              <Icon /> {MODEL_PRETTYNAME[model()]} <CaretDown />
+            </Button>
+          );
+        })()}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenuContent>

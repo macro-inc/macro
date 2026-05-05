@@ -3,7 +3,6 @@ import { ROUTER_BASE } from '@app/constants/routerBase';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
@@ -321,15 +320,16 @@ const ROUTES: RouteDefinition[] = [
       return (
         <div class="h-full overflow-y-hidden">
           <div class="relative flex flex-row items-center pt-4 h-full">
-            <DeprecatedTextButton
-              theme="base"
-              text="Close"
+            <Button
+              variant="secondary"
               onClick={() => {
                 channel.postMessage({ type: 'login-success' });
                 channel.close();
                 window.close();
               }}
-            />
+            >
+              Close
+            </Button>
           </div>
         </div>
       );
