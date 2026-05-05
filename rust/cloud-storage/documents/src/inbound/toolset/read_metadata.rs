@@ -14,6 +14,35 @@ use uuid::Uuid;
 
 use super::DocumentToolContext;
 
+fn slugify(name: &str) -> String {
+    let mut result = String::with_capacity(name.len());
+    let mut prev_hyphen = false;
+    for c in name.chars() {
+        let to_push = if c.is_ascii_alphabetic() {
+            c.to_ascii_lowercase()
+        } else if c.is_ascii_digit() || c == '-' {
+            c
+        } else if c.is_whitespace() {
+            '-'
+        } else {
+            continue;
+        };
+        if to_push == '-' {
+            if !prev_hyphen {
+                result.push('-');
+                prev_hyphen = true;
+            }
+        } else {
+            result.push(to_push);
+            prev_hyphen = false;
+        }
+    }
+    result.trim_matches('-').to_string()
+}
+
+#[cfg(test)]
+mod test;
+
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadDocumentMetadata {
@@ -94,8 +123,7 @@ where
                             internal_error: e.into(),
                         })?;
 
-                    let name = result.document_metadata.document_name.clone();
-                    let slugified_name = name.replace(" ", "-").to_lowercase();
+                    let slugified_name = slugify(&result.document_metadata.document_name);
 
                     Some(format!("macro-{short_id}-{slugified_name}"))
                 }
