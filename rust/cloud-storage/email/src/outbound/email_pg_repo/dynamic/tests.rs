@@ -1,11 +1,11 @@
 use super::*;
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use email_importance::build_importance_condition;
-use sqlx::{Execute, Postgres};
 use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::EmailStr;
+use sqlx::{Execute, Postgres};
 use uuid::Uuid;
 
 #[test]
@@ -641,8 +641,8 @@ fn importance_true_filter_contains_shared_condition() {
     build_importance_condition(true, &mut builder);
     let condition_sql = builder.build().sql().to_owned();
 
-    let filter_sql = build_message_email_filter(&Expr::Literal(EmailLiteral::Importance(true)))
-        .to_debug_sql();
+    let filter_sql =
+        build_message_email_filter(&Expr::Literal(EmailLiteral::Importance(true))).to_debug_sql();
     assert!(
         filter_sql.contains(&condition_sql),
         "Importance(true) filter SQL does not contain build_importance_condition(true) output.\n\
@@ -660,8 +660,8 @@ fn importance_false_filter_contains_shared_condition() {
     build_importance_condition(false, &mut builder);
     let condition_sql = builder.build().sql().to_owned();
 
-    let filter_sql = build_message_email_filter(&Expr::Literal(EmailLiteral::Importance(false)))
-        .to_debug_sql();
+    let filter_sql =
+        build_message_email_filter(&Expr::Literal(EmailLiteral::Importance(false))).to_debug_sql();
     assert!(
         filter_sql.contains(&condition_sql),
         "Importance(false) filter SQL does not contain build_importance_condition(false) output.\n\

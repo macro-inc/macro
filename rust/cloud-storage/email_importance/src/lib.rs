@@ -137,6 +137,8 @@ pub fn build_importance_condition(is_important: bool, builder: &mut QueryBuilder
 /// explicitly marked important, or the sender has no noise override and the message is not
 /// deprioritised by labels.
 ///
+/// SPAM and TRASH messages are always excluded, regardless of sender overrides.
+///
 /// Uses [`build_importance_condition`] to mirror the `EmailLiteral::Importance(true)`
 /// match arm exactly.
 #[tracing::instrument(err, skip(db))]
@@ -144,7 +146,9 @@ pub async fn is_message_important(db: &PgPool, message_id: Uuid) -> Result<bool>
     let mut builder: QueryBuilder<'_, Postgres> =
         QueryBuilder::new("SELECT EXISTS(SELECT 1 FROM email_messages m WHERE m.id = ");
     builder.push_bind(message_id);
-    builder.push(" AND ");
+    builder.push(
+        " AND NOT EXISTS (SELECT 1 FROM email_message_labels ml JOIN email_labels l ON ml.label_id = l.id WHERE ml.message_id = m.id AND l.name IN ('SPAM', 'TRASH')) AND ",
+    );
     build_importance_condition(true, &mut builder);
     builder.push(")");
     let result: bool = builder.build_query_scalar().fetch_one(db).await?;

@@ -1,5 +1,3 @@
-use contacts::domain::ports::ContactsIngress;
-
 use crate::convert::{map_message_resource_to_service, map_thread_resources_to_service};
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::operations::shared::notify_search;
@@ -8,6 +6,7 @@ use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
 use crate::pubsub::util::cg_refresh_email;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
+use contacts::domain::ports::ContactsIngress;
 use email_db_client::threads;
 use email_utils::dedupe_emails;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -593,9 +592,5 @@ async fn filter_notifiable_message(
             })
         })?;
 
-    if important {
-        Ok(Some(new_message))
-    } else {
-        Ok(None)
-    }
+    Ok(important.then_some(new_message))
 }
