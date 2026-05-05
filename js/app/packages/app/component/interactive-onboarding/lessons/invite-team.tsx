@@ -238,20 +238,21 @@ function InviteTeamDemo(props: LessonContentProps) {
   };
 
   return (
-    <div class="h-full w-full flex items-start justify-start p-12 overflow-hidden">
-      <form
-        id={INVITE_FORM_ID}
-        onSubmit={handleSubmit}
-        class="w-full max-w-lg flex flex-col gap-8 h-full"
+    <div class="h-full w-full flex flex-col p-12 overflow-hidden">
+      <button
+        type="button"
+        onClick={handleBack}
+        class="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-xs w-fit mb-6"
       >
-        <button
-          type="button"
-          onClick={handleBack}
-          class="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-xs w-fit -mb-4"
+        <ArrowLeftIcon class="size-4" />
+        Back
+      </button>
+      <div class="flex-1 w-full border border-edge rounded-sm bg-ink/[0.02] flex justify-center items-start py-12 overflow-hidden">
+        <form
+          id={INVITE_FORM_ID}
+          onSubmit={handleSubmit}
+          class="w-full max-w-md flex flex-col gap-6 max-h-full overflow-hidden"
         >
-          <ArrowLeftIcon class="size-4" />
-          Back
-        </button>
         <div class="flex flex-col gap-2 shrink-0 px-2">
           <label class="text-base font-medium text-ink" for="team-name">
             Team name
@@ -288,21 +289,20 @@ function InviteTeamDemo(props: LessonContentProps) {
           </div>
         </div>
 
-        <div class="flex flex-col gap-2 min-h-0 flex-1">
-          <div class="flex flex-col min-h-0">
-            <div class="shrink-0 px-2">
-              <label
-                class="text-base font-medium text-ink"
-                id="invite-members-label"
-              >
-                Invite members{' '}
-                <span class="font-normal text-ink/50">(optional)</span>
-              </label>
-              <p class="text-sm text-ink/50" id="invite-members-description">
-                We'll send them an invite to join your workspace
-              </p>
-            </div>
-            <div class="flex flex-col gap-3 overflow-y-auto min-h-0 p-2">
+        <div class="flex flex-col gap-2 min-h-0 flex-1 overflow-hidden pb-4">
+          <div class="shrink-0 px-2">
+            <label
+              class="text-base font-medium text-ink"
+              id="invite-members-label"
+            >
+              Invite members{' '}
+              <span class="font-normal text-ink/50">(optional)</span>
+            </label>
+            <p class="text-sm text-ink/50" id="invite-members-description">
+              We'll send them an invite to join your workspace
+            </p>
+          </div>
+          <div class="flex flex-col gap-3 overflow-y-auto min-h-0 p-2">
               <Index each={inviteEntries()}>
                 {(entry, index) => (
                   <div class="flex flex-col gap-1 shrink-0">
@@ -379,30 +379,28 @@ function InviteTeamDemo(props: LessonContentProps) {
                   </div>
                 )}
               </Index>
-            </div>
           </div>
-          <div class="px-2">
-            <button
-              type="button"
-              onClick={addEmailField}
-              disabled={!canAddEmail()}
-              aria-label="Add another email invite"
-              class={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm rounded-xs bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
-                canAddEmail()
-                  ? 'text-ink bg-ink/8 hover:bg-ink/12'
-                  : 'text-ink/30 bg-ink/4 cursor-not-allowed'
-              )}
-            >
-              <PlusIcon class="size-4" />
-              Add another
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={addEmailField}
+            disabled={!canAddEmail()}
+            aria-label="Add another email invite"
+            class={cn(
+              'mx-2 flex items-center gap-2 px-3 py-2 text-sm rounded-xs bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel shrink-0',
+              canAddEmail()
+                ? 'text-ink bg-ink/8 hover:bg-ink/12'
+                : 'text-ink/30 bg-ink/4 cursor-not-allowed'
+            )}
+          >
+            <PlusIcon class="size-4" />
+            Add another
+          </button>
           <p class="text-sm text-ink/40 shrink-0 px-2">
             You can always invite more people later from Settings
           </p>
         </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
