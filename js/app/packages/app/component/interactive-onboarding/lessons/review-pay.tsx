@@ -1,5 +1,5 @@
 import InfoIcon from '@icon/regular/info.svg';
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import { useAnalytics } from '@app/component/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
@@ -38,6 +38,7 @@ function ReviewPayDemo(props: LessonContentProps) {
   const analytics = useAnalytics();
   const onboarding = useOnboarding();
   const isAuthenticated = useIsAuthenticated();
+  const [isRedirecting, setIsRedirecting] = createSignal(false);
 
   const checkoutMutation = useOnboardingCheckoutMutation({
     onSuccess: (result) => {
@@ -45,6 +46,7 @@ function ReviewPayDemo(props: LessonContentProps) {
         type: onboarding.selectedPlan(),
         seats: onboarding.seatCount(),
       });
+      setIsRedirecting(true);
       window.location.href = result.checkoutUrl;
     },
     onError: (error) => {
@@ -54,6 +56,8 @@ function ReviewPayDemo(props: LessonContentProps) {
       );
     },
   });
+
+  const isPending = () => checkoutMutation.isPending || isRedirecting();
 
   const selectedPlan = () => {
     const tier = onboarding.selectedPlan();
@@ -86,7 +90,7 @@ function ReviewPayDemo(props: LessonContentProps) {
 
   const handleCheckout = () => {
     const tier = onboarding.selectedPlan();
-    if (!tier || tier === 'free' || checkoutMutation.isPending) return;
+    if (!tier || tier === 'free' || isPending()) return;
 
     if (!isAuthenticated()) {
       toast.failure('Please sign in to continue');
@@ -154,13 +158,15 @@ function ReviewPayDemo(props: LessonContentProps) {
                   variant="accent"
                   size="lg"
                   onClick={handleCheckout}
-                  disabled={checkoutMutation.isPending}
+                  disabled={isPending()}
                   class="w-full rounded-xs"
                 >
-                  {checkoutMutation.isPending
-                    ? 'Loading...'
+                  {isPending()
+                    ? 'Redirecting to checkout…'
                     : 'Continue to payment'}
-                  <ArrowRightIcon class="size-4" />
+                  <Show when={!isPending()}>
+                    <ArrowRightIcon class="size-4" />
+                  </Show>
                 </Button>
                 <span class="text-xs text-ink/40 flex items-center justify-center gap-1">
                   <LockIcon class="size-3" />
@@ -303,13 +309,15 @@ function ReviewPayDemo(props: LessonContentProps) {
                     variant="accent"
                     size="lg"
                     onClick={handleCheckout}
-                    disabled={checkoutMutation.isPending}
+                    disabled={isPending()}
                     class="w-full rounded-xs"
                   >
-                    {checkoutMutation.isPending
-                      ? 'Loading...'
+                    {isPending()
+                      ? 'Redirecting to checkout…'
                       : 'Continue to payment'}
-                    <ArrowRightIcon class="size-4" />
+                    <Show when={!isPending()}>
+                      <ArrowRightIcon class="size-4" />
+                    </Show>
                   </Button>
                   <span class="text-xs text-ink/40 flex items-center justify-center gap-1">
                     <LockIcon class="size-3" />
