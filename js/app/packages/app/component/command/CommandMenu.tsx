@@ -573,9 +573,17 @@ function VirtualizedCommandList(props: {
 
   createEffect(() => {
     const index = props.selectedIndex;
-    if (index >= 0 && index < props.items.length && virtualizerHandle) {
-      virtualizerHandle.scrollToIndex(index, { align: 'nearest' });
+    if (index < 0 || index >= props.items.length || !virtualizerHandle) {
+      return;
     }
+    // Skip when all items fit: scrolling would be a no-op at the final
+    // container size, but during the height transition the container is
+    // briefly clipped and scrollToIndex shifts scrollTop, hiding the search
+    // row across category switches.
+    if (props.items.length * VIRTUAL_ITEM_HEIGHT <= MAX_LIST_HEIGHT) {
+      return;
+    }
+    virtualizerHandle.scrollToIndex(index, { align: 'nearest' });
   });
 
   const selector = createSelector(
