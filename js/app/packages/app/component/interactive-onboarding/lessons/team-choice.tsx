@@ -1,6 +1,7 @@
-import { createEffect } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 import UsersIcon from '@icon/regular/users.svg';
 import UserIcon from '@icon/regular/user.svg';
+import ArrowRightIcon from '@icon/regular/arrow-right.svg';
 import SpinnerIcon from '@icon/regular/spinner.svg';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import { useOnboarding } from '../onboarding-context';
@@ -22,6 +23,7 @@ function TeamChoiceDemo(props: LessonContentProps) {
   const onboarding = useOnboarding();
   const analytics = useAnalytics();
   const isAuthenticated = useIsAuthenticated();
+  const [isRedirecting, setIsRedirecting] = createSignal(false);
 
   const checkoutMutation = useOnboardingCheckoutMutation({
     onSuccess: (result) => {
@@ -29,6 +31,7 @@ function TeamChoiceDemo(props: LessonContentProps) {
         type: onboarding.selectedPlan(),
         seats: 1,
       });
+      setIsRedirecting(true);
       window.location.href = result.checkoutUrl;
     },
     onError: (error) => {
@@ -38,6 +41,8 @@ function TeamChoiceDemo(props: LessonContentProps) {
       );
     },
   });
+
+  const isPending = () => checkoutMutation.isPending || isRedirecting();
 
   createEffect(() => {
     props.onUnready();
@@ -49,7 +54,7 @@ function TeamChoiceDemo(props: LessonContentProps) {
 
   const handleChooseSolo = () => {
     const tier = onboarding.selectedPlan();
-    if (!tier || tier === 'free' || checkoutMutation.isPending) return;
+    if (!tier || tier === 'free' || isPending()) return;
 
     if (!isAuthenticated()) {
       toast.failure('Please sign in to continue');
@@ -71,7 +76,7 @@ function TeamChoiceDemo(props: LessonContentProps) {
           <button
             type="button"
             onClick={handleChooseTeam}
-            disabled={checkoutMutation.isPending}
+            disabled={isPending()}
             class="flex items-center gap-4 p-5 rounded-md border border-accent/50 bg-accent/5 hover:bg-accent/10 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div class="shrink-0 size-11 rounded-full bg-accent/20 flex items-center justify-center">
@@ -90,22 +95,25 @@ function TeamChoiceDemo(props: LessonContentProps) {
           <button
             type="button"
             onClick={handleChooseSolo}
-            disabled={checkoutMutation.isPending}
+            disabled={isPending()}
             class="flex items-center gap-4 p-5 rounded-md border border-edge bg-panel hover:bg-ink/5 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div class="shrink-0 size-11 rounded-full bg-ink/10 flex items-center justify-center">
-              {checkoutMutation.isPending ? (
+              {isPending() ? (
                 <SpinnerIcon class="size-5 text-ink/60 animate-spin" />
               ) : (
                 <UserIcon class="size-5 text-ink/60" />
               )}
             </div>
-            <div class="flex flex-col gap-0.5">
-              <span class="text-base font-medium text-ink">Continue solo</span>
+            <div class="flex-1 flex flex-col gap-0.5">
+              <span class="text-base font-medium text-ink">
+                {isPending() ? 'Redirecting to checkout…' : 'Continue solo'}
+              </span>
               <span class="text-sm text-ink/50">
-                Use Macro on your own for now
+                {isPending() ? '' : 'Use Macro on your own for now'}
               </span>
             </div>
+            <ArrowRightIcon class="size-4 text-ink/50 shrink-0" />
           </button>
         </div>
     </div>
