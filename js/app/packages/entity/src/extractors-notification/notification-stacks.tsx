@@ -49,14 +49,17 @@ interface NotificationStacksProps {
   visibleCount?: number;
 }
 
-function NotificationStackRow(props: {
+export function NotificationStackRow(props: {
   stack: NotificationStack;
   entity: EntityData;
   onClick?: (e: PointerEvent | MouseEvent | KeyboardEvent) => void;
   content?: JSX.Element;
+  showMarkDone?: boolean;
 }) {
   const notificationSource = useGlobalNotificationSource();
   const unread = () => isNotificationUnread(props.stack);
+  const canMarkDone = () =>
+    props.showMarkDone !== false && props.stack.type !== 'call-started';
 
   const { markStackAsDone, markStackAsRead } = useNotificationStackActions({
     stack: props.stack,
@@ -115,7 +118,7 @@ function NotificationStackRow(props: {
               e.preventDefault();
               handleClick(e);
             }
-            if (e.key === 'e') {
+            if (e.key === 'e' && canMarkDone()) {
               e.preventDefault();
               e.stopPropagation();
               handleMarkAsDone();
@@ -147,15 +150,17 @@ function NotificationStackRow(props: {
                 {' - '}
                 <NotificationTimestamp stack={props.stack} />
               </span>
-              <div class="ml-auto flex items-center gap-1 pr-2 shrink-0">
-                <Button
-                  onClick={handleMarkAsDone}
-                  tooltip={'Mark notification done'}
-                  class="border border-edge-muted text-xs text-ink-muted grid p-0 place-items-center size-6"
-                >
-                  <CheckIcon class="size-3" />
-                </Button>
-              </div>
+              <Show when={canMarkDone()}>
+                <div class="ml-auto flex items-center gap-1 pr-2 shrink-0">
+                  <Button
+                    onClick={handleMarkAsDone}
+                    tooltip={'Mark notification done'}
+                    class="border border-edge-muted text-xs text-ink-muted grid p-0 place-items-center size-6"
+                  >
+                    <CheckIcon class="size-3" />
+                  </Button>
+                </div>
+              </Show>
             </div>
             <div
               class={cn('ph-no-capture mt-1 min-w-0', {
@@ -171,7 +176,9 @@ function NotificationStackRow(props: {
       <ContextMenu.Portal>
         <div onClick={(e) => e.stopPropagation()}>
           <ContextMenuContent class="text-xs text-ink-muted">
-            <MenuItem text="Mark Done" onClick={() => handleMarkAsDone()} />
+            <Show when={canMarkDone()}>
+              <MenuItem text="Mark Done" onClick={() => handleMarkAsDone()} />
+            </Show>
             <MenuItem text="Mark Read" onClick={handleMarkAsRead} />
             <MenuItem text="Copy Link" onClick={handleCopyLink} />
           </ContextMenuContent>

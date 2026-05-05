@@ -194,6 +194,14 @@ fn api_router(state: ApiContext) -> Router {
             search_service::search_router().with_state(SearchHandlerState::from_ref(&state)),
         )
         .nest(
+            "/sync_service",
+            sync_service_hex::inbound::axum_router::sync_service_router(
+                sync_service_hex::inbound::axum_router::SyncServiceRouterState {
+                    service: state.sync_service_client.clone(),
+                },
+            ),
+        )
+        .nest(
             "/comms",
             comms_service::comms_router(&CommsHandlerState::from_ref(&state))
                 .with_state(CommsHandlerState::from_ref(&state)),

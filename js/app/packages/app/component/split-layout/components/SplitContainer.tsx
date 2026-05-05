@@ -77,7 +77,6 @@ export function SplitContainer(
           props.ref(ref);
         }}
         data-split-id={props.id}
-        class="bracket-never"
         data-split-container
         data-modal={panel.handle.isSpotLight()}
         tabindex={-1}

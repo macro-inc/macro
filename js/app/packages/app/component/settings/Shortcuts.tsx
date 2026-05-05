@@ -1,84 +1,78 @@
 import { IS_MAC } from '@core/constant/isMac';
-import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { Hotkey } from '@core/component/Hotkey';
+import { Keyboard, Panel } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, Index, type JSX } from 'solid-js';
 
 const cmdOrCtrl = IS_MAC ? 'cmd' : 'ctrl';
+const CmdOrCtrl = IS_MAC ? 'MetaLeft' : 'ControlLeft';
 
-type ShortcutItem = {
+interface ShortcutItem {
+  /** Display strings for `<Hotkey>`, e.g. ['cmd+k']. Multiple = "any of these works". */
   keys: string[];
+  /** `e.code` values to light up on the keyboard when this row is hovered. */
+  codes: string[];
   description: JSX.Element;
-};
+}
 
-type ShortcutSection = {
+interface ShortcutSection {
   title: string;
   items: ShortcutItem[];
-};
+}
 
 const shortcutSections: ShortcutSection[] = [
   {
     title: 'Core',
     items: [
-      { keys: ['c'], description: 'Open the create menu' },
-      { keys: [`${cmdOrCtrl}+k`], description: 'Open the command menu' },
-      {
-        keys: ['g'],
-        description: (
-          <>
-            Go to a view (e.g. <Kbd shortcut="g" /> then <Kbd shortcut="i" /> for inbox)
-          </>
-        ),
-      },
-      { keys: ['/'], description: 'Go to search view' },
-      { keys: [`${cmdOrCtrl}+f`], description: 'Search in current view' },
-      { keys: [`${cmdOrCtrl}+j`], description: 'Focus AI chat' },
-      { keys: [`${cmdOrCtrl}+;`], description: 'Open settings panel' },
-    ],
-  },
-  {
-    title: 'Unified List',
-    items: [
-      { keys: ['j', 'arrowdown'], description: 'Move down' },
-      { keys: ['k', 'arrowup'], description: 'Move up' },
-      { keys: ['shift+j', 'shift+arrowdown'], description: `Select down` },
-      { keys: ['shift+k', 'shift+arrowup'], description: `Select up` },
-      { keys: ['e'], description: 'Mark done' },
-      {
-        keys: ['x'],
-        description: (
-          <>
-            Select items (then <Kbd shortcut={`${cmdOrCtrl}+k`} /> to bring up actions)
-          </>
-        ),
-      },
-      { keys: ['f'], description: 'Open filter menu' },
-      { keys: ['h', 'arrowleft'], description: 'Collapse item' },
-      { keys: ['l', 'arrowright'], description: 'Expand item' },
-      { keys: ['space'], description: 'Preview item' },
-      { keys: ['click', 'enter'], description: 'Open item in current split' },
-      { keys: ['shift+click', 'shift+enter'], description: 'Open item in a new split' },
+      { keys: ['c']             , codes: ['KeyC']                   , description: 'Open the create menu'   },
+      { keys: [`${cmdOrCtrl}+k`], codes: [CmdOrCtrl, 'KeyK']        , description: 'Open the command menu'  },
+      { keys: ['g']             , codes: ['KeyG']                   , description: 'Go to a view'           },
+      { keys: ['/']             , codes: ['Slash']                  , description: 'Go to search view'      },
+      { keys: [`${cmdOrCtrl}+f`], codes: [CmdOrCtrl, 'KeyF']        , description: 'Search in current view' },
+      { keys: [`${cmdOrCtrl}+j`], codes: [CmdOrCtrl, 'KeyJ']        , description: 'Focus AI chat'          },
+      { keys: [`${cmdOrCtrl}+;`], codes: [CmdOrCtrl, 'Semicolon']   , description: 'Open settings panel'    },
     ],
   },
   {
     title: 'Splits',
     items: [
-      { keys: ['\\', `${cmdOrCtrl}+\\`], description: 'Create a split' },
-      { keys: [`cmd+escape`], description: 'Go home / close split'},
-      { keys: ['shift+escape'], description: 'Spotlight split' },
-      { keys: ['shift+h', 'shift+arrowleft'], description: 'Focus split to the left' },
-      { keys: ['shift+l', 'shift+arrowright'], description: 'Focus split to the right' },
-      { keys: [`opt+[`], description: 'Go back in current split' },
-      { keys: [`opt+]`], description: 'Go forward in current split' },
+      { keys: ['\\']              , codes: ['Backslash']                  , description: 'Create a split'              },
+      { keys: ['cmd+escape']      , codes: ['MetaLeft', 'Escape']         , description: 'Go home / close split'       },
+      { keys: ['shift+escape']    , codes: ['ShiftLeft', 'Escape']        , description: 'Spotlight split'             },
+      { keys: ['shift+arrowleft'] , codes: ['ShiftLeft', 'ArrowLeft']     , description: 'Focus split to the left'     },
+      { keys: ['shift+arrowright'], codes: ['ShiftLeft', 'ArrowRight']    , description: 'Focus split to the right'    },
+      { keys: ['opt+[']           , codes: ['AltLeft', 'BracketLeft']     , description: 'Go back in current split'    },
+      { keys: ['opt+]']           , codes: ['AltLeft', 'BracketRight']    , description: 'Go forward in current split' },
+    ],
+  },
+  {
+    title: 'Unified List',
+    items: [
+      { keys: ['arrowdown']      , codes: ['ArrowDown']               , description: 'Move down'                  },
+      { keys: ['arrowup']        , codes: ['ArrowUp']                 , description: 'Move up'                    },
+      { keys: ['shift+arrowdown'], codes: ['ShiftLeft', 'ArrowDown']  , description: 'Select down'                },
+      { keys: ['shift+arrowup']  , codes: ['ShiftLeft', 'ArrowUp']    , description: 'Select up'                  },
+      { keys: ['e']              , codes: ['KeyE']                    , description: 'Mark done'                  },
+      { keys: ['x']              , codes: ['KeyX']                    , description: 'Select items'               },
+      { keys: ['f']              , codes: ['KeyF']                    , description: 'Open filter menu'           },
+      { keys: ['arrowleft']      , codes: ['ArrowLeft']               , description: 'Collapse item'              },
+      { keys: ['arrowright']     , codes: ['ArrowRight']              , description: 'Expand item'                },
+      { keys: ['space']          , codes: ['Space']                   , description: 'Preview item'               },
+      { keys: ['enter']          , codes: ['Enter']                   , description: 'Open item in current split' },
+      { keys: ['shift+enter']    , codes: ['ShiftLeft', 'Enter']      , description: 'Open item in a new split'   },
     ],
   },
 ];
+
+const [hoveredCodes, setHoveredCodes] = createSignal<string[]>([]);
 
 function Kbd(props: { shortcut: string; class?: string }) {
   return (
     <span
       class={cn(
-        'inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm border border-edge-muted bg-ink/4 text-ink-muted uppercase',
+        'inline-flex items-center text-xs px-1.5 py-0.5 rounded-sm uppercase transition-colors',
+        'border border-edge-muted bg-ink/4 text-ink-muted',
+        'group-hover:border-accent/30 group-hover:bg-accent/10 group-hover:text-accent',
         props.class
       )}
     >
@@ -89,7 +83,11 @@ function Kbd(props: { shortcut: string; class?: string }) {
 
 function ShortcutRow(props: { item: ShortcutItem; spacer?: string }) {
   return (
-    <div class="flex items-center gap-2 py-1.5 rounded-md hover:bg-panel-secondary/50 transition-colors">
+    <div
+      class="group flex items-center gap-2 py-1.5 rounded-md hover:bg-panel-secondary/50 transition-colors"
+      onMouseEnter={() => setHoveredCodes(props.item.codes)}
+      onMouseLeave={() => setHoveredCodes([])}
+    >
       <div class="shrink-0 flex items-center gap-1 uppercase">
         <Index each={props.item.keys}>
           {(key, index) => (
@@ -102,7 +100,9 @@ function ShortcutRow(props: { item: ShortcutItem; spacer?: string }) {
           )}
         </Index>
       </div>
-      <span class="text-ink-muted text-sm">{props.item.description}</span>
+      <span class="text-sm text-ink-muted group-hover:text-accent transition-colors">
+        {props.item.description}
+      </span>
     </div>
   );
 }
@@ -122,29 +122,52 @@ function ShortcutSectionComponent(props: { section: ShortcutSection }) {
   );
 }
 
-export function Shortcuts() {
-  const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
-
+function ShortcutsContent() {
   return (
-    <div class="absolute inset-0 bg-panel">
-      <div
-        ref={setScrollRef}
-        class="absolute inset-0 overflow-auto p-6 scrollbar-hidden"
-      >
-        <div class="max-w-2xl mx-auto">
-          <div class="mb-4">
-            <h2 class="text-xl font-semibold text-ink mb-2">Keyboard Shortcuts</h2>
-            <p class="text-ink-muted text-sm">
-              Shortcuts without a {cmdOrCtrl}/option modifier key require text inputs to be unfocused. For example, pressing <kbd>j</kbd> in a document will insert a j, but will move down the list if the document text is unfocused.
-            </p>
-          </div>
+    <div class="flex flex-col h-full overflow-hidden">
+      <div class="relative flex items-center justify-between h-10 px-6 shrink-0 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
+        <div class="text-sm font-semibold">Keyboard Shortcuts</div>
+      </div>
 
-          <For each={shortcutSections}>
-            {(section) => <ShortcutSectionComponent section={section} />}
-          </For>
+      <div class="flex-1 overflow-auto px-6 py-2 @container">
+        <Keyboard keys={hoveredCodes()} />
+
+        <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
+          {/* Core - left column */}
+          <ShortcutSectionComponent section={shortcutSections[0]} />
+
+          {/* Splits - right column */}
+          <ShortcutSectionComponent section={shortcutSections[1]} />
+
+          {/* Unified List - spans both columns with its own 2-column layout */}
+          <div class="@[600px]:col-span-2">
+            <div class="mb-3">
+              <h3 class="font-medium text-lg mb-2 flex items-center gap-2">
+                {shortcutSections[2].title}
+              </h3>
+              <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
+                <For each={shortcutSections[2].items}>
+                  {(item) => <ShortcutRow item={item} spacer="or" />}
+                </For>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      <CustomScrollbar scrollContainer={scrollRef} />
+    </div>
+  );
+}
+
+export function Shortcuts() {
+  return (
+    <div class="h-full overflow-hidden flex justify-center p-2">
+      <div class="max-w-200 w-full h-full">
+        <Panel depth={2} class="h-full overflow-hidden">
+          <div class="text-ink h-full">
+            <ShortcutsContent />
+          </div>
+        </Panel>
+      </div>
     </div>
   );
 }

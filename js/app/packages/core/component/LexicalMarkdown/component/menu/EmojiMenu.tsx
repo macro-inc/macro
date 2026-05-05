@@ -53,7 +53,15 @@ export function EmojiItem(props: {
       class={cn('group flex items-center p-1.5 mx-1.5 rounded-xs', {
         'bg-hover': props.selected,
       })}
+      on:mouseup={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
       on:mousedown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      on:click={(e) => {
         e.preventDefault();
         e.stopPropagation();
         props.onSelect?.();
@@ -244,6 +252,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
           use:clickOutside={() => {
             closeMenu();
           }}
+          on:touchstart={(e) => e.stopPropagation()}
           ref={menuRef}
         >
           <Panel depth={2} active class="py-2">

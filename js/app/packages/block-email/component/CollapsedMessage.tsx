@@ -1,4 +1,3 @@
-import { BozzyBracket } from '@core/component/BozzyBracket';
 import { type UserIconProps, UserIcon } from '@core/component/UserIcon';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { useEmail } from '@core/context/user';
@@ -56,71 +55,69 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
     <div class="shrink-0 flex justify-center w-full">
       {/* These pl/pr below are needed to align with expanded messages at mobile width. */}
       <div class="macro-message-width macro-message-margin w-full pl-2 pr-4 sm:px-0">
-        <BozzyBracket active={props.isFocused} hover={hover()} class="">
+        <div
+          class="relative flex flex-row items-center w-full pb-2 transition-all"
+          classList={{
+            'pt-2': !props.isFirstMessage,
+            'opacity-80': hasMouseLeft() && !hover(),
+            'opacity-100': !hasMouseLeft() || hover(),
+          }}
+          data-message-body-id={props.message.db_id}
+          tabIndex={0}
+          onClick={props.onClick}
+          onKeyDown={handleKeyDown}
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => {
+            setHover(false);
+            setHasMouseLeft(true);
+          }}
+        >
+          {/* Rail line - behind avatar */}
           <div
-            class="relative flex flex-row items-center w-full pb-2 cursor-pointer transition-all"
-            classList={{
-              'pt-2': !props.isFirstMessage,
-              'opacity-80': hasMouseLeft() && !hover(),
-              'opacity-100': !hasMouseLeft() || hover(),
+            class="absolute top-0 bottom-0 border-l border-edge-muted z-0"
+            style={{
+              left: 'var(--left-of-connector)',
             }}
-            data-message-body-id={props.message.db_id}
-            tabIndex={0}
-            onClick={props.onClick}
-            onKeyDown={handleKeyDown}
-            onMouseEnter={() => setHover(true)}
-            onMouseLeave={() => {
-              setHover(false);
-              setHasMouseLeft(true);
+          />
+          {/* Avatar - centered on the rail, in front of rail */}
+          <div
+            class="relative z-10 flex justify-center items-center shrink-0"
+            style={{
+              width: 'var(--user-icon-width)',
+              height: 'var(--user-icon-width)',
+              'margin-left':
+                'calc(var(--left-of-connector) - var(--user-icon-width) / 2 + 1px)',
             }}
           >
-            {/* Rail line - behind avatar */}
-            <div
-              class="absolute top-0 bottom-0 border-l border-edge-muted z-0"
-              style={{
-                left: 'var(--left-of-connector)',
-              }}
+            <UserIcon
+              {...senderIconProps()}
+              isDeleted={false}
+              size="fill"
+              suppressClick={true}
             />
-            {/* Avatar - centered on the rail, in front of rail */}
-            <div
-              class="relative z-10 flex justify-center items-center shrink-0"
-              style={{
-                width: 'var(--user-icon-width)',
-                height: 'var(--user-icon-width)',
-                'margin-left':
-                  'calc(var(--left-of-connector) - var(--user-icon-width) / 2 + 1px)',
-              }}
-            >
-              <UserIcon
-                {...senderIconProps()}
-                isDeleted={false}
-                size="fill"
-                suppressClick={true}
-              />
-            </div>
-            {/* Sender + Snippet - aligned with expanded message content */}
-            <div
-              class="flex-1 flex items-center min-w-0"
-              style={{
-                'padding-left': 'var(--message-padding-x)',
-              }}
-            >
-              <span class="w-16 shrink-0">
-                <EmailUserTooltip recipient={props.message.from}>
-                  <span class="text-ink font-semibold truncate text-sm cursor-default block">
-                    {senderDisplay()}
-                  </span>
-                </EmailUserTooltip>
-              </span>
-              <span class="text-ink truncate">{snippet()}</span>
-            </div>
-            {/* Date */}
-            <div class="text-xs text-ink shrink-0 ml-4 pr-2">
-              {props.message.internal_date_ts &&
-                formatShortDate(props.message.internal_date_ts)}
-            </div>
           </div>
-        </BozzyBracket>
+          {/* Sender + Snippet - aligned with expanded message content */}
+          <div
+            class="flex-1 flex items-center min-w-0"
+            style={{
+              'padding-left': 'var(--message-padding-x)',
+            }}
+          >
+            <span class="w-16 shrink-0">
+              <EmailUserTooltip recipient={props.message.from}>
+                <span class="text-ink font-semibold truncate text-sm cursor-default block">
+                  {senderDisplay()}
+                </span>
+              </EmailUserTooltip>
+            </span>
+            <span class="text-ink truncate">{snippet()}</span>
+          </div>
+          {/* Date */}
+          <div class="text-xs text-ink shrink-0 ml-4 pr-2">
+            {props.message.internal_date_ts &&
+              formatShortDate(props.message.internal_date_ts)}
+          </div>
+        </div>
       </div>
     </div>
   );

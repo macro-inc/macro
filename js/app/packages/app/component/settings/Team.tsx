@@ -111,7 +111,7 @@ function RoleSelect(props: {
       itemComponent={(itemProps: { item: CollectionNode<RoleOption> }) => (
         <Select.Item
           item={itemProps.item}
-          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover outline-none data-highlighted:bg-hover"
         >
           <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
           <Select.ItemIndicator>
@@ -160,7 +160,7 @@ function TierSelect(props: {
       itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
         <Select.Item
           item={itemProps.item}
-          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover outline-none data-highlighted:bg-hover"
         >
           <div class="flex flex-col">
             <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
@@ -227,7 +227,7 @@ function InviteEntryRow(props: {
           <TierSelect
             value={props.entry.tier}
             onChange={props.onTierChange}
-            triggerClass="bracket-never flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink outline-none focus:border-accent/50 shrink-0"
+            triggerClass="flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink outline-none focus:border-accent/50 shrink-0"
           />
         </Show>
         <Show when={props.showRemove}>
@@ -235,7 +235,7 @@ function InviteEntryRow(props: {
             <Button
               variant="secondary"
               size="icon-sm"
-              class="bracket-never rounded-xs shrink-0 focus:border-accent/50"
+              class="rounded-xs shrink-0 focus:border-accent/50"
               tabIndex={0}
               onClick={props.onRemove}
             >
@@ -367,7 +367,7 @@ function InviteEmailsInput(props: {
       </Show>
       <Button
         variant="secondary"
-        class="bracket-never rounded-xs w-full justify-center focus:border-accent/50"
+        class="rounded-xs w-full justify-center focus:border-accent/50"
         tabIndex={0}
         disabled={!canAddRow()}
         onClick={addRow}
@@ -1382,15 +1382,13 @@ function TeamContent() {
 
 export function Team() {
   return (
-    <div class="flex justify-center p-2">
-      <div class="max-w-2xl w-full">
-        <Panel depth={2}>
-          <div class="text-ink">
-            <Suspense
-              fallback={
-                <div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />
-              }
-            >
+    <div
+      class="h-full overflow-hidden flex justify-center p-2"
+    >
+      <div class="max-w-200 w-full h-full">
+        <Panel depth={2} class="h-full overflow-hidden">
+          <div class="text-ink h-full">
+            <Suspense fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />}>
               <TeamContent />
             </Suspense>
           </div>

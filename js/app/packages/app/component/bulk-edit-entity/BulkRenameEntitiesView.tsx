@@ -143,7 +143,7 @@ export const BulkRenameEntitiesView = (props: {
           />
         </Show>
 
-        <div class="w-full focus-within:bracket-offset-2">
+        <div class="w-full">
           <input
             ref={(el) => {
               inputRef = el;
@@ -158,7 +158,7 @@ export const BulkRenameEntitiesView = (props: {
             onInput={(e) => setEditValue(e.currentTarget.value)}
             onKeyDown={handleKeyDown}
             class="w-full p-2 text-sm border border-edge bg-menu text-ink
-                   placeholder:text-ink-placeholder focus:outline-none
+                   placeholder:text-ink-placeholder focus:outline-none focus:bg-active
                    selection:bg-ink selection:text-panel"
             placeholder="Enter new text..."
           />

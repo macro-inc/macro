@@ -13,8 +13,8 @@ use crate::domain::models::queue_message::{
     QueueMessageNeedsStateMachine, UserApnsEndpoints,
 };
 use crate::domain::models::request::{
-    BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationStatus,
-    SendNotificationRequest, UpdateNotificationsRequest,
+    BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationListFilters,
+    NotificationStatus, SendNotificationRequest, UpdateNotificationsRequest,
 };
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
@@ -59,18 +59,19 @@ pub trait NotificationReader: Send + Sync + 'static {
         req: UpdateNotificationsRequest,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
-    /// Get a user's active notifications, paginated.
+    /// Get a user's non-deleted notifications, paginated.
     ///
-    /// Returns at most `limit` (default 20, max 500) notifications that are
-    /// not deleted and not done, ordered by creation time descending.
+    /// Returns at most `limit` (default 20, max 500) notifications matching
+    /// the status filters, ordered by creation time descending.
     fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
         limit: Option<u32>,
         cursor: Query<Uuid, CreatedAt, ()>,
+        filters: NotificationListFilters,
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send;
 
-    /// Get a user's active notifications filtered by event item IDs, paginated.
+    /// Get a user's non-deleted notifications filtered by event item IDs, paginated.
     fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
         &self,
         req: GetNotificationsByEventItemIdsRequest<'_>,
@@ -597,12 +598,13 @@ where
         user_id: MacroUserIdStr<'_>,
         limit: Option<u32>,
         cursor: Query<Uuid, CreatedAt, ()>,
+        filters: NotificationListFilters,
     ) -> Result<Paginated<UserNotificationRow<T>, String>, Report> {
         let limit = limit.unwrap_or(20).min(500);
 
         let rows = self
             .repository
-            .get_user_notifications::<T>(user_id, limit, cursor)
+            .get_user_notifications::<T>(user_id, limit, cursor, filters)
             .await?;
 
         let paginated = rows
@@ -628,6 +630,7 @@ where
                 req.event_item_ids,
                 limit,
                 req.cursor,
+                req.filters,
             )
             .await?;
 

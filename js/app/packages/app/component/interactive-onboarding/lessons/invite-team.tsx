@@ -42,7 +42,9 @@ function InviteTeamContent() {
       <div class="flex flex-col gap-2">
         <div class="flex items-start gap-2">
           <CheckIcon class="size-4 text-accent shrink-0 mt-0.5" />
-          <span class="text-sm text-ink/70">Shared calls and tasks across your team</span>
+          <span class="text-sm text-ink/70">
+            Shared calls and tasks across your team
+          </span>
         </div>
         <div class="flex items-start gap-2">
           <CheckIcon class="size-4 text-accent shrink-0 mt-0.5" />
@@ -266,7 +268,7 @@ function InviteTeamDemo(props: LessonContentProps) {
             disabled={false}
             aria-describedby="team-name-counter"
             class={cn(
-              'w-[calc(100%-36px)] px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
+              'w-[calc(100%-36px)] px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
               errors().teamName
                 ? 'border-failure focus-visible:ring-failure'
                 : 'border-edge focus-visible:ring-accent',
@@ -302,82 +304,77 @@ function InviteTeamDemo(props: LessonContentProps) {
             </p>
           </div>
           <div class="flex flex-col gap-3 overflow-y-auto min-h-0 p-2">
-              <Index each={inviteEntries()}>
-                {(entry, index) => (
-                  <div class="flex flex-col gap-1 shrink-0">
-                    <div class="flex items-center gap-2">
-                      <input
-                        id={`invite-email-${index}`}
-                        type="email"
-                        value={entry().email}
-                        onInput={(e) =>
-                          updateEmail(index, e.currentTarget.value)
-                        }
-                        onBlur={(e) =>
-                          validateField('email', index, e.currentTarget.value)
-                        }
-                        placeholder={emailPlaceholder()}
+            <Index each={inviteEntries()}>
+              {(entry, index) => (
+                <div class="flex flex-col gap-1 shrink-0">
+                  <div class="flex items-center gap-2">
+                    <input
+                      id={`invite-email-${index}`}
+                      type="email"
+                      value={entry().email}
+                      onInput={(e) => updateEmail(index, e.currentTarget.value)}
+                      onBlur={(e) =>
+                        validateField('email', index, e.currentTarget.value)
+                      }
+                      placeholder={emailPlaceholder()}
+                      disabled={false}
+                      aria-labelledby="invite-members-label"
+                      aria-describedby="invite-members-description"
+                      aria-invalid={!!errors().emails?.[index]}
+                      class={cn(
+                        'flex-1 px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
+                        errors().emails?.[index]
+                          ? 'border-failure focus-visible:ring-failure'
+                          : 'border-edge focus-visible:ring-accent',
+                        false
+                      )}
+                    />
+                    <Show when={showTier()}>
+                      <TierSelect
+                        value={entry().tier}
+                        onChange={(tier) => updateTier(index, tier)}
                         disabled={false}
-                        aria-labelledby="invite-members-label"
-                        aria-describedby="invite-members-description"
-                        aria-invalid={!!errors().emails?.[index]}
-                        class={cn(
-                          'flex-1 px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
-                          errors().emails?.[index]
-                            ? 'border-failure focus-visible:ring-failure'
-                            : 'border-edge focus-visible:ring-accent',
-                          false
-                        )}
+                        triggerClass="flex items-center justify-between gap-1 w-28 px-3 py-2 text-base border border-edge rounded-xs bg-panel text-ink outline-none shrink-0 hover:bg-ink/5 data-[expanded]:bg-ink/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel [&>svg]:data-[expanded]:rotate-180 [&>svg]:transition-transform"
                       />
-                      <Show when={showTier()}>
-                        <TierSelect
-                          value={entry().tier}
-                          onChange={(tier) => updateTier(index, tier)}
-                          disabled={false}
-                          triggerClass="bracket-never flex items-center justify-between gap-1 w-28 px-3 py-2 text-base border border-edge rounded-xs bg-panel text-ink outline-none shrink-0 hover:bg-ink/5 data-[expanded]:bg-ink/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel [&>svg]:data-[expanded]:rotate-180 [&>svg]:transition-transform"
-                        />
-                      </Show>
-                      <Tooltip
-                        tooltip={
-                          inviteEntries().length > 1 ? 'Remove' : 'Clear'
-                        }
-                        placement="top"
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            inviteEntries().length === 1
-                              ? updateEmail(0, '')
-                              : removeEmail(index)
-                          }
-                          disabled={false}
-                          aria-label={
-                            inviteEntries().length > 1
-                              ? `Remove email ${index + 1}`
-                              : 'Clear email'
-                          }
-                          class={cn(
-                            'shrink-0 p-1.5 text-ink/40 hover:text-ink hover:bg-ink/5 rounded-xs bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
-                            false
-                          )}
-                        >
-                          <Show
-                            when={inviteEntries().length > 1}
-                            fallback={<XIcon class="size-4" />}
-                          >
-                            <TrashIcon class="size-4" />
-                          </Show>
-                        </button>
-                      </Tooltip>
-                    </div>
-                    <Show when={errors().emails?.[index]}>
-                      <p class="text-sm text-failure-ink" role="alert">
-                        {errors().emails?.[index]}
-                      </p>
                     </Show>
+                    <Tooltip
+                      tooltip={inviteEntries().length > 1 ? 'Remove' : 'Clear'}
+                      placement="top"
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          inviteEntries().length === 1
+                            ? updateEmail(0, '')
+                            : removeEmail(index)
+                        }
+                        disabled={false}
+                        aria-label={
+                          inviteEntries().length > 1
+                            ? `Remove email ${index + 1}`
+                            : 'Clear email'
+                        }
+                        class={cn(
+                          'shrink-0 p-1.5 text-ink/40 hover:text-ink hover:bg-ink/5 rounded-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel'
+                        )}
+                      >
+                        <Show
+                          when={inviteEntries().length > 1}
+                          fallback={<XIcon class="size-4" />}
+                        >
+                          <TrashIcon class="size-4" />
+                        </Show>
+                      </button>
+                    </Tooltip>
                   </div>
-                )}
-              </Index>
+                  <Show when={errors().emails?.[index]}>
+                    <p class="text-sm text-failure-ink" role="alert">
+                      {errors().emails?.[index]}
+                    </p>
+                  </Show>
+                </div>
+              )}
+            </Index>
           </div>
           <button
             type="button"
@@ -385,7 +382,7 @@ function InviteTeamDemo(props: LessonContentProps) {
             disabled={!canAddEmail()}
             aria-label="Add another email invite"
             class={cn(
-              'mx-2 flex items-center gap-2 px-3 py-2 text-sm rounded-xs bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel shrink-0',
+              'mx-2 flex items-center gap-2 px-3 py-2 text-sm rounded-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel shrink-0',
               canAddEmail()
                 ? 'text-ink bg-ink/8 hover:bg-ink/12'
                 : 'text-ink/30 bg-ink/4 cursor-not-allowed'

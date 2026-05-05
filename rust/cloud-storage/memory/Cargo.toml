@@ -12,6 +12,7 @@ ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
+call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 futures = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
@@ -28,7 +29,6 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 
 # For building ToolServiceContext
-call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 comms = { path = "../comms" }
 documents = { path = "../documents" }
 email = { path = "../email" }
@@ -38,6 +38,7 @@ entity_access_management = { path = "../entity_access_management" }
 frecency = { path = "../frecency" }
 lexical_client = { path = "../lexical_client" }
 macro_aws_config = { path = "../macro_aws_config" }
+notification = { path = "../notification", features = ["ai_tool"] }
 properties = { path = "../properties" }
 readonly_pool = { path = "../readonly_pool" }
 search_service_client = { path = "../search_service_client" }

@@ -36,6 +36,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "user_permissions",
 ] }
 macro_user_id = { path = "../macro_user_id" }
+notification = { path = "../notification", features = ["ai_tool"] }
 properties = { path = "../properties", features = ["ai_tools"] }
 readonly_pool = { path = "../readonly_pool" }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }

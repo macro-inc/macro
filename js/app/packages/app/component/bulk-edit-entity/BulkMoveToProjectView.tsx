@@ -363,7 +363,7 @@ export const BulkMoveToProjectView = (props: {
 
   return (
     <div ref={rootScopeId}>
-      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
+      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
         <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
           <CloseIcon />
         </Dialog.CloseButton>
@@ -448,7 +448,7 @@ export const BulkMoveToProjectView = (props: {
                 return (
                   <div
                     class={cn(
-                      'flex items-center px-2 py-1 cursor-pointer hover:bg-accent/10',
+                      'flex items-center px-2 py-1 hover:bg-accent/10',
                       isFocused() && 'focused bg-accent/20',
                       isSelected() && 'bg-accent/10'
                     )}
@@ -470,7 +470,7 @@ export const BulkMoveToProjectView = (props: {
                     <div
                       class={cn(
                         'mr-2 w-4 h-4 flex items-center justify-center text-xs',
-                        hasChildren() ? 'cursor-pointer' : 'opacity-20'
+                        !hasChildren() && 'opacity-20'
                       )}
                       onClick={(e) => {
                         e.stopPropagation();

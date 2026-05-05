@@ -37,21 +37,21 @@ export interface PlanFeature {
 
 export const PLAN_FEATURES: PlanFeature[] = [
   {
+    label: 'AI Tool Calls',
+    values: {
+      free: '—',
+      haiku: '1,000',
+      sonnet: '5,000',
+      opus: 'Unlimited',
+    },
+  },
+  {
     label: 'AI Agent',
     values: {
       free: '—',
       haiku: 'Haiku',
       sonnet: 'Sonnet',
       opus: 'Opus',
-    },
-  },
-  {
-    label: 'AI tool calls',
-    values: {
-      free: '—',
-      haiku: '1,000/month',
-      sonnet: '5,000/month',
-      opus: 'Unlimited',
     },
   },
   {

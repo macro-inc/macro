@@ -71,7 +71,7 @@ export function CallRecordingSectionShell(props: {
             <Show when={props.onToggle}>
               <button
                 type="button"
-                class="ml-auto shrink-0 rounded-xs border border-edge-muted/50 px-2 py-1 text-xs font-medium text-ink-muted cursor-pointer hover:bg-hover/30 hover:text-ink flex items-center gap-1.5 transition-colors"
+                class="ml-auto shrink-0 rounded-xs border border-edge-muted/50 px-2 py-1 text-xs font-medium text-ink-muted  hover:bg-hover/30 hover:text-ink flex items-center gap-1.5 transition-colors"
                 aria-expanded={props.open}
                 aria-label={toggleLabel()}
                 title={toggleLabel()}
@@ -96,7 +96,7 @@ export function CallRecordingSectionShell(props: {
       >
         <button
           type="button"
-          class="isolate sticky top-0 z-10 flex w-full min-w-0 shrink-0 cursor-pointer items-center gap-2 border-b border-edge-muted/50 bg-panel px-4 py-2 text-left @[860px]:py-4 hover:bg-hover/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0"
+          class="isolate sticky top-0 z-10 flex w-full min-w-0 shrink-0  items-center gap-2 border-b border-edge-muted/50 bg-panel px-4 py-2 text-left @[860px]:py-4 hover:bg-hover/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0"
           aria-expanded={props.open}
           aria-label={toggleLabel()}
           title={toggleLabel()}
@@ -127,7 +127,7 @@ export function CallRecordingSectionShell(props: {
             : cn(
                 'transition-[max-height,transform,opacity] duration-300 ease-out @[860px]:transition-none @[860px]:max-h-none @[860px]:opacity-100 @[860px]:translate-y-0',
                 isOpen()
-                  ? 'flex min-h-0 flex-1 flex-col max-h-[100dvh] translate-y-0 opacity-100 @[860px]:h-full @[860px]:max-h-none'
+                  ? 'flex min-h-0 flex-1 flex-col max-h-dvh translate-y-0 opacity-100 @[860px]:h-full @[860px]:max-h-none'
                   : 'max-h-0 translate-y-2 opacity-0 pointer-events-none'
               )
         )}

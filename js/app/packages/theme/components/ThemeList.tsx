@@ -108,9 +108,6 @@ export function ThemeList() {
                   analytics.track('theme_changed', {themeId: theme.id})
                   applyTheme(theme.id)
                 }}
-                style="
-                  cursor: var(--cursor-pointer);
-                "
               >
                 <div
                   style="

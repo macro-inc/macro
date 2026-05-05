@@ -198,8 +198,8 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                         type="button"
                         id={`select-property-option-${index()}`}
                         class={cn(
-                          'flex flex-row w-full items-center gap-2 py-1.5 px-2 scroll-my-1 bracket-never',
-                          isFocused(index()) && 'bg-hover'
+                          'flex flex-row w-full items-center gap-2 py-1.5 px-2 scroll-my-1',
+                          isFocused(index()) && 'bg-active'
                         )}
                         onClick={() => addProperty(property.id)}
                         onMouseEnter={() => setFocusedIndex(index())}

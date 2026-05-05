@@ -102,7 +102,7 @@ export function InCallParticipantNameRow(props: {
       }
       class={cn(
         'flex min-w-0 items-center gap-2 rounded-xs px-1 py-1',
-        isInteractive() ? 'cursor-pointer hover:bg-hover' : 'cursor-default'
+        isInteractive() ? 'hover:bg-hover' : 'cursor-default'
       )}
     >
       <InCallParticipantAvatar
@@ -149,7 +149,7 @@ export function InCallParticipantsListPopover(
         as="button"
         type="button"
         class={cn(
-          'inline-flex items-center justify-center rounded-full bg-transparent p-0 transition-colors hover:bg-accent/15 cursor-pointer text-accent',
+          'inline-flex items-center justify-center rounded-full bg-transparent p-0 transition-colors hover:bg-accent/15  text-accent',
           props.class
         )}
         aria-haspopup="dialog"

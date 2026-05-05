@@ -38,7 +38,7 @@ where
 #[utoipa::path(
     tag = "sync_service",
     post,
-    path = "/internal/sync_service/wakeup",
+    path = "/sync_service/wakeup",
     operation_id = "bulk_wakeup_sync_service_documents",
     request_body = BulkWakeupRequest,
     responses(

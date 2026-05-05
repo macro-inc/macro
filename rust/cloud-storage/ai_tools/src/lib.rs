@@ -15,6 +15,7 @@ use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
 use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::email_toolset;
+use notification::inbound::ai_tool::notification_toolset;
 use properties::inbound::toolset::properties_toolset;
 use schemas::{anthropic_tools, read};
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
@@ -61,6 +62,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
 /// These are actually sent to the AI provider
 pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
+        .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_toolset())
         .add_tool::<Subagent, ToolServiceContext>();
     let prompt = prompts::TOOLS_PROMPT;

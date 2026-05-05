@@ -80,6 +80,13 @@ fn casing_matters_for_prefix() {
 }
 
 #[test]
+fn incomplete_input_does_not_panic() {
+    assert!(MacroUserId::parse_from_str("").is_err());
+    assert!(MacroUserId::parse_from_str("macro").is_err());
+    assert!(MacroUserId::parse_from_str("macro|").is_err());
+}
+
+#[test]
 fn casing_ignored_for_email() {
     let id = MacroUserId::parse_from_str("macro|###hello###+WEIRD@something-strange.world.tour")
         .unwrap();

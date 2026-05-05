@@ -3,6 +3,7 @@ import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
 import type { ThemeReactiveColor } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { ColorSwatch } from './ColorSwatch';
+import { isMobile } from '@core/mobile/isMobile';
 
 const displayType = () => 'hex';
 
@@ -41,23 +42,22 @@ export function ThemeEditorAdvanced(){
       `}</style>
 
       <div
-        style="
-          background-color: var(--b0);
-          font-size: var(--text-xs);
-          scrollbar-width: none;
-          position: relative;
-          overflow: hidden;
-          font-weight: 300;
-          display: block;
-          height: 100%;
-          "
+        style={{
+          'height': isMobile() ? '280px' : '390px',
+          'font-size': 'var(--text-xs)',
+          'scrollbar-width': 'none',
+          'position': 'relative',
+          'overflow': 'hidden',
+          'font-weight': 300,
+          'display': 'block',
+        }}
       >
         <div
           style="
           overscroll-behavior: none;
           box-sizing: border-box;
           scrollbar-width: none;
-          overflow-y: scroll;
+          overflow-y: auto;
           height: 100%;
           width: 100%;
         "
@@ -71,30 +71,6 @@ export function ThemeEditorAdvanced(){
               gap: 1px;
             "
           >
-            <div
-              style="
-                border-bottom: 1px solid var(--b3);
-                background-color: var(--b0);
-                align-items: center;
-                position: absolute;
-                padding: 0 20px;
-                display: grid;
-                height: 42px;
-                width: 100%;
-                z-index: 1;
-            "
-            >
-              <div
-                style={{
-                  'font-size': '0.875rem',
-                  'font-weight': '600'
-                }}
-              >
-                Theme Tokens
-              </div>
-            </div>
-            <div style="height: 41px;" />
-
             <For each={Object.entries(themeReactive)}>
               {([colorKey, colorValue]) => {
                 // a1 thru a4 are not currently being used, so we will hide them

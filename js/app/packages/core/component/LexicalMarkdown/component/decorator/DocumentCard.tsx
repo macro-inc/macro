@@ -3,7 +3,6 @@ import {
   useBlockOwner,
   useMaybeBlockName,
 } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   DropdownMenuContent,
   MenuItem,
@@ -70,6 +69,8 @@ import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { dispatchInternalLayoutShift } from '../../plugins/shared/utils';
 import { BlockLink } from '../core/BlockLink';
 import { ChannelMessageThreadCard } from './ChannelMessageThreadCard';
+import { TaskPropertiesPreview } from '../../../DocumentPreview';
+import { Button, cn, Layer } from '@ui';
 
 false && floatWithElement;
 
@@ -243,11 +244,14 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
 
       getElement = () => preview.element();
     } else {
-      getElement = () =>
-        ChannelMessageThreadCard({
-          channelId: props.documentId,
-          messageId: msgId!,
-        });
+      getElement = () => (
+        <div class="p-2">
+          <ChannelMessageThreadCard
+            channelId={props.documentId}
+            messageId={msgId!}
+          />
+        </div>
+      );
     }
 
     const noDispose = registerPreviewElement(nodeId, getElement);
@@ -351,7 +355,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   }) => {
     return (
       <div class="p-2">
-        <div class="flex center gap-2 items-center h-4">
+        <div class="flex center gap-2 items-center">
           <div class="shrink-0">
             <ItemEntityIcon size="sm" />
           </div>
@@ -361,12 +365,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
             </BlockLink>
           </div>
           <DropdownMenu open={dropdownOpen()} onOpenChange={setDropdownOpen}>
-            <DropdownMenu.Trigger>
-              <DeprecatedIconButton
-                theme="clear"
-                icon={DotsThree}
-                tabIndex={-1}
-              />
+            <DropdownMenu.Trigger as={Button} size="icon-sm" variant="ghost">
+              <DotsThree />
             </DropdownMenu.Trigger>
             <ScopedPortal scope="block">
               <DropdownMenuContent class="z-action-menu">
@@ -390,10 +390,14 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
             </ScopedPortal>
           </DropdownMenu>
         </div>
-        <div class="flex items-center justify-between mt-1">
+        <div
+          class={cn('flex items-center justify-between', {
+            'mt-2': Boolean(props.item.owner) || Boolean(props.item.updatedAt),
+          })}
+        >
           <Show when={props.item.owner}>
             {(owner) => (
-              <div class="flex items-center text-xs text-ink-muted">
+              <div class="flex items-center text-xs text-ink-extra-muted">
                 <UserIcon class="w-3 h-3 mr-1" />
                 <span class="truncate">{owner().replace('macro|', '')}</span>
               </div>
@@ -401,7 +405,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
           </Show>
           <Show when={props.item.updatedAt}>
             {(updatedAt) => (
-              <div class="flex items-center text-xs text-ink-muted/60 mr-2">
+              <div class="flex items-center text-xs text-ink-extra-muted pr-1">
                 <ClockIcon class="w-3 h-3 mr-1" />
                 <span>{formatDate(updatedAt())}</span>
               </div>
@@ -413,52 +417,62 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   };
 
   return (
-    <div
-      ref={(el) => {
-        setContainerRef(el);
-        setPreviewBoxRef(el);
-      }}
-      contentEditable={false}
-      class="relative my-2 rounded border border-edge-muted no-select-children select-none overflow-hidden flex flex-col"
-      classList={{
-        'bg-active outline-edge outline-4':
-          isSelectedAsNode() && !channelMessageId(),
-        'resize-y shrink-0 min-h-[100px]': isPreviewable(),
-      }}
-      style={{
-        height: isPreviewable() ? previewBoxHeight : 'auto',
-      }}
-      onClick={(e) => {
-        if (channelMessageId()) return;
-        e.preventDefault();
-        clickCardHandler();
-      }}
-    >
-      <Switch>
-        <Match when={item().loading}>
-          <div class="flex items-center justify-center p-4 text-ink-muted">
-            <LoadingSpinner class="w-6 h-6 animate-spin" />
-          </div>
-        </Match>
-
-        <Match when={matches(item(), isAccessiblePreviewItem)}>
-          {(item) => (
-            <>
-              <DocumentInfo item={item()} blockName={props.blockName} />
-              <Show when={previewComponent()}>
-                <Show
-                  when={isPreviewable()}
-                  fallback={<Dynamic component={previewComponent()} />}
-                >
-                  <div class="relative grow overflow-y-scroll">
-                    <Dynamic component={previewComponent()} />
-                  </div>
+    <Layer depth={2}>
+      <div
+        ref={(el) => {
+          setContainerRef(el);
+          setPreviewBoxRef(el);
+        }}
+        contentEditable={false}
+        class={cn(
+          'relative my-2 rounded border border-edge bg-panel no-select-children select-none overflow-hidden flex flex-col',
+          isSelectedAsNode() &&
+            !channelMessageId() &&
+            'bg-active outline-edge outline-4',
+          isPreviewable() && 'resize-y shrink-0 min-h-25'
+        )}
+        style={{
+          height: isPreviewable() ? previewBoxHeight : 'auto',
+        }}
+        onClick={(e) => {
+          if (channelMessageId()) return;
+          e.preventDefault();
+          clickCardHandler();
+        }}
+      >
+        <Switch>
+          <Match when={item().loading}>
+            <div class="flex items-center justify-center p-4 text-ink-muted">
+              <LoadingSpinner class="w-6 h-6 animate-spin" />
+            </div>
+          </Match>
+          <Match when={matches(item(), isAccessiblePreviewItem)}>
+            {(item) => (
+              <>
+                {/*<div class="h-2"/>*/}
+                <DocumentInfo item={item()} blockName={props.blockName} />
+                <Show when={props.blockName === 'task'}>
+                  <Suspense
+                    fallback={<div class="w-full bg-hover/50 h-4 m-2" />}
+                  >
+                    <TaskPropertiesPreview taskId={item().id} />
+                  </Suspense>
                 </Show>
-              </Show>
-            </>
-          )}
-        </Match>
-      </Switch>
-    </div>
+                <Show when={previewComponent()}>
+                  <Show
+                    when={isPreviewable()}
+                    fallback={<Dynamic component={previewComponent()} />}
+                  >
+                    <div class="relative grow overflow-y-scroll">
+                      <Dynamic component={previewComponent()} />
+                    </div>
+                  </Show>
+                </Show>
+              </>
+            )}
+          </Match>
+        </Switch>
+      </div>
+    </Layer>
   );
 }

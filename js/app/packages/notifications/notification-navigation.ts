@@ -159,7 +159,7 @@ function getSupportedHandler(
   notification: UnifiedNotification,
   entity?: NotificationEntityOverride
 ): ((layoutManager: SplitManager, newSplit?: boolean) => Promise<void>) | null {
-  const tag = notification.notification_metadata.tag;
+  const tag = notification.notification_metadata.tag as NotificationType;
 
   return match(tag)
     .with(
@@ -201,6 +201,14 @@ function getSupportedHandler(
         );
     })
     .with('invite_to_team', () => null)
+    .with(
+      'call-started',
+      () =>
+        async (lm: SplitManager, newSplit: boolean = false) =>
+          openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
+            newSplit,
+          })
+    )
     .with('task_assigned', () => {
       const meta = notification.notification_metadata;
       if (meta.tag !== 'task_assigned') return null;

@@ -12,7 +12,7 @@ export type CallControlButtonSize = 'sm' | 'md';
 export type CallControlButtonVariant = 'default' | 'active' | 'danger';
 
 export const callControlButtonStyles = {
-  base: 'flex items-center justify-center cursor-pointer outline outline-transarent bg-transparent transition-colors',
+  base: 'flex items-center justify-center outline outline-transarent bg-transparent transition-colors',
 
   size: {
     sm: 'w-6 h-6 rounded-md',
