@@ -103,7 +103,7 @@ export function Tooltip(props: TooltipProps) {
         >
           <Show when={!props.unstyled} fallback={tooltipContent()}>
             <Layer depth={3}>
-              <div class="border-edge bg-panel flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm shadow-md shadow-[#000]/5">
+              <div class="border border-edge bg-panel flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm shadow-md shadow-[#000]/5">
                 {tooltipContent()}
               </div>
             </Layer>

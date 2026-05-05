@@ -50,7 +50,7 @@ function DocumentMentionPill(props: { notification: UnifiedNotification }) {
 
   return (
     <div
-      class="group relative flex items-center gap-1.5 px-2 py-1 rounded border border-edge-muted bg-panel hover:bg-hover cursor-pointer text-xs min-w-0 max-w-48 shrink-0"
+      class="group relative flex items-center gap-1.5 px-2 py-1 rounded border border-edge-muted bg-panel hover:bg-hover text-xs min-w-0 max-w-48 shrink-0"
       onClick={handleClick}
       role="button"
       tabIndex={0}

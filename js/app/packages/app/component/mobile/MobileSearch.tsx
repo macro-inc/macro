@@ -357,7 +357,7 @@ function FullTextResultItem(props: {
 
   return (
     <div
-      class="px-2 py-2 text-sm font-semibold cursor-pointer"
+      class="px-2 py-2 text-sm font-semibold"
       onClick={() => props.onSelect(props.entity)}
     >
       <div class="flex items-center gap-2 min-w-0">

@@ -41,7 +41,7 @@ export const RenameView = (props: {
   return (
     <div class="w-full">
       <EntityModalTitle title="Rename" />
-      <div class="w-full focus-within:bracket-offset-2">
+      <div class="w-full">
         <input
           ref={(el) => {
             inputRef = el;
@@ -56,7 +56,7 @@ export const RenameView = (props: {
           value={editValue()}
           onInput={(e) => setEditValue(e.currentTarget.value)}
           onKeyDown={handleKeyDown}
-          class="w-full p-2 text-sm border border-edge bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none selection:bg-ink selection:text-panel"
+          class="w-full p-2 text-sm border border-edge bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none focus:bg-active selection:bg-ink selection:text-panel"
           placeholder="Enter title..."
         />
       </div>

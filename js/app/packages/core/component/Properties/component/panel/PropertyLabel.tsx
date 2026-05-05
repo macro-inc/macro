@@ -159,7 +159,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
       >
         <Dialog.Portal>
           <DialogWrapper>
-            <div class="flex flex-col overflow-hidden bracket-never text-sm">
+            <div class="flex flex-col overflow-hidden text-sm">
               <div class="flex items-center justify-between gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
                 <Dialog.Title class="pl-2 text-sm font-medium">
                   Delete Property

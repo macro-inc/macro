@@ -29,6 +29,9 @@ import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-sol
 import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
 import { createMemo, createResource, createSignal, Show } from 'solid-js';
+import { usePermissions } from '@core/context/user';
+import { useSettingsState } from '@core/constant/SettingsState';
+import PaywallComponent from '../paywall/PaywallComponent';
 import {
     useEmailLinks,
   useEmailLinksStatus,
@@ -86,6 +89,8 @@ export function Account() {
   const logout = useLogout();
   const { showPaywall } = usePaywallState();
   const hasPaidAccess = useHasPaidAccess();
+  const permissions = usePermissions();
+    const { toggleSettings } = useSettingsState();
   const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
   const [showEnableEmailModal, setShowEnableEmailModal] = createSignal<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
@@ -154,165 +159,173 @@ export function Account() {
       class="h-full overflow-y-auto p-2"
       style="scrollbar-width: none;"
     >
-      <div class="max-w-2xl w-full mx-auto">
+      <div class="max-w-200 w-full mx-auto">
         <Panel depth={2}>
           <div class="text-ink">
             <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
               <div class="text-sm font-semibold">Account</div>
             </div>
             <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
-
-            <Show when={ENABLE_PROFILE_PICTURES && userId()}>
-              <Row label="Profile Picture">
-                <div
-                  class="relative group cursor-pointer"
-                  use:fileSelector={{
-                    acceptedFileExtensions: blockNameToFileExtensions.image,
-                    acceptedMimeTypes: blockNameToMimeTypes.image,
-                    onSelect: async (files: File[]) => {
-                      let response = await uploadProfilePicture(files[0]);
-                      if (!response || !userId()) return;
-                      let { url } = response;
-                      let pic: ProfilePictureItem = {
-                        _createdAt: new Date(),
-                        url,
-                        id: userId()!,
-                        loading: false,
-                      };
-                      // update the cache directly to force a reload
-                      const [_, controls] = useProfilePictureUrl(userId());
-                      controls.mutate(pic);
-                    },
-                  }}
-                >
-                  <UserIcon
-                    id={userId() as string}
-                    isDeleted={false}
-                    size="lg"
-                    class="bg-transparent"
+              <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
+                <div class="bg-panel px-6 py-2">
+                  <PaywallComponent
+                    hideCloseButton
+                    cb={() => {}}
+                    handleGuest={() => toggleSettings()}
                   />
-                  <div class="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <IconUpload class="size-5 text-white" />
+                </div>
+              </Show>
+
+              <Show when={ENABLE_PROFILE_PICTURES && userId()}>
+                <Row label="Profile Picture">
+                  <div
+                    class="relative group"
+                    use:fileSelector={{
+                      acceptedFileExtensions: blockNameToFileExtensions.image,
+                      acceptedMimeTypes: blockNameToMimeTypes.image,
+                      onSelect: async (files: File[]) => {
+                        let response = await uploadProfilePicture(files[0]);
+                        if (!response || !userId()) return;
+                        let { url } = response;
+                        let pic: ProfilePictureItem = {
+                          _createdAt: new Date(),
+                          url,
+                          id: userId()!,
+                          loading: false,
+                        };
+                        // update the cache directly to force a reload
+                        const [_, controls] = useProfilePictureUrl(userId());
+                        controls.mutate(pic);
+                      },
+                    }}
+                  >
+                    <UserIcon
+                      id={userId() as string}
+                      isDeleted={false}
+                      size="lg"
+                      class="bg-transparent"
+                    />
+                    <div class="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <IconUpload class="size-5 text-white" />
+                    </div>
                   </div>
+                </Row>
+              </Show>
+
+              <Row label="Email">
+                <span class="ph-no-capture text-sm text-ink-muted">
+                  {email() ?? ''}
+                </span>
+              </Row>
+
+              <Row label="First Name">
+                <EditableField
+                  class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
+                  value={firstName()}
+                  onSave={(newValue: string) => {
+                    setUpdatedFirstName(newValue);
+                    authServiceClient.putUserName({ first_name: newValue });
+                  }}
+                  placeholder="Enter First Name"
+                  allowEmpty={true}
+                />
+              </Row>
+
+              <Row label="Last Name">
+                <EditableField
+                  class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
+                  value={lastName()}
+                  onSave={(newValue: string) => {
+                    setUpdatedLastName(newValue);
+                    authServiceClient.putUserName({ last_name: newValue });
+                  }}
+                  placeholder="Enter Last Name"
+                  allowEmpty={true}
+                />
+              </Row>
+
+              <Row label="License Status">
+                <div class="flex items-center gap-3">
+                  <span class="text-sm text-ink-muted">
+                    {capitalize(licenseStatus() ?? '')}
+                  </span>
+                  <Show when={!hasPaidAccess()}>
+                    <Button
+                      variant="accent"
+                      size="sm"
+                      depth={3}
+                      onClick={() => showPaywall()}
+                    >
+                      Upgrade
+                    </Button>
+                  </Show>
                 </div>
               </Row>
-            </Show>
 
-            <Row label="Email">
-              <span class="ph-no-capture text-sm text-ink-muted">
-                {email() ?? ''}
-              </span>
-            </Row>
+              <BundleUpdateRow />
 
-            <Row label="First Name">
-              <EditableField
-                class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
-                value={firstName()}
-                onSave={(newValue: string) => {
-                  setUpdatedFirstName(newValue);
-                  authServiceClient.putUserName({ first_name: newValue });
-                }}
-                placeholder="Enter First Name"
-                allowEmpty={true}
-              />
-            </Row>
-
-            <Row label="Last Name">
-              <EditableField
-                class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
-                value={lastName()}
-                onSave={(newValue: string) => {
-                  setUpdatedLastName(newValue);
-                  authServiceClient.putUserName({ last_name: newValue });
-                }}
-                placeholder="Enter Last Name"
-                allowEmpty={true}
-              />
-            </Row>
-
-            <Row label="License Status">
-              <div class="flex items-center gap-3">
-                <span class="text-sm text-ink-muted">
-                  {capitalize(licenseStatus() ?? '')}
-                </span>
-                <Show when={!hasPaidAccess()}>
-                  <Button
-                    variant="accent"
-                    size="sm"
-                    depth={3}
-                    onClick={() => showPaywall()}
+              <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
+                <Row label="Email">
+                  <Show
+                    when={!emailActive()}
+                    fallback={
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        depth={3}
+                        onClick={() => setShowEmailModal(true)}
+                      >
+                        Disable
+                      </Button>
+                    }
                   >
-                    Upgrade
-                  </Button>
-                </Show>
-              </div>
-            </Row>
+                    <Show when={!showEnableEmailModal()}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        depth={3}
+                        onClick={() => setShowEnableEmailModal(true)}
+                      >
+                        Enable
+                      </Button>
+                    </Show>
+                  </Show>
+                </Row>
+              </Show>
 
-            <BundleUpdateRow />
-
-            <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
-              <Row label="Email">
+              <Row label="GitHub">
                 <Show
-                  when={!emailActive()}
+                  when={!githubLinkExists.loading}
                   fallback={
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      depth={3}
-                      onClick={() => setShowEmailModal(true)}
-                    >
-                      Disable
-                    </Button>
+                    <span class="text-sm text-ink-muted">Loading…</span>
                   }
                 >
-                  <Show when={!showEnableEmailModal()}>
+                  <Show
+                    when={!githubLinkExists()}
+                    fallback={
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        depth={3}
+                        onClick={handleGithubDisable}
+                      >
+                        Disable
+                      </Button>
+                    }
+                  >
                     <Button
                       variant="secondary"
                       size="sm"
                       depth={3}
-                      onClick={() => setShowEnableEmailModal(true)}
+                      onClick={handleGithubEnable}
                     >
                       Enable
                     </Button>
                   </Show>
                 </Show>
               </Row>
-            </Show>
 
-            <Row label="GitHub">
-              <Show
-                when={!githubLinkExists.loading}
-                fallback={
-                  <span class="text-sm text-ink-muted">Loading…</span>
-                }
-              >
-                <Show
-                  when={!githubLinkExists()}
-                  fallback={
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      depth={3}
-                      onClick={handleGithubDisable}
-                    >
-                      Disable
-                    </Button>
-                  }
-                >
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    depth={3}
-                    onClick={handleGithubEnable}
-                  >
-                    Enable
-                  </Button>
-                </Show>
-              </Show>
-            </Row>
-
-            <NotificationToggle />
-
+              <NotificationToggle />
             </div>
 
             <div class="flex items-center justify-end h-10 px-6">

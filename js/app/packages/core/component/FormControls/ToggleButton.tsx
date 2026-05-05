@@ -70,7 +70,7 @@ export const ToggleButton: ParentComponent<
   return (
     <KToggleButton
       class={cn(
-        'w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none focus:disabled:[--focus-border-inset:0] focus:[--focus-border-inset:-3px]',
+        'w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none outline-none focus-visible:bg-active',
         props.class
       )}
       classList={props.classList}

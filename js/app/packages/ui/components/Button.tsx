@@ -13,7 +13,8 @@ export type ButtonVariant =
   | 'destructive'
   | 'ghost'
   | 'link'
-  | 'accent';
+  | 'accent'
+  | 'active';
 
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon-sm' | 'icon-md' | 'icon-lg';
 
@@ -44,6 +45,8 @@ const variantStyles: Record<ButtonVariant, string> = {
   link: 'bg-transparent text-accent underline-offset-2 not-disabled:hover:underline not-disabled:active:text-accent/80 disabled:text-ink-extra-muted',
   accent:
     'bg-accent text-panel not-disabled:hover:bg-accent/90 not-disabled:active:bg-accent/80 disabled:bg-ink-extra-muted',
+  active:
+      'bg-accent/8 text-accent-ink border border-accent-ink not-disabled:hover:bg-accent/20 not-disabled:active:bg-accent/25 disabled:opacity-50',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -118,6 +121,7 @@ export const Button = <T extends ValidComponent = 'button'>(
   const cls = () =>
     cn(
       'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-xs',
+      'outline-none focus-visible:bg-active',
       'data-disabled:cursor-not-allowed',
       'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
       variantStyles[variant()],
@@ -151,7 +155,7 @@ export const Button = <T extends ValidComponent = 'button'>(
               style={{ 'max-width': 'calc(100vw - 32px)' }}
             >
               <Layer depth={3}>
-              <div class="border-edge bg-panel flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm shadow-md shadow-[#000]/5">
+              <div class="border border-edge bg-panel flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm shadow-md shadow-[#000]/5">
                 {local.tooltip}
               </div>
               </Layer>

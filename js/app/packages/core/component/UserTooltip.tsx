@@ -77,7 +77,7 @@ export function UserTooltip(props: UserTooltipProps) {
   };
 
   const buttonStyle =
-    'px-3 text-xs w-full justify-start hover:bg-hover/20 rounded-xs';
+    'px-3 text-xs w-full justify-start hover:bg-hover rounded-xs';
 
   return (
     <Panel depth={2} active>

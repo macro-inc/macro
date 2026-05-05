@@ -85,7 +85,7 @@ function Image(props: {
         <Show when={props.previewSrc} fallback={props.fallback}>
           {(previewSrc) => (
             <img
-              class={cn(props.class, props.onOpen && 'cursor-pointer')}
+              class={cn(props.class)}
               src={previewSrc()}
               alt="preview"
               width={props.width}
@@ -98,7 +98,7 @@ function Image(props: {
         </Show>
       </Show>
       <img
-        class={cn(props.class, props.onOpen && 'cursor-pointer')}
+        class={cn(props.class)}
         classList={{ invisible: !loaded(), absolute: !loaded() }}
         src={props.src}
         alt="preview"

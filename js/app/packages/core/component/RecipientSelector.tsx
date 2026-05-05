@@ -63,7 +63,7 @@ function RecipientChip(props: {
       <Show when={props.icon}>{props.icon}</Show>
       <p class="text-sm whitespace-nowrap">{truncateString(props.label, 20)}</p>
       <XIcon
-        class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1"
+        class="w-5 h-5 hover:bg-hover hover-transition-bg p-1"
         onClick={props.onRemove}
       />
     </div>
@@ -240,7 +240,6 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   triggerMode?: ComboboxTriggerMode;
   hideBorder?: boolean;
   noPadding?: boolean;
-  noBrackets?: boolean;
   includeSelf?: boolean;
   disabled?: boolean;
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
@@ -482,10 +481,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           : undefined
       }
       class={cn(
-        'ph-no-capture w-full text-sm offset-2 bg-input',
+        'ph-no-capture w-full text-sm offset-2 bg-input focus-within:bg-active',
         !props.hideBorder && 'border border-edge',
         !props.noPadding && 'py-2',
-        !props.noBrackets && 'focus-within:bracket-offset-2',
         props.class
       )}
     >

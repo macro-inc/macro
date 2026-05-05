@@ -60,7 +60,7 @@ function HistoryRow(props: { record: HistoryRecord }) {
     <div
       class={cn(
         'flex items-center gap-2 border-b border-edge-muted px-3 py-2 text-sm',
-        clickable() ? 'cursor-default hover:bg-hover/30' : 'cursor-default'
+        clickable() ? 'cursor-default hover:bg-hover' : 'cursor-default'
       )}
       onClick={() => {
         const id = chatId();
@@ -332,7 +332,7 @@ export function Automation() {
                         'cursor-default border rounded-sm px-2 py-1 text-xs transition-colors',
                         d().frequency === option.value
                           ? 'border-accent/30 bg-accent/10 text-accent'
-                          : 'border-edge-muted text-ink-muted hover:bg-hover/30'
+                          : 'border-edge-muted text-ink-muted hover:bg-hover'
                       )}
                       onClick={() =>
                         setState((current) => ({
@@ -364,7 +364,7 @@ export function Automation() {
                               'cursor-default border rounded-sm px-2 py-1 text-xs transition-colors',
                               active()
                                 ? 'border-accent/30 bg-accent/10 text-accent'
-                                : 'border-edge-muted text-ink-muted hover:bg-hover/30'
+                                : 'border-edge-muted text-ink-muted hover:bg-hover'
                             )}
                             onClick={() =>
                               setState((current) => {

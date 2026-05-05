@@ -24,11 +24,11 @@ export function ParticipantsListItem(props: {
   );
 
   return (
-    <div class="flex items-center gap-2 min-h-10 px-2 py-2 text-sm w-full border-b border-edge-muted last:border-b-0 hover:bg-hover/30">
+    <div class="flex items-center gap-2 min-h-10 px-2 py-2 text-sm w-full border-b border-edge-muted last:border-b-0 hover:bg-hover">
       <button
         {...navigationHandlers}
         type="button"
-        class="flex min-w-0 flex-1 items-center gap-2 rounded-xs px-2 py-1 text-left cursor-pointer focus:outline-none"
+        class="flex min-w-0 flex-1 items-center gap-2 rounded-xs px-2 py-1 text-left focus:outline-none"
       >
         <div class="shrink-0">
           <UserIcon

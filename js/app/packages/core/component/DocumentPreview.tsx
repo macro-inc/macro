@@ -382,7 +382,7 @@ const TASK_PREVIEW_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
 ];
 
-function TaskPropertiesPreview(props: { taskId: string }) {
+export function TaskPropertiesPreview(props: { taskId: string }) {
   const { properties, isLoading } = useEntityProperties(
     props.taskId,
     'TASK',
@@ -774,7 +774,7 @@ export function PopupPreview(props: {
                   {/* Task properties: status, priority, assignees */}
                   <Show when={props.documentInfo.type === 'task'}>
                     <Suspense
-                      fallback={<div class="w-full bg-hover/50 h-4 m-2" />}
+                      fallback={<div class="w-full bg-active h-4 m-2" />}
                     >
                       <TaskPropertiesPreview taskId={props.documentInfo.id} />
                     </Suspense>

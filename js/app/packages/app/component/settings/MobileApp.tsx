@@ -4,16 +4,15 @@ import { Panel } from '@ui';
 export function MobileApp() {
   return (
     <div
-      class="flex-1 overflow-y-auto py-2 px-4"
-      style="scrollbar-width: none;"
+      class="h-full overflow-hidden flex justify-center p-2"
     >
-      <div class="max-w-2xl w-full mx-auto">
-        <Panel depth={2}>
-          <div class="text-ink">
-            <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
+      <div class="max-w-200 w-full h-full">
+        <Panel depth={2} class="h-full overflow-hidden">
+          <div class="text-ink h-full flex flex-col">
+            <div class="flex items-center justify-between h-10 px-6 border-b border-edge-muted">
               <div class="text-sm font-semibold">Mobile App</div>
             </div>
-            <div class="flex flex-col items-center justify-center gap-6 py-8">
+            <div class="flex-1 flex flex-col items-center justify-center gap-6 py-8">
               <AppStoreQr style="display: block; max-width: 300px;" />
               <p class="text-sm text-ink text-center">
                 Download on the<br/>

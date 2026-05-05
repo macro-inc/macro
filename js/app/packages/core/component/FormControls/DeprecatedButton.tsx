@@ -42,7 +42,7 @@ export const DeprecatedButton: ParentComponent<{
   const hasHotkey = () => !!(props.hotkeyShortcut || props.hotkeyToken);
   return (
     <Polymorphic
-      class="relative flex items-stretch hover:opacity-80 disabled:opacity-50 focus:[--focus-border-inset:-4px] font-mono font-medium uppercase leading-none disabled:cursor-not-allowed"
+      class="relative flex items-stretch hover:opacity-80 disabled:opacity-50 font-mono font-medium uppercase leading-none disabled:cursor-not-allowed outline-none focus-visible:bg-active"
       classList={{
         [`${sizeClass[props.size || 'Base']}`]: !hasHotkey(),
         [`${themeClass[props.theme || 'primary']}`]: !hasHotkey(),

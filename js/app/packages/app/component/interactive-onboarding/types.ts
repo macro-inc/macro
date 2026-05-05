@@ -1,6 +1,13 @@
 import type { Component } from 'solid-js';
+import type { OnboardingContextValue } from './onboarding-context';
 
 export type LessonId = string;
+
+export interface BackContext {
+  onboarding: OnboardingContextValue;
+  isLessonSkipped: (id: LessonId) => boolean;
+  hasPaidAccess: boolean;
+}
 
 export interface LessonDefinition {
   id: LessonId;
@@ -10,6 +17,10 @@ export interface LessonDefinition {
   /** Optional component rendered in the right demo panel. When omitted the Macro logo is shown. */
   demo?: Component<LessonContentProps>;
   order?: number;
+  /** ID of the lesson to navigate back to, or a function that returns it (or undefined to hide the button). When set, a back button appears in the sidebar. */
+  previousLesson?: LessonId | ((context: BackContext) => LessonId | undefined);
+  /** Called before navigating back, for cleanup/side effects. */
+  onBack?: (context: BackContext) => void;
   /** Hide the continue button entirely — the lesson drives its own advancement. */
   hideContinue?: boolean;
   /** Called instead of the default complete-and-advance flow. On web, redirects externally (returns void). On native mobile, performs auth inline and returns true to advance. */
@@ -35,6 +46,10 @@ export interface LessonContentProps {
   scopeId: string;
   /** Programmatically mark the current lesson complete and advance to the next one. */
   advance: () => void;
+  /** Skip a specific lesson by ID without navigating to it. */
+  skipLesson: (id: LessonId) => void;
+  /** Navigate to a specific lesson by ID (un-skips it so it becomes current). */
+  goToLesson: (id: LessonId) => void;
 }
 
 export interface LessonState {

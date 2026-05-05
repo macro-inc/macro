@@ -255,7 +255,7 @@ export default function IconGallery() {
                 {(color) => (
                   <button
                     onClick={() => setSelectedColor(color)}
-                    class="h-2.5 w-2.5 cursor-pointer rounded-[1px] transition-transform hover:scale-125"
+                    class="h-2.5 w-2.5 rounded-[1px] transition-transform hover:scale-125"
                     classList={{
                       'ring-1 ring-ink ring-offset-1':
                         selectedColor().value === color.value,
@@ -268,9 +268,9 @@ export default function IconGallery() {
             </div>
             {/* Custom color option */}
             <div class="mt-1.5 flex items-center gap-1.5">
-              <span class="text-[10px] text-muted">Custom</span>
+              <span class="text-xxs text-muted">Custom</span>
               <label
-                class="relative h-2.5 w-2.5 cursor-pointer rounded-[1px] transition-transform hover:scale-125"
+                class="relative h-2.5 w-2.5 rounded-[1px] transition-transform hover:scale-125"
                 classList={{
                   'ring-1 ring-ink ring-offset-1':
                     selectedColor().value === 'custom',
@@ -293,7 +293,7 @@ export default function IconGallery() {
                       css: e.currentTarget.value,
                     });
                   }}
-                  class="absolute inset-0 cursor-pointer opacity-0"
+                  class="absolute inset-0 opacity-0"
                 />
               </label>
             </div>
@@ -311,11 +311,11 @@ export default function IconGallery() {
                 onInput={(e) => setIconSize(Number(e.currentTarget.value))}
                 class="icon-gallery-slider w-24"
               />
-              <span class="w-8 text-[10px] text-muted">{iconSize()}px</span>
+              <span class="w-8 text-xxs text-muted">{iconSize()}px</span>
             </label>
             <button
               onClick={triggerAllAnimations}
-              class="cursor-pointer border border-ink bg-transparent px-2 py-1 text-[10px] text-ink hover:opacity-70"
+              class="border border-ink bg-transparent px-2 py-1 text-xxs text-ink hover:opacity-70"
             >
               Trigger All Animations
             </button>
@@ -331,7 +331,7 @@ export default function IconGallery() {
           <For each={ICON_PAIRS}>
             {(pair) => (
               <div class="inline-flex flex-col items-center rounded-[1px] border border-edge-muted p-2">
-                <p class="mb-2 text-[10px] text-ink">{pair.name}</p>
+                <p class="mb-2 text-xxs text-ink">{pair.name}</p>
                 <div class="flex items-center justify-center gap-3">
                   {/* Static version */}
                   <div class="flex flex-col items-center">
@@ -350,7 +350,7 @@ export default function IconGallery() {
                   {/* Animated version */}
                   <div class="flex flex-col items-center">
                     <div
-                      class="flex cursor-pointer items-center justify-center"
+                      class="flex items-center justify-center"
                       style={{
                         color: getColorStyle(),
                         width: `${iconSize()}px`,
@@ -378,7 +378,7 @@ export default function IconGallery() {
                       <span class="text-[8px] text-muted">animated</span>
                       <button
                         onClick={() => triggerAnimation(pair.name)}
-                        class="flex h-2.5 w-2.5 cursor-pointer items-center justify-center rounded-full border border-current text-muted transition-colors hover:bg-ink/10 hover:text-ink"
+                        class="flex h-2.5 w-2.5 items-center justify-center rounded-full border border-current text-muted transition-colors hover:bg-ink/10 hover:text-ink"
                         title="Play animation"
                       >
                         <svg
@@ -435,7 +435,7 @@ export default function IconGallery() {
               onInput={(e) => setArcanumSize(Number(e.currentTarget.value))}
               class="icon-gallery-slider w-24"
             />
-            <span class="w-8 text-[10px] text-muted">{arcanumSize()}px</span>
+            <span class="w-8 text-xxs text-muted">{arcanumSize()}px</span>
           </label>
           <span class="h-px flex-1 bg-edge-muted" />
         </div>

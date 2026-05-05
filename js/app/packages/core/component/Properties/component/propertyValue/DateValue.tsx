@@ -60,7 +60,7 @@ export const DateValue: Component<PropertyValueProps> = (props) => {
         class={cn(
           'inline-flex items-center leading-none shrink-0 py-1.5 h-6.5 transition-colors border border-edge-muted px-1.5',
           {
-            'hover:border-edge-muted hover:bg-hover/50': props.canEdit,
+            'hover:border-edge-muted hover:bg-hover': props.canEdit,
           }
         )}
       >
