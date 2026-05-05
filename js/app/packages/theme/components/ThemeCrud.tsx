@@ -19,8 +19,9 @@ export function ThemeCrud(props: ThemeCrudProps) {
   return (
     <div
       style="
-        grid-template-columns: min-content min-content;
+        grid-auto-columns: min-content;
         background-color: var(--b0);
+        grid-auto-flow: column;
         box-sizing: border-box;
         align-items: center;
         direction: rtl;

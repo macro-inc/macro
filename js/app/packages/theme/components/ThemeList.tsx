@@ -49,58 +49,43 @@ export function ThemeList() {
         >
           <div
             style="
+              border-bottom: 1px solid var(--b3);
+              background-color: var(--b0);
+              align-items: center;
+              position: absolute;
+              padding: 0 20px;
+              display: flex;
+              height: 42px;
+              width: 100%;
+              z-index: 1;
+              top: 0;
+              left: 0;
+            "
+          >
+            <div
+              style={{
+                'font-size': '0.875rem',
+                'font-weight': '600'
+              }}
+            >
+              Theme List
+            </div>
+          </div>
+          <div
+            style="
               grid-template-columns: min-content 1fr min-content;
               background-color: var(--b3);
               box-sizing: border-box;
               grid-auto-rows: 40px;
               overflow-x: hidden;
+              padding-top: 40px;
               display: grid;
               gap: 1px;
             "
           >
-            <div
-              style="
-                border-bottom: 1px solid var(--b3);
-                background-color: var(--b0);
-                align-items: center;
-                position: absolute;
-                padding: 0 20px;
-                display: grid;
-                height: 42px;
-                width: 100%;
-                z-index: 1;
-              "
-            >
-              <div
-                style={{
-                  'font-size': '0.875rem',
-                  'font-weight': '600'
-                }}
-              >
-                Theme List
-              </div>
-            </div>
-            <div style="height: 40px; grid-column: 1 / -1;" />
-          <For each={themes()}>
-            {(theme) => (
-              <div
-                class={`theme-list-item ${theme.id === currentThemeId() && isThemeSaved() ? 'current-theme' : ''}`}
-                onClick={() => {
-                  analytics.track('theme_changed', {themeId: theme.id})
-                  applyTheme(theme.id)
-                }}
-              >
-                <div
-                  style="
-
-                    grid-template-columns: min-content 1fr;
-                    background-color: var(--b3);
-                    align-items: center;
-                    display: grid;
-                    height: 41px;
-                    gap: 1px;
-                  "
-                >
+            <For each={themes()}>
+              {(theme) => (
+                <>
                   <div
                     style="
                       background-color: var(--b0);
@@ -150,10 +135,9 @@ export function ThemeList() {
                   </div>
 
                   <ThemeCrud themeId={theme.id} />
-                </div>
-              </div>
-            )}
-          </For>
+                </>
+              )}
+            </For>
           </div>
         </div>
       </div>
