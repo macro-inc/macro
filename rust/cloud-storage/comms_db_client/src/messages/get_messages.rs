@@ -60,10 +60,8 @@ pub async fn get_messages(
     Ok(messages)
 }
 
-/// Paginated query to get messages and their channel id for backfilling
-/// search. `only_deleted` filters on `deleted_at`: `None` returns every row,
-/// `Some(false)` returns only active rows (`deleted_at IS NULL`), and
-/// `Some(true)` returns only soft-deleted rows.
+/// Paginated query to get all messages and their channel id
+/// Used for backfilling search
 #[tracing::instrument(skip(db))]
 pub async fn get_channel_messages(
     db: &Pool<Postgres>,

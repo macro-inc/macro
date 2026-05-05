@@ -7,10 +7,7 @@ use model::document::{BackfillSearchDocumentInformation, FileType};
 
 /// Used to get all documents in a paginated format
 /// This will get the latest version of the document for non-pdf documents
-/// For pdf documents, this will get the oldest version of the document.
-/// `only_deleted` filters on `Document."deletedAt"`: `None` returns every
-/// document, `Some(false)` returns only active documents, `Some(true)`
-/// returns only soft-deleted documents.
+/// For pdf documents, this will get the oldest version of the document
 #[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip(db))]
 pub async fn get_documents_for_search(

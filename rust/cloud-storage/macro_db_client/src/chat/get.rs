@@ -12,9 +12,7 @@ pub struct ChatSearchBackfill {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Gets the chat messages for search backfill. `only_deleted` filters on
-/// `Chat."deletedAt"`: `None` returns every chat, `Some(false)` returns only
-/// active chats, `Some(true)` returns only soft-deleted chats.
+/// Gets the chat messages for search backfill
 #[tracing::instrument(skip(db))]
 pub async fn get_chat_messages_for_search_backfill(
     db: &sqlx::Pool<sqlx::Postgres>,

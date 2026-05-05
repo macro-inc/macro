@@ -39,11 +39,6 @@ pub enum BackfillError {
     Publish(#[source] anyhow::Error),
 }
 
-/// Filter on the source row's deletion state. `Any` (the default) returns
-/// every row regardless of `deleted_at`; `Active` returns only rows where
-/// `deleted_at IS NULL`; `Deleted` returns only rows where it is set. The
-/// `Deleted` variant is useful for cleanup-only backfill runs that want to
-/// avoid churning through every active row.
 #[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DeletionFilter {
@@ -54,10 +49,6 @@ pub enum DeletionFilter {
 }
 
 impl DeletionFilter {
-    /// Encode the filter for a SQL parameter. `None` means "no filter";
-    /// `Some(false)` means active only; `Some(true)` means deleted only.
-    /// The receiving query is expected to handle these three cases on the
-    /// `deleted_at` column.
     pub fn as_only_deleted(self) -> Option<bool> {
         match self {
             DeletionFilter::Any => None,
