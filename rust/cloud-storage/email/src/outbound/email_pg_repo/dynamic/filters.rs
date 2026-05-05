@@ -1,5 +1,5 @@
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
-use email_importance::{SqlFragment, build_importance_true_condition, build_sender_importance_override_filter};
+use email_importance::{SqlFragment, build_importance_condition};
 use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
 use recursion::CollapsibleExt;
@@ -111,40 +111,12 @@ pub(super) fn build_message_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragmen
                 )
                 AND "#,
             );
-            f.extend(build_importance_true_condition());
+            f.extend(build_importance_condition(true));
             f.push_raw(")");
             f
         }
         filter_ast::ExprFrame::Literal(EmailLiteral::Importance(false)) => {
-            let mut f = SqlFragment::raw(
-                r#"(
-                "#,
-            );
-            f.extend(build_sender_importance_override_filter(false));
-            f.push_raw(
-                r#"
-                OR (
-                    NOT "#,
-            );
-            f.extend(build_sender_importance_override_filter(true));
-            f.push_raw(
-                r#"
-                    AND NOT EXISTS (
-                        SELECT 1 FROM email_message_labels ml
-                        JOIN email_labels l ON ml.label_id = l.id
-                        WHERE ml.message_id = m.id
-                        AND l.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
-                    )
-                    AND EXISTS (
-                        SELECT 1 FROM email_message_labels ml
-                        JOIN email_labels l ON ml.label_id = l.id
-                        WHERE ml.message_id = m.id
-                        AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
-                    )
-                )
-            )"#,
-            );
-            f
+            build_importance_condition(false)
         }
         filter_ast::ExprFrame::Literal(EmailLiteral::NotificationDone(_)) => {
             SqlFragment::raw("TRUE")

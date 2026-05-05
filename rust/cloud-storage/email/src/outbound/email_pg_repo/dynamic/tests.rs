@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
-use email_importance::build_importance_true_condition;
+use email_importance::build_importance_condition;
 use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
 use macro_user_id::cowlike::CowLike;
@@ -631,16 +631,32 @@ fn test_has_message_literals_false_when_only_calendar_only() {
 }
 
 /// Verifies that `build_message_email_filter` for `Importance(true)` embeds the exact SQL
-/// produced by `build_importance_true_condition`. If the filter arm ever diverges from the
+/// produced by `build_importance_condition(true)`. If the filter arm ever diverges from the
 /// shared condition (e.g. by inlining different SQL), this test fails.
 #[test]
 fn importance_true_filter_contains_shared_condition() {
-    let condition_sql = build_importance_true_condition().to_debug_sql();
+    let condition_sql = build_importance_condition(true).to_debug_sql();
     let filter_sql = build_message_email_filter(&Expr::Literal(EmailLiteral::Importance(true)))
         .to_debug_sql();
     assert!(
         filter_sql.contains(&condition_sql),
-        "Importance(true) filter SQL does not contain build_importance_true_condition output.\n\
+        "Importance(true) filter SQL does not contain build_importance_condition(true) output.\n\
+         filter:    {filter_sql}\n\
+         condition: {condition_sql}"
+    );
+}
+
+/// Verifies that `build_message_email_filter` for `Importance(false)` embeds the exact SQL
+/// produced by `build_importance_condition(false)`. If the filter arm ever diverges from the
+/// shared condition, this test fails.
+#[test]
+fn importance_false_filter_contains_shared_condition() {
+    let condition_sql = build_importance_condition(false).to_debug_sql();
+    let filter_sql = build_message_email_filter(&Expr::Literal(EmailLiteral::Importance(false)))
+        .to_debug_sql();
+    assert!(
+        filter_sql.contains(&condition_sql),
+        "Importance(false) filter SQL does not contain build_importance_condition(false) output.\n\
          filter:    {filter_sql}\n\
          condition: {condition_sql}"
     );
