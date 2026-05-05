@@ -9,10 +9,20 @@ import {
   type ParentComponent,
   Show,
 } from 'solid-js';
-import { DeprecatedButton } from './DeprecatedButton';
+import { Button, type ButtonSize, type ButtonVariant } from '@ui/components/Button';
 
 type Size = 'SM' | 'Base';
 type Theme = 'primary' | 'secondary';
+
+const SIZE_TO_BUTTON_SIZE: Record<Size, ButtonSize> = {
+  SM: 'sm',
+  Base: 'md',
+};
+
+const THEME_TO_BUTTON_VARIANT: Record<Theme, ButtonVariant> = {
+  primary: 'primary',
+  secondary: 'secondary',
+};
 type ShadowTheme = 'Base' | 'AccentSpread';
 
 const DropdownMenu: ParentComponent<
@@ -98,13 +108,16 @@ const DropdownMenu: ParentComponent<
       boundary={props.boundary ?? panelRef}
     >
       <Popover.Trigger
-        size={props.size}
-        active={open()}
+        size={SIZE_TO_BUTTON_SIZE[props.size ?? 'Base']}
+        variant={
+          open()
+            ? 'active'
+            : THEME_TO_BUTTON_VARIANT[props.theme ?? 'primary']
+        }
         classList={{
           'block!': true,
         }}
-        as={DeprecatedButton}
-        theme={props.theme}
+        as={Button}
         ref={triggerEl}
       >
         {props.triggerLabel}

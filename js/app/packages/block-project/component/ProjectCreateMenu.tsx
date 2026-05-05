@@ -3,7 +3,7 @@ import { cn } from '@ui/utils/classname';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
-import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
+import { Button } from '@ui';
 import { toast } from '@core/component/Toast/Toast';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -339,9 +339,9 @@ export function ProjectCreateMenu(props: { id: string }) {
     <DropdownMenu open={open()} onOpenChange={setOpen}>
       <div class="flex items-center">
         <DropdownMenu.Trigger class="h-min">
-          <DeprecatedButton size="XS" active={open()}>
+          <Button size="sm" variant={open() ? 'active' : 'secondary'}>
             Create
-          </DeprecatedButton>
+          </Button>
         </DropdownMenu.Trigger>
       </div>
       <DropdownMenu.Portal>

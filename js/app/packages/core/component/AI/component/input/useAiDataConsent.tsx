@@ -1,7 +1,6 @@
 import { useAiDataConsent } from '@core/context/user';
 import { authServiceClient } from '@service-auth/client';
 import { invalidateUserInfo } from '@queries/auth/user-info';
-import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { Button, Dialog, Panel } from '@ui';
 
@@ -63,12 +62,12 @@ export function useAiDataConsentGate() {
                 data is not retained or used for training.
               </p>
               <div class="flex justify-end mt-4 gap-2">
-                <DeprecatedButton theme="secondary" onClick={denyConsent}>
+                <Button variant="secondary" onClick={denyConsent}>
                   Cancel
-                </DeprecatedButton>
-                <DeprecatedButton theme="primary" onClick={grantConsent}>
+                </Button>
+                <Button variant="primary" onClick={grantConsent}>
                   Accept
-                </DeprecatedButton>
+                </Button>
               </div>
             </div>
           </div>

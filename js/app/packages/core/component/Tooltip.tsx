@@ -35,7 +35,7 @@ export type TooltipProps = ParentProps<{
  * @param props.unstyled - When true, removes default styling from the tooltip content.
  * @example
  * <Tooltip tooltip={<div class="text-xs">Hello</div>}>
- *     <DeprecatedButton>Hover over me</DeprecatedButton>
+ *     <Button>Hover over me</Button>
  * </Tooltip>
  */
 export function Tooltip(props: TooltipProps) {
