@@ -31,8 +31,11 @@ export function Appearance() {
       >
         <Panel depth={2}>
           <div class="flex flex-col h-full overflow-hidden">
-            <div class="relative flex items-center h-10 shrink-0 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
-              <div class="h-full shrink-0 pl-3">
+            <div class="relative flex items-center gap-3 h-10 shrink-0 pl-5 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
+              <h1 class="font-semibold text-ink select-none text-sm shrink-0">
+                Editor
+              </h1>
+              <div class="h-full shrink-0">
                 <Tabs
                   list={tabList}
                   value={activeTab()}

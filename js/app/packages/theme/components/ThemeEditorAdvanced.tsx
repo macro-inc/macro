@@ -49,7 +49,7 @@ export function ThemeEditorAdvanced(){
           overflow: hidden;
           font-weight: 300;
           display: block;
-          height: 100%;
+          height: min-content;
           "
       >
         <div
@@ -57,8 +57,7 @@ export function ThemeEditorAdvanced(){
           overscroll-behavior: none;
           box-sizing: border-box;
           scrollbar-width: none;
-          overflow-y: scroll;
-          height: 100%;
+          height: min-content;
           width: 100%;
         "
         >
@@ -71,30 +70,6 @@ export function ThemeEditorAdvanced(){
               gap: 1px;
             "
           >
-            <div
-              style="
-                border-bottom: 1px solid var(--b3);
-                background-color: var(--b0);
-                align-items: center;
-                position: absolute;
-                padding: 0 20px;
-                display: grid;
-                height: 42px;
-                width: 100%;
-                z-index: 1;
-            "
-            >
-              <div
-                style={{
-                  'font-size': '0.875rem',
-                  'font-weight': '600'
-                }}
-              >
-                Theme Tokens
-              </div>
-            </div>
-            <div style="height: 41px;" />
-
             <For each={Object.entries(themeReactive)}>
               {([colorKey, colorValue]) => {
                 // a1 thru a4 are not currently being used, so we will hide them
