@@ -194,6 +194,10 @@
   --color-focus: var(--color-accent);
 }
 
+/* Big hammer fix for cursor pointer. */
+@utility cursor-pointer {
+  cursor: default;
+}
 
 /* NOTE: We use this as a compile-time css util in this file to be able reuse the
  * declarations while still being able to override the color. */

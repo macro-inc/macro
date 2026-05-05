@@ -239,7 +239,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
             <div class="flex items-center gap-2 pt-2">
               <div class="w-6 border-t border-edge-muted" />
               <button
-                class="flex items-center gap-1 px-2 hover:opacity-70 transition-opacity"
+                class="flex items-center gap-1 px-2 hover:opacity-70 transition-opacity cursor-pointer"
                 onClick={toggleExpanded}
               >
                 {isExpanded() ? (
