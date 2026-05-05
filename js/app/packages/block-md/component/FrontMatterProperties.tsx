@@ -23,7 +23,6 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
 import CaretRight from '@icon/bold/caret-right-bold.svg';
-import EyeSlash from '@icon/bold/eye-slash-bold.svg';
 import Plus from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';

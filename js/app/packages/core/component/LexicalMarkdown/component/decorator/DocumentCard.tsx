@@ -244,9 +244,14 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
 
       getElement = () => preview.element();
     } else {
-      getElement = () => (<div class="p-2">
-        <ChannelMessageThreadCard channelId={props.documentId} messageId={msgId!} />
-      </div>);
+      getElement = () => (
+        <div class="p-2">
+          <ChannelMessageThreadCard
+            channelId={props.documentId}
+            messageId={msgId!}
+          />
+        </div>
+      );
     }
 
     const noDispose = registerPreviewElement(nodeId, getElement);
@@ -360,8 +365,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
             </BlockLink>
           </div>
           <DropdownMenu open={dropdownOpen()} onOpenChange={setDropdownOpen}>
-            <DropdownMenu.Trigger as={Button} size="icon-sm" variant='ghost'>
-                <DotsThree />
+            <DropdownMenu.Trigger as={Button} size="icon-sm" variant="ghost">
+              <DotsThree />
             </DropdownMenu.Trigger>
             <ScopedPortal scope="block">
               <DropdownMenuContent class="z-action-menu">
@@ -385,9 +390,11 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
             </ScopedPortal>
           </DropdownMenu>
         </div>
-        <div class={cn("flex items-center justify-between", {
-          'mt-2': Boolean(props.item.owner) || Boolean(props.item.updatedAt)
-        })}>
+        <div
+          class={cn('flex items-center justify-between', {
+            'mt-2': Boolean(props.item.owner) || Boolean(props.item.updatedAt),
+          })}
+        >
           <Show when={props.item.owner}>
             {(owner) => (
               <div class="flex items-center text-xs text-ink-extra-muted">
@@ -454,7 +461,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                 <Show when={previewComponent()}>
                   <Show
                     when={isPreviewable()}
-                    fallback={ <Dynamic component={previewComponent()} /> }
+                    fallback={<Dynamic component={previewComponent()} />}
                   >
                     <div class="relative grow overflow-y-scroll">
                       <Dynamic component={previewComponent()} />
