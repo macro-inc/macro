@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            c.\"id\" as \"chat_id\",\n            m.id as \"message_id\",\n            c.\"userId\" as \"user_id\",\n            c.\"createdAt\" as \"created_at\",\n            c.\"updatedAt\" as \"updated_at\"\n        FROM\n            \"ChatMessage\" m\n        JOIN\n            \"Chat\" c on c.\"id\" = m.\"chatId\"\n        WHERE\n            c.\"userId\" = ANY($1) AND c.\"deletedAt\" IS NULL\n        ORDER BY\n            m.\"createdAt\" DESC\n        LIMIT $2\n        OFFSET $3\n        ",
+  "query": "\n        SELECT\n            c.\"id\" as \"chat_id\",\n            m.id as \"message_id\",\n            c.\"userId\" as \"user_id\",\n            c.\"createdAt\" as \"created_at\",\n            c.\"updatedAt\" as \"updated_at\"\n        FROM\n            \"ChatMessage\" m\n        JOIN\n            \"Chat\" c on c.\"id\" = m.\"chatId\"\n        WHERE\n            m.\"chatId\" = ANY($1)\n        ORDER BY\n            m.\"createdAt\" DESC\n        LIMIT $2\n        OFFSET $3\n        ",
   "describe": {
     "columns": [
       {
@@ -44,5 +44,5 @@
       false
     ]
   },
-  "hash": "a9822aca7429a3fd0c2ab83450b7e23bac9bcae5ebd973db3ef6016100721bb7"
+  "hash": "13a3a2c05506fe36d0420c3ed6eb711ece07b50c77690ce7ef2336c9390896d4"
 }

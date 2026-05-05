@@ -15,7 +15,7 @@ use s3_key::{
 
 use crate::{
     parsers::{canvas::parse_canvas, markdown::parse_markdown_legacy, pdf::parse_pdf_pages},
-    process::document::document_info::get_document_info,
+    process::document::document_info::{DocumentInfo, get_document_info},
 };
 
 use super::SearchExtractorMessage;
@@ -76,15 +76,23 @@ pub async fn update_search_with_raw_document(
     }
 
     // This ensures we only process the latest version
-    let document_info = get_document_info(db, search_extractor_message)
+    let document_info = match get_document_info(db, search_extractor_message)
         .await
-        .context("failed to get document info")?;
-
-    let document_info = if let Some(document_info) = document_info {
-        document_info
-    } else {
-        tracing::trace!("no document info returned");
-        return Ok(());
+        .context("failed to get document info")?
+    {
+        DocumentInfo::Active(info) => *info,
+        DocumentInfo::Removable => {
+            tracing::trace!("document is deleted or missing, removing from search index");
+            opensearch_client
+                .delete_document(&search_extractor_message.document_id)
+                .await
+                .context("failed to delete document from search index")?;
+            return Ok(());
+        }
+        DocumentInfo::Skip => {
+            tracing::trace!("no document info returned");
+            return Ok(());
+        }
     };
 
     let document_name = document_info.document_name;
@@ -286,15 +294,23 @@ pub async fn update_search_with_sync_document(
         }
     }
 
-    let document_info = get_document_info(db, search_extractor_message)
+    let document_info = match get_document_info(db, search_extractor_message)
         .await
-        .context("failed to get document info")?;
-
-    let document_info = if let Some(document_info) = document_info {
-        document_info
-    } else {
-        tracing::trace!("no document info returned");
-        return Ok(());
+        .context("failed to get document info")?
+    {
+        DocumentInfo::Active(info) => *info,
+        DocumentInfo::Removable => {
+            tracing::trace!("document is deleted or missing, removing from search index");
+            opensearch_client
+                .delete_document(&search_extractor_message.document_id)
+                .await
+                .context("failed to delete document from search index")?;
+            return Ok(());
+        }
+        DocumentInfo::Skip => {
+            tracing::trace!("no document info returned");
+            return Ok(());
+        }
     };
 
     let document_id = &search_extractor_message.document_id;
