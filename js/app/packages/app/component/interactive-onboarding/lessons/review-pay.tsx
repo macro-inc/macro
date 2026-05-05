@@ -15,7 +15,18 @@ import ArrowRightIcon from '@icon/regular/arrow-right.svg';
 import InfoIcon from '@icon/regular/info.svg';
 import LockIcon from '@icon/regular/lock.svg';
 import { Button } from '@ui/components/Button';
-import { useOnboardingCheckoutMutation } from '../use-onboarding-checkout';
+import { cn } from '@ui/utils/classname';
+import {
+  useOnboardingCheckoutMutation,
+  getPendingTeam,
+  clearPendingTeam,
+  savePendingTeam,
+} from '../use-onboarding-checkout';
+import { throwOnErr } from '@core/util/maybeResult';
+import { authServiceClient } from '@service-auth/client';
+import { invalidateUserTeams } from '@queries/team';
+import { analytics } from '@app/lib/analytics/analytics';
+import { Tooltip } from '@core/component/Tooltip';
 
 function ReviewPayContent() {
   return (
@@ -35,13 +46,7 @@ function ReviewPayDemo(props: LessonContentProps) {
       analytics.track('subscription_start', {
         type: onboarding.selectedPlan(),
         seats: onboarding.seatCount(),
-        teamId: result.teamId,
       });
-      if (result.teamId) {
-        analytics.track('onboarding_team_created', {
-          teamId: result.teamId,
-        });
-      }
       window.location.href = result.checkoutUrl;
     },
     onError: (error) => {
@@ -97,10 +102,13 @@ function ReviewPayDemo(props: LessonContentProps) {
       .filter((m) => m.tier !== 'free')
       .map((m) => ({ email: m.email, tier: m.tier as PaidPlanTier }));
 
-    checkoutMutation.mutate({
-      tier: tier as PaidPlanTier,
-      team: teamName ? { name: teamName, members } : undefined,
-    });
+    if (teamName) {
+      savePendingTeam({ name: teamName, members });
+    } else {
+      clearPendingTeam();
+    }
+
+    checkoutMutation.mutate({ tier: tier as PaidPlanTier });
   };
 
   const handleBack = () => {
@@ -359,6 +367,38 @@ function ReviewPayDemo(props: LessonContentProps) {
   );
 }
 
+async function createPendingTeamOnReturn(): Promise<boolean> {
+  const pendingTeam = getPendingTeam();
+  if (!pendingTeam) return true;
+
+  try {
+    const team = await throwOnErr(() =>
+      authServiceClient.createTeam({ name: pendingTeam.name })
+    );
+
+    const emails = pendingTeam.members
+      .filter((m) => m.email.trim())
+      .map((m) => m.email);
+
+    if (emails.length > 0) {
+      await throwOnErr(() =>
+        authServiceClient.inviteToTeam(team.id, { emails })
+      );
+    }
+
+    await invalidateUserTeams();
+    clearPendingTeam();
+
+    analytics.track('onboarding_team_created', { teamId: team.id });
+
+    return true;
+  } catch (error) {
+    console.error('Failed to create team:', error);
+    clearPendingTeam();
+    return true;
+  }
+}
+
 export const reviewPayLesson: LessonDefinition = {
   id: 'review-pay',
   title: 'Finish setup',
@@ -367,4 +407,5 @@ export const reviewPayLesson: LessonDefinition = {
   order: 95,
   hideContinue: true,
   completeOnParam: 'subscriptionSuccess',
+  onCompleteParam: createPendingTeamOnReturn,
 };
