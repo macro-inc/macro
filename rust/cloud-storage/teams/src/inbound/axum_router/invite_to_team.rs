@@ -14,17 +14,13 @@ use crate::domain::{
 
 use super::{TeamPathParam, TeamRouterState, middleware::TeamAccessRoleExtractor};
 
-fn default_tier() -> TeamUserTier {
-    TeamUserTier::Haiku
-}
-
 /// A single invite entry with email and tier
 #[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema, Clone)]
 pub struct InviteEntry {
     /// The email of the user to invite
     pub email: String,
     /// The tier for this user (defaults to Haiku if not provided)
-    #[serde(default = "default_tier")]
+    #[serde(default)]
     pub tier: TeamUserTier,
 }
 
