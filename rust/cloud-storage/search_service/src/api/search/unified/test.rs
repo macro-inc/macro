@@ -169,6 +169,7 @@ fn test_channel_updated_at_uses_max_from_message_results() {
                     sender_id: Some("sender1".to_string()),
                     created_at: Some(DateTime::from_timestamp(1800, 0).unwrap()),
                     updated_at: Some(DateTime::from_timestamp(2000, 0).unwrap()), // Second highest
+                    deleted_at: None,
                     highlight: SearchHighlight::default(),
                     score: None,
                 },
@@ -178,6 +179,7 @@ fn test_channel_updated_at_uses_max_from_message_results() {
                     sender_id: Some("sender2".to_string()),
                     created_at: Some(DateTime::from_timestamp(2900, 0).unwrap()),
                     updated_at: Some(DateTime::from_timestamp(3000, 0).unwrap()), // Highest - should be used
+                    deleted_at: None,
                     highlight: SearchHighlight::default(),
                     score: None,
                 },
@@ -187,6 +189,7 @@ fn test_channel_updated_at_uses_max_from_message_results() {
                     sender_id: Some("sender3".to_string()),
                     created_at: Some(DateTime::from_timestamp(1400, 0).unwrap()),
                     updated_at: Some(DateTime::from_timestamp(1500, 0).unwrap()), // Lowest of results
+                    deleted_at: None,
                     highlight: SearchHighlight::default(),
                     score: None,
                 },
@@ -253,6 +256,7 @@ fn test_channel_updated_at_falls_back_to_metadata_when_results_have_no_updated_a
                     sender_id: Some("sender1".to_string()),
                     created_at: Some(DateTime::from_timestamp(1800, 0).unwrap()),
                     updated_at: None, // No updated_at
+                    deleted_at: None,
                     highlight: SearchHighlight::default(),
                     score: None,
                 },
@@ -262,6 +266,7 @@ fn test_channel_updated_at_falls_back_to_metadata_when_results_have_no_updated_a
                     sender_id: Some("sender2".to_string()),
                     created_at: Some(DateTime::from_timestamp(2900, 0).unwrap()),
                     updated_at: None, // No updated_at
+                    deleted_at: None,
                     highlight: SearchHighlight::default(),
                     score: None,
                 },
@@ -323,6 +328,7 @@ fn test_sort_unified_search_results_with_channel() {
                     sender_id: Some("sender1".to_string()),
                     created_at: Some(DateTime::from_timestamp(2900, 0).unwrap()),
                     updated_at: Some(DateTime::from_timestamp(3000, 0).unwrap()), // Should make channel sort first
+                    deleted_at: None,
                     highlight: SearchHighlight::default(),
                     score: None,
                 }],

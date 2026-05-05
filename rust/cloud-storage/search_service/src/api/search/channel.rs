@@ -1,4 +1,5 @@
 use crate::api::search::simple::SearchError;
+use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 
@@ -29,18 +30,38 @@ pub(in crate::api::search) async fn enrich_channels(
     // Extract channel IDs from results
     let channel_ids: Vec<Uuid> = results.iter().map(|r| r.entity_id).collect();
 
-    // Fetch channel metadata directly from DB
-    let channel_histories = comms_db_client::activity::get_activity::get_channel_history_info(
-        &ctx.db,
-        user_id,
-        &channel_ids,
+    // Extract message IDs from results so we can flag any that have been deleted.
+    let message_ids: Vec<Uuid> = results
+        .iter()
+        .filter_map(|r| match &r.goto {
+            Some(SearchGotoContent::Channels(goto)) => Some(goto.channel_message_id),
+            _ => None,
+        })
+        .collect();
+
+    let (channel_histories, message_deleted_ats) = tokio::try_join!(
+        async {
+            comms_db_client::activity::get_activity::get_channel_history_info(
+                &ctx.db,
+                user_id,
+                &channel_ids,
+            )
+            .await
+            .map_err(anyhow::Error::from)
+        },
+        async {
+            comms_db_client::messages::get_deleted_ats::get_messages_deleted_at(
+                &ctx.db,
+                &message_ids,
+            )
+            .await
+        },
     )
-    .await
-    .map_err(|e| SearchError::InternalError(e.into()))?;
+    .map_err(SearchError::InternalError)?;
 
     // Construct enriched results
-    let enriched_results =
-        construct_search_result(results, channel_histories).map_err(SearchError::InternalError)?;
+    let enriched_results = construct_search_result(results, channel_histories, message_deleted_ats)
+        .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
 }
@@ -48,12 +69,14 @@ pub(in crate::api::search) async fn enrich_channels(
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     channel_histories: HashMap<Uuid, ChannelHistoryInfo>,
+    message_deleted_ats: HashMap<Uuid, DateTime<Utc>>,
 ) -> anyhow::Result<Vec<ChannelSearchResponseItemWithMetadata>> {
     // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
     let entity_id_hit_map: IndexMap<sqlx::types::Uuid, Vec<ChannelSearchResult>> = search_results
         .into_iter()
         .map(|hit| {
             let result = if let Some(SearchGotoContent::Channels(goto)) = hit.goto {
+                let deleted_at = message_deleted_ats.get(&goto.channel_message_id).copied();
                 ChannelSearchResult {
                     highlight: hit.highlight.into(),
                     score: hit.score,
@@ -62,6 +85,7 @@ pub fn construct_search_result(
                     sender_id: Some(goto.sender_id),
                     created_at: Some(goto.created_at),
                     updated_at: Some(goto.updated_at),
+                    deleted_at,
                 }
             } else {
                 // name match
@@ -73,6 +97,7 @@ pub fn construct_search_result(
                     sender_id: None,
                     created_at: None,
                     updated_at: None,
+                    deleted_at: None,
                 }
             };
             (hit.entity_id, result)

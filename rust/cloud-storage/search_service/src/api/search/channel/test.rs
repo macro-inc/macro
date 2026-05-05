@@ -6,7 +6,7 @@ use super::*;
 
 #[test]
 fn test_construct_search_result_empty_input() {
-    let result = construct_search_result(vec![], HashMap::new());
+    let result = construct_search_result(vec![], HashMap::new(), HashMap::new());
     assert!(result.is_ok());
     assert_eq!(result.unwrap().len(), 0);
 }
@@ -43,7 +43,8 @@ fn test_construct_search_result_single_channel() {
         create_channel_history(channel_uuid.to_string().as_str()),
     );
 
-    let result = construct_search_result(search_results, channel_histories).unwrap();
+    let result =
+        construct_search_result(search_results, channel_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_id, channel_uuid);
@@ -125,7 +126,8 @@ fn test_construct_search_result_multiple_messages_same_channel() {
         create_channel_history(channel_uuid.to_string().as_str()),
     );
 
-    let result = construct_search_result(search_results, channel_histories).unwrap();
+    let result =
+        construct_search_result(search_results, channel_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_id, channel_uuid);
@@ -207,7 +209,8 @@ fn test_construct_search_result_filters_messages_without_content() {
         create_channel_history(channel_uuid.to_string().as_str()),
     );
 
-    let result = construct_search_result(search_results, channel_histories).unwrap();
+    let result =
+        construct_search_result(search_results, channel_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_message_search_results.len(), 2);
@@ -293,7 +296,7 @@ fn test_channel_history_timestamps() {
     )];
 
     // Call the function under test
-    let result = construct_search_result(input, channel_histories).unwrap();
+    let result = construct_search_result(input, channel_histories, HashMap::new()).unwrap();
 
     // Verify that timestamps were copied from the channel history
     assert_eq!(result.len(), 1);
@@ -334,7 +337,7 @@ fn test_channel_history_missing_entry() {
     channel_histories.insert(different_channel_uuid, history);
 
     // Call the function under test
-    let result = construct_search_result(input, channel_histories).unwrap();
+    let result = construct_search_result(input, channel_histories, HashMap::new()).unwrap();
 
     // Channels without history info should not be returned
     assert_eq!(result.len(), 0);
@@ -368,7 +371,7 @@ fn test_channel_history_null_viewed_at() {
     channel_histories.insert(channel_uuid, history);
 
     // Call the function under test
-    let result = construct_search_result(input, channel_histories).unwrap();
+    let result = construct_search_result(input, channel_histories, HashMap::new()).unwrap();
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
@@ -514,9 +517,12 @@ fn test_sort_stability() {
         );
     }
 
-    let result1 = construct_search_result(input.clone(), channel_histories.clone()).unwrap();
-    let result2 = construct_search_result(input.clone(), channel_histories.clone()).unwrap();
-    let result3 = construct_search_result(input.clone(), channel_histories.clone()).unwrap();
+    let result1 =
+        construct_search_result(input.clone(), channel_histories.clone(), HashMap::new()).unwrap();
+    let result2 =
+        construct_search_result(input.clone(), channel_histories.clone(), HashMap::new()).unwrap();
+    let result3 =
+        construct_search_result(input.clone(), channel_histories.clone(), HashMap::new()).unwrap();
 
     assert_eq!(result1.len(), 5);
     assert_eq!(result2.len(), 5);
