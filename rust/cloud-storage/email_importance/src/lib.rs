@@ -276,3 +276,59 @@ pub async fn get_sender_importance_override(
 
     Ok(domain_level.map(|row| row.is_important))
 }
+
+/// Builds the inner SQL condition for `Importance(true)`: sender explicitly marked important,
+/// or no noise override and the message is not deprioritised by labels.
+///
+/// This is the shared fragment used by both the `EmailLiteral::Importance(true)` match arm
+/// in the dynamic filter builder and by [`is_message_important`]. Keeping them on the same
+/// function guarantees they cannot silently diverge.
+///
+/// All table aliases (`m`, `sender_c`, `ef`, `ef_addr`) must be in scope in the outer query.
+pub fn build_importance_true_condition() -> SqlFragment {
+    let mut f = SqlFragment::raw("(");
+    f.extend(build_sender_importance_override_filter(true));
+    f.push_raw(
+        r#" OR (
+        NOT "#,
+    );
+    f.extend(build_sender_importance_override_filter(false));
+    f.push_raw(
+        r#"
+        AND (
+            m.is_draft = TRUE
+            OR EXISTS (
+                SELECT 1 FROM email_message_labels ml
+                JOIN email_labels l ON ml.label_id = l.id
+                WHERE ml.message_id = m.id
+                AND l.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
+            )
+            OR NOT EXISTS (
+                SELECT 1 FROM email_message_labels ml
+                JOIN email_labels l ON ml.label_id = l.id
+                WHERE ml.message_id = m.id
+                AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
+            )
+        )
+    ))"#,
+    );
+    f
+}
+
+/// Returns `true` if the message would match the `Importance(true)` filter: the sender is
+/// explicitly marked important, or the sender has no noise override and the message is not
+/// deprioritised by labels.
+///
+/// Uses [`build_importance_true_condition`] to mirror the `EmailLiteral::Importance(true)`
+/// match arm exactly.
+pub async fn is_message_important(db: &PgPool, message_id: Uuid) -> Result<bool> {
+    let mut builder = QueryBuilder::new(
+        "SELECT EXISTS(SELECT 1 FROM email_messages m WHERE m.id = ",
+    );
+    builder.push_bind(message_id);
+    builder.push(" AND ");
+    build_importance_true_condition().push_into(&mut builder);
+    builder.push(")");
+    let result: bool = builder.build_query_scalar().fetch_one(db).await?;
+    Ok(result)
+}

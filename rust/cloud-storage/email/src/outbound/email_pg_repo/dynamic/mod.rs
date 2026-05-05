@@ -14,4 +14,3 @@ pub(crate) use query::dynamic_email_thread_cursor;
 #[cfg(test)]
 pub(crate) use filters::*;
 
-use email_importance::SqlFragment;

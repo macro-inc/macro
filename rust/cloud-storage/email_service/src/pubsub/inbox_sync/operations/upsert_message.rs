@@ -14,7 +14,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
 use models_email::db::address::EmailRecipientType;
-use models_email::email::service;
 use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
 use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
@@ -579,70 +578,24 @@ async fn filter_notifiable_message(
         return Ok(None);
     };
 
-    // 1. filter out sent and draft messages
+    // 1. Sent and draft messages never generate notifications.
     if new_message.is_sent || new_message.is_draft {
         return Ok(None);
     }
 
-    // 2. filter out messages that don't make it to the user's inbox (spam, etc)
-    let labels = email_db_client::labels::get::fetch_message_labels(&ctx.db, new_message.db_id)
+    // 2. Single query mirroring Importance(true): sender override or label-based signal.
+    let important = email_importance::is_message_important(&ctx.db, new_message.db_id)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to fetch message labels".to_string()),
+                source: e.context("Failed to evaluate message importance".to_string()),
             })
         })?;
 
-    let is_inbox = labels
-        .iter()
-        .any(|label| label.name == service::label::system_labels::INBOX);
-
-    if !is_inbox {
-        return Ok(None);
-    }
-
-    // 3. filter out noise emails, mirroring the Importance(false) query in email_importance:
-    //    noise = sender_override(false)
-    //            OR (NOT sender_override(true)
-    //                AND NOT has (CATEGORY_PERSONAL, SENT, DRAFT)  -- SENT/DRAFT already gone
-    //                AND has (CATEGORY_UPDATES, CATEGORY_PROMOTIONS, CATEGORY_SOCIAL, CATEGORY_FORUMS))
-    let sender_importance = if let Some(contact_id) = new_message.from_contact_id {
-        email_importance::get_sender_importance_override(&ctx.db, contact_id, new_message.link_id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to fetch sender importance override".to_string()),
-                })
-            })?
+    if important {
+        Ok(Some(new_message))
     } else {
-        None
-    };
-
-    let is_noise = match sender_importance {
-        Some(false) => true,
-        Some(true) => false,
-        None => {
-            let has_depriority = labels.iter().any(|label| {
-                matches!(
-                    label.name.as_str(),
-                    service::label::system_labels::CATEGORY_UPDATES
-                        | service::label::system_labels::CATEGORY_PROMOTIONS
-                        | service::label::system_labels::CATEGORY_SOCIAL
-                        | service::label::system_labels::CATEGORY_FORUMS
-                )
-            });
-            let has_priority = labels.iter().any(|label| {
-                label.name.as_str() == service::label::system_labels::CATEGORY_PERSONAL
-            });
-            has_depriority && !has_priority
-        }
-    };
-
-    if is_noise {
-        return Ok(None);
+        Ok(None)
     }
-
-    Ok(Some(new_message))
 }
