@@ -17,7 +17,7 @@ function ToggleButton(props: ToggleButtonProps) {
       <div class="w-full flex items-center gap-2 my-2">
         <button
           type="button"
-          class="flex items-center gap-1 text-xs bracket-never hover:text-accent"
+          class="flex items-center gap-1 text-xs hover:text-accent"
           data-collapsible-toggle
           data-collapsible-state={props.showAll ? 'expanded' : 'collapsed'}
           onClick={props.toggle}

@@ -125,6 +125,18 @@ export type SortBy =
   | 'recently_updated'
   | 'recently_created';
 /**
+ * User-facing notification categories used for list filtering.
+ */
+export type NotificationItemType =
+  | 'email'
+  | 'message'
+  | 'channel'
+  | 'document'
+  | 'project'
+  | 'chat'
+  | 'call'
+  | 'task';
+/**
  * Direction for reading more messages around a cursor.
  */
 export type PageDirection = 'older' | 'newer';
@@ -1129,6 +1141,132 @@ export interface ListEntities {
 export interface ListEntitiesResponse {
   items: EntityItem[];
   summary: string;
+}
+/**
+ * List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `done` and `seen` to request done/not-done or seen/unseen notifications.
+ */
+export interface ListNotifications {
+  /**
+   * Filter by done status. If omitted, only not-done notifications are returned. Set true for done notifications, false for not-done notifications.
+   */
+  done?: boolean | null;
+  /**
+   * Filter to notifications for specific entities. Pair each id with entityType to avoid ambiguity. Example: [{"entityType":"email","id":"..."}] returns notifications for one email thread.
+   */
+  entities?: NotificationEntityRef[] | null;
+  /**
+   * Filter to specific notification item types. If omitted, returns all types. Example: ["email", "message"] returns only email and message notifications.
+   */
+  includeTypes?: NotificationItemType[] | null;
+  /**
+   * Maximum number of notifications to return. Defaults to 20, max 50.
+   */
+  limit?: number | null;
+  /**
+   * Filter by seen status. If omitted, both seen and unseen notifications are returned. Set true for seen notifications, false for unseen notifications.
+   */
+  seen?: boolean | null;
+}
+/**
+ * User-facing reference to one specific entity to filter notifications by.
+ */
+export interface NotificationEntityRef {
+  entityType: NotificationItemType;
+  /**
+   * Entity id. For `email`, this is the email thread id. For `message`, this is the channel message id.
+   */
+  id: string;
+}
+/**
+ * Response from listing notifications.
+ */
+export interface ListNotificationsResponse {
+  /**
+   * Whether there are more notifications available.
+   */
+  hasMore: boolean;
+  /**
+   * The list of notifications.
+   */
+  notifications: NotificationItem[];
+}
+/**
+ * A single notification item in the list response.
+ */
+export interface NotificationItem {
+  /**
+   * When the notification was created (ISO 8601).
+   */
+  createdAt: string;
+  /**
+   * Whether the notification is marked as done.
+   */
+  done: boolean;
+  /**
+   * The ID of the entity this notification is about.
+   */
+  entityId: string;
+  /**
+   * The type of entity this notification is about (e.g. "channel", "document").
+   */
+  entityType: string;
+  /**
+   * The notification event type (e.g. "channel_mention").
+   */
+  eventType: string;
+  /**
+   * The notification ID.
+   */
+  id: string;
+  /**
+   * The notification metadata/payload.
+   */
+  metadata: {
+    [k: string]: unknown;
+  };
+  /**
+   * Whether the notification has been seen.
+   */
+  seen: boolean;
+  /**
+   * The user ID of the sender, if any.
+   */
+  senderId?: string | null;
+}
+/**
+ * Mark one or more notifications as done or not done for the current user. Use this when the user has completed the action associated with a notification.
+ */
+export interface MarkNotificationsDone {
+  /**
+   * Whether to mark as done (true) or not done (false).
+   */
+  done: boolean;
+  /**
+   * The IDs of the notifications to update.
+   */
+  notificationIds: string[];
+}
+/**
+ * Response from marking notifications as seen or done.
+ */
+export interface MarkNotificationsResponse {
+  /**
+   * The number of notifications updated.
+   */
+  count: number;
+  /**
+   * Whether the operation succeeded.
+   */
+  success: boolean;
+}
+/**
+ * Mark one or more notifications as seen for the current user. Use this when the user has viewed notifications but hasn't acted on them yet.
+ */
+export interface MarkNotificationsSeen {
+  /**
+   * The IDs of the notifications to mark as seen.
+   */
+  notificationIds: string[];
 }
 /**
  * Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. For call records, this searches the channel name the call took place in. This tool finds items based on what they're called, not their content.

@@ -80,20 +80,20 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
   const videoHeight = () => props.item.height ?? undefined;
 
   return (
-    <div class="group relative flex min-h-20 max-h-[480px] max-w-[480px] min-w-0 overflow-hidden rounded-2xl border border-edge bg-menu">
+    <div class="group relative flex min-h-20 max-h-120 max-w-120 min-w-0 overflow-hidden rounded-2xl border border-edge bg-menu">
       <Show
         when={isInlinePlaying()}
         fallback={
           <>
             <button
               type="button"
-              class="block max-w-full cursor-pointer"
+              class="block max-w-full"
               onClick={props.onOpen}
               aria-label="Open video viewer"
             >
               <MediaVideo.Preview
                 src={props.item.src}
-                class="block max-h-[480px] max-w-full"
+                class="block max-h-120 max-w-full"
                 width={videoWidth()}
                 height={videoHeight()}
               />
@@ -113,7 +113,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
         }
       >
         <video
-          class="block max-h-[480px] max-w-full"
+          class="block max-h-120 max-w-full"
           controls
           autoplay
           playsinline

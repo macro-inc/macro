@@ -72,7 +72,6 @@ function MobileForwardToChannelLayout(
           triedToSubmit={props.triedToSubmit}
           options={props.destinationOptions}
           triggerMode="input"
-          noBrackets
           class="border-1 border-edge-muted p-1"
           focusOnMount
         />
@@ -449,7 +448,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               triedToSubmit={triedToSubmit}
               options={destinationOptions}
               triggerMode="input"
-              noBrackets
               class="border border-edge-muted p-1"
               focusOnMount
               horizontalScroll

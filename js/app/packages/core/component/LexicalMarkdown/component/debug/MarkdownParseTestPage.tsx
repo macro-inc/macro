@@ -427,7 +427,7 @@ export default function MarkdownParseTestPage() {
 
             <Show when={outputType() === 'static'}>
               <div class="flex items-center gap-2 mb-4">
-                <label class="flex items-center gap-2 cursor-pointer">
+                <label class="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={singleLine()}

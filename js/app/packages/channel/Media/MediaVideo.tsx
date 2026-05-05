@@ -41,8 +41,7 @@ function PlayOverlay(props: { onOpen?: () => void; class?: string }) {
     <div
       class={cn(
         'absolute inset-0 flex items-center justify-center bg-ink/20',
-        props.onOpen &&
-          'cursor-pointer transition-colors group-hover:bg-ink/30',
+        props.onOpen && 'transition-colors group-hover:bg-ink/30',
         props.class
       )}
       onClick={() => props.onOpen?.()}

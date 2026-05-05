@@ -71,7 +71,6 @@ function TranscriptSegmentRow(props: {
         message={message}
         highlighted={props.isActive}
         selected={props.isActive}
-        class="cursor-pointer"
         onClick={() => {
           if (videoTimestamp !== null) props.onSeekToSeconds?.(videoTimestamp);
         }}
@@ -123,7 +122,6 @@ function GroupedTranscriptSegmentRow(props: {
         message={message}
         highlighted={props.isActive}
         selected={props.isActive}
-        class="cursor-pointer"
         onClick={() => {
           if (videoTimestamp !== null) props.onSeekToSeconds?.(videoTimestamp);
         }}
@@ -382,7 +380,7 @@ export function CallTranscript(props: {
         >
           <button
             type="button"
-            class="pointer-events-auto isolate overflow-hidden relative bg-panel border border-accent/30 flex h-8 px-2 items-center justify-center text-xs font-mono uppercase font-medium leading-5 whitespace-nowrap cursor-pointer text-accent before:absolute before:inset-0 before:bg-accent/10 hover:before:bg-accent/20 before:content-[''] before:transition-colors"
+            class="pointer-events-auto isolate overflow-hidden relative bg-panel border border-accent/30 flex h-8 px-2 items-center justify-center text-xs font-mono uppercase font-medium leading-5 whitespace-nowrap text-accent before:absolute before:inset-0 before:bg-accent/10 hover:before:bg-accent/20 before:content-[''] before:transition-colors"
             onClick={() => {
               setSyncToVideoTime(true);
               scrollActiveIntoView('smooth');

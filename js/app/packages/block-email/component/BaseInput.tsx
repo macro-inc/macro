@@ -311,7 +311,7 @@ function TruncatedRecipientList(props: {
   return (
     <div
       use:observedSize={{ setSize: setContainerRect }}
-      class="flex items-center text-sm overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1 cursor-pointer"
+      class="flex items-center text-sm overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1"
       onclick={props.onClick}
     >
       {/* Hidden measurement element - must have same font styles */}
@@ -1597,7 +1597,7 @@ export function BaseInput(props: {
             </For>
           </div>
         </div>
-        <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
+        <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2">
           <div class="flex flex-row items-center gap-1">
             <div class="relative">
               <Button

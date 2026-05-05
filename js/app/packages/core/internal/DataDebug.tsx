@@ -50,7 +50,7 @@ function SignalDebugCard(props: SignalDebugCardProps) {
       </div>
       <div class="border-t border-edge mt-3 pt-3">
         <details>
-          <summary class="cursor-pointer text-accent text-sm">Raw JSON</summary>
+          <summary class="text-accent text-sm">Raw JSON</summary>
           <div class="mt-2 relative">
             <button
               onClick={copyToClipboard}

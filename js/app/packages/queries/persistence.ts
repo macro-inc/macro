@@ -27,6 +27,7 @@ export type PersistScope = Readonly<{
   maxAge: ParsedDuration;
   buster: string;
   shouldPersist: (queryKey: QueryKey) => boolean;
+  shouldRestore?: (queryKey: QueryKey) => boolean;
 }>;
 
 type QueryClientLike = {
@@ -68,6 +69,8 @@ async function handleRestore(
   scope: PersistScope,
   query: Query
 ): Promise<void> {
+  if (scope.shouldRestore && !scope.shouldRestore(query.queryKey)) return;
+
   const state = queryClient.getQueryState(query.queryKey);
   if (state && state.status === 'success') return;
 

@@ -766,15 +766,26 @@ const SidebarLink = (props: SidebarLinkProps) => {
             if (e.button === 1) return;
 
             e.preventDefault();
-            const handle = layout.openWithSplit(content(), {
-              preferNewSplit: e.shiftKey,
-              mergeHistory: false,
-              allowDuplicate: true,
-              referredFrom: 'sidebar',
-            });
-            if (props.id === 'search' && handle) {
-              requestSearchFocus(handle.id);
+            let currentContentHandle = layoutManager?.activeSplit();
+
+            const currentContent = currentContentHandle?.content();
+            const isSameContent =
+              currentContent?.type === 'component' &&
+              currentContent?.id === props.id;
+
+            if (!isSameContent || e.shiftKey) {
+              currentContentHandle = layout.openWithSplit(content(), {
+                preferNewSplit: e.shiftKey,
+                mergeHistory: false,
+                allowDuplicate: true,
+                referredFrom: 'sidebar',
+              });
             }
+
+            if (props.id === 'search' && currentContentHandle) {
+              requestSearchFocus(currentContentHandle.id);
+            }
+
             layoutManager?.returnFocus();
           }}
         >

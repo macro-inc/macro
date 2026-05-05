@@ -322,13 +322,13 @@ export function ThemeEditorBasic(){
       <div
         style="
           font-family: var(--font-sans);
+          padding: 8px 20px 12px 20px;
           background-color: var(--b0);
           box-sizing: border-box;
           height: min-content;
           font-weight: 500;
           font-size: 12px;
           display: grid;
-          padding: 20px;
           gap: 20px;
         "
       >
@@ -436,7 +436,6 @@ export function ThemeEditorBasic(){
               style="
                 appearance: none;
                 -webkit-appearance: none;
-                cursor: var(--cursor-pointer);
                 width: calc(100% + 18px);
                 box-sizing: border-box;
                 border-radius: 2px;
@@ -509,8 +508,8 @@ export function ThemeEditorBasic(){
               style={{
                 'left': `${(themeReactive.b0.c[0]() / (themeReactive.a0.c[0]() * 0.6) / 0.37) * 100}%`,
                 'transform': 'translate(-50%, -50%)',
-                'background-color': 'var(--b0)',
                 'border': '1px solid var(--b4)',
+                'background-color': 'var(--b0)',
                 'box-sizing': 'border-box',
                 'border-radius': '2px',
                 'position': 'absolute',
@@ -526,7 +525,6 @@ export function ThemeEditorBasic(){
               style="
                 appearance: none;
                 -webkit-appearance: none;
-                cursor: var(--cursor-pointer);
                 width: calc(100% + 18px);
                 box-sizing: border-box;
                 border-radius: 2px;
@@ -624,7 +622,6 @@ export function ThemeEditorBasic(){
               style="
                 appearance: none;
                 -webkit-appearance: none;
-                cursor: var(--cursor-pointer);
                 width: calc(100% + 18px);
                 box-sizing: border-box;
                 border-radius: 2px;
@@ -720,7 +717,6 @@ export function ThemeEditorBasic(){
               style="
                 appearance: none;
                 -webkit-appearance: none;
-                cursor: var(--cursor-pointer);
                 width: calc(100% + 18px);
                 box-sizing: border-box;
                 border-radius: 2px;
@@ -731,18 +727,15 @@ export function ThemeEditorBasic(){
                 left: -9px;
                 margin: 0;
                 top: 0;
-               "
+              "
+              value={themeDepth()}
               ref={sliderDepthRef}
               type="range"
               step="0.001"
-              value={themeDepth()}
               max="0.4"
               min="0.0"
             />
           </div>
-
-
-
         </div>
       </div>
     </>

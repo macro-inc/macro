@@ -92,7 +92,7 @@ export const SearchOperatorAutocomplete = (
     <Show when={filteredOptions().length > 0}>
       <div
         data-operator-dropdown
-        class="absolute left-0 top-full mt-1 z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-md min-w-[200px] max-w-[320px] max-h-[240px] overflow-y-auto p-1"
+        class="absolute left-0 top-full mt-1 z-action-menu bg-panel border border-edge-muted rounded-sm shadow-md min-w-[200px] max-w-[320px] max-h-[240px] overflow-y-auto p-1"
         onMouseDown={(e) => e.preventDefault()}
       >
         <div class="px-2 py-1 text-[10px] text-ink-faint uppercase tracking-wider">

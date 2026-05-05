@@ -1,4 +1,9 @@
 # Services
+# Freeze the Docker Compose project name so every checkout/worktree uses the
+# same local containers, networks, and anonymous Compose-managed resources.
+# Local setup is single-instance by design.
+name: macro
+
 include:
   - docker-compose-databases.yml
   - infra/stacks/fusionauth-instance/docker-compose.yml

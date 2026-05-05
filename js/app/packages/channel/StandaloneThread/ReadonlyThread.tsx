@@ -17,15 +17,11 @@ export function ReadonlyThread(props: ReadonlyThreadProps) {
     >
       <StandaloneThread.ParentMessage
         onClickMessage={props.onClickMessage}
-        class={
-          props.onClickMessage ? 'cursor-pointer hover:bg-hover' : undefined
-        }
+        class={props.onClickMessage ? 'hover:bg-hover' : undefined}
       />
       <StandaloneThread.Replies
         onClickMessage={props.onClickMessage}
-        class={
-          props.onClickMessage ? 'cursor-pointer hover:bg-hover' : undefined
-        }
+        class={props.onClickMessage ? 'hover:bg-hover' : undefined}
       />
     </StandaloneThread.Root>
   );

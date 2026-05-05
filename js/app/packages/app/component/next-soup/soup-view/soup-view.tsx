@@ -175,7 +175,7 @@ type PersistedSoupViewState = {
   assigneeFilter: string[];
 };
 
-const PERSISTED_STATE_VERSION = 5;
+const PERSISTED_STATE_VERSION = 6;
 
 const listStateCache = new Map<
   string,
@@ -849,7 +849,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
-        class="size-full bracket-never no-select-children"
+        class="size-full no-select-children"
         ref={(el) => {
           setSoupViewRef(el);
           attachHotkeys(el);
@@ -893,6 +893,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   </Match>
                   <Match when={!rows().length}>
                     <EmptyState
+                      listView={currentView()}
                       search={!!searchText()}
                       hasRefinementsFromBase={hasActiveRefinements()}
                       onClearFilters={resetToTabDefaults}

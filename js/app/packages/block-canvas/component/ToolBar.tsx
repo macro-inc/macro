@@ -16,6 +16,7 @@ import {
 import { IS_MAC } from '@core/constant/isMac';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useIsNestedBlock } from '@core/block';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { useCanEdit } from '@core/signal/permissions';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
@@ -94,7 +95,9 @@ const ConnectorTypeSubMenu = (props: {
 };
 
 export function ToolBar() {
-  const canEdit = useCanEdit();
+  const baseCanEdit = useCanEdit();
+  const isNested = useIsNestedBlock();
+  const canEdit = () => baseCanEdit() && !isNested;
   const toolManager = useToolManager();
   const cachedStyle = useCachedStyle();
   const { activeTool } = toolManager;

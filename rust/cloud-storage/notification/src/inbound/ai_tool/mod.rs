@@ -6,7 +6,10 @@ mod test;
 use crate::domain::{
     models::{
         UserNotificationRow,
-        request::{NotificationStatus, UpdateNotificationsRequest},
+        request::{
+            NotificationEntityRef, NotificationItemType, NotificationListFilters,
+            NotificationStatus, UpdateNotificationsRequest,
+        },
     },
     service::NotificationReader,
 };
@@ -62,12 +65,41 @@ where
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ListNotifications",
-    description = "List the current user's active (not deleted, not done) notifications. Returns notifications ordered by most recent first. Use this to show the user their unread or pending notifications."
+    description = "List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `done` and `seen` to request done/not-done or seen/unseen notifications."
 )]
 pub struct ListNotifications {
     /// Maximum number of notifications to return. Defaults to 20, max 50.
     #[schemars(description = "Maximum number of notifications to return. Defaults to 20, max 50.")]
+    #[serde(default)]
     pub limit: Option<u32>,
+
+    /// Filter by done status. If omitted, only not-done notifications are returned.
+    #[schemars(
+        description = "Filter by done status. If omitted, only not-done notifications are returned. Set true for done notifications, false for not-done notifications."
+    )]
+    #[serde(default)]
+    pub done: Option<bool>,
+
+    /// Filter by seen status. If omitted, both seen and unseen notifications are returned.
+    #[schemars(
+        description = "Filter by seen status. If omitted, both seen and unseen notifications are returned. Set true for seen notifications, false for unseen notifications."
+    )]
+    #[serde(default)]
+    pub seen: Option<bool>,
+
+    /// Filter to specific notification item types. If omitted, returns all types.
+    #[schemars(
+        description = "Filter to specific notification item types. If omitted, returns all types. Example: [\"email\", \"message\"] returns only email and message notifications."
+    )]
+    #[serde(default)]
+    pub include_types: Option<Vec<NotificationItemType>>,
+
+    /// Filter to notifications for specific entities. If omitted, returns notifications for all entities.
+    #[schemars(
+        description = "Filter to notifications for specific entities. Pair each id with entityType to avoid ambiguity. Example: [{\"entityType\":\"email\",\"id\":\"...\"}] returns notifications for one email thread."
+    )]
+    #[serde(default)]
+    pub entities: Option<Vec<NotificationEntityRef>>,
 }
 
 /// A single notification item in the list response.
@@ -143,6 +175,12 @@ where
                 MacroUserIdStr((*request_context.user_id).copied()),
                 Some(limit),
                 models_pagination::Query::Sort(CreatedAt, ()),
+                NotificationListFilters {
+                    done: self.done.or(Some(false)),
+                    seen: self.seen,
+                    include_types: self.include_types.clone().unwrap_or_default(),
+                    entities: self.entities.clone().unwrap_or_default(),
+                },
             )
             .await
             .map_err(|e| ToolCallError {

@@ -390,7 +390,6 @@ function IosShareSheetComposer(props: {
               selectedOptions={selectedOptions()}
               options={destinationOptions}
               triggerMode="input"
-              noBrackets
               hideBorder
               noPadding
               focusOnMount

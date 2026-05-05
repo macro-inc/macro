@@ -317,6 +317,7 @@ export function ActionMenu(props: {
           use:floatWithElement={floatWithElementProps()}
           use:floatWithSelection={floatWithSelectionProps()}
           use:clickOutside={clickOutsideHandler}
+          on:touchstart={(e) => e.stopPropagation()}
           ref={menuRef}
         >
           <Panel depth={2} active class="py-2">

@@ -84,6 +84,17 @@ export function createOnboardingState(options: OnboardingStateOptions) {
     setStore(index, 'skipped', false);
   };
 
+  const goToLessonById = (id: LessonId) => {
+    const idx = findIndexById(id);
+    if (idx !== -1) {
+      // Reset target lesson and all lessons after it
+      for (let i = idx; i < store.length; i++) {
+        setStore(i, 'skipped', false);
+        setStore(i, 'completed', false);
+      }
+    }
+  };
+
   const dismiss = () => {
     setDismissed(true);
   };
@@ -98,6 +109,7 @@ export function createOnboardingState(options: OnboardingStateOptions) {
     skipLesson,
     advanceToNext,
     goToLesson,
+    goToLessonById,
     dismiss,
   };
 }

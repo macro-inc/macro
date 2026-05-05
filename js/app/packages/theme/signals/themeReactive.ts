@@ -3,21 +3,21 @@ import { setIsThemeSaved, setThemeUpdate } from './themeSignals';
 import { createEffect, createSignal, on } from 'solid-js';
 
 export const themeReactive: ThemeReactive = {
-  a0: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  a1: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  a2: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  a3: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  a4: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  b0: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  b1: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  b2: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  b3: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  b4: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  c0: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  c1: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  c2: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  c3: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
-  c4: {l: createSignal(0), c: createSignal(0), h: createSignal(0)},
+  a0: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'accent color'},
+  a1: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'accent color +40°'},
+  a2: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'accent color +80°'},
+  a3: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'accent color +120°'},
+  a4: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'accent color +160°'},
+  b0: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'backaground'},
+  b1: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'background active'},
+  b2: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'background hover'},
+  b3: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'muted edge'},
+  b4: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'edge'},
+  c0: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'text'},
+  c1: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'text muted'},
+  c2: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'text extra muted'},
+  c3: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'text disabled'},
+  c4: {l: createSignal(0), c: createSignal(0), h: createSignal(0), description: 'text placeholder'},
 } as const;
 
 const previousTheme: ThemePrevious = {

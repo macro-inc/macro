@@ -243,7 +243,10 @@ use utoipa::OpenApi;
         saved_views::exclude_default_view_handler,
 
         // /github
-        github::inbound::github_sync_router::install_sync_handler
+        github::inbound::github_sync_router::install_sync_handler,
+
+        // /internal/sync_service
+        sync_service_hex::inbound::axum_router::bulk_wakeup_handler
     ),
     components(
         schemas(
@@ -418,6 +421,10 @@ use utoipa::OpenApi;
             CreateViewRequest,
             ExcludeDefaultViewRequest,
             ShortIdResponse,
+
+            // Sync service
+            sync_service_hex::domain::models::BulkWakeupRequest,
+            sync_service_hex::domain::models::BulkWakeupResponse,
         ),
     ),
     tags(

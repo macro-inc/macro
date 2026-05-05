@@ -42,6 +42,7 @@ impl NotificationReader for UnreachableService {
         _user_id: MacroUserIdStr<'_>,
         _limit: Option<u32>,
         _cursor: Query<Uuid, CreatedAt, ()>,
+        _filters: crate::domain::models::request::NotificationListFilters,
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send
     {
         async { unreachable!("should not be called") }
@@ -435,6 +436,7 @@ impl NotificationReader for PresignedTestService {
         _user_id: MacroUserIdStr<'_>,
         _limit: Option<u32>,
         _cursor: Query<Uuid, CreatedAt, ()>,
+        _filters: crate::domain::models::request::NotificationListFilters,
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send
     {
         async { unreachable!() }
