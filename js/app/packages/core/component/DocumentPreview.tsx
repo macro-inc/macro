@@ -382,7 +382,7 @@ const TASK_PREVIEW_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
 ];
 
-function TaskPropertiesPreview(props: { taskId: string }) {
+export function TaskPropertiesPreview(props: { taskId: string }) {
   const { properties, isLoading } = useEntityProperties(
     props.taskId,
     'TASK',

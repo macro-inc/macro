@@ -492,7 +492,7 @@ function GlyphGrid(props: GlyphGridProps) {
                   onDblClick={() => props.onEditGlyph(glyph)}
                   class="items-center border relative group transition-colors justify-self-stretch"
                   classList={{
-                    'border-edge bg-edge bracket-offset-2': isSelected(),
+                    'border-edge bg-edge': isSelected(),
                     'border-edge bg-background hover:bg-edge': !isSelected(),
                   }}
                 >

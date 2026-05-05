@@ -31,7 +31,7 @@ export default function BlockEmail() {
   return (
     <Suspense>
       <DocumentBlockContainer title={title() ?? 'Email'}>
-        <div class="size-full bracket-never" tabIndex={-1}>
+        <div class="size-full" tabIndex={-1}>
           <Show when={blockData()}>
             <Show when={threadId()}>
               {(id) => (

@@ -405,13 +405,13 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                 {(recipient) => (
                   <div class="flex justify-between">
                     <div
-                      class="flex items-center gap-2 overflow-hidden"
+                      class="flex items-center gap-2 overflow-hidden cursor-pointer"
                       onClick={() =>
                         props.navigateToChannel(recipient.channel_id)
                       }
                     >
                       <Switch
-                        fallback={<WideUsers class="shrink-0 w-4 h-4" />}
+                        fallback={<WideUsers class="flex-shrink-0 w-4 h-4" />}
                       >
                         <Match
                           when={
@@ -424,7 +424,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                         <Match
                           when={props.channelNameMap.get(recipient.channel_id)}
                         >
-                          <WideUsers class="shrink-0 w-4 h-4" />
+                          <WideUsers class="flex-shrink-0 w-4 h-4" />
                         </Match>
                       </Switch>
                       <div class="font-medium truncate">
@@ -1035,7 +1035,7 @@ export function ShareModal(props: ShareModalProps) {
                             {(recipient) => (
                               <div class="flex justify-between">
                                 <div
-                                  class="flex items-center gap-2 overflow-hidden"
+                                  class="flex items-center gap-2 overflow-hidden cursor-pointer"
                                   onClick={() =>
                                     navigateToChannel(recipient.channel_id)
                                   }
@@ -1452,7 +1452,7 @@ export function ShareOptions(props: {
                 return (
                   <DropdownMenu.RadioItem
                     value={option.value}
-                    class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg focus-bracket"
+                    class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg outline-none focus:bg-active data-[highlighted]:bg-active"
                   >
                     <div class="w-4 h-4 shrink-0">
                       {Icon && <Icon class="w-full h-full" />}
@@ -1469,7 +1469,7 @@ export function ShareOptions(props: {
               <div class="my-1 border-t border-edge-muted w-full" />
               <DropdownMenu.RadioItem
                 value="none"
-                class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg focus-bracket"
+                class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg outline-none focus:bg-active data-[highlighted]:bg-active"
               >
                 <div class="w-4 h-4 shrink-0">
                   <IconX class="w-full h-full" />

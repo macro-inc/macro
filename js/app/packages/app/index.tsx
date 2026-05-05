@@ -37,7 +37,8 @@ const renderApp = () => {
     ? 'true'
     : 'false';
 
-  // Used for :focus-visible, which focus-bracket utility uses, to prevent input elements triggering :focus-visible on mouse click
+  // Track current input modality (keyboard / mouse / touch) on the document element.
+  // Used by hotkeys and other modality-aware behaviors.
   // Use capture phase to ensure we catch events even if they're stopped by handlers
   document.addEventListener(
     'keydown',

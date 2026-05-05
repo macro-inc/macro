@@ -240,7 +240,6 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   triggerMode?: ComboboxTriggerMode;
   hideBorder?: boolean;
   noPadding?: boolean;
-  noBrackets?: boolean;
   includeSelf?: boolean;
   disabled?: boolean;
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
@@ -482,10 +481,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           : undefined
       }
       class={cn(
-        'ph-no-capture w-full text-sm offset-2 bg-input',
+        'ph-no-capture w-full text-sm offset-2 bg-input focus-within:bg-active',
         !props.hideBorder && 'border border-edge',
         !props.noPadding && 'py-2',
-        !props.noBrackets && 'focus-within:bracket-offset-2',
         props.class
       )}
     >

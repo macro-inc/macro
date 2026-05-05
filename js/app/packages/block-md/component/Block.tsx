@@ -32,7 +32,7 @@ export default function BlockMarkdown() {
   return (
     <DocumentBlockContainer>
       <div
-        class="w-full h-full select-none overscroll-none overflow-hidden flex flex-col relative bracket-never"
+        class="w-full h-full select-none overscroll-none overflow-hidden flex flex-col relative"
         tabIndex={-1}
       >
         <ModalsProvider>

@@ -802,7 +802,7 @@ export const UnifiedFilterDropdown = () => {
             as={Button}
             variant="secondary"
             size="sm"
-            class="rounded-xs [&_svg]:size-4 suppress-css-bracket"
+            class="rounded-xs [&_svg]:size-4"
           >
             <SlidersHorizontalIcon />
             <span class="font-medium">Filter</span>

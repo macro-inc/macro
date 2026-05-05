@@ -251,10 +251,7 @@ export function History(props: HistoryProps) {
   };
 
   return (
-    <div
-      class="w-full h-full p-2 flex flex-col gap-2 pb-12 suppress-css-bracket"
-      tabindex={-1}
-    >
+    <div class="w-full h-full p-2 flex flex-col gap-2 pb-12" tabindex={-1}>
       <Suspense fallback={'loading...'}>
         <Show when={selectedVersion()}>
           {(selectedVersion) => {
@@ -283,7 +280,7 @@ export function History(props: HistoryProps) {
                   }}
                 </Show>
                 <div
-                  class="w-full h-[50%] overflow-y-scroll border border-edge suppress-css-bracket"
+                  class="w-full h-[50%] overflow-y-scroll border border-edge"
                   tabindex={-1}
                   ref={(ref) => {
                     ref.focus();
@@ -401,7 +398,7 @@ function DocumentPreview(props: {
     );
 
   return (
-    <div class="w-full h-full supress-css-bracket p-2">
+    <div class="w-full h-full p-2">
       <LexicalWrapperContext.Provider value={props.lexicalWrapper}>
         <Show when={props.isSelectedVersionEmpty}>
           <div class="w-full h-full flex items-center justify-center">

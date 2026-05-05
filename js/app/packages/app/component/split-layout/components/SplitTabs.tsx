@@ -108,7 +108,7 @@ export function SplitTabs(props: {
       />
 
       <Tabs.List
-        class="flex flex-row suppress-css-brackets h-full bg-panel overflow-x-scroll overscroll-none scrollbar-hidden scroll-shadows-x relative"
+        class="flex flex-row h-full bg-panel overflow-x-scroll overscroll-none scrollbar-hidden scroll-shadows-x relative"
         as="div"
         ref={(r) => {
           scrollRef = r;

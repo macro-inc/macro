@@ -45,7 +45,6 @@ export function ParticipantsAddPanel(props: {
           options={options}
           hideBorder
           noPadding
-          noBrackets
         />
       </div>
       <button

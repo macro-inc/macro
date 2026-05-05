@@ -373,7 +373,7 @@ export function Channel(props: ChannelProps) {
         <MaybeMessageActionDrawerManager>
           <ChannelDropZone dragState={dragState}>
             <div
-              class="ph-no-capture relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
+              class="ph-no-capture relative flex-1 min-h-0 outline-none"
               ref={(element) => {
                 setMessageListElement(element);
                 attachMessageListRef(element);

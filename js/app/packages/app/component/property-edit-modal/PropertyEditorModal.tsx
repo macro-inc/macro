@@ -80,7 +80,7 @@ function ListItem(props: {
       class={cn(
         'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 scroll-my-1',
         {
-          'bg-hover bracket': props.isSelected && !props.disabled,
+          'bg-active': props.isSelected && !props.disabled,
           'opacity-50 cursor-not-allowed': props.disabled,
         }
       )}
@@ -152,7 +152,7 @@ export function PropertyEditorModal() {
     <Dialog open={propertyEditorOpen()} onOpenChange={togglePropertyEditor}>
       <Dialog.Portal>
         <DialogWrapper contentRef={mergeRefs(attach, setDialogRef)}>
-          <div class="flex flex-col max-h-108 overflow-hidden bracket-never text-sm">
+          <div class="flex flex-col max-h-108 overflow-hidden text-sm">
             <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
               <span class="pl-2 pointer-events-none">❯</span>
               <SearchInput
