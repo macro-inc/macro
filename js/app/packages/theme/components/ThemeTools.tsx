@@ -33,7 +33,6 @@ export function ThemeTools() {
       style={{
         'gap': '4.5px' /* (41 - 32) / 2 */,
         'font-family': 'var(--font-sans)',
-        'background-color': 'var(--b0)',
         'scrollbar-width': 'none',
         'align-items': 'center',
         'overflow': 'hidden',

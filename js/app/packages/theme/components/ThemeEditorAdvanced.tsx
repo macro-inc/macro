@@ -3,6 +3,7 @@ import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
 import type { ThemeReactiveColor } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { ColorSwatch } from './ColorSwatch';
+import { isMobile } from '@core/mobile/isMobile';
 
 const displayType = () => 'hex';
 
@@ -41,16 +42,15 @@ export function ThemeEditorAdvanced(){
       `}</style>
 
       <div
-        style="
-          background-color: var(--b0);
-          font-size: var(--text-xs);
-          scrollbar-width: none;
-          position: relative;
-          overflow: hidden;
-          font-weight: 300;
-          display: block;
-          height: 410px;
-          "
+        style={{
+          'height': isMobile() ? '280px' : '390px',
+          'font-size': 'var(--text-xs)',
+          'scrollbar-width': 'none',
+          'position': 'relative',
+          'overflow': 'hidden',
+          'font-weight': 300,
+          'display': 'block',
+        }}
       >
         <div
           style="
