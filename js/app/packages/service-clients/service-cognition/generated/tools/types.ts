@@ -485,6 +485,10 @@ export interface ChannelSearchResult {
    * This is only prsent if the search result is on the message content
    */
   created_at?: string | null;
+  /**
+   * When the channel message was deleted, if it has been
+   */
+  deleted_at?: string | null;
   highlight: SearchHighlight;
   /**
    * The channel message id

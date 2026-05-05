@@ -170,6 +170,9 @@ export const SearchToolResponse = z.object({
                 created_at: z
                   .union([z.string().datetime({ offset: true }), z.null()])
                   .optional(),
+                deleted_at: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
                 highlight: z.object({
                   bcc: z.array(z.string()).optional(),
                   cc: z.array(z.string()).optional(),
