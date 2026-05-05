@@ -3,6 +3,8 @@ use crate::pubsub::context::{NotificationIngressType, PubSubContext};
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use contacts::domain::service::SqsContactsIngress;
+use contacts::outbound::ingress::SqsContactsQueue;
 use document_storage_service_client::DocumentStorageServiceClient;
 use futures::StreamExt;
 use static_file_service_client::StaticFileServiceClient;
@@ -15,6 +17,7 @@ pub async fn run_worker(
     db: sqlx::Pool<sqlx::Postgres>,
     worker: sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
+    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     gmail_client: gmail_client::GmailClient,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
@@ -29,6 +32,7 @@ pub async fn run_worker(
         db,
         sqs_worker: worker.clone(),
         sqs_client,
+        contacts_ingress,
         gmail_client,
         auth_service_client,
         redis_client,

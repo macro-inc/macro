@@ -14,6 +14,7 @@ import { ContentHits } from './extractors-search';
 
 // Notification components
 import {
+  NotificationStackRow,
   NotificationStacks,
   MobileNotificationStacks,
   NotificationIcon,
@@ -43,6 +44,7 @@ export const Entity = {
     ContentHits: ContentHits,
   },
   Notification: {
+    StackRow: NotificationStackRow,
     Stacks: NotificationStacks,
     MobileStacks: MobileNotificationStacks,
     Icon: NotificationIcon,

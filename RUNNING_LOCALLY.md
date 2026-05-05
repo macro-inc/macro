@@ -23,6 +23,8 @@ export SOPS_KMS_ARN = "arn:aws:kms:us-east-1:569036502058:key/mrk-cab29bf948044e
 
 Run `just setup` to initialize your entire environment.
 
+Local Docker resources are intentionally frozen to the `macro` Compose project. Multiple checkouts/worktrees share the same containers, volumes, networks, LocalStack, and FusionAuth instance. Do not run two local stacks at the same time.
+
 ## Running
 
 ### Backend

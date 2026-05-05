@@ -17,6 +17,7 @@ use email::{
     domain::service::EmailServiceImpl, inbound::toolset::EmailToolContext, outbound::EmailPgRepo,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use notification::inbound::ai_tool::NotificationToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
@@ -186,6 +187,115 @@ impl notification::domain::service::NotificationIngress for NoOpNotificationIngr
     }
 }
 
+/// No-op SNS endpoint manager used by AI notification tools.
+///
+/// The exposed AI tools list and update notifications. Updating notifications
+/// can clear existing push notifications via the notification delivery queue,
+/// but it does not create or mutate SNS platform endpoints. Device
+/// registration APIs are not exposed through the AI toolset, so SNS endpoint
+/// operations intentionally fail if called accidentally.
+#[derive(Clone)]
+pub struct NoOpSnsEndpointManager;
+
+impl notification::domain::ports::SnsEndpointManager for NoOpSnsEndpointManager {
+    async fn create_platform_endpoint(
+        &self,
+        _platform_arn: &str,
+        _token: &str,
+    ) -> Result<String, rootcause::Report> {
+        rootcause::bail!("SNS endpoint manager not configured for AI tools")
+    }
+
+    async fn get_endpoint_attributes(
+        &self,
+        _endpoint_arn: &str,
+    ) -> Result<std::collections::HashMap<String, String>, rootcause::Report> {
+        rootcause::bail!("SNS endpoint manager not configured for AI tools")
+    }
+
+    async fn set_endpoint_attributes(
+        &self,
+        _endpoint_arn: &str,
+        _attributes: std::collections::HashMap<String, String>,
+    ) -> Result<(), rootcause::Report> {
+        rootcause::bail!("SNS endpoint manager not configured for AI tools")
+    }
+
+    async fn delete_endpoint(&self, _endpoint_arn: &str) -> Result<(), rootcause::Report> {
+        rootcause::bail!("SNS endpoint manager not configured for AI tools")
+    }
+}
+
+/// Notification delivery queue used by AI tools.
+///
+/// Most production contexts provide the real notification SQS queue so marking
+/// notifications seen/done can clear mobile pushes. Some auxiliary binaries
+/// that expose the shared tool context do not have a notification queue
+/// configured; those can use `NoOp`, which still updates database state but
+/// skips push-clearing delivery messages.
+#[derive(Clone)]
+pub enum ToolNotificationQueue {
+    Sqs(notification::outbound::queue::SqsQueue),
+    NoOp,
+}
+
+impl notification::domain::ports::NotificationQueue for ToolNotificationQueue {
+    async fn publish<'a, T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
+        &self,
+        messages: Vec<notification::domain::models::queue_message::QueueMessage<'a, T, U>>,
+    ) -> Result<(), rootcause::Report> {
+        match self {
+            ToolNotificationQueue::Sqs(queue) => {
+                notification::domain::ports::NotificationQueue::publish(queue, messages).await
+            }
+            ToolNotificationQueue::NoOp => Ok(()),
+        }
+    }
+
+    async fn receive_messages(
+        &self,
+    ) -> Result<Vec<notification::domain::models::queue_message::RawQueueMessage>, rootcause::Report>
+    {
+        match self {
+            ToolNotificationQueue::Sqs(queue) => {
+                notification::domain::ports::NotificationQueue::receive_messages(queue).await
+            }
+            ToolNotificationQueue::NoOp => Ok(Vec::new()),
+        }
+    }
+
+    async fn delete_message(&self, receipt_handle: &str) -> Result<(), rootcause::Report> {
+        match self {
+            ToolNotificationQueue::Sqs(queue) => {
+                notification::domain::ports::NotificationQueue::delete_message(
+                    queue,
+                    receipt_handle,
+                )
+                .await
+            }
+            ToolNotificationQueue::NoOp => Ok(()),
+        }
+    }
+
+    async fn delay_message(
+        &self,
+        receipt_handle: &str,
+        delay: std::time::Duration,
+    ) -> Result<(), rootcause::Report> {
+        match self {
+            ToolNotificationQueue::Sqs(queue) => {
+                notification::domain::ports::NotificationQueue::delay_message(
+                    queue,
+                    receipt_handle,
+                    delay,
+                )
+                .await
+            }
+            ToolNotificationQueue::NoOp => Ok(()),
+        }
+    }
+}
+
 /// Type alias for the entity access management service implementation used by AI tools
 pub type ToolEntityAccessManagementService =
     entity_access_management::domain::service::EntityAccessManagementServiceImpl<
@@ -271,6 +381,16 @@ pub type ToolCallRecordQueryService = CallRecordQueryServiceImpl<PgCallRepo>;
 pub type ToolCallToolContext =
     CallToolContext<ToolCallService, ToolCallRecordQueryService, ToolEntityAccessService>;
 
+/// Type alias for the notification reader service used by AI tools.
+pub type ToolNotificationService = notification::domain::service::NotificationReaderService<
+    notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
+    ToolNotificationQueue,
+    NoOpSnsEndpointManager,
+>;
+
+/// Type alias for the notification tool context.
+pub type ToolNotificationToolContext = NotificationToolContext<ToolNotificationService>;
+
 /// Type alias for the chat service implementation used by AI tools.
 /// Uses an empty toolset — the read-only tool never invokes tool execution.
 pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManagementService>;
@@ -298,6 +418,7 @@ pub struct ToolServiceContext {
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
+    pub notification_tool_context: ToolNotificationToolContext,
     pub chat_tool_context: ToolChatToolContext,
     pub channel_tool_context: ToolChannelToolContext,
     pub schedule_tool_context: NoOpScheduleContext,

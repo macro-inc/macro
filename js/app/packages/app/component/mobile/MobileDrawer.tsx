@@ -1,6 +1,7 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
 import Drawer from '@corvu/drawer';
+import { Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   onCleanup,
@@ -56,45 +57,84 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
   });
 
   return (
-    <Drawer.Content
-      onFocusIn={(e: FocusEvent) => {
-        scrollToFocusedInput(e);
-      }}
-      class={cn(
-        'bottom-[var(--virtual-keyboard-height,0)] fixed left-0 right-0 z-modal bg-page rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
-        virtualKeyboardVisible()
-          ? 'pb-0 max-h-[calc(80vh-var(--virtual-keyboard-height))] overflow-y-auto'
-          : 'pb-(--safe-bottom)',
-        local.class
-      )}
-      {...rest}
-    />
+    <Layer depth={1}>
+      <Drawer.Content
+        onFocusIn={(e: FocusEvent) => {
+          scrollToFocusedInput(e);
+        }}
+        class={cn(
+          'bottom-[var(--virtual-keyboard-height,0)] fixed left-0 right-0 z-modal bg-panel rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
+          virtualKeyboardVisible()
+            ? 'pb-0 max-h-[calc(80vh-var(--virtual-keyboard-height))] overflow-y-auto'
+            : 'pb-(--safe-bottom)',
+          local.class
+        )}
+        {...rest}
+      />
+    </Layer>
   );
 }
 
-type MobileDrawerSectionProps<T extends ValidComponent = 'div'> =
-  ComponentProps<T> & {
-    as?: T;
-  };
+type ExtendDiv<T extends ValidComponent = 'div'> = ComponentProps<T> & {
+  as?: T;
+};
+
+/**
+ * Component for rendering style Drawer Section Labels.
+ */
+function MobileDrawerSectionLabel<T extends ValidComponent = 'div'>(
+  props: ExtendDiv<T>
+) {
+  const [local, rest] = splitProps(props, ['as', 'class', 'children']);
+  return (
+    <Dynamic
+      component={local.as ?? 'div'}
+      class={cn(
+        'px-3 pb-2 text-xs font-medium text-ink-muted uppercase tracking-wide',
+        local.class
+      )}
+      {...rest}
+    >
+      {local.children}
+    </Dynamic>
+  );
+}
 
 /**
  * Component for rendering styled Drawer sections.
  */
 function MobileDrawerSection<T extends ValidComponent = 'div'>(
-  props: MobileDrawerSectionProps<T>
+  props: ExtendDiv<T>
 ) {
-  const [local, rest] = splitProps(props as MobileDrawerSectionProps, [
-    'as',
-    'class',
-    'children',
-  ]);
+  const [local, rest] = splitProps(props, ['as', 'class', 'children']);
+  return (
+    <Layer depth={2}>
+      <Dynamic
+        component={(local.as ?? 'div') as ValidComponent}
+        class={cn('rounded-2xl mx-3 overflow-clip', local.class)}
+        {...rest}
+      >
+        {local.children}
+      </Dynamic>
+    </Layer>
+  );
+}
+
+/**
+ * Component for rendering the standard mobile drawer drag handle.
+ */
+function MobileDrawerHandle<T extends ValidComponent = 'div'>(
+  props: ExtendDiv<T>
+) {
+  const [local, rest] = splitProps(props, ['as', 'class', 'children']);
+
   return (
     <Dynamic
-      component={(local.as ?? 'div') as ValidComponent}
-      class={cn('bg-menu rounded-2xl mx-3', local.class as string)}
+      component={local.as ?? 'div'}
+      class={cn('flex justify-center pt-3 pb-2 shrink-0', local.class)}
       {...rest}
     >
-      {local.children}
+      {local.children ?? <div class="w-10 h-1 rounded-full bg-edge-muted" />}
     </Dynamic>
   );
 }
@@ -118,6 +158,8 @@ export const MobileDrawer = Object.assign(
     Overlay: Drawer.Overlay,
     Content: MobileDrawerContent,
     Close: Drawer.Close,
+    Handle: MobileDrawerHandle,
     Section: MobileDrawerSection,
+    Label: MobileDrawerSectionLabel,
   }
 );

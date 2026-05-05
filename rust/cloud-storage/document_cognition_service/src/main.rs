@@ -30,8 +30,11 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use notification::domain::service::SqsNotificationIngress;
+use notification::domain::service::{
+    NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
+};
 use notification::outbound::queue::SqsQueue;
+use notification::outbound::repository::DbNotificationRepository;
 use readonly_pool::ReadOnlyPool;
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::SecretManager;
@@ -174,6 +177,22 @@ async fn main() -> anyhow::Result<()> {
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue,
     });
+
+    let notification_reader_queue = SqsQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.notification_queue.clone(),
+    );
+    let notification_reader_service = NotificationReaderService::new(
+        DbNotificationRepository::new(db.clone()),
+        ai_tools::ToolNotificationQueue::Sqs(notification_reader_queue),
+        ai_tools::NoOpSnsEndpointManager,
+        PlatformArnConfig {
+            apns_platform_arn: String::new(),
+            fcm_platform_arn: String::new(),
+        },
+    );
+    let notification_tool_context =
+        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
     tracing::info!("initialized notification ingress service");
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
@@ -350,6 +369,7 @@ async fn main() -> anyhow::Result<()> {
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
+        notification_tool_context: notification_tool_context.clone(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(db.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,

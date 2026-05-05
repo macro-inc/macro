@@ -34,6 +34,7 @@ export function getActionVerb(type: NotificationType): string {
     .with('channel_invite', () => 'invited you')
     .with('invite_to_team', () => 'invited you')
     .with('task_assigned', () => 'assigned you')
+    .with('call-started', () => 'started a call')
     .exhaustive();
 }
 
@@ -61,6 +62,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('channel_invite', () => (count === 1 ? 'invite' : 'invites'))
     .with('invite_to_team', () => (count === 1 ? 'invite' : 'invites'))
     .with('task_assigned', () => (count === 1 ? 'task' : 'tasks'))
+    .with('call-started', () => (count === 1 ? 'call' : 'calls'))
     .exhaustive();
 }
 

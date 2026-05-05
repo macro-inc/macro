@@ -1,6 +1,8 @@
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use contacts::domain::service::SqsContactsIngress;
+use contacts::outbound::ingress::SqsContactsQueue;
 use document_storage_service_client::DocumentStorageServiceClient;
 use gmail_client::GmailClient;
 use notification::domain::service::SqsNotificationIngress;
@@ -18,6 +20,7 @@ pub struct PubSubContext {
     pub db: PgPool,
     pub sqs_worker: sqs_worker::SQSWorker,
     pub sqs_client: sqs_client::SQS,
+    pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub gmail_client: GmailClient,
     pub auth_service_client: AuthServiceClient,
     pub redis_client: RedisClient,

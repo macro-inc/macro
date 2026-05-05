@@ -107,6 +107,7 @@ notification = { path = "../notification" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mime_guess = "2.0.5"
+contacts = { path = "../contacts" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_file_type = { path = "../model_file_type" }
@@ -133,7 +134,6 @@ sha2 = { workspace = true }
 sqlx = { workspace = true }
 sqlx-core = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
-  "contacts",
   "email",
   "gmail",
   "search",

@@ -7,6 +7,7 @@ import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE, ENABLE_TEAMS_OVERRIDE } from '@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 
 import { MobileApp } from './MobileApp';
+import { Mcp } from './Mcp';
 import { Appearance } from './Appearance';
 import { Tabs } from '@core/component/Tabs';
 import { Account } from './Account';
@@ -65,6 +66,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     if (teamsFlag().enabled) { tabs.push({ value: 'Team', label: 'Team' }) }
     tabs.push({ value: 'Shortcuts', label: 'Shortcuts' });
     if (ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()) { tabs.push({ value: 'Mobile App', label: 'App' }) }
+    if (!isNativeMobilePlatform()) { tabs.push({ value: 'MCP', label: 'MCP' }) }
     if (isNativeMobilePlatform() && DEV_MODE_ENV) { tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' }) }
     return tabs;
   }
@@ -153,9 +155,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
   }
 
   const handleTabChange = (value: string) => {
-    if (value === 'Account' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts' || value === 'Mobile App' || value === 'Team') {
-          setActiveTabId(value as SettingsTab);
-        }
+    if (settingsTabs().some((tab) => tab.value === value)) {
+      setActiveTabId(value as SettingsTab);
+    }
   }
 
   function BottomTabs() {
@@ -217,6 +219,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
         </Show>
         <Show when={activeTabId() === 'Mobile App' && ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()}>
           <MobileApp />
+        </Show>
+        <Show when={activeTabId() === 'MCP' && !isNativeMobilePlatform()}>
+          <Mcp />
         </Show>
       </div>
 

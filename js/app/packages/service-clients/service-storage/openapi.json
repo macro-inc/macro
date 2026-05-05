@@ -5272,6 +5272,40 @@
         }
       }
     },
+    "/sync_service/wakeup": {
+      "post": {
+        "tags": ["sync_service"],
+        "operationId": "bulk_wakeup_sync_service_documents",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkWakeupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Wakeups accepted for fire-and-forget dispatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkWakeupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or missing internal auth header"
+          },
+          "401": {
+            "description": "Invalid internal auth header"
+          }
+        }
+      }
+    },
     "/threads/{thread_id}": {
       "patch": {
         "tags": ["threads"],
@@ -6362,6 +6396,28 @@
           }
         }
       },
+      "BulkWakeupRequest": {
+        "type": "object",
+        "required": ["document_ids"],
+        "properties": {
+          "document_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BulkWakeupResponse": {
+        "type": "object",
+        "required": ["dispatched"],
+        "properties": {
+          "dispatched": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
       "CallActiveResponse": {
         "type": "object",
         "description": "Response indicating whether an active call exists for a channel.",
@@ -6395,6 +6451,13 @@
           "attended": {
             "type": ["boolean", "null"],
             "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
+          },
+          "call_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Call record IDs to filter by. Empty to include all calls."
           },
           "channel_ids": {
             "type": "array",

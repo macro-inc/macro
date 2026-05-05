@@ -15,6 +15,7 @@ import {
 } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export type TabItem = {
   value: string;
@@ -61,7 +62,13 @@ export const Tabs = (
                   'text-ink-extra-muted',
                   'data-checked:text-accent hover:text-accent'
                 )}
-                onPointerDown={() => rootProps.onChange?.(item.value)}
+                // We don't want touches on touch to unfocus inputs
+                onPointerDown={(e) => {
+                  if (isTouchDevice()) e.preventDefault();
+                }}
+                onClick={() => {
+                  rootProps.onChange?.(item.value);
+                }}
               >
                 {item.label}
               </KSegmentedControl.ItemLabel>

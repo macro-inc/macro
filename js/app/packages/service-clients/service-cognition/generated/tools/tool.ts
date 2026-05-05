@@ -32,6 +32,18 @@ type ToolParserMap = {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
+  ListNotifications: {
+    call: types.ListNotifications;
+    response: types.ListNotificationsResponse;
+  };
+  MarkNotificationsDone: {
+    call: types.MarkNotificationsDone;
+    response: types.MarkNotificationsResponse;
+  };
+  MarkNotificationsSeen: {
+    call: types.MarkNotificationsSeen;
+    response: types.MarkNotificationsResponse;
+  };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   ReadCallRecord: {
     call: types.ReadCallRecord;
@@ -102,6 +114,18 @@ const toolParserMap = {
   ListEntities: {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
+  },
+  ListNotifications: {
+    call: schemas.ListNotifications,
+    response: schemas.ListNotificationsResponse,
+  },
+  MarkNotificationsDone: {
+    call: schemas.MarkNotificationsDone,
+    response: schemas.MarkNotificationsResponse,
+  },
+  MarkNotificationsSeen: {
+    call: schemas.MarkNotificationsSeen,
+    response: schemas.MarkNotificationsResponse,
   },
   NameSearch: {
     call: schemas.NameSearch,
@@ -190,6 +214,18 @@ type ToolDataMap = {
   ListEntities: {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
+  };
+  ListNotifications: {
+    call: types.ListNotifications;
+    response: types.ListNotificationsResponse;
+  };
+  MarkNotificationsDone: {
+    call: types.MarkNotificationsDone;
+    response: types.MarkNotificationsResponse;
+  };
+  MarkNotificationsSeen: {
+    call: types.MarkNotificationsSeen;
+    response: types.MarkNotificationsResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   ReadCallRecord: {
