@@ -128,7 +128,7 @@ function ReviewPayDemo(props: LessonContentProps) {
         <ArrowLeftIcon class="size-4" />
         Back
       </button>
-      <div class="flex-1 flex items-start justify-start">
+      <div class="flex-1 flex items-center justify-center">
         <Show
           when={hasTeam()}
           fallback={
@@ -188,167 +188,165 @@ function ReviewPayDemo(props: LessonContentProps) {
             </div>
           }
         >
-          {/* Team layout - two columns inside card */}
-          <div class="w-full h-full border border-edge rounded-sm bg-ink/[0.02] flex">
-            {/* Left column */}
-            <div class="flex-[2] border-r border-edge flex flex-col">
-              {/* Header */}
-              <Show when={onboarding.teamName()}>
-                <div class="px-5 pt-3">
-                  <span class="text-xs text-ink/40 uppercase tracking-wide">
-                    Team
-                  </span>
-                  <p class="text-lg font-semibold text-ink -mt-0.5">
-                    {onboarding.teamName()}
-                  </p>
-                </div>
-              </Show>
-
-              {/* Price */}
-              <div class="px-5 pt-1 pb-4 border-b border-edge flex items-baseline justify-between">
-                <div class="flex items-end gap-1.5">
-                  <span class="text-4xl font-bold text-ink leading-none">
-                    ${onboarding.totalCost()}
-                  </span>
-                  <span class="text-ink/50 text-base pb-0.5">/month</span>
-                </div>
-                <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium">
-                  Team plan
-                </span>
-              </div>
-
-              {/* Summary */}
-              <div class="px-5 py-4 border-b border-edge">
-                <span class="text-xs text-ink/40 uppercase tracking-wide">
-                  Summary
-                </span>
-                <div class="flex flex-col text-sm mt-2">
-                  <div
-                    class={cn('flex justify-between py-2', onboarding.invitedMembers().length > 0 && 'border-b border-ink/10')}
-                  >
-                    <span class="text-ink/60">
-                      Your seat · {selectedPlan()?.name}
+          {/* Team layout - full width with centered contents */}
+          <div class="w-full h-full border border-edge rounded-sm bg-ink/[0.02] flex items-center justify-center">
+            <div class="relative">
+              {/* Main column - truly centered */}
+              <div class="w-[320px]">
+                {/* Header */}
+                <Show when={onboarding.teamName()}>
+                  <div class="mb-1">
+                    <span class="text-xs text-ink/40 uppercase tracking-wide">
+                      Team
                     </span>
-                    <span>
-                      <span class="text-ink">${onboarding.userSeatCost()}</span>
-                      <span class="text-ink/40"> /month</span>
-                    </span>
+                    <p class="text-lg font-semibold text-ink -mt-0.5">
+                      {onboarding.teamName()}
+                    </p>
                   </div>
-                  <For each={teamByTier()}>
-                    {(group) => (
-                      <div class="flex justify-between py-2 border-b border-ink/10">
-                        <span class="text-ink/60">
-                          Team · {group.plan.name} × {group.count}
-                        </span>
-                        <Tooltip tooltip="Charged when invite is accepted">
-                          <span class="underline decoration-dotted underline-offset-4 italic cursor-help">
-                            <span class="text-ink">
-                              ${group.plan.price * group.count}
-                            </span>
-                            <span class="text-ink/40"> /month</span>
-                          </span>
-                        </Tooltip>
-                      </div>
-                    )}
-                  </For>
-                  <Show when={onboarding.invitedMembers().length > 0}>
-                    <div class="flex justify-between items-center py-2">
-                      <span class="text-ink/60 flex items-center gap-1">
-                        Total
-                        <Tooltip tooltip="Team charges begin when members accept their invite">
-                          <InfoIcon class="size-3.5 text-ink/40" />
-                        </Tooltip>
+                </Show>
+
+                {/* Price */}
+                <div class="pb-4 border-b border-ink/10 flex items-baseline justify-between">
+                  <div class="flex items-end gap-1.5">
+                    <span class="text-4xl font-bold text-ink leading-none">
+                      ${onboarding.totalCost()}
+                    </span>
+                    <span class="text-ink/50 text-base pb-0.5">/month</span>
+                  </div>
+                  <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium">
+                    Team plan
+                  </span>
+                </div>
+
+                {/* Summary */}
+                <div class="py-4 border-b border-ink/10">
+                  <span class="text-xs text-ink/40 uppercase tracking-wide">
+                    Summary
+                  </span>
+                  <div class="flex flex-col text-sm mt-2">
+                    <div
+                      class={cn('flex justify-between py-2', onboarding.invitedMembers().length > 0 && 'border-b border-ink/10')}
+                    >
+                      <span class="text-ink/60">
+                        Your seat · {selectedPlan()?.name}
                       </span>
                       <span>
-                        <span class="text-ink font-medium">
-                          ${onboarding.totalCost()}
-                        </span>
+                        <span class="text-ink">${onboarding.userSeatCost()}</span>
                         <span class="text-ink/40"> /month</span>
                       </span>
+                    </div>
+                    <For each={teamByTier()}>
+                      {(group) => (
+                        <div class="flex justify-between py-2 border-b border-ink/10">
+                          <span class="text-ink/60">
+                            Team · {group.plan.name} × {group.count}
+                          </span>
+                          <Tooltip tooltip="Charged when invite is accepted">
+                            <span class="underline decoration-dotted underline-offset-4 italic cursor-help">
+                              <span class="text-ink">
+                                ${group.plan.price * group.count}
+                              </span>
+                              <span class="text-ink/40"> /month</span>
+                            </span>
+                          </Tooltip>
+                        </div>
+                      )}
+                    </For>
+                    <Show when={onboarding.invitedMembers().length > 0}>
+                      <div class="flex justify-between items-center py-2">
+                        <span class="text-ink/60 flex items-center gap-1">
+                          Total
+                          <Tooltip tooltip="Team charges begin when members accept their invite">
+                            <InfoIcon class="size-3.5 text-ink/40" />
+                          </Tooltip>
+                        </span>
+                        <span>
+                          <span class="text-ink font-medium">
+                            ${onboarding.totalCost()}
+                          </span>
+                          <span class="text-ink/40"> /month</span>
+                        </span>
+                      </div>
+                    </Show>
+                  </div>
+
+                  {/* What's included - inline when no invites */}
+                  <Show when={onboarding.invitedMembers().length === 0}>
+                    <div class="mt-4 pt-4 border-t border-ink/10">
+                      <span class="text-xs text-ink/40 uppercase tracking-wide">
+                        What's included
+                      </span>
+                      <div class="flex flex-col gap-1 mt-2">
+                        <For each={PLAN_FEATURES}>
+                          {(feature) => (
+                            <div class="flex justify-between text-sm">
+                              <span class="text-ink/60">{feature.label}</span>
+                              <span class="text-ink">
+                                {feature.values[onboarding.selectedPlan() ?? 'free']}
+                              </span>
+                            </div>
+                          )}
+                        </For>
+                      </div>
                     </div>
                   </Show>
                 </div>
 
-                {/* What's included - inline when no invites */}
-                <Show when={onboarding.invitedMembers().length === 0}>
-                  <div class="mt-4 pt-4 border-t border-ink/10">
-                    <span class="text-xs text-ink/40 uppercase tracking-wide">
-                      What's included
-                    </span>
-                    <div class="flex flex-col gap-1 mt-2">
-                      <For each={PLAN_FEATURES}>
-                        {(feature) => (
-                          <div class="flex justify-between text-sm">
-                            <span class="text-ink/60">{feature.label}</span>
-                            <span class="text-ink">
-                              {
-                                feature.values[
-                                  onboarding.selectedPlan() ?? 'free'
-                                ]
-                              }
-                            </span>
-                          </div>
-                        )}
-                      </For>
-                    </div>
+                {/* CTA */}
+                <div class="pt-4 flex flex-col gap-2">
+                  <Button
+                    variant="accent"
+                    size="lg"
+                    onClick={handleCheckout}
+                    disabled={checkoutMutation.isPending}
+                    class="w-full rounded-xs"
+                  >
+                    {checkoutMutation.isPending
+                      ? 'Loading...'
+                      : 'Continue to payment'}
+                    <ArrowRightIcon class="size-4" />
+                  </Button>
+                  <span class="text-xs text-ink/40 flex items-center justify-center gap-1">
+                    <LockIcon class="size-3" />
+                    Secure checkout via Stripe
+                  </span>
+                </div>
+              </div>
+
+              {/* Right column - Invites, positioned to right of main column */}
+              <div class="absolute left-full top-0 ml-16 w-56">
+                <span class="text-xs text-ink/40 uppercase tracking-wide">
+                  Invites ({onboarding.invitedMembers().length})
+                </span>
+                <Show
+                  when={onboarding.invitedMembers().length > 0}
+                  fallback={
+                    <p class="text-sm text-ink/40 italic mt-2">
+                      Invite teammates anytime from Settings
+                    </p>
+                  }
+                >
+                  <div class="flex flex-col gap-1.5 overflow-y-auto max-h-32 mt-2">
+                    <For each={onboarding.invitedMembers()}>
+                      {(member) => (
+                        <div class="flex items-center justify-between text-sm">
+                          <span class="text-ink/70 truncate mr-2">
+                            {member.email}
+                          </span>
+                          <span class="text-xs text-ink/40 shrink-0">
+                            {PLANS.find((p) => p.tier === member.tier)?.name}
+                          </span>
+                        </div>
+                      )}
+                    </For>
                   </div>
                 </Show>
-              </div>
-
-              {/* What's included - separate section when has invites */}
-
-              {/* CTA */}
-              <div class="px-5 py-4 flex flex-col gap-2 mt-auto">
-                <Button
-                  variant="accent"
-                  size="lg"
-                  onClick={handleCheckout}
-                  disabled={checkoutMutation.isPending}
-                  class="w-full rounded-xs"
-                >
-                  {checkoutMutation.isPending
-                    ? 'Loading...'
-                    : 'Continue to payment'}
-                  <ArrowRightIcon class="size-4" />
-                </Button>
-                <span class="text-xs text-ink/40 flex items-center justify-center gap-1">
-                  <LockIcon class="size-3" />
-                  Secure checkout via Stripe
-                </span>
-              </div>
-            </div>
-
-            {/* Right column - Invites */}
-            <div class="flex-1 px-5 py-4 flex flex-col">
-              <span class="text-xs text-ink/40 uppercase tracking-wide">
-                Invites ({onboarding.invitedMembers().length})
-              </span>
-              <Show
-                when={onboarding.invitedMembers().length > 0}
-                fallback={
-                  <p class="text-sm text-ink/40 italic mt-2">
-                    No members invited yet
+                <Show when={onboarding.invitedMembers().length > 0}>
+                  <p class="text-xs text-ink/40 pt-2">
+                    You can invite more from Settings
                   </p>
-                }
-              >
-                <div class="flex flex-col gap-1.5 overflow-y-auto flex-1 mt-2">
-                  <For each={onboarding.invitedMembers()}>
-                    {(member) => (
-                      <div class="flex items-center justify-between text-sm">
-                        <span class="text-ink/70 truncate mr-2">
-                          {member.email}
-                        </span>
-                        <span class="text-xs text-ink/40 shrink-0">
-                          {PLANS.find((p) => p.tier === member.tier)?.name}
-                        </span>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </Show>
-              <p class="text-xs text-ink/40 mt-auto pt-2">
-                You can invite more from Settings
-              </p>
+                </Show>
+              </div>
             </div>
           </div>
         </Show>
