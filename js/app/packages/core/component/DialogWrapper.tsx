@@ -2,6 +2,10 @@ import { Dialog } from '@kobalte/core';
 import { cn } from '@ui/utils/classname';
 import type { JSXElement, Ref } from 'solid-js';
 import { Panel } from '@ui';
+import {
+  PanelDialogContainer,
+  PANEL_DIALOG_OVERLAY_CLASS,
+} from './PanelDialog';
 
 export interface DialogWrapperProps {
   children: JSXElement;
@@ -19,6 +23,9 @@ export interface DialogWrapperProps {
  * Correct usage is to put this immediately below the <Dialog.Portal>. No other Dialog machinery necesary. Just this and then the content.
  *
  * Note: DialogWrapper constrains its height by applying a max-height to its immediate children. This allows the child content to be properly constrained (e.g. for flex-box layouts) without the children needing to know that they are inside a dialog. For this to work as expected, child content should start with a single container element.
+ *
+ * Internally this delegates the diagonal backdrop + positioning to
+ * `PanelDialog`'s primitives so all Macro-themed dialogs share one source of truth.
  */
 export function DialogWrapper(props: DialogWrapperProps) {
   const width = props.width ?? '800px';
@@ -26,13 +33,13 @@ export function DialogWrapper(props: DialogWrapperProps) {
   return (
     <>
       <Dialog.Overlay
-        class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4"
+        class={PANEL_DIALOG_OVERLAY_CLASS}
         ref={props.overlayRef}
       />
-      <div class="z-modal fixed inset-0">
+      <PanelDialogContainer topOffset="10rem">
         <Dialog.Content
           class={cn(
-            'max-w-[calc(100vw-16px)] mt-40 mx-auto overflow-hidden portal-scope'
+            'max-w-[calc(100vw-16px)] overflow-hidden portal-scope'
           )}
           style={{ width: width }}
           onOpenAutoFocus={props.onOpenAutoFocus}
@@ -47,8 +54,7 @@ export function DialogWrapper(props: DialogWrapperProps) {
             </div>
           </Panel>
         </Dialog.Content>
-      </div>
+      </PanelDialogContainer>
     </>
-    // Overlay with Diagonal pattern
   );
 }

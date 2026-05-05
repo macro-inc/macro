@@ -137,11 +137,11 @@ const PaywallComponent = (props: PaywallComponent) => {
   };
 
   return (
-    <div class="space-y-2 w-full">
+    <div class="relative space-y-2 w-full">
       <Show when={!props.hideCloseButton}>
         <button
           onClick={props.cb}
-          class="fixed top-6 right-6 sm:top-3 sm:right-3 text-ink-extra-muted hover:text-ink transition-colors"
+          class="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 text-ink-extra-muted hover:text-ink transition-colors z-10"
         >
           <IconX class="w-5 sm:w-6 h-5 sm:h-6" />
         </button>
