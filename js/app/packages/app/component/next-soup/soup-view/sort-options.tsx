@@ -1,4 +1,7 @@
-import type { SortConfig, SoupEntity } from '@app/component/next-soup/create-soup-state';
+import type {
+  SortConfig,
+  SoupEntity,
+} from '@app/component/next-soup/create-soup-state';
 import type {
   EntityData,
   TaskEntityWithProperties,

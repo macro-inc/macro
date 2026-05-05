@@ -1,4 +1,7 @@
-import type { GroupConfig, SoupEntity } from '@app/component/next-soup/create-soup-state';
+import type {
+  GroupConfig,
+  SoupEntity,
+} from '@app/component/next-soup/create-soup-state';
 import { isTaskEntity } from '@entity';
 import {
   getTaskStatusOptionId,
