@@ -152,9 +152,9 @@ export function TaskListEntity(props: TaskListEntityProps) {
         {
           'min-h-10': !isMobile(),
           'bg-accent/5': props.checked,
-          'hover:bg-hover/30':
+          'hover:bg-hover group-data-expanded/cm-trigger:bg-hover':
             !props.checked && !props.highlighted && !props.hovered,
-          'bg-hover/20': props.hovered && !props.highlighted && !props.checked,
+          'bg-hover': props.hovered && !props.highlighted && !props.checked,
           'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1':
             props.highlighted && !isMobile(),
         }
