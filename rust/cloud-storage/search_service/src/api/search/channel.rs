@@ -39,7 +39,7 @@ pub(in crate::api::search) async fn enrich_channels(
         })
         .collect();
 
-    let (channel_histories, message_deleted_ats) = tokio::try_join!(
+    let (channel_histories, message_states) = tokio::try_join!(
         async {
             comms_db_client::activity::get_activity::get_channel_history_info(
                 &ctx.db,
@@ -50,7 +50,7 @@ pub(in crate::api::search) async fn enrich_channels(
             .map_err(anyhow::Error::from)
         },
         async {
-            comms_db_client::messages::get_deleted_ats::get_messages_deleted_at(
+            comms_db_client::messages::get_deleted_ats::get_message_deletion_states(
                 &ctx.db,
                 &message_ids,
             )
@@ -60,7 +60,7 @@ pub(in crate::api::search) async fn enrich_channels(
     .map_err(SearchError::InternalError)?;
 
     // Construct enriched results
-    let enriched_results = construct_search_result(results, channel_histories, message_deleted_ats)
+    let enriched_results = construct_search_result(results, channel_histories, message_states)
         .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
@@ -69,14 +69,17 @@ pub(in crate::api::search) async fn enrich_channels(
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     channel_histories: HashMap<Uuid, ChannelHistoryInfo>,
-    message_deleted_ats: HashMap<Uuid, DateTime<Utc>>,
+    message_states: HashMap<Uuid, Option<DateTime<Utc>>>,
 ) -> anyhow::Result<Vec<ChannelSearchResponseItemWithMetadata>> {
     // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
     let entity_id_hit_map: IndexMap<sqlx::types::Uuid, Vec<ChannelSearchResult>> = search_results
         .into_iter()
-        .map(|hit| {
+        .filter_map(|hit| {
             let result = if let Some(SearchGotoContent::Channels(goto)) = hit.goto {
-                let deleted_at = message_deleted_ats.get(&goto.channel_message_id).copied();
+                // Drop content-match hits whose underlying message no longer exists in
+                // the DB — those are stale OpenSearch entries (e.g. hard-deleted) that
+                // shouldn't surface to users.
+                let deleted_at = *message_states.get(&goto.channel_message_id)?;
                 ChannelSearchResult {
                     highlight: hit.highlight.into(),
                     score: hit.score,
@@ -100,7 +103,7 @@ pub fn construct_search_result(
                     deleted_at: None,
                 }
             };
-            (hit.entity_id, result)
+            Some((hit.entity_id, result))
         })
         .fold(IndexMap::new(), |mut map, (entity_id, result)| {
             map.entry(entity_id).or_insert_with(Vec::new).push(result);

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            id,\n            deleted_at::timestamptz as \"deleted_at!\"\n        FROM comms_messages\n        WHERE id = ANY($1)\n            AND deleted_at IS NOT NULL\n        ",
+  "query": "\n        SELECT\n            id,\n            deleted_at::timestamptz as \"deleted_at\"\n        FROM comms_messages\n        WHERE id = ANY($1)\n        ",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "deleted_at!",
+        "name": "deleted_at",
         "type_info": "Timestamptz"
       }
     ],
@@ -24,5 +24,5 @@
       null
     ]
   },
-  "hash": "fc8ec6507ec5d711348debedb954f4bec6efecb50855b17fb637fb04163deac8"
+  "hash": "a7546aa6e8594ac3e66cd708f033fab241312305c74f1bcdb32b96e924030b1d"
 }
