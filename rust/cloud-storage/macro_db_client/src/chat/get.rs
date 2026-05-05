@@ -12,7 +12,9 @@ pub struct ChatSearchBackfill {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Gets the chat messages for search backfill
+/// Gets the chat messages for search backfill. `only_deleted` filters on
+/// `Chat."deletedAt"`: `None` returns every chat, `Some(false)` returns only
+/// active chats, `Some(true)` returns only soft-deleted chats.
 #[tracing::instrument(skip(db))]
 pub async fn get_chat_messages_for_search_backfill(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -20,13 +22,21 @@ pub async fn get_chat_messages_for_search_backfill(
     offset: i64,
     chat_ids: Option<&Vec<String>>,
     user_ids: Option<&Vec<String>>,
+    only_deleted: Option<bool>,
 ) -> anyhow::Result<Vec<ChatSearchBackfill>> {
     if let Some(chat_ids) = chat_ids {
         if chat_ids.is_empty() {
             return Ok(vec![]);
         }
 
-        return get_chat_messages_for_search_backfill_chat_ids(db, limit, offset, chat_ids).await;
+        return get_chat_messages_for_search_backfill_chat_ids(
+            db,
+            limit,
+            offset,
+            chat_ids,
+            only_deleted,
+        )
+        .await;
     }
 
     if let Some(user_ids) = user_ids {
@@ -34,7 +44,14 @@ pub async fn get_chat_messages_for_search_backfill(
             return Ok(vec![]);
         }
 
-        return get_chat_messages_for_search_backfill_user_ids(db, limit, offset, user_ids).await;
+        return get_chat_messages_for_search_backfill_user_ids(
+            db,
+            limit,
+            offset,
+            user_ids,
+            only_deleted,
+        )
+        .await;
     }
 
     let result = sqlx::query!(
@@ -49,13 +66,18 @@ pub async fn get_chat_messages_for_search_backfill(
             "ChatMessage" m
         JOIN
             "Chat" c on c."id" = m."chatId"
+        WHERE
+            $3::bool IS NULL
+            OR ($3 AND c."deletedAt" IS NOT NULL)
+            OR (NOT $3 AND c."deletedAt" IS NULL)
         ORDER BY
             m."createdAt" DESC
         LIMIT $1
         OFFSET $2
         "#,
         limit,
-        offset
+        offset,
+        only_deleted,
     )
     .map(|row| ChatSearchBackfill {
         chat_id: row.chat_id,
@@ -76,6 +98,7 @@ async fn get_chat_messages_for_search_backfill_chat_ids(
     limit: i64,
     offset: i64,
     chat_ids: &[String],
+    only_deleted: Option<bool>,
 ) -> anyhow::Result<Vec<ChatSearchBackfill>> {
     let result = sqlx::query!(
         r#"
@@ -91,6 +114,11 @@ async fn get_chat_messages_for_search_backfill_chat_ids(
             "Chat" c on c."id" = m."chatId"
         WHERE
             m."chatId" = ANY($1)
+            AND (
+                $4::bool IS NULL
+                OR ($4 AND c."deletedAt" IS NOT NULL)
+                OR (NOT $4 AND c."deletedAt" IS NULL)
+            )
         ORDER BY
             m."createdAt" DESC
         LIMIT $2
@@ -98,7 +126,8 @@ async fn get_chat_messages_for_search_backfill_chat_ids(
         "#,
         chat_ids,
         limit,
-        offset
+        offset,
+        only_deleted,
     )
     .map(|row| ChatSearchBackfill {
         chat_id: row.chat_id,
@@ -119,6 +148,7 @@ async fn get_chat_messages_for_search_backfill_user_ids(
     limit: i64,
     offset: i64,
     user_ids: &[String],
+    only_deleted: Option<bool>,
 ) -> anyhow::Result<Vec<ChatSearchBackfill>> {
     let result = sqlx::query!(
         r#"
@@ -134,6 +164,11 @@ async fn get_chat_messages_for_search_backfill_user_ids(
             "Chat" c on c."id" = m."chatId"
         WHERE
             c."userId" = ANY($1)
+            AND (
+                $4::bool IS NULL
+                OR ($4 AND c."deletedAt" IS NOT NULL)
+                OR (NOT $4 AND c."deletedAt" IS NULL)
+            )
         ORDER BY
             m."createdAt" DESC
         LIMIT $2
@@ -141,7 +176,8 @@ async fn get_chat_messages_for_search_backfill_user_ids(
         "#,
         user_ids,
         limit,
-        offset
+        offset,
+        only_deleted,
     )
     .map(|row| ChatSearchBackfill {
         chat_id: row.chat_id,

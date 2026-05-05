@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            c.\"id\" as \"chat_id\",\n            m.id as \"message_id\",\n            c.\"userId\" as \"user_id\",\n            c.\"createdAt\" as \"created_at\",\n            c.\"updatedAt\" as \"updated_at\"\n        FROM\n            \"ChatMessage\" m\n        JOIN\n            \"Chat\" c on c.\"id\" = m.\"chatId\"\n        WHERE\n            m.\"chatId\" = ANY($1)\n        ORDER BY\n            m.\"createdAt\" DESC\n        LIMIT $2\n        OFFSET $3\n        ",
+  "query": "\n        SELECT\n            c.\"id\" as \"chat_id\",\n            m.id as \"message_id\",\n            c.\"userId\" as \"user_id\",\n            c.\"createdAt\" as \"created_at\",\n            c.\"updatedAt\" as \"updated_at\"\n        FROM\n            \"ChatMessage\" m\n        JOIN\n            \"Chat\" c on c.\"id\" = m.\"chatId\"\n        WHERE\n            $3::bool IS NULL\n            OR ($3 AND c.\"deletedAt\" IS NOT NULL)\n            OR (NOT $3 AND c.\"deletedAt\" IS NULL)\n        ORDER BY\n            m.\"createdAt\" DESC\n        LIMIT $1\n        OFFSET $2\n        ",
   "describe": {
     "columns": [
       {
@@ -31,9 +31,9 @@
     ],
     "parameters": {
       "Left": [
-        "TextArray",
         "Int8",
-        "Int8"
+        "Int8",
+        "Bool"
       ]
     },
     "nullable": [
@@ -44,5 +44,5 @@
       false
     ]
   },
-  "hash": "13a3a2c05506fe36d0420c3ed6eb711ece07b50c77690ce7ef2336c9390896d4"
+  "hash": "7c07eebbc4d89f86a5d9c04bcecaddeb7090d3d74ad131b9c9621373c9ccb971"
 }
