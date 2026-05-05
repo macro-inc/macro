@@ -246,13 +246,12 @@ function InviteTeamDemo(props: LessonContentProps) {
   };
 
   return (
-    <div class="h-full w-full flex flex-col p-12 overflow-hidden">
-      <div class="flex-1 w-full border border-edge rounded-sm bg-ink/[0.02] flex justify-center overflow-hidden pt-[15%]">
-        <form
-          id={INVITE_FORM_ID}
-          onSubmit={handleSubmit}
-          class="w-full max-w-md flex flex-col gap-6"
-        >
+    <div class="h-full w-full flex items-start justify-center p-12 pt-[12%] overflow-hidden">
+      <form
+        id={INVITE_FORM_ID}
+        onSubmit={handleSubmit}
+        class="w-full max-w-md flex flex-col gap-6"
+      >
         <div class="flex flex-col gap-2 shrink-0 px-2">
           <label class="text-base font-medium text-ink" for="team-name">
             Team name
@@ -399,8 +398,7 @@ function InviteTeamDemo(props: LessonContentProps) {
             You can always invite more people later from Settings
           </p>
         </div>
-        </form>
-      </div>
+      </form>
     </div>
   );
 }

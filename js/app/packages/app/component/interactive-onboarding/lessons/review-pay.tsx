@@ -110,12 +110,12 @@ function ReviewPayDemo(props: LessonContentProps) {
   };
 
   return (
-    <div class="h-full w-full flex items-center justify-center p-12">
+    <div class="h-full w-full flex items-start justify-center p-12 pt-[12%]">
         <Show
           when={hasTeam()}
           fallback={
-            /* Solo layout - single column full size */
-            <div class="w-full h-full border border-edge rounded-sm bg-ink/[0.02] flex flex-col">
+            /* Solo layout */
+            <div class="w-full max-w-md flex flex-col">
               {/* Price */}
               <div class="px-5 py-4 border-b border-edge flex items-baseline justify-between">
                 <div class="flex items-end gap-1.5">
@@ -170,11 +170,8 @@ function ReviewPayDemo(props: LessonContentProps) {
             </div>
           }
         >
-          {/* Team layout - full width with centered contents */}
-          <div class="w-full h-full border border-edge rounded-sm bg-ink/[0.02] flex items-center justify-center">
-            <div class="relative">
-              {/* Main column - truly centered */}
-              <div class="w-[320px]">
+          {/* Team layout */}
+          <div class="w-full max-w-md">
                 {/* Header */}
                 <Show when={onboarding.teamName()}>
                   <div class="mb-1">
@@ -274,6 +271,32 @@ function ReviewPayDemo(props: LessonContentProps) {
                   </Show>
                 </div>
 
+                {/* Invites */}
+                <Show when={onboarding.invitedMembers().length > 0}>
+                  <div class="py-4 border-b border-ink/10">
+                    <span class="text-xs text-ink/40 uppercase tracking-wide">
+                      Invites ({onboarding.invitedMembers().length})
+                    </span>
+                    <div class="flex flex-col gap-1.5 mt-2">
+                      <For each={onboarding.invitedMembers()}>
+                        {(member) => (
+                          <div class="flex items-center justify-between text-sm">
+                            <span class="text-ink/70 truncate mr-2">
+                              {member.email}
+                            </span>
+                            <span class="text-xs text-ink/40 shrink-0">
+                              {PLANS.find((p) => p.tier === member.tier)?.name}
+                            </span>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                    <p class="text-xs text-ink/40 pt-2">
+                      You can invite more from Settings
+                    </p>
+                  </div>
+                </Show>
+
                 {/* CTA */}
                 <div class="pt-4 flex flex-col gap-2">
                   <Button
@@ -294,43 +317,6 @@ function ReviewPayDemo(props: LessonContentProps) {
                   </span>
                 </div>
               </div>
-
-              {/* Right column - Invites, positioned to right of main column */}
-              <div class="absolute left-full top-0 ml-16 w-56">
-                <span class="text-xs text-ink/40 uppercase tracking-wide">
-                  Invites ({onboarding.invitedMembers().length})
-                </span>
-                <Show
-                  when={onboarding.invitedMembers().length > 0}
-                  fallback={
-                    <p class="text-sm text-ink/40 italic mt-2">
-                      Invite teammates anytime from Settings
-                    </p>
-                  }
-                >
-                  <div class="flex flex-col gap-1.5 overflow-y-auto max-h-32 mt-2">
-                    <For each={onboarding.invitedMembers()}>
-                      {(member) => (
-                        <div class="flex items-center justify-between text-sm">
-                          <span class="text-ink/70 truncate mr-2">
-                            {member.email}
-                          </span>
-                          <span class="text-xs text-ink/40 shrink-0">
-                            {PLANS.find((p) => p.tier === member.tier)?.name}
-                          </span>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                </Show>
-                <Show when={onboarding.invitedMembers().length > 0}>
-                  <p class="text-xs text-ink/40 pt-2">
-                    You can invite more from Settings
-                  </p>
-                </Show>
-              </div>
-            </div>
-          </div>
         </Show>
     </div>
   );
