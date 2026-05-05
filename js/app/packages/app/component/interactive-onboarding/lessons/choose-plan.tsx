@@ -106,7 +106,9 @@ function ChoosePlanDemo(props: LessonContentProps) {
               when={isPending() && selectedPlan() === plan.tier}
               fallback={
                 <>
-                  <Show when={selectedPlan() === plan.tier && plan.tier !== 'free'}>
+                  <Show
+                    when={selectedPlan() === plan.tier && plan.tier !== 'free'}
+                  >
                     <CheckIcon class="size-4" />
                   </Show>
                   {plan.tier === 'free'

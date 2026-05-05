@@ -216,7 +216,9 @@ function InteractiveOnboardingInner() {
         return false;
       if (l.id === 'about-us' && isAuthenticated()) return false;
       if (
-        (l.id === 'team-choice' || l.id === 'invite-team' || l.id === 'review-pay') &&
+        (l.id === 'team-choice' ||
+          l.id === 'invite-team' ||
+          l.id === 'review-pay') &&
         !inviteTeamEnabled().enabled
       )
         return false;
