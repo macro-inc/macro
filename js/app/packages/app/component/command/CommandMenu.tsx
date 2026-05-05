@@ -137,7 +137,7 @@ export function CommandMenuInner(props: {
   });
 
   createEffect(
-    on(query, () => {
+    on([query, CommandState.categoryFilter], () => {
       const items = filteredItems();
       const firstIsSearch = items[0] && isSearchItem(items[0]);
       CommandState.setSelectedIndex(firstIsSearch && items.length > 1 ? 1 : 0);
@@ -364,7 +364,6 @@ export function CommandMenuInner(props: {
       );
       const nextIndex = (currentIndex + 1) % CATEGORIES.length;
       CommandState.setCategoryFilter(CATEGORIES[nextIndex].id);
-      CommandState.setSelectedIndex(0);
       return true;
     },
     runWithInputFocused: true,
@@ -382,7 +381,6 @@ export function CommandMenuInner(props: {
       const prevIndex =
         (currentIndex - 1 + CATEGORIES.length) % CATEGORIES.length;
       CommandState.setCategoryFilter(CATEGORIES[prevIndex].id);
-      CommandState.setSelectedIndex(0);
       return true;
     },
     runWithInputFocused: true,
@@ -688,7 +686,6 @@ function CategoryFilterTabs() {
         onChange={(value) => {
           if (value) {
             CommandState.setCategoryFilter(value as CategoryFilter);
-            CommandState.setSelectedIndex(0);
           }
         }}
       />
