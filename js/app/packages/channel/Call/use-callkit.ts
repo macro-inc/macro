@@ -11,7 +11,7 @@ import { joinChannelCall } from './join-channel-call';
 const DEVICE_TYPE_IOS_VOIP = 'iosvoip' as DeviceType;
 
 type VoipTokenPayload = { token: string };
-type CallAnsweredPayload = { callId: string; channelId: string };
+type CallAnsweredPayload = { channelId: string };
 
 /**
  * Sets up CallKit / PushKit integration for iOS.

@@ -11,6 +11,9 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
     // Keyed by call UUID — holds the channelId so it's available when CXAnswerCallAction fires.
     private var pendingCalls: [UUID: String] = [:]
 
+    // The UUID of the most recently reported incoming call, used by endActiveCall.
+    private var activeCallUUID: UUID?
+
     // Last VoIP token received from PushKit; may arrive before the JS listener is ready.
     private var cachedVoipToken: String?
 
@@ -57,7 +60,15 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
             return
         }
 
+        // Enforce the single-call invariant: if a stale entry exists (duplicate
+        // delivery or network retry), evict it before reporting the new call.
+        for staleUUID in pendingCalls.keys where staleUUID != uuid {
+            provider.reportCall(with: staleUUID, endedAt: nil, reason: .failed)
+            pendingCalls.removeValue(forKey: staleUUID)
+        }
+
         pendingCalls[uuid] = channelId
+        activeCallUUID = uuid
 
         let update = CXCallUpdate()
         update.remoteHandle = CXHandle(type: .generic, value: channelId)
@@ -80,6 +91,7 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
 
     public func providerDidReset(_ provider: CXProvider) {
         pendingCalls.removeAll()
+        activeCallUUID = nil
     }
 
     public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
@@ -93,6 +105,7 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
         ])
         action.fulfill()
         pendingCalls.removeValue(forKey: action.callUUID)
+        if activeCallUUID == action.callUUID { activeCallUUID = nil }
     }
 
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
@@ -101,6 +114,7 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
         ])
         action.fulfill()
         pendingCalls.removeValue(forKey: action.callUUID)
+        if activeCallUUID == action.callUUID { activeCallUUID = nil }
     }
 
     // MARK: - Tauri commands
@@ -116,14 +130,18 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
     /// Called by the JS layer when the user leaves a call from within the app,
     /// so the system CallKit UI is dismissed.
     @objc public func endActiveCall(_ invoke: Invoke) {
-        guard let uuid = pendingCalls.keys.first else {
+        guard let uuid = activeCallUUID else {
             invoke.resolve()
             return
         }
         let transaction = CXTransaction(action: CXEndCallAction(call: uuid))
-        callController.request(transaction) { _ in }
-        pendingCalls.removeValue(forKey: uuid)
-        invoke.resolve()
+        callController.request(transaction) { [weak self] error in
+            if error == nil {
+                self?.pendingCalls.removeValue(forKey: uuid)
+                self?.activeCallUUID = nil
+            }
+            invoke.resolve()
+        }
     }
 }
 
