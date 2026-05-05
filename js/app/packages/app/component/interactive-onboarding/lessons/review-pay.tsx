@@ -22,7 +22,17 @@ import {
 } from '../use-onboarding-checkout';
 import { throwOnErr } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
+import { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
 import { invalidateUserTeams } from '@queries/team';
+
+function toTeamUserTier(tier: PaidPlanTier): TeamUserTier {
+  const map: Record<PaidPlanTier, TeamUserTier> = {
+    haiku: TeamUserTier.Haiku,
+    sonnet: TeamUserTier.Sonnet,
+    opus: TeamUserTier.Opus,
+  };
+  return map[tier];
+}
 import { analytics } from '@app/lib/analytics/analytics';
 import { Tooltip } from '@core/component/Tooltip';
 
@@ -345,7 +355,7 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
 
     const invites = pendingTeam.members
       .filter((m) => m.email.trim())
-      .map((m) => ({ email: m.email, tier: m.tier }));
+      .map((m) => ({ email: m.email, tier: toTeamUserTier(m.tier) }));
 
     if (invites.length > 0) {
       await throwOnErr(() =>

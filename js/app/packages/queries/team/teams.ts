@@ -216,9 +216,9 @@ export function useCreateTeamWithInvitesMutation(
           return { previousTeams };
         },
 
-        onSuccess: (_team, { emails }) => {
+        onSuccess: (_team, { invites }) => {
           invalidateUserTeams();
-          const hasInvites = emails && emails.length > 0;
+          const hasInvites = invites && invites.length > 0;
           toast.success(
             hasInvites ? 'Team created and invitations sent' : 'Team created'
           );
