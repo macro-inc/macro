@@ -194,6 +194,10 @@
   --color-focus: var(--color-accent);
 }
 
+/* Big hammer fix for cursor pointer. */
+@utility cursor-pointer {
+  cursor: default;
+}
 
 @utility hide-scrollbar {
   scrollbar-width: none;

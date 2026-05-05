@@ -413,7 +413,7 @@ const SearchableFilterSubmenu = (props: {
 
       <DropdownMenu.Portal>
         <Layer depth={2}>
-          <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden">
+          <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-65 max-w-[90vw] overflow-hidden">
             <SearchableMultiSelectInline
               options={props.options}
               activeIds={props.activeIds}
@@ -444,7 +444,7 @@ function SingleValueSubmenu<T>(props: {
       </DropdownMenu.SubTrigger>
       <DropdownMenu.Portal>
         <Layer depth={2}>
-          <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
+          <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
             <For each={props.options}>
               {(option) => {
                 const active = () => props.current() === option.value;
@@ -646,7 +646,7 @@ const SearchIndexSubRow = (props: {
     </DropdownMenu.SubTrigger>
     <DropdownMenu.Portal>
       <Layer depth={2}>
-        <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[180px] p-1">
+        <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
           {props.children}
         </DropdownMenu.SubContent>
       </Layer>
@@ -811,7 +811,7 @@ export const UnifiedFilterDropdown = () => {
 
         <DropdownMenu.Portal>
           <Layer depth={2}>
-            <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[180px] p-1">
+            <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
               <Show
                 when={
                   categories().length === 1 && !isTasksView() && !isSearchView()
@@ -828,14 +828,14 @@ export const UnifiedFilterDropdown = () => {
 
                           <DropdownMenu.Portal>
                             <Layer depth={2}>
-                              <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
+                              <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
                                 <For each={category.options}>
                                   {(option) => {
                                     const active = () =>
                                       isOptionActive(option.id);
                                     return (
                                       <DropdownMenu.Item
-                                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover cursor-pointer"
+                                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                                         onSelect={() => toggleFilter(option.id)}
                                         closeOnSelect={!category.multiple}
                                       >
@@ -961,7 +961,7 @@ export const UnifiedFilterDropdown = () => {
                     const active = () => isOptionActive(option.id);
                     return (
                       <DropdownMenu.Item
-                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover cursor-pointer"
+                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                         onSelect={() => toggleFilter(option.id)}
                         closeOnSelect={!categories()[0]!.multiple}
                       >

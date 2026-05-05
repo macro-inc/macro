@@ -288,7 +288,7 @@ function EditableLabel(props: EditableLabelProps) {
         fallback={
           <div
             onClick={handleStartEdit}
-            class="cursor-pointer hover:bg-edge px-1 py-0.5 w-full h-full flex items-center"
+            class="hover:bg-edge px-1 py-0.5 w-full h-full flex items-center"
             style="min-height: 20px;"
           >
             {props.value}
@@ -858,7 +858,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                                   : 'transparent'
                               }
                               stroke="transparent"
-                              class="cursor-pointer hover:stroke-current hover:stroke-1 hover:opacity-50"
+                              class="hover:stroke-current hover:stroke-1 hover:opacity-50"
                               onMouseDown={() => handleMouseDown(row(), col())}
                               onMouseEnter={() =>
                                 handleMouseEnter(row(), col())
@@ -1037,7 +1037,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
   });
 
   return (
-    <div class="w-[400px] bg-panel p-4 overflow-y-auto border-l border-edge border-dashed shrink-0">
+    <div class="w-100 bg-panel p-4 overflow-y-auto border-l border-edge border-dashed shrink-0">
       <div class="space-y-4">
         <h3 class="font-mono text-sm text-ink">[ Global Settings ]</h3>
 

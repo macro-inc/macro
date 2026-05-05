@@ -68,7 +68,7 @@ const TableGrid = ({
 
                   return (
                     <div
-                      class="w-4 h-4 border border-edge cursor-pointer transition-colors duration-100"
+                      class="w-4 h-4 border border-edge transition-colors duration-100"
                       classList={{
                         'bg-hover': isHighlighted(),
                       }}

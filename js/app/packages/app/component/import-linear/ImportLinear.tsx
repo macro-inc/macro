@@ -218,7 +218,7 @@ export default function ImportLinear() {
 
         <div class="flex flex-col gap-2">
           <label class="text-sm text-ink-muted">CSV file</label>
-          <label class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-accent-contrast font-medium rounded-md cursor-pointer hover:bg-accent-hover transition-colors w-fit">
+          <label class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-accent-contrast font-medium rounded-md hover:bg-accent-hover transition-colors w-fit">
             <span>Choose File</span>
             <input
               type="file"

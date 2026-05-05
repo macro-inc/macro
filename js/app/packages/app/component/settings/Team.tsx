@@ -111,7 +111,7 @@ function RoleSelect(props: {
       itemComponent={(itemProps: { item: CollectionNode<RoleOption> }) => (
         <Select.Item
           item={itemProps.item}
-          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover"
+          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover outline-none data-highlighted:bg-hover"
         >
           <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
           <Select.ItemIndicator>
@@ -160,7 +160,7 @@ function TierSelect(props: {
       itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
         <Select.Item
           item={itemProps.item}
-          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover"
+          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover outline-none data-highlighted:bg-hover"
         >
           <div class="flex flex-col">
             <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>

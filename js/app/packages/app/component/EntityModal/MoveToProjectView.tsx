@@ -422,7 +422,7 @@ export const MoveToProjectView = (props: {
           class="w-full p-2 text-sm border border-edge bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none selection:bg-ink selection:text-panel"
         />
       </div>
-      <div class="w-full max-h-64 h-[300px] overflow-hidden">
+      <div class="w-full max-h-64 h-75 overflow-hidden">
         <Fragment ref={listRef}>
           <VList data={flattenedProjects.items} class="[&>div]:overflow-clip">
             {(project, index) => {
@@ -478,7 +478,7 @@ export const MoveToProjectView = (props: {
 
                         {/* Expand/collapse caret */}
                         <div
-                          class="flex items-center justify-center w-4 h-4 cursor-pointer hover:bg-edge rounded"
+                          class="flex items-center justify-center w-4 h-4 hover:bg-edge rounded"
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleExpanded(project.id);

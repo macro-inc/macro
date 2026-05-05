@@ -81,9 +81,26 @@ export function ThemeList() {
               </div>
             </div>
             <div style="height: 40px; grid-column: 1 / -1;" />
-            <For each={themes()}>
-              {(theme) => (
-                <>
+          <For each={themes()}>
+            {(theme) => (
+              <div
+                class={`theme-list-item ${theme.id === currentThemeId() && isThemeSaved() ? 'current-theme' : ''}`}
+                onClick={() => {
+                  analytics.track('theme_changed', {themeId: theme.id})
+                  applyTheme(theme.id)
+                }}
+              >
+                <div
+                  style="
+
+                    grid-template-columns: min-content 1fr;
+                    background-color: var(--b3);
+                    align-items: center;
+                    display: grid;
+                    height: 41px;
+                    gap: 1px;
+                  "
+                >
                   <div
                     style="
                       background-color: var(--b0);
