@@ -13,6 +13,7 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import TrashIcon from '@icon/regular/trash-simple.svg';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
+import CheckIcon from '@icon/regular/check.svg';
 import { useEmail } from '@core/context/user';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import { useOnboarding } from '../onboarding-context';
@@ -38,7 +39,21 @@ const TEAM_NAME_MAX_LENGTH = 50;
 function InviteTeamContent() {
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
-      <p>Create your team and invite collaborators to get started together.</p>
+      <p>Your team gets:</p>
+      <div class="flex flex-col gap-2">
+        <div class="flex items-start gap-2">
+          <CheckIcon class="size-4 text-accent shrink-0 mt-0.5" />
+          <span class="text-sm text-ink/70">Shared calls and tasks across your team</span>
+        </div>
+        <div class="flex items-start gap-2">
+          <CheckIcon class="size-4 text-accent shrink-0 mt-0.5" />
+          <span class="text-sm text-ink/70">Unified team AI memory</span>
+        </div>
+        <div class="flex items-start gap-2">
+          <CheckIcon class="size-4 text-accent shrink-0 mt-0.5" />
+          <span class="text-sm text-ink/70">Add or remove members anytime</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -247,11 +262,11 @@ function InviteTeamDemo(props: LessonContentProps) {
         <ArrowLeftIcon class="size-4" />
         Back
       </button>
-      <div class="flex-1 w-full border border-edge rounded-sm bg-ink/[0.02] flex justify-center items-start py-12 overflow-hidden">
+      <div class="flex-1 w-full border border-edge rounded-sm bg-ink/[0.02] flex justify-center overflow-hidden pt-[15%]">
         <form
           id={INVITE_FORM_ID}
           onSubmit={handleSubmit}
-          class="w-full max-w-md flex flex-col gap-6 max-h-full overflow-hidden"
+          class="w-full max-w-md flex flex-col gap-6"
         >
         <div class="flex flex-col gap-2 shrink-0 px-2">
           <label class="text-base font-medium text-ink" for="team-name">
