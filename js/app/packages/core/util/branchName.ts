@@ -5,6 +5,7 @@ import { storageServiceClient } from '@service-storage/client';
 
 const MAX_BRANCH_LENGTH = 200;
 
+// Keep in sync with `slugify` in rust/cloud-storage/documents/src/inbound/toolset/read_metadata.rs
 const slugify = (title: string): string =>
   title
     .toLowerCase()

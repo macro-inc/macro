@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use super::DocumentToolContext;
 
+// Keep in sync with `slugify` in js/app/packages/core/util/branchName.ts
 fn slugify(name: &str) -> String {
     let mut result = String::with_capacity(name.len());
     let mut prev_hyphen = false;
