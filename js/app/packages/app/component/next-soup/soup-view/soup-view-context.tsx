@@ -41,8 +41,6 @@ import { soupKeys } from '@queries/soup/keys';
 import type { InfiniteData } from '@tanstack/solid-query';
 import type { SoupPage } from '@service-storage/generated/schemas';
 
-export type { SoupRow, SoupEntity, GroupMeta };
-
 type DataSource<T> = {
   data: Accessor<T[]>;
   isLoading: Accessor<boolean>;
