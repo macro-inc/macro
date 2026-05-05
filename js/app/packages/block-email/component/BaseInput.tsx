@@ -311,7 +311,7 @@ function TruncatedRecipientList(props: {
   return (
     <div
       use:observedSize={{ setSize: setContainerRect }}
-      class="flex items-center text-sm overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1 cursor-pointer"
+      class="flex items-center text-sm overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1"
       onclick={props.onClick}
     >
       {/* Hidden measurement element - must have same font styles */}

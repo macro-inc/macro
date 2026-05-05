@@ -156,7 +156,7 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
                     handleFileUpload(files);
                   },
                 }}
-                class="underline cursor-pointer"
+                class="underline"
               >
                 Upload files
               </span>{' '}
@@ -167,7 +167,7 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
                     await handleFolderSelect(files, handleFileUpload);
                   },
                 }}
-                class="underline cursor-pointer"
+                class="underline"
               >
                 Upload folders
               </span>

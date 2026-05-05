@@ -478,7 +478,7 @@ export const MoveToProjectView = (props: {
 
                         {/* Expand/collapse caret */}
                         <div
-                          class="flex items-center justify-center w-4 h-4 cursor-pointer hover:bg-edge rounded"
+                          class="flex items-center justify-center w-4 h-4 hover:bg-edge rounded"
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleExpanded(project.id);

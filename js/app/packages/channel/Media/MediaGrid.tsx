@@ -87,7 +87,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
           <>
             <button
               type="button"
-              class="block max-w-full cursor-pointer"
+              class="block max-w-full"
               onClick={props.onOpen}
               aria-label="Open video viewer"
             >

@@ -56,7 +56,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       {/* These pl/pr below are needed to align with expanded messages at mobile width. */}
       <div class="macro-message-width macro-message-margin w-full pl-2 pr-4 sm:px-0">
         <div
-          class="relative flex flex-row items-center w-full pb-2 cursor-pointer transition-all"
+          class="relative flex flex-row items-center w-full pb-2 transition-all"
           classList={{
             'pt-2': !props.isFirstMessage,
             'opacity-80': hasMouseLeft() && !hover(),

@@ -436,7 +436,6 @@ export function ThemeEditorBasic(){
               style="
                 appearance: none;
                 -webkit-appearance: none;
-                cursor: var(--cursor-pointer);
                 width: calc(100% + 18px);
                 box-sizing: border-box;
                 border-radius: 2px;
@@ -525,7 +524,6 @@ export function ThemeEditorBasic(){
               style="
                 appearance: none;
                 -webkit-appearance: none;
-                cursor: var(--cursor-pointer);
                 width: calc(100% + 18px);
                 box-sizing: border-box;
                 border-radius: 2px;
@@ -622,7 +620,6 @@ export function ThemeEditorBasic(){
               style="
                 appearance: none;
                 -webkit-appearance: none;
-                cursor: var(--cursor-pointer);
                 width: calc(100% + 18px);
                 box-sizing: border-box;
                 border-radius: 2px;
@@ -717,7 +714,6 @@ export function ThemeEditorBasic(){
               style="
                 appearance: none;
                 -webkit-appearance: none;
-                cursor: var(--cursor-pointer);
                 width: calc(100% + 18px);
                 box-sizing: border-box;
                 border-radius: 2px;

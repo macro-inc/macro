@@ -63,7 +63,7 @@ function RecipientChip(props: {
       <Show when={props.icon}>{props.icon}</Show>
       <p class="text-sm whitespace-nowrap">{truncateString(props.label, 20)}</p>
       <XIcon
-        class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1"
+        class="w-5 h-5 hover:bg-hover hover-transition-bg p-1"
         onClick={props.onRemove}
       />
     </div>

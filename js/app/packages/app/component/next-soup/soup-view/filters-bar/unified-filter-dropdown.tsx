@@ -835,7 +835,7 @@ export const UnifiedFilterDropdown = () => {
                                       isOptionActive(option.id);
                                     return (
                                       <DropdownMenu.Item
-                                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover cursor-pointer"
+                                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                                         onSelect={() => toggleFilter(option.id)}
                                         closeOnSelect={!category.multiple}
                                       >
@@ -961,7 +961,7 @@ export const UnifiedFilterDropdown = () => {
                     const active = () => isOptionActive(option.id);
                     return (
                       <DropdownMenu.Item
-                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover cursor-pointer"
+                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                         onSelect={() => toggleFilter(option.id)}
                         closeOnSelect={!categories()[0]!.multiple}
                       >

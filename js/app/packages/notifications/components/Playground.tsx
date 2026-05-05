@@ -213,7 +213,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
           </div>
 
           <details class="group">
-            <summary class="text-xs font-mono text-ink-muted uppercase cursor-pointer hover:text-accent">
+            <summary class="text-xs font-mono text-ink-muted uppercase hover:text-accent">
               Raw JSON ▸
             </summary>
             <pre class="bg-menu p-4 rounded-lg border border-edge-muted text-xs overflow-auto mt-2">
@@ -431,7 +431,7 @@ function NotificationDetail(props: {
 
       <section>
         <details class="group">
-          <summary class="text-lg font-semibold text-ink mb-4 cursor-pointer hover:text-accent">
+          <summary class="text-lg font-semibold text-ink mb-4 hover:text-accent">
             Raw Notification Data ▸
           </summary>
           <pre class="bg-menu p-6 rounded-xl border border-edge-muted text-xs overflow-auto mt-4">

@@ -179,7 +179,7 @@ export function Account() {
               <Show when={ENABLE_PROFILE_PICTURES && userId()}>
                 <Row label="Profile Picture">
                   <div
-                    class="relative group cursor-pointer"
+                    class="relative group"
                     use:fileSelector={{
                       acceptedFileExtensions: blockNameToFileExtensions.image,
                       acceptedMimeTypes: blockNameToMimeTypes.image,

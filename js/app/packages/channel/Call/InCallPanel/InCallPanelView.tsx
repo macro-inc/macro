@@ -124,7 +124,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
             <button
               type="button"
               class={cn(
-                'shrink-0 transition-colors cursor-pointer hover:bg-accent/30 outline-0 outline-accent/50 hover:outline-1 hover-transition-outline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-edge-muted',
+                'shrink-0 transition-colors hover:bg-accent/30 outline-0 outline-accent/50 hover:outline-1 hover-transition-outline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-edge-muted',
                 slim() && 'animate-pulse hover:outline-0'
               )}
               title="Open full call view"
