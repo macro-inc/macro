@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use email_importance::build_importance_condition;
+use sqlx::{Execute, Postgres};
 use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
 use macro_user_id::cowlike::CowLike;
@@ -67,6 +68,7 @@ fn test_build_message_email_filter_importance_true_includes_email_filters() {
         debug
             .contains("LOWER(ef.email_domain) = LOWER(split_part(sender_c.email_address, '@', 2))")
     );
+    // Boolean values are inlined as TRUE/FALSE into the raw SQL.
     assert!(debug.contains("ef.is_important = TRUE"));
     assert!(debug.contains("ef_addr.is_important = FALSE"));
 }
@@ -635,7 +637,10 @@ fn test_has_message_literals_false_when_only_calendar_only() {
 /// shared condition (e.g. by inlining different SQL), this test fails.
 #[test]
 fn importance_true_filter_contains_shared_condition() {
-    let condition_sql = build_importance_condition(true).to_debug_sql();
+    let mut builder = sqlx::QueryBuilder::<Postgres>::new("");
+    build_importance_condition(true, &mut builder);
+    let condition_sql = builder.build().sql().to_owned();
+
     let filter_sql = build_message_email_filter(&Expr::Literal(EmailLiteral::Importance(true)))
         .to_debug_sql();
     assert!(
@@ -651,7 +656,10 @@ fn importance_true_filter_contains_shared_condition() {
 /// shared condition, this test fails.
 #[test]
 fn importance_false_filter_contains_shared_condition() {
-    let condition_sql = build_importance_condition(false).to_debug_sql();
+    let mut builder = sqlx::QueryBuilder::<Postgres>::new("");
+    build_importance_condition(false, &mut builder);
+    let condition_sql = builder.build().sql().to_owned();
+
     let filter_sql = build_message_email_filter(&Expr::Literal(EmailLiteral::Importance(false)))
         .to_debug_sql();
     assert!(

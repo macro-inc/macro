@@ -80,7 +80,7 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-email_importance = { path = "../email_importance", features = ["testing"] }
+email_importance = { path = "../email_importance" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }

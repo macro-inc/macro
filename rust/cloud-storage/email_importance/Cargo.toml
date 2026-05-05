@@ -4,9 +4,6 @@ name = "email_importance"
 publish = false
 version = "0.1.0"
 
-[features]
-testing = []
-
 [dependencies]
 anyhow = { workspace = true }
 sqlx = { workspace = true }

@@ -13,7 +13,7 @@ async fn fragment_matches(pool: &Pool<Postgres>, message_id: Uuid, is_important:
     let mut builder = QueryBuilder::new("SELECT EXISTS(SELECT 1 FROM email_messages m WHERE m.id = ");
     builder.push_bind(message_id);
     builder.push(" AND ");
-    build_sender_importance_override_filter(is_important).push_into(&mut builder);
+    build_sender_importance_override_filter(is_important, &mut builder);
     builder.push(")");
     builder
         .build_query_scalar::<bool>()

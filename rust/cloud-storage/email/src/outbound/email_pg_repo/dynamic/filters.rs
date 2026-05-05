@@ -1,5 +1,6 @@
+use super::SqlFragment;
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
-use email_importance::{SqlFragment, build_importance_condition};
+use email_importance::build_importance_condition;
 use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
 use recursion::CollapsibleExt;
@@ -101,22 +102,17 @@ pub(super) fn build_message_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragmen
         ),
 
         filter_ast::ExprFrame::Literal(EmailLiteral::Importance(true)) => {
-            let mut f = SqlFragment::raw(
-                r#"(
-                NOT EXISTS (
-                    SELECT 1 FROM email_message_labels ml
-                    JOIN email_labels l ON ml.label_id = l.id
-                    WHERE ml.message_id = m.id
-                    AND l.name = 'TRASH'
-                )
-                AND "#,
+            let mut builder = sqlx::QueryBuilder::new(
+                "(\n                NOT EXISTS (\n                    SELECT 1 FROM email_message_labels ml\n                    JOIN email_labels l ON ml.label_id = l.id\n                    WHERE ml.message_id = m.id\n                    AND l.name = 'TRASH'\n                )\n                AND ",
             );
-            f.extend(build_importance_condition(true));
-            f.push_raw(")");
-            f
+            build_importance_condition(true, &mut builder);
+            builder.push(")");
+            SqlFragment::raw(builder.sql())
         }
         filter_ast::ExprFrame::Literal(EmailLiteral::Importance(false)) => {
-            build_importance_condition(false)
+            let mut builder = sqlx::QueryBuilder::new("");
+            build_importance_condition(false, &mut builder);
+            SqlFragment::raw(builder.sql())
         }
         filter_ast::ExprFrame::Literal(EmailLiteral::NotificationDone(_)) => {
             SqlFragment::raw("TRUE")
