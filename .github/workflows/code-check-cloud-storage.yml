@@ -159,8 +159,28 @@ jobs:
           fi
           echo "nextest_filter=$filterset" >> "$GITHUB_OUTPUT"
 
-  check:
+  build-workspace:
     needs: path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    runs-on: linux-extra-beefy
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: nix-community/cache-nix-action@d12e0f307e43ac49b7b098ea0e999f6e0b7bc02a
+        with:
+          primary-key: nix-x86_64-linux-workspace-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-x86_64-linux-workspace-
+      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc
+        with:
+          name: macro-inc
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: build workspace artifacts
+        run: nix build .#packages.x86_64-linux.workspaceArtifacts
+
+  check:
+    needs: [path-check, build-workspace]
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-extra-beefy
     steps:
@@ -180,7 +200,7 @@ jobs:
         run: nix build .#checks.x86_64-linux.fmt .#checks.x86_64-linux.clippy
 
   test:
-    needs: path-check
+    needs: [path-check, build-workspace]
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-extra-beefy
     services:
@@ -365,12 +385,13 @@ jobs:
   status-check:
     name: Cloud Storage Status Check
     if: always()
-    needs: [path-check, check, test, diff-check, check-lambdas, check-no-bootstrap-deletions]
+    needs: [path-check, build-workspace, check, test, diff-check, check-lambdas, check-no-bootstrap-deletions]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
         run: |
           echo "path-check: ${{ needs.path-check.result }}"
+          echo "build-workspace: ${{ needs.build-workspace.result }}"
           echo "check: ${{ needs.check.result }}"
           echo "test: ${{ needs.test.result }}"
           echo "diff-check: ${{ needs.diff-check.result }}"
@@ -379,6 +400,7 @@ jobs:
 
           # Fail if any job failed (skipped and success are both OK)
           if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
+             [[ "${{ needs.build-workspace.result }}" == "failure" ]] || \
              [[ "${{ needs.check.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
              [[ "${{ needs.diff-check.result }}" == "failure" ]] || \
