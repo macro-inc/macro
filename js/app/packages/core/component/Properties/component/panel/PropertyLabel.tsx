@@ -1,6 +1,6 @@
 import { useMaybeBlockAliasedName, useMaybeBlockId } from '@core/block';
 import { cn } from '@ui/utils/classname';
-import { Backdrop, Button, Panel } from '@ui';
+import { Dialog, Button, Panel } from '@ui';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
 import UnpinIcon from '@icon/regular/push-pin-slash.svg';
@@ -151,7 +151,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         </Show>
       </div>
 
-      <Backdrop
+      <Dialog
         open={deleteConfirmVisible()}
         onOpenChange={setDeleteConfirmVisible}
       >
@@ -159,9 +159,9 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col overflow-hidden text-sm">
               <div class="flex items-center justify-between gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
-                <Backdrop.Title class="pl-2 text-sm font-medium">
+                <Dialog.Title class="pl-2 text-sm font-medium">
                   Delete Property
-                </Backdrop.Title>
+                </Dialog.Title>
                 <Button
                   variant="ghost"
                   size="icon-sm"
@@ -172,11 +172,11 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                 </Button>
               </div>
               <div class="p-4">
-                <Backdrop.Description class="text-sm text-ink-muted">
+                <Dialog.Description class="text-sm text-ink-muted">
                   Are you sure you want to remove property "
                   {props.property.displayName}"
                   {documentName ? ` from "${documentName}"` : ''}?
-                </Backdrop.Description>
+                </Dialog.Description>
               </div>
               <div class="flex items-center justify-end gap-2 px-2 py-1.5 border-t border-edge-muted shrink-0">
                 <Button
@@ -197,7 +197,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
             </div>
           </div>
         </Panel>
-      </Backdrop>
+      </Dialog>
     </>
   );
 };

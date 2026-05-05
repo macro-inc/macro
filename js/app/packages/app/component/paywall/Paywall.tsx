@@ -2,7 +2,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { onMount } from 'solid-js';
-import { Backdrop, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 import PaywallComponent from './PaywallComponent';
 
 export function Paywall() {
@@ -55,11 +55,11 @@ export function Paywall() {
   });
 
   return (
-    <Backdrop
+    <Dialog
       open={paywallOpen()}
       onOpenChange={(open) => !open && hidePaywall()}
       position="center"
-      width="900px"
+      class="w-[900px]"
     >
       <Panel active depth={2}>
         <div
@@ -72,6 +72,6 @@ export function Paywall() {
           </div>
         </div>
       </Panel>
-    </Backdrop>
+    </Dialog>
   );
 }

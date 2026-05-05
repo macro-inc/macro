@@ -1,7 +1,7 @@
 import { AiChatEmptyState } from '@core/component/AI/component/AIChatEmptyState';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { Show } from 'solid-js';
-import { Backdrop, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 
 const [macroMcpSetupOpen, setMacroMcpSetupOpen] = createControlledOpenSignal(
   false,
@@ -21,17 +21,17 @@ export const closeMacroMcpSetupModal = () => {
 export function MacroMcpSetupModal() {
   return (
     <Show when={macroMcpSetupOpen()}>
-      <Backdrop
+      <Dialog
         open={macroMcpSetupOpen()}
         onOpenChange={setMacroMcpSetupOpen}
-        width="760px"
+        class="w-[760px]"
       >
         <Panel depth={2} active>
           <div class="*:max-h-[75vh]">
             <AiChatEmptyState />
           </div>
         </Panel>
-      </Backdrop>
+      </Dialog>
     </Show>
   );
 }

@@ -6,7 +6,7 @@ import {
 } from './useCommandItems';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
-import { Backdrop, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 import { Tabs } from '@core/component/Tabs';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -83,7 +83,7 @@ export function CommandMenu() {
   };
 
   return (
-    <Backdrop
+    <Dialog
       open={CommandState.isOpen()}
       onOpenChange={CommandState.setIsOpen}
       contentRef={setCommandMenuRef}
@@ -102,7 +102,7 @@ export function CommandMenu() {
           />
         </div>
       </Panel>
-    </Backdrop>
+    </Dialog>
   );
 }
 

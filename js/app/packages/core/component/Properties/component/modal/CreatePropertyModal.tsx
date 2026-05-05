@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
 import { Button } from '@ui/components/Button';
 import { SegmentedControl } from '@ui/components/SegmentedControl';
-import { Backdrop, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
@@ -406,7 +406,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   );
 
   return (
-    <Backdrop
+    <Dialog
       open={props.isOpen}
       onOpenChange={(open) => {
         if (!open) props.onClose();
@@ -415,9 +415,9 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       <Panel depth={2} class="*:max-h-[75vh]">
         <div class="flex flex-col text-sm">
           <div class="flex items-center justify-between gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
-            <Backdrop.Title class="pl-2 text-sm font-medium">
+            <Dialog.Title class="pl-2 text-sm font-medium">
               Create New Property
-            </Backdrop.Title>
+            </Dialog.Title>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -608,6 +608,6 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
           </div>
         </div>
       </Panel>
-    </Backdrop>
+    </Dialog>
   );
 };

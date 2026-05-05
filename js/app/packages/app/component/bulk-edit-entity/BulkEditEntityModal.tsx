@@ -1,5 +1,5 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { Backdrop, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 import type { EntityData } from '@entity';
 import {
   type Accessor,
@@ -34,7 +34,7 @@ const BulkEditEntityModalContent = (props: {
   };
 
   return (
-    <Backdrop
+    <Dialog
       open={props.isOpen()}
       onOpenChange={(open) => {
         if (!open) {
@@ -72,7 +72,7 @@ const BulkEditEntityModalContent = (props: {
           </div>
         </div>
       </Panel>
-    </Backdrop>
+    </Dialog>
   );
 };
 

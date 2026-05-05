@@ -3,7 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useCreateScheduleMutation } from '@queries/agent-schedule/schedules';
 import { debounce } from '@solid-primitives/scheduled';
-import { Backdrop, Button, Panel } from '@ui';
+import { Dialog, Button, Panel } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   createEffect,
@@ -137,21 +137,20 @@ export function AutomationComposer() {
     );
 
   return (
-    <Backdrop
+    <Dialog
       open={automationComposerOpen()}
       onOpenChange={(open) => setAutomationComposerOpen(open, false)}
-      width="800px"
     >
       <Panel depth={2} active>
         <div class="*:max-h-[75vh]">
           <div class="flex cursor-default flex-col text-ink">
             <div class="flex items-center justify-between border-b border-edge-muted px-3 py-2">
-              <Backdrop.Title class="m-0 p-0 text-sm font-semibold">
+              <Dialog.Title class="m-0 p-0 text-sm font-semibold">
                 New Automation
-              </Backdrop.Title>
-              <Backdrop.CloseButton as={Button} variant="ghost" size="icon-sm">
+              </Dialog.Title>
+              <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                 &times;
-              </Backdrop.CloseButton>
+              </Dialog.CloseButton>
             </div>
 
             <div class="grid max-h-[70vh] gap-3 overflow-y-auto px-3 py-3">
@@ -321,6 +320,6 @@ export function AutomationComposer() {
           </div>
         </div>
       </Panel>
-    </Backdrop>
+    </Dialog>
   );
 }

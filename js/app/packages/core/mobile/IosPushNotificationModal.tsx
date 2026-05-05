@@ -1,7 +1,7 @@
 import { isPlatform } from '@core/util/platform';
 import { useNotificationSettings } from '@notifications/notification-settings';
 import { useIsAuthenticated } from '@queries/auth';
-import { Backdrop, Button, Panel } from '@ui';
+import { Dialog, Button, Panel } from '@ui';
 import { createMemo, Show } from 'solid-js';
 
 const DEBUG_FORCE_OPEN = false;
@@ -20,7 +20,7 @@ export function IosPushNotificationModal() {
 
   return (
     <Show when={shouldShow()}>
-      <Backdrop
+      <Dialog
         open
         onOpenChange={(open) => {
           if (!open) settings.dismissPrompt();
@@ -30,16 +30,16 @@ export function IosPushNotificationModal() {
         <Panel depth={2} active>
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col gap-4 px-4 py-6">
-              <Backdrop.Title class="text-lg font-semibold text-ink">
+              <Dialog.Title class="text-lg font-semibold text-ink">
                 Enable Push Notifications
-              </Backdrop.Title>
-              <Backdrop.Description class="text-sm text-ink-extra-muted">
+              </Dialog.Title>
+              <Dialog.Description class="text-sm text-ink-extra-muted">
                 Get notified about new messages, mentions, comments, and emails.
-              </Backdrop.Description>
+              </Dialog.Description>
               <div class="flex gap-2 w-full justify-end pt-2">
-                <Backdrop.CloseButton class="text-sm text-ink-muted hover:text-ink px-3 py-1.5">
+                <Dialog.CloseButton class="text-sm text-ink-muted hover:text-ink px-3 py-1.5">
                   Later
-                </Backdrop.CloseButton>
+                </Dialog.CloseButton>
                 <Button
                   variant="accent"
                   size="sm"
@@ -58,7 +58,7 @@ export function IosPushNotificationModal() {
             </div>
           </div>
         </Panel>
-      </Backdrop>
+      </Dialog>
     </Show>
   );
 }

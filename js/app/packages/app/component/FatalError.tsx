@@ -3,7 +3,7 @@ import ResetIcon from '@icon/regular/arrow-clockwise.svg';
 import HomeIcon from '@icon/regular/house.svg';
 import { logger } from '@observability';
 import { Show } from 'solid-js';
-import { Backdrop, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 
 interface FatalErrorProps {
   error?: Error;
@@ -16,7 +16,7 @@ export function FatalError(props: FatalErrorProps) {
   });
 
   return (
-    <Backdrop open position="center" width="480px">
+    <Dialog open position="center" class="w-[480px]">
       <Panel active depth={2}>
         <div class="p-6 sm:p-8 font-sans">
           <div class="text-center">
@@ -58,6 +58,6 @@ export function FatalError(props: FatalErrorProps) {
           </div>
         </div>
       </Panel>
-    </Backdrop>
+    </Dialog>
   );
 }

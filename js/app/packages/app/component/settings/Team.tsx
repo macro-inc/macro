@@ -12,7 +12,7 @@ import CheckIcon from '@icon/regular/check.svg';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { Button } from '@ui/components/Button';
-import { Backdrop, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { Select } from '@kobalte/core/select';
 import { useUserId } from '@core/context/user';
@@ -671,7 +671,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   };
 
   return (
-    <Backdrop
+    <Dialog
       open={props.open}
       onOpenChange={(open) => !open && props.onClose()}
       onOpenAutoFocus={(e) => {
@@ -683,12 +683,12 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
         <div class="*:max-h-[75vh]">
           <div class="flex flex-col text-ink">
             <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
-              <Backdrop.CloseButton as={Button} variant="ghost" size="icon-sm">
+              <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                 <XIcon />
-              </Backdrop.CloseButton>
-              <Backdrop.Title as="span" class="text-sm font-medium p-0 m-0">
+              </Dialog.CloseButton>
+              <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
                 Create Team
-              </Backdrop.Title>
+              </Dialog.Title>
             </div>
             <div class="p-3 flex flex-col gap-3">
               <div class="flex flex-col gap-1">
@@ -758,7 +758,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
           </div>
         </div>
       </Panel>
-    </Backdrop>
+    </Dialog>
   );
 }
 
@@ -1126,7 +1126,7 @@ function TeamManagement(props: {
         </Show>
       </div>
 
-      <Backdrop
+      <Dialog
         open={showDeleteTeamModal()}
         onOpenChange={handleDeleteTeamModalClose}
       >
@@ -1134,16 +1134,16 @@ function TeamManagement(props: {
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
-                <Backdrop.CloseButton
+                <Dialog.CloseButton
                   as={Button}
                   variant="ghost"
                   size="icon-sm"
                 >
                   <XIcon />
-                </Backdrop.CloseButton>
-                <Backdrop.Title as="span" class="text-sm font-medium p-0 m-0">
+                </Dialog.CloseButton>
+                <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
                   Delete Team
-                </Backdrop.Title>
+                </Dialog.Title>
               </div>
               <div class="p-3 flex flex-col gap-3">
                 <p>
@@ -1192,9 +1192,9 @@ function TeamManagement(props: {
             </div>
           </div>
         </Panel>
-      </Backdrop>
+      </Dialog>
 
-      <Backdrop
+      <Dialog
         open={!!showRemoveModal()}
         onOpenChange={() => setShowRemoveModal(null)}
       >
@@ -1202,16 +1202,16 @@ function TeamManagement(props: {
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
-                <Backdrop.CloseButton
+                <Dialog.CloseButton
                   as={Button}
                   variant="ghost"
                   size="icon-sm"
                 >
                   <XIcon />
-                </Backdrop.CloseButton>
-                <Backdrop.Title as="span" class="text-sm font-medium p-0 m-0">
+                </Dialog.CloseButton>
+                <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
                   Remove Member
-                </Backdrop.Title>
+                </Dialog.Title>
               </div>
               <div class="p-3 flex flex-col gap-3">
                 <p>
@@ -1245,9 +1245,9 @@ function TeamManagement(props: {
             </div>
           </div>
         </Panel>
-      </Backdrop>
+      </Dialog>
 
-      <Backdrop
+      <Dialog
         open={!!showCancelInviteModal()}
         onOpenChange={() => setShowCancelInviteModal(null)}
       >
@@ -1255,16 +1255,16 @@ function TeamManagement(props: {
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
-                <Backdrop.CloseButton
+                <Dialog.CloseButton
                   as={Button}
                   variant="ghost"
                   size="icon-sm"
                 >
                   <XIcon />
-                </Backdrop.CloseButton>
-                <Backdrop.Title as="span" class="text-sm font-medium p-0 m-0">
+                </Dialog.CloseButton>
+                <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
                   Cancel Invitation
-                </Backdrop.Title>
+                </Dialog.Title>
               </div>
               <div class="p-3 flex flex-col gap-3">
                 <p>
@@ -1301,9 +1301,9 @@ function TeamManagement(props: {
             </div>
           </div>
         </Panel>
-      </Backdrop>
+      </Dialog>
 
-      <Backdrop
+      <Dialog
         open={showInviteModal()}
         onOpenChange={handleInviteModalClose}
       >
@@ -1311,16 +1311,16 @@ function TeamManagement(props: {
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
-                <Backdrop.CloseButton
+                <Dialog.CloseButton
                   as={Button}
                   variant="ghost"
                   size="icon-sm"
                 >
                   <XIcon />
-                </Backdrop.CloseButton>
-                <Backdrop.Title as="span" class="text-sm font-medium p-0 m-0">
+                </Dialog.CloseButton>
+                <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
                   Invite to Team
-                </Backdrop.Title>
+                </Dialog.Title>
               </div>
               <div class="p-3 flex flex-col gap-3">
                 <InviteEmailsInput
@@ -1362,7 +1362,7 @@ function TeamManagement(props: {
             </div>
           </div>
         </Panel>
-      </Backdrop>
+      </Dialog>
     </div>
   );
 }

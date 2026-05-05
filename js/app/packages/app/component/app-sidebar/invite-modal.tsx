@@ -4,7 +4,7 @@ import { getWebOrigin } from '@core/util/webOrigin';
 import { authServiceClient } from '@service-auth/client';
 import { contactsClient } from '@service-contacts/client';
 import { isOk } from '@core/util/maybeResult';
-import { Backdrop, Button, Panel } from '@ui';
+import { Dialog, Button, Panel } from '@ui';
 import { toast } from '@core/component/Toast/Toast';
 import CloseIcon from '@icon/regular/x.svg';
 import ClipboardIcon from '@icon/regular/clipboard.svg';
@@ -66,7 +66,7 @@ export const InviteModal = () => {
   };
 
   return (
-    <Backdrop
+    <Dialog
       open={inviteModalOpen()}
       onOpenChange={(o) => !o && handleClose()}
     >
@@ -74,12 +74,12 @@ export const InviteModal = () => {
         <div class="*:max-h-[75vh]">
           <div class="flex flex-col text-ink">
             <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
-              <Backdrop.CloseButton as={Button} variant="ghost" size="icon-sm">
+              <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                 <CloseIcon />
-              </Backdrop.CloseButton>
-              <Backdrop.Title as="span" class="text-sm font-medium p-0 m-0">
+              </Dialog.CloseButton>
+              <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
                 Invite
-              </Backdrop.Title>
+              </Dialog.Title>
             </div>
 
             <div class="p-3 flex flex-col gap-3">
@@ -156,6 +156,6 @@ export const InviteModal = () => {
           </div>
         </div>
       </Panel>
-    </Backdrop>
+    </Dialog>
   );
 };

@@ -25,7 +25,7 @@ import {
   toPropertyDefinitionDomain,
   useSearchInputFocus,
 } from '../../utils';
-import { Backdrop, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
@@ -150,7 +150,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
   const isFocused = createSelector(focusedIndex);
 
   return (
-    <Backdrop
+    <Dialog
       open={props.isOpen}
       onOpenChange={(open) => {
         if (!open) props.onClose();
@@ -238,6 +238,6 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
             </div>
         </div>
       </Panel>
-    </Backdrop>
+    </Dialog>
   );
 }

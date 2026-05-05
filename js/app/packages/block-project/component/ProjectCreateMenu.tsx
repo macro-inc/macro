@@ -22,7 +22,7 @@ import { Layer } from '@ui';
 import PlusIcon from '@icon/regular/plus.svg';
 import { createProject } from '@queries/storage/projects';
 import { type Component, createSignal, For } from 'solid-js';
-import { Backdrop, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 
 type MenuItemProps = {
   label: string;
@@ -222,7 +222,7 @@ function ProjectCreateDialog(props: {
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
 
   return (
-    <Backdrop
+    <Dialog
       open={props.open}
       onOpenChange={(o) => !o && props.onClose()}
       width=""
@@ -230,9 +230,9 @@ function ProjectCreateDialog(props: {
       <Panel depth={2} active>
         <div class="*:max-h-[75vh]">
           <div class="p-2">
-            <Backdrop.Title class="text-md font-semibold text-ink pb-3">
+            <Dialog.Title class="text-md font-semibold text-ink pb-3">
               Create in {props.name}
-            </Backdrop.Title>
+            </Dialog.Title>
             <For each={BLOCK_CREATE_SPECS}>
               {(spec) => (
                 <button
@@ -256,7 +256,7 @@ function ProjectCreateDialog(props: {
           </div>
         </div>
       </Panel>
-    </Backdrop>
+    </Dialog>
   );
 }
 

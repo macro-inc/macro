@@ -1,4 +1,4 @@
-import { Backdrop, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
@@ -148,7 +148,7 @@ export function PropertyEditorModal() {
   const keybindings = useListKeyBindings(() => dialogRef());
 
   return (
-    <Backdrop
+    <Dialog
       open={propertyEditorOpen()}
       onOpenChange={togglePropertyEditor}
       contentRef={mergeRefs(attach, setDialogRef)}
@@ -202,7 +202,7 @@ export function PropertyEditorModal() {
           </div>
         </div>
       </Panel>
-    </Backdrop>
+    </Dialog>
   );
 }
 

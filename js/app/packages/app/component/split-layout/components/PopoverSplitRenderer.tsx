@@ -1,6 +1,6 @@
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { Backdrop, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
@@ -118,7 +118,7 @@ function PopoverSplitModal(props: {
   });
 
   return (
-    <Backdrop
+    <Dialog
       open={props.popover.isOpen}
       onOpenChange={(open) => {
         if (!open) {
@@ -141,6 +141,6 @@ function PopoverSplitModal(props: {
           </SplitPanelContext.Provider>
         </div>
       </Panel>
-    </Backdrop>
+    </Dialog>
   );
 }

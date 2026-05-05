@@ -6,7 +6,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useLogout } from '@core/auth/logout';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { toast } from '@core/component/Toast/Toast';
-import { Backdrop, Button, Panel } from '@ui';
+import { Dialog, Button, Panel } from '@ui';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
@@ -408,21 +408,21 @@ export function Account() {
                 <Button variant="destructive" depth={3} onClick={() => setShowDeleteModal(true)}>
                   Delete Account
                 </Button>
-                <Backdrop
+                <Dialog
                   open={showDeleteModal()}
                   onOpenChange={setShowDeleteModal}
                   position="center"
-                  width="480px"
+                  class="w-[480px]"
                 >
                   <Panel active depth={2}>
                     <div class="p-6 font-sans flex flex-col gap-3">
-                      <Backdrop.Title class="text-ink text-lg font-semibold leading-7">
+                      <Dialog.Title class="text-ink text-lg font-semibold leading-7">
                         Delete Account
-                      </Backdrop.Title>
-                      <Backdrop.Description class="text-ink-muted text-sm font-normal leading-tight">
+                      </Dialog.Title>
+                      <Dialog.Description class="text-ink-muted text-sm font-normal leading-tight">
                         Are you sure you want to delete your account? This action is
                         permanent and cannot be undone.
-                      </Backdrop.Description>
+                      </Dialog.Description>
                       <div class="pt-3 justify-end items-center gap-3 inline-flex">
                         <Button variant="secondary" depth={3} onClick={() => setShowDeleteModal(false)}>
                           Cancel
@@ -436,22 +436,22 @@ export function Account() {
                       </div>
                     </div>
                   </Panel>
-                </Backdrop>
-                <Backdrop
+                </Dialog>
+                <Dialog
                   open={showDeleteConfirmModal()}
                   onOpenChange={setShowDeleteConfirmModal}
                   position="center"
-                  width="480px"
+                  class="w-[480px]"
                 >
                   <Panel active depth={2}>
                     <div class="p-6 font-sans flex flex-col gap-3">
-                      <Backdrop.Title class="text-ink text-lg font-semibold leading-7">
+                      <Dialog.Title class="text-ink text-lg font-semibold leading-7">
                         Are you absolutely sure?
-                      </Backdrop.Title>
-                      <Backdrop.Description class="text-ink-muted text-sm font-normal leading-tight">
+                      </Dialog.Title>
+                      <Dialog.Description class="text-ink-muted text-sm font-normal leading-tight">
                         This will permanently delete your account and all associated
                         data. This cannot be undone.
-                      </Backdrop.Description>
+                      </Dialog.Description>
                       <div class="pt-3 justify-end items-center gap-3 inline-flex">
                         <Button variant="secondary" depth={3} onClick={() => setShowDeleteConfirmModal(false)}>
                           Cancel
@@ -462,7 +462,7 @@ export function Account() {
                       </div>
                     </div>
                   </Panel>
-                </Backdrop>
+                </Dialog>
               </div>
             </Show>
           </div>

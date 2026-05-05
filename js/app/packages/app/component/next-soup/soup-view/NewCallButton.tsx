@@ -9,7 +9,7 @@ import { commsServiceClient } from '@service-comms/client';
 import PhoneCallIcon from '@macro-icons/wide/call.svg';
 import XIcon from '@icon/regular/x.svg';
 import { createSignal } from 'solid-js';
-import { Backdrop, Button, Panel } from '@ui';
+import { Dialog, Button, Panel } from '@ui';
 
 export function NewCallButton() {
   const [isOpen, setIsOpen] = createSignal(false);
@@ -89,28 +89,28 @@ export function NewCallButton() {
         <PhoneCallIcon class="size-3.5" />
         New Call
       </Button>
-      <Backdrop
+      <Dialog
         open={isOpen()}
         onOpenChange={(open) => {
           setIsOpen(open);
           if (!open) reset();
         }}
-        width="512px"
+        class="w-[512px]"
       >
         <Panel depth={2} active>
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
-                <Backdrop.CloseButton
+                <Dialog.CloseButton
                   as={Button}
                   variant="ghost"
                   size="icon-sm"
                 >
                   <XIcon />
-                </Backdrop.CloseButton>
-                <Backdrop.Title as="span" class="text-sm font-medium p-0 m-0">
+                </Dialog.CloseButton>
+                <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
                   New Call
-                </Backdrop.Title>
+                </Dialog.Title>
               </div>
               <div class="flex flex-col p-4 gap-4">
                 <RecipientSelector<'user' | 'contact' | 'channel'>
@@ -137,7 +137,7 @@ export function NewCallButton() {
             </div>
           </div>
         </Panel>
-      </Backdrop>
+      </Dialog>
     </>
   );
 }

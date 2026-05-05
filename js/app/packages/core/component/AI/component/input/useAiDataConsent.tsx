@@ -3,7 +3,7 @@ import { authServiceClient } from '@service-auth/client';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { Backdrop, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 
 import CloseIcon from '@icon/regular/x.svg';
 import { createSignal } from 'solid-js';
@@ -35,16 +35,16 @@ export function useAiDataConsentGate() {
 
   function ConsentDialog() {
     return (
-      <Backdrop
+      <Dialog
         open={open()}
         onOpenChange={(isOpen) => !isOpen && denyConsent()}
-        width="480px"
+        class="w-[480px]"
       >
         <Panel depth={2} active>
           <div class="*:max-h-[75vh]">
             <div class="flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b border-b-edge-muted">
               <div class="flex flex-row items-center gap-2">
-                <Backdrop.CloseButton>
+                <Dialog.CloseButton>
                   <DeprecatedIconButton
                     tooltip={{ label: 'Close' }}
                     icon={CloseIcon}
@@ -52,8 +52,8 @@ export function useAiDataConsentGate() {
                     theme="clear"
                     size="sm"
                   />
-                </Backdrop.CloseButton>
-                <Backdrop.Title>AI Data Sharing</Backdrop.Title>
+                </Dialog.CloseButton>
+                <Dialog.Title>AI Data Sharing</Dialog.Title>
               </div>
             </div>
             <div class="p-3">
@@ -73,7 +73,7 @@ export function useAiDataConsentGate() {
             </div>
           </div>
         </Panel>
-      </Backdrop>
+      </Dialog>
     );
   }
 
