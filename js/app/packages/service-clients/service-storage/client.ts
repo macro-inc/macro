@@ -540,16 +540,25 @@ export const storageServiceClient = {
     );
   },
 
-  async getDocumentShortId({
+  async getDocumentBranchName({
     documentId,
   }: {
     documentId: string;
-  }): Promise<MaybeResult<FetchWithTokenErrorCode, string>> {
+  }): Promise<
+    MaybeResult<
+      FetchWithTokenErrorCode,
+      { shortId: string; branchName: string | null }
+    >
+  > {
     return mapOk(
-      await dssFetch<{ shortId: string }>(`/documents/${documentId}/short_id`, {
-        method: 'GET',
-      }),
-      (result) => result.shortId
+      await dssFetch<{ shortId: string; branchName?: string | null }>(
+        `/documents/${documentId}/branch_name`,
+        { method: 'GET' }
+      ),
+      (result) => ({
+        shortId: result.shortId,
+        branchName: result.branchName ?? null,
+      })
     );
   },
 

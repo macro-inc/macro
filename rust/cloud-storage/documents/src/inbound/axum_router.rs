@@ -4,7 +4,7 @@
 //! - `POST /` — create a new document
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
-//! - `GET /{document_id}/short_id` — get document short ID
+//! - `GET /{document_id}/branch_name` — get short ID + git branch name (when the document is a task)
 //! - `DELETE /{document_id}` — soft-delete a document
 
 #[cfg(test)]
@@ -15,9 +15,9 @@ mod create_document;
 mod create_task;
 mod delete_document;
 mod edit_document;
+mod get_branch_name;
 mod get_document;
 mod get_location;
-mod get_short_id;
 
 use std::sync::Arc;
 
@@ -43,9 +43,9 @@ pub use create_document::*;
 pub use create_task::*;
 pub use delete_document::*;
 pub use edit_document::*;
+pub use get_branch_name::*;
 pub use get_document::*;
 pub use get_location::*;
-pub use get_short_id::*;
 
 impl IntoResponse for DocumentError {
     fn into_response(self) -> axum::response::Response {
@@ -126,8 +126,8 @@ where
             axum::routing::get(get_location_v3_handler::<T, Svc>),
         )
         .route(
-            "/{document_id}/short_id",
-            axum::routing::get(get_short_id_handler::<T, Svc>),
+            "/{document_id}/branch_name",
+            axum::routing::get(get_branch_name_handler::<T, Svc>),
         )
         .route(
             "/{document_id}/copy",

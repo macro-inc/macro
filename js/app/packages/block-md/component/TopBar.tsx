@@ -109,7 +109,7 @@ export function TopBar() {
     );
   };
 
-  const copyBranchName = () => copyBranchNameToClipboard(blockId, name());
+  const copyBranchName = () => copyBranchNameToClipboard(blockId);
 
   if (isTask) {
     let cleanupKbShortcut = () => {};

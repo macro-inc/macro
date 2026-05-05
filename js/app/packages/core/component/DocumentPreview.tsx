@@ -550,12 +550,7 @@ export function PopupPreview(props: {
   };
 
   const handleCopyBranchName = () => {
-    const previewItem = item();
-    const docName =
-      props.documentInfo.name ||
-      ('name' in previewItem ? (previewItem.name as string) : '') ||
-      '';
-    copyBranchNameToClipboard(props.documentInfo.id, docName);
+    copyBranchNameToClipboard(props.documentInfo.id);
   };
 
   const isSplitAlreadyOpen = () => {

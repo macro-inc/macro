@@ -78,6 +78,8 @@ export * from './basicDocumentSubTypeProperty';
 export * from './basicDocumentType';
 export * from './basicDocumentUpdatedAt';
 export * from './bomPart';
+export * from './branchNameResponse';
+export * from './branchNameResponseBranchName';
 export * from './bulkWakeupRequest';
 export * from './bulkWakeupResponse';
 export * from './callActiveResponse';
