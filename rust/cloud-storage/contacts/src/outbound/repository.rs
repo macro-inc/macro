@@ -106,8 +106,8 @@ impl ContactsBackfillOutboxRepo for DbContactsRepository {
                 let user_ids: Vec<String> = serde_json::from_value(r.user_ids)?;
                 let channel_participants = user_ids
                     .into_iter()
-                    .map(MacroUserIdStr::try_from)
-                    .collect::<Result<_, _>>()?;
+                    .filter_map(|id| MacroUserIdStr::try_from(id).ok())
+                    .collect();
                 Ok(ContactsBackfillOutboxMessage {
                     id: r.id as u64,
                     channel_id: r.comms_channel_id,

@@ -13,4 +13,5 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   invite_to_team: 'INVITE',
   task_assigned: 'ASSIGNED',
   ai_response: 'AI',
+  'call-started': 'CALL',
 } as const;

@@ -138,7 +138,9 @@ export function CommandMenuInner(props: {
 
   createEffect(
     on(query, () => {
-      CommandState.setSelectedIndex(0);
+      const items = filteredItems();
+      const firstIsSearch = items[0] && isSearchItem(items[0]);
+      CommandState.setSelectedIndex(firstIsSearch && items.length > 1 ? 1 : 0);
     })
   );
 

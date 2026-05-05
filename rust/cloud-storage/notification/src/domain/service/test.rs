@@ -277,6 +277,7 @@ impl NotificationRepository for MockRepository {
         _user_id: MacroUserIdStr<'_>,
         _limit: u32,
         _cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+        _filters: crate::domain::models::request::NotificationListFilters,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         Ok(vec![])
     }
@@ -287,6 +288,7 @@ impl NotificationRepository for MockRepository {
         _event_item_ids: &[Uuid],
         _limit: u32,
         _cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+        _filters: crate::domain::models::request::NotificationListFilters,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         Ok(vec![])
     }
@@ -456,9 +458,10 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         user_id: MacroUserIdStr<'_>,
         limit: u32,
         cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+        filters: crate::domain::models::request::NotificationListFilters,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         (**self)
-            .get_user_notifications(user_id, limit, cursor)
+            .get_user_notifications(user_id, limit, cursor, filters)
             .await
     }
 
@@ -468,9 +471,16 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         event_item_ids: &[Uuid],
         limit: u32,
         cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+        filters: crate::domain::models::request::NotificationListFilters,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         (**self)
-            .get_user_notifications_by_event_item_ids(user_id, event_item_ids, limit, cursor)
+            .get_user_notifications_by_event_item_ids(
+                user_id,
+                event_item_ids,
+                limit,
+                cursor,
+                filters,
+            )
             .await
     }
 

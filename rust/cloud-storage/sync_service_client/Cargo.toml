@@ -9,6 +9,8 @@ anyhow = { workspace = true }
 model = { path = "../model" }
 reqwest = { workspace = true }
 serde = { workspace = true }
+sync_service_hex = { path = "../sync_service", package = "sync_service" }
+tokio = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

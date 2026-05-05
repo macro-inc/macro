@@ -221,6 +221,16 @@ export const storageServiceClient = {
     );
   },
 
+  async bulkWakeupSyncServiceDocuments(args: { document_ids: string[] }) {
+    return mapOk(
+      await dssFetch<{ dispatched: number }>(`/sync_service/wakeup`, {
+        method: 'POST',
+        body: JSON.stringify({ document_ids: args.document_ids }),
+      }),
+      (result) => result
+    );
+  },
+
   async getSoupItems(args: {
     params: { cursor?: string | null };
     body: PostSoupRequest;

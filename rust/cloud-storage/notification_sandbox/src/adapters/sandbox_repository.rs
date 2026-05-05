@@ -1,6 +1,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
 use notification::domain::models::TaggedContent;
+use notification::domain::models::request::NotificationListFilters;
 use notification::domain::models::{
     DeviceEndpoint, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
     UserNotificationRow, device::DeviceType,
@@ -117,9 +118,10 @@ impl NotificationRepository for SandboxNotificationRepository {
         user_id: MacroUserIdStr<'_>,
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
+        filters: NotificationListFilters,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         self.inner
-            .get_user_notifications(user_id, limit, cursor)
+            .get_user_notifications(user_id, limit, cursor, filters)
             .await
     }
 
@@ -129,9 +131,16 @@ impl NotificationRepository for SandboxNotificationRepository {
         event_item_ids: &[Uuid],
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
+        filters: NotificationListFilters,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         self.inner
-            .get_user_notifications_by_event_item_ids(user_id, event_item_ids, limit, cursor)
+            .get_user_notifications_by_event_item_ids(
+                user_id,
+                event_item_ids,
+                limit,
+                cursor,
+                filters,
+            )
             .await
     }
 

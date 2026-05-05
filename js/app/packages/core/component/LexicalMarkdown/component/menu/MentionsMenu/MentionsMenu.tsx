@@ -520,6 +520,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       <ScopedPortal scope={props.portalScope}>
         <div
           class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content"
+          on:touchstart={(e) => e.stopPropagation()}
           ref={(el) => {
             floatWithElement(el, floatWithElementProps);
             floatWithSelection(el, floatWithSelectionProps);

@@ -12,7 +12,6 @@
 		3036F7131E55779ABF15BD58 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 02B7F8347F94B067E6B27396 /* LaunchScreen.storyboard */; };
 		31585529C029A01BE249A285 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1E81BD6B453D87B7F7B1597B /* CoreGraphics.framework */; };
 		324A1E9A4258E7911D4DAC39 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9FACFFCB6E3743955F72464C /* Security.framework */; };
-		36C1893A7382FCD5A6A74845 /* libapp.a in Resources */ = {isa = PBXBuildFile; fileRef = CF674524E34966183631754E /* libapp.a */; };
 		395DAD80D2F1C1FDEB4ACA2D /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE016BCDACB745FDB90321AF /* ShareViewController.swift */; };
 		53CDD0ACFBE8BDF1550B2E53 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 682535EEFE1DA20BE07B123C /* main.mm */; };
 		5C516481BCA83A182C2BCC94 /* assets in Resources */ = {isa = PBXBuildFile; fileRef = 3842AE2A64FB9933D0400EA4 /* assets */; };
@@ -63,6 +62,7 @@
 		02B7F8347F94B067E6B27396 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		04B56F58E2E44DDE1D67E7B7 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		0534025E6A6DC9BF45F0EC3E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		07B9FBE7A5B295FC80DD38FD /* tests.rs */ = {isa = PBXFileReference; path = tests.rs; sourceTree = "<group>"; };
 		0E2B15F176E4B041AE33EEEA /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		0EAE3E64C98FE3472A9133C6 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		1631E4CFBB715FFDBF919C8C /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
@@ -80,9 +80,10 @@
 		9FACFFCB6E3743955F72464C /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		AF1DE57E7D9CF13BB2E0E038 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CE1209BFDECB28E00189B168 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
-		CF674524E34966183631754E /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		D8F57162F5CC7AEDD55F173D /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		DCE4B06F002B1CDA6E6F3C2A /* tauri_protocol.rs */ = {isa = PBXFileReference; path = tauri_protocol.rs; sourceTree = "<group>"; };
 		DE016BCDACB745FDB90321AF /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		E008C8DABBF95A4BBAE08B15 /* share_target.rs */ = {isa = PBXFileReference; path = share_target.rs; sourceTree = "<group>"; };
 		F2F6B23901C11426024E1D4E /* ShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F3673D372C5ABDD1AD6E7067 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		FA2CD6184313364E14B6F84E /* NotificationServiceExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = NotificationServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -150,20 +151,12 @@
 			path = bindings;
 			sourceTree = "<group>";
 		};
-		5F72359403FB561BE1489F63 /* debug */ = {
+		75535DC8237A09A15D793259 /* share_target */ = {
 			isa = PBXGroup;
 			children = (
-				CF674524E34966183631754E /* libapp.a */,
+				07B9FBE7A5B295FC80DD38FD /* tests.rs */,
 			);
-			path = debug;
-			sourceTree = "<group>";
-		};
-		70DD658F1D4B0FED51A79854 /* arm64 */ = {
-			isa = PBXGroup;
-			children = (
-				5F72359403FB561BE1489F63 /* debug */,
-			);
-			path = arm64;
+			path = share_target;
 			sourceTree = "<group>";
 		};
 		78CBE3E5873199C0066F12DF /* Sources */ = {
@@ -190,6 +183,9 @@
 				9625271C5AAE7E545027267A /* debug.rs */,
 				17B52554D60D361AFE791C3E /* lib.rs */,
 				1631E4CFBB715FFDBF919C8C /* main.rs */,
+				E008C8DABBF95A4BBAE08B15 /* share_target.rs */,
+				DCE4B06F002B1CDA6E6F3C2A /* tauri_protocol.rs */,
+				75535DC8237A09A15D793259 /* share_target */,
 			);
 			name = src;
 			path = ../../src;
@@ -215,7 +211,6 @@
 		BAFB695BB8415511FEC74542 /* Externals */ = {
 			isa = PBXGroup;
 			children = (
-				70DD658F1D4B0FED51A79854 /* arm64 */,
 			);
 			path = Externals;
 			sourceTree = "<group>";
@@ -239,7 +234,14 @@
 			path = app;
 			sourceTree = "<group>";
 		};
-		"TEMP_A189466E-4111-45C1-A5D0-39E07CC21F79" /* x86_64 */ = {
+		"TEMP_E7B71914-BE81-4A93-AD09-CC8988C6EBE3" /* arm64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = arm64;
+			sourceTree = "<group>";
+		};
+		"TEMP_FDEDC763-2672-41E7-B94A-E03693807B94" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -358,7 +360,6 @@
 				C6BD59C055C986EA4A77FDA2 /* Assets.xcassets in Resources */,
 				3036F7131E55779ABF15BD58 /* LaunchScreen.storyboard in Resources */,
 				5C516481BCA83A182C2BCC94 /* assets in Resources */,
-				36C1893A7382FCD5A6A74845 /* libapp.a in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

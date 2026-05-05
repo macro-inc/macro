@@ -129,6 +129,7 @@ members = [
   "static_file",
   "static_file_service",
   "static_file_service_client",
+  "sync_service",
   "sync_service_client",
   "system_properties",
   "teams",

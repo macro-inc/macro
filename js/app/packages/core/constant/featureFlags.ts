@@ -311,7 +311,7 @@ export const ENABLE_APP_STORE_QR_CODE = resolveFeatureFlag(
 
 export const ENABLE_RAIL_CHAT_TASK_COMMENTS = resolveFeatureFlag(
   'RAIL_CHAT_TASK_COMMENTS',
-  DEV_MODE_ENV
+  true
 );
 
 // skips over posthog and sets the ENABLE_TEAMS feature to true if we are in dev mode
@@ -331,5 +331,9 @@ export function ENABLE_CALLS(): boolean {
 }
 
 export const ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE = DEV_MODE_ENV
+  ? true
+  : undefined;
+
+export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;

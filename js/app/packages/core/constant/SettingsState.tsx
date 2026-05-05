@@ -12,6 +12,7 @@ export type SettingsTab =
   | 'Inbox'
   | 'Shortcuts'
   | 'Mobile App'
+  | 'MCP'
   | 'Team';
 
 export const [activeTabId, setActiveTabId] =

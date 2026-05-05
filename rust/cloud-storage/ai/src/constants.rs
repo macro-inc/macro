@@ -1,1 +1,0 @@
-pub const DEFAULT_MAX_TOKENS: u32 = 8192;
