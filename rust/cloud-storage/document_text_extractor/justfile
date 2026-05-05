@@ -10,7 +10,7 @@ deploy-dev:
 
 # Prepare database
 prepare:
-    DATABASE_URL={{ DATABASE_URL }} cargo sqlx prepare
+    DATABASE_URL={{ DATABASE_URL }} sqlx prepare
 
 # Build lambda for deployment
 build:
