@@ -12,7 +12,6 @@ import { cn } from '@ui/utils/classname';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import TrashIcon from '@icon/regular/trash-simple.svg';
-import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import { useEmail } from '@core/context/user';
 import type { LessonContentProps, LessonDefinition } from '../types';
@@ -71,12 +70,6 @@ function InviteTeamDemo(props: LessonContentProps) {
     enabledOverride: ENABLE_TEAM_INVITE_TIERS_OVERRIDE,
   });
   const showTier = () => tierFlag().enabled;
-
-  const handleBack = () => {
-    onboarding.setTeamName('');
-    onboarding.setInvitedMembers([]);
-    props.goToLesson('team-choice');
-  };
 
   const initialEntries = (): InviteEntry[] => {
     const members = onboarding.invitedMembers();
@@ -254,14 +247,6 @@ function InviteTeamDemo(props: LessonContentProps) {
 
   return (
     <div class="h-full w-full flex flex-col p-12 overflow-hidden">
-      <button
-        type="button"
-        onClick={handleBack}
-        class="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-xs w-fit mb-6"
-      >
-        <ArrowLeftIcon class="size-4" />
-        Back
-      </button>
       <div class="flex-1 w-full border border-edge rounded-sm bg-ink/[0.02] flex justify-center overflow-hidden pt-[15%]">
         <form
           id={INVITE_FORM_ID}
@@ -426,6 +411,11 @@ export const inviteTeamLesson: LessonDefinition = {
   content: InviteTeamContent,
   demo: InviteTeamDemo,
   order: 90,
+  previousLesson: 'team-choice',
+  onBack: ({ onboarding }) => {
+    onboarding.setTeamName('');
+    onboarding.setInvitedMembers([]);
+  },
   onContinue: () => {
     const form = document.getElementById(
       INVITE_FORM_ID

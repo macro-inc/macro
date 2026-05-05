@@ -1,7 +1,6 @@
 import { createEffect } from 'solid-js';
 import UsersIcon from '@icon/regular/users.svg';
 import UserIcon from '@icon/regular/user.svg';
-import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import SpinnerIcon from '@icon/regular/spinner.svg';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import { useOnboarding } from '../onboarding-context';
@@ -44,10 +43,6 @@ function TeamChoiceDemo(props: LessonContentProps) {
     props.onUnready();
   });
 
-  const handleBack = () => {
-    props.goToLesson('choose-plan');
-  };
-
   const handleChooseTeam = () => {
     props.advance();
   };
@@ -71,16 +66,7 @@ function TeamChoiceDemo(props: LessonContentProps) {
   };
 
   return (
-    <div class="h-full w-full flex flex-col p-12">
-      <button
-        type="button"
-        onClick={handleBack}
-        class="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-xs w-fit mb-auto"
-      >
-        <ArrowLeftIcon class="size-4" />
-        Back
-      </button>
-      <div class="flex-1 flex items-center justify-center">
+    <div class="h-full w-full flex items-center justify-center p-12">
         <div class="flex flex-col gap-4 w-full max-w-md">
           <button
             type="button"
@@ -122,7 +108,6 @@ function TeamChoiceDemo(props: LessonContentProps) {
             </div>
           </button>
         </div>
-      </div>
     </div>
   );
 }
@@ -134,4 +119,10 @@ export const teamChoiceLesson: LessonDefinition = {
   demo: TeamChoiceDemo,
   order: 89,
   hideContinue: true,
+  previousLesson: ({ isLessonSkipped, hasPaidAccess }) => {
+    if (isLessonSkipped('choose-plan') || hasPaidAccess) {
+      return undefined;
+    }
+    return 'choose-plan';
+  },
 };

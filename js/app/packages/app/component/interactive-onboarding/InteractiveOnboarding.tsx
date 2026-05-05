@@ -1,6 +1,7 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import MacroLogo from '@core/component/MacroLogo';
 import LogoIcon from '@macro-icons/macro-logo.svg';
+import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
@@ -370,6 +371,35 @@ function InteractiveOnboardingInner() {
     setLessonKey((k) => k + 1);
   };
 
+  const onboarding = useOnboarding();
+
+  const getBackContext = () => ({
+    onboarding,
+    isLessonSkipped: (id: string) => state.lessons().find((l) => l.definition.id === id)?.skipped ?? false,
+    hasPaidAccess: hasPaid(),
+  });
+
+  const getPreviousLesson = () => {
+    const current = state.currentLesson();
+    if (!current) return undefined;
+    const prev = current.definition.previousLesson;
+    if (!prev) return undefined;
+    if (typeof prev === 'function') {
+      return prev(getBackContext());
+    }
+    return prev;
+  };
+
+  const handleBack = (targetLesson: string) => {
+    const current = state.currentLesson();
+    if (!current) return;
+    const onBack = current.definition.onBack;
+    if (onBack) {
+      onBack(getBackContext());
+    }
+    state.goToLessonById(targetLesson);
+  };
+
   // cmd+enter hotkey to continue
   let shellRef: HTMLDivElement | undefined;
   const [attachHotkeys, scopeId] = useHotkeyDOMScope('onboarding-shell');
@@ -700,7 +730,19 @@ function InteractiveOnboardingInner() {
                         <div class="bg-ink text-panel text-xs font-mono size-4 flex items-center justify-center font-bold rounded-xs">
                           {lesson().index + 1}
                         </div>
-                        <h2 class="text-3xl font-semibold text-ink-muted mt-12">
+                        <Show when={getPreviousLesson()}>
+                          {(prevLesson) => (
+                            <button
+                              type="button"
+                              onClick={() => handleBack(prevLesson())}
+                              class="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-xs mt-8"
+                            >
+                              <ArrowLeftIcon class="size-4" />
+                              Back
+                            </button>
+                          )}
+                        </Show>
+                        <h2 class="text-3xl font-semibold text-ink-muted mt-4">
                           {lesson().definition.title}
                         </h2>
                       </div>

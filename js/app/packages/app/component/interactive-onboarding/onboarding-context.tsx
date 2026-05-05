@@ -13,7 +13,7 @@ export interface InvitedMember {
   tier: PlanTier;
 }
 
-interface OnboardingContextValue {
+export interface OnboardingContextValue {
   selectedPlan: () => PlanTier | null;
   setSelectedPlan: (tier: PlanTier | null) => void;
   invitedMembers: () => InvitedMember[];

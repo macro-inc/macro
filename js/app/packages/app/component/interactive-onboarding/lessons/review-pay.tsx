@@ -10,7 +10,6 @@ import {
   type PaidPlanTier,
 } from '@app/component/paywall/plans';
 import { useIsAuthenticated } from '@core/auth';
-import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import ArrowRightIcon from '@icon/regular/arrow-right.svg';
 import LockIcon from '@icon/regular/lock.svg';
 import { Button } from '@ui/components/Button';
@@ -110,25 +109,8 @@ function ReviewPayDemo(props: LessonContentProps) {
     checkoutMutation.mutate({ tier: tier as PaidPlanTier });
   };
 
-  const handleBack = () => {
-    if (hasTeam()) {
-      props.goToLesson('invite-team');
-    } else {
-      props.goToLesson('team-choice');
-    }
-  };
-
   return (
-    <div class="h-full w-full flex flex-col p-12">
-      <button
-        type="button"
-        onClick={handleBack}
-        class="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-xs w-fit mb-6"
-      >
-        <ArrowLeftIcon class="size-4" />
-        Back
-      </button>
-      <div class="flex-1 flex items-center justify-center">
+    <div class="h-full w-full flex items-center justify-center p-12">
         <Show
           when={hasTeam()}
           fallback={
@@ -350,7 +332,6 @@ function ReviewPayDemo(props: LessonContentProps) {
             </div>
           </div>
         </Show>
-      </div>
     </div>
   );
 }
@@ -394,6 +375,12 @@ export const reviewPayLesson: LessonDefinition = {
   demo: ReviewPayDemo,
   order: 95,
   hideContinue: true,
+  previousLesson: ({ onboarding }) => {
+    const hasTeam =
+      onboarding.invitedMembers().length > 0 ||
+      onboarding.teamName().trim() !== '';
+    return hasTeam ? 'invite-team' : 'team-choice';
+  },
   completeOnParam: 'subscriptionSuccess',
   onCompleteParam: createPendingTeamOnReturn,
 };
