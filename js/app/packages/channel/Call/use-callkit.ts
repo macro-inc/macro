@@ -41,15 +41,12 @@ export function useCallKitSetup() {
       }
     ).then((u) => unlistens.push(u));
 
-    listen<CallAnsweredPayload>(
-      'plugin:call-kit:call-answered',
-      (event) => {
-        const { channelId } = event.payload;
-        joinChannelCall(channelId).catch((err) =>
-          console.error('callkit: failed to join channel call', err)
-        );
-      }
-    ).then((u) => unlistens.push(u));
+    listen<CallAnsweredPayload>('plugin:call-kit:call-answered', (event) => {
+      const { channelId } = event.payload;
+      joinChannelCall(channelId).catch((err) =>
+        console.error('callkit: failed to join channel call', err)
+      );
+    }).then((u) => unlistens.push(u));
 
     // Drain any VoIP token that arrived from PushKit before the listener above
     // was registered (common on first launch).

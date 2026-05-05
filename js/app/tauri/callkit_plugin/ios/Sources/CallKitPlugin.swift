@@ -78,10 +78,11 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
         // iOS 13+: must call reportNewIncomingCall synchronously within this delegate.
         // If we don't, iOS will terminate the app.
         provider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
-            if let error = error {
+            if error != nil {
                 // CallKit refused (e.g. Do Not Disturb, max calls reached).
                 // Still must complete the PushKit handler.
                 self?.pendingCalls.removeValue(forKey: uuid)
+                self?.activeCallUUID = nil
             }
             completion()
         }
@@ -100,12 +101,10 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
             return
         }
         trigger("call-answered", data: [
-            "callId": action.callUUID.uuidString,
             "channelId": channelId,
         ])
         action.fulfill()
         pendingCalls.removeValue(forKey: action.callUUID)
-        if activeCallUUID == action.callUUID { activeCallUUID = nil }
     }
 
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
