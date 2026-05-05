@@ -107,6 +107,13 @@ export function channelMessagesQueryOptions(
       }
       return failureCount < 1;
     },
+    placeholderData: (
+      prev: ChannelMessagesData | undefined,
+      prevQuery: { queryKey: ChannelMessagesQueryKey } | undefined
+    ) => {
+      const prevChannelId = prevQuery?.queryKey[2];
+      return prev && prevChannelId === channelId ? prev : undefined;
+    },
   };
 }
 
@@ -742,7 +749,16 @@ export function createMessageIndex(
 
   const [messageIndex, setMessageIndex] = createStore(buildIndex());
 
-  createEffect(on(data, () => setMessageIndex(reconcile(buildIndex()))));
+  createEffect(
+    on(data, () => {
+      const next = buildIndex();
+      // The underlying query can briefly emit undefined data during a refetch
+      if (next.items.length === 0 && messageIndex.items.length > 0) {
+        return;
+      }
+      setMessageIndex(reconcile(next));
+    })
+  );
 
   return messageIndex;
 }

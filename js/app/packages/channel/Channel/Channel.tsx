@@ -52,6 +52,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  Suspense,
 } from 'solid-js';
 import {
   ChannelInput,
@@ -87,6 +88,8 @@ import {
 } from './ThreadList';
 import { createThreadManager } from './thread-manager';
 import { createThreadPaginator } from './thread-paginator';
+import { FindBar } from '@core/component/FindBar';
+import { createChannelFindBar } from './create-channel-find-bar';
 
 export type ChannelProps = {
   channelId: string;
@@ -298,6 +301,16 @@ export function Channel(props: ChannelProps) {
     selection.clear();
   };
 
+  const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
+    selectMessage(messageId);
+    targetMessageController.goToMessage(messageId, replyId);
+  };
+
+  const findBar = createChannelFindBar({
+    channelId: () => props.channelId,
+    goToMessage,
+  });
+
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
     createChannelHotkeys({
       selection,
@@ -308,6 +321,7 @@ export function Channel(props: ChannelProps) {
       isEditing: () => !!messageEditor.state(),
       isInputEmpty: () =>
         (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
+      onOpenFindBar: findBar.open,
     });
 
   const handleScrollToBottom = () => {
@@ -370,11 +384,6 @@ export function Channel(props: ChannelProps) {
     );
   };
 
-  const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
-    selectMessage(messageId);
-    targetMessageController.goToMessage(messageId, replyId);
-  };
-
   createEffect(
     on(isChannelReady, () => {
       if (props.onHandleReady)
@@ -398,6 +407,19 @@ export function Channel(props: ChannelProps) {
               tabIndex={-1}
               data-channel-message-list
             >
+              <Show when={findBar.isOpen()}>
+                <FindBar
+                  class="absolute top-2 right-3 z-10 w-80 max-w-[calc(100%-1.5rem)]"
+                  query={findBar.query()}
+                  onQueryChange={findBar.setQuery}
+                  onClose={findBar.close}
+                  onPrevious={findBar.previous}
+                  onNext={findBar.next}
+                  index={findBar.activeIndex()}
+                  inputRef={findBar.setInputEl}
+                  placeholder="Find in channel"
+                />
+              </Show>
               <Show when={messages().length > 0}>
                 <ThreadList
                   keys={() => messageIndex.keys}
