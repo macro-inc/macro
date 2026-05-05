@@ -1,9 +1,7 @@
 import { useBlockId } from '@core/block';
-import { DialogWrapper } from '@core/component/DialogWrapper';
 import { useListKeyBindings } from '@core/util/useListKeyBindings';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import PlusIcon from '@icon/regular/plus.svg';
-import { Dialog } from '@kobalte/core/dialog';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { cn } from '@ui/utils/classname';
@@ -27,7 +25,7 @@ import {
   toPropertyDefinitionDomain,
   useSearchInputFocus,
 } from '../../utils';
-import { Panel } from '@ui';
+import { Backdrop, Panel } from '@ui';
 
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
@@ -152,16 +150,15 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
   const isFocused = createSelector(focusedIndex);
 
   return (
-    <Dialog
+    <Backdrop
       open={props.isOpen}
       onOpenChange={(open) => {
         if (!open) props.onClose();
       }}
-      modal={true}
+      contentRef={setDialogRef}
     >
-      <Dialog.Portal>
-        <DialogWrapper contentRef={setDialogRef}>
-          <Panel depth={2} class="flex flex-col text-sm">
+      <Panel depth={2} class="*:max-h-[75vh]">
+        <div class="flex flex-col text-sm">
             <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
               <span class="pl-2 pointer-events-none text-ink-extra-muted">
                 ❯
@@ -239,9 +236,8 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                 </div>
               </Show>
             </div>
-          </Panel>
-        </DialogWrapper>
-      </Dialog.Portal>
-    </Dialog>
+        </div>
+      </Panel>
+    </Backdrop>
   );
 }

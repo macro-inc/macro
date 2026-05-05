@@ -1,10 +1,8 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { PanelDialog } from '@core/component/PanelDialog';
-import Dialog from '@corvu/dialog';
 import { onMount } from 'solid-js';
-import { Panel } from '@ui';
+import { Backdrop, Panel } from '@ui';
 import PaywallComponent from './PaywallComponent';
 
 export function Paywall() {
@@ -19,7 +17,6 @@ export function Paywall() {
   const hidePaywall = () => {
     _hidePaywall();
 
-    // TODO: correctly return focus back soup
     setTimeout(() => {
       setTimeout(() => {
         const activeId = split?.activeSplitId();
@@ -33,7 +30,6 @@ export function Paywall() {
           return;
         }
 
-        // Fallback to the unified entity list
         const unifiedEntityList = document
           .querySelector('[data-unified-entity-list]')
           ?.closest('[tabindex="0"]') as HTMLElement;
@@ -59,30 +55,23 @@ export function Paywall() {
   });
 
   return (
-    <Dialog open={paywallOpen()} modal={true} onEscapeKeyDown={hidePaywall}>
-      <Dialog.Portal>
-        <PanelDialog position="center">
-          <Dialog.Content
-            class="max-w-[calc(100vw-16px)] overflow-hidden portal-scope"
-            style={{ width: '900px' }}
-          >
-            <Panel active depth={2}>
-              <div
-                class="*:max-h-[85vh] font-sans"
-                ref={paywallContentEl}
-                tabIndex={-1}
-              >
-                <div class="overflow-y-auto p-6 sm:p-8">
-                  <PaywallComponent
-                    cb={hidePaywall}
-                    errorKey={paywallKey()}
-                  />
-                </div>
-              </div>
-            </Panel>
-          </Dialog.Content>
-        </PanelDialog>
-      </Dialog.Portal>
-    </Dialog>
+    <Backdrop
+      open={paywallOpen()}
+      onOpenChange={(open) => !open && hidePaywall()}
+      position="center"
+      width="900px"
+    >
+      <Panel active depth={2}>
+        <div
+          class="*:max-h-[85vh] font-sans"
+          ref={paywallContentEl}
+          tabIndex={-1}
+        >
+          <div class="overflow-y-auto p-6 sm:p-8">
+            <PaywallComponent cb={hidePaywall} errorKey={paywallKey()} />
+          </div>
+        </div>
+      </Panel>
+    </Backdrop>
   );
 }

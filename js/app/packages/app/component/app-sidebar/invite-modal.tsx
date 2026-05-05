@@ -1,12 +1,10 @@
-import { Dialog } from '@kobalte/core/dialog';
 import { createSignal, Show } from 'solid-js';
 import { useReferralCode } from '@core/context/user';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { authServiceClient } from '@service-auth/client';
 import { contactsClient } from '@service-contacts/client';
 import { isOk } from '@core/util/maybeResult';
-import { DialogWrapper } from '@core/component/DialogWrapper';
-import { Button } from '@ui/components/Button';
+import { Backdrop, Button, Panel } from '@ui';
 import { toast } from '@core/component/Toast/Toast';
 import CloseIcon from '@icon/regular/x.svg';
 import ClipboardIcon from '@icon/regular/clipboard.svg';
@@ -68,17 +66,20 @@ export const InviteModal = () => {
   };
 
   return (
-    <Dialog open={inviteModalOpen()} onOpenChange={(o) => !o && handleClose()}>
-      <Dialog.Portal>
-        <DialogWrapper>
+    <Backdrop
+      open={inviteModalOpen()}
+      onOpenChange={(o) => !o && handleClose()}
+    >
+      <Panel depth={2} active>
+        <div class="*:max-h-[75vh]">
           <div class="flex flex-col text-ink">
             <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
-              <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+              <Backdrop.CloseButton as={Button} variant="ghost" size="icon-sm">
                 <CloseIcon />
-              </Dialog.CloseButton>
-              <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+              </Backdrop.CloseButton>
+              <Backdrop.Title as="span" class="text-sm font-medium p-0 m-0">
                 Invite
-              </Dialog.Title>
+              </Backdrop.Title>
             </div>
 
             <div class="p-3 flex flex-col gap-3">
@@ -153,8 +154,8 @@ export const InviteModal = () => {
               </Show>
             </div>
           </div>
-        </DialogWrapper>
-      </Dialog.Portal>
-    </Dialog>
+        </div>
+      </Panel>
+    </Backdrop>
   );
 };

@@ -1,9 +1,7 @@
-import { DialogWrapper } from '@core/component/DialogWrapper';
 import { isPlatform } from '@core/util/platform';
-import { Dialog } from '@kobalte/core/dialog';
 import { useNotificationSettings } from '@notifications/notification-settings';
 import { useIsAuthenticated } from '@queries/auth';
-import { Button } from '@ui/components/Button';
+import { Backdrop, Button, Panel } from '@ui';
 import { createMemo, Show } from 'solid-js';
 
 const DEBUG_FORCE_OPEN = false;
@@ -22,25 +20,26 @@ export function IosPushNotificationModal() {
 
   return (
     <Show when={shouldShow()}>
-      <Dialog
-        open={true}
+      <Backdrop
+        open
         onOpenChange={(open) => {
           if (!open) settings.dismissPrompt();
         }}
+        width="90%"
       >
-        <Dialog.Portal>
-          <DialogWrapper width="90%">
+        <Panel depth={2} active>
+          <div class="*:max-h-[75vh]">
             <div class="flex flex-col gap-4 px-4 py-6">
-              <Dialog.Title class="text-lg font-semibold text-ink">
+              <Backdrop.Title class="text-lg font-semibold text-ink">
                 Enable Push Notifications
-              </Dialog.Title>
-              <Dialog.Description class="text-sm text-ink-extra-muted">
+              </Backdrop.Title>
+              <Backdrop.Description class="text-sm text-ink-extra-muted">
                 Get notified about new messages, mentions, comments, and emails.
-              </Dialog.Description>
+              </Backdrop.Description>
               <div class="flex gap-2 w-full justify-end pt-2">
-                <Dialog.CloseButton class="text-sm text-ink-muted hover:text-ink px-3 py-1.5">
+                <Backdrop.CloseButton class="text-sm text-ink-muted hover:text-ink px-3 py-1.5">
                   Later
-                </Dialog.CloseButton>
+                </Backdrop.CloseButton>
                 <Button
                   variant="accent"
                   size="sm"
@@ -57,9 +56,9 @@ export function IosPushNotificationModal() {
                 </Button>
               </div>
             </div>
-          </DialogWrapper>
-        </Dialog.Portal>
-      </Dialog>
+          </div>
+        </Panel>
+      </Backdrop>
     </Show>
   );
 }

@@ -1,11 +1,9 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { DialogWrapper } from '@core/component/DialogWrapper';
 import { toast } from '@core/component/Toast/Toast';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useCreateScheduleMutation } from '@queries/agent-schedule/schedules';
-import { Dialog } from '@kobalte/core/dialog';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button } from '@ui/components/Button';
+import { Backdrop, Button, Panel } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   createEffect,
@@ -139,20 +137,21 @@ export function AutomationComposer() {
     );
 
   return (
-    <Dialog
+    <Backdrop
       open={automationComposerOpen()}
       onOpenChange={(open) => setAutomationComposerOpen(open, false)}
+      width="800px"
     >
-      <Dialog.Portal>
-        <DialogWrapper width="800px">
+      <Panel depth={2} active>
+        <div class="*:max-h-[75vh]">
           <div class="flex cursor-default flex-col text-ink">
             <div class="flex items-center justify-between border-b border-edge-muted px-3 py-2">
-              <Dialog.Title class="m-0 p-0 text-sm font-semibold">
+              <Backdrop.Title class="m-0 p-0 text-sm font-semibold">
                 New Automation
-              </Dialog.Title>
-              <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+              </Backdrop.Title>
+              <Backdrop.CloseButton as={Button} variant="ghost" size="icon-sm">
                 &times;
-              </Dialog.CloseButton>
+              </Backdrop.CloseButton>
             </div>
 
             <div class="grid max-h-[70vh] gap-3 overflow-y-auto px-3 py-3">
@@ -320,8 +319,8 @@ export function AutomationComposer() {
               </Button>
             </div>
           </div>
-        </DialogWrapper>
-      </Dialog.Portal>
-    </Dialog>
+        </div>
+      </Panel>
+    </Backdrop>
   );
 }

@@ -1,4 +1,3 @@
-import { DialogWrapper } from '@core/component/DialogWrapper';
 import {
   isCommandItem,
   isEntityItem,
@@ -7,7 +6,7 @@ import {
 } from './useCommandItems';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
-import { Dialog } from '@kobalte/core/dialog';
+import { Backdrop, Panel } from '@ui';
 import { Tabs } from '@core/component/Tabs';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -84,24 +83,26 @@ export function CommandMenu() {
   };
 
   return (
-    <Dialog open={CommandState.isOpen()} onOpenChange={CommandState.setIsOpen}>
-      <Dialog.Portal>
-        <DialogWrapper
-          contentRef={setCommandMenuRef}
-          onCloseAutoFocus={(event) => {
-            if (suppressCloseAutoFocus) {
-              event.preventDefault();
-              suppressCloseAutoFocus = false;
-            }
-          }}
-        >
+    <Backdrop
+      open={CommandState.isOpen()}
+      onOpenChange={CommandState.setIsOpen}
+      contentRef={setCommandMenuRef}
+      onCloseAutoFocus={(event) => {
+        if (suppressCloseAutoFocus) {
+          event.preventDefault();
+          suppressCloseAutoFocus = false;
+        }
+      }}
+    >
+      <Panel depth={2} active>
+        <div class="*:max-h-[75vh]">
           <CommandMenuInner
             commandMenuRef={commandMenuRef}
             onSelect={handleSelect}
           />
-        </DialogWrapper>
-      </Dialog.Portal>
-    </Dialog>
+        </div>
+      </Panel>
+    </Backdrop>
   );
 }
 

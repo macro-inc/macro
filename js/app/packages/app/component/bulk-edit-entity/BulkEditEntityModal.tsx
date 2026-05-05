@@ -1,6 +1,5 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { DialogWrapper } from '@core/component/DialogWrapper';
-import { Dialog } from '@kobalte/core/dialog';
+import { Backdrop, Panel } from '@ui';
 import type { EntityData } from '@entity';
 import {
   type Accessor,
@@ -35,7 +34,7 @@ const BulkEditEntityModalContent = (props: {
   };
 
   return (
-    <Dialog
+    <Backdrop
       open={props.isOpen()}
       onOpenChange={(open) => {
         if (!open) {
@@ -43,10 +42,9 @@ const BulkEditEntityModalContent = (props: {
         }
         props.setIsOpen(open);
       }}
-      modal={true}
     >
-      <Dialog.Portal>
-        <DialogWrapper>
+      <Panel depth={2} active>
+        <div class="*:max-h-[75vh]">
           <div class="flex flex-col text-ink">
             <Show when={props.view === 'rename'}>
               <BulkRenameEntitiesView
@@ -72,9 +70,9 @@ const BulkEditEntityModalContent = (props: {
               />
             </Show>
           </div>
-        </DialogWrapper>
-      </Dialog.Portal>
-    </Dialog>
+        </div>
+      </Panel>
+    </Backdrop>
   );
 };
 
