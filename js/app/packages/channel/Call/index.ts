@@ -23,6 +23,7 @@ export { CallEventSync } from './CallEventSync';
 export { CallStartedNotifier } from './CallStartedNotifier';
 export { joinChannelCall } from './join-channel-call';
 export { openChannelCallTab } from './open-channel-call-tab';
+export { useCallKitSetup } from './use-callkit';
 export {
   InCallPanel,
   InCallParticipantsListPopover,

@@ -146,6 +146,7 @@ pub async fn main() -> anyhow::Result<()> {
     let platform_config = ::notification::domain::service::PlatformArnConfig {
         apns_platform_arn: config.sns_apns_platform_arn.clone(),
         fcm_platform_arn: config.sns_fcm_platform_arn.clone(),
+        apns_voip_platform_arn: config.sns_apns_voip_platform_arn.clone(),
     };
     let reader_service = ::notification::domain::service::NotificationReaderService::new(
         notification_repository,

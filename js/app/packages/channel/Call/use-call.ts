@@ -6,6 +6,7 @@ import { throwOnErr } from '@core/util/maybeResult';
 import { RoomEvent } from 'livekit-client';
 import { createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { endCallKitCall } from './use-callkit';
 
 type UseCallOptions = {
   /** Called after successfully joining a call. */
@@ -145,6 +146,8 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     // doesn't double-fire onLeave.
     cleanupDisconnectListener?.();
     cleanupDisconnectListener = null;
+    // Dismiss the native CallKit call sheet if the user left from within the app.
+    await endCallKitCall();
     try {
       await callCtx.disconnect();
       options?.onLeave?.();

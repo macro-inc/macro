@@ -19,6 +19,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
+import { useCallKitSetup } from '@channel/Call';
 
 type NotAndroid = 'not-android';
 
@@ -66,6 +67,8 @@ function TauriProvider(props: { children: JSX.Element }) {
     });
     grantBundleUpdate();
   }
+
+  useCallKitSetup();
 
   const value: TauriContextValue = {
     runtimeInsets: insets,

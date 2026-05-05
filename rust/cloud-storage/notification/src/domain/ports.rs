@@ -21,8 +21,10 @@ use crate::domain::models::device::DeviceType;
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
-    SendNotificationRequestBuilder, UserNotificationRow, android::FCMMessage,
-    apple::APNSPushNotification, mobile::MessageAttributes,
+    SendNotificationRequestBuilder, UserNotificationRow,
+    android::FCMMessage,
+    apple::{APNSPushNotification, VoipPushPayload},
+    mobile::MessageAttributes,
 };
 
 /// Port for sending mobile push notifications (iOS/Android via SNS).
@@ -372,4 +374,32 @@ pub trait NotificationIngressQueue: Send + Sync + 'static {
         &self,
         receipt_handle: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for sending VoIP push notifications (PushKit / CallKit) to iOS devices.
+///
+/// VoIP pushes bypass the regular notification pipeline — they are delivered
+/// immediately without DB persistence and wake the app via PushKit so that
+/// CallKit can display the native incoming-call UI.
+pub trait VoipPushSender: Send + Sync + 'static {
+    /// Send a VoIP push to all registered VoIP device endpoints of the given users.
+    ///
+    /// This is fire-and-forget: errors are logged but do not propagate.
+    fn send_voip_push(
+        &self,
+        recipient_ids: &[MacroUserIdStr<'_>],
+        payload: &VoipPushPayload,
+    ) -> impl std::future::Future<Output = ()> + Send;
+}
+
+impl<V: VoipPushSender> VoipPushSender for Option<V> {
+    async fn send_voip_push(
+        &self,
+        recipient_ids: &[MacroUserIdStr<'_>],
+        payload: &VoipPushPayload,
+    ) {
+        if let Some(inner) = self {
+            inner.send_voip_push(recipient_ids, payload).await;
+        }
+    }
 }

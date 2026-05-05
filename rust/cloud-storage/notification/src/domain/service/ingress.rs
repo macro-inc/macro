@@ -332,7 +332,7 @@ where
                         .into_iter()
                         .filter_map(|e| match e {
                             DeviceEndpoint::Ios(arn) => Some(arn),
-                            DeviceEndpoint::Android(_) => None,
+                            DeviceEndpoint::Android(_) | DeviceEndpoint::IosVoip(_) => None,
                         })
                         .collect();
                     if ios.is_empty() {
@@ -433,6 +433,8 @@ pub struct PlatformArnConfig {
     pub apns_platform_arn: String,
     /// SNS platform ARN for Android (FCM).
     pub fcm_platform_arn: String,
+    /// SNS platform ARN for iOS VoIP (APNS_VOIP). None if VoIP push is not configured.
+    pub apns_voip_platform_arn: Option<String>,
 }
 
 /// Service for reading and updating notifications.
@@ -518,7 +520,7 @@ where
                     .into_iter()
                     .filter_map(|e| match e {
                         DeviceEndpoint::Ios(arn) => Some(arn),
-                        DeviceEndpoint::Android(_) => None,
+                        DeviceEndpoint::Android(_) | DeviceEndpoint::IosVoip(_) => None,
                     })
                     .collect();
                 if ios.is_empty() {
@@ -680,9 +682,14 @@ where
         device_token: &str,
         device_type: &DeviceType,
     ) -> Result<(), Report> {
-        let platform_arn = match device_type {
-            DeviceType::Ios => &self.platform_config.apns_platform_arn,
-            DeviceType::Android => &self.platform_config.fcm_platform_arn,
+        let platform_arn: &str = match device_type {
+            DeviceType::Ios => self.platform_config.apns_platform_arn.as_str(),
+            DeviceType::Android => self.platform_config.fcm_platform_arn.as_str(),
+            DeviceType::IosVoip => self
+                .platform_config
+                .apns_voip_platform_arn
+                .as_deref()
+                .ok_or_else(|| rootcause::report!("VoIP push not configured: SNS_APNS_VOIP_PLATFORM_ARN is not set"))?,
         };
 
         // Get endpoint if exists, otherwise create new one

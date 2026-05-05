@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 
 use crate::domain::models::{
     android::FCMMessage,
-    apple::{APNSPushNotification, Alert},
+    apple::{APNSPushNotification, Alert, VoipPushPayload},
 };
 
 /// SNS target platform for push notifications.
@@ -40,6 +40,33 @@ pub(crate) enum SnsPayload<'a, T> {
         #[serde(rename = "GCM", serialize_with = "stringified_json")]
         gcm: &'a FCMMessage<T>,
     },
+}
+
+/// SNS message structure for APNS_VOIP delivery.
+///
+/// VoIP payloads use the `APNS_VOIP` / `APNS_VOIP_SANDBOX` SNS keys instead of
+/// `APNS` / `APNS_SANDBOX`, and carry no `aps` wrapper — just the raw custom dict.
+#[derive(Debug, Serialize)]
+pub(crate) struct SnsVoipPayload<'a> {
+    pub default: String,
+    #[serde(rename = "APNS_VOIP", serialize_with = "stringified_json")]
+    pub apns_voip: &'a VoipPushPayload,
+    #[serde(rename = "APNS_VOIP_SANDBOX", serialize_with = "stringified_json")]
+    pub apns_voip_sandbox: &'a VoipPushPayload,
+}
+
+impl<'a> SnsVoipPayload<'a> {
+    pub fn new(payload: &'a VoipPushPayload) -> Self {
+        Self {
+            default: format!("Incoming call in {}", payload.channel_name),
+            apns_voip: payload,
+            apns_voip_sandbox: payload,
+        }
+    }
+
+    pub fn as_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
 }
 
 fn stringified_json<T, S>(val: &T, ser: S) -> Result<S::Ok, S::Error>
@@ -172,4 +199,6 @@ pub enum DeviceEndpoint {
     Android(String),
     /// iOS device endpoint (APNS).
     Ios(String),
+    /// iOS VoIP device endpoint (APNS_VOIP / PushKit).
+    IosVoip(String),
 }
