@@ -85,6 +85,7 @@ ego-tree = { workspace = true }
 email = { path = "../email", features = ["axum", "gmail_token", "inbound", "outbound"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
 email_db_client = { path = "../email_db_client" }
+email_importance = { path = "../email_importance" }
 email_utils = { path = "../email_utils" }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }

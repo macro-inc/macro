@@ -602,13 +602,13 @@ async fn filter_notifiable_message(
         return Ok(None);
     }
 
-    // 3. filter out noise emails, mirroring the Importance(false) query in filters.rs:
+    // 3. filter out noise emails, mirroring the Importance(false) query in email_importance:
     //    noise = sender_override(false)
     //            OR (NOT sender_override(true)
     //                AND NOT has (CATEGORY_PERSONAL, SENT, DRAFT)  -- SENT/DRAFT already gone
     //                AND has (CATEGORY_UPDATES, CATEGORY_PROMOTIONS, CATEGORY_SOCIAL, CATEGORY_FORUMS))
     let sender_importance = if let Some(contact_id) = new_message.from_contact_id {
-        email_db_client::filters::get_sender_importance_override(&ctx.db, contact_id, new_message.link_id)
+        email_importance::get_sender_importance_override(&ctx.db, contact_id, new_message.link_id)
             .await
             .map_err(|e| {
                 ProcessingError::Retryable(DetailedError {

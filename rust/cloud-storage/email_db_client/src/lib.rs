@@ -1,5 +1,4 @@
 pub mod attachments;
-pub mod filters;
 pub mod backfill;
 pub mod contacts;
 pub mod histories;

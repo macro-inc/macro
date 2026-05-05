@@ -1,5 +1,5 @@
-use super::SqlFragment;
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
+use email_importance::{SqlFragment, build_sender_importance_override_filter};
 use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
 use recursion::CollapsibleExt;
@@ -54,44 +54,6 @@ fn build_email_match(preamble: &str, email: &Email) -> SqlFragment {
             f
         }
     }
-}
-
-fn build_sender_importance_override_filter(is_important: bool) -> SqlFragment {
-    let importance_literal = if is_important { "TRUE" } else { "FALSE" };
-    let opposite_importance_literal = if is_important { "FALSE" } else { "TRUE" };
-
-    SqlFragment::raw(format!(
-        r#"(
-                    EXISTS (
-                        SELECT 1
-                        FROM email_contacts sender_c
-                        JOIN email_filters ef
-                          ON ef.link_id = m.link_id
-                         AND ef.email_address IS NOT NULL
-                         AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
-                        WHERE sender_c.id = m.from_contact_id
-                          AND ef.is_important = {importance_literal}
-                    )
-                    OR EXISTS (
-                        SELECT 1
-                        FROM email_contacts sender_c
-                        JOIN email_filters ef
-                          ON ef.link_id = m.link_id
-                         AND ef.email_domain IS NOT NULL
-                         AND LOWER(ef.email_domain) = LOWER(split_part(sender_c.email_address, '@', 2))
-                        WHERE sender_c.id = m.from_contact_id
-                          AND ef.is_important = {importance_literal}
-                          AND NOT EXISTS (
-                              SELECT 1
-                              FROM email_filters ef_addr
-                              WHERE ef_addr.link_id = m.link_id
-                                AND ef_addr.email_address IS NOT NULL
-                                AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
-                                AND ef_addr.is_important = {opposite_importance_literal}
-                          )
-                    )
-                )"#,
-    ))
 }
 
 pub(super) fn build_message_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragment {
