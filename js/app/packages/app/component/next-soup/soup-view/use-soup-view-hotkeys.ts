@@ -246,13 +246,13 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     scopeId,
     description: 'Toggle select all',
     keyDownHandler: (e) => {
-      const items = soup.items.data();
-      if (items.length === 0) return false;
+      const rows = soup.rows();
+      if (rows.length === 0) return false;
       e?.preventDefault();
-      if (soup.selection.count() === items.length) {
+      if (soup.selection.count() === rows.length) {
         soup.selection.clear();
       } else {
-        soup.selection.set(items.slice());
+        soup.selection.set(rows.map((r) => r.original));
       }
       return true;
     },

@@ -64,7 +64,7 @@ export type SortConfig<T> = {
 };
 
 interface SoupContextOptions<TId extends string = FilterID> {
-  initialData?: SoupRow[];
+  initialData?: SoupEntity[];
   initialPredicates?: {
     and?: TId[];
     or?: TId[];
@@ -83,7 +83,6 @@ export const createSoupState = <TId extends string = FilterID>(
     initialData,
     initialPredicates,
     predicateConfigs,
-
     skipGroupHeaders,
   } = options;
 
@@ -117,7 +116,35 @@ export const createSoupState = <TId extends string = FilterID>(
 
   const isGroupExpanded = (groupId: string) => !collapsedGroups().has(groupId);
 
-  const [rows, setRowsInternal] = createSignal<SoupRow[]>(initialData ?? []);
+  const [focusedId, setFocusedId] = createSignal<string | undefined>();
+
+  const buildRow = (
+    entity: SoupEntity,
+    options: {
+      depth?: number;
+      group?: GroupMeta;
+      parentGroupId?: string | null;
+    } = {}
+  ): SoupRow => {
+    const { depth = 0, group, parentGroupId = null } = options;
+    const rowId = group ? group.id : entity.id;
+    return {
+      original: entity,
+      id: rowId,
+      depth,
+      group,
+      parentGroupId,
+      isFocused: () => focusedId() === rowId,
+      isSelected: () => selection.isSelected(entity.id),
+      isGrouped: () => parentGroupId !== null,
+      isExpanded: () => selection.isSelected(entity.id),
+      toggleExpanded: () => selection.toggle(entity),
+    };
+  };
+
+  const [rows, setRowsInternal] = createSignal<SoupRow[]>(
+    initialData?.map((e) => buildRow(e)) ?? []
+  );
 
   const setRows = (newRows: SoupRow[]) => {
     setRowsInternal(newRows);
@@ -128,8 +155,6 @@ export const createSoupState = <TId extends string = FilterID>(
   const [collapseEntityCallback, setCollapseEntityCallback] = createSignal<
     ((entityId: string) => Promise<void>) | undefined
   >(undefined);
-
-  const [focusedId, setFocusedId] = createSignal<string | undefined>();
 
   const indexOf = (id: string): number => rows().findIndex((r) => r.id === id);
 
@@ -250,6 +275,7 @@ export const createSoupState = <TId extends string = FilterID>(
   return {
     rows,
     setRows,
+    buildRow,
     predicates,
     selection,
     sort,

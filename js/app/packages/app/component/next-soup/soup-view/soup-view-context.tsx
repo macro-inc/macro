@@ -210,40 +210,6 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  const buildRow = (
-    entity: SoupEntity,
-    options: {
-      depth?: number;
-      group?: GroupMeta;
-      parentGroupId?: string | null;
-    } = {}
-  ): SoupRow => {
-    const { depth = 0, group, parentGroupId = null } = options;
-    const rowId = group ? group.id : entity.id;
-    return {
-      original: entity,
-      id: rowId,
-      depth,
-      group,
-      parentGroupId,
-      isFocused() {
-        return soup.focus.id() === rowId;
-      },
-      isSelected() {
-        return soup.selection.isSelected(entity.id);
-      },
-      isGrouped() {
-        return parentGroupId !== null;
-      },
-      isExpanded() {
-        return soup.selection.isSelected(entity.id);
-      },
-      toggleExpanded() {
-        return soup.selection.isSelected(entity.id);
-      },
-    };
-  };
-
   const itemsQuery = useSoupAstItemsQuery(
     () => ({
       params: soupParams(),
@@ -350,7 +316,7 @@ export const SoupViewContextProvider: FlowComponent<
     const groupId = soup.grouping.activeGroupId();
 
     if (!groupId || !(groupId in GROUP_CONFIGS)) {
-      return allEntities.map((e) => buildRow(e));
+      return allEntities.map((e) => soup.buildRow(e));
     }
 
     const config = GROUP_CONFIGS[groupId as GroupOptionId];
@@ -387,7 +353,7 @@ export const SoupViewContextProvider: FlowComponent<
 
       const firstEntity = groupEntities[0];
       result.push(
-        buildRow(firstEntity, {
+        soup.buildRow(firstEntity, {
           group: groupMeta,
           parentGroupId: groupIdStr,
         })
@@ -396,7 +362,7 @@ export const SoupViewContextProvider: FlowComponent<
       if (soup.grouping.isExpanded(groupIdStr)) {
         for (let i = 1; i < groupEntities.length; i++) {
           result.push(
-            buildRow(groupEntities[i], {
+            soup.buildRow(groupEntities[i], {
               parentGroupId: groupIdStr,
             })
           );

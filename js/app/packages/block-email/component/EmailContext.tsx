@@ -339,13 +339,13 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     if (!props) return false;
 
-    const selectedEntity = soup?.items.get(thread.db_id);
+    const selectedRow = soup?.items.get(thread.db_id);
 
-    if (selectedEntity) {
+    if (selectedRow) {
       if (soup) {
-        markAsDoneAction.executeWithSoup([selectedEntity], soup);
+        markAsDoneAction.executeWithSoup([selectedRow.original], soup);
       } else {
-        markAsDoneAction.execute([selectedEntity]);
+        markAsDoneAction.execute([selectedRow.original]);
       }
     } else {
       archiveMutation.mutate({

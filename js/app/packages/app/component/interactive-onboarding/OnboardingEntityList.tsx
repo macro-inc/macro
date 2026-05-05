@@ -28,8 +28,9 @@ export function OnboardingEntityList(props: OnboardingEntityListProps) {
         class="flex flex-col w-full h-full scrollbar-hidden overflow-scroll"
         role="listbox"
       >
-        <For each={props.soup.data()}>
-          {(entity) => {
+        <For each={props.soup.rows()}>
+          {(row) => {
+            const entity = row.original;
             const isFocused = () => props.soup.focus.id() === entity.id;
             const isRemoving = () =>
               props.removingIds?.().has(entity.id) ?? false;

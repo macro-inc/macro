@@ -1,5 +1,7 @@
-import { createSoupState } from '@app/component/next-soup/create-soup-state';
-import type { SoupState } from '@app/component/next-soup/create-soup-state';
+import {
+  createSoupState,
+  type SoupState,
+} from '@app/component/next-soup/create-soup-state';
 import {
   LauncherInner,
   CREATABLE_BLOCKS,
@@ -129,7 +131,6 @@ function CreateEntityContent(props: LessonContentProps) {
 
 function CreateEntityDemo(props: LessonContentProps) {
   const soup = createSoupState({
-    initialData: filteredSandboxEntities(),
     wrapNavigation: true,
   });
 
@@ -143,7 +144,7 @@ function CreateEntityDemo(props: LessonContentProps) {
 
   // Keep soup synced with sandbox store
   createEffect(() => {
-    soup.setData(filteredSandboxEntities());
+    soup.setRows(filteredSandboxEntities().map((e) => soup.buildRow(e)));
   });
 
   // Build sandbox versions of all creatable blocks

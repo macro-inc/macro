@@ -81,7 +81,7 @@ const useGroupDropdown = (options: GroupOption[] = DEFAULT_GROUP_OPTIONS) => {
       soup.grouping.setActiveGroupId(undefined);
     } else {
       soup.grouping.setActiveGroupId(groupOption);
-      soup.grouping.expandAll([]);
+      soup.grouping.expandAll();
     }
   };
 
