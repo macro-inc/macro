@@ -354,7 +354,10 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
     await invalidateUserTeams();
     clearPendingTeam();
 
-    analytics.track('onboarding_team_created', { teamId: team.id });
+    analytics.track('onboarding_team_created', {
+      inviteCount: emails.length,
+      teamId: team.id,
+    });
 
     return true;
   } catch (error) {
@@ -371,7 +374,11 @@ export const reviewPayLesson: LessonDefinition = {
   demo: ReviewPayDemo,
   order: 95,
   hideContinue: true,
-  previousLesson: ({ onboarding }) => {
+  previousLesson: ({ onboarding, isLessonSkipped }) => {
+    // When teams feature is disabled, these lessons are skipped
+    if (isLessonSkipped('team-choice')) {
+      return 'choose-plan';
+    }
     const hasTeam =
       onboarding.invitedMembers().length > 0 ||
       onboarding.teamName().trim() !== '';

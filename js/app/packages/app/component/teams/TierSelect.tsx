@@ -54,7 +54,7 @@ export function TierSelect(props: {
       itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
         <Select.Item
           item={itemProps.item}
-          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover/50 cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover/50 outline-none data-highlighted:bg-hover bracket-never"
         >
           <div class="flex flex-col">
             <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
