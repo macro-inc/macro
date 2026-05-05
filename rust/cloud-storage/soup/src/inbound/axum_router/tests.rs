@@ -2,6 +2,7 @@ use axum::{
     Extension, Router,
     http::{Method, Request, StatusCode},
 };
+use chrono::{Duration, Utc};
 use email::domain::{
     models::{EmailErr, PreviewView, PreviewViewStandardLabel, UserProvider},
     ports::EmailService,
@@ -12,7 +13,8 @@ use item_filters::EntityFilters;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use model_user::UserContext;
 use models_pagination::{
-    CursorVal, Frecency, FrecencyValue, Identify, PaginateOn, Query, SortOn, TypeEraseCursor,
+    CursorVal, Frecency, FrecencyValue, Identify, PaginateOn, Query, SimpleSortMethod, SortOn,
+    TypeEraseCursor,
 };
 use serde::Serialize;
 use serde_json::json;
@@ -1127,4 +1129,147 @@ async fn ast_endpoint_expands_file_assoc_image_to_or_tree() {
         actual.len() > 1,
         "image association should expand to multiple file types"
     );
+}
+
+#[tokio::test]
+async fn it_can_expand_assoc_ast() {
+    let js = json!({
+        "df": {
+            "&": [
+                {
+                    "l": {
+                        "fa": "assoc:code"
+                    }
+                },
+                {
+                    "!": {
+                        "l": {
+                            "dst": "task"
+                        }
+                    }
+                }
+            ]
+        },
+        "ef": {
+            "l": {
+                "ThreadId": "00000000-0000-0000-0000-000000000000"
+            }
+        },
+        "chanf": {
+            "l": {
+                "ChannelId": "00000000-0000-0000-0000-000000000000"
+            }
+        },
+        "cf": {
+            "l": {
+                "cid": "00000000-0000-0000-0000-000000000000"
+            }
+        },
+        "pf": {
+            "l": {
+                "pid": "00000000-0000-0000-0000-000000000000"
+            }
+        },
+        "callf": {
+            "l": {
+                "ChannelId": "00000000-0000-0000-0000-000000000000"
+            }
+        },
+        "limit": 100,
+        "sort_method": "updated_at"
+    });
+
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = soup_router(SoupRouterState::new(
+        soup.clone(),
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let request = Request::builder()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(serde_json::to_vec(&js).unwrap()))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+
+    let arg = {
+        let mut guard = inner_counter.lock().unwrap();
+        guard
+            .pop()
+            .expect("SoupService::handle should have been called")
+    };
+
+    let filter: EntityFilterAst = serde_json::from_value(arg.filter).unwrap();
+
+    #[derive(Serialize)]
+    struct Data(chrono::DateTime<Utc>, Uuid);
+
+    impl Identify for Data {
+        type Id = Uuid;
+
+        fn id(&self) -> Uuid {
+            self.1
+        }
+    }
+
+    impl SortOn<SimpleSortMethod> for Data {
+        fn sort_on(
+            sort_type: SimpleSortMethod,
+        ) -> impl FnMut(&Self) -> CursorVal<SimpleSortMethod> {
+            move |v| CursorVal {
+                sort_type,
+                last_val: v.0,
+            }
+        }
+    }
+
+    let now = Utc::now();
+    let res = (0..1000)
+        .map(|x| Data(now - Duration::seconds(x), Uuid::new_v4()))
+        .paginate_on(100, SimpleSortMethod::UpdatedAt)
+        .filter_on(filter)
+        .into_page();
+
+    let cursor = res.type_erase().next_cursor.unwrap();
+
+    let request2 = Request::builder()
+        .uri(format!("/soup/ast?cursor={cursor}"))
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&serde_json::json!({})).unwrap(),
+        ))
+        .unwrap();
+
+    let router: Router = soup_router(SoupRouterState::new(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    ))
+    .layer(Extension(UserContext {
+        user_id: "macro|test@example.com".to_string(),
+        fusion_user_id: "1234".to_string(),
+        permissions: None,
+        organization_id: None,
+    }));
+
+    let _res = router.oneshot(request2).await.unwrap();
+
+    let guard = inner_counter.lock().unwrap();
+    let req = guard
+        .first()
+        .expect("SoupService::handle should have been called with next cursor");
+    assert!(matches!(req.cursor_kind, MockCursorKind::SimpleCursor));
 }
