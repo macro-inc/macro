@@ -1,4 +1,4 @@
-import { BozzyBracket } from '@core/component/BozzyBracket';
+
 import {
   CustomEntityIcon,
   EntityIcon,
@@ -460,10 +460,7 @@ export const MoveToProjectView = (props: {
                     focused: isFocused(),
                   }}
                 >
-                  <BozzyBracket
-                    active={isSelected() || isFocused()}
-                    class="flex h-5"
-                  >
+                  <div class="flex h-5">
                     <div
                       class="w-full"
                       style={{
@@ -515,7 +512,7 @@ export const MoveToProjectView = (props: {
                         </Show>
                       </div>
                     </div>
-                  </BozzyBracket>
+                  </div>
                 </div>
               );
             }}

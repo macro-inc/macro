@@ -1,4 +1,4 @@
-import { BozzyBracket } from '@core/component/BozzyBracket';
+
 import { type UserIconProps, UserIcon } from '@core/component/UserIcon';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { useEmail } from '@core/context/user';
@@ -56,8 +56,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
     <div class="shrink-0 flex justify-center w-full">
       {/* These pl/pr below are needed to align with expanded messages at mobile width. */}
       <div class="macro-message-width macro-message-margin w-full pl-2 pr-4 sm:px-0">
-        <BozzyBracket active={props.isFocused} hover={hover()} class="">
-          <div
+        <div
             class="relative flex flex-row items-center w-full pb-2 cursor-pointer transition-all"
             classList={{
               'pt-2': !props.isFirstMessage,
@@ -120,7 +119,6 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                 formatShortDate(props.message.internal_date_ts)}
             </div>
           </div>
-        </BozzyBracket>
       </div>
     </div>
   );

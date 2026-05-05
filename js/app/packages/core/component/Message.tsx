@@ -14,7 +14,7 @@ import {
   splitProps,
   useContext,
 } from 'solid-js';
-import { BozzyBracket } from './BozzyBracket';
+
 import {
   CustomEntityIcon,
   EntityIcon,
@@ -231,16 +231,13 @@ const Root: Component<MessageRootProps> = (props) => {
             isParentNewMessage={props.isParentNewMessage}
           />
         </Show>
-        <BozzyBracket
-          active={props.focused}
-          unfocusable={props.isTarget || props.unfocusable}
+        <div
           class="flex flex-row"
           style={{
             'margin-bottom': props.isLastInThread //|| props.showReply?.()
               ? `${replyHeight()}px`
               : '0px',
           }}
-          hover={props.shouldHover}
         >
           {/* Message Wrapper w/ Main Connector Line */}
           <div
@@ -339,7 +336,7 @@ const Root: Component<MessageRootProps> = (props) => {
               {props.children}
             </div>
           </div>
-        </BozzyBracket>
+        </div>
         <Show
           when={
             props.hoverActions &&
