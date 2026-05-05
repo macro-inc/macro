@@ -8,6 +8,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  For,
   on,
   onCleanup,
   onMount,
@@ -164,16 +165,18 @@ function OnboardingCostSummary() {
               <span>{selectedPlan()?.name}</span>
               <span>${onboarding.userSeatCost()}/mo</span>
             </div>
-            {teamByTier().map((group) => (
-              <div class="flex justify-between italic">
-                <span>
-                  Team · {group.plan.name} ×{group.count}
-                </span>
-                <span class="border-b border-dashed border-ink/40">
-                  ${group.plan.price * group.count}/mo
-                </span>
-              </div>
-            ))}
+            <For each={teamByTier()}>
+              {(group) => (
+                <div class="flex justify-between italic">
+                  <span>
+                    Team · {group.plan.name} ×{group.count}
+                  </span>
+                  <span class="border-b border-dashed border-ink/40">
+                    ${group.plan.price * group.count}/mo
+                  </span>
+                </div>
+              )}
+            </For>
           </div>
           <div class="flex justify-between items-center mt-2 pt-2 border-t border-ink/10 text-xs">
             <span class="text-ink/40 flex items-center gap-1">
@@ -376,7 +379,8 @@ function InteractiveOnboardingInner() {
 
   const getBackContext = () => ({
     onboarding,
-    isLessonSkipped: (id: string) => state.lessons().find((l) => l.definition.id === id)?.skipped ?? false,
+    isLessonSkipped: (id: string) =>
+      state.lessons().find((l) => l.definition.id === id)?.skipped ?? false,
     hasPaidAccess: hasPaid(),
   });
 
@@ -744,10 +748,12 @@ function InteractiveOnboardingInner() {
                             </Button>
                           )}
                         </Show>
-                        <h2 class={cn(
-                          'text-3xl font-semibold text-ink-muted',
-                          getPreviousLesson() ? 'mt-4' : 'mt-12'
-                        )}>
+                        <h2
+                          class={cn(
+                            'text-3xl font-semibold text-ink-muted',
+                            getPreviousLesson() ? 'mt-4' : 'mt-12'
+                          )}
+                        >
                           {lesson().definition.title}
                         </h2>
                       </div>

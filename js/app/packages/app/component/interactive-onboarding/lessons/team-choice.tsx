@@ -72,50 +72,48 @@ function TeamChoiceDemo(props: LessonContentProps) {
 
   return (
     <div class="h-full w-full flex items-center justify-center p-12">
-        <div class="flex flex-col gap-4 w-full max-w-md">
-          <button
-            type="button"
-            onClick={handleChooseTeam}
-            disabled={isPending()}
-            class="flex items-center gap-4 p-5 rounded-md border border-accent/50 bg-accent/5 hover:bg-accent/10 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div class="shrink-0 size-11 rounded-full bg-accent/20 flex items-center justify-center">
-              <UsersIcon class="size-5 text-accent" />
-            </div>
-            <div class="flex flex-col gap-0.5">
-              <span class="text-base font-semibold text-ink">
-                Create a team
-              </span>
-              <span class="text-sm text-ink/50">
-                Collaborate with others in a shared workspace
-              </span>
-            </div>
-          </button>
+      <div class="flex flex-col gap-4 w-full max-w-md">
+        <button
+          type="button"
+          onClick={handleChooseTeam}
+          disabled={isPending()}
+          class="flex items-center gap-4 p-5 rounded-md border border-accent/50 bg-accent/5 hover:bg-accent/10 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <div class="shrink-0 size-11 rounded-full bg-accent/20 flex items-center justify-center">
+            <UsersIcon class="size-5 text-accent" />
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="text-base font-semibold text-ink">Create a team</span>
+            <span class="text-sm text-ink/50">
+              Collaborate with others in a shared workspace
+            </span>
+          </div>
+        </button>
 
-          <button
-            type="button"
-            onClick={handleChooseSolo}
-            disabled={isPending()}
-            class="flex items-center gap-4 p-5 rounded-md border border-edge bg-panel hover:bg-ink/5 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div class="shrink-0 size-11 rounded-full bg-ink/10 flex items-center justify-center">
-              {isPending() ? (
-                <SpinnerIcon class="size-5 text-ink/60 animate-spin" />
-              ) : (
-                <UserIcon class="size-5 text-ink/60" />
-              )}
-            </div>
-            <div class="flex-1 flex flex-col gap-0.5">
-              <span class="text-base font-medium text-ink">
-                {isPending() ? 'Redirecting to checkout…' : 'Continue solo'}
-              </span>
-              <span class="text-sm text-ink/50">
-                {isPending() ? '' : 'Use Macro on your own for now'}
-              </span>
-            </div>
-            <ArrowRightIcon class="size-4 text-ink/50 shrink-0" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleChooseSolo}
+          disabled={isPending()}
+          class="flex items-center gap-4 p-5 rounded-md border border-edge bg-panel hover:bg-ink/5 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <div class="shrink-0 size-11 rounded-full bg-ink/10 flex items-center justify-center">
+            {isPending() ? (
+              <SpinnerIcon class="size-5 text-ink/60 animate-spin" />
+            ) : (
+              <UserIcon class="size-5 text-ink/60" />
+            )}
+          </div>
+          <div class="flex-1 flex flex-col gap-0.5">
+            <span class="text-base font-medium text-ink">
+              {isPending() ? 'Redirecting to checkout…' : 'Continue solo'}
+            </span>
+            <span class="text-sm text-ink/50">
+              {isPending() ? '' : 'Use Macro on your own for now'}
+            </span>
+          </div>
+          <ArrowRightIcon class="size-4 text-ink/50 shrink-0" />
+        </button>
+      </div>
     </div>
   );
 }

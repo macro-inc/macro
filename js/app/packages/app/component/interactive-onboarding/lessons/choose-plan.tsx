@@ -42,9 +42,11 @@ function ChoosePlanDemo(props: LessonContentProps) {
             }}
             class="w-full py-2 rounded-xs text-base font-semibold flex items-center justify-center gap-1.5"
             classList={{
-              'bg-accent text-panel': plan.highlighted && selectedPlan() !== plan.tier,
+              'bg-accent text-panel':
+                plan.highlighted && selectedPlan() !== plan.tier,
               'bg-accent/20 text-accent': selectedPlan() === plan.tier,
-              'bg-ink/8 text-ink hover:bg-ink/12': selectedPlan() !== plan.tier && !plan.highlighted,
+              'bg-ink/8 text-ink hover:bg-ink/12':
+                selectedPlan() !== plan.tier && !plan.highlighted,
             }}
           >
             <Show when={selectedPlan() === plan.tier && plan.tier !== 'free'}>
