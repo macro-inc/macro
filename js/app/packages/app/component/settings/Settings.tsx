@@ -1,11 +1,9 @@
-import { createEffect, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, createMemo, For, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isMobile } from '@core/mobile/isMobile';
-
 import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE, ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-
 import { MobileApp } from './MobileApp';
 import { Mcp } from './Mcp';
 import { Appearance } from './Appearance';
@@ -16,12 +14,13 @@ import { Team } from './Team';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { SplitHeaderLeft, SplitHeaderRight } from '../split-layout/components/SplitHeader';
+import { CollapsibleHeaderItem } from '../split-layout/components/CollapsibleHeaderItem';
 import { SettingsButton } from './SettingsButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Layer } from '@ui';
+import ChevronDownIcon from '@icon/regular/caret-down.svg';
 
-/**
- * Wrapper for Settings Panel used in the split layout. Includes the correct Header button.
- */
 export function SettingsPanelComponentWrapper() {
   return (
     <>
@@ -189,11 +188,25 @@ export function SettingsPanel(props: SettingsPanelProps) {
             Settings
           </h1>
           <Show when={!isMobile()}>
-            <Tabs
-              list={settingsTabs()}
-              value={activeTabId()}
-              defaultValue="Appearance"
-              onChange={handleTabChange}
+            <CollapsibleHeaderItem
+              id="settings-tabs"
+              priority={1}
+              containerClass="h-full"
+              expanded={() => (
+                <Tabs
+                  list={settingsTabs()}
+                  value={activeTabId()}
+                  defaultValue="Appearance"
+                  onChange={handleTabChange}
+                />
+              )}
+              collapsed={() => (
+                <CollapsedSettingsTabs
+                  tabs={settingsTabs()}
+                  value={activeTabId()}
+                  onChange={handleTabChange}
+                />
+              )}
             />
           </Show>
         </div>
@@ -229,5 +242,48 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <BottomTabs />
       </Show>
     </div>
+  );
+}
+
+type CollapsedSettingsTabsProps = {
+  tabs: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+};
+
+function CollapsedSettingsTabs(props: CollapsedSettingsTabsProps) {
+  const activeLabel = createMemo(() => {
+    return (
+      props.tabs.find((item) => item.value === props.value)?.label ??
+      props.tabs[0]?.label
+    );
+  });
+
+  return (
+    <DropdownMenu placement="bottom-start" gutter={4}>
+      <DropdownMenu.Trigger class="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xs border border-edge-muted hover:bg-ink/6 transition-colors">
+        <span class="truncate">{activeLabel()}</span>
+        <ChevronDownIcon class="size-3 shrink-0" />
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <Layer depth={2}>
+          <DropdownMenu.Content class="z-action-menu bg-page border border-edge-muted rounded-sm shadow-sm p-1">
+            <For each={props.tabs}>
+              {(item) => (
+                <DropdownMenu.Item
+                  class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
+                  classList={{
+                    'font-semibold': props.value === item.value,
+                  }}
+                  onSelect={() => props.onChange(item.value)}
+                >
+                  {item.label}
+                </DropdownMenu.Item>
+              )}
+            </For>
+          </DropdownMenu.Content>
+        </Layer>
+      </DropdownMenu.Portal>
+    </DropdownMenu>
   );
 }

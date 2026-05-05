@@ -168,7 +168,7 @@ export const CollapsedSoupViewTabs = () => {
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <Layer depth={2}>
-          <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-sm p-1">
+          <DropdownMenu.Content class="z-action-menu bg-page border border-edge-muted rounded-sm shadow-sm p-1">
             <For each={list()}>
               {(item) => (
                 <DropdownMenu.Item
