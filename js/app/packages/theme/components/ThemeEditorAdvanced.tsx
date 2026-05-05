@@ -49,7 +49,7 @@ export function ThemeEditorAdvanced(){
           overflow: hidden;
           font-weight: 300;
           display: block;
-          height: min-content;
+          height: 410px;
           "
       >
         <div
@@ -57,7 +57,8 @@ export function ThemeEditorAdvanced(){
           overscroll-behavior: none;
           box-sizing: border-box;
           scrollbar-width: none;
-          height: min-content;
+          overflow-y: auto;
+          height: 100%;
           width: 100%;
         "
         >
