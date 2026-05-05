@@ -122,7 +122,7 @@ function RoleSelect(props: {
     >
       <Select.Trigger
         as={Button}
-        class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-[expanded]:bg-ink/10"
+        class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
         disabled={props.disabled}
       >
         <Select.Value<RoleOption>>
@@ -131,7 +131,7 @@ function RoleSelect(props: {
         <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-25 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -175,7 +175,7 @@ function TierSelect(props: {
       <Select.Trigger
         as={props.triggerAs}
         tabIndex={0}
-        class={props.triggerClass ?? 'rounded-xs px-2 py-1 text-xs data-[expanded]:bg-ink/10'}
+        class={props.triggerClass ?? 'rounded-xs px-2 py-1 text-xs data-expanded:bg-ink/10'}
       >
         <Select.Value<TierOption>>
           {(state) => state.selectedOption().label}
@@ -183,7 +183,7 @@ function TierSelect(props: {
         <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[220px] p-1">
+        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-55 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -1245,7 +1245,7 @@ function TeamManagement(props: {
         <Dialog.Portal>
           <DialogWrapper>
             <div class="flex flex-col text-ink">
-              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
+              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
                 <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                   <XIcon />
                 </Dialog.CloseButton>

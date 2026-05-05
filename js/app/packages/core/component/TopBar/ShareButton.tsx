@@ -411,7 +411,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                       }
                     >
                       <Switch
-                        fallback={<WideUsers class="flex-shrink-0 w-4 h-4" />}
+                        fallback={<WideUsers class="shrink-0 w-4 h-4" />}
                       >
                         <Match
                           when={
@@ -424,7 +424,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                         <Match
                           when={props.channelNameMap.get(recipient.channel_id)}
                         >
-                          <WideUsers class="flex-shrink-0 w-4 h-4" />
+                          <WideUsers class="shrink-0 w-4 h-4" />
                         </Match>
                       </Switch>
                       <div class="font-medium truncate">

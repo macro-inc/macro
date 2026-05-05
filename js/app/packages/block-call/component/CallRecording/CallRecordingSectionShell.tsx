@@ -127,7 +127,7 @@ export function CallRecordingSectionShell(props: {
             : cn(
                 'transition-[max-height,transform,opacity] duration-300 ease-out @[860px]:transition-none @[860px]:max-h-none @[860px]:opacity-100 @[860px]:translate-y-0',
                 isOpen()
-                  ? 'flex min-h-0 flex-1 flex-col max-h-[100dvh] translate-y-0 opacity-100 @[860px]:h-full @[860px]:max-h-none'
+                  ? 'flex min-h-0 flex-1 flex-col max-h-dvh translate-y-0 opacity-100 @[860px]:h-full @[860px]:max-h-none'
                   : 'max-h-0 translate-y-2 opacity-0 pointer-events-none'
               )
         )}

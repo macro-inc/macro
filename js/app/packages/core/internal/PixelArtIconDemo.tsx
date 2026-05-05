@@ -1037,7 +1037,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
   });
 
   return (
-    <div class="w-[400px] bg-panel p-4 overflow-y-auto border-l border-edge border-dashed shrink-0">
+    <div class="w-100 bg-panel p-4 overflow-y-auto border-l border-edge border-dashed shrink-0">
       <div class="space-y-4">
         <h3 class="font-mono text-sm text-ink">[ Global Settings ]</h3>
 
