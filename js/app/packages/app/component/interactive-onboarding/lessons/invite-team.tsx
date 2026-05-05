@@ -17,6 +17,7 @@ import {
   useCreateTeamWithInvitesMutation,
 } from '@queries/team';
 import { useEmail } from '@core/context/user';
+import { useAnalytics } from '@app/component/analytics-context';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 const inviteFormSchema = z.object({
@@ -47,6 +48,7 @@ type FormErrors = {
 };
 
 function InviteTeamDemo(props: LessonContentProps) {
+  const analytics = useAnalytics();
   const [teamName, setTeamName] = createSignal('');
   const [emails, setEmails] = createSignal<string[]>(['']);
   const [errors, setErrors] = createSignal<FormErrors>({});
@@ -197,6 +199,9 @@ function InviteTeamDemo(props: LessonContentProps) {
       await createTeamMutation.mutateAsync({
         name: result.data.teamName,
         emails: result.data.emails.length > 0 ? result.data.emails : undefined,
+      });
+      analytics.track('onboarding_team_created', {
+        inviteCount: result.data.emails.length,
       });
       props.advance();
     } catch {
@@ -364,10 +369,14 @@ function InviteTeamDemo(props: LessonContentProps) {
 }
 
 function SkipAction(props: LessonContentProps) {
+  const analytics = useAnalytics();
   return (
     <button
       type="button"
-      onClick={() => props.advance()}
+      onClick={() => {
+        analytics.track('onboarding_team_skipped');
+        props.advance();
+      }}
       class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between text-ink/40 hover:text-ink hover:bg-ink/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel"
     >
       Skip for now
