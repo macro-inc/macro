@@ -6,6 +6,7 @@ import ThemeList from '@theme/components/ThemeList';
 import { Panel } from '@ui';
 import { Tabs } from '@core/component/Tabs';
 import { createSignal, Show } from 'solid-js';
+import { isMobile } from '@core/mobile/isMobile';
 
 type EditorTab = 'basic' | 'advanced';
 
@@ -31,10 +32,7 @@ export function Appearance() {
       >
         <Panel depth={2}>
           <div class="flex flex-col h-full overflow-hidden">
-            <div class="relative flex items-center gap-3 h-10 shrink-0 pl-5 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
-              <h1 class="font-semibold text-ink select-none text-sm shrink-0">
-                Editor
-              </h1>
+            <div class="relative flex items-center gap-3 h-10 shrink-0 px-[20px] after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
               <div class="h-full shrink-0">
                 <Tabs
                   list={tabList}
@@ -43,10 +41,18 @@ export function Appearance() {
                   onChange={(value) => setActiveTab(value as EditorTab)}
                 />
               </div>
-              <div class="flex-1 min-w-0 h-full">
+              <Show when={!isMobile()}>
+                <div class="flex-1 min-w-0 h-full">
+                  <ThemeTools />
+                </div>
+              </Show>
+            </div>
+
+            <Show when={isMobile()}>
+              <div class="flex items-center px-[20px] py-1.5 border-b border-edge-muted shrink-0 min-w-0 overflow-hidden">
                 <ThemeTools />
               </div>
-            </div>
+            </Show>
 
             <div class="flex-1 overflow-auto min-h-0">
               <Show when={activeTab() === 'basic'}>
