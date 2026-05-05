@@ -137,31 +137,31 @@ const PaywallComponent = (props: PaywallComponent) => {
   };
 
   return (
-      <div class="space-y-2 w-full">
-        <Show when={!props.hideCloseButton}>
-          <button
-            onClick={props.cb}
-            class="fixed top-6 right-6 sm:top-3 sm:right-3 text-ink-extra-muted hover:text-ink transition-colors"
-          >
-            <IconX class="w-5 sm:w-6 h-5 sm:h-6" />
-          </button>
-        </Show>
-        <Show when={!hasPaid()}>
-          <div class="relative w-full text-center">
-            <div class="space-y-6 sm:space-y-8">
-              <div class="text-center">
-                <h2 class="mb-2 font-semibold text-ink text-xl sm:text-2xl">
-                  Choose your plan
-                </h2>
-                <Show when={props.errorKey}>
-                  <p class="mb-4 text-failure-ink text-sm sm:text-base">
-                    {PaywallMessages[props.errorKey as PaywallKey]}
-                  </p>
-                </Show>
-              </div>
+    <div class="space-y-2 w-full">
+      <Show when={!props.hideCloseButton}>
+        <button
+          onClick={props.cb}
+          class="fixed top-6 right-6 sm:top-3 sm:right-3 text-ink-extra-muted hover:text-ink transition-colors"
+        >
+          <IconX class="w-5 sm:w-6 h-5 sm:h-6" />
+        </button>
+      </Show>
+      <Show when={!hasPaid()}>
+        <div class="relative w-full text-center">
+          <div class="space-y-6 sm:space-y-8">
+            <div class="text-center">
+              <h2 class="mb-2 font-semibold text-ink text-xl sm:text-2xl">
+                Choose your plan
+              </h2>
+              <Show when={props.errorKey}>
+                <p class="mb-4 text-failure-ink text-sm sm:text-base">
+                  {PaywallMessages[props.errorKey as PaywallKey]}
+                </p>
+              </Show>
             </div>
           </div>
-        </Show>
+        </div>
+      </Show>
 
       <div class="w-full @container">
         <div class="gap-2 grid grid-cols-1 @[530px]:grid-cols-3">
@@ -171,8 +171,7 @@ const PaywallComponent = (props: PaywallComponent) => {
                 onClick={() => setUserSelectedTier(plan.tier)}
                 class="p-4 sm:p-5 border flex flex-col transition-all relative text-left"
                 classList={{
-                  'border-accent-ink bg-active':
-                  selectedTier() === plan.tier,
+                  'border-accent-ink bg-active': selectedTier() === plan.tier,
                   'border-edge hover:border-edge': selectedTier() !== plan.tier,
                 }}
                 style={{ 'border-radius': '2px' }}
@@ -184,7 +183,12 @@ const PaywallComponent = (props: PaywallComponent) => {
                         {plan.name}
                       </div>
                     </div>
-                    <SubscriptionTier class="w-7 shrink-0" tier={selectedTier() === plan.tier ? plan.tier : undefined} />
+                    <SubscriptionTier
+                      class="w-7 shrink-0"
+                      tier={
+                        selectedTier() === plan.tier ? plan.tier : undefined
+                      }
+                    />
                   </div>
                   <div class="flex items-baseline gap-0.5">
                     <span class="text-3xl font-bold text-ink">

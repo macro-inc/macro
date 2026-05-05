@@ -38,12 +38,12 @@ export interface PlanFeature {
 export const PLAN_FEATURES: PlanFeature[] = [
   {
     label: 'AI Tool Calls',
-        values: {
-          free: '—',
-          haiku: '1,000',
-          sonnet: '5,000',
-          opus: 'Unlimited',
-        },
+    values: {
+      free: '—',
+      haiku: '1,000',
+      sonnet: '5,000',
+      opus: 'Unlimited',
+    },
   },
   {
     label: 'AI Agent',
