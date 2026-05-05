@@ -162,8 +162,8 @@ export function IconSelectorMenu(props: {
 
   return (
     <Show when={props.show()}>
-      <div class="max-h-[290px] overflow-y-auto" ref={menuRef}>
-        <OldMenu class="max-h-[290px] overflow-y-auto">
+      <div class="max-h-72.5 overflow-y-auto" ref={menuRef}>
+        <OldMenu class="max-h-72.5 overflow-y-auto">
           <For each={icons}>
             {(icon) => (
               <OldMenuItem

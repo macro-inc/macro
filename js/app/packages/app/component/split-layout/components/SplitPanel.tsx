@@ -62,7 +62,7 @@ export function SplitPanel(props: SplitPanelProps) {
   });
 
   const nextSoup = createSoupState({
-    initialFilters: ['explicit-noise'],
+    initialPredicates: { and: ['explicit-noise'] },
   });
 
   return (

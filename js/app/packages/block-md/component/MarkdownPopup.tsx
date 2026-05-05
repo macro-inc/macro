@@ -52,7 +52,6 @@ import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
-import { GlitchText } from '@ui/components/GlitchText';
 import {
   $getLocationUrl,
   $getSelectionLocation,
@@ -72,6 +71,7 @@ import {
 import { FormatTools } from './FormatTools';
 import { Button } from '@ui/components/Button';
 import { Dynamic } from 'solid-js/web';
+import { Layer } from '@ui';
 
 const MENU_ID = 'markdown-popup';
 
@@ -450,7 +450,7 @@ export function MarkdownPopup(props: {
             </p>
             <div class="flex flex-row items-center space-x-2 w-full px-2">
               <textarea
-                class={`resize-none rounded-xs w-full p-2 my-3 text-sm h-max-[800px] overflow-hidden ring-1 ring-edge/50 bg-hover`}
+                class="resize-none rounded-xs w-full p-2 my-3 text-sm h-max-[800px] overflow-hidden ring-1 ring-edge bg-hover"
                 ref={setRewriteInputRef}
                 rows={1}
                 onSubmit={(e) => e.preventDefault()}
@@ -468,7 +468,7 @@ export function MarkdownPopup(props: {
                 }}
               />
               <button
-                class={`bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center py-1`}
+                class="bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center py-1"
                 onClick={() => {
                   handleRewrite(inputVal());
                 }}
@@ -477,7 +477,7 @@ export function MarkdownPopup(props: {
                   width={20}
                   height={20}
                   color="var(--color-accent)"
-                  class={`text-accent-ink !fill-accent`}
+                  class="text-accent-ink fill-accent!"
                 />
               </button>
             </div>
@@ -505,11 +505,10 @@ export function MarkdownPopup(props: {
                       height={20}
                       class="text-accent"
                     />
-                    <GlitchText from="Reading document" continuous />
                   </div>
                 }
               >
-                <div class="break-words p-2">
+                <div class="wrap-break-word p-2">
                   <ChatMessageMarkdown
                     text={completion().content}
                     generating={isGenerating}
@@ -518,7 +517,7 @@ export function MarkdownPopup(props: {
                     }}
                   />
                 </div>
-                <div class="border-t-1 border-edge">
+                <div class="border-t border-edge">
                   <div class="flex flex-row justify-end text-ink-muted mt-1">
                     <Show when={completionType() === 'rewrite'}>
                       {' '}
@@ -652,16 +651,18 @@ export function MarkdownPopup(props: {
       </ScopedPortal>
       <Show when={showPopup() && anchorRef()}>
         <ScopedPortal scope="local">
-          <GeneralizedPopup
-            PopupComponents={MarkdownPopupToolbar}
-            anchor={{
-              ref: anchorRef()!,
-              blockId: `${blockId}`,
-              blockType: 'md',
-            }}
-            useBlockBoundary={true}
-            ref={setMenuRef}
-          />
+          <Layer depth={2}>
+            <GeneralizedPopup
+              PopupComponents={MarkdownPopupToolbar}
+              anchor={{
+                ref: anchorRef()!,
+                blockId: `${blockId}`,
+                blockType: 'md',
+              }}
+              useBlockBoundary={true}
+              ref={setMenuRef}
+            />
+          </Layer>
         </ScopedPortal>
       </Show>
       <Show when={highlightLocation()}>

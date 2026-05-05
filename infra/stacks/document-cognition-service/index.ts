@@ -6,6 +6,8 @@ import {
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -252,10 +254,8 @@ const documentCognitionService = new DocumentCognitionService(
         value: pulumi.interpolate`${notificationIngressQueueName}`,
       },
       {
-        name: 'CONNECTION_GATEWAY_URL',
-        value: `https://connection-gateway${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        name: ServiceUrl.CONNECTION_GATEWAY_URL,
+        value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
       },
       {
         name: 'SEARCH_EVENT_QUEUE',
@@ -274,10 +274,8 @@ const documentCognitionService = new DocumentCognitionService(
         value: pulumi.interpolate`${PERPLEXITY_API_KEY}`,
       },
       {
-        name: 'AUTHENTICATION_SERVICE_URL',
-        value: `https://auth-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        name: ServiceUrl.AUTHENTICATION_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL),
       },
       {
         name: 'AUTHENTICATION_SERVICE_SECRET_KEY',

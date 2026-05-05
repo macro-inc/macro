@@ -1,5 +1,8 @@
+use std::collections::HashSet;
+
 use crate::pubsub::context::PubSubContext;
-use model::contacts::ConnectionsMessage;
+use contacts::domain::ports::ContactsIngress;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::db::address::EmailRecipientType;
 use models_email::service::attachment::{
     AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
@@ -157,24 +160,27 @@ async fn handle_contacts_sync(ctx: &PubSubContext, link: &Link) -> Result<(), Pr
         link.macro_id
     );
 
-    let mut users = vec![link.macro_id.to_string()];
-    users.extend(
-        email_addresses
-            .iter()
-            .map(|email| format!("macro|{}", email)),
-    );
+    let users: HashSet<MacroUserIdStr<'static>> = std::iter::once(Ok(link.macro_id.clone()))
+        .chain(
+            email_addresses
+                .iter()
+                .map(|email| MacroUserIdStr::try_from_email(email)),
+        )
+        .collect::<Result<_, _>>()
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: anyhow::anyhow!(e).context("invalid user email for contacts"),
+            })
+        })?;
 
-    let connections = (1..users.len()).map(|i| (0, i)).collect::<Vec<_>>();
-
-    let connections_message = ConnectionsMessage { users, connections };
-
-    ctx.sqs_client
-        .enqueue_contacts_add_connection(connections_message)
+    ctx.contacts_ingress
+        .enqueue_contacts(users)
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::SqsEnqueueFailed,
-                source: e.context(format!(
+                source: anyhow::anyhow!("{e:?}").context(format!(
                     "Failed to enqueue contacts message for {}",
                     email_addresses.join(", ")
                 )),

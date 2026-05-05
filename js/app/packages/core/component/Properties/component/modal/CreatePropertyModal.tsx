@@ -25,6 +25,7 @@ import {
 } from '../../utils';
 import { ERROR_MESSAGES } from '../../utils/errorHandling';
 import { Dropdown, type DropdownOption } from './shared/Dropdown';
+import { Panel } from '@ui';
 
 // Derive DataTypeValue from the dropdown options
 type DataTypeValue = ReturnType<
@@ -92,7 +93,7 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
               }}
               onKeyDown={(e) => handleKeyDown(e, option().id, option().value)}
               placeholder={props.placeholder}
-              class="flex-1 p-1.5 border border-edge-muted/50 text-sm rounded-sm bg-input placeholder:text-ink-placeholder"
+              class="flex-1 p-1.5 border border-edge-muted text-sm rounded-sm bg-input placeholder:text-ink-placeholder"
               data-option-id={option().id}
             />
             <button
@@ -416,8 +417,8 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     >
       <Dialog.Portal>
         <DialogWrapper>
-          <div class="flex flex-col overflow-hidden bracket-never text-sm">
-            <div class="flex items-center justify-between gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
+          <Panel depth={2} class="flex flex-col text-sm">
+            <div class="flex items-center justify-between gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
               <Dialog.Title class="pl-2 text-sm font-medium">
                 Create New Property
               </Dialog.Title>
@@ -452,7 +453,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                     value={newPropertyName()}
                     onInput={(e) => setNewPropertyName(e.currentTarget.value)}
                     placeholder="Enter property name"
-                    class="w-full p-1.5 border border-edge-muted/50 text-sm rounded-sm bg-input placeholder:text-ink-placeholder"
+                    class="w-full p-1.5 border border-edge-muted text-sm rounded-sm bg-input placeholder:text-ink-placeholder"
                   />
                 </div>
 
@@ -479,13 +480,12 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                       Selection Type
                     </label>
                     <SegmentedControl
-                      value={isMultiSelect()}
-                      onChange={setIsMultiSelect}
+                      value={isMultiSelect() ? 'multi' : 'single'}
+                      onChange={(v) => setIsMultiSelect(v === 'multi')}
                       options={[
-                        { value: false, label: 'Single Select' },
-                        { value: true, label: 'Multi Select' },
+                        { value: 'single', label: 'Single Select' },
+                        { value: 'multi', label: 'Multi Select' },
                       ]}
-                      aria-label="Selection type"
                     />
                   </div>
                 </Show>
@@ -610,7 +610,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 </Show>
               </Button>
             </div>
-          </div>
+          </Panel>
         </DialogWrapper>
       </Dialog.Portal>
     </Dialog>

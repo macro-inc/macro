@@ -209,7 +209,7 @@ export function MobileSwipeBackContainer(props: MobileSwipeBackContainerProps) {
             class={cn(
               'absolute inset-0',
               {
-                'z-1 shadow-xl': !mobileSwipeLayout.fgIsSlotA(),
+                'z-user-highlight shadow-xl': !mobileSwipeLayout.fgIsSlotA(),
                 '-z-1 pointer-events-none': mobileSwipeLayout.fgIsSlotA(),
               },
               mobileSwipeLayout.fgIsSlotA() &&

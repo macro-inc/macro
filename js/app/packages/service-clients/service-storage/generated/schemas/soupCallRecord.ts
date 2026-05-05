@@ -5,9 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SoupCallRecordChannelName } from './soupCallRecordChannelName';
+import type { SoupCallRecordCustomName } from './soupCallRecordCustomName';
 import type { SoupCallRecordDurationMs } from './soupCallRecordDurationMs';
 import type { SoupCallRecordEndedAt } from './soupCallRecordEndedAt';
 import type { SoupCallRecordParticipant } from './soupCallRecordParticipant';
+import type { SoupCallRecordSummary } from './soupCallRecordSummary';
 
 /**
  * A call record as displayed in Soup. Excludes room_name, egress_id,
@@ -25,6 +27,8 @@ export interface SoupCallRecord {
   channelName?: SoupCallRecordChannelName;
   /** User who created the call. */
   createdBy: string;
+  /** User-supplied or AI-generated display name for the call. */
+  customName?: SoupCallRecordCustomName;
   /** Call duration in milliseconds (None if still active). */
   durationMs?: SoupCallRecordDurationMs;
   /** When the call ended (None if still active). */
@@ -35,4 +39,8 @@ export interface SoupCallRecord {
   participants: SoupCallRecordParticipant[];
   /** When the call started. */
   startedAt: string;
+  /** AI-generated summary of the call. Only set on archived
+`call_records` once summarization has run; active calls always
+return `None`. */
+  summary?: SoupCallRecordSummary;
 }

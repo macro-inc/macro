@@ -1,4 +1,5 @@
 import {
+  AwaitNode,
   ContactMentionNode,
   DateMentionNode,
   DiffInsertNode,
@@ -17,6 +18,7 @@ import {
   WatermarkNode,
 } from '@lexical-core';
 import { clearDecorators, setDecorator } from '@lexical-core/decoratorRegistry';
+import { Await } from './component/decorator/Await';
 import { ContactMention } from './component/decorator/ContactMention';
 import { DateMention } from './component/decorator/DateMention';
 import { DiffInsert } from './component/decorator/DiffInsert';
@@ -56,5 +58,6 @@ export function initializeLexical() {
   setDecorator(ThemeMentionNode, ThemeMention);
   setDecorator(UnknownMentionNode, UnknownMention);
   setDecorator(WatermarkNode, Watermark);
+  setDecorator(AwaitNode, Await);
   registerDiffNodeFactory();
 }

@@ -1,7 +1,10 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
+  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
+  enqueuePreviewWakeup,
   isAccessiblePreviewItem,
   useItemPreview,
   type ItemEntity,
@@ -20,6 +23,7 @@ import {
   Match,
   Switch,
   Suspense,
+  createEffect,
   type ComponentProps,
   type Accessor,
 } from 'solid-js';
@@ -35,6 +39,13 @@ import { cn } from '@ui/utils/classname';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   const [item] = useItemPreview(entity);
+  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
+
+  createEffect(() => {
+    if (!bulkWakeupEnabled().enabled) return;
+
+    enqueuePreviewWakeup(item());
+  });
 
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
 

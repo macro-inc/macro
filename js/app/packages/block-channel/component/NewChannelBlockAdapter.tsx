@@ -10,11 +10,21 @@ import {
 } from '@channel/Channel/ChannelTabContext';
 import {
   isJoinCallRequested,
+  isOpenCallTabRequested,
   URL_PARAMS as CHANNEL_URL_PARAMS,
 } from '@channel/Channel/link';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
-import { createSignal, Match, onMount, Show, Suspense, Switch } from 'solid-js';
+import {
+  createComputed,
+  createSignal,
+  Match,
+  onCleanup,
+  onMount,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { useSearchParams } from '@solidjs/router';
 import { blockHandleSignal } from '@core/signal/load';
 import { createMethodRegistration } from '@core/orchestrator';
@@ -32,15 +42,18 @@ import {
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import {
-  CallAudioSink,
   CallEventSync,
-  CallProvider,
   ChannelCallAutoJoin,
   ChannelCallButton,
   ChannelCallTab,
   useCall,
+  useCallContextOptional,
 } from '@channel/Call';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import {
+  ChatWithAgentButton,
+  toChatChannelType,
+} from '@app/component/ChatWithAgentButton';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -49,6 +62,7 @@ type ChannelTargetMessageParams = {
   [URL_PARAMS.message]?: string;
   [URL_PARAMS.thread]?: string;
   [CHANNEL_URL_PARAMS.joinCall]?: string;
+  [CHANNEL_URL_PARAMS.openCallTab]?: string;
 };
 
 export type BlockChannelProps = ChannelTargetMessageParams;
@@ -71,6 +85,7 @@ function NewTop(props: { channelId: string }) {
   const { activeTab, setActiveTab } = useChannelTab();
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
+  const chatChannelType = () => toChatChannelType(channelType());
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const call = useCall(() => props.channelId);
   const participants = () =>
@@ -103,9 +118,25 @@ function NewTop(props: { channelId: string }) {
         activeTab={activeTab()}
         onTabChange={setActiveTab}
       />
-      <Show when={ENABLE_CALLS()}>
+      <Show when={chatChannelType() || ENABLE_CALLS()}>
         <SplitHeaderRight>
-          <ChannelCallButton channelId={props.channelId} />
+          <div class="flex items-center gap-1.5">
+            <Show when={chatChannelType()}>
+              {(type) => (
+                <ChatWithAgentButton
+                  entity={{
+                    type: 'channel',
+                    id: props.channelId,
+                    name: channelName() ?? 'Channel',
+                    channelType: type(),
+                  }}
+                />
+              )}
+            </Show>
+            <Show when={ENABLE_CALLS()}>
+              <ChannelCallButton channelId={props.channelId} />
+            </Show>
+          </div>
         </SplitHeaderRight>
       </Show>
       <ChannelTopBarLiveIndicators />
@@ -130,10 +161,39 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     (isJoinCallRequested(props[CHANNEL_URL_PARAMS.joinCall]) ||
       isJoinCallRequested(searchParams[CHANNEL_URL_PARAMS.joinCall]));
 
-  const [activeTab, setActiveTab] = createSignal<ChannelTabId>(
-    wantsJoinCall ? 'call' : DEFAULT_CHANNEL_TAB
+  const callCtx = useCallContextOptional();
+  const hasActiveCallHere =
+    callCtx?.isInCall() && callCtx.activeChannelId() === channelId;
+
+  const [activeTab, setActiveTabInternal] = createSignal<ChannelTabId>(
+    wantsJoinCall || hasActiveCallHere ? 'call' : DEFAULT_CHANNEL_TAB
   );
   const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
+
+  /** Set when `<NewChannel>` mounts (Messages tab only); used for goToMessage. */
+  const messagesChannelHandle: { current?: ChannelHandle } = {};
+
+  const setActiveTab = (tab: ChannelTabId) => {
+    if (tab !== 'messages') {
+      messagesChannelHandle.current = undefined;
+    }
+    setActiveTabInternal(tab);
+  };
+
+  // CallContext: which channel has the Call tab selected (for isCallPage(), etc.).
+  // `createComputed` (not `createEffect`) so this runs before paint and matches
+  // `activeTab` on the first frame (e.g. deep-link opens on Call tab).
+  createComputed(() => {
+    if (isPreview || !callCtx) return;
+    const tab = activeTab();
+    callCtx.syncCallPageTab(channelId, tab === 'call');
+  });
+
+  // Nav away unmounts this block without switching tabs first — clear stale ownership.
+  onCleanup(() => {
+    if (isPreview || !callCtx) return;
+    callCtx.syncCallPageTab(channelId, false);
+  });
 
   // Clear the URL param after consuming it so a reload doesn't re-trigger
   // the join if the user has since left the call.
@@ -167,6 +227,33 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     };
   };
 
+  // Register on the block always — `goToLocationFromParams` used to live only
+  // inside `onChannelReady` (Messages tab), so open-call from Attachments/etc. was a no-op.
+  createMethodRegistration(blockHandle, {
+    goToLocationFromParams: async (params: ChannelTargetMessageParams) => {
+      if (isOpenCallTabRequested(params[CHANNEL_URL_PARAMS.openCallTab])) {
+        setActiveTab('call');
+        return;
+      }
+
+      const { targetMessageId, targetMessageReplyId } =
+        convertTargetMessage(params);
+
+      if (targetMessageId && messagesChannelHandle.current) {
+        setActiveTab(DEFAULT_CHANNEL_TAB);
+        await messagesChannelHandle.current.goToMessage(
+          targetMessageId,
+          targetMessageReplyId
+        );
+      }
+
+      if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {
+        setActiveTab('call');
+        setPendingJoinCall(true);
+      }
+    },
+  });
+
   const initialTargetMessageParams = (): ChannelTargetMessageParams => {
     const hasPropsTarget =
       props[URL_PARAMS.message] !== undefined ||
@@ -190,69 +277,44 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   };
 
   const onChannelReady = (handle: ChannelHandle) => {
-    createMethodRegistration(blockHandle, {
-      goToLocationFromParams: async (params: ChannelTargetMessageParams) => {
-        const { targetMessageId, targetMessageReplyId } =
-          convertTargetMessage(params);
-
-        if (targetMessageId && handle) {
-          setActiveTab(DEFAULT_CHANNEL_TAB);
-          handle.goToMessage(targetMessageId, targetMessageReplyId);
-        }
-
-        if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {
-          // Flip to the call tab eagerly so the user sees the "Joining
-          // call…" placeholder instead of whatever tab they were on.
-          setActiveTab('call');
-          setPendingJoinCall(true);
-        }
-      },
-    });
+    messagesChannelHandle.current = handle;
   };
 
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
-      <CallProvider>
-        <CallEventSync />
-        <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
-          <ChannelCallAutoJoin
-            channelId={channelId}
-            pendingJoinCall={pendingJoinCall}
-            onHandled={() => setPendingJoinCall(false)}
-          />
-          <div class="h-full flex flex-col px-2 mobile:px-0">
-            {/*
-              Mounted above <Switch> so remote call audio keeps playing when
-              the user switches from the Call tab to Messages / Attachments /
-              Participants. See CallAudioSink for details.
-            */}
-            <CallAudioSink />
-            <Switch>
-              <Match when={activeTab() === 'messages'}>
-                <NewChannel
-                  channelId={channelId}
-                  onHandleReady={onChannelReady}
-                  autofocus={!isPreview}
-                  {...convertTargetMessage(initialTargetMessageParams())}
-                />
-              </Match>
-              <Match when={activeTab() === 'attachments'}>
-                <ChannelAttachmentsTab channelId={channelId} />
-              </Match>
-              <Match when={activeTab() === 'participants'}>
-                <ChannelParticipantsTab channelId={channelId} />
-              </Match>
-              <Match when={activeTab() === 'call'}>
-                <ChannelCallTab
-                  channelId={channelId}
-                  pendingJoin={pendingJoinCall}
-                />
-              </Match>
-            </Switch>
-            <NewTop channelId={channelId} />
-          </div>
-        </ChannelTabProvider>
-      </CallProvider>
+      <CallEventSync />
+      <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
+        <ChannelCallAutoJoin
+          channelId={channelId}
+          pendingJoinCall={pendingJoinCall}
+          onHandled={() => setPendingJoinCall(false)}
+        />
+        <div class="h-full flex flex-col px-2 mobile:px-0">
+          <Switch>
+            <Match when={activeTab() === 'messages'}>
+              <NewChannel
+                channelId={channelId}
+                onHandleReady={onChannelReady}
+                autofocus={!isPreview}
+                {...convertTargetMessage(initialTargetMessageParams())}
+              />
+            </Match>
+            <Match when={activeTab() === 'attachments'}>
+              <ChannelAttachmentsTab channelId={channelId} />
+            </Match>
+            <Match when={activeTab() === 'participants'}>
+              <ChannelParticipantsTab channelId={channelId} />
+            </Match>
+            <Match when={activeTab() === 'call'}>
+              <ChannelCallTab
+                channelId={channelId}
+                pendingJoin={pendingJoinCall}
+              />
+            </Match>
+          </Switch>
+          <NewTop channelId={channelId} />
+        </div>
+      </ChannelTabProvider>
     </EntityPermissionsGate>
   );
 }

@@ -1,4 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { cn } from '@ui/utils/classname';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
@@ -18,6 +19,7 @@ import {
 } from '@core/util/create';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Layer } from '@ui';
 import PlusIcon from '@icon/regular/plus.svg';
 import { createProject } from '@queries/storage/projects';
 import { type Component, createSignal, For } from 'solid-js';
@@ -260,7 +262,10 @@ function MenuItem(props: MenuItemProps) {
 
   return (
     <DropdownMenu.Item
-      class={`flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-click duration-200 text-ink-extra-muted data-highlighted:${selectedColor} data-highlighted:bracket-offset-4`}
+      class={cn(
+        'flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-click duration-200 text-ink-extra-muted outline-none data-highlighted:bg-active',
+        `data-highlighted:${selectedColor}`
+      )}
       onSelect={props.action}
     >
       <div class="flex items-center gap-1">
@@ -291,7 +296,7 @@ function MenuContent(props: { projectId: string }) {
   }));
 
   return (
-    <DropdownMenu.Content class="isolate relative flex flex-col gap-2 bg-dialog -mb-1 p-2 border-2 border-accent min-w-max bracket-never">
+    <DropdownMenu.Content class="isolate relative flex flex-col gap-2 bg-dialog -mb-1 p-2 border-2 border-accent min-w-max">
       <For each={items}>
         {(item, index) => <MenuItem {...item} index={index() + 1} />}
       </For>
@@ -341,7 +346,9 @@ export function ProjectCreateMenu(props: { id: string }) {
         </DropdownMenu.Trigger>
       </div>
       <DropdownMenu.Portal>
-        <MenuContent projectId={props.id} />
+        <Layer depth={2}>
+          <MenuContent projectId={props.id} />
+        </Layer>
       </DropdownMenu.Portal>
     </DropdownMenu>
   );

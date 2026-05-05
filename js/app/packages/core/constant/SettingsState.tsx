@@ -1,6 +1,6 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 
 export type SettingsTab =
   | 'Account'
@@ -11,7 +11,9 @@ export type SettingsTab =
   | 'AI Memory'
   | 'Inbox'
   | 'Shortcuts'
-  | 'Mobile App';
+  | 'Mobile App'
+  | 'MCP'
+  | 'Team';
 
 export const [activeTabId, setActiveTabId] =
   createSignal<SettingsTab>('Appearance');
@@ -28,9 +30,9 @@ export const useSettingsState = () => {
     });
   };
 
-  const isOpen = () => {
+  const isOpen = createMemo(() => {
     return getSettingsSplit() !== undefined;
-  };
+  });
 
   const openSettings = (activeTabId?: SettingsTab) => {
     if (activeTabId) setActiveTabId(activeTabId);

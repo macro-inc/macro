@@ -29,6 +29,7 @@ import type {
   ChatMessageSearchResult,
   ChannelSearchResult,
   ProjectSearchResult,
+  CallRecordSearchResult,
   UnifiedSearchResponseItem,
 } from '@service-search/generated/models';
 import type {
@@ -36,20 +37,28 @@ import type {
   SoupPage,
 } from '@service-storage/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
+import { differenceInMilliseconds } from 'date-fns';
 
 type InnerSearchResult =
   | DocumentSearchResult
   | EmailSearchResult
   | ChatMessageSearchResult
   | ChannelSearchResult
-  | ProjectSearchResult;
+  | ProjectSearchResult
+  | CallRecordSearchResult;
 
 type TypedInnerSearchResult =
   | { results: InnerSearchResult[]; type?: undefined }
   | { results: DocumentSearchResult[]; type: 'pdf'; searchQuery: string }
   | { results: DocumentSearchResult[]; type: 'md' }
   | { results: ChannelSearchResult[]; type: 'channel' }
-  | { results: EmailSearchResult[]; type: 'email'; searchQuery?: string };
+  | { results: EmailSearchResult[]; type: 'email'; searchQuery?: string }
+  | {
+      results: CallRecordSearchResult[];
+      type: 'call_record';
+      callId: string;
+      callStartedAt: string;
+    };
 
 const getSearchData = (data: TypedInnerSearchResult): SearchData => {
   let contentHitData: ContentHitData[] = [];
@@ -122,6 +131,34 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           location: {
             type: 'email' as const,
             messageId: r.message_id!,
+          },
+        }));
+      });
+      break;
+    }
+    case 'call_record': {
+      contentHitData = data.results.flatMap((r) => {
+        // TODO: support name only hits for call records when we support rename
+        const isContentHit = !!r.transcript_id;
+        if (!isContentHit) return [];
+
+        const videoSeconds = Math.max(
+          0,
+          differenceInMilliseconds(r.started_at!, data.callStartedAt) / 1000
+        );
+
+        const contents = r.highlight.content ?? [];
+        return contents.map((content) => ({
+          type: 'call_record' as const,
+          id: r.transcript_id!,
+          content: mergeAdjacentMacroEmTags(content),
+          senderId: r.speaker_id!,
+          sentAt: r.started_at!,
+          videoSeconds,
+          location: {
+            type: 'call_record' as const,
+            callId: data.callId,
+            transcriptId: r.transcript_id!,
           },
         }));
       });
@@ -328,6 +365,39 @@ export const useSearchResponseItemMapper = () => {
           },
         ];
       }
+
+      case 'call': {
+        if (!result.metadata) return [];
+        const search = getSearchData({
+          type: 'call_record',
+          results: result.call_search_results,
+          callId: result.call_id,
+          callStartedAt: result.metadata.started_at,
+        });
+
+        const channelName: string | undefined =
+          result.metadata.channel_name ??
+          channels().find((c) => c.id === result.channel_id)?.name ??
+          undefined;
+
+        return [
+          {
+            type: 'call',
+            id: result.call_id,
+            name: result.name ?? channelName ?? blockNameToDefaultFile('call'),
+            channelId: result.channel_id,
+            channelName,
+            ownerId: result.owner_id,
+            createdAt: result.metadata.started_at,
+            updatedAt: result.metadata.updated_at,
+            isActive: false,
+            attended: result.metadata.attended,
+            durationMs: result.metadata.duration_ms,
+            participantIds: result.participant_ids,
+            search,
+          },
+        ];
+      }
     }
   };
 };
@@ -445,11 +515,14 @@ export const mapSoupPageToEntityList: (
           };
         }
 
-        if (item.tag === 'callRecord') {
+        if (item.tag === 'call') {
           return {
             type: 'call',
             id: item.data.callId,
-            name: item.data.channelName ?? 'Call',
+            name:
+              item.data.customName ??
+              item.data.channelName ??
+              blockNameToDefaultFile('call'),
             channelId: item.data.channelId,
             channelName: item.data.channelName ?? undefined,
             ownerId: item.data.createdBy,
@@ -460,6 +533,7 @@ export const mapSoupPageToEntityList: (
             attended: item.data.attended,
             durationMs: item.data.durationMs ?? undefined,
             participantIds: item.data.participants.map((p) => p.userId),
+            summary: item.data.summary ?? undefined,
           } satisfies CallEntity;
         }
 

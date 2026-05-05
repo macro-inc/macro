@@ -1,4 +1,7 @@
-export { NotificationStacks } from './notification-stacks';
+export {
+  NotificationStackRow,
+  NotificationStacks,
+} from './notification-stacks';
 export { MobileNotificationStacks } from './mobile-notification-stacks';
 export type { EntityRowConfig } from './mobile-notification-stacks';
 export { NotificationIcon } from './notification-icon';

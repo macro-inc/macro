@@ -1,6 +1,12 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, getSearchEventQueue, stack } from '../../packages/shared';
+import {
+  config,
+  getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { SearchProcessingService } from './service';
 
@@ -57,6 +63,11 @@ const databaseUrlArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: DATABASE_URL })
   .apply((secret) => secret.arn);
 
+const DATABASE_URL_READONLY = config.require('macro_db_readonly_secret_key');
+const databaseUrlReadonlyArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: DATABASE_URL_READONLY })
+  .apply((secret) => secret.arn);
+
 const INTERNAL_AUTH_KEY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`internal_auth_key`),
@@ -73,6 +84,7 @@ const searchProcessingService = new SearchProcessingService(
   {
     secretKeyArns: [
       databaseUrlArn,
+      databaseUrlReadonlyArn,
       opensearchPasswordArn,
       syncServiceAuthKeyArn,
     ],
@@ -96,6 +108,10 @@ const searchProcessingService = new SearchProcessingService(
       {
         name: 'DATABASE_URL',
         value: pulumi.interpolate`${DATABASE_URL}`,
+      },
+      {
+        name: 'DATABASE_URL_READONLY',
+        value: pulumi.interpolate`${DATABASE_URL_READONLY}`,
       },
       {
         name: 'SEARCH_EVENT_QUEUE',
@@ -138,8 +154,8 @@ const searchProcessingService = new SearchProcessingService(
         value: '3', // 3 workers per instance
       },
       {
-        name: 'LEXICAL_SERVICE_URL',
-        value: `https://lexical-service-${stack}.macroverse.workers.dev`,
+        name: ServiceUrl.LEXICAL_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
       },
       // OpenTelemetry / Datadog tracing configuration
       {

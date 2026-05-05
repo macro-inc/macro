@@ -1,9 +1,9 @@
-import { BozzyBracket } from '@core/component/BozzyBracket';
 import {
   CustomEntityIcon,
   EntityIcon,
   getEntityIconConfig,
 } from '@core/component/EntityIcon';
+import { cn } from '@ui/utils/classname';
 import { ExplorerSpacer } from '@core/component/FileList/ExplorerSpacer';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import Fragment from '@core/util/Fragment';
@@ -377,7 +377,7 @@ export const MoveToProjectView = (props: {
             <div class="size-5 flex items-center justify-center">
               <Dynamic
                 component={getIcon().icon}
-                class={`flex size-full ${getIcon().foreground}`}
+                class={cn('flex size-full', getIcon().foreground)}
               />
             </div>
 
@@ -413,16 +413,16 @@ export const MoveToProjectView = (props: {
         </div>
       </div>
 
-      <div class="w-full h-fit suppress-css-brackets mb-3">
+      <div class="w-full h-fit mb-3">
         <input
           type="text"
           placeholder="Search folders..."
           value={searchQuery()}
           onInput={(e) => setSearchQuery(e.currentTarget.value)}
-          class="w-full p-2 text-sm border-1 border-edge/20 bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none selection:bg-ink selection:text-panel"
+          class="w-full p-2 text-sm border border-edge bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none selection:bg-ink selection:text-panel"
         />
       </div>
-      <div class="w-full max-h-64 h-[300px] overflow-hidden">
+      <div class="w-full max-h-64 h-75 overflow-hidden">
         <Fragment ref={listRef}>
           <VList data={flattenedProjects.items} class="[&>div]:overflow-clip">
             {(project, index) => {
@@ -459,10 +459,7 @@ export const MoveToProjectView = (props: {
                     focused: isFocused(),
                   }}
                 >
-                  <BozzyBracket
-                    active={isSelected() || isFocused()}
-                    class="flex h-5"
-                  >
+                  <div class="flex h-5">
                     <div
                       class="w-full"
                       style={{
@@ -481,7 +478,7 @@ export const MoveToProjectView = (props: {
 
                         {/* Expand/collapse caret */}
                         <div
-                          class="flex items-center justify-center w-4 h-4 cursor-pointer hover:bg-edge/10 rounded"
+                          class="flex items-center justify-center w-4 h-4 hover:bg-edge rounded"
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleExpanded(project.id);
@@ -491,7 +488,10 @@ export const MoveToProjectView = (props: {
                           }}
                         >
                           <CaretRight
-                            class={`w-3 h-3 transition-transform duration-150 ${isExpanded() && !searchQuery() ? 'rotate-90' : ''}`}
+                            class={cn(
+                              'w-3 h-3 transition-transform duration-150',
+                              isExpanded() && !searchQuery() && 'rotate-90'
+                            )}
                           />
                         </div>
 
@@ -511,7 +511,7 @@ export const MoveToProjectView = (props: {
                         </Show>
                       </div>
                     </div>
-                  </BozzyBracket>
+                  </div>
                 </div>
               );
             }}

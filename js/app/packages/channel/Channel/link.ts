@@ -7,6 +7,8 @@ export const URL_PARAMS = {
   thread: 'channel_thread_id',
   message: 'channel_message_id',
   joinCall: 'join_call',
+  /** Switch to the Call tab without starting a join (e.g. sidebar → full call UI). */
+  openCallTab: 'open_call_tab',
 };
 
 export function getChannelParams(
@@ -25,5 +27,10 @@ export function getChannelParams(
 
 /** True when a `join_call` param value means "please join the call". */
 export function isJoinCallRequested(value: unknown): boolean {
+  return value === 'true' || value === true;
+}
+
+/** True when we should only show the Call tab (already in / joining call). */
+export function isOpenCallTabRequested(value: unknown): boolean {
   return value === 'true' || value === true;
 }

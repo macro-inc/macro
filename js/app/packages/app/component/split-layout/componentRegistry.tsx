@@ -1,5 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
-import { getDefaultListViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
+import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
@@ -13,6 +13,8 @@ import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/compose/Compose';
 import { SettingsPanelComponentWrapper } from '../settings/Settings';
+import type { Query } from '@app/component/next-soup/filters/filter-store/types';
+import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
 
@@ -104,12 +106,12 @@ registerComponent(
   'inbox',
   withAuth(() => {
     usePageViewTracking('inbox');
-    const preset = getDefaultListViewPreset('inbox');
+    const preset = getViewPreset('inbox');
     return (
       <SoupView
         viewName="Inbox"
-        queryFilters={preset.queryFilters}
-        initialClientFilters={preset.clientFilters}
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
         disableLocalSearch
       />
     );
@@ -121,7 +123,7 @@ registerComponent(
   withAuth(() => {
     usePageViewTracking('agents');
     const user = useUserContext();
-    const preset = getDefaultListViewPreset('agents', {
+    const preset = getViewPreset('agents', undefined, {
       userId: user.userId(),
       email: user.email(),
     });
@@ -129,8 +131,8 @@ registerComponent(
     return (
       <SoupView
         viewName="Agents"
-        queryFilters={preset.queryFilters}
-        initialClientFilters={preset.clientFilters}
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
         additionalEntities={automationEntities}
       />
     );
@@ -141,12 +143,12 @@ registerComponent(
   'mail',
   withAuth(() => {
     usePageViewTracking('mail');
-    const preset = getDefaultListViewPreset('mail');
+    const preset = getViewPreset('mail');
     return (
       <SoupView
         viewName="Email"
-        queryFilters={preset.queryFilters}
-        initialClientFilters={preset.clientFilters}
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
       />
     );
   })
@@ -157,15 +159,15 @@ registerComponent(
   withAuth(() => {
     usePageViewTracking('documents');
     const user = useUserContext();
-    const preset = getDefaultListViewPreset('documents', {
+    const preset = getViewPreset('documents', undefined, {
       userId: user.userId(),
       email: user.email(),
     });
     return (
       <SoupView
         viewName="Documents"
-        queryFilters={preset.queryFilters}
-        initialClientFilters={preset.clientFilters}
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
       />
     );
   })
@@ -176,15 +178,15 @@ registerComponent(
   withAuth(() => {
     usePageViewTracking('tasks');
     const user = useUserContext();
-    const preset = getDefaultListViewPreset('tasks', {
+    const preset = getViewPreset('tasks', undefined, {
       userId: user.userId(),
       email: user.email(),
     });
     return (
       <SoupView
         viewName="Tasks"
-        queryFilters={preset.queryFilters}
-        initialClientFilters={preset.clientFilters}
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
       />
     );
   })
@@ -194,12 +196,12 @@ registerComponent(
   'channels',
   withAuth(() => {
     usePageViewTracking('channels');
-    const preset = getDefaultListViewPreset('channels');
+    const preset = getViewPreset('channels');
     return (
       <SoupView
         viewName="Channels"
-        queryFilters={preset.queryFilters}
-        initialClientFilters={preset.clientFilters}
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
       />
     );
   })
@@ -209,12 +211,12 @@ registerComponent(
   'calls',
   withAuth(() => {
     usePageViewTracking('calls');
-    const preset = getDefaultListViewPreset('calls');
+    const preset = getViewPreset('calls');
     return (
       <SoupView
         viewName="Calls"
-        queryFilters={preset.queryFilters}
-        initialClientFilters={preset.clientFilters}
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
       />
     );
   })
@@ -225,34 +227,44 @@ registerComponent(
   withAuth(() => {
     usePageViewTracking('folders');
     const user = useUserContext();
-    const preset = getDefaultListViewPreset('folders', {
+    const preset = getViewPreset('folders', undefined, {
       userId: user.userId(),
       email: user.email(),
     });
     return (
       <SoupView
         viewName="Folders"
-        queryFilters={preset.queryFilters}
-        initialClientFilters={preset.clientFilters}
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
       />
     );
   })
 );
 
+type SearchComponentParams = {
+  initialQuery?: string;
+  initialFilters?: Query;
+  initialClientFilters?: SetPredicatesInput<string>;
+};
+
 registerComponent(
   'search',
-  withAuth(() => {
+  withAuth((params: SearchComponentParams = {}) => {
     usePageViewTracking('search');
-    const user = useUserContext();
-    const preset = getDefaultListViewPreset('search', {
-      userId: user.userId(),
-      email: user.email(),
-    });
+    const preset = getViewPreset('search');
+    const hasExplicitParams =
+      params.initialQuery !== undefined ||
+      params.initialFilters !== undefined ||
+      params.initialClientFilters !== undefined;
     return (
       <SoupView
         viewName="Search"
-        queryFilters={preset.queryFilters}
-        initialClientFilters={preset.clientFilters}
+        initialFilters={params.initialFilters ?? preset?.filters}
+        initialClientFilters={
+          params.initialClientFilters ?? preset?.clientFilters
+        }
+        initialSearchText={params.initialQuery}
+        skipPersistedState={hasExplicitParams}
       />
     );
   })
@@ -270,14 +282,7 @@ registerComponent('email-compose', (params) => {
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
-  return (
-    <ComposeTask
-      initialContent={params?.initialContent}
-      initialTitle={params?.initialTitle}
-      initialAssigneeId={params?.initialAssigneeId}
-      onSuccess={params?.onSuccess}
-    />
-  );
+  return <ComposeTask {...params} />;
 });
 registerComponent(
   'import-linear',
@@ -338,10 +343,6 @@ if (LOCAL_ONLY) {
     lazy(
       () => import('@core/component/FormControls/debug/NewFormPrimitivesDemo')
     )
-  );
-  registerComponent(
-    'custom-cursor',
-    lazy(() => import('@app/component/CustomCursorTest'))
   );
   registerComponent(
     'resize',

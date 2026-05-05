@@ -3,9 +3,10 @@ import * as pulumi from '@pulumi/pulumi';
 
 interface StaticFileCloudFrontArgs {
   bucket: aws.s3.Bucket;
+  imageOptimizerUrl: pulumi.Output<string>;
+  imageOptimizerFunctionName: pulumi.Output<string>;
   api: aws.lb.LoadBalancer;
   stackName: string;
-  // Optional parameters
   geoRestrictions?: {
     restrictionType: 'whitelist' | 'blacklist';
     locations: string[];
@@ -17,6 +18,19 @@ interface StaticFileCloudFrontArgs {
   notFoundPage: aws.s3.BucketObject;
   tags: { [key: string]: string };
 }
+
+const IMAGE_URL_REWRITE_FUNCTION = `
+function handler(event) {
+  var request = event.request;
+  var size = request.querystring.size;
+
+  if (!size) return request;
+
+  request.uri += '/size=' + size.value;
+  request.querystring = {};
+  return request;
+}
+`;
 
 export class StaticFileCloudFront extends pulumi.ComponentResource {
   public readonly distribution: aws.cloudfront.Distribution;
@@ -31,7 +45,6 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
     super('custom:cdn:StaticFileCloudFront', name, {}, opts);
     this.tags = args.tags;
 
-    // Create Origin Access Control for the CloudFront distribution
     this.s3AccessControl = new aws.cloudfront.OriginAccessControl(
       `${name}-s3-oac`,
       {
@@ -43,8 +56,32 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const s3OriginId = `static-file-bucket`;
-    const apiOriginId = `static-file-api`;
+    const lambdaAccessControl = new aws.cloudfront.OriginAccessControl(
+      `${name}-lambda-oac`,
+      {
+        description: 'Origin Access Control for Image Optimizer Lambda',
+        originAccessControlOriginType: 'lambda',
+        signingBehavior: 'always',
+        signingProtocol: 'sigv4',
+      },
+      { parent: this }
+    );
+
+    const s3OriginId = 'static-file-bucket';
+    const lambdaOriginId = 'image-optimizer-lambda';
+    const apiOriginId = 'static-file-api';
+    const originGroupId = 'image-optimization-group';
+
+    const imageUrlRewrite = new aws.cloudfront.Function(
+      `${name}-image-url-rewrite`,
+      {
+        name: `image-url-rewrite-${args.stackName}`,
+        runtime: 'cloudfront-js-2.0',
+        code: IMAGE_URL_REWRITE_FUNCTION,
+        publish: true,
+      },
+      { parent: this }
+    );
 
     const responseHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
       'corp-policy',
@@ -68,7 +105,73 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
       }
     );
 
-    // Create the CloudFront distribution
+    // S3 bucket for CloudFront standard access logs
+    const logBucket = new aws.s3.BucketV2(
+      `${name}-cf-logs-bucket`,
+      {
+        bucket: `static-file-cf-logs-${args.stackName}`,
+        forceDestroy: args.stackName !== 'prod',
+        tags: args.tags,
+      },
+      { parent: this }
+    );
+
+    const logBucketOwnership = new aws.s3.BucketOwnershipControls(
+      `${name}-cf-logs-ownership`,
+      {
+        bucket: logBucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerPreferred',
+        },
+      },
+      { parent: this }
+    );
+
+    new aws.s3.BucketAclV2(
+      `${name}-cf-logs-acl`,
+      {
+        bucket: logBucket.id,
+        accessControlPolicy: {
+          owner: {
+            id: logBucket.id.apply(() =>
+              aws.s3.getCanonicalUserId().then((r) => r.id)
+            ),
+          },
+          grants: [
+            {
+              grantee: {
+                id: 'c4c1ede66af53448b93c283ce9448c4ba468c9432aa01d700d3878632f77d2d0',
+                type: 'CanonicalUser',
+              },
+              permission: 'FULL_CONTROL',
+            },
+          ],
+        },
+      },
+      { parent: this, dependsOn: [logBucketOwnership] }
+    );
+
+    new aws.s3.BucketLifecycleConfigurationV2(
+      `${name}-cf-logs-lifecycle`,
+      {
+        bucket: logBucket.id,
+        rules: [
+          {
+            id: 'expire-logs-7-days',
+            status: 'Enabled',
+            expiration: {
+              days: 7,
+            },
+          },
+        ],
+      },
+      { parent: this }
+    );
+
+    const lambdaDomainName = args.imageOptimizerUrl.apply((url) =>
+      url.replace('https://', '').replace(/\/+$/, '')
+    );
+
     this.distribution = new aws.cloudfront.Distribution(
       `${name}-distribution`,
       {
@@ -77,6 +180,17 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
             domainName: args.bucket.bucketRegionalDomainName,
             originAccessControlId: this.s3AccessControl.id,
             originId: s3OriginId,
+          },
+          {
+            domainName: lambdaDomainName,
+            originAccessControlId: lambdaAccessControl.id,
+            customOriginConfig: {
+              httpPort: 80,
+              httpsPort: 443,
+              originProtocolPolicy: 'https-only',
+              originSslProtocols: ['TLSv1.2'],
+            },
+            originId: lambdaOriginId,
           },
           {
             domainName: args.api.dnsName,
@@ -89,6 +203,15 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
             originId: apiOriginId,
           },
         ],
+        originGroups: [
+          {
+            originId: originGroupId,
+            failoverCriteria: {
+              statusCodes: [403, 404, 500, 502, 503, 504],
+            },
+            members: [{ originId: s3OriginId }, { originId: lambdaOriginId }],
+          },
+        ],
         enabled: true,
         isIpv6Enabled: true,
         comment: `Static files distribution for ${name}`,
@@ -96,16 +219,22 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
           {
             allowedMethods: ['HEAD', 'GET', 'OPTIONS'],
             pathPattern: '/file/*',
-            targetOriginId: s3OriginId,
+            targetOriginId: originGroupId,
             cachedMethods: ['GET', 'OPTIONS', 'HEAD'],
             viewerProtocolPolicy: 'redirect-to-https',
             forwardedValues: {
-              queryString: true,
+              queryString: false,
               headers: ['Origin'],
               cookies: {
                 forward: 'none',
               },
             },
+            functionAssociations: [
+              {
+                eventType: 'viewer-request',
+                functionArn: imageUrlRewrite.arn,
+              },
+            ],
             responseHeadersPolicyId: responseHeadersPolicy.id,
             minTtl: 0,
             defaultTtl: 31536000,
@@ -175,8 +304,8 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
           },
           viewerProtocolPolicy: 'redirect-to-https',
           minTtl: 0,
-          defaultTtl: 2628000, // 1 week
-          maxTtl: 7884000, // 3 months
+          defaultTtl: 2628000,
+          maxTtl: 7884000,
           compress: true,
         },
         priceClass: 'PriceClass_100',
@@ -199,6 +328,11 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
         tags: {
           Environment: args.stackName,
         },
+        loggingConfig: {
+          bucket: logBucket.bucketDomainName,
+          includeCookies: false,
+          prefix: 'cf-logs/',
+        },
         customErrorResponses: [
           {
             errorCode: 403,
@@ -214,20 +348,32 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
       }
     );
 
-    // Configure bucket to allow CloudFront access
+    new aws.cloudfront.MonitoringSubscription(
+      `${name}-monitoring-subscription`,
+      {
+        distributionId: this.distribution.id,
+        monitoringSubscription: {
+          realtimeMetricsSubscriptionConfig: {
+            realtimeMetricsSubscriptionStatus: 'Enabled',
+          },
+        },
+      },
+      { parent: this }
+    );
+
+    // Allow CloudFront to read from and Lambda to write to the bucket
     new aws.s3.BucketPublicAccessBlock(
       `${name}-access-block`,
       {
         bucket: args.bucket.id,
         blockPublicAcls: true,
-        blockPublicPolicy: false, // Must be false to allow CloudFront
+        blockPublicPolicy: false,
         ignorePublicAcls: true,
-        restrictPublicBuckets: false, // Must be false to allow CloudFront,
+        restrictPublicBuckets: false,
       },
       { parent: this }
     );
 
-    // Create bucket policy to allow CloudFront access
     new aws.s3.BucketPolicy(
       `${name}-bucket-policy`,
       {
@@ -255,6 +401,17 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
               ],
             })
           ),
+      },
+      { parent: this }
+    );
+
+    new aws.lambda.Permission(
+      `${name}-lambda-cloudfront-permission`,
+      {
+        action: 'lambda:InvokeFunctionUrl',
+        function: args.imageOptimizerFunctionName,
+        principal: 'cloudfront.amazonaws.com',
+        sourceArn: this.distribution.arn,
       },
       { parent: this }
     );

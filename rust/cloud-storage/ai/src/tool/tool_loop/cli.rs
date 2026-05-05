@@ -181,9 +181,18 @@ where
                     .build(),
             );
 
+            let request_messages = messages
+                .iter()
+                .map(|m| ChatMessage {
+                    content: m.content.clone(),
+                    role: m.role,
+                    attachments: None,
+                })
+                .collect();
+
             let request = RequestBuilder::new()
                 .system_prompt(&self.system_prompt)
-                .messages(messages.clone())
+                .messages(request_messages)
                 .model(self.model)
                 .build();
 

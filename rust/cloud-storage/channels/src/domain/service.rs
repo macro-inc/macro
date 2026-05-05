@@ -1,13 +1,14 @@
 use crate::domain::{
     models::{
-        ChannelMessage, ChannelMessageFilters, ChannelParticipant, MessagePageDirection,
-        ThreadInfo, ThreadReply, TopLevelMessageRow,
+        ChannelAttachmentType, ChannelMessage, ChannelMessageFilters, ChannelParticipant,
+        MessagePageDirection, ResolvedChannelMessage, ThreadInfo, ThreadReply, TopLevelMessageRow,
     },
     ports::{
-        ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage,
-        ChannelMessagesQueryResult, ChannelMessagesRepo, ChannelMessagesService,
+        ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult,
+        ChannelMessagesRepo, ChannelMessagesService,
     },
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
 use uuid::Uuid;
 
@@ -114,17 +115,36 @@ where
 /// - `limit`: total number of messages to return (including the anchor).
 ///
 /// Returns messages in DESC order (newest first).
+struct CenteredWindow {
+    rows: Vec<TopLevelMessageRow>,
+    has_more_newer: bool,
+}
+
+impl std::ops::Deref for CenteredWindow {
+    type Target = [TopLevelMessageRow];
+
+    fn deref(&self) -> &Self::Target {
+        &self.rows
+    }
+}
+
 fn center_window(
     before: Vec<TopLevelMessageRow>,
     anchor: TopLevelMessageRow,
     after: Vec<TopLevelMessageRow>,
     limit: usize,
-) -> Vec<TopLevelMessageRow> {
+) -> CenteredWindow {
     if limit == 0 {
-        return vec![];
+        return CenteredWindow {
+            rows: vec![],
+            has_more_newer: !after.is_empty(),
+        };
     }
     if limit == 1 {
-        return vec![anchor];
+        return CenteredWindow {
+            rows: vec![anchor],
+            has_more_newer: !after.is_empty(),
+        };
     }
 
     let slots = limit - 1;
@@ -133,6 +153,7 @@ fn center_window(
     let before_take = half.min(before.len());
     let after_take = (slots - before_take).min(after.len());
     let before_take = (slots - after_take).min(before.len());
+    let has_more_newer = after.len() > after_take;
 
     let mut before = before;
     before.truncate(before_take);
@@ -146,7 +167,10 @@ fn center_window(
     result.push(anchor);
     result.append(&mut before);
 
-    result
+    CenteredWindow {
+        rows: result,
+        has_more_newer,
+    }
 }
 
 impl<R> ChannelMessagesService for ChannelMessagesServiceImpl<R>
@@ -162,12 +186,20 @@ where
         direction: MessagePageDirection,
         limit: u16,
         filters: &ChannelMessageFilters,
+        notification_user_id: Option<MacroUserIdStr<'static>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         let limit = limit.clamp(1, 100);
 
         let rows_result = self
             .repo
-            .get_top_level_messages(channel_id, &query, direction, limit, filters)
+            .get_top_level_messages(
+                channel_id,
+                &query,
+                direction,
+                limit,
+                filters,
+                notification_user_id,
+            )
             .await
             .map_err(anyhow::Error::from)?;
 
@@ -191,12 +223,13 @@ where
         channel_id: Uuid,
         query: Query<Uuid, CreatedAt, ()>,
         limit: u16,
+        attachment_type: Option<ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         let limit = limit.clamp(1, 500);
 
         let attachments = self
             .repo
-            .get_channel_attachments(channel_id, &query, limit)
+            .get_channel_attachments(channel_id, &query, limit, attachment_type)
             .await
             .map_err(anyhow::Error::from)?;
 
@@ -229,7 +262,7 @@ where
         channel_id: Uuid,
         message_id: Uuid,
         limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         let limit = limit.clamp(1, 100);
 
         let anchor = self
@@ -239,14 +272,30 @@ where
             .map_err(anyhow::Error::from)?
             .ok_or(ChannelMessagesErr::MessageNotFound(message_id))?;
 
+        if anchor.deleted_at.is_some() {
+            let thread_data = self
+                .repo
+                .get_thread_data(&[anchor.id], 1)
+                .await
+                .map_err(anyhow::Error::from)?;
+            let has_active_replies = thread_data
+                .get(&anchor.id)
+                .is_some_and(|td| td.reply_count > 0);
+
+            if !has_active_replies {
+                return Err(ChannelMessagesErr::MessageNotFound(message_id));
+            }
+        }
+
         let (before, after) = self
             .repo
             .get_top_level_messages_around(channel_id, anchor.created_at, anchor.id, limit)
             .await
             .map_err(anyhow::Error::from)?;
 
-        let rows = center_window(before, anchor, after, limit.into());
-        let messages = self.hydrate_messages(rows).await?;
+        let window = center_window(before, anchor, after, limit.into());
+        let has_more_newer = window.has_more_newer;
+        let messages = self.hydrate_messages(window.rows).await?;
 
         let page = messages
             .into_iter()
@@ -254,7 +303,10 @@ where
             .filter_on(())
             .into_page();
 
-        Ok(page)
+        Ok(ChannelMessagesQueryResult {
+            page,
+            has_more_newer,
+        })
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -304,5 +356,18 @@ where
             .collect();
 
         Ok(replies)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn resolve_message(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<ResolvedChannelMessage, ChannelMessagesErr> {
+        self.repo
+            .resolve_message(channel_id, message_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(ChannelMessagesErr::MessageNotFound(message_id))
     }
 }

@@ -8,7 +8,6 @@
  * Version 1.1 - August 7, 2025. Added scale support to media nodes.
  * Version 1.2 - Feb 3, 2026. Added theme-mention-node.
  * Version 1.21 - Feb 4, 2026. Added fallback-xml tag node.
+ * Version 1.3 - Apr 30, 2026. Added AwaitNode.
  */
-export const MARKDOWN_VERSION_COUNTER = 1.21;
-
-export const STAGING_TAG = 'staging';
+export const MARKDOWN_VERSION_COUNTER = 1.3;

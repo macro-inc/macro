@@ -4,7 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { TranscriptSegmentRequestDiarizedSpeakerId } from './transcriptSegmentRequestDiarizedSpeakerId';
 import type { TranscriptSegmentRequestEndedAt } from './transcriptSegmentRequestEndedAt';
+import type { TranscriptSegmentRequestStreamStartedAt } from './transcriptSegmentRequestStreamStartedAt';
 
 /**
  * A transcript segment from LiveKit Inference STT.
@@ -12,6 +14,10 @@ import type { TranscriptSegmentRequestEndedAt } from './transcriptSegmentRequest
 export interface TranscriptSegmentRequest {
   /** The transcribed text content. */
   content: string;
+  /** Stable per-speaker identifier produced by the STT provider's diarization
+pass. Namespaced upstream by audio track so values are unique across all
+tracks in a call. `None` when the provider didn't return a speaker label. */
+  diarizedSpeakerId?: TranscriptSegmentRequestDiarizedSpeakerId;
   /** When the speaker stopped talking for this segment. */
   endedAt?: TranscriptSegmentRequestEndedAt;
   /** Whether this is a final transcription (not interim). */
@@ -22,4 +28,10 @@ export interface TranscriptSegmentRequest {
   speakerId: string;
   /** When the speaker started talking for this segment. */
   startedAt: string;
+  /** Wall-clock when the transcriber's STT stream first received audio
+for this participant. The server takes the earliest non-null value
+across all participants and uses it to overwrite the
+`egress_started`-derived `recording_started_at`, which is too early
+(it stamps egress bootstrap, not first audio frame). */
+  streamStartedAt?: TranscriptSegmentRequestStreamStartedAt;
 }

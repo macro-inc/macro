@@ -6,6 +6,8 @@ import {
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -281,6 +283,14 @@ const INTERNAL_CALL_SECRET = aws.secretsmanager
   .getSecretVersionOutput({ secretId: config.require('call_internal_secret') })
   .apply((secret) => secret.secretString);
 
+const ANTHROPIC_API_KEY = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.get('anthropic_api_key') ?? '',
+  })
+  .apply((secret) => {
+    return secret.secretString;
+  });
+
 // Cal.com webhook — HMAC secret, resolved at runtime via Secrets Manager.
 const CAL_WEBHOOK_SECRET_KEY = config.require('cal_webhook_secret_key');
 const calWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
@@ -389,6 +399,10 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'INTERNAL_CALL_SECRET',
         value: pulumi.interpolate`${INTERNAL_CALL_SECRET}`,
+      },
+      {
+        name: 'ANTHROPIC_API_KEY',
+        value: pulumi.interpolate`${ANTHROPIC_API_KEY}`,
       },
       {
         name: 'LIVEKIT_SERVER_URL',
@@ -504,10 +518,8 @@ const cloudStorageService = new CloudStorageService(
         value: pulumi.interpolate`${INTERNAL_API_SECRET_KEY}`,
       },
       {
-        name: 'CONNECTION_GATEWAY_URL',
-        value: `https://connection-gateway${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        name: ServiceUrl.CONNECTION_GATEWAY_URL,
+        value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
       },
       {
         name: 'BULK_UPLOAD_REQUESTS_TABLE',
@@ -524,16 +536,16 @@ const cloudStorageService = new CloudStorageService(
         value: pulumi.interpolate`${SYNC_SERVICE_AUTH_KEY}`,
       },
       {
-        name: 'SYNC_SERVICE_URL',
-        value: `https://sync-service-${stack === 'dev' ? 'dev3' : 'prod2'}.macroverse.workers.dev`,
+        name: ServiceUrl.SYNC_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
       },
       {
         name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
         value: pulumi.interpolate`${AUTHENTICATION_SERVICE_SECRET_KEY}`,
       },
       {
-        name: 'AUTHENTICATION_SERVICE_URL',
-        value: `https://auth-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+        name: ServiceUrl.AUTHENTICATION_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL),
       },
       {
         name: 'MACRO_API_TOKEN_ISSUER',

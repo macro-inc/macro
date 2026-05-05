@@ -27,6 +27,7 @@ import {
   toPropertyDefinitionDomain,
   useSearchInputFocus,
 } from '../../utils';
+import { Panel } from '@ui';
 
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
@@ -160,9 +161,11 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     >
       <Dialog.Portal>
         <DialogWrapper contentRef={setDialogRef}>
-          <div class="flex flex-col overflow-hidden bracket-never text-sm">
-            <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
-              <span class="pl-2 pointer-events-none">❯</span>
+          <Panel depth={2} class="flex flex-col text-sm">
+            <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
+              <span class="pl-2 pointer-events-none text-ink-extra-muted">
+                ❯
+              </span>
               <input
                 ref={searchInputRef}
                 type="text"
@@ -196,7 +199,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                         id={`select-property-option-${index()}`}
                         class={cn(
                           'flex flex-row w-full items-center gap-2 py-1.5 px-2 scroll-my-1',
-                          isFocused(index()) && 'bg-hover'
+                          isFocused(index()) && 'bg-active'
                         )}
                         onClick={() => addProperty(property.id)}
                         onMouseEnter={() => setFocusedIndex(index())}
@@ -205,7 +208,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                           property={property}
                           class="opacity-50 shrink-0"
                         />
-                        <p class="text-sm font-medium truncate text-left grow-1">
+                        <p class="text-sm font-medium truncate text-left grow">
                           {property.displayName}
                         </p>
                         <p class="text-sm text-ink-extra-muted/50 shrink-0">
@@ -236,7 +239,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                 </div>
               </Show>
             </div>
-          </div>
+          </Panel>
         </DialogWrapper>
       </Dialog.Portal>
     </Dialog>

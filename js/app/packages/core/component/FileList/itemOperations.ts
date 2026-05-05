@@ -2,6 +2,7 @@ import { analytics } from '@app/lib/analytics';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr, isOk } from '@core/util/maybeResult';
+import { callServiceClient } from '@service-call/client';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
@@ -111,6 +112,13 @@ export async function renameItem(args: {
       });
       break;
     }
+    case 'call': {
+      result = await callServiceClient.editCallRecord({
+        callId: id,
+        customName: newName,
+      });
+      break;
+    }
     default: {
       return false;
     }
@@ -183,9 +191,11 @@ export async function deleteItem(args: {
       itemType === 'channel' ||
       itemType === 'email' ||
       itemType === 'channel_message' ||
-      itemType === 'automation'
+      itemType === 'automation' ||
+      itemType === 'call'
     )
       return false;
+
     const removed = await removeHistoryItem(itemType, id);
     if (!removed) return false;
   }

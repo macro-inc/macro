@@ -18,8 +18,8 @@ import {
   setThemeShouldMatchSystem,
   themeShouldMatchSystem,
   themes,
-} from '../../block-theme/signals/themeSignals';
-import { applyTheme } from '../../block-theme/utils/themeUtils';
+} from '../../theme/signals/themeSignals';
+import { applyTheme } from '../../theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
 import { CommandState } from './command';
 import {

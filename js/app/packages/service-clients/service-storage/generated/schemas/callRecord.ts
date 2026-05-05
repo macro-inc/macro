@@ -5,11 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CallRecordChannelName } from './callRecordChannelName';
+import type { CallRecordCustomName } from './callRecordCustomName';
 import type { CallRecordDurationMs } from './callRecordDurationMs';
 import type { CallRecordEgressId } from './callRecordEgressId';
 import type { CallRecordEndedAt } from './callRecordEndedAt';
 import type { CallRecordParticipant } from './callRecordParticipant';
+import type { CallRecordRecordingStartedAt } from './callRecordRecordingStartedAt';
 import type { CallRecordRecordingUrl } from './callRecordRecordingUrl';
+import type { CallRecordSummary } from './callRecordSummary';
 import type { CallRecordTranscriptSegment } from './callRecordTranscriptSegment';
 
 /**
@@ -25,6 +28,9 @@ export interface CallRecord {
   channelName?: CallRecordChannelName;
   /** User who created the call. */
   createdBy: string;
+  /** User-supplied or AI-generated display name for the call. Only set on
+archived `call_records`; active calls always return `None`. */
+  customName?: CallRecordCustomName;
   /** Call duration in milliseconds (None if still active). */
   durationMs?: CallRecordDurationMs;
   /** Recording egress ID, if any. */
@@ -35,12 +41,20 @@ export interface CallRecord {
   isActive: boolean;
   /** Participants (both active and historic). */
   participants: CallRecordParticipant[];
+  /** When the egress recording actually began. `None` until the
+`egress_started` webhook arrives (typically a few seconds after
+`started_at`). Frontend should anchor transcript-to-audio sync to
+this value when present, falling back to `started_at` otherwise. */
+  recordingStartedAt?: CallRecordRecordingStartedAt;
   /** Presigned URL for the call recording, if available. */
   recordingUrl?: CallRecordRecordingUrl;
   /** The RTC room name. */
   roomName: string;
   /** When the call started (created_at for active, started_at for archived). */
   startedAt: string;
+  /** AI-generated summary of the call. Only set on archived `call_records`
+once summarization has run; active calls always return `None`. */
+  summary?: CallRecordSummary;
   /** Transcript segments ordered by `sequence_num`. */
   transcript: CallRecordTranscriptSegment[];
 }

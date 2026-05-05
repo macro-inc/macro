@@ -1,6 +1,4 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import type { Model } from '@core/component/AI/types';
-import { isDssImage, isImageAttachment } from '@core/component/AI/util';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
@@ -66,20 +64,17 @@ export function UserMessage(props: {
   };
 
   const imageAttachments = () =>
-    props.message.attachments.filter((a) => isImageAttachment(a));
+    props.message.attachments.filter((a) => a.entity_type === 'static_file');
 
   const itemPreviewAttachments = () =>
-    props.message.attachments.filter(
-      (a) =>
-        // jail
-        !isImageAttachment(a) &&
-        ['channel', 'document', 'email', 'project'].includes(a.attachmentType)
+    props.message.attachments.filter((a) =>
+      ['channel', 'document', 'email_thread', 'project'].includes(a.entity_type)
     );
 
   return (
-    <div class="flex flex-col space-y-2 group">
+    <div class="flex flex-col group">
       <Show when={quote()}>
-        <div class="relative w-full text-xs flex flex-row space-x-2 justify-end items-start text-ink-muted">
+        <div class="relative w-full text-xs flex flex-row space-x-2 items-start text-ink-muted">
           <div class="flex flex-row items-center space-x-3">
             <QuoteIcon class="w-3 h-3 shrink-0" />
             <p>"{quote()?.substring(0, 300)}..."</p>
@@ -87,25 +82,27 @@ export function UserMessage(props: {
         </div>
       </Show>
       <Show when={props.message.attachments.length > 0}>
-        <div class="flex flex-col space-y-2 items-end justify-end w-auto px-1 pb-1 pl-4 mb-2">
+        <div class="flex flex-col flex-wrap justify-end items-end gap-1 w-full px-1 mb-2">
           <For each={imageAttachments()}>
             {(attachment) => (
               <ImagePreview
-                image={{ id: attachment.attachmentId }}
+                image={{ id: attachment.entity_id }}
                 variant="small"
-                isDss={isDssImage(attachment)}
+                isDss={false}
               />
             )}
           </For>
           <For each={itemPreviewAttachments()}>
             {(attachment) => (
               <ItemPreview
-                id={attachment.attachmentId}
-                // TODO: improve typing for item preview attachments
+                id={attachment.entity_id}
                 type={
-                  attachment.attachmentType as
+                  (attachment.entity_type === 'email_thread'
+                    ? 'email'
+                    : attachment.entity_type) as
                     | 'channel'
                     | 'document'
+                    | 'email'
                     | 'project'
                 }
               />
@@ -115,21 +112,23 @@ export function UserMessage(props: {
       </Show>
 
       <Show when={content()}>
-        <div class="flex flex-row justify-end w-auto items-center">
+        <div class="flex flex-row w-full items-center">
           <Switch>
             <Match when={!isEditing()}>
-              <Show when={props.edit}>
-                <DeprecatedIconButton
-                  icon={PencilIcon}
-                  theme="clear"
-                  onClick={() => setIsEditing(true)}
-                />
-              </Show>
-              <div class="text-align-right! bg-message sender-message px-3.5 w-auto max-w-[80%] py-1.5 whitespace-pre-line relative">
+              <div class="bg-message sender-message rounded-md px-3 py-1 my-px ring ring-edge-muted whitespace-pre-line relative ml-auto max-w-[calc(100%-8rem)]">
                 <ChatMessageMarkdown
                   generating={() => false}
                   text={content()!}
                 />
+                <Show when={props.edit}>
+                  <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <DeprecatedIconButton
+                      icon={PencilIcon}
+                      theme="clear"
+                      onClick={() => setIsEditing(true)}
+                    />
+                  </div>
+                </Show>
               </div>
             </Match>
             <Match when={isEditing()}>
@@ -137,7 +136,7 @@ export function UserMessage(props: {
                 chatId={props.edit!.chatId}
                 attachments={props.message.attachments}
                 initialText={props.message.content.toString()}
-                model={(props.message.model as Model) ?? DEFAULT_MODEL}
+                model={DEFAULT_MODEL}
                 onAccept={() => {}}
                 onCancel={() => setIsEditing(false)}
               />

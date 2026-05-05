@@ -45,8 +45,8 @@ export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
         <LogoIcon class="size-16 text-accent self-center" />
         <h2 class="text-3xl font-semibold text-ink mt-3">Welcome to Macro.</h2>
         <p class="text-base text-ink/60 mt-4">
-          Macro is a unified system for work – built for <strong>speed</strong>{' '}
-          and <strong>focus</strong>.
+          Macro is a unified system for work{'\u2060'}—built for{' '}
+          <strong>speed</strong> and <strong>focus</strong>.
         </p>
 
         <form
@@ -76,7 +76,7 @@ export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
         <A
           href="/login"
           onClick={() => analytics.track('login_from_onboarding')}
-          class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between gap-2 border-none bg-transparent text-ink/50 hover:bg-hover/60 ring-1 ring-edge-muted/50"
+          class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between gap-2 border-none bg-transparent text-ink/50 hover:bg-hover/60 ring-1 ring-edge-muted"
         >
           Login
         </A>

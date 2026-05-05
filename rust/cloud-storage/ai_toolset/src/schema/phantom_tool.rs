@@ -1,4 +1,4 @@
-use super::generate::{ToolSchema, ToolSchemaGenerator, ToolSchemas};
+use super::generate::{CombinedToolEntry, ToolSchema, ToolSchemaGenerator, ToolSchemas};
 use schemars::{JsonSchema, schema_for};
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -44,5 +44,18 @@ where
                 output_schema: output_schema_json,
             }],
         }
+    }
+
+    fn register_schemas(
+        &self,
+        generator: &mut schemars::SchemaGenerator,
+    ) -> Vec<CombinedToolEntry> {
+        generator.subschema_for::<I>();
+        generator.subschema_for::<O>();
+        vec![CombinedToolEntry {
+            name: self.name.to_owned(),
+            input: I::schema_name().into_owned(),
+            output: O::schema_name().into_owned(),
+        }]
     }
 }

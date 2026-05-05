@@ -1,7 +1,10 @@
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { isEditableInput } from '@core/util/isEditableInput';
 import Drawer from '@corvu/drawer';
+import { Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
-  createSignal,
+  onCleanup,
   splitProps,
   type ComponentProps,
   type ValidComponent,
@@ -13,21 +16,18 @@ import { Dynamic } from 'solid-js/web';
  * focused input/textarea to `offset` px from the container's top edge.
  *
  * Usage:
- *   <div onFocusIn={(e) => scrollToFocusedInput(e, e.currentTarget)}>
+ *   <div onFocusIn={(e) => scrollToFocusedInput(e)}>
  */
-export function scrollToFocusedInput(
-  e: FocusEvent & { currentTarget: HTMLElement },
-  offset = 40
-) {
-  if (
-    !(e.target instanceof HTMLInputElement) &&
-    !(e.target instanceof HTMLTextAreaElement)
-  )
+let scrollTimer: ReturnType<typeof setTimeout> | undefined;
+
+export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
+  if (!isEditableInput(e.target as Element) || scrollTimer !== undefined)
     return;
   const input = e.target as HTMLElement;
-  const container = e.currentTarget;
+  const container = e.currentTarget as HTMLElement;
   // Has to be delayed until after browser's native keyboard-show scroll completes
-  setTimeout(() => {
+  scrollTimer = setTimeout(() => {
+    scrollTimer = undefined;
     const inputRect = input.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
     container.scrollTo({
@@ -50,54 +50,91 @@ export function scrollToFocusedInput(
  */
 function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
   const [local, rest] = splitProps(props, ['class']);
-  const [inputFocused, setInputFocused] = createSignal(false);
 
-  const isInputEl = (target: EventTarget | null) =>
-    target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+  onCleanup(() => {
+    clearTimeout(scrollTimer);
+    scrollTimer = undefined;
+  });
 
   return (
-    <Drawer.Content
-      onFocusIn={(e: FocusEvent) => {
-        if (isInputEl(e.target)) setInputFocused(true);
-      }}
-      onFocusOut={(e: FocusEvent) => {
-        if (isInputEl(e.target)) setInputFocused(false);
-      }}
-      class={cn(
-        'bottom-(--virtual-keyboard-height) fixed left-0 right-0 z-modal bg-page rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
-        inputFocused()
-          ? 'pb-0 max-h-[calc(80vh-var(--virtual-keyboard-height))] overflow-y-auto'
-          : 'pb-(--safe-bottom)',
-        local.class
-      )}
-      {...rest}
-    />
+    <Layer depth={1}>
+      <Drawer.Content
+        onFocusIn={(e: FocusEvent) => {
+          scrollToFocusedInput(e);
+        }}
+        class={cn(
+          'bottom-[var(--virtual-keyboard-height,0)] fixed left-0 right-0 z-modal bg-panel rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
+          virtualKeyboardVisible()
+            ? 'pb-0 max-h-[calc(80vh-var(--virtual-keyboard-height))] overflow-y-auto'
+            : 'pb-(--safe-bottom)',
+          local.class
+        )}
+        {...rest}
+      />
+    </Layer>
   );
 }
 
-type MobileDrawerSectionProps<T extends ValidComponent = 'div'> =
-  ComponentProps<T> & {
-    as?: T;
-  };
+type ExtendDiv<T extends ValidComponent = 'div'> = ComponentProps<T> & {
+  as?: T;
+};
+
+/**
+ * Component for rendering style Drawer Section Labels.
+ */
+function MobileDrawerSectionLabel<T extends ValidComponent = 'div'>(
+  props: ExtendDiv<T>
+) {
+  const [local, rest] = splitProps(props, ['as', 'class', 'children']);
+  return (
+    <Dynamic
+      component={local.as ?? 'div'}
+      class={cn(
+        'px-3 pb-2 text-xs font-medium text-ink-muted uppercase tracking-wide',
+        local.class
+      )}
+      {...rest}
+    >
+      {local.children}
+    </Dynamic>
+  );
+}
 
 /**
  * Component for rendering styled Drawer sections.
  */
 function MobileDrawerSection<T extends ValidComponent = 'div'>(
-  props: MobileDrawerSectionProps<T>
+  props: ExtendDiv<T>
 ) {
-  const [local, rest] = splitProps(props as MobileDrawerSectionProps, [
-    'as',
-    'class',
-    'children',
-  ]);
+  const [local, rest] = splitProps(props, ['as', 'class', 'children']);
+  return (
+    <Layer depth={2}>
+      <Dynamic
+        component={(local.as ?? 'div') as ValidComponent}
+        class={cn('rounded-2xl mx-3 overflow-clip', local.class)}
+        {...rest}
+      >
+        {local.children}
+      </Dynamic>
+    </Layer>
+  );
+}
+
+/**
+ * Component for rendering the standard mobile drawer drag handle.
+ */
+function MobileDrawerHandle<T extends ValidComponent = 'div'>(
+  props: ExtendDiv<T>
+) {
+  const [local, rest] = splitProps(props, ['as', 'class', 'children']);
+
   return (
     <Dynamic
-      component={(local.as ?? 'div') as ValidComponent}
-      class={cn('bg-menu rounded-2xl mx-3', local.class as string)}
+      component={local.as ?? 'div'}
+      class={cn('flex justify-center pt-3 pb-2 shrink-0', local.class)}
       {...rest}
     >
-      {local.children}
+      {local.children ?? <div class="w-10 h-1 rounded-full bg-edge-muted" />}
     </Dynamic>
   );
 }
@@ -107,7 +144,13 @@ function MobileDrawerSection<T extends ValidComponent = 'div'>(
  */
 export const MobileDrawer = Object.assign(
   (props: ComponentProps<typeof Drawer>) => (
-    <Drawer breakPoints={[0.8]} {...props} />
+    <Drawer
+      breakPoints={[0.8]}
+      closeOnOutsideFocus={false}
+      noOutsidePointerEvents={false}
+      restoreFocus={false}
+      {...props}
+    />
   ),
   {
     Trigger: Drawer.Trigger,
@@ -115,6 +158,8 @@ export const MobileDrawer = Object.assign(
     Overlay: Drawer.Overlay,
     Content: MobileDrawerContent,
     Close: Drawer.Close,
+    Handle: MobileDrawerHandle,
     Section: MobileDrawerSection,
+    Label: MobileDrawerSectionLabel,
   }
 );

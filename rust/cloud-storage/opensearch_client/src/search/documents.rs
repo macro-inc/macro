@@ -10,7 +10,7 @@ use opensearch_query_builder::{BoolQueryBuilder, QueryType};
 pub(crate) struct DocumentSearchConfig;
 
 impl SearchQueryConfig for DocumentSearchConfig {
-    const USER_ID_KEY: &'static str = "owner_id";
+    const USER_ID_KEY: Option<&'static str> = Some("owner_id");
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Documents;
 }

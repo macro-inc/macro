@@ -96,11 +96,19 @@ export function toolCall(_delay: NetworkDelay = noDelay) {
       type: 'toolCall',
       tool: {
         data: {
-          contentType: 'channel',
-          ids: ['this-is-not-a-real-id'],
-          messagesSince: null,
+          channelId: '00000000-0000-0000-0000-000000000001',
+          windowType: 'latest',
+          cursor: null,
+          direction: null,
+          from: null,
+          includeThreadPreviews: true,
+          limit: 25,
+          maxCharsPerMessage: null,
+          messageId: null,
+          messageIds: [],
+          to: null,
         },
-        name: 'ReadThread',
+        name: 'ReadChannelMessages',
       },
     },
     {

@@ -1,5 +1,9 @@
 import type { AppEvents, AppEventNames } from '@app/lib/analytics/app-events';
 import {
+  type GoogleConversionAction,
+  googleConversionSendTo,
+} from '@app/lib/analytics/googleConversions';
+import {
   initializeGoogleAnalytics,
   initializeMetaPixel,
 } from '@app/lib/analytics/providers';
@@ -12,13 +16,12 @@ import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
 /**
  * Resolves the user's device context for analytics enrichment.
  *
- * `getPlatform()` reads the build-time `VITE_PLATFORM` env var:
- *   - Tauri iOS/Android builds → 'ios' | 'android' → 'mobile-app'
- *   - Tauri desktop build → 'desktop' → 'desktop-app'
- *   - Web build → 'web' (used by both desktop and mobile browsers)
+ * `getPlatform()` runtime-detects via `isTauri()` + `@tauri-apps/plugin-os`:
+ *   - Tauri iOS/Android → 'ios' | 'android' → 'mobile-app'
+ *   - Tauri desktop OS → 'desktop' → 'desktop-app'
+ *   - Plain browser → 'web'
  *
- * Desktop and mobile browsers share the same web build, so we use
- * `isTouchDevice()` (checks `pointer: coarse` media query) to distinguish
+ * On web, `isTouchDevice()` (checks `pointer: coarse` media query) distinguishes
  * a phone/tablet browser ('mobile-web') from a desktop browser ('desktop-web').
  */
 const DEVICE_PROPERTY = 'macro_device' as const;
@@ -96,6 +99,11 @@ export type MetaStandardEvent = (typeof META_STANDARD_EVENT_NAMES)[number];
 
 const META_STANDARD_EVENTS: Set<string> = new Set(META_STANDARD_EVENT_NAMES);
 
+const IGNORABLE_ERRORS = [
+  // This error is reported very frequently but is not an actual issue.
+  'ResizeObserver loop completed with undelivered notifications',
+];
+
 const initializePosthog = (instance: PostHog) => {
   const key = import.meta.env.VITE_POSTHOG_API_KEY;
   if (!key) return;
@@ -104,6 +112,19 @@ const initializePosthog = (instance: PostHog) => {
     api_host: 'https://macro-prox.macroverse.workers.dev/i/ph',
     ui_host: 'https://us.posthog.com',
     defaults: '2026-01-30',
+    before_send: (cr) => {
+      if (cr?.event !== '$exception') return cr;
+
+      const exceptionValues = cr.properties.$exception_values;
+
+      if (!exceptionValues || !Array.isArray(exceptionValues)) return cr;
+
+      if (IGNORABLE_ERRORS.some((e) => exceptionValues.includes(e))) {
+        return null;
+      }
+
+      return cr;
+    },
   });
 };
 
@@ -198,6 +219,35 @@ export const createAnalytics = () => {
     sendEvent('meta-pixel', event, data);
   };
 
+  /**
+   * Fires a Google Ads conversion via `gtag('event', 'conversion', ...)`.
+   * `action` is typed to `GoogleConversionAction`, resolved to its `AW-{id}/{label}`
+   * `send_to` via `googleConversionSendTo`.
+   *
+   * Pass `transaction_id` whenever possible — Google dedupes server-side on it,
+   * which matters here because both call sites fire from `onMount` and a refresh
+   * re-fires. A user id (post-signup) or the submitted email (mobile lead capture)
+   * are both fine.
+   *
+   * Per-action `value` lets a single campaign optimize across multiple primaries
+   * (Smart Bidding sums values across the goal). See `googleConversions.ts`.
+   */
+  const trackGoogleConversion = (
+    action: GoogleConversionAction,
+    data?: { value?: number; currency?: string; transaction_id?: string }
+  ) => {
+    if (disabled) return;
+
+    try {
+      gtag('event', 'conversion', {
+        send_to: googleConversionSendTo(action),
+        ...data,
+      });
+    } catch (e) {
+      console.error('[Analytics] Failed to send Google Ads conversion:', e);
+    }
+  };
+
   const identify = (userID: string, info: Partial<UserIdentifyInfo>) => {
     if (disabled) return;
 
@@ -271,6 +321,7 @@ export const createAnalytics = () => {
     initializeProviders,
     track,
     trackMeta,
+    trackGoogleConversion,
     identify,
     reset,
     pageView,
@@ -281,6 +332,10 @@ export type AnalyticsInterface = {
   posthog: PostHog;
   track: TrackFn;
   trackMeta: (event: MetaStandardEvent, data?: Record<string, unknown>) => void;
+  trackGoogleConversion: (
+    action: GoogleConversionAction,
+    data?: { value?: number; currency?: string; transaction_id?: string }
+  ) => void;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
   reset: () => void;
   pageView: (pageTitle: string, opts?: PageViewOptions) => void;

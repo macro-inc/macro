@@ -70,13 +70,24 @@ impl TeamUserTier {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, PartialOrd, Copy, std::cmp::Ord, serde::Serialize)]
+#[derive(
+    Eq,
+    PartialEq,
+    Debug,
+    Clone,
+    PartialOrd,
+    Copy,
+    std::cmp::Ord,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",
     sqlx(type_name = "\"team_role\"", rename_all = "lowercase")
 )]
+#[serde(rename_all = "lowercase")]
 /// Ordered from least to most access top -> bottom
 pub enum TeamRole {
     /// The user is a member of the team
@@ -149,6 +160,19 @@ pub struct TeamInviteDetails {
 pub struct PatchTeamRequest {
     /// The new name for the team
     pub name: Option<String>,
+    /// Role updates to apply to team users
+    pub user_role_updates: Option<Vec<PatchTeamUserRole>>,
+}
+
+/// Request to update a team user's role
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamUserRole {
+    /// The team user you are updating
+    #[cfg_attr(feature = "axum", schema(value_type = String))]
+    pub team_user_id: MacroUserIdStr<'static>,
+    /// The new role of the team user
+    pub role: TeamRole,
 }
 
 /// Request to update a team user's tier
@@ -233,6 +257,36 @@ impl TeamInvite<'static> {
             email: self.email.to_owned(),
         }
     }
+}
+
+/// Snapshot of a team invite before it is accepted.
+#[derive(Debug, Clone)]
+pub struct TeamInviteSnapshot<'a> {
+    /// The invite id
+    pub id: uuid::Uuid,
+    /// The team id
+    pub team_id: uuid::Uuid,
+    /// The invited email
+    pub email: Email<Lowercase<'a>>,
+    /// The role being invited as
+    pub team_role: TeamRole,
+    /// The user who sent the invitation
+    pub invited_by: MacroUserIdStr<'a>,
+    /// When the invite was created
+    pub created_at: DateTime<Utc>,
+    /// When the invite was last sent
+    pub last_sent_at: DateTime<Utc>,
+    /// The tier being invited as
+    pub tier: TeamUserTier,
+}
+
+/// Result of accepting a team invite, including the data needed to roll it back.
+#[derive(Debug, Clone)]
+pub struct AcceptedTeamInvite<'a> {
+    /// The accepted team member
+    pub member: TeamMember<'a>,
+    /// Snapshot of the invite before it was accepted
+    pub invite: TeamInviteSnapshot<'a>,
 }
 
 /// Errors for team

@@ -22,6 +22,7 @@ use model::document::{
     DocumentBasic, DocumentMetadata,
     response::{CreateDocumentResponseData, GetDocumentResponseData, LocationResponseV3},
 };
+use model_entity::Entity;
 use models_permissions::share_permission::access_level::AccessLevel;
 
 use super::*;
@@ -117,6 +118,15 @@ impl DocumentService for StubDocumentService {
     ) -> Result<String, DocumentError> {
         unimplemented!()
     }
+    async fn get_project_children(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<Entity<'static>>, DocumentError> {
+        unimplemented!()
+    }
+    async fn get_project_name(&self, project_id: &str) -> Result<String, DocumentError> {
+        unimplemented!()
+    }
     async fn get_document(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -200,6 +210,22 @@ impl DocumentService for StubDocumentService {
         _plain_user_id: String,
         _request: documents::domain::models::CreateTaskRequest,
     ) -> Result<documents::domain::models::CreateTaskResponse, DocumentError> {
+        unimplemented!()
+    }
+
+    async fn get_document_comments(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<documents::domain::models::CommentThread>, DocumentError> {
+        unimplemented!()
+    }
+
+    async fn handle_task_properties(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _document_id: &str,
+        _request: &documents::domain::models::CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
         unimplemented!()
     }
 }

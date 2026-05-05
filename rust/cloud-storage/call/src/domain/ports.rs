@@ -11,12 +11,15 @@ use uuid::Uuid;
 
 use item_filters::ast::{LiteralTree, call::CallLiteral};
 
-use crate::domain::models::EditCallRecordRequest;
+use crate::domain::models::{
+    CustomSpeakerAssignment, EditCallRecordRequest, EditCallTranscriptRequest,
+};
 
 use super::models::{
-    Call, CallActiveResponse, CallError, CallParticipant, CallRecord, CallTokenResponse,
-    CallWebhookEvent, EgressS3Config, GetCallRecordsRequest, LeaveCallResponse,
-    TranscriptSegmentRequest,
+    AddParticipantError, Call, CallActiveResponse, CallError, CallParticipant, CallRecord,
+    CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse, CallWebhookEvent,
+    EgressS3Config, GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse,
+    GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -54,11 +57,24 @@ pub trait CallRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
 
     /// Add a participant to a call.
+    ///
+    /// Returns [`AddParticipantError::UserAlreadyActive`] if the DB-level
+    /// partial unique index rejects the insert because the user is already
+    /// an active participant in another call. Other failures are wrapped in
+    /// [`AddParticipantError::Repository`].
     fn add_participant<'a>(
         &self,
         call_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
-    ) -> impl Future<Output = Result<CallParticipant, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<CallParticipant, AddParticipantError>> + Send;
+
+    /// Find the call the user is currently an active participant of, if any.
+    /// Scans globally across all channels and returns `(call_id, channel_id)`
+    /// for the first active participation row (`left_at IS NULL`).
+    fn find_active_call_for_user<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Option<(Uuid, Uuid)>, Self::Err>> + Send;
 
     /// Remove a participant from a call.
     fn remove_participant<'a>(
@@ -131,6 +147,17 @@ pub trait CallRepository: Send + Sync + 'static {
         recording_key: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Set `recording_started_at` on whichever row currently owns the egress —
+    /// active `calls` first, then archived `call_records` — driven by the
+    /// `egress_started` webhook. Idempotent: only sets the column when it is
+    /// still `NULL` so a duplicate or retried webhook can't overwrite a
+    /// previously captured start time.
+    fn set_recording_started_at_by_egress_id(
+        &self,
+        egress_id: &str,
+        started_at: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Insert a transcript segment for an active call.
     fn create_transcript_segment(
         &self,
@@ -152,6 +179,22 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_id: &Uuid,
     ) -> impl Future<Output = Result<Option<CallRecord>, Self::Err>> + Send;
+
+    /// Batch-fetch lightweight previews for the given call ids.
+    ///
+    /// Returns one [`CallRecordPreview`] per deduplicated id in `call_ids`,
+    /// in the order supplied. Ids that resolve to a row (in either `calls`
+    /// or `call_records`) come back as [`CallRecordPreview::Exists`]; ids
+    /// that match neither come back as [`CallRecordPreview::DoesNotExist`].
+    /// No access checks are performed.
+    ///
+    /// `user_id` is used solely to resolve channel display names (e.g. the
+    /// "other participant" in a DM) and is not used for authorization.
+    fn batch_get_call_record_previews<'a>(
+        &self,
+        call_ids: &[Uuid],
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Vec<CallRecordPreview>, Self::Err>> + Send;
 
     /// Fetch the most recent call records where the given user was a
     /// participant, spanning both active (`calls` + `call_participants`)
@@ -187,6 +230,40 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_record_id: &Uuid,
         request: &EditCallRecordRequest,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Apply a batch of per-diarized-speaker `custom_speaker` overrides to
+    /// the archived `call_record_transcripts` rows for `call_record_id`.
+    ///
+    /// Each entry sets `custom_speaker` for every row in the call whose
+    /// `diarized_speaker_id` matches; entries with `custom_speaker = None`
+    /// clear the override. Rows whose `diarized_speaker_id` doesn't appear
+    /// in `assignments` are left untouched. Empty `assignments` is a no-op.
+    fn patch_call_transcript_custom_speakers(
+        &self,
+        call_record_id: &Uuid,
+        assignments: &[CustomSpeakerAssignment],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Persist the AI-generated summary text on the archived call record.
+    ///
+    /// Tolerates unknown `call_id` (no row matches): the summarization flow
+    /// can race with the record being deleted, so this is an idempotent no-op
+    /// when the target row is gone.
+    fn insert_call_summary(
+        &self,
+        call_id: &Uuid,
+        summary: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Set `call_records.custom_name = $name` only when the existing value is
+    /// `NULL`. Used by the AI auto-naming flow so a user-set custom name is
+    /// never overwritten. No-op if no row matches or the column is already
+    /// populated.
+    fn set_custom_name_if_null(
+        &self,
+        call_id: &Uuid,
+        name: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
@@ -227,6 +304,48 @@ impl<T: RecordingStorage> RecordingStorage for Option<T> {
             None => anyhow::bail!("recording storage not configured"),
         }
     }
+}
+
+/// Summarizer port for generating an AI summary of a finished call.
+///
+/// Implementations are expected to produce a natural-language summary of
+/// the call given its finalized transcript. The returned [`String`] is the
+/// summary text that will be persisted on the corresponding `call_records`
+/// row (see the `insert_call_summary` repository operation).
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait CallSummarizer: Send + Sync + 'static {
+    /// The error type returned by summarization operations.
+    type Err: Into<anyhow::Error> + Send + Debug;
+
+    /// Produce a summary for the call identified by `call_id` using the
+    /// supplied finalized `transcript` segments. The segments are expected
+    /// to be ordered by `sequence_num` ascending (matching what is stored
+    /// in a [`CallRecord`]).
+    ///
+    /// Returns `Ok(None)` when the transcript has no substantive content to
+    /// summarize (empty, silence, fragmented/incoherent speech). Callers
+    /// must treat `None` as "do not persist a summary" — writing a
+    /// placeholder "transcript is uninformative" line is exactly the
+    /// behavior this is meant to avoid.
+    fn summarize_call(
+        &self,
+        call_id: &Uuid,
+        transcript: Vec<CallRecordTranscriptSegment>,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Produce a short display name for the call from its already-generated
+    /// summary. Used by the auto-name flow only when the call has no
+    /// user-supplied `custom_name` yet.
+    ///
+    /// Returns `Ok(None)` when the summary has no substantive content
+    /// (silence, test call, accidental recording) so the caller can leave
+    /// the existing `custom_name` untouched rather than persisting a
+    /// generic placeholder.
+    fn generate_call_name(
+        &self,
+        call_id: &Uuid,
+        summary: &str,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
@@ -344,6 +463,17 @@ pub trait CallService: Send + Sync + 'static {
         request: EditCallRecordRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
+    /// Apply per-diarized-speaker `custom_speaker` overrides to a call's
+    /// transcript. Authorization is carried in the receipt; the entity must
+    /// be `EntityType::Call` and its `entity_id` must be the call's UUID.
+    /// Each `custom_speaker` (when `Some`) must parse as a `MacroUserId`;
+    /// otherwise the request is rejected with [`CallError::InvalidRequest`].
+    fn edit_call_transcript(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        request: EditCallTranscriptRequest,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
     /// Toggle the `share_with_team` flag on the active call identified by the
     /// receipt. Authorization is carried in the receipt produced by
     /// `CallAccessLevelExtractor`; the entity on the receipt must be
@@ -353,6 +483,29 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<bool, CallError>> + Send;
+
+    /// Batch-fetch lightweight previews for a list of call ids.
+    ///
+    /// Mirrors the `POST /documents/preview` endpoint in
+    /// `document_storage_service`: no per-id access checks, duplicate ids
+    /// are deduplicated, and the response preserves the deduplicated input
+    /// order. `user_id` is passed through to the repository solely for
+    /// channel-name resolution.
+    fn get_batch_call_record_previews<'a>(
+        &self,
+        request: GetBatchCallRecordPreviewRequest,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<GetBatchCallRecordPreviewResponse, CallError>> + Send;
+
+    /// Generate and persist an AI summary for a finished call.
+    ///
+    /// Loads the [`CallRecord`] for `call_id`, passes its finalized transcript
+    /// to the configured [`CallSummarizer`], and persists the resulting
+    /// summary via [`CallRepository::insert_call_summary`]. If no summarizer
+    /// is configured, this is a no-op. Missing records (e.g. deleted mid-flow)
+    /// and empty transcripts are also no-ops — no AI call is made in those
+    /// cases.
+    fn summarize_call(&self, call_id: &Uuid) -> impl Future<Output = Result<(), CallError>> + Send;
 }
 
 /// Lightweight read-only port for querying call records in Soup.
@@ -380,5 +533,31 @@ impl CallRecordQueryService for NoOpCallRecordQueryService {
         _req: GetCallRecordsRequest,
     ) -> Result<Vec<CallRecord>, CallError> {
         Ok(Vec::new())
+    }
+}
+
+/// Propagates call record lifecycle events to the search index.
+pub trait CallSearchIndexer: Send + Sync + 'static {
+    /// Enqueue an upsert.
+    fn enqueue_upsert(&self, call_id: &Uuid) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Enqueue a removal.
+    fn enqueue_remove(
+        &self,
+        channel_id: &Uuid,
+        call_id: &Uuid,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// No-op for services without search.
+pub struct NoOpCallSearchIndexer;
+
+impl CallSearchIndexer for NoOpCallSearchIndexer {
+    async fn enqueue_upsert(&self, _call_id: &Uuid) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn enqueue_remove(&self, _channel_id: &Uuid, _call_id: &Uuid) -> anyhow::Result<()> {
+        Ok(())
     }
 }

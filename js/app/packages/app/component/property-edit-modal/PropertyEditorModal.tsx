@@ -80,7 +80,7 @@ function ListItem(props: {
       class={cn(
         'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 scroll-my-1',
         {
-          'bg-hover bracket': props.isSelected && !props.disabled,
+          'bg-active': props.isSelected && !props.disabled,
           'opacity-50 cursor-not-allowed': props.disabled,
         }
       )}
@@ -152,8 +152,8 @@ export function PropertyEditorModal() {
     <Dialog open={propertyEditorOpen()} onOpenChange={togglePropertyEditor}>
       <Dialog.Portal>
         <DialogWrapper contentRef={mergeRefs(attach, setDialogRef)}>
-          <div class="flex flex-col max-h-108 overflow-hidden bracket-never text-sm">
-            <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
+          <div class="flex flex-col max-h-108 overflow-hidden text-sm">
+            <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
               <span class="pl-2 pointer-events-none">❯</span>
               <SearchInput
                 placeHolder={placeholder() || defaultPlaceholder}
@@ -300,7 +300,7 @@ function PropertyList(props: {
     >
       <div
         ref={containerRef}
-        class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden p-1"
+        class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden p-1"
       >
         <For each={filteredProperties()}>
           {(property, index) => (
@@ -331,7 +331,7 @@ function EditingEntityPreview(props: { entities: EntityData[] }) {
         {(entity) => {
           return (
             <div
-              class={cn('bg-edge/20 px-2 py-1 truncate text-xs rounded-xs', {
+              class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
                 'max-w-[50%]': props.entities.length === 2,
               })}
             >
@@ -484,7 +484,7 @@ function SelectPropertyEditor(props: {
   const selector = createSelector(props.selectedIndex);
 
   return (
-    <div class="p-1 max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+    <div class="p-1 max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
       <Show
         when={filteredOptions().length > 0}
         fallback={
@@ -506,7 +506,7 @@ function SelectPropertyEditor(props: {
                 <p class="text-sm font-medium">{String(option.value.value)}</p>
               </div>
               <Show when={shouldShowHotkeys() && index() < 9}>
-                <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
+                <div class="text-xxs px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
                   <Hotkey shortcut={`${index() + 1}`} />
                 </div>
               </Show>
@@ -577,7 +577,7 @@ function EntityPropertyEditor(props: {
   const selector = createSelector(props.selectedIndex);
 
   return (
-    <div class="p-1 max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+    <div class="p-1 max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
       <Show
         when={entities().length > 0}
         fallback={
@@ -767,7 +767,7 @@ function DirectEditPropertyEditor(props: {
   };
 
   return (
-    <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden p-1">
+    <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden p-1">
       <ListItem
         id="property-value-option-0"
         isSelected={true}
@@ -841,7 +841,7 @@ function DatePropertyEditor(props: {
 
   return (
     <>
-      <div class="p-1 max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+      <div class="p-1 max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
         <Show
           when={dateOptions().length > 0}
           fallback={

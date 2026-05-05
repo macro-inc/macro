@@ -17,7 +17,7 @@ export function MultiSelectCheckbox(props: MultiSelectCheckboxProps) {
   return (
     <button
       type="button"
-      class="size-full relative group/button flex items-center justify-center bracket-never"
+      class="size-full relative group/button flex items-center justify-center"
       onMouseDown={(e) => {
         e.stopPropagation();
       }}

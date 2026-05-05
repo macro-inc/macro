@@ -13,10 +13,16 @@ import {
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import {
+  ChatWithAgentButton,
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/component/ChatWithAgentButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -163,14 +169,14 @@ export function TopBar(props: {
       buttonComponent: () => {
         const [hovering, setHovering] = createSignal(false);
         return (
-          <div class="border-1 border-edge-muted flex items-stretch rounded-xs">
+          <div class="border border-edge-muted flex items-stretch rounded-xs">
             <button
               class="h-7 px-2 flex items-center gap-1 text-xs hover:bg-hover hover-transition-bg"
               onMouseEnter={() => setHovering(true)}
               onMouseLeave={() => setHovering(false)}
               onClick={openTaskCompose}
             >
-              <div class="size-4 text-task">
+              <div class="size-4">
                 <AnimatedTaskIcon triggerAnimation={hovering()} />
               </div>
               <span class="text-ink">Task</span>
@@ -180,11 +186,30 @@ export function TopBar(props: {
       },
     },
     {
+      label: 'Chat',
+      icon: ChatWithAgentIcon,
+      action: () => {
+        const threadId = emailCtx.thread()?.db_id;
+        if (!threadId) return;
+        openChatWithAgent({ type: 'email', id: threadId, name: props.title });
+      },
+      condition: () => !!emailCtx.thread()?.db_id,
+      buttonComponent: () => {
+        const id = emailCtx.thread()?.db_id;
+        return id ? (
+          <ChatWithAgentButton
+            entity={{ type: 'email', id, name: props.title }}
+          />
+        ) : null;
+      },
+    },
+    {
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
       condition: () => ENABLE_EMAIL_SHARING,
       buttonComponent: () => <ShareTrigger />,
+      focusTarget: getShareDrawerRecipientInput,
     },
   ];
 

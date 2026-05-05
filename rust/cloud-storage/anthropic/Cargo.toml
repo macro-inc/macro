@@ -16,8 +16,8 @@ rand = { workspace = true }
 tokio = { workspace = true, features = ["sync"]}
 async-stream = { workspace = true }
 futures = { workspace = true }
-reqwest = { workspace = true }
-reqwest-eventsource = "0.6.0"
+reqwest = { workspace = true, features = ["stream"] }
+tokio-util = { workspace = true, features = ["io"] }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

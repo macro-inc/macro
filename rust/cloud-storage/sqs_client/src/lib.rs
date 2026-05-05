@@ -3,9 +3,6 @@ mod message_attribute;
 #[cfg(feature = "chat")]
 pub mod chat;
 
-#[cfg(feature = "contacts")]
-pub mod contacts;
-
 #[cfg(feature = "convert")]
 pub mod convert;
 
@@ -63,8 +60,6 @@ pub struct SQS {
     chat_delete_queue: Option<String>,
     #[cfg(feature = "document_text_extractor")]
     document_text_extractor_queue: Option<String>,
-    #[cfg(feature = "contacts")]
-    contacts_queue: Option<String>,
     #[cfg(feature = "upload_extractor")]
     upload_extractor_queue: Option<String>,
     #[cfg(feature = "convert")]
@@ -103,8 +98,6 @@ impl SQS {
             chat_delete_queue: None,
             #[cfg(feature = "document_text_extractor")]
             document_text_extractor_queue: None,
-            #[cfg(feature = "contacts")]
-            contacts_queue: None,
             #[cfg(feature = "upload_extractor")]
             upload_extractor_queue: None,
             #[cfg(feature = "convert")]

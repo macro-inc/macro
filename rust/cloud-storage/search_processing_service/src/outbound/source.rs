@@ -1,0 +1,256 @@
+use std::collections::HashMap;
+
+use model::document::FileType;
+use sqlx::PgPool;
+use sqs_client::search::{
+    SearchQueueMessage, call::CallRecordMessage, channel::ChannelMessageUpdate, chat::ChatMessage,
+    email::EmailThreadBatchMessage,
+};
+
+use crate::config::BackfillPageSizes;
+use crate::domain::models::{
+    BackfillError, CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest,
+    DocumentBackfillRequest, EmailBackfillRequest, SourcePage,
+};
+use crate::domain::ports::BackfillSource;
+
+const DEFAULT_EMAIL_BATCH_SIZE: usize = 50;
+
+/// Postgres-backed [`BackfillSource`] for every search-indexed entity. One
+/// struct, one DB pool, per-entity page sizes — collapses what used to be
+/// five parallel adapters. New entity types just add a method here.
+pub struct PgBackfillSource {
+    db: PgPool,
+    page_sizes: BackfillPageSizes,
+}
+
+impl PgBackfillSource {
+    pub fn new(db: PgPool, page_sizes: BackfillPageSizes) -> Self {
+        Self { db, page_sizes }
+    }
+}
+
+impl BackfillSource for PgBackfillSource {
+    async fn fetch_calls(
+        &self,
+        req: &CallBackfillRequest,
+        offset: usize,
+    ) -> Result<SourcePage, BackfillError> {
+        // Caller passed an explicit set of ids: page through them at the
+        // configured page size so this branch and the full-scan branch share
+        // the same loop shape and failure semantics.
+        if !req.call_ids.is_empty() {
+            let start = offset;
+            if start >= req.call_ids.len() {
+                return Ok(SourcePage::empty());
+            }
+            let end = start
+                .saturating_add(self.page_sizes.calls)
+                .min(req.call_ids.len());
+            let messages: Vec<SearchQueueMessage> = req.call_ids[start..end]
+                .iter()
+                .map(|id| {
+                    SearchQueueMessage::CallRecord(CallRecordMessage {
+                        call_id: id.clone(),
+                    })
+                })
+                .collect();
+            let rows_consumed = messages.len();
+            return Ok(SourcePage {
+                messages,
+                rows_consumed,
+            });
+        }
+
+        let batch = macro_db_client::call_record::get::get_call_records_for_search_backfill(
+            &self.db,
+            self.page_sizes.calls as i64,
+            offset as i64,
+        )
+        .await
+        .map_err(BackfillError::Source)?;
+
+        let rows_consumed = batch.len();
+        let messages: Vec<SearchQueueMessage> = batch
+            .into_iter()
+            .map(|r| {
+                SearchQueueMessage::CallRecord(CallRecordMessage {
+                    call_id: r.call_id.to_string(),
+                })
+            })
+            .collect();
+
+        Ok(SourcePage {
+            messages,
+            rows_consumed,
+        })
+    }
+
+    async fn fetch_chats(
+        &self,
+        req: &ChatBackfillRequest,
+        offset: usize,
+    ) -> Result<SourcePage, BackfillError> {
+        let chat_ids = (!req.chat_ids.is_empty()).then_some(&req.chat_ids);
+        let user_ids = (!req.user_ids.is_empty()).then_some(&req.user_ids);
+
+        let batch = macro_db_client::chat::get::get_chat_messages_for_search_backfill(
+            &self.db,
+            self.page_sizes.chats as i64,
+            offset as i64,
+            chat_ids,
+            user_ids,
+        )
+        .await
+        .map_err(BackfillError::Source)?;
+
+        let rows_consumed = batch.len();
+        let messages: Vec<SearchQueueMessage> = batch
+            .into_iter()
+            .map(|chat| {
+                SearchQueueMessage::ChatMessage(ChatMessage {
+                    chat_id: chat.chat_id,
+                    message_id: chat.message_id,
+                    user_id: chat.user_id,
+                    created_at: chat.created_at,
+                    updated_at: chat.updated_at,
+                })
+            })
+            .collect();
+
+        Ok(SourcePage {
+            messages,
+            rows_consumed,
+        })
+    }
+
+    async fn fetch_channels(
+        &self,
+        _req: &ChannelBackfillRequest,
+        offset: usize,
+    ) -> Result<SourcePage, BackfillError> {
+        let batch = comms_db_client::messages::get_messages::get_channel_messages(
+            &self.db,
+            self.page_sizes.channels as i64,
+            offset as i64,
+        )
+        .await
+        .map_err(BackfillError::Source)?;
+
+        let rows_consumed = batch.len();
+        let messages: Vec<SearchQueueMessage> = batch
+            .into_iter()
+            .map(|(channel_id, message_id)| {
+                SearchQueueMessage::ChannelMessageUpdate(ChannelMessageUpdate {
+                    channel_id: channel_id.to_string(),
+                    message_id: message_id.to_string(),
+                })
+            })
+            .collect();
+
+        Ok(SourcePage {
+            messages,
+            rows_consumed,
+        })
+    }
+
+    async fn fetch_documents(
+        &self,
+        req: &DocumentBackfillRequest,
+        offset: usize,
+    ) -> Result<SourcePage, BackfillError> {
+        let batch = macro_db_client::document::get_documents_search::get_documents_for_search(
+            &self.db,
+            self.page_sizes.documents as i64,
+            offset as i64,
+            &req.file_types,
+            &req.sub_type,
+            &req.created_after,
+            &req.created_before,
+        )
+        .await
+        .map_err(BackfillError::Source)?;
+
+        let rows_consumed = batch.len();
+        let messages: Vec<SearchQueueMessage> = batch
+            .iter()
+            .map(|d| {
+                if d.file_type == FileType::Md {
+                    SearchQueueMessage::ExtractSync(d.into())
+                } else {
+                    SearchQueueMessage::ExtractDocumentText(d.into())
+                }
+            })
+            .collect();
+
+        Ok(SourcePage {
+            messages,
+            rows_consumed,
+        })
+    }
+
+    async fn fetch_emails(
+        &self,
+        req: &EmailBackfillRequest,
+        offset: usize,
+    ) -> Result<SourcePage, BackfillError> {
+        let batch_size = req
+            .batch_size
+            .filter(|n| *n > 0)
+            .unwrap_or(DEFAULT_EMAIL_BATCH_SIZE);
+
+        let rows = match req.since {
+            Some(since) => {
+                email_db_client::threads::get::get_paginated_thread_ids_with_macro_user_id_since(
+                    &self.db,
+                    self.page_sizes.emails as i64,
+                    offset as i64,
+                    since,
+                )
+                .await
+                .map_err(BackfillError::Source)?
+            }
+            None => email_db_client::threads::get::get_paginated_thread_ids_with_macro_user_id(
+                &self.db,
+                self.page_sizes.emails as i64,
+                offset as i64,
+            )
+            .await
+            .map_err(BackfillError::Source)?,
+        };
+
+        let rows_consumed = rows.len();
+        if rows_consumed == 0 {
+            return Ok(SourcePage::empty());
+        }
+
+        let mut by_user: HashMap<String, Vec<String>> = HashMap::new();
+        for (thread_id, macro_user_id) in rows {
+            by_user
+                .entry(macro_user_id)
+                .or_default()
+                .push(thread_id.to_string());
+        }
+
+        let messages: Vec<SearchQueueMessage> = by_user
+            .into_iter()
+            .flat_map(|(macro_user_id, thread_ids)| {
+                thread_ids
+                    .chunks(batch_size)
+                    .map(|chunk| {
+                        SearchQueueMessage::ExtractEmailThreadBatch(EmailThreadBatchMessage {
+                            thread_ids: chunk.to_vec(),
+                            macro_user_id: macro_user_id.clone(),
+                            index_override: req.index_override.clone(),
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        Ok(SourcePage {
+            messages,
+            rows_consumed,
+        })
+    }
+}

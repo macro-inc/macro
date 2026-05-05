@@ -9,9 +9,20 @@ import {
 import {
   blockNameToItemType,
   isCloudStorageItem,
+  type ItemType,
 } from '@service-storage/client';
 import type { QueryClient } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { match } from 'ts-pattern';
+
+function isSoupEntityTag(
+  itemType: ItemType
+): itemType is ItemType & SoupEntityTag {
+  return match(itemType)
+    .with('email', 'channel_message', 'automation', () => false)
+    .with('document', 'chat', 'project', 'channel', 'call', () => true)
+    .exhaustive();
+}
 
 /**
  * Tracks opening of a block and updates history accordingly.
@@ -30,8 +41,8 @@ export function track({
 
   optimisticUpdateSoupItemViewedAt(itemId);
   const inSoup = hasSoupEntity(itemId);
-  if (!inSoup && itemType) {
-    refetchSoupEntity(itemId, itemType as SoupEntityTag);
+  if (!inSoup && isSoupEntityTag(itemType)) {
+    refetchSoupEntity(itemId, itemType);
   }
 
   if (!isCloudStorageItem(itemType)) return;

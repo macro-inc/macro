@@ -1,6 +1,7 @@
 #![allow(deprecated)]
 use ai::types::Model;
-use model::chat::{ChatAttachmentWithName, ChatMessageWithAttachments};
+use model::chat::ChatMessageWithAttachments;
+use model_entity::Entity;
 use serde::{Deserialize, Serialize};
 use unfurl_service::GetUnfurlResponse;
 use utoipa::ToSchema;
@@ -26,13 +27,17 @@ pub struct ChatResponse {
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     /// attachment context - attachments not attached to messages
     #[deprecated(note = "Attachments are now stateless and no longer float until message send")]
-    pub attachments: Vec<ChatAttachmentWithName>,
+    pub attachments: Vec<Entity<'static>>,
     /// Current number of tokens in the chat
+    // kill
     pub token_count: Option<i64>,
     /// Available models for the chat
+    // kill
     pub available_models: Vec<Model>,
     /// message_id - web citation list
+    // kill
     pub web_citations: Vec<(String, Vec<GetUnfurlResponse>)>,
     /// whether the chat is persistent or not
+    // kill
     pub is_persistent: bool,
 }

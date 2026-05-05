@@ -11,13 +11,15 @@ import { Tooltip } from '@core/component/Tooltip';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
+import { Panel } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
@@ -51,6 +53,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const generating = input.isGenerating;
 
   let containerRef!: HTMLDivElement;
+  useTouchOutsideToDismissKeyboard(() => containerRef);
   const toolsetSignal = createSignal<ToolSet>({ type: 'all' });
   const { hasConsent, requestConsent, ConsentDialog } = useAiDataConsentGate();
 
@@ -101,6 +104,7 @@ export function ChatInput(props: ChatInputComponentProps) {
         metaKey: opts?.metaKey,
       };
       props.editor.controls.clear();
+      attachments.setAttached([]);
       props.onSend(sendInput);
     }
   );
@@ -163,7 +167,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               {props.extraRightControls?.()}
               <Tooltip tooltip="Enter to send" placement="top">
                 <div class="flex items-center">
-                  <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
+                  <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1 py-0.5">
                     <Hotkey shortcut="Enter" />
                   </div>
                 </div>
@@ -182,8 +186,8 @@ export function ChatInput(props: ChatInputComponentProps) {
             <Button
               onClick={() => sendMessage({ modelOverride: 'claude-opus-4-6' })}
             >
-              <div class="group hover:bg-accent transition ease-in-out size-6 p-[2px] border border-accent rounded-full flex items-center justify-center">
-                <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+              <div class="group hover:bg-accent transition ease-in-out size-6 p-0.5 border border-accent rounded-full flex items-center justify-center">
+                <ArrowUp class="group-hover:text-input! group-hover:fill-input! text-accent-ink! fill-accent! size-4 transition ease-in-out" />
               </div>
             </Button>
           </Show>
@@ -196,85 +200,81 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   return (
-    <div
-      id="chat-input"
-      ref={containerRef}
-      class="relative flex flex-col bg-input border border-edge-muted rounded-md transition-all duration-150"
-    >
-      <Show when={hasAttachments()}>
-        <div class="px-2 pt-2 w-full">
-          <AttachmentList
-            attached={attachments.attached}
-            removeAttachment={(id) => {
-              attachments.removeAttachment(id);
+    <Panel depth={2}>
+      <div id="chat-input" ref={containerRef} class="relative flex flex-col">
+        <Show when={hasAttachments()}>
+          <div class="px-2 pt-2 w-full">
+            <AttachmentList
+              attached={attachments.attached}
+              removeAttachment={(id) => {
+                attachments.removeAttachment(id);
+              }}
+              uploading={() =>
+                uploadQueue.uploading().map((uploading) => uploading.preview)
+              }
+            />
+          </div>
+        </Show>
+
+        <Show when={showAttachMenu()}>
+          <ChatAttachMenu
+            anchorRef={attachMenuAnchorRef()!}
+            close={() => setShowAttachMenu(false)}
+            containerRef={containerRef}
+            open={showAttachMenu()}
+            onAttach={(attachment) => {
+              analytics.track('ai_attachment_add');
+              attachments.addAttachment(attachment);
             }}
-            uploading={() =>
-              uploadQueue.uploading().map((uploading) => uploading.preview)
-            }
           />
-        </div>
-      </Show>
+        </Show>
 
-      <Show when={showAttachMenu()}>
-        <ChatAttachMenu
-          anchorRef={attachMenuAnchorRef()!}
-          close={() => setShowAttachMenu(false)}
-          containerRef={containerRef}
-          open={showAttachMenu()}
-          onAttach={(attachment) => {
-            analytics.track('ai_attachment_add');
-            attachments.addAttachment(attachment);
-          }}
-        />
-      </Show>
+        <div class="relative px-2 py-1.5">
+          <div
+            id="chat-input-text-area"
+            class={cn('text-sm sm:text-sm text-ink')}
+            classList={{
+              'pl-8': !isMultiline(),
+              'pr-[48px]': !isMultiline() && isTouchDevice(),
+              'pr-[130px]': !isMultiline() && !isTouchDevice(),
+              'pl-0 pr-0 pb-8': isMultiline(),
+            }}
+            ref={mdRef}
+          >
+            <MarkdownShell
+              config={props.editor}
+              placeholder="Ask AI, @mention anything"
+              initialValue={props.initialValue}
+              autofocus={
+                !isMobile() &&
+                !isTouchDevice() &&
+                props.autoFocusOnMount !== false
+              }
+            />
+          </div>
 
-      <div class="relative px-2 py-1.5">
-        <div
-          id="chat-input-text-area"
-          class={cn(
-            'text-sm sm:text-sm text-ink transition-all duration-150 ease-out'
-          )}
-          classList={{
-            'pl-8': !isMultiline(),
-            'pr-[48px]': !isMultiline() && isTouchDevice(),
-            'pr-[130px]': !isMultiline() && !isTouchDevice(),
-            'pl-0 pr-0 pb-8': isMultiline(),
-          }}
-          ref={mdRef}
-        >
-          <MarkdownShell
-            config={props.editor}
-            placeholder="Ask AI, @mention anything"
-            initialValue={props.initialValue}
-            autofocus={
-              !isMobile() &&
-              !isTouchDevice() &&
-              props.autoFocusOnMount !== false
-            }
-          />
-        </div>
+          <div
+            class="absolute left-2"
+            classList={{
+              'top-1/2 -translate-y-1/2': !isMultiline(),
+              'bottom-1.5 top-auto translate-y-0': isMultiline(),
+            }}
+          >
+            <LeftButton />
+          </div>
 
-        <div
-          class="absolute left-2 transition-all duration-150 ease-out"
-          classList={{
-            'top-1/2 -translate-y-1/2': !isMultiline(),
-            'bottom-1.5 top-auto translate-y-0': isMultiline(),
-          }}
-        >
-          <LeftButton />
+          <div
+            class="absolute right-2"
+            classList={{
+              'top-1/2 -translate-y-1/2': !isMultiline(),
+              'bottom-1.5 top-auto translate-y-0': isMultiline(),
+            }}
+          >
+            <RightControls />
+          </div>
         </div>
-
-        <div
-          class="absolute right-2 transition-all duration-150 ease-out"
-          classList={{
-            'top-1/2 -translate-y-1/2': !isMultiline(),
-            'bottom-1.5 top-auto translate-y-0': isMultiline(),
-          }}
-        >
-          <RightControls />
-        </div>
+        <ConsentDialog />
       </div>
-      <ConsentDialog />
-    </div>
+    </Panel>
   );
 }

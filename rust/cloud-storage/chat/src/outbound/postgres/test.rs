@@ -552,8 +552,6 @@ async fn get_chat_returns_full_response(pool: Pool<Postgres>) {
     assert_eq!(response.user_id, "macro|test@example.com");
     assert!(response.model.is_some());
     assert!(response.messages.is_empty());
-    assert!(response.web_citations.is_empty());
-    assert!(!response.available_models.is_empty());
 }
 
 #[sqlx::test(

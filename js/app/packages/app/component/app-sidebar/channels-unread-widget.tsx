@@ -119,6 +119,7 @@ function ChannelGroupItem(props: {
   isSlim?: boolean;
   channelLetters?: string;
 }) {
+  const notificationSource = useGlobalNotificationSource();
   const [isVisible, setIsVisible] = createSignal(!props.animate);
 
   onMount(() => {
@@ -165,6 +166,14 @@ function ChannelGroupItem(props: {
     navigateToLatestNotification(true);
   };
 
+  const markAllAsDone = () => {
+    void notificationSource.bulkMarkAsDone(props.group.notifications);
+  };
+
+  const markAllAsRead = () => {
+    void notificationSource.bulkMarkAsRead(props.group.notifications);
+  };
+
   const _openFullscreen = () => {
     const { params } = getChannelNotificationParams(latestNotification());
     globalSplitManager()?.createPopoverSplit({
@@ -200,7 +209,7 @@ function ChannelGroupItem(props: {
         navigateToLatestNotification(e.shiftKey);
       }}
     >
-      <div class="relative flex items-center justify-center flex-shrink-0 size-5">
+      <div class="relative flex items-center justify-center shrink-0 size-5">
         <Show
           when={isDM() && senderId()}
           fallback={<ChannelLetterIcon letters={props.channelLetters ?? '?'} />}
@@ -223,7 +232,7 @@ function ChannelGroupItem(props: {
         </span>
 
         <Show when={count() > 0}>
-          <span class="flex-shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded ml-auto">
+          <span class="shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded ml-auto">
             {count()}
           </span>
         </Show>
@@ -259,6 +268,8 @@ function ChannelGroupItem(props: {
           {/* FIXME: this doesn't work yet */}
           {/* <MenuItem text="Open fullscreen" onClick={openFullscreen} /> */}
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
+          <MenuItem text="Mark all as read" onClick={markAllAsRead} />
+          <MenuItem text="Mark all as done" onClick={markAllAsDone} />
         </ContextMenuContent>
       </ContextMenu.Portal>
     </ContextMenu>

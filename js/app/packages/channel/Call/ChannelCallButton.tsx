@@ -5,7 +5,7 @@ import { Button } from '@ui/components/Button';
 import PhoneIcon from '@macro-icons/wide/call.svg';
 import PhoneDisconnectIcon from '@macro-icons/wide/call-disconnect.svg';
 import { useActiveCallQuery } from '@queries/call/call';
-import { useCall } from './useCall';
+import { useCall } from './use-call';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export function ChannelCallButton(props: { channelId: string }) {
@@ -19,7 +19,7 @@ export function ChannelCallButton(props: { channelId: string }) {
   const isCallInProgress = () => !!activeCallQuery.data;
   const isHighlighted = () => call.isInThisChannel() || isCallInProgress();
 
-  const isPending = () => call.isJoining() || call.isLeaving();
+  const isPending = () => call.isLeaving();
 
   const tooltip = () => {
     if (call.isInThisChannel()) return 'Leave Call';
@@ -28,7 +28,8 @@ export function ChannelCallButton(props: { channelId: string }) {
   };
 
   const handleClick = async () => {
-    if (isPending()) return;
+    if (call.isJoining() || call.isLeaving()) return;
+
     try {
       if (call.isInThisChannel()) {
         await call.leaveCall();

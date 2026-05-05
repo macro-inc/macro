@@ -8,11 +8,11 @@ use crate::types::openai::message::convert_message;
 use crate::types::traits::{ExtendedOpenAIStream, ExtendedOpenAIStreamItem};
 use crate::types::{ChatCompletionRequest, ChatMessage, ChatMessages};
 use crate::types::{ExtendedClient, Result};
-use async_openai::types::{
-    ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage,
-    ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestMessage,
-    ChatCompletionRequestToolMessage, ChatCompletionStreamOptions, CreateChatCompletionRequest,
-    FinishReason, FunctionCall,
+use async_openai::types::chat::{
+    ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls,
+    ChatCompletionRequestAssistantMessage, ChatCompletionRequestAssistantMessageContent,
+    ChatCompletionRequestMessage, ChatCompletionRequestToolMessage, ChatCompletionStreamOptions,
+    CreateChatCompletionRequest, FinishReason, FunctionCall,
 };
 use async_stream::stream;
 use futures::stream::StreamExt;
@@ -160,7 +160,7 @@ where
 
         // Current assistant segment being built
         let mut content = String::new();
-        let mut tool_calls: Vec<ChatCompletionMessageToolCall> = vec![];
+        let mut tool_calls: Vec<ChatCompletionMessageToolCalls> = vec![];
         let mut pending_tool_messages: Vec<ChatCompletionRequestMessage> = vec![];
 
         for item in stream_parts {
@@ -171,14 +171,15 @@ where
                             StreamPart::ToolCall(call) => {
                                 self.tool_call_id_name_mapping
                                     .insert(call.id.clone(), call.name.clone());
-                                tool_calls.push(ChatCompletionMessageToolCall {
-                                    id: call.id.clone(),
-                                    r#type: async_openai::types::ChatCompletionToolType::Function,
-                                    function: FunctionCall {
-                                        arguments: call.json.to_string(),
-                                        name: call.name.clone(),
+                                tool_calls.push(ChatCompletionMessageToolCalls::Function(
+                                    ChatCompletionMessageToolCall {
+                                        id: call.id.clone(),
+                                        function: FunctionCall {
+                                            arguments: call.json.to_string(),
+                                            name: call.name.clone(),
+                                        },
                                     },
-                                });
+                                ));
                             }
                             StreamPart::Content(text) => content.push_str(text.as_str()),
                             StreamPart::ToolResponse(ToolResponse::Json { id, json, .. }) => {
@@ -193,7 +194,7 @@ where
                                     .unwrap_or_else(|_| "internal error parsing".into());
                                 new_messages.push(ChatCompletionRequestMessage::Tool(
                                     ChatCompletionRequestToolMessage {
-                                        content: async_openai::types::ChatCompletionRequestToolMessageContent::Text(
+                                        content: async_openai::types::chat::ChatCompletionRequestToolMessageContent::Text(
                                             content_text,
                                         ),
                                         tool_call_id: id,
@@ -208,14 +209,15 @@ where
                     StreamPart::ToolCall(call) => {
                         self.tool_call_id_name_mapping
                             .insert(call.id.clone(), call.name.clone());
-                        tool_calls.push(ChatCompletionMessageToolCall {
-                            id: call.id.clone(),
-                            r#type: async_openai::types::ChatCompletionToolType::Function,
-                            function: FunctionCall {
-                                arguments: call.json.to_string(),
-                                name: call.name.clone(),
+                        tool_calls.push(ChatCompletionMessageToolCalls::Function(
+                            ChatCompletionMessageToolCall {
+                                id: call.id.clone(),
+                                function: FunctionCall {
+                                    arguments: call.json.to_string(),
+                                    name: call.name.clone(),
+                                },
                             },
-                        });
+                        ));
 
                         let tool_response_text = match self
                             .toolset
@@ -266,7 +268,7 @@ where
                         // response message in message chain
                         pending_tool_messages.push(ChatCompletionRequestMessage::Tool(
                             ChatCompletionRequestToolMessage {
-                                content: async_openai::types::ChatCompletionRequestToolMessageContent::Text(
+                                content: async_openai::types::chat::ChatCompletionRequestToolMessageContent::Text(
                                     tool_response_text,
                                 ),
                                 tool_call_id: call.id,
@@ -292,7 +294,7 @@ where
     fn make_assistant_message(
         &self,
         content: &mut String,
-        tool_calls: &mut Vec<ChatCompletionMessageToolCall>,
+        tool_calls: &mut Vec<ChatCompletionMessageToolCalls>,
     ) -> ChatCompletionRequestMessage {
         ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
             content: if content.is_empty() {
@@ -400,7 +402,8 @@ where
         self.request.tools = Some(self.toolset.openai_chatcompletion_toolset());
         self.request.stream = Some(true);
         self.request.stream_options = Some(ChatCompletionStreamOptions {
-            include_usage: true,
+            include_usage: Some(true),
+            include_obfuscation: None,
         });
 
         self.client.chat_stream(self.request.clone()).await
@@ -413,13 +416,13 @@ fn correct_message_chain(
     messages: Vec<ChatCompletionRequestMessage>,
 ) -> Vec<ChatCompletionRequestMessage> {
     let mut corrected = vec![];
-    let mut pending_tool_calls: Option<Vec<ChatCompletionMessageToolCall>> = None;
+    let mut pending_tool_call_ids: Option<Vec<String>> = None;
     let mut i = 0;
 
     while i < messages.len() {
         let msg = &messages[i];
 
-        if let Some(expected) = pending_tool_calls.take() {
+        if let Some(expected_ids) = pending_tool_call_ids.take() {
             // Consume as many matching tool responses as we can
             let mut responded: HashSet<String> = HashSet::new();
             while i < messages.len() {
@@ -432,14 +435,14 @@ fn correct_message_chain(
                 }
             }
             // Backfill any missing tool responses
-            for call in &expected {
-                if !responded.contains(&call.id) {
-                    tracing::warn!(call_id=?call.id, "missing tool response");
+            for id in &expected_ids {
+                if !responded.contains(id) {
+                    tracing::warn!(call_id=?id, "missing tool response");
                     corrected.push(ChatCompletionRequestMessage::Tool(
                         ChatCompletionRequestToolMessage {
-                            tool_call_id: call.id.clone(),
+                            tool_call_id: id.clone(),
                             content:
-                                async_openai::types::ChatCompletionRequestToolMessageContent::Text(
+                                async_openai::types::chat::ChatCompletionRequestToolMessageContent::Text(
                                     "No response from server".into(),
                                 ),
                         },
@@ -448,7 +451,15 @@ fn correct_message_chain(
             }
         } else {
             if let ChatCompletionRequestMessage::Assistant(assistant) = msg {
-                pending_tool_calls = assistant.tool_calls.clone();
+                pending_tool_call_ids = assistant.tool_calls.as_ref().map(|calls| {
+                    calls
+                        .iter()
+                        .filter_map(|c| match c {
+                            ChatCompletionMessageToolCalls::Function(f) => Some(f.id.clone()),
+                            _ => None,
+                        })
+                        .collect()
+                });
             }
             corrected.push(messages[i].clone());
             i += 1;
@@ -456,15 +467,16 @@ fn correct_message_chain(
     }
 
     // Handle trailing assistant with tool_calls but no responses at end of messages
-    if let Some(expected) = pending_tool_calls {
-        for call in &expected {
-            tracing::warn!(call_id=?call.id, "missing tool response");
+    if let Some(expected_ids) = pending_tool_call_ids {
+        for id in &expected_ids {
+            tracing::warn!(call_id=?id, "missing tool response");
             corrected.push(ChatCompletionRequestMessage::Tool(
                 ChatCompletionRequestToolMessage {
-                    tool_call_id: call.id.clone(),
-                    content: async_openai::types::ChatCompletionRequestToolMessageContent::Text(
-                        "No response from server".into(),
-                    ),
+                    tool_call_id: id.clone(),
+                    content:
+                        async_openai::types::chat::ChatCompletionRequestToolMessageContent::Text(
+                            "No response from server".into(),
+                        ),
                 },
             ));
         }

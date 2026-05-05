@@ -5,13 +5,13 @@
 //! instead of duplicating the wiring logic.
 
 use crate::tool_context::{
-    NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties, ToolServiceContext,
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
+    NoOpSnsEndpointManager, NoOpTaskProperties, ToolNotificationQueue, ToolServiceContext,
 };
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
-use document_storage_service_client::DocumentStorageServiceClient;
 use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
@@ -19,7 +19,7 @@ use documents::outbound::s3_upload_url::S3UploadUrlAdapter;
 use email::domain::ports::ReadonlyEmailPreviewAdapter;
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
-use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
+use email_service_client::EmailServiceClientExternal;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use frecency::domain::services::FrecencyQueryServiceImpl;
@@ -27,21 +27,20 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
+use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
+use notification::outbound::queue::SqsQueue;
+use notification::outbound::repository::DbNotificationRepository;
 use readonly_pool::ReadOnlyPool;
-use scribe::ScribeClient;
-use scribe::document::DocumentClient;
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::{SecretManager, SecretsManager};
 use soup::domain::service::SoupImpl;
 use soup::outbound::pg_soup_repo::PgSoupRepo;
-use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 
 env_var! {
     struct ToolContextEnvVars {
         DocumentStorageServiceUrl,
-        SearchServiceUrl,
         EmailServiceUrl,
         SyncServiceUrl,
         SyncServiceAuthKey,
@@ -59,6 +58,7 @@ maybe_env_var! {
     struct ToolContextMaybeEnvVars {
         InternalApiSecretKey,
         LexicalServiceUrl,
+        NotificationQueue,
     }
 }
 
@@ -70,8 +70,8 @@ maybe_env_var! {
 /// are treated as AWS Secrets Manager secret names and resolved through the
 /// secrets manager. In `Local`, their values are used directly.
 ///
-/// Required env vars: `DOCUMENT_STORAGE_SERVICE_URL`, `SEARCH_SERVICE_URL`,
-/// `EMAIL_SERVICE_URL`, `SYNC_SERVICE_URL`, `SYNC_SERVICE_AUTH_KEY`,
+/// Required env vars: `DOCUMENT_STORAGE_SERVICE_URL`, `EMAIL_SERVICE_URL`,
+/// `SYNC_SERVICE_URL`, `SYNC_SERVICE_AUTH_KEY`,
 /// `STATIC_FILE_SERVICE_URL`, `DOCUMENT_STORAGE_BUCKET`,
 /// `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
@@ -81,6 +81,7 @@ maybe_env_var! {
 /// Optional env vars (with fallbacks for local dev):
 /// - `INTERNAL_API_SECRET_KEY` (defaults to `"local"`)
 /// - `LEXICAL_SERVICE_URL` (defaults to `http://localhost:8096`)
+/// - `NOTIFICATION_QUEUE` (if omitted, notification status updates skip push clearing)
 #[tracing::instrument(skip(pool), err)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
@@ -100,8 +101,16 @@ pub async fn build_tool_service_context_from_env(
         .context("expected LEXICAL_SERVICE_URL")?;
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+    let aws_sqs_client = aws_sdk_sqs::Client::new(&aws_config);
+    let sqs_client = sqs_client::SQS::new(aws_sqs_client.clone())
         .email_scheduled_queue(&env.email_scheduled_queue);
+    let notification_queue = maybe_env
+        .notification_queue
+        .as_ref()
+        .map(|queue_url| {
+            ToolNotificationQueue::Sqs(SqsQueue::new(aws_sqs_client, queue_url.to_string()))
+        })
+        .unwrap_or(ToolNotificationQueue::NoOp);
 
     let secretsmanager_client =
         SecretsManager::new(aws_sdk_secretsmanager::Client::new(&aws_config));
@@ -124,46 +133,18 @@ pub async fn build_tool_service_context_from_env(
         .as_ref()
         .to_string();
 
-    let dss_client = Arc::new(DocumentStorageServiceClient::new(
-        internal_api_secret_key.to_string(),
-        env.document_storage_service_url.to_string(),
-    ));
     let search_client = Arc::new(SearchServiceClient::new(
         internal_api_secret_key.to_string(),
-        env.search_service_url.to_string(),
+        env.document_storage_service_url.to_string(),
     ));
     let sync_client = Arc::new(SyncServiceClient::new(
         sync_service_auth_key.clone(),
         env.sync_service_url.to_string(),
     ));
-    let email_client = Arc::new(EmailServiceClient::new(
-        internal_api_secret_key.to_string(),
-        env.email_service_url.to_string(),
-    ));
-    let sfs_client = Arc::new(StaticFileServiceClient::new(
-        internal_api_secret_key.to_string(),
-        env.static_file_service_url.to_string(),
-    ));
     let email_ext_client = Arc::new(EmailServiceClientExternal::new(
         env.email_service_url.to_string(),
     ));
     let lexical_client = LexicalClient::new(sync_service_auth_key, lexical_service_url.to_string());
-
-    let scribe = Arc::new(
-        ScribeClient::new()
-            .with_document_client(
-                DocumentClient::builder()
-                    .with_dss_client(dss_client.clone())
-                    .with_lexical_client(Arc::new(lexical_client.clone()))
-                    .with_sync_service_client(sync_client.clone())
-                    .with_macro_db(pool.clone())
-                    .build(),
-            )
-            .with_channel_client(pool.clone())
-            .with_dcs_client(pool.clone())
-            .with_email_client(email_client)
-            .with_static_file_client(sfs_client),
-    );
 
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
@@ -178,6 +159,7 @@ pub async fn build_tool_service_context_from_env(
         PgUserRepo::new(pool.clone()),
         frecency_storage,
     );
+    let channel_tool_context = crate::tool_context::build_channel_tool_context(pool.clone());
     let email_service_for_tools: Arc<crate::tool_context::ToolEmailService> =
         Arc::new(email_service.clone());
     let soup_service = Arc::new(SoupImpl::new(
@@ -250,15 +232,62 @@ pub async fn build_tool_service_context_from_env(
         ))),
     );
 
+    let call_service = call::domain::service::CallServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        NoOpCallRtcClient,
+        NoOpConnectionService,
+        (*entity_access_service).clone(),
+        NoOpNotificationIngress,
+        None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
+        String::new(),
+    );
+    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+    );
+    let call_tool_context = call::inbound::toolset::CallToolContext::new(
+        call_service,
+        call_query_service,
+        (*entity_access_service).clone(),
+    );
+
+    let notification_reader_service = NotificationReaderService::new(
+        DbNotificationRepository::new(pool.clone()),
+        notification_queue,
+        NoOpSnsEndpointManager,
+        PlatformArnConfig {
+            apns_platform_arn: String::new(),
+            fcm_platform_arn: String::new(),
+        },
+    );
+    let notification_tool_context =
+        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+
+    let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone());
+    let chat_service = chat::domain::service::ChatServiceImpl::new(
+        chat_repo,
+        Arc::new(ai_toolset::AsyncToolSet::new()),
+        (),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
+    );
+    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
+        chat_service,
+        (*entity_access_service).clone(),
+    );
+
     Ok(ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
-        scribe,
         soup_service,
         email_service: email_service_for_tools,
         document_tool_context,
         properties_tool_context,
         email_tool_context,
+        call_tool_context,
+        notification_tool_context,
+        chat_tool_context,
+        channel_tool_context,
         schedule_tool_context: crate::NoOpScheduleContext,
     })
 }

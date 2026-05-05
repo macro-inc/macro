@@ -15,8 +15,16 @@ export type LoginCookieOptions = {
   sameSite: 'Lax';
 };
 
-/** Check if the user appears to be authenticated based on the login cookie. */
+const LOGIN_STORAGE_KEY = 'macro:login';
+
+/** Check if the user appears to be authenticated based on the login cookie or localStorage fallback. */
 export function hasLoginCookie(): boolean {
+  if (
+    typeof localStorage !== 'undefined' &&
+    localStorage.getItem(LOGIN_STORAGE_KEY) === 'true'
+  ) {
+    return true;
+  }
   if (typeof document === 'undefined') return false;
   const cookies = document.cookie.split(';');
   for (const cookie of cookies) {
@@ -26,6 +34,16 @@ export function hasLoginCookie(): boolean {
     }
   }
   return false;
+}
+
+/** Sync the login state to localStorage for environments where cookies don't persist, e.g. Tauri. */
+export function syncLoginStorage(isAuthenticated: boolean) {
+  if (typeof localStorage === 'undefined') return;
+  if (isAuthenticated) {
+    localStorage.setItem(LOGIN_STORAGE_KEY, 'true');
+  } else {
+    localStorage.removeItem(LOGIN_STORAGE_KEY);
+  }
 }
 
 /** Compute login cookie options from auth state. */

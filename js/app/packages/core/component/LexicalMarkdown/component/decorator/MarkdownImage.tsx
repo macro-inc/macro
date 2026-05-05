@@ -1,3 +1,5 @@
+import { internalDrag } from '@core/directive/internalDragState';
+false && internalDrag;
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
@@ -267,7 +269,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         ref={containerRef}
         class={cn(
           'relative max-w-full my-4 grid place-items-center',
-          isSelectedAsNode() && 'bracket-offset-4 ring-3 ring-edge-muted',
+          isSelectedAsNode() && 'ring-3 ring-edge-muted',
           state() === 'error' && 'media-error min-h-44',
           // If there are no constrained dimensions, center the image
           !props.constrainedWidth && !props.constrainedHeight && 'mx-auto'
@@ -318,9 +320,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
             (state() === 'loading' || state() === 'error') && 'invisible'
           )}
           draggable={true}
-          onDragStart={(e) => {
-            e.dataTransfer?.setData('application/x-macro-internal', '1');
-          }}
+          use:internalDrag={true}
           ref={imageRef}
           src={imageUrl()}
           style={{
@@ -356,7 +356,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
             (state() === 'ok' || state() === 'error')
           }
         >
-          <div class="w-full h-full absolute top-0 left-0 pointer-events-none bg-edge/20" />
+          <div class="w-full h-full absolute top-0 left-0 pointer-events-none bg-edge/10" />
           <MediaButtons
             delete={interactable() ? deleteImage : undefined}
             enlarge={state() === 'ok' ? viewFull : undefined}

@@ -56,8 +56,10 @@ with `just setup_macrodb` in `macro-api/cloud-storage`. Remember that some datab
 camelCased rather than snake_cased (use `/dump-schema` or check the migration files for actual column names).
 When a column is camelCased, you need to cast it as the snake_cased version when reading from the database. E.g.
 `SELECT "userId" as "user_id" FROM "UserInsights"`.
-Any time you make changes to the SQL code in rust, you need to run `just prepare_db` in
-the root directory of the crate you made the changes in, to update the .sqlx directory.
+Any time you make changes to the SQL code in rust, you need to run `just prepare_db` to
+update the .sqlx directory. Run it **only** from `rust/cloud-storage` — do not run it from
+individual crate directories anymore. The workspace-level recipe handles every crate that
+has sqlx queries.
 
 ## Development Commands
 
@@ -239,6 +241,7 @@ The migration included comprehensive indexes:
 ### Database Query Management
 
 - Always run tests between changes that involve changes to db queries
+- Never run `cargo test` with `SQLX_OFFLINE=true`. Tests are designed to validate against the live local Postgres; offline mode forces sqlx macros to consult the cached `.sqlx` data and can either surface confusing "type annotations needed" errors when a query was not in the cache or hide regressions where a query no longer matches the schema. If tests fail with sqlx "no cached data" errors, run `just prepare_db` (with `--tests` when the failure is in test code) — do not flip offline mode on. `SQLX_OFFLINE=true` is fine for `cargo check` / `cargo build` / `cargo clippy` only.
 
 ### Rust Error Handling
 

@@ -82,11 +82,9 @@ function LoadingContent(props: { lines: number }) {
   return (
     <div class="flex flex-col justify-center items-start w-full py-2">
       <For each={Array.from({ length: props.lines })}>
-        {() => (
-          <div class="bg-edge/70 animate-pulse rounded-md h-2 mb-2 w-full" />
-        )}
+        {() => <div class="bg-edge animate-pulse rounded-md h-2 mb-2 w-full" />}
       </For>
-      <div class="bg-edge/70 animate-pulse rounded-md h-2 mb-2 w-[65%]" />
+      <div class="bg-edge animate-pulse rounded-md h-2 mb-2 w-[65%]" />
     </div>
   );
 }
@@ -321,7 +319,7 @@ export function PDFPopup(props: PDFPopupProps) {
                   />
                 </div>
               </Show>
-              <div class="w-full border-t-1 border-edge">
+              <div class="w-full border-t border-edge">
                 <div class="flex flex-row w-full justify-end text-ink-muted mt-1">
                   <div class="w-fit mr-2">
                     <button

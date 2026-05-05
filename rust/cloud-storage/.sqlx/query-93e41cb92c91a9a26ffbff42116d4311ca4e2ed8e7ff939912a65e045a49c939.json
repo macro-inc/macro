@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.id, c.channel_id\n            FROM call_participants cp\n            JOIN calls c ON c.id = cp.call_id\n            WHERE cp.user_id = $1 AND cp.left_at IS NULL\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "93e41cb92c91a9a26ffbff42116d4311ca4e2ed8e7ff939912a65e045a49c939"
+}

@@ -50,7 +50,7 @@ function SignalDebugCard(props: SignalDebugCardProps) {
       </div>
       <div class="border-t border-edge mt-3 pt-3">
         <details>
-          <summary class="cursor-pointer text-accent text-sm">Raw JSON</summary>
+          <summary class="text-accent text-sm">Raw JSON</summary>
           <div class="mt-2 relative">
             <button
               onClick={copyToClipboard}
@@ -59,7 +59,7 @@ function SignalDebugCard(props: SignalDebugCardProps) {
             >
               <Copy class="w-4 h-4" />
             </button>
-            <pre class="text-xs bg-message p-3 rounded overflow-auto max-h-80 border border-edge/20">
+            <pre class="text-xs bg-message p-3 rounded overflow-auto max-h-80 border border-edge">
               {formatJson(props.data)}
             </pre>
           </div>

@@ -126,9 +126,9 @@
     },
     {
       "includes": [
-        "packages/block-theme/**",
-        "packages/app/component/dock/Dock.tsx",
-        "packages/app/component/settings/**"
+        "packages/app/component/settings/**",
+        "packages/theme/**",
+        "packages/ui/**"
       ],
       "formatter": {
         "enabled": false

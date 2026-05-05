@@ -44,7 +44,7 @@ export function LiveIndicators(props: {
         {(userId) => <UserIndicator userId={userId} />}
       </For>
       <Show when={remaining()}>
-        <div class="z-4">
+        <div class="z-placeable">
           <Tooltip
             tooltip={userIds()
               .slice(MAX_USER_INDICATORS)

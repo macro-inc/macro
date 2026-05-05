@@ -2,6 +2,7 @@ import {
   type EdgeConnectionStyle,
   EdgeConnectionStyles,
 } from '@block-canvas/model/CanvasModel';
+import { cn } from '@ui/utils/classname';
 import { useCachedStyle } from '@block-canvas/signal/cachedStyle';
 import { useToolManager } from '@block-canvas/signal/toolManager';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
@@ -15,6 +16,7 @@ import {
 import { IS_MAC } from '@core/constant/isMac';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useIsNestedBlock } from '@core/block';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { useCanEdit } from '@core/signal/permissions';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
@@ -93,7 +95,9 @@ const ConnectorTypeSubMenu = (props: {
 };
 
 export function ToolBar() {
-  const canEdit = useCanEdit();
+  const baseCanEdit = useCanEdit();
+  const isNested = useIsNestedBlock();
+  const canEdit = () => baseCanEdit() && !isNested;
   const toolManager = useToolManager();
   const cachedStyle = useCachedStyle();
   const { activeTool } = toolManager;
@@ -165,7 +169,10 @@ export function ToolBar() {
     <ScopedPortal scope="block">
       <div class="absolute left-1/2 bottom-2 flex flex-row p-1 bg-menu border border-edge -translate-x-1/2">
         <div
-          class={`flex flex-row items-center space-x-2 ${canEdit() && 'border-r border-edge'}`}
+          class={cn(
+            'flex flex-row items-center space-x-2',
+            canEdit() && 'border-r border-edge'
+          )}
         >
           <DeprecatedIconButton
             tooltip={{

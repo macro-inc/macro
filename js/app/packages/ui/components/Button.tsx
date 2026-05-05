@@ -1,9 +1,10 @@
 import { Button as KButton, type ButtonRootProps } from '@kobalte/core/button';
 import type { PolymorphicProps } from '@kobalte/core/polymorphic';
-import { cn } from '@ui/utils/classname';
+import { cn } from '../utils/classname';
 import CorvuTooltip from '@corvu/tooltip';
 import type { Placement } from '@floating-ui/dom';
 import { type JSX, Show, splitProps, type ValidComponent } from 'solid-js';
+import { Layer } from './Layer';
 
 export type ButtonVariant =
   | 'primary'
@@ -12,7 +13,8 @@ export type ButtonVariant =
   | 'destructive'
   | 'ghost'
   | 'link'
-  | 'accent';
+  | 'accent'
+  | 'active';
 
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon-sm' | 'icon-md' | 'icon-lg';
 
@@ -26,6 +28,7 @@ export type ButtonProps<T extends ValidComponent = 'button'> = PolymorphicProps<
   tooltipPlacement?: Placement;
   class?: string;
   children?: JSX.Element;
+  depth?: 0 | 1 | 2 | 3 | 4 | 5;
 };
 
 const variantStyles: Record<ButtonVariant, string> = {
@@ -42,6 +45,8 @@ const variantStyles: Record<ButtonVariant, string> = {
   link: 'bg-transparent text-accent underline-offset-2 not-disabled:hover:underline not-disabled:active:text-accent/80 disabled:text-ink-extra-muted',
   accent:
     'bg-accent text-panel not-disabled:hover:bg-accent/90 not-disabled:active:bg-accent/80 disabled:bg-ink-extra-muted',
+  active:
+      'bg-accent/8 text-accent-ink border border-accent-ink not-disabled:hover:bg-accent/20 not-disabled:active:bg-accent/25 disabled:opacity-50',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -73,6 +78,7 @@ const TOOLTIP_FLOATING_OPTIONS = {
  * @param props.size - sm, md (default), lg, icon-sm, icon-md, or icon-lg.
  * @param props.tooltip - Optional tooltip content to display when hovering over the button.
  * @param props.tooltipPlacement - Placement of the tooltip (default: "bottom"). Accepts any Floating UI placement string.
+ * @param props.depth - Layer depth (0-5). Wraps the button in a `Layer` so theme color tokens shift accordingly.
  * @param props.as - Override the rendered element (e.g. `"a"` or a router `<Link>` component).
  *
  * @example
@@ -106,6 +112,7 @@ export const Button = <T extends ValidComponent = 'button'>(
     'children',
     'tooltip',
     'tooltipPlacement',
+    'depth',
   ]);
 
   const variant = () => local.variant ?? 'ghost';
@@ -113,8 +120,9 @@ export const Button = <T extends ValidComponent = 'button'>(
 
   const cls = () =>
     cn(
-      'relative inline-flex items-center justify-center font-medium leading-none border border-transparent',
-      'data-[disabled]:cursor-not-allowed',
+      'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-xs',
+      'outline-none focus-visible:bg-active',
+      'data-disabled:cursor-not-allowed',
       'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
       variantStyles[variant()],
       sizeStyles[size()],
@@ -122,35 +130,39 @@ export const Button = <T extends ValidComponent = 'button'>(
     );
 
   return (
-    <Show
-      when={local.tooltip}
-      fallback={
-        <KButton class={cls()} {...others}>
-          {local.children}
-        </KButton>
-      }
-    >
-      <CorvuTooltip
-        placement={local.tooltipPlacement ?? 'bottom'}
-        floatingOptions={TOOLTIP_FLOATING_OPTIONS}
-        group="tooltip-single-group"
-        openDelay={TOOLTIP_DELAY}
-        closeDelay={TOOLTIP_DELAY}
+    <Layer depth={local.depth ?? 0}>
+      <Show
+        when={local.tooltip}
+        fallback={
+          <KButton class={cls()} {...others}>
+            {local.children}
+          </KButton>
+        }
       >
-        <CorvuTooltip.Trigger as={KButton} class={cls()} {...others}>
-          {local.children}
-        </CorvuTooltip.Trigger>
-        <CorvuTooltip.Portal>
-          <CorvuTooltip.Content
-            class="z-tool-tip"
-            style={{ 'max-width': 'calc(100vw - 32px)' }}
-          >
-            <div class="flex items-center justify-center bg-panel p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm border border-edge-muted shadow-md shadow-[#000]/5">
-              {local.tooltip}
-            </div>
-          </CorvuTooltip.Content>
-        </CorvuTooltip.Portal>
-      </CorvuTooltip>
-    </Show>
+        <CorvuTooltip
+          placement={local.tooltipPlacement ?? 'bottom'}
+          floatingOptions={TOOLTIP_FLOATING_OPTIONS}
+          group="tooltip-single-group"
+          openDelay={TOOLTIP_DELAY}
+          closeDelay={TOOLTIP_DELAY}
+        >
+          <CorvuTooltip.Trigger as={KButton} class={cls()} {...others}>
+            {local.children}
+          </CorvuTooltip.Trigger>
+          <CorvuTooltip.Portal>
+            <CorvuTooltip.Content
+              class="z-tool-tip"
+              style={{ 'max-width': 'calc(100vw - 32px)' }}
+            >
+              <Layer depth={3}>
+              <div class="border border-edge bg-panel flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm shadow-md shadow-[#000]/5">
+                {local.tooltip}
+              </div>
+              </Layer>
+            </CorvuTooltip.Content>
+          </CorvuTooltip.Portal>
+        </CorvuTooltip>
+      </Show>
+    </Layer>
   );
 };

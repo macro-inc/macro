@@ -2,6 +2,7 @@ import {
   ComposeLayout,
   EmailComposeToolbar,
 } from '@block-email/component/compose';
+import { cn } from '@ui/utils/classname';
 import {
   type ComposeContextValue,
   ComposeProvider,
@@ -43,7 +44,7 @@ type SendEmailSnapshot = {
 };
 
 function toEmailRecipients(
-  items: Array<{ email: string; name: string | null }>
+  items: Array<{ email: string; name?: string | null }>
 ): EmailRecipient[] {
   return items.map(convertContactInfoToEmailRecipient);
 }
@@ -166,9 +167,15 @@ export function ComposeTool(props: ComposeToolProps) {
   };
 
   const [recipients, setRecipients] = createSignal({
-    to: toEmailRecipients(props.initialData.to ?? []),
-    cc: toEmailRecipients(props.initialData.cc ?? []),
-    bcc: toEmailRecipients(props.initialData.bcc ?? []),
+    to: toEmailRecipients(
+      (props.initialData.to ?? []).map((r) => ({ ...r, name: r.name ?? null }))
+    ),
+    cc: toEmailRecipients(
+      (props.initialData.cc ?? []).map((r) => ({ ...r, name: r.name ?? null }))
+    ),
+    bcc: toEmailRecipients(
+      (props.initialData.bcc ?? []).map((r) => ({ ...r, name: r.name ?? null }))
+    ),
   });
   const [subject, setSubject] = createSignal(props.initialData.subject ?? '');
   const [isSending, setIsSending] = createSignal(false);
@@ -353,11 +360,11 @@ export function ComposeTool(props: ComposeToolProps) {
       <div class="relative">
         <ComposeLayout
           bodyDebugName={`chat-compose:${props.chatId}:${props.messageId}:${props.toolCallId}`}
-          class={`flex flex-col w-full text-sm border border-edge-muted rounded-lg p-4 bg-input ${
-            uiDisabled()
-              ? '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
-              : ''
-          }`}
+          class={cn(
+            'flex flex-col w-full text-sm border border-edge-muted rounded-lg p-4 bg-input',
+            uiDisabled() &&
+              '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
+          )}
           header={
             showOwnerDisabledMessage() ? (
               <div class="text-xs text-ink-extra-muted/60">

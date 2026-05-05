@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use ai_tools::{
-    NoOpConnectionService, NoOpNotificationService, NoOpScheduleContext, NoOpTaskProperties,
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
+    NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, ToolNotificationQueue,
     ToolServiceContext,
 };
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
-use document_storage_service_client::DocumentStorageServiceClient;
 use documents::{
     domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
     inbound::toolset::DocumentToolContext,
@@ -28,7 +28,8 @@ use mcp_auth_proxy::{
     domain::service::McpAuthProxyServiceImpl,
     outbound::{fusionauth::FusionAuthOAuthProvider, redis::RedisInflightAuth},
 };
-use scribe::{ScribeClient, document::DocumentClient};
+use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
+use notification::outbound::repository::DbNotificationRepository;
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::LocalOrRemoteSecret;
 use soup::domain::service::SoupImpl;
@@ -137,13 +138,10 @@ async fn build_tool_context(
     let dss_url: String = env_vars.document_storage_service_url.as_ref().to_owned();
     let sync_service_url: String = env_vars.sync_service_url.as_ref().to_owned();
 
-    let document_storage_client =
-        DocumentStorageServiceClient::new(internal_auth_key.clone(), dss_url.clone());
-
     let search_service_client = SearchServiceClient::new(internal_auth_key.clone(), dss_url);
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
-        sync_service_auth_key.clone(),
+        internal_auth_key.clone(),
         env_vars.lexical_service_url.as_ref().to_owned(),
     ));
 
@@ -151,12 +149,6 @@ async fn build_tool_context(
         internal_auth_key.clone(),
         env_vars.email_service_url.as_ref().to_owned(),
     ));
-
-    let static_file_service_client =
-        Arc::new(static_file_service_client::StaticFileServiceClient::new(
-            internal_auth_key,
-            env_vars.static_file_service_url.as_ref().to_owned(),
-        ));
 
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
@@ -256,34 +248,62 @@ async fn build_tool_context(
         ))),
     );
 
+    let call_service = call::domain::service::CallServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
+        NoOpCallRtcClient,
+        NoOpConnectionService,
+        EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
+        NoOpNotificationIngress,
+        None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
+        String::new(),
+    );
+    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
+    );
+    let call_tool_context = call::inbound::toolset::CallToolContext::new(
+        call_service,
+        call_query_service,
+        EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
+    );
+
+    let notification_reader_service = NotificationReaderService::new(
+        DbNotificationRepository::new(db.clone()),
+        ToolNotificationQueue::NoOp,
+        NoOpSnsEndpointManager,
+        PlatformArnConfig {
+            apns_platform_arn: String::new(),
+            fcm_platform_arn: String::new(),
+        },
+    );
+    let notification_tool_context =
+        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+
+    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
+        chat::domain::service::ChatServiceImpl::new(
+            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            Arc::new(ai_toolset::AsyncToolSet::new()),
+            (),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
+        ),
+        EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
+    );
+
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
         )),
         search_service_client: Arc::new(search_service_client),
-        scribe: Arc::new(
-            ScribeClient::new()
-                .with_document_client(
-                    DocumentClient::builder()
-                        .with_dss_client(document_storage_client)
-                        .with_lexical_client(lexical_client)
-                        .with_sync_service_client(SyncServiceClient::new(
-                            sync_service_auth_key,
-                            sync_service_url,
-                        ))
-                        .with_macro_db(db.clone())
-                        .build(),
-                )
-                .with_channel_client(db.clone())
-                .with_dcs_client(db.clone())
-                .with_email_client(email_service_client)
-                .with_static_file_client(static_file_service_client),
-        ),
         soup_service,
         email_service: email_service_for_tools,
         document_tool_context,
         properties_tool_context,
         email_tool_context,
+        call_tool_context,
+        notification_tool_context,
+        chat_tool_context,
+        channel_tool_context: ai_tools::build_channel_tool_context(db.clone()),
         schedule_tool_context: NoOpScheduleContext,
     };
 

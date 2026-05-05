@@ -34,6 +34,8 @@ import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
 import type {
   AccessLevel,
+  PostSoupAstRequest,
+  CallRecordPreview,
   PostSoupRequest,
   SoupPage,
   View,
@@ -127,16 +129,20 @@ export type ItemType =
   | 'channel'
   | 'email'
   | 'channel_message'
+  | 'call'
   | 'automation';
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
 const itemTypeSet = new Set([
   'document',
-  'channel',
-  'email',
   'chat',
   'project',
+  'channel',
+  'email',
+  'channel_message',
+  'call',
+  'automation',
   'thread',
 ]);
 
@@ -150,6 +156,8 @@ export function blockNameToItemType(
   switch (blockName) {
     case 'chat':
       return 'chat';
+    case 'call':
+      return 'call';
     case 'channel':
       return 'channel';
     case 'project':
@@ -213,6 +221,16 @@ export const storageServiceClient = {
     );
   },
 
+  async bulkWakeupSyncServiceDocuments(args: { document_ids: string[] }) {
+    return mapOk(
+      await dssFetch<{ dispatched: number }>(`/sync_service/wakeup`, {
+        method: 'POST',
+        body: JSON.stringify({ document_ids: args.document_ids }),
+      }),
+      (result) => result
+    );
+  },
+
   async getSoupItems(args: {
     params: { cursor?: string | null };
     body: PostSoupRequest;
@@ -223,6 +241,20 @@ export const storageServiceClient = {
       : '';
 
     return await dssFetch<SoupPage>(`/items/soup${searchParams}`, {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+    });
+  },
+
+  async getSoupAstItems(args: {
+    params: { cursor?: string | null };
+    body: PostSoupAstRequest;
+  }) {
+    const searchParams = args.params.cursor
+      ? `?cursor=${args.params.cursor}`
+      : '';
+
+    return await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
       method: 'POST',
       body: JSON.stringify(args.body),
     });
@@ -542,12 +574,28 @@ export const storageServiceClient = {
       (result) => result.data
     );
   },
+
   async getBatchDocumentPreviews(args: { document_ids: string[] }) {
     return mapOk(
       await dssFetch<{ previews: DocumentPreview[] }>(`/documents/preview`, {
         method: 'POST',
         body: JSON.stringify({ document_ids: args.document_ids }),
       }),
+      (result) => ({
+        previews: result.previews,
+      })
+    );
+  },
+
+  async getBatchCallPreviews(args: { call_ids: string[] }) {
+    return mapOk(
+      await dssFetch<{ previews: CallRecordPreview[] }>(
+        `/call/record/preview`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ callIds: args.call_ids }),
+        }
+      ),
       (result) => ({
         previews: result.previews,
       })
@@ -1021,20 +1069,16 @@ export const storageServiceClient = {
   getDocxExpandedParts,
 
   async upsertDocumentViewLocation({ documentId, location }) {
-    return ok(
-      await dssFetch<{}>(`/user_document_view_location/${documentId}`, {
-        method: 'POST',
-        body: JSON.stringify({ location }),
-      })
-    );
+    return await dssFetch<{}>(`/user_document_view_location/${documentId}`, {
+      method: 'POST',
+      body: JSON.stringify({ location }),
+    });
   },
 
   async deleteDocumentViewLocation({ documentId }) {
-    return ok(
-      await dssFetch<{}>(`/user_document_view_location/${documentId}`, {
-        method: 'DELETE',
-      })
-    );
+    return await dssFetch<{}>(`/user_document_view_location/${documentId}`, {
+      method: 'DELETE',
+    });
   },
 
   projects: {
@@ -1107,7 +1151,6 @@ export const storageServiceClient = {
       );
     },
 
-    // @ts-expect-error - TODO: we need to be able to return a string, the record<string, any> constraint is too strict
     async getUserAccessLevel({
       id,
     }): Promise<MaybeResult<FetchWithTokenErrorCode, AccessLevel>> {
@@ -1224,7 +1267,9 @@ export const storageServiceClient = {
       (result) => result.data
     );
   },
-} satisfies StorageServiceClient & typeof enhancements;
+} satisfies StorageServiceClient &
+  typeof enhancements &
+  Record<string, unknown>;
 
 export const uploadFileToPresignedUrl = async (
   presignedUrl: URL,

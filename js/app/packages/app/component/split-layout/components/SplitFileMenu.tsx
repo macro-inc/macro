@@ -1,13 +1,14 @@
 import { useBlockAliasedName, useBlockName } from '@core/block';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { ResponsiveDropdown } from '@app/component/SimpleDropdown';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
-import { MenuItem } from '@core/component/Menu';
+import { triggerFocusInput } from '@core/directive/focusInput';
 import { useIsDocumentOwner } from '@core/signal/permissions';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import Copy from '@icon/regular/copy.svg';
 import ThreeDots from '@icon/regular/list.svg';
 import Rename from '@icon/regular/pencil-line.svg';
 import Trash from '@icon/regular/trash-simple.svg';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
@@ -19,12 +20,12 @@ import {
   Show,
   useContext,
 } from 'solid-js';
-import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { SplitPanelContext } from '../context';
 import { useSplitLayout } from '../layout';
 import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
 import { toast } from '@core/component/Toast/Toast';
 import { buildEntityData } from '@entity';
+import { Layer } from '@ui';
 
 export type FileOperationName = 'delete' | 'rename' | 'copy' | 'moveToProject';
 
@@ -182,8 +183,12 @@ export function SplitFileMenu(props: {
   );
 
   return (
-    <DropdownMenu open={open()} onOpenChange={setOpen} boundary={ctx.panelRef}>
-      <DropdownMenu.Trigger
+    <ResponsiveDropdown
+      open={open()}
+      onOpenChange={setOpen}
+      boundary={ctx.panelRef}
+    >
+      <ResponsiveDropdown.Trigger
         as={Button}
         class={cn(
           'px-1',
@@ -193,40 +198,60 @@ export function SplitFileMenu(props: {
         size="icon-sm"
       >
         <ThreeDots />
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content class="bg-menu w-fit p-1 border border-edge-muted rounded-xs mt-2 shadow">
-          <For each={ops()}>
-            {(op, i) => (
-              <>
-                <Show when={op.divideAbove && i() >= 1}>
-                  <div class="my-1 h-[1px] bg-edge-muted/50" />
-                </Show>
-                <MenuItem text={op.label} onClick={op.action} icon={op.icon} />
-              </>
-            )}
-          </For>
-          <Show when={filteredTools().length > 0 && ops().length > 0}>
-            <div class="my-1 h-[1px] bg-edge" />
-          </Show>
-          <For each={filteredTools()}>
-            {(tool, i) => (
-              <>
-                <Show when={tool.divideAbove && i() > 0}>
-                  <div class="my-1 h-[1px] bg-edge" />
-                </Show>
-                <MenuItem
-                  text={
-                    typeof tool.label === 'function' ? tool.label() : tool.label
-                  }
-                  onClick={tool.action}
-                  icon={tool.icon}
-                />
-              </>
-            )}
-          </For>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+      </ResponsiveDropdown.Trigger>
+      <ResponsiveDropdown.Portal>
+        <Layer depth={2}>
+          <ResponsiveDropdown.Content class="bg-menu w-fit p-1 border border-edge-muted rounded-xs shadow">
+            <For each={ops()}>
+              {(op, i) => (
+                <>
+                  <Show when={op.divideAbove && i() >= 1}>
+                    <div class="my-1 h-px bg-edge-muted" />
+                  </Show>
+                  <ResponsiveDropdown.Item
+                    text={op.label}
+                    onClick={() => {
+                      op.action();
+                      setOpen(false);
+                    }}
+                    icon={op.icon}
+                  />
+                </>
+              )}
+            </For>
+            <Show when={filteredTools().length > 0 && ops().length > 0}>
+              <div class="my-1 h-px bg-edge-muted" />
+            </Show>
+            <For each={filteredTools()}>
+              {(tool, i) => (
+                <>
+                  <Show when={tool.divideAbove && i() > 0}>
+                    <div class="my-1 h-px bg-edge-muted" />
+                  </Show>
+                  <ResponsiveDropdown.Item
+                    text={
+                      typeof tool.label === 'function'
+                        ? tool.label()
+                        : tool.label
+                    }
+                    onClick={(e?: MouseEvent) => {
+                      tool.action();
+                      if (tool.focusTarget) {
+                        triggerFocusInput(
+                          tool.focusTarget,
+                          e?.currentTarget as HTMLElement | undefined
+                        );
+                      }
+                      setOpen(false);
+                    }}
+                    icon={tool.icon}
+                  />
+                </>
+              )}
+            </For>
+          </ResponsiveDropdown.Content>
+        </Layer>
+      </ResponsiveDropdown.Portal>
+    </ResponsiveDropdown>
   );
 }

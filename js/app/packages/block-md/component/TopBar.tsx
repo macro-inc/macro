@@ -1,5 +1,10 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
+  ChatWithAgentButton,
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/component/ChatWithAgentButton';
+import {
   type BlockTool,
   ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
@@ -30,6 +35,7 @@ import { NOTIFICATIONS_DRAWER_ID } from '@core/component/NotificationsModal';
 import { ReferencesButton } from '@core/component/ReferencesModal';
 import { REFERENCES_DRAWER_ID } from '@core/component/ReferencesModal';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
@@ -51,6 +57,7 @@ import GitBranch from '@icon/regular/git-branch.svg';
 import Info from '@icon/regular/info.svg';
 import Bell from '@icon/regular/bell.svg';
 import Quotes from '@icon/regular/quotes.svg';
+import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import IconLink from '@icon/regular/link.svg';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
@@ -62,6 +69,7 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import { createEffect, For, on, Show, type JSX } from 'solid-js';
+import { DispatchAgentButton } from './DispatchAgentMenu';
 import { HISTORY_DRAWER_ID } from './History';
 import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
 import { useAnalytics } from '@app/component/analytics-context';
@@ -222,11 +230,40 @@ export function TopBar() {
       isActive: propertiesControl.isOpen,
     },
     {
+      label: 'Dispatch to Agent',
+      icon: TerminalWindowIcon,
+      action: () => {},
+      condition: () => isTask && !isMobile(),
+      buttonComponent: () => <DispatchAgentButton />,
+    },
+    {
+      label: 'Chat',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: blockId,
+          name: name(),
+          fileType: 'md',
+        }),
+      divideAbove: true,
+      buttonComponent: () => (
+        <ChatWithAgentButton
+          entity={{
+            type: 'document',
+            id: blockId,
+            name: name(),
+            fileType: 'md',
+          }}
+        />
+      ),
+    },
+    {
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
-      divideAbove: true,
       buttonComponent: () => <ShareTrigger />,
+      focusTarget: getShareDrawerRecipientInput,
     },
     {
       label: 'Copy Link',

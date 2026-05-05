@@ -69,7 +69,9 @@ export type CommentsContextType = {
   documentId: string;
   ownedComment: (id: number) => boolean;
   inComment: boolean;
+  highlightedCommentId: Accessor<number | null>;
 };
+
 export const CommentsContext = createContext<CommentsContextType>({
   setActiveThread: () => {},
   setThreadHeight: () => {},
@@ -84,6 +86,7 @@ export const CommentsContext = createContext<CommentsContextType>({
   documentId: '',
   ownedComment: () => false,
   inComment: false,
+  highlightedCommentId: () => null,
 });
 
 export function Thread(props: {
@@ -98,8 +101,13 @@ export function Thread(props: {
 }) {
   let measureContainerRef!: HTMLDivElement;
 
-  const { canComment, commentOperations, setActiveThread, ownedComment } =
-    useContext(CommentsContext);
+  const {
+    canComment,
+    commentOperations,
+    setActiveThread,
+    ownedComment,
+    highlightedCommentId,
+  } = useContext(CommentsContext);
 
   const [textValue, setTextValue] = createSignal('');
   const [isEditingNewReply, setIsEditingNewReply] = createSignal(false);
@@ -150,6 +158,15 @@ export function Thread(props: {
     setAllRepliesVisible(false);
   });
 
+  // expand all replies if we're navigating to a specific reply via URL
+  createEffect(() => {
+    const hId = highlightedCommentId();
+    if (hId === null) return;
+    if (replyIds().includes(hId)) {
+      setAllRepliesVisible(true);
+    }
+  });
+
   onMount(() => {
     if (!props.handleMouseDown) return;
     const handleMouseDown = props.handleMouseDown;
@@ -178,12 +195,12 @@ export function Thread(props: {
           maxHeight={props.maxHeight}
           isActive={props.isActive}
           forceWidth={props.width}
-          transition={true}
+          transition={false}
         >
           <div
             // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
             // pointer-events: none vs. all inside the .pdfOverlayInner div.
-            class="flex-shrink-0 bg-panel p-2 ring-1 ring-edge-muted rounded-sm portal-scope pointer-events-auto pdf-pointer-event-reset"
+            class="shrink-0 bg-panel p-2 ring-1 ring-edge-muted rounded-sm portal-scope pointer-events-auto pdf-pointer-event-reset"
             classList={{
               'transition-transform duration-100': true,
               '-translate-x-8': props.isActive,

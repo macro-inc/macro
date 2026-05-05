@@ -12,6 +12,7 @@ import {
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import {
+  type BlockAlias,
   type BlockAliasContext,
   Block as BlockComponent,
   type BlockComponentProps,
@@ -285,6 +286,10 @@ type GetBlockHandleFn = {
     blockId: string,
     blockType: T
   ): Promise<BlockHandle<BlockMethodsFor<T>> | undefined>;
+  <T extends BlockAlias>(
+    blockId: string,
+    blockType: T
+  ): Promise<BlockHandle<any> | undefined>;
   (blockId: string): Promise<BlockHandle<any> | undefined>;
 };
 
@@ -350,10 +355,10 @@ export function createBlockOrchestrator(): BlockOrchestrator {
     setBlocks(id, undefined!);
   };
 
-  const getBlockHandle: GetBlockHandleFn = async function <T extends BlockName>(
+  const getBlockHandle: GetBlockHandleFn = async function (
     blockId: string,
-    blockType?: T
-  ): Promise<BlockHandle<BlockMethodsFor<T>> | undefined> {
+    blockType?: BlockName | BlockAlias
+  ): Promise<BlockHandle<any> | undefined> {
     await awaitBlockRegistered(blocks as any, blockId);
     const block = (blocks as any)[blockId] as BlockWithHandle | undefined;
     if (!block) return;
@@ -364,7 +369,7 @@ export function createBlockOrchestrator(): BlockOrchestrator {
       return;
     }
     const [registry] = block.handle.registry;
-    return createBlockHandle<BlockMethodsFor<T>>(block, registry);
+    return createBlockHandle<any>(block, registry);
   };
 
   function createManagedBlockInstance(

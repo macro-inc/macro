@@ -3537,6 +3537,28 @@
           "name": {
             "type": ["string", "null"],
             "description": "The new name for the team"
+          },
+          "user_role_updates": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/PatchTeamUserRole"
+            },
+            "description": "Role updates to apply to team users"
+          }
+        }
+      },
+      "PatchTeamUserRole": {
+        "type": "object",
+        "description": "Request to update a team user's role",
+        "required": ["team_user_id", "role"],
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/TeamRole",
+            "description": "The new role of the team user"
+          },
+          "team_user_id": {
+            "type": "string",
+            "description": "The team user you are updating"
           }
         }
       },
@@ -3828,7 +3850,7 @@
       "TeamRole": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
-        "enum": ["Member", "Admin", "Owner"]
+        "enum": ["member", "admin", "owner"]
       },
       "TeamUserTier": {
         "type": "string",

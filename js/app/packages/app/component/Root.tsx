@@ -16,7 +16,12 @@ import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal'
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
-import { getLoginCookieOptions, updateCookie } from '@core/util/cookies';
+import {
+  getLoginCookieOptions,
+  hasLoginCookie,
+  syncLoginStorage,
+  updateCookie,
+} from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
@@ -54,6 +59,7 @@ import { useHotKeyRoot } from 'core/hotkey/hotkeys';
 import { detect } from 'detect-browser';
 import {
   createEffect,
+  createSignal,
   type JSX,
   Match,
   on,
@@ -63,21 +69,21 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { currentThemeId } from '../../block-theme/signals/themeSignals';
+import { currentThemeId } from '../../theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
   systemThemeEffect,
-} from '../../block-theme/utils/themeUtils';
+} from '../../theme/utils/themeUtils';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { Login } from './auth/Login';
 import { Signup } from './auth/Signup';
+import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 import { setCookie } from './auth/Shared';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
 import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
-import MacroJump from './MacroJump';
 import { ReactiveFavicon } from './ReactiveFavicon';
 import { lazy } from 'solid-js';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
@@ -85,13 +91,15 @@ import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 const InteractiveOnboarding = lazy(
   () => import('./interactive-onboarding/InteractiveOnboarding')
 );
-import Visor from './Visor';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import {
   AnalyticsContextProvider,
   useAnalytics,
 } from '@app/component/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
+import { CallProvider } from '@channel/Call/CallContext';
+import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { Button } from '@ui';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -100,10 +108,10 @@ function useSyncLoginCookie() {
   createEffect(() => {
     if (!userInfoQuery.isSuccess) return;
 
-    const { value, ...options } = getLoginCookieOptions(
-      userInfoQuery.data.authenticated ?? false
-    );
+    const authenticated = userInfoQuery.data.authenticated ?? false;
+    const { value, ...options } = getLoginCookieOptions(authenticated);
     updateCookie('login', value, options);
+    syncLoginStorage(authenticated);
   });
 }
 
@@ -149,6 +157,30 @@ const rootPreload: RoutePreloadFunc = async (args) => {
   }
 };
 
+function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
+  const [retrying, setRetrying] = createSignal(false);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    await props.onRetry();
+    setRetrying(false);
+  };
+
+  return (
+    <div class="flex flex-col items-center justify-center gap-4 h-full w-full text-ink-muted">
+      <p class="text-sm">Unable to connect. Please check your network.</p>
+      <Button
+        class="mt-2"
+        disabled={retrying()}
+        onClick={handleRetry}
+        variant="primary"
+      >
+        {retrying() ? 'Retrying…' : 'Retry'}
+      </Button>
+    </div>
+  );
+}
+
 function BasePathComponent() {
   const analytics = useAnalytics();
 
@@ -192,11 +224,16 @@ function BasePathComponent() {
     <Switch>
       <Match when={userInfoQuery.isLoading}>{null}</Match>
       <Match
+        when={
+          userInfoQuery.isError && hasLoginCookie() && isNativeMobilePlatform()
+        }
+      >
+        <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
+      </Match>
+      <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
-        <Navigate
-          href={`${isNativeMobilePlatform() ? '/welcome' : '/welcome'}${window.location.search}`}
-        />
+        <Navigate href={`/welcome${window.location.search}`} />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
         <Navigate href={redirectPath} />
@@ -305,10 +342,14 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/welcome',
     component: () => (
-      <div class="flex *:flex-1 w-full h-dvh overflow-y-hidden">
+      <div class="flex *:flex-1 w-full h-full overflow-y-hidden">
         <InteractiveOnboarding />
       </div>
     ),
+  },
+  {
+    path: '/team-invite',
+    component: TeamInviteAcceptance,
   },
   {
     // This splat route must be last to catch all unmatched routes
@@ -441,30 +482,31 @@ export function Root() {
                 <ConfiguredGlobalAppStateProvider>
                   <MutationUndoProvider>
                     <ChannelsContextProvider>
-                      <QuickAccessProvider>
-                        <SearchProvider>
-                          <ChatAttachmentsInit />
-                          <ReactiveFavicon />
-                          <Title>{tabTitle()}</Title>
-                          <MacroJump />
-                          <Visor />
-                          <Suspense>
-                            <IsomorphicRouter
-                              transformUrl={transformShortIdInUrlPathname}
-                              root={Layout}
-                              rootPreload={rootPreload}
-                              base={ROUTER_BASE}
-                            >
-                              {{
-                                path: '/',
-                                component: TauriRouteListener,
-                                children: ROUTES,
-                              }}
-                            </IsomorphicRouter>
-                          </Suspense>
-                          <ToastRegion />
-                        </SearchProvider>
-                      </QuickAccessProvider>
+                      <CallProvider>
+                        <CallStartedNotifier />
+                        <QuickAccessProvider>
+                          <SearchProvider>
+                            <ChatAttachmentsInit />
+                            <ReactiveFavicon />
+                            <Title>{tabTitle()}</Title>
+                            <Suspense>
+                              <IsomorphicRouter
+                                transformUrl={transformShortIdInUrlPathname}
+                                root={Layout}
+                                rootPreload={rootPreload}
+                                base={ROUTER_BASE}
+                              >
+                                {{
+                                  path: '/',
+                                  component: TauriRouteListener,
+                                  children: ROUTES,
+                                }}
+                              </IsomorphicRouter>
+                            </Suspense>
+                            <ToastRegion />
+                          </SearchProvider>
+                        </QuickAccessProvider>
+                      </CallProvider>
                     </ChannelsContextProvider>
                   </MutationUndoProvider>
                 </ConfiguredGlobalAppStateProvider>

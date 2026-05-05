@@ -1,7 +1,7 @@
 lambda_name := file_name(justfile_directory())
 os := os()
 macos_features := if os == "macos" { "--features macos" } else { "" }
-export DATABASE_URL := 'postgres://user:password@localhost:5432/macrodb'
+import '../database.just'
 
 mod ci '../ci.just'
 
@@ -10,7 +10,7 @@ deploy-dev:
 
 # Prepare database
 prepare:
-    cargo sqlx prepare
+    DATABASE_URL={{ DATABASE_URL }} cargo sqlx prepare
 
 # Build lambda for deployment
 build:
@@ -23,15 +23,15 @@ build:
 
 # Run local development server with automatic OS detection
 local:
-    cargo lambda watch {{ macos_features }}
+    DATABASE_URL={{ DATABASE_URL }} cargo lambda watch {{ macos_features }}
 
 # Run local development server specifically for Linux
 local-linux:
-    cargo lambda watch
+    DATABASE_URL={{ DATABASE_URL }} cargo lambda watch
 
 # Run local development server specifically for MacOS
 local-mac:
-    cargo lambda watch --features macos
+    DATABASE_URL={{ DATABASE_URL }} cargo lambda watch --features macos
 
 # Invoke lambda function with specified data file
 invoke data_file="sample_input.json":
@@ -39,4 +39,4 @@ invoke data_file="sample_input.json":
 
 # Run tests
 test:
-    cargo test
+    DATABASE_URL={{ DATABASE_URL }} cargo test

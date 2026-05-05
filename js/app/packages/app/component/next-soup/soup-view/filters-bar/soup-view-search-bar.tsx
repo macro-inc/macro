@@ -1,15 +1,29 @@
 import XIcon from '@icon/regular/x.svg?component-solid';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import { cn } from '@ui/utils/classname';
+import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { registerSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Hotkey } from '@core/component/Hotkey';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { COMMAND_PRIORITY_HIGH, KEY_ARROW_DOWN_COMMAND } from 'lexical';
-import { createSignal, createEffect, on, onCleanup, Show } from 'solid-js';
+import { batch } from 'solid-js';
+import {
+  $getRoot,
+  COMMAND_PRIORITY_HIGH,
+  KEY_ARROW_DOWN_COMMAND,
+} from 'lexical';
+import {
+  createSignal,
+  createEffect,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 
 type SearchbarVariant = 'filled' | 'secondary';
 
@@ -18,6 +32,7 @@ interface SoupSearchbarProps {
   autoFocus?: boolean;
   onDismiss?: () => void;
   placeholder?: string;
+  initialValue?: string;
 }
 
 const variantStyles: Record<SearchbarVariant, string> = {
@@ -28,7 +43,9 @@ const variantStyles: Record<SearchbarVariant, string> = {
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const { setSearchText, setSearchPaused, setSearchMentions } = useSoupView();
+  const { setSearchText, setSearchPaused, setSearchMentions, queryFilters } =
+    useSoupView();
+  const soup = useSoup();
   const panel = useSplitPanelOrThrow();
 
   const [hasContent, setHasContent] = createSignal(false);
@@ -112,6 +129,32 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
   onCleanup(searchHotkey.dispose);
 
+  onMount(() => {
+    const content = panel.handle.content();
+    if (content.type !== 'component' || content.id !== 'search') return;
+    const dispose = registerSearchSplit(panel.handle.id, {
+      applyOverrides: ({ query, filters, clientFilters }) => {
+        batch(() => {
+          editor.controls.setMarkdown(query);
+          editor.controls.getLexical().update(() => {
+            $getRoot().selectEnd();
+          });
+          editor.controls.blur();
+          queryFilters.replace(filters);
+          soup.predicates.set(clientFilters);
+        });
+        // Restore focus to the split panel so hotkey navigation works. The
+        // command menu suppresses Kobalte's onCloseAutoFocus for search
+        // rows so this stays put without needing a delay.
+        queueMicrotask(() => panel.panelRef()?.focus({ preventScroll: true }));
+      },
+      focus: () => {
+        setTimeout(() => editor.controls.focus());
+      },
+    });
+    onCleanup(dispose);
+  });
+
   return (
     <div
       class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2"
@@ -127,13 +170,14 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         <SearchIcon class="size-4 shrink-0" />
         <div
           data-soup-search
-          class="flex-1 min-w-0 [&_[contenteditable]]:outline-none [&_[contenteditable]]:p-0 [&_p]:my-0"
+          class="flex-1 min-w-0 **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 [&_p]:my-0"
         >
           <MarkdownShell
             config={editor}
             placeholder={props.placeholder ?? 'Search'}
             autofocus={props.autoFocus}
-            class="!min-h-0 !overflow-visible"
+            initialValue={props.initialValue}
+            class="min-h-0! overflow-visible!"
           />
         </div>
         <Show when={!hasContent() && !props.onDismiss}>

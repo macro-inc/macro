@@ -1,8 +1,19 @@
+set positional-arguments
+
+# Freeze Docker Compose resources across checkouts/worktrees. Local setup is
+# single-instance by design; do not derive resource names from the directory.
+export COMPOSE_PROJECT_NAME := "macro"
+
 # Creates global networks that are shared across docker-compose files
 create_networks:
   docker network create databases 2>/dev/null || true -- db network
   docker network create auth 2>/dev/null || true -- fusionauth network
-  echo "docker networks created"
+  docker volume create macro_postgres_data >/dev/null
+  docker volume create macro_redis_data >/dev/null
+  docker volume create macro_opensearch_data >/dev/null
+  docker volume create fusionauth_db_data >/dev/null
+  docker volume create fusionauth_config >/dev/null
+  echo "docker networks and volumes created"
 
 fix_environment *ARGS:
   # Decrypt ignoring mac error
@@ -51,9 +62,54 @@ docker_up *ARGS:
 # Requires .env file (from `just get_environment`) and FusionAuth setup (from `just setup`).
 # Automatically patches .env with local FusionAuth values before starting services.
 run_local *ARGS:
+  #!/usr/bin/env bash
+  set -euo pipefail
+
   just create_networks
   just patch_local_fusionauth_env
-  just docker_up {{ ARGS }}
+
+  do_build=false
+  build_processors=false
+  filtered_args=()
+  expecting_profile_name=false
+  for arg in "$@"; do
+    if [ "$expecting_profile_name" = true ]; then
+      if [ "$arg" = "processors" ]; then
+        build_processors=true
+      fi
+      expecting_profile_name=false
+      filtered_args+=("$arg")
+      continue
+    fi
+
+    if [ "$arg" = "--build" ]; then
+      do_build=true
+    elif [ "$arg" = "--profile" ]; then
+      expecting_profile_name=true
+      filtered_args+=("$arg")
+    elif [ "$arg" = "search_processing_service" ]; then
+      build_processors=true
+      filtered_args+=("$arg")
+    else
+      filtered_args+=("$arg")
+    fi
+  done
+
+  docker compose build rust_services_image
+
+  if [ "$do_build" = true ]; then
+    docker compose build websocket_service sync_service lexical_service
+    if [ "$build_processors" = true ]; then
+      docker compose build search_processing_service
+    fi
+  fi
+
+  echo "startup docker compose"
+  if [ "${#filtered_args[@]}" -gt 0 ]; then
+    docker compose up "${filtered_args[@]}"
+  else
+    docker compose up
+  fi
 
 # Patches .env with local FusionAuth values if the Pulumi stack exists.
 # Requires FusionAuth to be running — starts it temporarily if needed.
@@ -69,18 +125,26 @@ patch_local_fusionauth_env:
     echo "         Run 'just setup' if this is a fresh checkout."
     exit 0
   fi
+  if [ ! -f infra/stacks/fusionauth-instance/.env ]; then
+    echo "FusionAuth docker env not found; downloading it..."
+    just infra/stacks/fusionauth-instance/get_fusionauth_env
+  fi
   # FusionAuth must be running to read the client secret
   NEEDS_STOP=false
+  cleanup() {
+    if [ "$NEEDS_STOP" = true ]; then
+      echo "Stopping temporary FusionAuth..."
+      docker compose stop fusionauth
+    fi
+  }
+  trap cleanup EXIT
+
   if ! curl -s http://localhost:9011/api/status 2>/dev/null | grep -q '"Ok"'; then
     echo "Starting FusionAuth temporarily to read config..."
-    docker compose up fusionauth -d --wait
     NEEDS_STOP=true
+    docker compose up fusionauth -d --wait
   fi
   just infra/stacks/fusionauth-instance/insert_local_fusionauth_variables
-  if [ "$NEEDS_STOP" = true ]; then
-    echo "Stopping temporary FusionAuth..."
-    docker compose stop fusionauth
-  fi
 
 # Stop all local services
 stop-local:

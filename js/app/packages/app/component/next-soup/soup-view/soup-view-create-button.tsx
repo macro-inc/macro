@@ -9,7 +9,7 @@ import {
   openFolderPicker,
 } from '@core/util/upload';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import UploadIcon from '@icon/regular/upload-simple.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -18,7 +18,9 @@ import { Button } from '@ui/components/Button';
 import { NewCallButton } from './NewCallButton';
 
 // Which blocks to show as create options per view, in order
-const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, BlockName[]>> = {
+const VIEW_CREATE_BLOCKNAMES: Partial<
+  Record<ListView, (BlockName | BlockAlias)[]>
+> = {
   documents: ['md', 'canvas', 'code'],
   tasks: ['task'],
   agents: ['chat', 'automation'],
@@ -28,7 +30,7 @@ const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, BlockName[]>> = {
 };
 
 type CreateOption = {
-  id: BlockName | 'import-file' | 'import-folder';
+  id: BlockName | BlockAlias | 'import-file' | 'import-folder';
   label: string;
 };
 
@@ -46,9 +48,10 @@ const IMPORT_FOLDER_OPTION: CreateOption = {
  * (and thus aren't in CREATABLE_BLOCKS) but still need a create entry in
  * specific list views.
  */
-const VIEW_ONLY_BLOCK_LABELS: Partial<Record<BlockName, string>> = {
-  automation: 'Automation',
-};
+const VIEW_ONLY_BLOCK_LABELS: Partial<Record<BlockName | BlockAlias, string>> =
+  {
+    automation: 'Automation',
+  };
 
 function getViewCreateOptions(view: ListView): CreateOption[] {
   const createNames = VIEW_CREATE_BLOCKNAMES[view] ?? [];
@@ -70,7 +73,7 @@ function getViewCreateOptions(view: ListView): CreateOption[] {
 }
 
 function CreateOptionIcon(props: {
-  id: BlockName | 'import-file' | 'import-folder';
+  id: BlockName | BlockAlias | 'import-file' | 'import-folder';
 }) {
   return (
     <Show

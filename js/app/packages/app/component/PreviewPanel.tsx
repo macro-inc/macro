@@ -149,7 +149,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     >
       {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
       <div
-        class="relative w-full flex items-center justify-between shrink-0 h-10 bg-panel px-2 border-b border-edge-muted/50"
+        class="relative w-full flex items-center justify-between shrink-0 h-10 bg-panel px-2 border-b border-edge-muted"
         classList={{
           // In spotlight/fullscreen, avoid hugging the screen edge
           'pl-2': splitPanelContext.handle.isSpotLight(),
@@ -201,7 +201,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
 
 export const PreviewPanel: Component<PreviewPanel> = (props) => {
   return (
-    <div class="flex flex-row size-full sm:w-[70%] max-sm:h-[50%] max-sm:border-t border-edge-muted shrink-0">
+    <div class="flex flex-row size-full">
       <Show when={props.selectedEntity}>
         {(selectedEntity) => (
           <PreviewPanelContent

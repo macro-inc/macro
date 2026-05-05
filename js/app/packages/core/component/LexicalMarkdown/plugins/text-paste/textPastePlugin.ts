@@ -1,6 +1,12 @@
-import type { BlockAlias, BlockName } from '@core/block';
+import {
+  type BlockAlias,
+  BlockAliasRegistry,
+  type BlockName,
+  BlockRegistry,
+} from '@core/block';
+import { isTauri } from '@core/util/platform';
 import { mergeRegister } from '@lexical/utils';
-import { parseThemeV1Json } from '@block-theme/utils/themeValidation';
+import { parseThemeV2Json } from '@theme/utils/themeValidation';
 import {
   $getSelection,
   $isRangeSelection,
@@ -19,12 +25,16 @@ type MacroAppUrlParsed = {
   block: BlockName | BlockAlias | undefined;
   params: Record<string, string> | undefined;
 };
+
 const Hosts = {
   Prod: 'macro.com',
   Dev: 'dev.macro.com',
-  Staging: 'staging.macro.com',
   Localhost: 'localhost',
 } as const;
+
+const IgnoredParams = new Set(['referral_code']);
+
+const ValidBlockNames = [...BlockRegistry, ...BlockAliasRegistry];
 
 function cleanHostname(hostname: string): string {
   return hostname.replace('www.', '').toLowerCase();
@@ -41,6 +51,12 @@ function isValidMentionHostname(hostname: string): boolean {
     (target === Hosts.Localhost && current === Hosts.Dev)
   ) {
     return true;
+  }
+  // On Tauri, window.location.hostname is 'localhost', but Macro links are
+  // built with the real web origin (macro.com or dev.macro.com). Accept any
+  // recognized Macro host when running inside the native Tauri app.
+  if (isTauri() && current === Hosts.Localhost) {
+    return target === Hosts.Prod || target === Hosts.Dev;
   }
   return false;
 }
@@ -70,21 +86,8 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
       };
     }
 
-    const validTypes: Array<BlockName | BlockAlias> = [
-      'chat',
-      'write',
-      'pdf',
-      'md',
-      'task',
-      'code',
-      'image',
-      'canvas',
-      'channel',
-      'project',
-      'email',
-    ];
     const _block: string = pathParts[1];
-    if (!validTypes.includes(_block as any)) {
+    if (!ValidBlockNames.includes(_block as any)) {
       return {
         isValid: false,
         id: undefined,
@@ -108,6 +111,7 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
     const id: string = pathParts[2];
     const params: Record<string, string> = {};
     url.searchParams.forEach((value, key) => {
+      if (IgnoredParams.has(key)) return;
       params[key] = value;
     });
 
@@ -137,16 +141,16 @@ function registerTextPastePlugin(editor: LexicalEditor) {
             event.clipboardData?.getData('text/plain') || '';
 
           // Check for theme JSON before checking for Macro URL
-          const themeV1 = parseThemeV1Json(pastedText);
-          if (themeV1) {
+          const themeV2 = parseThemeV2Json(pastedText);
+          if (themeV2) {
             const selection = $getSelection();
             if ($isRangeSelection(selection) && !selection.isCollapsed())
               return false;
 
             event.preventDefault();
             editor.dispatchCommand(INSERT_THEME_MENTION_COMMAND, {
-              name: themeV1.name,
-              data: themeV1,
+              name: themeV2.name,
+              data: themeV2,
             });
             return true;
           }

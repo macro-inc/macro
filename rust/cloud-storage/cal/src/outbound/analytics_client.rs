@@ -30,18 +30,21 @@ impl AnalyticsClientSink {
 struct LeadCustomData<'a> {
     content_name: &'a str,
     content_category: &'static str,
+    value: f64,
+    currency: &'static str,
 }
 
 impl AnalyticsSink for AnalyticsClientSink {
     #[tracing::instrument(
         err,
         skip(self, booking),
-        fields(uid = %booking.uid, content_name),
+        fields(uid = %booking.uid, content_name, value),
     )]
     async fn on_booking_created(
         &self,
         booking: &BookingCreated,
         content_name: &str,
+        value: f64,
     ) -> Result<(), Report> {
         let attendee_email = booking.attendees.first().map(|a| a.email.as_str());
 
@@ -72,13 +75,15 @@ impl AnalyticsSink for AnalyticsClientSink {
         let custom_data = LeadCustomData {
             content_name,
             content_category: "cal_booking",
+            value,
+            currency: "USD",
         };
 
         // Debug log so we can see whether cal.com's metadata passthrough is
         // carrying the browser attribution signals. Only presence flags and
         // metadata key names are emitted — the raw email, fbp/fbc values,
         // and user_agent are deliberately not logged to avoid PII leakage.
-        // Enable with `RUST_LOG=cal=debug` when investigating match quality.
+        // Enable with `RUST_LOG=cal=debug` when investigating match quality
         tracing::debug!(
             uid = %booking.uid,
             content_name = %content_name,
@@ -92,7 +97,7 @@ impl AnalyticsSink for AnalyticsClientSink {
 
         self.client
             .track_meta(
-                "Lead",
+                "CompleteRegistration",
                 &user_data,
                 MetaActionSource::Website,
                 Some(&booking.uid),

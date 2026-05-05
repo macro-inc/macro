@@ -21,14 +21,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
 
-use crate::domain::models::EditCallRecordRequest;
+use crate::domain::models::{EditCallRecordRequest, EditCallTranscriptRequest};
 
 use super::models::{
-    CallActiveResponse, CallError, CallRecord, CallTokenResponse, EgressS3Config,
-    GetCallRecordsRequest, LeaveCallResponse, TranscriptSegmentRequest,
+    AddParticipantError, CallActiveResponse, CallError, CallRecord, CallRecordTranscriptSegment,
+    CallTokenResponse, EgressS3Config, GetBatchCallRecordPreviewRequest,
+    GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse,
+    TranscriptSegmentRequest,
 };
 use super::ports::{
-    CallRecordQueryService, CallRepository, CallRtcClient, CallService, RecordingStorage,
+    CallRecordQueryService, CallRepository, CallRtcClient, CallSearchIndexer, CallService,
+    CallSummarizer, NoOpCallSearchIndexer, RecordingStorage,
 };
 
 /// The concrete call service implementation.
@@ -39,6 +42,8 @@ pub struct CallServiceImpl<
     E: EntityAccessService,
     N: NotificationIngress,
     S: RecordingStorage,
+    Sm: CallSummarizer = NoopCallSummarizer,
+    I: CallSearchIndexer = NoOpCallSearchIndexer,
 > {
     repo: R,
     rtc_client: C,
@@ -46,9 +51,11 @@ pub struct CallServiceImpl<
     entity_access_service: E,
     notification_ingress: N,
     recording_storage: S,
+    search_indexer: I,
     server_url: String,
     egress_s3_config: Option<EgressS3Config>,
     internal_call_secret: Option<String>,
+    summarizer: Option<Sm>,
 }
 
 impl<
@@ -58,7 +65,8 @@ impl<
     E: EntityAccessService,
     N: NotificationIngress,
     S: RecordingStorage,
-> CallServiceImpl<R, C, Cn, E, N, S>
+    Sm: CallSummarizer,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, NoOpCallSearchIndexer>
 {
     /// Create a new call service.
     pub fn new(
@@ -77,12 +85,26 @@ impl<
             entity_access_service,
             notification_ingress,
             recording_storage,
+            search_indexer: NoOpCallSearchIndexer,
             server_url: server_url.into(),
             egress_s3_config: None,
             internal_call_secret: None,
+            summarizer: None,
         }
     }
+}
 
+impl<
+    R: CallRepository,
+    C: CallRtcClient,
+    Cn: ConnectionService,
+    E: EntityAccessService,
+    N: NotificationIngress,
+    S: RecordingStorage,
+    Sm: CallSummarizer,
+    I: CallSearchIndexer,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, I>
+{
     /// Enable auto-recording with the given S3 configuration.
     pub fn with_egress(mut self, s3_config: EgressS3Config) -> Self {
         self.egress_s3_config = Some(s3_config);
@@ -93,6 +115,33 @@ impl<
     pub fn with_internal_call_secret(mut self, secret: String) -> Self {
         self.internal_call_secret = Some(secret);
         self
+    }
+
+    /// Enable AI call summarization with the given [`CallSummarizer`]
+    /// implementation. When unset, calls are never summarized.
+    pub fn with_summarizer(mut self, summarizer: Sm) -> Self {
+        self.summarizer = Some(summarizer);
+        self
+    }
+
+    /// Swap the search indexer.
+    pub fn with_search_indexer<I2: CallSearchIndexer>(
+        self,
+        indexer: I2,
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I2> {
+        CallServiceImpl {
+            repo: self.repo,
+            rtc_client: self.rtc_client,
+            connection_service: self.connection_service,
+            entity_access_service: self.entity_access_service,
+            notification_ingress: self.notification_ingress,
+            recording_storage: self.recording_storage,
+            search_indexer: indexer,
+            server_url: self.server_url,
+            egress_s3_config: self.egress_s3_config,
+            internal_call_secret: self.internal_call_secret,
+            summarizer: self.summarizer,
+        }
     }
 
     /// Send a call event to all channel members (best-effort).
@@ -223,13 +272,15 @@ impl NotificationExtIos for CallStartedNotification {
 }
 
 impl<
-    R: CallRepository,
+    R: CallRepository + Clone,
     C: CallRtcClient,
     Cn: ConnectionService,
     E: EntityAccessService,
     N: NotificationIngress,
     S: RecordingStorage,
-> CallService for CallServiceImpl<R, C, Cn, E, N, S>
+    Sm: CallSummarizer + Clone,
+    I: CallSearchIndexer,
+> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
@@ -392,11 +443,40 @@ impl<
             }
         };
 
-        // Idempotent upsert — handles concurrent joins and rejoin after leave.
-        self.repo
-            .add_participant(&call.id, user_id.copied())
+        // Enforce: a user can only be active in one call at a time. If the
+        // user already has an active participation in a *different* call,
+        // reject before we add them here.
+        if let Some((other_call_id, other_channel_id)) = self
+            .repo
+            .find_active_call_for_user(user_id.copied())
             .await
-            .map_err(|e| CallError::Internal(e.into()))?;
+            .map_err(|e| CallError::Internal(e.into()))?
+            && other_call_id != call.id
+        {
+            return Err(CallError::AlreadyInCall(other_channel_id.to_string()));
+        }
+
+        // Idempotent upsert — handles concurrent joins and rejoin after leave.
+        // The DB-level partial unique index is the race-safe backstop: if a
+        // concurrent request slipped past the pre-flight above, the adapter
+        // returns AddParticipantError::UserAlreadyActive, which we translate
+        // to a typed CallError::AlreadyInCall.
+        match self.repo.add_participant(&call.id, user_id.copied()).await {
+            Ok(_) => {}
+            Err(AddParticipantError::UserAlreadyActive) => {
+                let channel = self
+                    .repo
+                    .find_active_call_for_user(user_id.copied())
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?
+                    .map(|(_, ch)| ch.to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+                return Err(CallError::AlreadyInCall(channel));
+            }
+            Err(AddParticipantError::Repository(e)) => {
+                return Err(CallError::Internal(e));
+            }
+        }
 
         // Always generate a fresh token (supports reconnection from different devices).
         let token = self
@@ -482,6 +562,14 @@ impl<
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
 
+                    // Fire-and-forget summarization now that the
+                    // `call_records` row is persisted.
+                    self.spawn_summarize_call(call.id);
+
+                    if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
+                        tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
+                    }
+
                     self.send_call_event(
                         &channel_id,
                         "call_ended",
@@ -514,15 +602,32 @@ impl<
                 };
 
                 // Reconcile: idempotent upsert (handles reconnect/race conditions).
-                self.repo
+                // UserAlreadyActive means our DB has the user active in
+                // another call while LiveKit says they joined this one —
+                // state drift. Don't fail the whole webhook; log and move on.
+                match self
+                    .repo
                     .add_participant(&call.id, participant_identity.copied())
                     .await
-                    .map_err(|e| CallError::Internal(e.into()))?;
-                tracing::info!(
-                    call_id = %call.id,
-                    participant = participant_identity.as_ref(),
-                    "reconciled participant_joined via webhook"
-                );
+                {
+                    Ok(_) => {
+                        tracing::info!(
+                            call_id = %call.id,
+                            participant = participant_identity.as_ref(),
+                            "reconciled participant_joined via webhook"
+                        );
+                    }
+                    Err(AddParticipantError::UserAlreadyActive) => {
+                        tracing::warn!(
+                            call_id = %call.id,
+                            participant = participant_identity.as_ref(),
+                            "participant_joined webhook: user already active in another call; ignoring reconcile"
+                        );
+                    }
+                    Err(AddParticipantError::Repository(e)) => {
+                        return Err(CallError::Internal(e));
+                    }
+                }
             }
             "participant_left" => {
                 let (Some(room_name), Some(participant_identity)) =
@@ -566,6 +671,14 @@ impl<
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
 
+                    // Fire-and-forget summarization now that the
+                    // `call_records` row is persisted.
+                    self.spawn_summarize_call(call.id);
+
+                    if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
+                        tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
+                    }
+
                     // Stop egress explicitly before deleting the room. DeleteRoom
                     // is expected to cascade-stop egress, but a failed or slow
                     // DeleteRoom can leave egress running and billing. Doing it
@@ -605,6 +718,31 @@ impl<
                     room_name = ?event.room_name,
                     "egress event"
                 );
+                // `egress_started` carries the wall-clock instant the encoder
+                // actually began capturing. Persist it so the frontend can
+                // anchor transcript-to-audio sync to the recording's true
+                // origin instead of the call-creation timestamp (which lags
+                // the recording start by the egress bootstrap window).
+                if event.event == "egress_started" {
+                    if let Some(egress_id) = &event.egress_id {
+                        let started_at =
+                            chrono::DateTime::<chrono::Utc>::from_timestamp(event.created_at, 0);
+                        if let Some(started_at) = started_at {
+                            self.repo
+                                .set_recording_started_at_by_egress_id(egress_id, started_at)
+                                .await
+                                .map_err(|e| CallError::Internal(e.into()))?;
+                        } else {
+                            tracing::warn!(
+                                egress_id,
+                                created_at = event.created_at,
+                                "egress_started webhook had unparseable created_at",
+                            );
+                        }
+                    } else {
+                        tracing::warn!("egress_started webhook missing egress_id");
+                    }
+                }
             }
             "egress_ended" => {
                 let (Some(egress_id), Some(file_url)) = (&event.egress_id, &event.file_url) else {
@@ -709,11 +847,28 @@ impl<
         let call_id = Uuid::parse_str(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
 
+        // Look up channel_id before deletion to keep the search-remove message id unique.
+        let channel_id = self
+            .repo
+            .get_call_record_by_call_id(&call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+            .map(|r| r.channel_id);
+
         let recording_key = self
             .repo
             .delete_call_record(&call_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
+
+        if let Some(channel_id) = channel_id
+            && let Err(e) = self
+                .search_indexer
+                .enqueue_remove(&channel_id, &call_id)
+                .await
+        {
+            tracing::error!(error=?e, call_id=%call_id, "failed to enqueue call record removal from search");
+        }
 
         if let Some(key) = recording_key {
             self.recording_storage
@@ -776,6 +931,29 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))
     }
 
+    #[tracing::instrument(err, skip(self, request), fields(num_assignments = request.assignments.len()))]
+    async fn edit_call_transcript(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        request: EditCallTranscriptRequest,
+    ) -> Result<(), CallError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::Call {
+            return Err(CallError::Internal(anyhow::anyhow!(
+                "expected Call entity in receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+
+        let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
+            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+
+        self.repo
+            .patch_call_transcript_custom_speakers(&call_id, &request.assignments)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn toggle_share_with_team(
         &self,
@@ -812,6 +990,184 @@ impl<
 
         Ok(new_value)
     }
+
+    #[tracing::instrument(err, skip(self, request, user_id), fields(num_call_ids = request.call_ids.len()))]
+    async fn get_batch_call_record_previews<'a>(
+        &self,
+        request: GetBatchCallRecordPreviewRequest,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<GetBatchCallRecordPreviewResponse, CallError> {
+        let previews = self
+            .repo
+            .batch_get_call_record_previews(&request.call_ids, user_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        Ok(GetBatchCallRecordPreviewResponse { previews })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn summarize_call(&self, call_id: &Uuid) -> Result<(), CallError> {
+        // No summarizer configured — feature is off, silently succeed.
+        let Some(summarizer) = self.summarizer.as_ref() else {
+            return Ok(());
+        };
+
+        // Load the finalized call record. May race with deletion, in which
+        // case there's nothing to summarize — log and move on.
+        let Some(record) = self
+            .repo
+            .get_call_record_by_call_id(call_id)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, %call_id, "failed to load call record for summarization"))
+            .map_err(|e| CallError::Internal(e.into()))?
+        else {
+            tracing::warn!(%call_id, "call record not found for summarization; skipping");
+            return Ok(());
+        };
+
+        if record.transcript.is_empty() {
+            tracing::info!(%call_id, "call has empty transcript; skipping summarization");
+            return Ok(());
+        }
+
+        let Some(summary) = summarizer
+            .summarize_call(call_id, record.transcript)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, %call_id, "call summarizer failed"))
+            .map_err(|e| CallError::Internal(e.into()))?
+        else {
+            tracing::info!(
+                %call_id,
+                "summarizer returned no summary (uninformative transcript); skipping persistence"
+            );
+            return Ok(());
+        };
+
+        self.repo
+            .insert_call_summary(call_id, &summary)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, %call_id, "failed to persist call summary"))
+            .map_err(|e| CallError::Internal(e.into()))?;
+
+        // Auto-generate a display name from the summary; only persisted when
+        // the user has not already set one (`set_custom_name_if_null`). Best
+        // effort — naming failures must not fail summarization.
+        if record.custom_name.is_none() {
+            match summarizer.generate_call_name(call_id, &summary).await {
+                Ok(Some(name)) => {
+                    if let Err(e) = self.repo.set_custom_name_if_null(call_id, &name).await {
+                        tracing::error!(
+                            error=?e, %call_id,
+                            "failed to persist ai-generated call name"
+                        );
+                    }
+                }
+                Ok(None) => {
+                    tracing::info!(
+                        %call_id,
+                        "ai call naming returned no title; leaving name unset"
+                    );
+                }
+                Err(e) => {
+                    tracing::error!(
+                        error=?e, %call_id,
+                        "ai call naming failed after summary; leaving name unset"
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl<
+    R: CallRepository + Clone,
+    C: CallRtcClient,
+    Cn: ConnectionService,
+    E: EntityAccessService,
+    N: NotificationIngress,
+    S: RecordingStorage,
+    Sm: CallSummarizer + Clone,
+    I: CallSearchIndexer,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, I>
+{
+    /// Fire-and-forget spawn of [`CallService::summarize_call`] for `call_id`.
+    ///
+    /// Called after the `call_records` row is persisted so that summarization
+    /// can run off the request path without blocking call completion. The
+    /// spawned task owns cloned handles to `repo` and `summarizer`; errors
+    /// are logged, never propagated. When no summarizer is configured this is
+    /// a no-op and no task is spawned.
+    fn spawn_summarize_call(&self, call_id: Uuid) {
+        let Some(summarizer) = self.summarizer.clone() else {
+            return;
+        };
+        let repo = self.repo.clone();
+        tokio::spawn(async move {
+            let record = match repo.get_call_record_by_call_id(&call_id).await {
+                Ok(Some(record)) => record,
+                Ok(None) => {
+                    tracing::warn!(%call_id, "call record not found for summarization; skipping");
+                    return;
+                }
+                Err(e) => {
+                    tracing::error!(error=?e, %call_id, "failed to load call record for summarization");
+                    return;
+                }
+            };
+
+            if record.transcript.is_empty() {
+                tracing::info!(%call_id, "call has empty transcript; skipping summarization");
+                return;
+            }
+
+            let summary = match summarizer.summarize_call(&call_id, record.transcript).await {
+                Ok(Some(summary)) => summary,
+                Ok(None) => {
+                    tracing::info!(
+                        %call_id,
+                        "summarizer returned no summary (uninformative transcript); skipping persistence"
+                    );
+                    return;
+                }
+                Err(e) => {
+                    tracing::error!(error=?e, %call_id, "failed to summarize call on completion");
+                    return;
+                }
+            };
+
+            if let Err(e) = repo.insert_call_summary(&call_id, &summary).await {
+                tracing::error!(error=?e, %call_id, "failed to persist call summary");
+                return;
+            }
+
+            if record.custom_name.is_none() {
+                match summarizer.generate_call_name(&call_id, &summary).await {
+                    Ok(Some(name)) => {
+                        if let Err(e) = repo.set_custom_name_if_null(&call_id, &name).await {
+                            tracing::error!(
+                                error=?e, %call_id,
+                                "failed to persist ai-generated call name"
+                            );
+                        }
+                    }
+                    Ok(None) => {
+                        tracing::info!(
+                            %call_id,
+                            "ai call naming returned no title; leaving name unset"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            error=?e, %call_id,
+                            "ai call naming failed after summary; leaving name unset"
+                        );
+                    }
+                }
+            }
+        });
+    }
 }
 
 /// Extract the recording key from a full S3 URL.
@@ -824,6 +1180,44 @@ fn extract_recording_key(file_url: &str) -> &str {
         .find("calls/")
         .map(|idx| &file_url[idx + "calls/".len()..])
         .unwrap_or(file_url)
+}
+
+/// Zero-sized placeholder implementation of [`CallSummarizer`].
+///
+/// [`CallServiceImpl`]'s summarizer generic defaults to this type so callers
+/// that do not wire an AI summarizer can simply leave the `summarizer` field
+/// as `None`. The implementation itself is never executed — [`CallServiceImpl`]
+/// only invokes `summarize_call` when `summarizer.is_some()`, and this
+/// placeholder is exclusively used as the type parameter when the field is
+/// `None`. If it is ever called, that is a programming error.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoopCallSummarizer;
+
+impl CallSummarizer for NoopCallSummarizer {
+    type Err = anyhow::Error;
+
+    async fn summarize_call(
+        &self,
+        _call_id: &Uuid,
+        _transcript: Vec<CallRecordTranscriptSegment>,
+    ) -> Result<Option<String>, Self::Err> {
+        // Type-placeholder only — [`CallServiceImpl`] must never invoke this
+        // when `summarizer` is `None`, and [`NoopCallSummarizer`] is never a
+        // `Some(_)` value in practice.
+        unreachable!(
+            "NoopCallSummarizer::summarize_call invoked; it exists only as a type placeholder when the optional summarizer is None"
+        )
+    }
+
+    async fn generate_call_name(
+        &self,
+        _call_id: &Uuid,
+        _summary: &str,
+    ) -> Result<Option<String>, Self::Err> {
+        unreachable!(
+            "NoopCallSummarizer::generate_call_name invoked; it exists only as a type placeholder when the optional summarizer is None"
+        )
+    }
 }
 
 /// Lightweight implementation of [`CallRecordQueryService`] for read-only

@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { createCallback } from '@solid-primitives/rootless';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
@@ -63,11 +64,12 @@ export function PageNumberInput() {
           class="flex flex-row items-center justify-center"
           onClick={() => inputRef?.select()}
         >
-          <div class="px-1 hover:bg-hover hover-transition-bg cursor-default focus:bracket">
+          <div class="px-1 hover:bg-hover hover-transition-bg cursor-default focus-within:bg-active">
             <input
-              class={`py-0.5 px-0 text-sm bg-transparent text-ink font-medium cursor-default text-center border-none flex-initial focus:bg-input ${getWidthClass(
-                currentPageNumber()
-              )}`}
+              class={cn(
+                'py-0.5 px-0 text-sm bg-transparent text-ink font-medium cursor-default text-center border-none flex-initial focus:bg-input',
+                getWidthClass(currentPageNumber())
+              )}
               step="1"
               min="1"
               max={getPageCount().toString()}

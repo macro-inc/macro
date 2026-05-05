@@ -1,22 +1,28 @@
 use axum::extract::FromRef;
+use call::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
+use call::domain::ports::CallRtcClient;
+use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
+use call::inbound::toolset::CallToolContext;
+use call::outbound::pg_call_repo::PgCallRepo;
+use call::outbound::s3_recording_storage::S3RecordingStorage;
+use channels::domain::service::ChannelMessagesServiceImpl;
+use channels::inbound::toolset::ChannelToolContext;
+use channels::outbound::pg_channels_repo::PgChannelMessagesRepo;
+use chat::domain::service::ChatServiceImpl;
+use chat::inbound::toolset::ChatToolContext;
+use chat::outbound::postgres::PgChatRepo;
 use connection::domain::ports::ConnectionService;
 use documents::{domain::ports::TaskPropertiesPort, inbound::toolset::DocumentToolContext};
 use email::{
     domain::service::EmailServiceImpl, inbound::toolset::EmailToolContext, outbound::EmailPgRepo,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use notification::inbound::ai_tool::NotificationToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
-use scribe::{
-    ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
-    email::EmailClient, static_file::StaticFileClient,
-};
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
 
 pub use ai_toolset::RequestContext;
-
-pub type ToolScribe =
-    ScribeClient<DocumentClient, ChannelClient, DcsClient, EmailClient, StaticFileClient>;
 
 /// Type alias for the frecency service implementation
 pub type ToolFrecencyService = frecency::domain::services::FrecencyQueryServiceImpl<
@@ -36,6 +42,23 @@ pub type ToolCommsService = comms::domain::service::ChannelServiceImpl<
     comms::outbound::postgres::user_repo::PgUserRepo,
     frecency::outbound::postgres::FrecencyPgStorage,
 >;
+
+/// Type alias for the channel messages service implementation used by AI tools.
+pub type ToolChannelMessagesService = ChannelMessagesServiceImpl<PgChannelMessagesRepo>;
+
+/// Type alias for the channel AI tool context.
+pub type ToolChannelToolContext =
+    ChannelToolContext<ToolChannelMessagesService, ToolEntityAccessService>;
+
+/// Build the channel AI tool context from a Postgres pool.
+pub fn build_channel_tool_context(pool: sqlx::PgPool) -> ToolChannelToolContext {
+    ChannelToolContext::new(
+        ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(pool.clone())),
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool),
+        ),
+    )
+}
 
 /// No-op task properties service (not needed for AI tools)
 #[derive(Clone)]
@@ -85,6 +108,191 @@ impl ConnectionService for NoOpConnectionService {
         _message: serde_json::Value,
     ) -> Result<(), connection::domain::models::ConnectionError> {
         Ok(())
+    }
+}
+
+/// No-op RTC client used by the call tool context — the AI read-only tools
+/// never touch RTC, so token/egress methods bail rather than silently succeed.
+#[derive(Clone)]
+pub struct NoOpCallRtcClient;
+
+impl CallRtcClient for NoOpCallRtcClient {
+    async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn delete_room(&self, _room_name: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn generate_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn remove_participant<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn start_room_composite_egress(
+        &self,
+        _room_name: &str,
+        _s3_config: &EgressS3Config,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn stop_egress(&self, _egress_id: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn receive_webhook(
+        &self,
+        _body: &str,
+        _auth_token: &str,
+    ) -> Result<CallWebhookEvent, CallError> {
+        Err(CallError::Auth)
+    }
+
+    async fn dispatch_transcription_agent(&self, _room_name: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+/// No-op notification ingress used by the call tool context — reads never
+/// push notifications.
+#[derive(Clone)]
+pub struct NoOpNotificationIngress;
+
+impl notification::domain::service::NotificationIngress for NoOpNotificationIngress {
+    async fn send_notification<
+        'a,
+        T: notification::domain::models::Notification + Clone + 'static,
+        U: serde::Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
+        _req: notification::domain::models::SendNotificationRequest<'a, T, U>,
+    ) -> Result<
+        Option<notification::domain::models::NotificationResult<'a>>,
+        rootcause::Report<notification::domain::service::SendNotificationError>,
+    > {
+        Ok(None)
+    }
+}
+
+/// No-op SNS endpoint manager used by AI notification tools.
+///
+/// The exposed AI tools list and update notifications. Updating notifications
+/// can clear existing push notifications via the notification delivery queue,
+/// but it does not create or mutate SNS platform endpoints. Device
+/// registration APIs are not exposed through the AI toolset, so SNS endpoint
+/// operations intentionally fail if called accidentally.
+#[derive(Clone)]
+pub struct NoOpSnsEndpointManager;
+
+impl notification::domain::ports::SnsEndpointManager for NoOpSnsEndpointManager {
+    async fn create_platform_endpoint(
+        &self,
+        _platform_arn: &str,
+        _token: &str,
+    ) -> Result<String, rootcause::Report> {
+        rootcause::bail!("SNS endpoint manager not configured for AI tools")
+    }
+
+    async fn get_endpoint_attributes(
+        &self,
+        _endpoint_arn: &str,
+    ) -> Result<std::collections::HashMap<String, String>, rootcause::Report> {
+        rootcause::bail!("SNS endpoint manager not configured for AI tools")
+    }
+
+    async fn set_endpoint_attributes(
+        &self,
+        _endpoint_arn: &str,
+        _attributes: std::collections::HashMap<String, String>,
+    ) -> Result<(), rootcause::Report> {
+        rootcause::bail!("SNS endpoint manager not configured for AI tools")
+    }
+
+    async fn delete_endpoint(&self, _endpoint_arn: &str) -> Result<(), rootcause::Report> {
+        rootcause::bail!("SNS endpoint manager not configured for AI tools")
+    }
+}
+
+/// Notification delivery queue used by AI tools.
+///
+/// Most production contexts provide the real notification SQS queue so marking
+/// notifications seen/done can clear mobile pushes. Some auxiliary binaries
+/// that expose the shared tool context do not have a notification queue
+/// configured; those can use `NoOp`, which still updates database state but
+/// skips push-clearing delivery messages.
+#[derive(Clone)]
+pub enum ToolNotificationQueue {
+    Sqs(notification::outbound::queue::SqsQueue),
+    NoOp,
+}
+
+impl notification::domain::ports::NotificationQueue for ToolNotificationQueue {
+    async fn publish<'a, T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
+        &self,
+        messages: Vec<notification::domain::models::queue_message::QueueMessage<'a, T, U>>,
+    ) -> Result<(), rootcause::Report> {
+        match self {
+            ToolNotificationQueue::Sqs(queue) => {
+                notification::domain::ports::NotificationQueue::publish(queue, messages).await
+            }
+            ToolNotificationQueue::NoOp => Ok(()),
+        }
+    }
+
+    async fn receive_messages(
+        &self,
+    ) -> Result<Vec<notification::domain::models::queue_message::RawQueueMessage>, rootcause::Report>
+    {
+        match self {
+            ToolNotificationQueue::Sqs(queue) => {
+                notification::domain::ports::NotificationQueue::receive_messages(queue).await
+            }
+            ToolNotificationQueue::NoOp => Ok(Vec::new()),
+        }
+    }
+
+    async fn delete_message(&self, receipt_handle: &str) -> Result<(), rootcause::Report> {
+        match self {
+            ToolNotificationQueue::Sqs(queue) => {
+                notification::domain::ports::NotificationQueue::delete_message(
+                    queue,
+                    receipt_handle,
+                )
+                .await
+            }
+            ToolNotificationQueue::NoOp => Ok(()),
+        }
+    }
+
+    async fn delay_message(
+        &self,
+        receipt_handle: &str,
+        delay: std::time::Duration,
+    ) -> Result<(), rootcause::Report> {
+        match self {
+            ToolNotificationQueue::Sqs(queue) => {
+                notification::domain::ports::NotificationQueue::delay_message(
+                    queue,
+                    receipt_handle,
+                    delay,
+                )
+                .await
+            }
+            ToolNotificationQueue::NoOp => Ok(()),
+        }
     }
 }
 
@@ -153,6 +361,43 @@ pub type ToolPropertiesToolContext = PropertiesToolContext<ToolPropertiesService
 /// Type alias for the email tool context
 pub type ToolEmailToolContext = EmailToolContext<ToolUserEmailService>;
 
+/// Type alias for the call service implementation used by AI tools.
+/// Wired with NoOp RTC/connection/notification clients and no recording
+/// storage — the AI tools are read-only, so those capabilities are never
+/// exercised.
+pub type ToolCallService = CallServiceImpl<
+    PgCallRepo,
+    NoOpCallRtcClient,
+    NoOpConnectionService,
+    ToolEntityAccessService,
+    NoOpNotificationIngress,
+    Option<S3RecordingStorage>,
+>;
+
+/// Type alias for the read-only call record query service.
+pub type ToolCallRecordQueryService = CallRecordQueryServiceImpl<PgCallRepo>;
+
+/// Type alias for the call tool context
+pub type ToolCallToolContext =
+    CallToolContext<ToolCallService, ToolCallRecordQueryService, ToolEntityAccessService>;
+
+/// Type alias for the notification reader service used by AI tools.
+pub type ToolNotificationService = notification::domain::service::NotificationReaderService<
+    notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
+    ToolNotificationQueue,
+    NoOpSnsEndpointManager,
+>;
+
+/// Type alias for the notification tool context.
+pub type ToolNotificationToolContext = NotificationToolContext<ToolNotificationService>;
+
+/// Type alias for the chat service implementation used by AI tools.
+/// Uses an empty toolset — the read-only tool never invokes tool execution.
+pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManagementService>;
+
+/// Type alias for the chat tool context
+pub type ToolChatToolContext = ChatToolContext<ToolChatService, ToolEntityAccessService>;
+
 #[derive(Clone, Default)]
 pub struct NoOpScheduleContext;
 
@@ -167,12 +412,15 @@ pub fn no_op_schedule_context() -> NoOpScheduleContext {
 pub struct ToolServiceContext {
     pub search_service_client: Arc<search_service_client::SearchServiceClient>,
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
-    pub scribe: Arc<ToolScribe>,
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
     pub document_tool_context: ToolDocumentToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
+    pub call_tool_context: ToolCallToolContext,
+    pub notification_tool_context: ToolNotificationToolContext,
+    pub chat_tool_context: ToolChatToolContext,
+    pub channel_tool_context: ToolChannelToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
 }
 

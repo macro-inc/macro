@@ -124,7 +124,6 @@ export function ComposeRecipients(props: {
           placeholder="Macro users or email addresses"
           focusOnMount={ctx.focusRecipientsOnMount}
           hideBorder
-          noBrackets
           disabled={ctx.disabled()}
           includeSelf={ctx.includeSelf}
           onChipDragStart={(option, e) => handleChipDragStart('to', option, e)}
@@ -153,7 +152,6 @@ export function ComposeRecipients(props: {
             setSelectedOptions={(next) => ctx.setRecipients('cc', next)}
             placeholder="Macro users or email addresses"
             hideBorder
-            noBrackets
             disabled={ctx.disabled()}
             onChipDragStart={(option, e) =>
               handleChipDragStart('cc', option, e)
@@ -179,7 +177,6 @@ export function ComposeRecipients(props: {
             setSelectedOptions={(next) => ctx.setRecipients('bcc', next)}
             placeholder="Macro users or email addresses"
             hideBorder
-            noBrackets
             disabled={ctx.disabled()}
             onChipDragStart={(option, e) =>
               handleChipDragStart('bcc', option, e)

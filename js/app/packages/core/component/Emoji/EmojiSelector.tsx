@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import type { JSX } from 'solid-js';
 import {
   createEffect,
@@ -56,7 +57,10 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
     return (
       <button
         type="button"
-        class={`hover:bg-hover hover-transition-bg rounded-md p-1 aspect-square w-full flex items-center justify-center ${props.isSelected ? 'bg-hover' : ''}`}
+        class={cn(
+          'hover:bg-hover hover-transition-bg rounded-md p-1 aspect-square w-full flex items-center justify-center',
+          props.isSelected && 'bg-hover'
+        )}
         style={{ 'container-type': 'inline-size' }}
         onClick={() => props.onEmojiClick(props.emoji)}
         title={props.emoji.slug}

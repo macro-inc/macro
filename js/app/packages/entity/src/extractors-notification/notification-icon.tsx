@@ -11,6 +11,7 @@ import FilesIcon from '@icon/regular/files.svg';
 import EnvelopeIcon from '@icon/regular/envelope.svg';
 import UserPlusIcon from '@icon/regular/user-plus.svg';
 import CheckIcon from '@icon/regular/check.svg';
+import PhoneIcon from '@macro-icons/wide/call.svg';
 import { cn } from '@ui/utils/classname';
 
 interface NotificationIconProps {
@@ -38,6 +39,7 @@ function getNotificationIcon(
     .with('invite_to_team', () => UserPlusIcon)
     .with('task_assigned', () => CheckIcon)
     .with('ai_response', () => ChatIcon)
+    .with('call-started', () => PhoneIcon)
     .exhaustive();
 }
 

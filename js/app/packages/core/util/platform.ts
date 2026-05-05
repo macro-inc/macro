@@ -1,23 +1,21 @@
+import { type as osType } from '@tauri-apps/plugin-os';
+
 export type MacroPlatform = 'web' | 'desktop' | 'ios' | 'android';
 export type NativeMobilePlatform = Extract<MacroPlatform, 'ios' | 'android'>;
 
-const VALID_PLATFORMS: ReadonlyArray<MacroPlatform> = [
-  'web',
-  'desktop',
-  'ios',
-  'android',
-];
+let cached: MacroPlatform | undefined;
 
-function resolveBuildPlatform(): MacroPlatform {
-  const platform = import.meta.env.VITE_PLATFORM;
-  if (platform && VALID_PLATFORMS.includes(platform)) return platform;
-  return 'web';
+function detectPlatform(): MacroPlatform {
+  if (!isTauri()) return 'web';
+  const os = osType();
+  if (os === 'ios') return 'ios';
+  if (os === 'android') return 'android';
+  return 'desktop';
 }
 
-const buildPlatform = resolveBuildPlatform();
-
 export function getPlatform(): MacroPlatform {
-  return buildPlatform;
+  if (cached === undefined) cached = detectPlatform();
+  return cached;
 }
 
 export function isPlatform(target: MacroPlatform | MacroPlatform[]): boolean {

@@ -36,7 +36,7 @@ export const listPropertiesResponseItem = zod
   .union([
     zod
       .object({
-        created_at: zod.string().datetime({}),
+        created_at: zod.iso.datetime({}),
         data_type: zod
           .enum([
             'BOOLEAN',
@@ -52,7 +52,7 @@ export const listPropertiesResponseItem = zod
             'Data type for property values, determining storage and validation.'
           ),
         display_name: zod.string(),
-        id: zod.string().uuid(),
+        id: zod.uuid(),
         is_metadata: zod
           .boolean()
           .describe(
@@ -113,14 +113,14 @@ export const listPropertiesResponseItem = zod
               ),
           ])
           .optional(),
-        updated_at: zod.string().datetime({}),
+        updated_at: zod.iso.datetime({}),
       })
       .describe('Property definition model (service representation).'),
     zod
       .object({
         definition: zod
           .object({
-            created_at: zod.string().datetime({}),
+            created_at: zod.iso.datetime({}),
             data_type: zod
               .enum([
                 'BOOLEAN',
@@ -136,7 +136,7 @@ export const listPropertiesResponseItem = zod
                 'Data type for property values, determining storage and validation.'
               ),
             display_name: zod.string(),
-            id: zod.string().uuid(),
+            id: zod.uuid(),
             is_metadata: zod
               .boolean()
               .describe(
@@ -197,17 +197,17 @@ export const listPropertiesResponseItem = zod
                   ),
               ])
               .optional(),
-            updated_at: zod.string().datetime({}),
+            updated_at: zod.iso.datetime({}),
           })
           .describe('Property definition model (service representation).'),
         property_options: zod.array(
           zod
             .object({
-              created_at: zod.string().datetime({}),
+              created_at: zod.iso.datetime({}),
               display_order: zod.number(),
-              id: zod.string().uuid(),
-              property_definition_id: zod.string().uuid(),
-              updated_at: zod.string().datetime({}),
+              id: zod.uuid(),
+              property_definition_id: zod.uuid(),
+              updated_at: zod.iso.datetime({}),
               value: zod
                 .union([
                   zod
@@ -372,23 +372,23 @@ export const createPropertyDefinitionBody = zod
  * @summary Delete a property definition
  */
 export const deletePropertyDefinitionParams = zod.object({
-  definition_id: zod.string().uuid().describe('Property definition ID'),
+  definition_id: zod.uuid().describe('Property definition ID'),
 });
 
 /**
  * @summary Get all options for a property (for dropdowns)
  */
 export const getPropertyOptionsParams = zod.object({
-  definition_id: zod.string().uuid().describe('Property definition ID'),
+  definition_id: zod.uuid().describe('Property definition ID'),
 });
 
 export const getPropertyOptionsResponseItem = zod
   .object({
-    created_at: zod.string().datetime({}),
+    created_at: zod.iso.datetime({}),
     display_order: zod.number(),
-    id: zod.string().uuid(),
-    property_definition_id: zod.string().uuid(),
-    updated_at: zod.string().datetime({}),
+    id: zod.uuid(),
+    property_definition_id: zod.uuid(),
+    updated_at: zod.iso.datetime({}),
     value: zod
       .union([
         zod
@@ -423,7 +423,7 @@ export const getPropertyOptionsResponse = zod.array(
  * @summary Add a new option to a property dropdown
  */
 export const addPropertyOptionParams = zod.object({
-  definition_id: zod.string().uuid().describe('Property definition ID'),
+  definition_id: zod.uuid().describe('Property definition ID'),
 });
 
 export const addPropertyOptionBody = zod
@@ -461,8 +461,8 @@ export const addPropertyOptionBody = zod
  * @summary Delete a property option
  */
 export const deletePropertyOptionParams = zod.object({
-  definition_id: zod.string().uuid().describe('Property definition ID'),
-  option_id: zod.string().uuid().describe('Property option ID'),
+  definition_id: zod.uuid().describe('Property definition ID'),
+  option_id: zod.uuid().describe('Property option ID'),
 });
 
 /**
@@ -492,7 +492,6 @@ export const getBulkEntityPropertiesBody = zod
                 'Type of entity that can be referenced by entity properties.'
               ),
             specific_message_id: zod
-              .string()
               .uuid()
               .nullish()
               .describe(
@@ -503,7 +502,7 @@ export const getBulkEntityPropertiesBody = zod
       )
       .describe('Array of entity references (entity_id and entity_type pairs)'),
     property_ids: zod
-      .array(zod.string().uuid())
+      .array(zod.uuid())
       .optional()
       .describe(
         'Optional: only return properties with these definition IDs. If empty, returns all.'
@@ -521,7 +520,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
           .object({
             definition: zod
               .object({
-                created_at: zod.string().datetime({}),
+                created_at: zod.iso.datetime({}),
                 data_type: zod
                   .enum([
                     'BOOLEAN',
@@ -537,7 +536,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
                     'Data type for property values, determining storage and validation.'
                   ),
                 display_name: zod.string(),
-                id: zod.string().uuid(),
+                id: zod.uuid(),
                 is_metadata: zod
                   .boolean()
                   .describe(
@@ -598,18 +597,18 @@ export const getBulkEntityPropertiesResponse = zod.record(
                       ),
                   ])
                   .optional(),
-                updated_at: zod.string().datetime({}),
+                updated_at: zod.iso.datetime({}),
               })
               .describe('Property definition model (service representation).'),
             options: zod
               .array(
                 zod
                   .object({
-                    created_at: zod.string().datetime({}),
+                    created_at: zod.iso.datetime({}),
                     display_order: zod.number(),
-                    id: zod.string().uuid(),
-                    property_definition_id: zod.string().uuid(),
-                    updated_at: zod.string().datetime({}),
+                    id: zod.uuid(),
+                    property_definition_id: zod.uuid(),
+                    updated_at: zod.iso.datetime({}),
                     value: zod
                       .union([
                         zod
@@ -644,7 +643,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
               .nullish(),
             property: zod
               .object({
-                created_at: zod.string().datetime({}),
+                created_at: zod.iso.datetime({}),
                 entity_id: zod.string(),
                 entity_type: zod
                   .enum([
@@ -660,9 +659,9 @@ export const getBulkEntityPropertiesResponse = zod.record(
                   .describe(
                     'Type of entity that can be referenced by entity properties.'
                   ),
-                id: zod.string().uuid(),
-                property_definition_id: zod.string().uuid(),
-                updated_at: zod.string().datetime({}),
+                id: zod.uuid(),
+                property_definition_id: zod.uuid(),
+                updated_at: zod.iso.datetime({}),
               })
               .describe(
                 'Assignment of a property definition to a specific entity (service representation).'
@@ -711,8 +710,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
                     zod
                       .object({
                         type: zod.enum(['Date']),
-                        value: zod
-                          .string()
+                        value: zod.iso
                           .datetime({})
                           .describe(
                             'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
@@ -725,7 +723,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
                       .object({
                         type: zod.enum(['SelectOption']),
                         value: zod
-                          .array(zod.string().uuid())
+                          .array(zod.uuid())
                           .describe(
                             'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
                           ),
@@ -756,7 +754,6 @@ export const getBulkEntityPropertiesResponse = zod.record(
                                     'Type of entity that can be referenced by entity properties.'
                                   ),
                                 specific_message_id: zod
-                                  .string()
                                   .uuid()
                                   .nullish()
                                   .describe(
@@ -835,7 +832,7 @@ export const getEntityPropertiesResponse = zod
         .object({
           definition: zod
             .object({
-              created_at: zod.string().datetime({}),
+              created_at: zod.iso.datetime({}),
               data_type: zod
                 .enum([
                   'BOOLEAN',
@@ -851,7 +848,7 @@ export const getEntityPropertiesResponse = zod
                   'Data type for property values, determining storage and validation.'
                 ),
               display_name: zod.string(),
-              id: zod.string().uuid(),
+              id: zod.uuid(),
               is_metadata: zod
                 .boolean()
                 .describe(
@@ -912,18 +909,18 @@ export const getEntityPropertiesResponse = zod
                     ),
                 ])
                 .optional(),
-              updated_at: zod.string().datetime({}),
+              updated_at: zod.iso.datetime({}),
             })
             .describe('Property definition model (service representation).'),
           options: zod
             .array(
               zod
                 .object({
-                  created_at: zod.string().datetime({}),
+                  created_at: zod.iso.datetime({}),
                   display_order: zod.number(),
-                  id: zod.string().uuid(),
-                  property_definition_id: zod.string().uuid(),
-                  updated_at: zod.string().datetime({}),
+                  id: zod.uuid(),
+                  property_definition_id: zod.uuid(),
+                  updated_at: zod.iso.datetime({}),
                   value: zod
                     .union([
                       zod
@@ -958,7 +955,7 @@ export const getEntityPropertiesResponse = zod
             .nullish(),
           property: zod
             .object({
-              created_at: zod.string().datetime({}),
+              created_at: zod.iso.datetime({}),
               entity_id: zod.string(),
               entity_type: zod
                 .enum([
@@ -974,9 +971,9 @@ export const getEntityPropertiesResponse = zod
                 .describe(
                   'Type of entity that can be referenced by entity properties.'
                 ),
-              id: zod.string().uuid(),
-              property_definition_id: zod.string().uuid(),
-              updated_at: zod.string().datetime({}),
+              id: zod.uuid(),
+              property_definition_id: zod.uuid(),
+              updated_at: zod.iso.datetime({}),
             })
             .describe(
               'Assignment of a property definition to a specific entity (service representation).'
@@ -1025,8 +1022,7 @@ export const getEntityPropertiesResponse = zod
                   zod
                     .object({
                       type: zod.enum(['Date']),
-                      value: zod
-                        .string()
+                      value: zod.iso
                         .datetime({})
                         .describe(
                           'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
@@ -1039,7 +1035,7 @@ export const getEntityPropertiesResponse = zod
                     .object({
                       type: zod.enum(['SelectOption']),
                       value: zod
-                        .array(zod.string().uuid())
+                        .array(zod.uuid())
                         .describe(
                           'Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)'
                         ),
@@ -1070,7 +1066,6 @@ export const getEntityPropertiesResponse = zod
                                   'Type of entity that can be referenced by entity properties.'
                                 ),
                               specific_message_id: zod
-                                .string()
                                 .uuid()
                                 .nullish()
                                 .describe(
@@ -1131,7 +1126,7 @@ export const setEntityPropertyParams = zod.object({
     ])
     .describe('Entity type (user, document, channel, project, thread)'),
   entity_id: zod.string().describe('Entity ID'),
-  property_id: zod.string().uuid().describe('Property ID'),
+  property_id: zod.uuid().describe('Property ID'),
 });
 
 export const setEntityPropertyBody = zod
@@ -1150,7 +1145,7 @@ export const setEntityPropertyBody = zod
             zod
               .object({
                 type: zod.enum(['date']),
-                value: zod.string().datetime({}),
+                value: zod.iso.datetime({}),
               })
               .describe('Date and time value'),
             zod
@@ -1167,13 +1162,13 @@ export const setEntityPropertyBody = zod
               .describe('String\/text value'),
             zod
               .object({
-                option_id: zod.string().uuid(),
+                option_id: zod.uuid(),
                 type: zod.enum(['select_option']),
               })
               .describe('Select option by ID (for select-type properties)'),
             zod
               .object({
-                option_ids: zod.array(zod.string().uuid()),
+                option_ids: zod.array(zod.uuid()),
                 type: zod.enum(['multi_select_option']),
               })
               .describe(
@@ -1199,7 +1194,6 @@ export const setEntityPropertyBody = zod
                         'Type of entity that can be referenced by entity properties.'
                       ),
                     specific_message_id: zod
-                      .string()
                       .uuid()
                       .nullish()
                       .describe(
@@ -1233,7 +1227,6 @@ export const setEntityPropertyBody = zod
                           'Type of entity that can be referenced by entity properties.'
                         ),
                       specific_message_id: zod
-                        .string()
                         .uuid()
                         .nullish()
                         .describe(
@@ -1276,5 +1269,5 @@ export const setEntityPropertyBody = zod
  * @summary Remove a specific entity property by its ID
  */
 export const deleteEntityPropertyParams = zod.object({
-  entity_property_id: zod.string().uuid().describe('Entity Property ID'),
+  entity_property_id: zod.uuid().describe('Entity Property ID'),
 });

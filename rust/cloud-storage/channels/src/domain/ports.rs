@@ -1,9 +1,10 @@
 use crate::domain::models::{
-    ChannelAttachment, ChannelMessageFilters, ChannelParticipant, CountedReaction,
-    MessageAttachment, MessagePageDirection, ThreadData, ThreadReply, ThreadReplyRow,
-    TopLevelMessageRow,
+    ChannelAttachment, ChannelAttachmentType, ChannelMessageFilters, ChannelParticipant,
+    CountedReaction, MessageAttachment, MessagePageDirection, ResolvedChannelMessage, ThreadData,
+    ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -15,6 +16,8 @@ pub trait ChannelMessagesRepo: Send + Sync + 'static {
     type Err: Send;
 
     /// Fetch top-level messages (thread_id IS NULL). Cursor-paginated on created_at DESC.
+    ///
+    /// `notification_user_id` is used only when `filters.notification_filters` is non-empty.
     fn get_top_level_messages(
         &self,
         channel_id: Uuid,
@@ -22,6 +25,7 @@ pub trait ChannelMessagesRepo: Send + Sync + 'static {
         direction: MessagePageDirection,
         limit: u16,
         filters: &ChannelMessageFilters,
+        notification_user_id: Option<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<TopLevelMessagesQueryResult, Self::Err>> + Send;
 
     /// Batch-fetch thread data (stats + preview replies) for parent messages in a single query.
@@ -55,6 +59,7 @@ pub trait ChannelMessagesRepo: Send + Sync + 'static {
         channel_id: Uuid,
         query: &Query<Uuid, CreatedAt, ()>,
         limit: u16,
+        attachment_type: Option<ChannelAttachmentType>,
     ) -> impl Future<Output = Result<Vec<ChannelAttachment>, Self::Err>> + Send;
 
     /// Fetch active participants for a channel.
@@ -71,6 +76,13 @@ pub trait ChannelMessagesRepo: Send + Sync + 'static {
         message_id: Uuid,
     ) -> impl Future<Output = Result<Option<TopLevelMessageRow>, Self::Err>> + Send;
 
+    /// Resolve a message id to top-level/thread-reply metadata.
+    fn resolve_message(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> impl Future<Output = Result<Option<ResolvedChannelMessage>, Self::Err>> + Send;
+
     /// Fetch top-level messages around an anchor, split into before (DESC) and after (ASC).
     /// Each side is limited to `limit` rows for overfetch; trimming happens in the service.
     fn get_top_level_messages_around(
@@ -85,6 +97,8 @@ pub trait ChannelMessagesRepo: Send + Sync + 'static {
 /// Service for fetching paginated channel messages.
 pub trait ChannelMessagesService: Send + Sync + 'static {
     /// Fetch a page of channel messages with thread previews, reactions, and attachments.
+    ///
+    /// `notification_user_id` is used only when `filters.notification_filters` is non-empty.
     fn get_channel_messages(
         &self,
         channel_id: Uuid,
@@ -92,6 +106,7 @@ pub trait ChannelMessagesService: Send + Sync + 'static {
         direction: MessagePageDirection,
         limit: u16,
         filters: &ChannelMessageFilters,
+        notification_user_id: Option<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send;
 
     /// Fetch a paginated page of channel-level attachments.
@@ -100,6 +115,7 @@ pub trait ChannelMessagesService: Send + Sync + 'static {
         channel_id: Uuid,
         query: Query<Uuid, CreatedAt, ()>,
         limit: u16,
+        attachment_type: Option<ChannelAttachmentType>,
     ) -> impl Future<Output = Result<ChannelAttachmentsPage, ChannelMessagesErr>> + Send;
 
     /// Fetch active participants for a channel.
@@ -109,12 +125,15 @@ pub trait ChannelMessagesService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send;
 
     /// Fetch a centered window of messages around a specific message id.
+    ///
+    /// The result's `has_more_newer` reports whether newer messages exist outside the
+    /// returned window.
     fn get_channel_messages_around(
         &self,
         channel_id: Uuid,
         message_id: Uuid,
         limit: u16,
-    ) -> impl Future<Output = Result<ChannelMessagesPage, ChannelMessagesErr>> + Send;
+    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send;
 
     /// Fetch all replies for the thread identified by `message_id`.
     ///
@@ -124,6 +143,16 @@ pub trait ChannelMessagesService: Send + Sync + 'static {
         channel_id: Uuid,
         message_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ThreadReply>, ChannelMessagesErr>> + Send;
+
+    /// Resolve whether a message id is top-level or a thread reply.
+    fn resolve_message(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> impl Future<Output = Result<ResolvedChannelMessage, ChannelMessagesErr>> + Send {
+        let _ = channel_id;
+        async move { Err(ChannelMessagesErr::MessageNotFound(message_id)) }
+    }
 }
 
 /// A paginated page of channel messages.
@@ -131,6 +160,7 @@ pub type ChannelMessagesPage =
     models_pagination::PaginatedCursor<super::models::ChannelMessage, Uuid, CreatedAt, ()>;
 
 /// Result for a cursor-paginated channel messages query.
+#[derive(Debug)]
 pub struct ChannelMessagesQueryResult {
     /// The page of messages.
     pub page: ChannelMessagesPage,

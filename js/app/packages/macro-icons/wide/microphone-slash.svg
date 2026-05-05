@@ -1,0 +1,8 @@
+<svg width="100%" height="100%" viewBox="-2.265 -0.75 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-miterlimit="10" xmlns="http://www.w3.org/2000/svg">
+<path stroke-linecap="round" d="M10.59,12.09c-1.03.9-2.37,1.44-3.84,1.44-2.62,0-4.83-1.72-5.57-4.1"/>
+<path stroke-linecap="round" d="M12.34,9.36c-.07.24-.15.47-.25.69"/>
+<path stroke-linecap="round" d="M9.75,7.71v-3.96c0-1.66-1.34-3-3-3-1.07,0-2.02.56-2.55,1.41"/>
+<path d="M3.75,5.25v2.5c0,1.66,1.34,3,3,3,.7,0,1.35-.24,1.86-.64"/>
+<line stroke-linecap="round" x1="6.75" y1="13.53" x2="6.75" y2="15.75"/>
+<polyline stroke-linecap="round" points=".75 2.25 4.05 5.55 12.72 14.22"/>
+</svg>

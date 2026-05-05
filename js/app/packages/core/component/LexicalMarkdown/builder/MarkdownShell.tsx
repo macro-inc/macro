@@ -19,7 +19,7 @@ import {
 } from 'solid-js';
 import { FloatingMenuGroup } from '../context/FloatingMenuContext';
 import { LexicalWrapperContext } from '../context/LexicalWrapperContext';
-import { registerCommandEffect } from '../plugins';
+import { autoRegister, registerCommandEffect } from '../plugins';
 import {
   createFilesReadyHandler,
   getDragDropPosition,
@@ -66,6 +66,9 @@ export const MarkdownShell: Component<
       });
     }
 
+    const hasInitialContent =
+      props.initialState !== undefined || props.initialValue !== undefined;
+
     if (props.initialState) {
       initializeEditorWithState(editor, props.initialState);
     } else if (props.initialValue) {
@@ -75,6 +78,12 @@ export const MarkdownShell: Component<
     }
 
     didInitializeContent = true;
+
+    // The deferred markdownState effect misses the synchronous change inside
+    // init, so push the initial value out to onChange manually.
+    if (hasInitialContent) {
+      builderConfig.handlers.onChange?.(markdownState());
+    }
   };
 
   // Track editable state
@@ -97,10 +106,11 @@ export const MarkdownShell: Component<
   );
 
   // Placeholder visibility
-  createEffect(() => {
-    markdownState();
-    setShowPlaceholder(editorIsEmpty(editor));
-  });
+  autoRegister(
+    editor.registerUpdateListener(({ editorState }) => {
+      setShowPlaceholder(editorIsEmpty(editorState));
+    })
+  );
 
   // Register key handlers
   registerCommandEffect(
@@ -237,9 +247,6 @@ export const MarkdownShell: Component<
               portalScope={props.portalScope}
               block={builderConfig.mentions?.block as any}
               showOpenTabs={builderConfig.mentions?.showOpenTabs}
-              useSnapshotForDocuments={
-                builderConfig.mentions?.useSnapshotForDocuments
-              }
               entities={builderConfig.mentions?.entities}
               users={builderConfig.mentions?.users}
               disableMentionTracking={

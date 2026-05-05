@@ -1,5 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { Panel } from '@ui';
 import { toast } from '@core/component/Toast/Toast';
 import { isOk } from '@core/util/maybeResult';
 import IconCheck from '@icon/regular/check.svg';
@@ -71,7 +71,7 @@ export function UserTooltip(props: UserTooltipProps) {
       popoverSplit({
         type: 'component',
         id: 'task-compose',
-        params: { initialAssigneeId: props.id },
+        params: { initialAssigneeIds: [props.id] },
       });
     }
   };
@@ -80,10 +80,10 @@ export function UserTooltip(props: UserTooltipProps) {
     'px-3 text-xs w-full justify-start hover:bg-hover/20 rounded-xs';
 
   return (
-    <ClippedPanel active>
+    <Panel depth={2} active>
       <div class="bg-panel text-ink box-border border-accent overflow-hidden max-w-lg">
         <div class="flex items-center gap-2 p-2">
-          <div class="size-10 shrink-0 rounded-full bg-ink-extra-muted pointer-events-none">
+          <div class="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted pointer-events-none">
             <Switch>
               <Match when={props.isDeleted}>
                 <div class="size-10 shrink-0 rounded-full bg-ink-extra-muted/50 flex items-center justify-center">
@@ -123,7 +123,7 @@ export function UserTooltip(props: UserTooltipProps) {
         </div>
 
         <Show when={props.email || props.id}>
-          <div class="border-t border-edge/20"></div>
+          <div class="border-t border-edge"></div>
           <div class="p-2 flex flex-col gap-0">
             <Show when={props.email}>
               <Button onClick={handleCopyEmail} class={buttonStyle}>
@@ -154,6 +154,6 @@ export function UserTooltip(props: UserTooltipProps) {
           </div>
         </Show>
       </div>
-    </ClippedPanel>
+    </Panel>
   );
 }

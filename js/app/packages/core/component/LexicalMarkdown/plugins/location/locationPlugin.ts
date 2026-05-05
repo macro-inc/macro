@@ -154,7 +154,7 @@ function persistentLocationToSearchParams(location: PersistentLocation) {
  * @param location - The highlight location to serialize
  * @returns A string in the format `anchor=<id>::<offset>&focus=<id>::<offset>`
  */
-export function getPersitentLocationString(
+export function gerPersistentLocationString(
   location: PersistentLocation
 ): string {
   return persistentLocationToSearchParams(location).toString();
@@ -186,7 +186,9 @@ export const GO_TO_LOCATION_COMMAND = createCommand<
   PersistentLocation | undefined
 >('GO_TO_LOCATION_COMMAND');
 
-export const GO_TO_NODE_ID_COMMAND = createCommand<string>('SCROLL_TO_NODE_ID');
+export const GO_TO_NODE_ID_COMMAND = createCommand<string>(
+  'GO_TO_NODE_ID_COMMAND'
+);
 
 export type LocationPluginProps = {
   mapping: NodeIdMappings;

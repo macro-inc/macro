@@ -1,19 +1,29 @@
 use logger::Logger;
-use macro_bundle_updater_plugin::inbound::plugin::PluginService;
+use macro_bundle_updater_plugin::inbound::plugin::{PluginService, apply_completed_update};
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
 use reqwest::cookie::CookieStore;
 use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
 use serde::Serialize;
+#[cfg(target_os = "ios")]
+use share_target::cleanup_stale_staged_shared_files;
+use share_target::{
+    PendingShareFilesState, clear_shared_files, get_pending_share_filenames,
+    maybe_handle_share_deep_link, pop_shared_files, upload_shared_file_to_presigned_url,
+};
 use tauri::http::{HeaderMap, HeaderValue};
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
 
 mod tauri_protocol;
+
+pub(crate) const APP_SCHEME: &str = "macro";
 use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
+
+mod share_target;
 
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
@@ -103,6 +113,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_device_info::init())
         .plugin(tauri_plugin_http::init())
         .plugin(
             tauri_plugin_websocket::Builder::new()
@@ -170,26 +181,31 @@ pub fn run() {
                 h(ctx.webview_label(), request, responder);
             }
         })
+        .manage(PendingShareFilesState::default())
         .invoke_handler(tauri::generate_handler![
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
-            macro_bundle_updater_plugin::inbound::plugin::clear_bundle
+            macro_bundle_updater_plugin::inbound::plugin::clear_bundle,
+            get_pending_share_filenames,
+            pop_shared_files,
+            clear_shared_files,
+            upload_shared_file_to_presigned_url,
         ])
         .setup(|app| {
             // Restore persisted bundle root on startup
-            if let Ok(cache_dir) = app.path().app_cache_dir() {
-                if let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>() {
-                    tauri::async_runtime::block_on(async {
-                        let mut service = s.lock().await;
-                        service.load_bundle_root(&cache_dir).await;
-                        tracing::info!(
-                            "Setup: restored bundle root to {:?}",
-                            service.bundle_root_path()
-                        );
-                    });
-                }
+            if let Ok(cache_dir) = app.path().app_cache_dir()
+                && let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>()
+            {
+                tauri::async_runtime::block_on(async {
+                    let mut service = s.lock().await;
+                    service.load_bundle_root(&cache_dir).await;
+                    tracing::info!(
+                        "Setup: restored bundle root to {:?}",
+                        service.bundle_root_path()
+                    );
+                });
             }
 
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
@@ -202,20 +218,61 @@ pub fn run() {
             }
 
             app.chain(attach_deep_link_handler);
+            #[cfg(target_os = "ios")]
+            cleanup_stale_staged_shared_files(&app.handle());
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            #[cfg(feature = "auto_apply_update")]
+            {
+                if let RunEvent::Resumed = event {
+                    let app = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        match apply_completed_update(&app).await {
+                            Ok(true) => {
+                                tracing::info!("auto-applied pending bundle update on foreground");
+                            }
+                            Ok(false) => {}
+                            Err(e) => {
+                                tracing::error!("failed to auto-apply bundle update: {e}");
+                            }
+                        }
+                    });
+                }
+            }
+        });
 }
 
 /// fn to merge the headers from the http cookie store into the initial
 /// GET request to open a websocket
 fn merge_header_callback<R: Runtime>(url: String, headers: &mut HeaderMap, handle: &AppHandle<R>) {
-    let Some(s) = handle.try_state::<tauri_plugin_http::Http>() else {
+    let Ok(mut parsed_url) = Url::parse(&url) else {
         return;
     };
-    let Ok(mut parsed_url) = url.parse::<Url>() else {
+
+    // Origin headers are required for service auth and must be set unconditionally,
+    // independent of whether cookie state is available.
+    match parsed_url.host_str() {
+        Some("services.macro.com") | Some("services-dev.macro.com") => {
+            headers.insert(ORIGIN, HeaderValue::from_static("https://macro.com"));
+        }
+        // The sync service (macroverse.workers.dev) also validates Origin.
+        Some("macroverse.workers.dev") => {
+            let origin = if cfg!(debug_assertions) {
+                "https://dev.macro.com"
+            } else {
+                "https://macro.com"
+            };
+            headers.insert(ORIGIN, HeaderValue::from_static(origin));
+        }
+        _ => {}
+    }
+
+    // Cookie forwarding requires the HTTP plugin's cookie jar.
+    let Some(s) = handle.try_state::<tauri_plugin_http::Http>() else {
         return;
     };
     parsed_url
@@ -229,21 +286,6 @@ fn merge_header_callback<R: Runtime>(url: String, headers: &mut HeaderMap, handl
     if let Some(cookie) = s.inner().cookies_jar.as_ref().cookies(&parsed_url) {
         tracing::trace!("inserting cookie value for {parsed_url}");
         headers.insert(COOKIE, cookie);
-    }
-
-    // The API Gateway authorizer for services.macro.com validates Origin against an allowlist.
-    if url.contains("services.macro.com") || url.contains("services-dev.macro.com") {
-        headers.insert(ORIGIN, HeaderValue::from_static("https://macro.com"));
-    }
-
-    // The sync service (macroverse.workers.dev) also validates Origin.
-    if url.contains("macroverse.workers.dev") {
-        let origin = if cfg!(debug_assertions) {
-            "https://dev.macro.com"
-        } else {
-            "https://macro.com"
-        };
-        headers.insert(ORIGIN, HeaderValue::from_static(origin));
     }
 }
 
@@ -267,9 +309,13 @@ fn attach_deep_link_handler(app: &mut tauri::App) {
             .next()
             .ok_or_else(|| report!("expected at least 1 url"))?;
 
+        if maybe_handle_share_deep_link(handle, &url) {
+            return Ok(());
+        }
+
         // Universal/App links come in as https:// URLs, custom scheme links come in as macro://
         let macro_scheme = match url.scheme() {
-            "macro" => MacroScheme::new(url)?,
+            s if s == APP_SCHEME => MacroScheme::new(url)?,
             "http" | "https" => MacroScheme::from_url(&url)?,
             scheme => {
                 return Err(report!("unexpected deep link scheme: {}", scheme));

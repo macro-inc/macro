@@ -1,4 +1,9 @@
 # Services
+# Freeze the Docker Compose project name so every checkout/worktree uses the
+# same local containers, networks, and anonymous Compose-managed resources.
+# Local setup is single-instance by design.
+name: macro
+
 include:
   - docker-compose-databases.yml
   - infra/stacks/fusionauth-instance/docker-compose.yml
@@ -7,17 +12,30 @@ x-common-env: &common-env
   env_file:
     - .env
 
+x-rust-services-image: &rust-services-image
+  image: macro-local-rust-services:dev
+  build:
+    context: ./rust/cloud-storage
+    dockerfile: Dockerfile.dev
+    target: services_bundle
+
 services:
+  rust_services_image:
+    profiles:
+      - build-helper
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile.dev
+      target: services_bundle
+    image: macro-local-rust-services:dev
+
   # ============================================================================
   # authentication-service (Port 8080)
   # Primary auth service - depends on FusionAuth, Redis, MacroDB
   # ============================================================================
   authentication-service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: authentication_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/authentication_service"]
     ports:
       - "8080:8080"
     depends_on:
@@ -40,18 +58,17 @@ services:
   # WebSocket gateway - Redis only
   # ============================================================================
   connection_gateway:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: connection_gateway_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/connection_gateway_service"]
     ports:
       - "8082:8080"
     depends_on:
       - redis
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - connection-gateway
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -64,16 +81,15 @@ services:
   # Contact management - ContactsDB
   # ============================================================================
   contacts_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: contacts_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/contacts_service"]
     ports:
       - "8083:8080"
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - contacts-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -86,11 +102,8 @@ services:
   # Document analysis and processing
   # ============================================================================
   document_cognition_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: document_cognition_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/document_cognition_service"]
     ports:
       - "8085:8080"
     depends_on:
@@ -98,8 +111,10 @@ services:
       - email_service
       - static_file_service
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - document-cognition-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -112,11 +127,8 @@ services:
   # Main document storage API
   # ============================================================================
   document_storage_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: document_storage_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/document_storage_service"]
     ports:
       - "8086:8080"
     depends_on:
@@ -124,8 +136,10 @@ services:
       - connection_gateway
       - authentication-service
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - document-storage-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -138,11 +152,8 @@ services:
   # Email processing and management
   # ============================================================================
   email_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: email_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/email_service"]
     ports:
       - "8087:8080"
     depends_on:
@@ -152,8 +163,10 @@ services:
       - static_file_service
       - redis
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - email-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -166,11 +179,8 @@ services:
   # User notifications - NotificationDB
   # ============================================================================
   notification_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: notification_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/notification_service"]
     ports:
       - "8089:8080"
     depends_on:
@@ -180,8 +190,10 @@ services:
       - connection_gateway
       - document_storage_service
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - notification-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -197,6 +209,9 @@ services:
     profiles:
       - processors
     <<: *common-env
+    # Pinned because search_processing_service/pdfium-lib/linux/libpdfium.so is amd64-only;
+    # on Apple Silicon this forces QEMU emulation for build and runtime.
+    platform: linux/amd64
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.search_processing_service.dev
@@ -205,8 +220,10 @@ services:
     depends_on:
       - email_service
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - search-processing-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -219,16 +236,15 @@ services:
   # Static file serving - DynamoDB
   # ============================================================================
   static_file_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: static_file_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/static_file_service"]
     ports:
       - "8094:8080"
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - static-file-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -249,23 +265,24 @@ services:
     depends_on:
       - static_file_service
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          - static-file-cdn
 
   # ============================================================================
   # unfurl_service (Port 8095)
   # URL unfurling - no dependencies
   # ============================================================================
   unfurl_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: unfurl_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/unfurl_service"]
     ports:
       - "8095:8080"
     networks:
-      - services
+      services:
+        aliases:
+          - unfurl-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -278,15 +295,14 @@ services:
   # Proxies external images to avoid CORS issues and IP leakage
   # ============================================================================
   image_proxy_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: image_proxy_service
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/image_proxy_service"]
     ports:
       - "8097:8080"
     networks:
-      - services
+      services:
+        aliases:
+          - image-proxy-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -305,7 +321,9 @@ services:
     ports:
       - "6969:6969"
     networks:
-      - services
+      services:
+        aliases:
+          - websocket-service
 
   # ============================================================================
   # sync_service (Port 8787)
@@ -321,7 +339,9 @@ services:
     environment:
       - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
     networks:
-      - services
+      services:
+        aliases:
+          - sync-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
       interval: 30s
@@ -348,9 +368,11 @@ services:
       - PORT=8096
       - INTERNAL_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
       - SYNC_SERVICE_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
-      - SYNC_SERVICE_URL=http://sync_service:8787
+      - SYNC_SERVICE_URL=http://sync-service:8787
     networks:
-      - services
+      services:
+        aliases:
+          - lexical-service
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://localhost:8096/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s

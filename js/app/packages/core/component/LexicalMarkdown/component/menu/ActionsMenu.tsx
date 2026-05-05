@@ -1,4 +1,4 @@
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { cn, Panel } from '@ui';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { fuzzyFilter } from '@core/util/fuzzy';
@@ -32,7 +32,7 @@ false && clickOutside;
 false && floatWithSelection;
 false && floatWithElement;
 
-// ClippedPanel's p-px border (2px) + py-2 padding (16px)
+// Panel's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
 
 export function ActionsMenuItem(props: {
@@ -84,8 +84,9 @@ export function ActionsMenuItem(props: {
         props.setOpen(false);
       }}
       on:mouseover={() => props.setIndex(props.index)}
-      class="p-1 mx-1.5"
-      classList={{ 'bg-active bracket': props.selected }}
+      class={cn('group flex items-center p-1.5 mx-1.5 rounded-xs', {
+        'bg-hover': props.selected,
+      })}
     >
       <div class="flex flex-row gap-2 items-center w-full">
         <div class="size-6 flex items-center justify-center text-ink-extra-muted">
@@ -127,7 +128,7 @@ export function ActionMenu(props: {
   >(undefined);
 
   // Cap at 256px (16rem) so the menu stays compact when plenty of space is available,
-  // and floor at 0 after subtracting ClippedPanel decorations.
+  // and floor at 0 after subtracting Panel decorations.
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
     if (h === undefined) return undefined;
@@ -316,9 +317,10 @@ export function ActionMenu(props: {
           use:floatWithElement={floatWithElementProps()}
           use:floatWithSelection={floatWithSelectionProps()}
           use:clickOutside={clickOutsideHandler}
+          on:touchstart={(e) => e.stopPropagation()}
           ref={menuRef}
         >
-          <ClippedPanel active class="py-2 bg-panel" cornerRadius={'4px'}>
+          <Panel depth={2} active class="py-2">
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{
@@ -330,7 +332,7 @@ export function ActionMenu(props: {
             >
               {inner()}
             </div>
-          </ClippedPanel>
+          </Panel>
         </div>
       </ScopedPortal>
     </Show>

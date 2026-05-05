@@ -6,7 +6,7 @@ use axum::extract::FromRef;
 use schemars::{JsonSchema, Schema};
 use serde::Serialize;
 use serde::de::Deserialize;
-use std::collections::hash_map::HashMap;
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 /// Error type for failures when creating or adding tools to a toolset.
@@ -63,17 +63,17 @@ impl ToolSchema {
 pub struct ToolSet<T> {
     /// The tools in this toolset, keyed by name.
     /// This includes type-erased user tools
-    pub tools: HashMap<String, T>,
+    pub tools: BTreeMap<String, T>,
     /// Non type-erased user tools
-    pub user_tools: HashMap<String, T>,
+    pub user_tools: BTreeMap<String, T>,
 }
 
 impl<T> ToolSet<T> {
     /// Creates a new empty toolset.
     pub fn new() -> Self {
         Self {
-            tools: HashMap::new(),
-            user_tools: HashMap::new(),
+            tools: BTreeMap::new(),
+            user_tools: BTreeMap::new(),
         }
     }
 }

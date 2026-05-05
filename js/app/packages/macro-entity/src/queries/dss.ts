@@ -195,6 +195,9 @@ export function createBulkCopyDssEntityMutation() {
       queryClient.cancelQueries({
         queryKey: soupKeys.items._def,
       });
+      queryClient.cancelQueries({
+        queryKey: soupKeys.astItems._def,
+      });
     },
 
     onSettled: (data, error, { entities }) => {
@@ -206,6 +209,9 @@ export function createBulkCopyDssEntityMutation() {
       // Trigger refetch so new items appear
       queryClient.invalidateQueries({
         queryKey: soupKeys.items._def,
+      });
+      queryClient.invalidateQueries({
+        queryKey: soupKeys.astItems._def,
       });
       queryClient.invalidateQueries({ queryKey: ['entity'] });
     },

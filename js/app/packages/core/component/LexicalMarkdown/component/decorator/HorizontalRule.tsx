@@ -78,7 +78,7 @@ export function HorizontalRule(props: HorizontalRuleDecoratorProps) {
       <div
         class="w-full h-px bg-edge rounded-full"
         classList={{
-          'outline-edge/30 outline-4': isSelectedAsNode() || ruleHover(),
+          'outline-edge outline-4': isSelectedAsNode() || ruleHover(),
         }}
       />
 

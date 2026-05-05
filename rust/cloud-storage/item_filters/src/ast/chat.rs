@@ -5,26 +5,39 @@ use uuid::Uuid;
 
 use crate::{
     ChatFilters,
-    ast::{ExpandErr, ParseFromStr, UnknownValue},
+    ast::{ExpandErr, ParseFromStr, UnknownValue, date::DateLiteral},
 };
 
 /// the literal ast type for the chat entity
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ChatLiteral {
     /// the chat is in some nested project structure where [Uuid] is a parent node
+    #[serde(rename = "pid")]
     ProjectId(Uuid),
     /// the chat has role [ChatRole]
+    #[serde(rename = "r")]
     Role(ChatRole),
     /// the chat has the id [Uuid]
+    #[serde(rename = "cid")]
     ChatId(Uuid),
     /// the chat is owned by [MacroUserIdStr]
+    #[serde(rename = "o")]
     Owner(MacroUserIdStr<'static>),
     /// this node value filters by chat importance. false short-circuits to match nothing.
+    #[serde(rename = "imp")]
     Importance(bool),
     /// this node value filters by notification done state for chats.
+    #[serde(rename = "nd")]
     NotificationDone(bool),
     /// this node value filters by notification seen state for chats.
+    #[serde(rename = "ns")]
     NotificationSeen(bool),
+    /// this node value filters by chat createdAt timestamp
+    #[serde(rename = "ca")]
+    CreatedAt(DateLiteral),
+    /// this node value filters by chat updatedAt timestamp
+    #[serde(rename = "ua")]
+    UpdatedAt(DateLiteral),
 }
 
 /// the possible roles for a chat

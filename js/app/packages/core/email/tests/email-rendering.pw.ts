@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
-import { DEFAULT_THEMES } from '../../../block-theme/constants';
+import { DEFAULT_THEMES } from '../../../theme/constants';
 import type { ThemeColorParams } from '../transform-email-colors';
 
 // =============================================================================

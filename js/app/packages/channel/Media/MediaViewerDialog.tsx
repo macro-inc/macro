@@ -1,6 +1,7 @@
 import * as stackingContext from '@core/constant/stackingContext';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
+import { isMobile } from '@core/mobile/isMobile';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -22,19 +23,54 @@ function VideoViewerContent(props: {
   onPrevious?: () => void;
   onNext?: () => void;
   indexLabel?: Accessor<string>;
+  navigationHidden?: boolean;
 }) {
   const navButtonClass =
     'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-colors disabled:cursor-not-allowed disabled:opacity-50';
+
+  let swipeTouchStartX = 0;
+  let swipeTouchEndX = 0;
+  let isSwiping = false;
+
+  const handleTouchStart = (e: TouchEvent) => {
+    const hasNav = props.onPrevious != null || props.onNext != null;
+    if (!hasNav || e.touches.length !== 1) return;
+    swipeTouchStartX = e.touches[0].clientX;
+    swipeTouchEndX = e.touches[0].clientX;
+    isSwiping = false;
+  };
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    swipeTouchEndX = e.touches[0].clientX;
+    if (Math.abs(swipeTouchStartX - swipeTouchEndX) > 30) isSwiping = true;
+  };
+
+  const handleTouchEnd = () => {
+    if (isSwiping) {
+      const diff = swipeTouchStartX - swipeTouchEndX;
+      if (Math.abs(diff) > 50) {
+        if (diff > 0) props.onNext?.();
+        else props.onPrevious?.();
+      }
+    }
+    isSwiping = false;
+    swipeTouchStartX = 0;
+    swipeTouchEndX = 0;
+  };
 
   return (
     <div
       class="fixed inset-0 z-modal flex items-center justify-center"
       style={{
-        'padding-top': 'max(var(--safe-top), 0.5rem)',
-        'padding-bottom': 'max(var(--safe-bottom), 1.5rem)',
-        'padding-left': 'max(var(--safe-left), 0.5rem)',
-        'padding-right': 'max(var(--safe-right), 0.5rem)',
+        'margin-top': 'max(var(--safe-top), 0.5rem)',
+        'margin-bottom': 'max(var(--safe-bottom), 1.5rem)',
+        'margin-left': 'max(var(--safe-left), 0.5rem)',
+        'margin-right': 'max(var(--safe-right), 0.5rem)',
       }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       <Dialog.Content class="flex items-center justify-center bg-panel">
         <LightboxToolbar isVisible={true}>
@@ -58,25 +94,27 @@ function VideoViewerContent(props: {
           </div>
         </Show>
 
-        <button
-          class={cn(navButtonClass, 'left-4')}
-          style={{ 'z-index': stackingContext.zModal + 1 }}
-          onClick={props.onPrevious}
-          disabled={!props.onPrevious}
-          aria-label="Previous media"
-        >
-          <ChevronLeftIcon class="h-5 w-5 text-ink" />
-        </button>
+        <Show when={!isMobile() && !props.navigationHidden}>
+          <button
+            class={cn(navButtonClass, 'left-4')}
+            style={{ 'z-index': stackingContext.zModal + 1 }}
+            onClick={props.onPrevious}
+            disabled={!props.onPrevious}
+            aria-label="Previous media"
+          >
+            <ChevronLeftIcon class="h-5 w-5 text-ink" />
+          </button>
 
-        <button
-          class={cn(navButtonClass, 'right-4')}
-          style={{ 'z-index': stackingContext.zModal + 1 }}
-          onClick={props.onNext}
-          disabled={!props.onNext}
-          aria-label="Next media"
-        >
-          <ChevronRightIcon class="h-5 w-5 text-ink" />
-        </button>
+          <button
+            class={cn(navButtonClass, 'right-4')}
+            style={{ 'z-index': stackingContext.zModal + 1 }}
+            onClick={props.onNext}
+            disabled={!props.onNext}
+            aria-label="Next media"
+          >
+            <ChevronRightIcon class="h-5 w-5 text-ink" />
+          </button>
+        </Show>
 
         <div class="flex h-full w-full items-center justify-center">
           <video
@@ -84,7 +122,7 @@ function VideoViewerContent(props: {
             controls
             autoplay
             playsinline
-            src={props.item().src}
+            src={props.item().fullSrc}
           />
         </div>
       </Dialog.Content>
@@ -124,14 +162,16 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
                   onPrevious={hasPrevious() ? navigatePrevious : undefined}
                   onNext={hasNext() ? navigateNext : undefined}
                   indexLabel={hasMultipleItems() ? indexLabel : undefined}
+                  navigationHidden={!hasMultipleItems()}
                 />
               }
             >
               <Lightbox
-                src={() => item().src}
+                src={() => item().fullSrc}
                 imageId={() => item().id}
                 onPrevious={hasPrevious() ? navigatePrevious : undefined}
                 onNext={hasNext() ? navigateNext : undefined}
+                navigationHidden={!hasMultipleItems()}
                 indexLabel={hasMultipleItems() ? indexLabel : undefined}
               />
             </Show>

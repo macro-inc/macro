@@ -93,7 +93,7 @@ function CreateResult(props: {
         {(file) => (
           <button
             type="button"
-            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-hover transition-colors cursor-pointer"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-hover transition-colors"
             onClick={handleClick}
           >
             <EntityIcon size="xs" targetType={asFileType(file().extension)} />

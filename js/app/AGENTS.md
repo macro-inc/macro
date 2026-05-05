@@ -24,6 +24,7 @@
 
 ## Styling
 - Use semantic color tokens, not raw Tailwind color classes.
+- Do not add cursor-pointer to clickable elements.
 
 ## TS
 - For exhaustive switch statements use `match` from `ts-pattern`.
@@ -99,4 +100,3 @@ The `import Worker from './w?worker'` import itself is harmless — only `new Wo
 6. **Cross-reference the last URL request with the stuck thread.** If the last `tauri://` request was `*-worker.js?worker_file&type=module` and a worker thread is in `loadModuleSynchronously`, you've confirmed which worker is the culprit. Then trace back to where it was constructed (`new Worker(...)` or a `?worker` default export being instantiated) and make that lazy.
 
 Don't get distracted by red herrings the logs will show: `NSKeyedArchiver` main-thread fault, IPC throttling warnings ("N pending incoming messages"), the bundle updater's failed `localhost:3001` request — all are downstream symptoms or unrelated noise.
-

@@ -3,13 +3,33 @@ import LogoIcon from '@macro-icons/macro-logo.svg';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
 import { getWebOrigin } from '@core/util/webOrigin';
+import { MOBILE_WEB_SIGNUP_LEAD_VALUE } from '@app/lib/analytics/leadValues';
 
-export default function MobileWebSignupSent() {
+type Props = {
+  /** Email submitted on the prior step — used as the Google conversion `transaction_id` for dedup. */
+  email?: string;
+};
+
+export default function MobileWebSignupSent(props: Props) {
   const analytics = useAnalytics();
 
   onMount(() => {
     analytics.track('mobile_web_signup_sent_viewed');
-    analytics.trackMeta('Lead', { content_name: 'mobile_web_signup' });
+    // Fire as both Lead and CompleteRegistration: Meta's Maximize Value
+    // campaigns don't support Lead, so we duplicate to CompleteRegistration.
+    // The existing Lead event is used in a custom conversion we use in an ad campaign, so can't remove it
+    const leadPayload = {
+      content_name: 'mobile_web_signup',
+      value: MOBILE_WEB_SIGNUP_LEAD_VALUE,
+      currency: 'USD',
+    };
+    analytics.trackMeta('Lead', leadPayload);
+    analytics.trackMeta('CompleteRegistration', leadPayload);
+    analytics.trackGoogleConversion('mobile_web_lead', {
+      value: MOBILE_WEB_SIGNUP_LEAD_VALUE,
+      currency: 'USD',
+      transaction_id: props.email,
+    });
   });
 
   return (

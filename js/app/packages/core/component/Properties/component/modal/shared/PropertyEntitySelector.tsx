@@ -2,6 +2,7 @@ import { Entity, type EntityData } from '@entity';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
+import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { createEmailsInfiniteQuery } from '@macro-entity';
 import type { EmailEntity } from '@entity';
@@ -13,12 +14,10 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  on,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
-import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useSearchInputFocus } from '../../../utils';
 import {
   type CombinedEntity,
@@ -89,7 +88,7 @@ function getEntityName(entity: CombinedEntity): string {
   return data.name ?? '';
 }
 
-const ITEM_SIZE = 32;
+const MAX_LIST_HEIGHT = 192;
 
 export function PropertyEntitySelector(props: EntityInputProps) {
   const [inputValue, setInputValue] = createSignal('');
@@ -106,7 +105,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
   const pinnedCount = () => visiblePinnedOptions().length;
 
-  let virtualizerHandle: VirtualizerHandle | undefined;
+  let scrollContainerRef: HTMLDivElement | undefined;
 
   // Debounce search term updates (60ms like MentionsMenu)
   const debouncedSetSearchTerm = debounce(
@@ -239,6 +238,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const allEntities = entities();
     const userId = currentUserId();
 
+    // List is unvirtualized — revisit if these caps grow significantly.
     const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
     const MAX_SEARCH_RESULTS = 20;
 
@@ -274,50 +274,16 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return localResults;
   });
 
-  // Sort entities with selected items first when not searching
-  const sortedEntities = createMemo(
-    on([searchTerm, filteredEntities], () => {
-      const term = searchTerm();
-      const filteredResults = filteredEntities();
-
-      // When there's a search term, return results as-is
-      if (term) {
-        return filteredResults;
-      }
-
-      // When browsing (no search), show selected entities first, then others
-      // (self is already sorted to top within filteredEntities)
-      const selectedIds = props.selectedOptions();
-      const entityIdsInResults = new Set(filteredResults.map((e) => e.id));
-
-      // Partition filtered results into selected and unselected
-      const selected: CombinedEntity[] = [];
-      const unselected: CombinedEntity[] = [];
-
-      for (const entity of filteredResults) {
-        if (selectedIds.has(entity.id)) {
-          selected.push(entity);
-        } else {
-          unselected.push(entity);
-        }
-      }
-
-      // Add missing selected entities that aren't in the visible results
-      const allAvailableEntities = entities();
-      for (const selectedId of selectedIds) {
-        if (!entityIdsInResults.has(selectedId)) {
-          const actualEntity = allAvailableEntities.find(
-            (e) => e.id === selectedId
-          );
-          if (actualEntity) {
-            selected.push(actualEntity);
-          }
-        }
-      }
-
-      return [...selected, ...unselected];
-    })
-  );
+  // Sort entities with selected items first when not searching. Self is
+  // already pinned to the top within `filteredEntities`; this layers
+  // selected-first on top of that ordering.
+  const sortedEntities = useSelectedFirst({
+    items: filteredEntities,
+    allItems: entities,
+    selectedIds: props.selectedOptions,
+    searchQuery: searchTerm,
+    getId: (e: CombinedEntity) => e.id,
+  });
 
   const toggleEntity = (entity: CombinedEntity) => {
     const newSelected = new Set(props.selectedOptions());
@@ -378,13 +344,15 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     setSelectedIndex(0);
   });
 
-  // Scroll VList to selected index only during keyboard navigation
+  // Scroll the selected row into view during keyboard navigation
   createEffect(() => {
     const index = selectedIndex();
     const pCount = pinnedCount();
-    if (keyboardMode() && index >= pCount && virtualizerHandle) {
-      virtualizerHandle.scrollToIndex(index - pCount, { align: 'nearest' });
-    }
+    if (!keyboardMode() || index < pCount || !scrollContainerRef) return;
+    const row = scrollContainerRef.querySelector<HTMLDivElement>(
+      `[data-entity-index="${index - pCount}"]`
+    );
+    row?.scrollIntoView({ block: 'nearest' });
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -467,10 +435,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                   }}
                 >
                   <div class="flex items-center gap-2 flex-1 min-w-0">
-                    <div class="size-4 flex-shrink-0">{option.icon}</div>
+                    <div class="size-4 shrink-0">{option.icon}</div>
                     <span class="truncate min-w-0">{option.label}</span>
                   </div>
-                  <div class="flex-shrink-0">
+                  <div class="shrink-0">
                     <OptionCheckBox
                       checked={isSelected()}
                       multiselect={props.config.isMultiSelect}
@@ -481,76 +449,75 @@ export function PropertyEntitySelector(props: EntityInputProps) {
             }}
           </For>
           <Show when={sortedEntities().length > 0}>
-            <VList
-              ref={(handle) => {
-                virtualizerHandle = handle;
-              }}
-              data={sortedEntities()}
-              itemSize={ITEM_SIZE}
-              bufferSize={5 * ITEM_SIZE}
+            <div
+              ref={scrollContainerRef}
               style={{
-                height: `${Math.min(sortedEntities().length * ITEM_SIZE, 192)}px`,
-                contain: 'content',
+                'max-height': `${MAX_LIST_HEIGHT}px`,
               }}
               class="overflow-y-auto overflow-x-hidden scrollbar-hidden"
             >
-              {(entity, index) => {
-                const adjustedIndex = () => index() + pinnedCount();
-                const isSelected = () => props.selectedOptions().has(entity.id);
-                const isKeyboardSelected = () =>
-                  adjustedIndex() === selectedIndex();
+              <For each={sortedEntities()}>
+                {(entity, index) => {
+                  const adjustedIndex = () => index() + pinnedCount();
+                  const isSelected = () =>
+                    props.selectedOptions().has(entity.id);
+                  const isKeyboardSelected = () =>
+                    adjustedIndex() === selectedIndex();
 
-                return (
-                  <div
-                    data-entity-index={index()}
-                    class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8"
-                    classList={{
-                      'bg-hover': isKeyboardSelected(),
-                      'bg-accent/10': isSelected(),
-                    }}
-                    onClick={() => toggleEntity(entity)}
-                    onKeyDown={(e) => e.key === 'Enter' && toggleEntity(entity)}
-                    onMouseEnter={() => {
-                      if (!keyboardMode()) {
-                        setSelectedIndex(adjustedIndex());
+                  return (
+                    <div
+                      data-entity-index={index()}
+                      class="flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8"
+                      classList={{
+                        'bg-hover': isKeyboardSelected(),
+                        'bg-accent/10': isSelected(),
+                      }}
+                      onClick={() => toggleEntity(entity)}
+                      onKeyDown={(e) =>
+                        e.key === 'Enter' && toggleEntity(entity)
                       }
-                    }}
-                  >
-                    <div class="flex items-center gap-2 flex-1 min-w-0">
-                      <div class="size-4 flex-shrink-0">
-                        <Show
-                          when={entity.kind === 'entity'}
-                          fallback={
-                            <UserIcon
-                              id={entity.id}
-                              size="xs"
-                              isDeleted={false}
-                              suppressClick={true}
-                            />
-                          }
-                        >
-                          <Entity.Icon entity={entity.data as EntityData} />
-                        </Show>
+                      onMouseEnter={() => {
+                        if (!keyboardMode()) {
+                          setSelectedIndex(adjustedIndex());
+                        }
+                      }}
+                    >
+                      <div class="flex items-center gap-2 flex-1 min-w-0">
+                        <div class="size-4 shrink-0">
+                          <Show
+                            when={entity.kind === 'entity'}
+                            fallback={
+                              <UserIcon
+                                id={entity.id}
+                                size="xs"
+                                isDeleted={false}
+                                suppressClick={true}
+                              />
+                            }
+                          >
+                            <Entity.Icon entity={entity.data as EntityData} />
+                          </Show>
+                        </div>
+                        <span class="truncate min-w-0">
+                          <Show
+                            when={entity.kind === 'entity'}
+                            fallback={getEntityName(entity)}
+                          >
+                            <Entity.Title entity={entity.data as EntityData} />
+                          </Show>
+                        </span>
                       </div>
-                      <span class="truncate min-w-0">
-                        <Show
-                          when={entity.kind === 'entity'}
-                          fallback={getEntityName(entity)}
-                        >
-                          <Entity.Title entity={entity.data as EntityData} />
-                        </Show>
-                      </span>
+                      <div class="shrink-0">
+                        <OptionCheckBox
+                          checked={isSelected()}
+                          multiselect={props.config.isMultiSelect}
+                        />
+                      </div>
                     </div>
-                    <div class="flex-shrink-0">
-                      <OptionCheckBox
-                        checked={isSelected()}
-                        multiselect={props.config.isMultiSelect}
-                      />
-                    </div>
-                  </div>
-                );
-              }}
-            </VList>
+                  );
+                }}
+              </For>
+            </div>
           </Show>
         </div>
       </Show>

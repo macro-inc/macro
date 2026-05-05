@@ -8,6 +8,7 @@ mod test;
 use std::collections::{HashMap, HashSet};
 
 use chrono::Utc;
+use comms::outbound::postgres::channel_name::batch_resolve_channel_names;
 use entity_access::domain::models::AccessLevel;
 use filter_ast::Expr;
 use item_filters::ast::{LiteralTree, call::CallLiteral};
@@ -17,12 +18,27 @@ use models_permissions::share_permission::channel_share_permission::ChannelShare
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::channel_name::{NameLookup, display_name, resolve_channel_name};
 use crate::domain::models::{
-    Call, CallParticipant, CallRecord, CallRecordParticipant, CallRecordTranscriptSegment,
-    EditCallRecordRequest, TranscriptSegmentRequest,
+    AddParticipantError, Call, CallParticipant, CallRecord, CallRecordParticipant,
+    CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
+    EditCallRecordRequest, TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
+
+/// Name of the partial unique index enforcing one active call per user.
+const ACTIVE_CALL_UNIQUE_INDEX: &str = "call_participants_one_active_per_user";
+
+/// Translate a sqlx error from an `add_participant` insert into the domain
+/// [`AddParticipantError`]. A unique-violation on the
+/// `call_participants_one_active_per_user` partial index becomes
+/// [`AddParticipantError::UserAlreadyActive`]; everything else is wrapped.
+fn classify_add_participant_err(err: sqlx::Error) -> AddParticipantError {
+    if err.as_database_error().and_then(|db| db.constraint()) == Some(ACTIVE_CALL_UNIQUE_INDEX) {
+        AddParticipantError::UserAlreadyActive
+    } else {
+        AddParticipantError::Repository(err.into())
+    }
+}
 
 /// Extract channel_id UUIDs from a call filter AST.
 fn extract_channel_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
@@ -37,12 +53,39 @@ fn extract_channel_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
 fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
     match expr {
         Expr::Literal(CallLiteral::ChannelId(id)) => ids.push(*id),
+        Expr::Literal(CallLiteral::CallId(_)) => {}
         Expr::Literal(CallLiteral::Attended(_)) => {}
+        // Speaker is transcript-segment-only; soup's call list ignores it.
+        Expr::Literal(CallLiteral::Speaker(_)) => {}
         Expr::And(a, b) | Expr::Or(a, b) => {
             collect_channel_ids(a, ids);
             collect_channel_ids(b, ids);
         }
         Expr::Not(inner) => collect_channel_ids(inner, ids),
+    }
+}
+
+/// Extract call_id UUIDs from a call filter AST.
+fn extract_call_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
+    let Some(expr) = filter else {
+        return Vec::new();
+    };
+    let mut ids = Vec::new();
+    collect_call_ids(expr, &mut ids);
+    ids
+}
+
+fn collect_call_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
+    match expr {
+        Expr::Literal(CallLiteral::CallId(id)) => ids.push(*id),
+        Expr::Literal(CallLiteral::ChannelId(_)) => {}
+        Expr::Literal(CallLiteral::Attended(_)) => {}
+        Expr::Literal(CallLiteral::Speaker(_)) => {}
+        Expr::And(a, b) | Expr::Or(a, b) => {
+            collect_call_ids(a, ids);
+            collect_call_ids(b, ids);
+        }
+        Expr::Not(inner) => collect_call_ids(inner, ids),
     }
 }
 
@@ -58,13 +101,16 @@ fn extract_attended(filter: &LiteralTree<CallLiteral>) -> Option<bool> {
 fn find_attended(expr: &Expr<CallLiteral>) -> Option<bool> {
     match expr {
         Expr::Literal(CallLiteral::Attended(b)) => Some(*b),
+        Expr::Literal(CallLiteral::CallId(_)) => None,
         Expr::Literal(CallLiteral::ChannelId(_)) => None,
+        Expr::Literal(CallLiteral::Speaker(_)) => None,
         Expr::And(a, b) | Expr::Or(a, b) => find_attended(a).or_else(|| find_attended(b)),
         Expr::Not(inner) => find_attended(inner).map(|b| !b),
     }
 }
 
 /// Postgres implementation of [`CallRepository`].
+#[derive(Clone)]
 pub struct PgCallRepo {
     pool: PgPool,
 }
@@ -265,7 +311,7 @@ impl CallRepository for PgCallRepo {
         &self,
         call_id: &Uuid,
         user_id: MacroUserIdStr<'_>,
-    ) -> Result<CallParticipant, Self::Err> {
+    ) -> Result<CallParticipant, AddParticipantError> {
         let row = sqlx::query!(
             r#"
             INSERT INTO call_participants (call_id, user_id)
@@ -277,13 +323,35 @@ impl CallRepository for PgCallRepo {
             user_id.as_ref(),
         )
         .fetch_one(&self.pool)
-        .await?;
+        .await
+        .map_err(classify_add_participant_err)?;
 
         Ok(CallParticipant {
             call_id: row.call_id,
             user_id: row.user_id,
             joined_at: row.joined_at,
         })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn find_active_call_for_user(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<(Uuid, Uuid)>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT c.id, c.channel_id
+            FROM call_participants cp
+            JOIN calls c ON c.id = cp.call_id
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            LIMIT 1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| (r.id, r.channel_id)))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -421,7 +489,7 @@ impl CallRepository for PgCallRepo {
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, share_permission_id, share_with_team
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, recording_started_at, share_permission_id, share_with_team
             FROM calls
             WHERE id = $1
             FOR UPDATE
@@ -469,8 +537,8 @@ impl CallRepository for PgCallRepo {
         // The record keeps the same id as the original call.
         sqlx::query!(
             r#"
-            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, share_permission_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, recording_started_at, share_permission_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             "#,
             call_id,
             call.channel_id,
@@ -481,6 +549,7 @@ impl CallRepository for PgCallRepo {
             duration_ms,
             call.egress_id,
             call.recording_key,
+            call.recording_started_at,
             &call.share_permission_id,
         )
         .execute(tx.as_mut())
@@ -503,8 +572,8 @@ impl CallRepository for PgCallRepo {
         // Copy transcripts to call_record_transcripts.
         sqlx::query!(
             r#"
-            INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, content, started_at, ended_at, sequence_num)
-            SELECT $1, segment_id, speaker_id, content, started_at, ended_at, sequence_num
+            INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num)
+            SELECT $1, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num
             FROM call_transcripts
             WHERE call_id = $2
             "#,
@@ -579,6 +648,45 @@ impl CallRepository for PgCallRepo {
         Ok(result.rows_affected() > 0)
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn set_recording_started_at_by_egress_id(
+        &self,
+        egress_id: &str,
+        started_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, Self::Err> {
+        let active = sqlx::query!(
+            r#"
+            UPDATE calls
+               SET recording_started_at = $2
+             WHERE egress_id = $1
+               AND recording_started_at IS NULL
+            "#,
+            egress_id,
+            started_at,
+        )
+        .execute(&self.pool)
+        .await?;
+        if active.rows_affected() > 0 {
+            return Ok(true);
+        }
+
+        // Fall through: if the call already archived (rare race), persist on
+        // the archived row instead.
+        let archived = sqlx::query!(
+            r#"
+            UPDATE call_records
+               SET recording_started_at = $2
+             WHERE egress_id = $1
+               AND recording_started_at IS NULL
+            "#,
+            egress_id,
+            started_at,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(archived.rows_affected() > 0)
+    }
+
     #[tracing::instrument(err, skip(self, segment))]
     async fn create_transcript_segment(
         &self,
@@ -587,8 +695,8 @@ impl CallRepository for PgCallRepo {
     ) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
-            INSERT INTO call_transcripts (call_id, segment_id, speaker_id, content, started_at, ended_at, sequence_num)
-            VALUES ($1, $2, $3, $4, $5, $6, (
+            INSERT INTO call_transcripts (call_id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, (
                 SELECT COALESCE(MAX(sequence_num), 0) + 1
                 FROM call_transcripts
                 WHERE call_id = $1
@@ -598,12 +706,66 @@ impl CallRepository for PgCallRepo {
             call_id,
             segment.segment_id,
             segment.speaker_id,
+            segment.diarized_speaker_id,
             segment.content,
             segment.started_at,
             segment.ended_at,
         )
         .execute(&self.pool)
         .await?;
+
+        // The agent's first-audio-frame wall-clock is a more accurate
+        // recording-timeline anchor than the `egress_started` webhook's
+        // envelope time (which fires when egress bootstraps, ~seconds
+        // before any audio frame is encoded). Overwrite the column when:
+        //   - it's still NULL (no webhook yet), OR
+        //   - the existing value is at exact second precision (i.e., from
+        //     the webhook, which stores `from_timestamp(secs, 0)`), OR
+        //   - the new value is earlier than the existing agent value
+        //     (across multiple participants, take the earliest first-audio).
+        if let Some(stream_started_at) = segment.stream_started_at {
+            let active = sqlx::query!(
+                r#"
+                UPDATE calls
+                SET recording_started_at = $1
+                WHERE id = $2
+                  AND (
+                    recording_started_at IS NULL
+                    OR recording_started_at = date_trunc('second', recording_started_at)
+                    OR $1 < recording_started_at
+                  )
+                "#,
+                stream_started_at,
+                call_id,
+            )
+            .execute(&self.pool)
+            .await?;
+
+            // Race fallback: if `archive_call` moved the row to `call_records`
+            // between transcript-ingest's lookup and now, the active UPDATE
+            // affects 0 rows. Apply the same conditional update to the
+            // archived row (same id is reused on archive). Mirrors
+            // `set_recording_started_at_by_egress_id`.
+            if active.rows_affected() == 0 {
+                sqlx::query!(
+                    r#"
+                    UPDATE call_records
+                    SET recording_started_at = $1
+                    WHERE id = $2
+                      AND (
+                        recording_started_at IS NULL
+                        OR recording_started_at = date_trunc('second', recording_started_at)
+                        OR $1 < recording_started_at
+                      )
+                    "#,
+                    stream_started_at,
+                    call_id,
+                )
+                .execute(&self.pool)
+                .await?;
+            }
+        }
+
         Ok(())
     }
 
@@ -626,7 +788,7 @@ impl CallRepository for PgCallRepo {
         // Try active `calls` first.
         if let Some(active) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, recording_started_at
             FROM calls
             WHERE id = $1
             "#,
@@ -656,7 +818,7 @@ impl CallRepository for PgCallRepo {
 
             let transcript = sqlx::query!(
                 r#"
-                SELECT segment_id, speaker_id, content, started_at, ended_at, sequence_num
+                SELECT id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num
                 FROM call_transcripts
                 WHERE call_id = $1
                 ORDER BY sequence_num ASC
@@ -667,8 +829,10 @@ impl CallRepository for PgCallRepo {
             .await?
             .into_iter()
             .map(|row| CallRecordTranscriptSegment {
+                transcript_id: row.id,
                 segment_id: Some(row.segment_id),
                 speaker_id: row.speaker_id,
+                diarized_speaker_id: row.diarized_speaker_id,
                 content: row.content,
                 started_at: row.started_at,
                 ended_at: row.ended_at,
@@ -686,9 +850,12 @@ impl CallRepository for PgCallRepo {
                 ended_at: None,
                 duration_ms: None,
                 egress_id: active.egress_id,
+                recording_started_at: active.recording_started_at,
                 recording_key: active.recording_key,
                 recording_url: None,
                 channel_name: None,
+                custom_name: None,
+                summary: None,
                 is_active: true,
                 participants,
                 transcript,
@@ -698,7 +865,7 @@ impl CallRepository for PgCallRepo {
         // Fall back to archived `call_records`.
         let Some(archived) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key
+            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, recording_started_at, custom_name, summary
             FROM call_records
             WHERE id = $1
             "#,
@@ -732,7 +899,7 @@ impl CallRepository for PgCallRepo {
 
         let transcript = sqlx::query!(
             r#"
-            SELECT segment_id, speaker_id, content, started_at, ended_at, sequence_num
+            SELECT id, segment_id, speaker_id, diarized_speaker_id, custom_speaker, content, started_at, ended_at, sequence_num
             FROM call_record_transcripts
             WHERE call_record_id = $1
             ORDER BY sequence_num ASC
@@ -743,8 +910,10 @@ impl CallRepository for PgCallRepo {
         .await?
         .into_iter()
         .map(|row| CallRecordTranscriptSegment {
+            transcript_id: row.id,
             segment_id: row.segment_id,
-            speaker_id: row.speaker_id,
+            speaker_id: row.custom_speaker.unwrap_or(row.speaker_id),
+            diarized_speaker_id: row.diarized_speaker_id,
             content: row.content,
             started_at: row.started_at,
             ended_at: row.ended_at,
@@ -762,13 +931,104 @@ impl CallRepository for PgCallRepo {
             ended_at: Some(archived.ended_at),
             duration_ms: Some(archived.duration_ms),
             egress_id: archived.egress_id,
+            recording_started_at: archived.recording_started_at,
             recording_key: archived.recording_key,
             recording_url: None,
             channel_name: None,
+            custom_name: archived.custom_name,
+            summary: archived.summary,
             is_active: false,
             participants,
             transcript,
         }))
+    }
+
+    #[tracing::instrument(err, skip(self, call_ids), fields(num_call_ids = call_ids.len()))]
+    async fn batch_get_call_record_previews<'a>(
+        &self,
+        call_ids: &[Uuid],
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Vec<CallRecordPreview>, Self::Err> {
+        if call_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Deduplicate ids while preserving first-occurrence order for the response.
+        let mut seen = HashSet::new();
+        let unique_call_ids: Vec<Uuid> = call_ids
+            .iter()
+            .copied()
+            .filter(|id| seen.insert(*id))
+            .collect();
+
+        // Single query across both `calls` (active) and `call_records` (archived).
+        // An id in both tables should be impossible; if it somehow happens the
+        // active row wins by appearing first.
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                id as "call_id!",
+                channel_id as "channel_id!",
+                created_at as "started_at!",
+                NULL::timestamptz as "ended_at"
+            FROM calls
+            WHERE id = ANY($1)
+            UNION ALL
+            SELECT
+                id as "call_id!",
+                channel_id as "channel_id!",
+                started_at as "started_at!",
+                ended_at as "ended_at"
+            FROM call_records
+            WHERE id = ANY($1)
+            "#,
+            &unique_call_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        struct Found {
+            channel_id: Uuid,
+            started_at: chrono::DateTime<Utc>,
+            ended_at: Option<chrono::DateTime<Utc>>,
+        }
+
+        let mut found: HashMap<Uuid, Found> = HashMap::with_capacity(rows.len());
+        for row in rows {
+            // If the same id ever shows up twice, keep the first (active) hit.
+            found.entry(row.call_id).or_insert(Found {
+                channel_id: row.channel_id,
+                started_at: row.started_at,
+                ended_at: row.ended_at,
+            });
+        }
+
+        let unique_channel_ids: Vec<Uuid> = {
+            let mut seen = HashSet::new();
+            found
+                .values()
+                .filter_map(|f| seen.insert(f.channel_id).then_some(f.channel_id))
+                .collect()
+        };
+
+        let channel_names =
+            batch_resolve_channel_names(&self.pool, &unique_channel_ids, user_id).await?;
+
+        let previews = unique_call_ids
+            .into_iter()
+            .map(|call_id| match found.remove(&call_id) {
+                Some(f) => CallRecordPreview::Exists(CallRecordPreviewData {
+                    call_id,
+                    channel_id: f.channel_id,
+                    channel_name: channel_names.get(&f.channel_id).cloned(),
+                    started_at: f.started_at,
+                    ended_at: f.ended_at,
+                }),
+                None => CallRecordPreview::DoesNotExist(WithCallId { call_id }),
+            })
+            .collect();
+
+        Ok(previews)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -781,12 +1041,31 @@ impl CallRepository for PgCallRepo {
         // Fetch call headers from both active and archived tables, ordered by
         // start time descending. We intentionally exclude transcripts (too
         // large for the soup feed).
+        //
+        // Visibility is derived from the `entity_access` table: a call is
+        // visible to the user if there's an entity_access row whose
+        // `source_id` matches one of the user's source ids (their
+        // channel memberships, team memberships, or their own user id).
+        // This mirrors `entity_access::pg_access_repo::queries::call_access`.
         let channel_ids = extract_channel_ids(filter);
         let has_channel_filter = !channel_ids.is_empty();
+        let call_ids = extract_call_ids(filter);
+        let has_call_id_filter = !call_ids.is_empty();
         let attended = extract_attended(filter);
 
         let rows = sqlx::query!(
             r#"
+            WITH user_source_ids AS (
+                SELECT cp.channel_id::text AS source_id
+                FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                UNION ALL
+                SELECT t.team_id::text AS source_id
+                FROM team_user t
+                WHERE t.user_id = $1
+                UNION ALL
+                SELECT $1 AS source_id
+            )
             SELECT
                 id as "call_id!",
                 channel_id as "channel_id!",
@@ -797,19 +1076,23 @@ impl CallRepository for PgCallRepo {
                 NULL::bigint as "duration_ms",
                 egress_id,
                 recording_key,
+                recording_started_at,
+                NULL::text as "custom_name",
+                NULL::text as "summary",
                 true as "is_active!"
             FROM calls c
             WHERE EXISTS (
-                SELECT 1 FROM comms_channel_participants ccp
-                WHERE ccp.channel_id = c.channel_id
-                  AND ccp.user_id = $1
-                  AND ccp.left_at IS NULL
+                SELECT 1 FROM entity_access ea
+                JOIN user_source_ids u ON u.source_id = ea.source_id
+                WHERE ea.entity_id = c.id
+                  AND ea.entity_type = 'call'
             )
             AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
             AND ($5::bool IS NULL OR EXISTS (
                 SELECT 1 FROM call_participants cp
                 WHERE cp.call_id = c.id AND cp.user_id = $1
             ) = $5)
+            AND ($6::bool IS FALSE OR c.id = ANY($7))
             UNION ALL
             SELECT
                 id as "call_id!",
@@ -821,19 +1104,23 @@ impl CallRepository for PgCallRepo {
                 duration_ms as "duration_ms",
                 egress_id,
                 recording_key,
+                recording_started_at,
+                custom_name,
+                summary,
                 false as "is_active!"
             FROM call_records cr
             WHERE EXISTS (
-                SELECT 1 FROM comms_channel_participants ccp
-                WHERE ccp.channel_id = cr.channel_id
-                  AND ccp.user_id = $1
-                  AND ccp.left_at IS NULL
+                SELECT 1 FROM entity_access ea
+                JOIN user_source_ids u ON u.source_id = ea.source_id
+                WHERE ea.entity_id = cr.id
+                  AND ea.entity_type = 'call'
             )
             AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
             AND ($5::bool IS NULL OR EXISTS (
                 SELECT 1 FROM call_record_participants crp
                 WHERE crp.call_record_id = cr.id AND crp.user_id = $1
             ) = $5)
+            AND ($6::bool IS FALSE OR cr.id = ANY($7))
             ORDER BY "started_at!" DESC
             LIMIT $2
             "#,
@@ -842,6 +1129,8 @@ impl CallRepository for PgCallRepo {
             has_channel_filter,
             &channel_ids,
             attended,
+            has_call_id_filter,
+            &call_ids,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -898,9 +1187,12 @@ impl CallRepository for PgCallRepo {
                 ended_at: row.ended_at,
                 duration_ms: row.duration_ms,
                 egress_id: row.egress_id,
+                recording_started_at: row.recording_started_at,
                 recording_key: row.recording_key,
                 recording_url: None,
                 channel_name: None,
+                custom_name: row.custom_name,
+                summary: row.summary,
                 is_active: row.is_active,
                 participants,
                 transcript: Vec::new(),
@@ -916,94 +1208,11 @@ impl CallRepository for PgCallRepo {
                 .collect()
         };
 
-        let channel_info_rows = sqlx::query!(
-            r#"
-            SELECT id, name, channel_type::text as "channel_type!"
-            FROM comms_channels
-            WHERE id = ANY($1)
-            "#,
-            &unique_channel_ids
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let channel_map: HashMap<Uuid, (Option<String>, String)> = channel_info_rows
-            .into_iter()
-            .map(|r| (r.id, (r.name, r.channel_type)))
-            .collect();
-
-        // Identify channels needing participant-based name resolution
-        // (DM channels or unnamed private channels).
-        let needs_participants: Vec<Uuid> = channel_map
-            .iter()
-            .filter(|(_, (name, ct))| {
-                ct == "direct_message"
-                    || (ct == "private" && name.as_ref().is_none_or(|n| n.trim().is_empty()))
-            })
-            .map(|(id, _)| *id)
-            .collect();
-
-        let (participant_map, name_lookup) = if needs_participants.is_empty() {
-            (HashMap::new(), NameLookup::new())
-        } else {
-            let participant_rows = sqlx::query!(
-                r#"
-                SELECT channel_id, user_id
-                FROM comms_channel_participants
-                WHERE channel_id = ANY($1) AND left_at IS NULL
-                "#,
-                &needs_participants
-            )
-            .fetch_all(&self.pool)
-            .await?;
-
-            let mut part_map: HashMap<Uuid, Vec<MacroUserIdStr<'static>>> = HashMap::new();
-            let mut all_user_ids = HashSet::new();
-            for row in participant_rows {
-                let uid = MacroUserIdStr::parse_from_str(&row.user_id)
-                    .expect("valid user id from db")
-                    .into_owned();
-                all_user_ids.insert(row.user_id);
-                part_map.entry(row.channel_id).or_default().push(uid);
-            }
-
-            let user_id_strings: Vec<String> = all_user_ids.into_iter().collect();
-            let name_rows = sqlx::query!(
-                r#"
-                SELECT u.id as user_profile_id, mui.first_name, mui.last_name
-                FROM macro_user_info mui
-                JOIN "User" u ON mui.macro_user_id = u.macro_user_id
-                WHERE u.id = ANY($1)
-                "#,
-                &user_id_strings
-            )
-            .fetch_all(&self.pool)
-            .await?;
-
-            let lookup: NameLookup = name_rows
-                .into_iter()
-                .filter_map(|row| {
-                    let name = display_name(row.first_name.as_deref(), row.last_name.as_deref())?;
-                    Some((row.user_profile_id, name))
-                })
-                .collect();
-
-            (part_map, lookup)
-        };
+        let channel_names =
+            batch_resolve_channel_names(&self.pool, &unique_channel_ids, user_id.copied()).await?;
 
         for record in &mut records {
-            if let Some((name, channel_type)) = channel_map.get(&record.channel_id) {
-                let empty = Vec::new();
-                let participants = participant_map.get(&record.channel_id).unwrap_or(&empty);
-                record.channel_name = Some(resolve_channel_name(
-                    channel_type,
-                    name.as_deref(),
-                    participants,
-                    &record.channel_id,
-                    user_id.copied(),
-                    &name_lookup,
-                ));
-            }
+            record.channel_name = channel_names.get(&record.channel_id).cloned();
         }
 
         Ok(records)
@@ -1035,83 +1244,8 @@ impl CallRepository for PgCallRepo {
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
     ) -> Result<Option<String>, Self::Err> {
-        let Some(channel_info) = sqlx::query!(
-            r#"
-            SELECT name, channel_type::text as "channel_type!"
-            FROM comms_channels
-            WHERE id = $1
-            "#,
-            channel_id
-        )
-        .fetch_optional(&self.pool)
-        .await?
-        else {
-            return Ok(None);
-        };
-
-        let channel_type = &channel_info.channel_type;
-        let needs_participants = channel_type == "direct_message"
-            || (channel_type == "private"
-                && channel_info
-                    .name
-                    .as_ref()
-                    .is_none_or(|n| n.trim().is_empty()));
-
-        let (participant_ids, name_lookup) = if !needs_participants {
-            (Vec::new(), NameLookup::new())
-        } else {
-            let participant_rows = sqlx::query!(
-                r#"
-                SELECT user_id
-                FROM comms_channel_participants
-                WHERE channel_id = $1 AND left_at IS NULL
-                "#,
-                channel_id
-            )
-            .fetch_all(&self.pool)
-            .await?;
-
-            let mut ids = Vec::new();
-            let mut all_user_ids = Vec::new();
-            for row in participant_rows {
-                let uid = MacroUserIdStr::parse_from_str(&row.user_id)
-                    .expect("valid user id from db")
-                    .into_owned();
-                all_user_ids.push(row.user_id);
-                ids.push(uid);
-            }
-
-            let name_rows = sqlx::query!(
-                r#"
-                SELECT u.id as user_profile_id, mui.first_name, mui.last_name
-                FROM macro_user_info mui
-                JOIN "User" u ON mui.macro_user_id = u.macro_user_id
-                WHERE u.id = ANY($1)
-                "#,
-                &all_user_ids
-            )
-            .fetch_all(&self.pool)
-            .await?;
-
-            let lookup: NameLookup = name_rows
-                .into_iter()
-                .filter_map(|row| {
-                    let name = display_name(row.first_name.as_deref(), row.last_name.as_deref())?;
-                    Some((row.user_profile_id, name))
-                })
-                .collect();
-
-            (ids, lookup)
-        };
-
-        Ok(Some(resolve_channel_name(
-            channel_type,
-            channel_info.name.as_deref(),
-            &participant_ids,
-            channel_id,
-            user_id.copied(),
-            &name_lookup,
-        )))
+        let mut map = batch_resolve_channel_names(&self.pool, &[*channel_id], user_id).await?;
+        Ok(map.remove(channel_id))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1154,6 +1288,53 @@ impl CallRepository for PgCallRepo {
             edit::set_share_with_team(&mut tx, call_record_id, share_with_team).await?;
         }
 
+        if let Some(custom_name) = request.custom_name.as_deref() {
+            let custom_name = if custom_name.is_empty() {
+                None
+            } else {
+                Some(custom_name)
+            };
+            edit::set_custom_name(&mut tx, call_record_id, custom_name).await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, assignments), fields(num_assignments = assignments.len()), err)]
+    async fn patch_call_transcript_custom_speakers(
+        &self,
+        call_record_id: &Uuid,
+        assignments: &[CustomSpeakerAssignment],
+    ) -> Result<(), Self::Err> {
+        if assignments.is_empty() {
+            return Ok(());
+        }
+        let mut tx = self.pool.begin().await?;
+        edit::set_custom_speakers(&mut tx, call_record_id, assignments).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, summary), err)]
+    async fn insert_call_summary(&self, call_id: &Uuid, summary: &str) -> Result<(), Self::Err> {
+        // Tolerate missing rows: summarization can race with record deletion.
+        sqlx::query!(
+            r#"
+            UPDATE call_records SET summary = $2 WHERE id = $1
+            "#,
+            call_id,
+            summary,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, name), err)]
+    async fn set_custom_name_if_null(&self, call_id: &Uuid, name: &str) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        edit::set_custom_name_if_null(&mut tx, call_id, name).await?;
         tx.commit().await?;
         Ok(())
     }

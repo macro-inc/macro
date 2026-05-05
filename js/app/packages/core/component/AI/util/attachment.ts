@@ -13,8 +13,8 @@ export const asFileType = (
 };
 
 export const isImageAttachment = (attachment: AttachmentPreview) => {
-  if (attachment.attachmentType === 'image') return true;
-  if (attachment.attachmentType === 'document') {
+  if (attachment.entity_type === 'static_file') return true;
+  if (attachment.entity_type === 'document') {
     if (!attachment.metadata) return false;
     if (attachment.metadata.type === 'image') return true;
     if (attachment.metadata.type === 'document') {
@@ -31,7 +31,7 @@ export const isImageAttachment = (attachment: AttachmentPreview) => {
 export const isDssImage = (
   attachment: AttachmentPreview
 ): attachment is {
-  attachmentType: 'document';
+  entity_type: 'document';
   metadata: Extract<AttachmentMetadata, { type: 'document' }>;
 } => {
   if (!isImageAttachment(attachment)) return false;

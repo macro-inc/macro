@@ -35,7 +35,7 @@ export function StaticSplitLabel(props: {
   return (
     <div
       class={cn(
-        'z-3 relative flex items-center gap-2 max-w-full h-full shrink',
+        'z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink',
         props.class
       )}
     >
@@ -62,6 +62,7 @@ export function SplitLabel(props: {
   /** Per-variant fields the block context can't supply (e.g. `channelType`
    * for a channel rename). Merged into the args passed to `buildEntityData`. */
   renameOverrides?: Partial<BuildEntityDataArgs>;
+  maxDisplayLength?: number;
 }) {
   const panel = useSplitPanelOrThrow();
   const blockId = useBlockId();
@@ -70,6 +71,12 @@ export function SplitLabel(props: {
   createEffect(() => {
     panel.handle.setDisplayName(props.label);
   });
+
+  const truncatedLabel = () => {
+    if (!props.maxDisplayLength) return props.label;
+    if (props.label.length <= props.maxDisplayLength) return props.label;
+    return props.label.slice(0, props.maxDisplayLength - 3) + '...';
+  };
 
   const startEditing = (e: MouseEvent) => {
     if (props.lockRename) return;
@@ -97,14 +104,14 @@ export function SplitLabel(props: {
       onContextMenu={startEditing}
       onDblClick={startEditing}
     >
-      {props.label}
+      {truncatedLabel()}
     </span>
   );
 }
 
 export function SplitHeaderBadge(props: { text: string; tooltip?: string }) {
   return (
-    <span class="py-0.5 px-2 rounded-none text-[0.625rem] text-ink-muted">
+    <span class="py-0.5 px-2 rounded-none text-xxs text-ink-muted">
       <Tooltip tooltip={props.tooltip} spanMode>
         <span class="font-mono uppercase">{props.text}</span>
       </Tooltip>
@@ -166,7 +173,7 @@ export function BlockItemSplitLabel(props: {
   });
 
   return (
-    <div class="ph-no-capture z-3 relative flex items-center gap-2 w-screen max-w-full h-full shrink">
+    <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 w-screen max-w-full h-full shrink">
       <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
       <Show when={props.badges}>{props.badges}</Show>
       <SplitLabel

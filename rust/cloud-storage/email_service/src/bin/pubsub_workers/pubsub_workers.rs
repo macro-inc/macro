@@ -84,8 +84,14 @@ async fn main() -> anyhow::Result<()> {
         .email_scheduled_queue(&config.email_scheduled_queue)
         .sfs_uploader_queue(&config.sfs_uploader_queue)
         .sfs_delete_queue(&config.sfs_delete_queue)
-        .contacts_queue(&config.contacts_queue)
         .email_link_manager_queue(&config.link_manager_queue);
+
+    let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
+        queue: contacts::outbound::ingress::SqsContactsQueue::new(
+            aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+            config.contacts_queue.clone(),
+        ),
+    });
 
     let link_manager_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
@@ -233,6 +239,7 @@ async fn main() -> anyhow::Result<()> {
     for worker in inbox_sync_workers {
         let db_inbox_sync = db.clone();
         let sqs_client_inbox_sync = sqs_client.clone();
+        let contacts_ingress_inbox_sync = contacts_ingress.clone();
         let gmail_client_inbox_sync = gmail_client.clone();
         let auth_service_client_inbox_sync = auth_service_client.clone();
         let redis_client_inbox_sync = redis_client.clone();
@@ -246,6 +253,7 @@ async fn main() -> anyhow::Result<()> {
                 db_inbox_sync,
                 worker,
                 sqs_client_inbox_sync,
+                contacts_ingress_inbox_sync,
                 gmail_client_inbox_sync,
                 auth_service_client_inbox_sync,
                 redis_client_inbox_sync,
@@ -269,6 +277,7 @@ async fn main() -> anyhow::Result<()> {
     for worker in inbox_sync_retry_workers {
         let db_inbox_sync = db.clone();
         let sqs_client_inbox_sync = sqs_client.clone();
+        let contacts_ingress_inbox_sync = contacts_ingress.clone();
         let gmail_client_inbox_sync = gmail_client.clone();
         let auth_service_client_inbox_sync = auth_service_client.clone();
         let redis_client_inbox_sync = redis_client.clone();
@@ -282,6 +291,7 @@ async fn main() -> anyhow::Result<()> {
                 db_inbox_sync,
                 worker,
                 sqs_client_inbox_sync,
+                contacts_ingress_inbox_sync,
                 gmail_client_inbox_sync,
                 auth_service_client_inbox_sync,
                 redis_client_inbox_sync,
@@ -355,6 +365,7 @@ async fn main() -> anyhow::Result<()> {
     for worker in backfill_workers {
         let db_backfill = db_backfill.clone();
         let sqs_client_backfill = sqs_client.clone();
+        let contacts_ingress_backfill = contacts_ingress.clone();
         let gmail_client_backfill = gmail_client.clone();
         let auth_service_client_backfill = auth_service_client.clone();
         let redis_client_backfill = redis_client.clone();
@@ -368,6 +379,7 @@ async fn main() -> anyhow::Result<()> {
                 db_backfill,
                 worker,
                 sqs_client_backfill,
+                contacts_ingress_backfill,
                 gmail_client_backfill,
                 auth_service_client_backfill,
                 redis_client_backfill,

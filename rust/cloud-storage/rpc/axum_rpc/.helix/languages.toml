@@ -1,5 +1,0 @@
-[[language]]
-name = "rust"
-
-[language-server.rust-analyzer.config]
-cargo.target = "wasm32-unknown-unknown"

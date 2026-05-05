@@ -33,10 +33,7 @@ export function Attachments(props: AttachmentsProps) {
 
   return (
     <Show when={shouldRender()}>
-      <div
-        class={cn('allow-css-brackets mb-2', props.class)}
-        data-message-attachments
-      >
+      <div class={cn('mb-2', props.class)} data-message-attachments>
         <Show when={mediaItems().length > 0}>
           <MediaPreview items={mediaItems()} />
         </Show>

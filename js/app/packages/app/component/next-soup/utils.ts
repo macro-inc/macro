@@ -1,5 +1,6 @@
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
+import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
@@ -10,7 +11,9 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { waitForFrames } from '@core/util/sleep';
 import {
   type EntityData,
+  getSnippetHit,
   isSearchEntity,
+  isSnippetEntity,
   type SearchLocation,
   type WithSearch,
 } from '@entity';
@@ -226,6 +229,14 @@ export const openEntityInNewTab = ({
           entityUrl.searchParams.set('search_snippet', location.searchSnippet);
         }
         break;
+      case 'call_record':
+        if (location.transcriptId) {
+          entityUrl.searchParams.set(
+            CALL_PARAMS.transcriptId,
+            location.transcriptId
+          );
+        }
+        break;
     }
   }
 
@@ -300,7 +311,12 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
-  const { openInNewSplit, location, splitHandle, mergeHistory } = options;
+  const { openInNewSplit, splitHandle, mergeHistory } = options;
+  let { location } = options;
+
+  if (!location && isSnippetEntity(entity)) {
+    location = getSnippetHit(entity)?.location;
+  }
 
   // Get dependencies internally
   const splitManager = globalSplitManager();
@@ -318,6 +334,8 @@ export const openEntityInSplitFromUnifiedList = async (
     params = getChannelParams(location.messageId, location.threadId);
   } else if (entity.type === 'channel_message') {
     params = getChannelParams(entity.messageId, entity.threadId);
+  } else if (entity.type === 'call' && location?.type === 'call_record') {
+    params = { [CALL_PARAMS.transcriptId]: location.transcriptId };
   }
 
   splitManager.openWithSplit(
@@ -403,6 +421,12 @@ async function navigateToLocation(
           location.highlightTerms
         ),
         [PDF_PARAMS.searchSnippet]: location.searchSnippet,
+      });
+      break;
+    }
+    case 'call_record': {
+      await blockHandle.goToLocationFromParams({
+        [CALL_PARAMS.transcriptId]: location.transcriptId,
       });
       break;
     }

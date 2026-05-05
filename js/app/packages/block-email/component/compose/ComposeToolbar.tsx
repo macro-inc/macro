@@ -85,7 +85,7 @@ export function EmailComposeToolbar(props: {
           />
         </div>
       </Show>
-      <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
+      <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 mt-2">
         <Show
           when={!isMobile()}
           fallback={
@@ -172,7 +172,7 @@ export function EmailComposeToolbar(props: {
                   fallback={<Spinner class="size-6 animate-spin" />}
                 >
                   <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                    <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+                    <ArrowUp class="group-hover:text-input! group-hover:fill-input! text-accent-ink! fill-accent! size-4 transition ease-in-out" />
                   </div>
                 </Show>
               </button>

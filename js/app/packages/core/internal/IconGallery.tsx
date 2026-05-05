@@ -46,6 +46,15 @@ type ColorOption =
   | (typeof THEME_COLORS)[number]
   | { name: 'Custom'; value: 'custom'; css: string };
 
+// Dynamically import all arcanum SVG icons
+const arcanumIconModules = import.meta.glob(
+  '../../macro-icons/arcanum/arcanum-*.svg',
+  {
+    eager: true,
+    query: '?component-solid',
+  }
+) as Record<string, { default: Component }>;
+
 // Dynamically import all static SVG icons
 const staticIconModules = import.meta.glob('../../macro-icons/wide/*.svg', {
   eager: true,
@@ -145,12 +154,26 @@ for (const [name, component] of Object.entries(staticIcons)) {
 // Sort alphabetically
 STATIC_ONLY_ICONS.sort((a, b) => a.name.localeCompare(b.name));
 
+// Build arcanum icons list
+type ArcanumIcon = {
+  name: string;
+  component: Component;
+};
+
+const ARCANUM_ICONS: ArcanumIcon[] = [];
+for (const [path, module] of Object.entries(arcanumIconModules)) {
+  const rawName = getIconName(path);
+  ARCANUM_ICONS.push({ name: rawName, component: module.default });
+}
+ARCANUM_ICONS.sort((a, b) => a.name.localeCompare(b.name));
+
 export default function IconGallery() {
   const [selectedColor, setSelectedColor] = createSignal<ColorOption>(
     THEME_COLORS[0]
   );
   const [customColor, setCustomColor] = createSignal('');
   const [iconSize, setIconSize] = createSignal(48);
+  const [arcanumSize, setArcanumSize] = createSignal(300);
   const [animationTriggers, setAnimationTriggers] = createSignal<
     Record<string, boolean>
   >({});
@@ -232,7 +255,7 @@ export default function IconGallery() {
                 {(color) => (
                   <button
                     onClick={() => setSelectedColor(color)}
-                    class="h-2.5 w-2.5 cursor-pointer rounded-[1px] transition-transform hover:scale-125"
+                    class="h-2.5 w-2.5 rounded-[1px] transition-transform hover:scale-125"
                     classList={{
                       'ring-1 ring-ink ring-offset-1':
                         selectedColor().value === color.value,
@@ -245,9 +268,9 @@ export default function IconGallery() {
             </div>
             {/* Custom color option */}
             <div class="mt-1.5 flex items-center gap-1.5">
-              <span class="text-[10px] text-muted">Custom</span>
+              <span class="text-xxs text-muted">Custom</span>
               <label
-                class="relative h-2.5 w-2.5 cursor-pointer rounded-[1px] transition-transform hover:scale-125"
+                class="relative h-2.5 w-2.5 rounded-[1px] transition-transform hover:scale-125"
                 classList={{
                   'ring-1 ring-ink ring-offset-1':
                     selectedColor().value === 'custom',
@@ -270,7 +293,7 @@ export default function IconGallery() {
                       css: e.currentTarget.value,
                     });
                   }}
-                  class="absolute inset-0 cursor-pointer opacity-0"
+                  class="absolute inset-0 opacity-0"
                 />
               </label>
             </div>
@@ -288,11 +311,11 @@ export default function IconGallery() {
                 onInput={(e) => setIconSize(Number(e.currentTarget.value))}
                 class="icon-gallery-slider w-24"
               />
-              <span class="w-8 text-[10px] text-muted">{iconSize()}px</span>
+              <span class="w-8 text-xxs text-muted">{iconSize()}px</span>
             </label>
             <button
               onClick={triggerAllAnimations}
-              class="cursor-pointer border border-ink bg-transparent px-2 py-1 text-[10px] text-ink hover:opacity-70"
+              class="border border-ink bg-transparent px-2 py-1 text-xxs text-ink hover:opacity-70"
             >
               Trigger All Animations
             </button>
@@ -308,7 +331,7 @@ export default function IconGallery() {
           <For each={ICON_PAIRS}>
             {(pair) => (
               <div class="inline-flex flex-col items-center rounded-[1px] border border-edge-muted p-2">
-                <p class="mb-2 text-[10px] text-ink">{pair.name}</p>
+                <p class="mb-2 text-xxs text-ink">{pair.name}</p>
                 <div class="flex items-center justify-center gap-3">
                   {/* Static version */}
                   <div class="flex flex-col items-center">
@@ -327,7 +350,7 @@ export default function IconGallery() {
                   {/* Animated version */}
                   <div class="flex flex-col items-center">
                     <div
-                      class="flex cursor-pointer items-center justify-center"
+                      class="flex items-center justify-center"
                       style={{
                         color: getColorStyle(),
                         width: `${iconSize()}px`,
@@ -355,7 +378,7 @@ export default function IconGallery() {
                       <span class="text-[8px] text-muted">animated</span>
                       <button
                         onClick={() => triggerAnimation(pair.name)}
-                        class="flex h-2.5 w-2.5 cursor-pointer items-center justify-center rounded-full border border-current text-muted transition-colors hover:bg-ink/10 hover:text-ink"
+                        class="flex h-2.5 w-2.5 items-center justify-center rounded-full border border-current text-muted transition-colors hover:bg-ink/10 hover:text-ink"
                         title="Play animation"
                       >
                         <svg
@@ -390,6 +413,42 @@ export default function IconGallery() {
                     color: getColorStyle(),
                     width: `${iconSize()}px`,
                     height: `${iconSize()}px`,
+                  }}
+                >
+                  <icon.component />
+                </div>
+                <span class="mt-2 text-[8px] text-muted">{icon.name}</span>
+              </div>
+            )}
+          </For>
+        </div>
+
+        {/* Arcanum icons */}
+        <div class="mt-6 mb-3 flex items-center gap-3">
+          <h2 class="text-xs font-semibold text-ink">Arcanum</h2>
+          <label class="flex items-center gap-2 text-xs text-ink">
+            <input
+              type="range"
+              min="10"
+              max="400"
+              value={arcanumSize()}
+              onInput={(e) => setArcanumSize(Number(e.currentTarget.value))}
+              class="icon-gallery-slider w-24"
+            />
+            <span class="w-8 text-xxs text-muted">{arcanumSize()}px</span>
+          </label>
+          <span class="h-px flex-1 bg-edge-muted" />
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <For each={ARCANUM_ICONS}>
+            {(icon) => (
+              <div class="inline-flex flex-col items-center rounded-[1px] border border-edge-muted p-2">
+                <div
+                  class="flex items-center justify-center"
+                  style={{
+                    color: getColorStyle(),
+                    width: `${arcanumSize()}px`,
+                    height: `${arcanumSize()}px`,
                   }}
                 >
                   <icon.component />

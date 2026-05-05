@@ -1,11 +1,14 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import MacroLogo from '@core/component/MacroLogo';
 import LogoIcon from '@macro-icons/macro-logo.svg';
+import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createEffect,
+  createMemo,
   createSignal,
+  For,
   on,
   onCleanup,
   onMount,
@@ -21,10 +24,12 @@ import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
 import { ContinueButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { Panel, Button } from '@ui';
+import { cn } from '@ui/utils/classname';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
+import { useUserTeamsQuery } from '@queries/team';
 import { useIsAuthenticated } from '@core/auth';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -34,12 +39,21 @@ import MobileWebSignupSent from './MobileWebSignupSent';
 import { useSendMobileWelcomeEmail } from '@queries/auth';
 import { isOk } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
+import { OnboardingProvider, useOnboarding } from './onboarding-context';
+import { PLANS } from '@app/component/paywall/plans';
+import { Tooltip } from '@core/component/Tooltip';
+import InfoIcon from '@icon/regular/info.svg';
 
 export default function InteractiveOnboarding() {
   const isAuthenticated = useIsAuthenticated();
   const [mobileWebStep, setMobileWebStep] = createSignal<
     'welcome' | 'signup-sent'
   >('welcome');
+  const [submittedEmail, setSubmittedEmail] = createSignal<string | undefined>(
+    undefined
+  );
   const sendMobileWelcomeEmail = useSendMobileWelcomeEmail();
 
   // Mobile web users who aren't authenticated get a dedicated welcome screen
@@ -56,6 +70,7 @@ export default function InteractiveOnboarding() {
 
     if (isOk(result)) {
       if (result[1].sent) {
+        setSubmittedEmail(email);
         setMobileWebStep('signup-sent');
       } else {
         toast.alert('Email already sent.');
@@ -78,13 +93,105 @@ export default function InteractiveOnboarding() {
       fallback={
         <Show
           when={mobileWebStep() === 'welcome'}
-          fallback={<MobileWebSignupSent />}
+          fallback={<MobileWebSignupSent email={submittedEmail()} />}
         >
           <MobileWebWelcome onSignUp={handleMobileSignUp} />
         </Show>
       }
     >
-      <InteractiveOnboardingInner />
+      <OnboardingProvider>
+        <InteractiveOnboardingInner />
+      </OnboardingProvider>
+    </Show>
+  );
+}
+
+function OnboardingCostSummary() {
+  const onboarding = useOnboarding();
+
+  const selectedPlan = () => {
+    const tier = onboarding.selectedPlan();
+    return PLANS.find((p) => p.tier === tier);
+  };
+
+  const teamByTier = () => {
+    const groups: Record<
+      string,
+      { plan: (typeof PLANS)[number]; count: number }
+    > = {};
+    const order: string[] = [];
+    for (const member of onboarding.invitedMembers()) {
+      const plan = PLANS.find((p) => p.tier === member.tier);
+      if (plan) {
+        if (groups[member.tier]) {
+          groups[member.tier].count++;
+        } else {
+          groups[member.tier] = { plan, count: 1 };
+          order.push(member.tier);
+        }
+      }
+    }
+    return order.map((tier) => groups[tier]);
+  };
+
+  const hasTeam = () =>
+    onboarding.invitedMembers().length > 0 ||
+    onboarding.teamName().trim() !== '';
+
+  return (
+    <Show when={selectedPlan() && selectedPlan()!.price > 0}>
+      <div class="px-4 py-3 border-t border-ink/10">
+        <div class="flex items-center justify-between">
+          <div class="flex items-baseline gap-1">
+            <span class="text-3xl font-bold text-accent">
+              ${onboarding.userSeatCost()}
+            </span>
+            <span class="text-ink/40">/mo</span>
+          </div>
+          <div class="flex items-center gap-1.5 min-w-0 ml-4">
+            <Show when={hasTeam() && onboarding.teamName()}>
+              <span class="text-xs text-ink/50 truncate max-w-[50ch]">
+                {onboarding.teamName()}
+              </span>
+              <span class="text-ink/30">·</span>
+            </Show>
+            <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium shrink-0">
+              {hasTeam() ? 'Team plan' : selectedPlan()?.name}
+            </span>
+          </div>
+        </div>
+        <Show when={hasTeam()}>
+          <div class="flex flex-col gap-1.5 mt-1.5 text-xs text-ink/40">
+            <div class="flex justify-between">
+              <span>{selectedPlan()?.name}</span>
+              <span>${onboarding.userSeatCost()}/mo</span>
+            </div>
+            <For each={teamByTier()}>
+              {(group) => (
+                <div class="flex justify-between italic">
+                  <span>
+                    Team · {group.plan.name} ×{group.count}
+                  </span>
+                  <span class="border-b border-dashed border-ink/40">
+                    ${group.plan.price * group.count}/mo
+                  </span>
+                </div>
+              )}
+            </For>
+          </div>
+          <div class="flex justify-between items-center mt-2 pt-2 border-t border-ink/10 text-xs">
+            <span class="text-ink/40 flex items-center gap-1">
+              Total with team
+              <Tooltip tooltip="Team charges begin when members accept their invite">
+                <InfoIcon class="size-3 text-ink/30" />
+              </Tooltip>
+            </span>
+            <span class="text-ink/50 font-medium">
+              ${onboarding.totalCost()}/mo
+            </span>
+          </div>
+        </Show>
+      </div>
     </Show>
   );
 }
@@ -101,21 +208,45 @@ function InteractiveOnboardingInner() {
 
   const hasPaid = useHasPaidAccess();
   const isAuthenticated = useIsAuthenticated();
-  const allLessons = LESSONS.filter((l) => {
-    if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
-      return false;
-    if (l.id === 'about-us' && isAuthenticated()) return false;
-    return true;
+  const userTeamsQuery = useUserTeamsQuery();
+  const hasExistingTeam = () => (userTeamsQuery.data?.length ?? 0) > 0;
+  const inviteTeamEnabled = useFeatureFlag('enable-teams-onboarding', {
+    enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
   });
-  const lessons = isTouch
-    ? allLessons.filter(
-        (l) =>
-          l.id === 'welcome' ||
-          l.id === 'about-us' ||
-          l.id === 'choose-plan' ||
-          l.id === 'launch'
+  const allLessons = createMemo(() =>
+    LESSONS.filter((l) => {
+      if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
+        return false;
+      if (l.id === 'about-us' && isAuthenticated()) return false;
+      // Skip team/payment lessons when feature flag disabled
+      if (
+        (l.id === 'team-choice' ||
+          l.id === 'invite-team' ||
+          l.id === 'review-pay') &&
+        !inviteTeamEnabled().enabled
       )
-    : allLessons;
+        return false;
+      // Skip review-pay if user already has subscription
+      if (l.id === 'review-pay' && hasPaid()) return false;
+      // Skip invite-team if user already has a team
+      if (l.id === 'invite-team' && hasExistingTeam()) return false;
+      // Skip team-choice if user has both subscription and team
+      if (l.id === 'team-choice' && hasPaid() && hasExistingTeam())
+        return false;
+      return true;
+    })
+  );
+  const lessons = createMemo(() =>
+    isTouch
+      ? allLessons().filter(
+          (l) =>
+            l.id === 'welcome' ||
+            l.id === 'about-us' ||
+            l.id === 'choose-plan' ||
+            l.id === 'launch'
+        )
+      : allLessons()
+  );
 
   const testMode = new URLSearchParams(location.search).has('test');
 
@@ -124,12 +255,16 @@ function InteractiveOnboardingInner() {
   const slideIndex =
     slideParam !== null ? Math.max(0, parseInt(slideParam, 10) - 1) : null;
 
-  const sortedLessons = [...lessons].sort(
-    (a, b) => (a.order ?? 0) - (b.order ?? 0)
+  const sortedLessons = createMemo(() =>
+    [...lessons()].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
   );
   const debugCompleted =
     slideIndex !== null
-      ? new Set(sortedLessons.slice(0, slideIndex).map((l) => l.id))
+      ? new Set(
+          sortedLessons()
+            .slice(0, slideIndex)
+            .map((l) => l.id)
+        )
       : undefined;
 
   // Detect a return-from-OAuth param synchronously so we can pre-populate
@@ -141,7 +276,7 @@ function InteractiveOnboardingInner() {
   );
   const returnCompleted = returningLesson
     ? new Set(
-        sortedLessons
+        sortedLessons()
           .filter((l) => (l.order ?? 0) <= (returningLesson.order ?? 0))
           .map((l) => l.id)
       )
@@ -181,14 +316,21 @@ function InteractiveOnboardingInner() {
 
   let continueButtonRef: HTMLButtonElement | undefined;
 
-  const handleLessonComplete = (buttonLabel?: string) => {
+  const handleLessonComplete = (
+    buttonLabel?: string,
+    options?: { skipFocus?: boolean }
+  ) => {
     setContinueLabel(buttonLabel);
     setReadyToContinue(true);
     // Skip auto-focus on touch — Safari scrolls to the focused element,
     // which jumps the view to the bottom on longer lessons.
-    if (!isTouch) {
+    if (!isTouch && !options?.skipFocus) {
       requestAnimationFrame(() => continueButtonRef?.focus());
     }
+  };
+
+  const handleLessonUnready = () => {
+    setReadyToContinue(false);
   };
 
   // Programmatic advance for lessons that progress on their own interaction
@@ -244,6 +386,36 @@ function InteractiveOnboardingInner() {
     setReadyToContinue(false);
     setContinueLabel(undefined);
     setLessonKey((k) => k + 1);
+  };
+
+  const onboarding = useOnboarding();
+
+  const getBackContext = () => ({
+    onboarding,
+    isLessonSkipped: (id: string) =>
+      state.lessons().find((l) => l.definition.id === id)?.skipped ?? false,
+    hasPaidAccess: hasPaid(),
+  });
+
+  const getPreviousLesson = () => {
+    const current = state.currentLesson();
+    if (!current) return undefined;
+    const prev = current.definition.previousLesson;
+    if (!prev) return undefined;
+    if (typeof prev === 'function') {
+      return prev(getBackContext());
+    }
+    return prev;
+  };
+
+  const handleBack = (targetLesson: string) => {
+    const current = state.currentLesson();
+    if (!current) return;
+    const onBack = current.definition.onBack;
+    if (onBack) {
+      onBack(getBackContext());
+    }
+    state.goToLessonById(targetLesson);
   };
 
   // cmd+enter hotkey to continue
@@ -419,7 +591,7 @@ function InteractiveOnboardingInner() {
   return (
     <div
       ref={shellRef}
-      class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative"
+      class="flex items-center justify-center h-full w-full p-6 sm:p-8 overflow-hidden relative"
       tabIndex={-1}
     >
       {/* Scoped keyframes */}
@@ -458,11 +630,8 @@ function InteractiveOnboardingInner() {
       </div>
 
       {/* Centered card */}
-      <div class="size-full max-w-[1600px] max-h-[900px]">
-        <ClippedPanel
-          cornerRadius={'4px'}
-          class="bg-panel size-full shadow-lg shadow-[#1111]"
-        >
+      <div class="size-full max-w-400 max-h-225">
+        <Panel depth={1}>
           <div class="size-full flex">
             <Show
               when={state.currentLesson()}
@@ -516,7 +685,10 @@ function InteractiveOnboardingInner() {
                           <Dynamic
                             component={lesson().definition.content}
                             onComplete={handleLessonComplete}
+                            onUnready={handleLessonUnready}
                             advance={advanceLesson}
+                            skipLesson={state.skipLesson}
+                            goToLesson={state.goToLessonById}
                             isActive={true}
                             scopeId={scopeId}
                           />
@@ -527,7 +699,10 @@ function InteractiveOnboardingInner() {
                               <Dynamic
                                 component={Demo()}
                                 onComplete={handleLessonComplete}
+                                onUnready={handleLessonUnready}
                                 advance={advanceLesson}
+                                skipLesson={state.skipLesson}
+                                goToLesson={state.goToLessonById}
                                 isActive={true}
                                 scopeId={scopeId}
                               />
@@ -546,7 +721,18 @@ function InteractiveOnboardingInner() {
                               centered={lesson().definition.centeredButton}
                             />
                             <Show when={lesson().definition.secondaryAction}>
-                              {(Action) => <Dynamic component={Action()} />}
+                              {(Action) => (
+                                <Dynamic
+                                  component={Action()}
+                                  onComplete={handleLessonComplete}
+                                  onUnready={handleLessonUnready}
+                                  advance={advanceLesson}
+                                  skipLesson={state.skipLesson}
+                                  goToLesson={state.goToLessonById}
+                                  isActive={true}
+                                  scopeId={scopeId}
+                                />
+                              )}
                             </Show>
                           </div>
                         </Show>
@@ -562,7 +748,25 @@ function InteractiveOnboardingInner() {
                         <div class="bg-ink text-panel text-xs font-mono size-4 flex items-center justify-center font-bold rounded-xs">
                           {lesson().index + 1}
                         </div>
-                        <h2 class="text-3xl font-semibold text-ink-muted mt-12">
+                        <Show when={getPreviousLesson()}>
+                          {(prevLesson) => (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleBack(prevLesson())}
+                              class="mt-6 gap-1.5 rounded-xs"
+                            >
+                              <ArrowLeftIcon class="size-4" />
+                              Back
+                            </Button>
+                          )}
+                        </Show>
+                        <h2
+                          class={cn(
+                            'text-3xl font-semibold text-ink-muted',
+                            getPreviousLesson() ? 'mt-4' : 'mt-12'
+                          )}
+                        >
                           {lesson().definition.title}
                         </h2>
                       </div>
@@ -579,7 +783,10 @@ function InteractiveOnboardingInner() {
                         <Dynamic
                           component={lesson().definition.content}
                           onComplete={handleLessonComplete}
+                          onUnready={handleLessonUnready}
                           advance={advanceLesson}
+                          skipLesson={state.skipLesson}
+                          goToLesson={state.goToLessonById}
                           isActive={true}
                           scopeId={scopeId}
                         />
@@ -596,11 +803,27 @@ function InteractiveOnboardingInner() {
                             centered={lesson().definition.centeredButton}
                           />
                           <Show when={lesson().definition.secondaryAction}>
-                            {(Action) => <Dynamic component={Action()} />}
+                            {(Action) => (
+                              <Dynamic
+                                component={Action()}
+                                onComplete={handleLessonComplete}
+                                onUnready={handleLessonUnready}
+                                advance={advanceLesson}
+                                skipLesson={state.skipLesson}
+                                goToLesson={state.goToLessonById}
+                                isActive={true}
+                                scopeId={scopeId}
+                              />
+                            )}
                           </Show>
                         </div>
                       </Show>
                     </div>
+
+                    {/* Cost Summary */}
+                    <Show when={lesson().definition.id !== 'review-pay'}>
+                      <OnboardingCostSummary />
+                    </Show>
 
                     {/* Footer */}
                     <div class="flex flex-col gap-3 px-4 py-3 border-t border-ink/10">
@@ -633,7 +856,10 @@ function InteractiveOnboardingInner() {
                           <Dynamic
                             component={Demo()}
                             onComplete={handleLessonComplete}
+                            onUnready={handleLessonUnready}
                             advance={advanceLesson}
+                            skipLesson={state.skipLesson}
+                            goToLesson={state.goToLessonById}
                             isActive={true}
                             scopeId={scopeId}
                           />
@@ -645,7 +871,7 @@ function InteractiveOnboardingInner() {
               )}
             </Show>
           </div>
-        </ClippedPanel>
+        </Panel>
       </div>
     </div>
   );

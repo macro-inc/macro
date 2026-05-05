@@ -116,6 +116,7 @@ export const listTypedNotificationsResponse = zod
                 'email_thread',
                 'team',
                 'call',
+                'static_file',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -124,19 +125,17 @@ export const listTypedNotificationsResponse = zod
           )
           .and(
             zod.object({
-              created_at: zod
-                .string()
+              created_at: zod.iso
                 .datetime({})
                 .describe('When the notification was created.'),
-              deleted_at: zod
-                .string()
+              deleted_at: zod.iso
                 .datetime({})
                 .nullish()
                 .describe('When the notification was deleted.'),
               done: zod
                 .boolean()
                 .describe('Whether the notification is marked as done.'),
-              id: zod.string().uuid().describe('The notification ID.'),
+              id: zod.uuid().describe('The notification ID.'),
               notification_event_type: zod
                 .string()
                 .describe(
@@ -426,9 +425,13 @@ export const listTypedNotificationsResponse = zod
                               "The sender's profile picture URL, if available."
                             ),
                           teamId: zod
-                            .string()
                             .uuid()
                             .describe('The unique identifier of the team'),
+                          teamInviteId: zod
+                            .uuid()
+                            .describe(
+                              'The unique identifier of the team invite'
+                            ),
                           teamName: zod
                             .string()
                             .describe('The name of the team being invited to'),
@@ -484,12 +487,10 @@ export const listTypedNotificationsResponse = zod
               sent: zod
                 .boolean()
                 .describe('Whether the notification has been sent.'),
-              updated_at: zod
-                .string()
+              updated_at: zod.iso
                 .datetime({})
                 .describe('When the notification was last updated.'),
-              viewed_at: zod
-                .string()
+              viewed_at: zod.iso
                 .datetime({})
                 .nullish()
                 .describe('When the notification was viewed\/seen.'),
@@ -526,7 +527,7 @@ export const bulkGetTypedNotificationsByEventItemIdsQueryParams = zod.object({
 export const bulkGetTypedNotificationsByEventItemIdsBody = zod
   .object({
     eventItemIds: zod
-      .array(zod.string().uuid())
+      .array(zod.uuid())
       .describe('The event item IDs to filter notifications by.'),
   })
   .describe('Request body for bulk-fetching notifications by event item IDs.');
@@ -548,6 +549,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'email_thread',
                 'team',
                 'call',
+                'static_file',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -556,19 +558,17 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
           )
           .and(
             zod.object({
-              created_at: zod
-                .string()
+              created_at: zod.iso
                 .datetime({})
                 .describe('When the notification was created.'),
-              deleted_at: zod
-                .string()
+              deleted_at: zod.iso
                 .datetime({})
                 .nullish()
                 .describe('When the notification was deleted.'),
               done: zod
                 .boolean()
                 .describe('Whether the notification is marked as done.'),
-              id: zod.string().uuid().describe('The notification ID.'),
+              id: zod.uuid().describe('The notification ID.'),
               notification_event_type: zod
                 .string()
                 .describe(
@@ -858,9 +858,13 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                               "The sender's profile picture URL, if available."
                             ),
                           teamId: zod
-                            .string()
                             .uuid()
                             .describe('The unique identifier of the team'),
+                          teamInviteId: zod
+                            .uuid()
+                            .describe(
+                              'The unique identifier of the team invite'
+                            ),
                           teamName: zod
                             .string()
                             .describe('The name of the team being invited to'),
@@ -916,12 +920,10 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
               sent: zod
                 .boolean()
                 .describe('Whether the notification has been sent.'),
-              updated_at: zod
-                .string()
+              updated_at: zod.iso
                 .datetime({})
                 .describe('When the notification was last updated.'),
-              viewed_at: zod
-                .string()
+              viewed_at: zod.iso
                 .datetime({})
                 .nullish()
                 .describe('When the notification was viewed\/seen.'),
@@ -940,7 +942,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
  * @summary Typed wrapper for getting notifications by a single event item ID.
  */
 export const getTypedNotificationsByEventItemIdParams = zod.object({
-  event_item_id: zod.string().uuid().describe('The event item ID'),
+  event_item_id: zod.uuid().describe('The event item ID'),
 });
 
 export const getTypedNotificationsByEventItemIdQueryLimitMin = 0;
@@ -974,6 +976,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'email_thread',
                 'team',
                 'call',
+                'static_file',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -982,19 +985,17 @@ export const getTypedNotificationsByEventItemIdResponse = zod
           )
           .and(
             zod.object({
-              created_at: zod
-                .string()
+              created_at: zod.iso
                 .datetime({})
                 .describe('When the notification was created.'),
-              deleted_at: zod
-                .string()
+              deleted_at: zod.iso
                 .datetime({})
                 .nullish()
                 .describe('When the notification was deleted.'),
               done: zod
                 .boolean()
                 .describe('Whether the notification is marked as done.'),
-              id: zod.string().uuid().describe('The notification ID.'),
+              id: zod.uuid().describe('The notification ID.'),
               notification_event_type: zod
                 .string()
                 .describe(
@@ -1284,9 +1285,13 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                               "The sender's profile picture URL, if available."
                             ),
                           teamId: zod
-                            .string()
                             .uuid()
                             .describe('The unique identifier of the team'),
+                          teamInviteId: zod
+                            .uuid()
+                            .describe(
+                              'The unique identifier of the team invite'
+                            ),
                           teamName: zod
                             .string()
                             .describe('The name of the team being invited to'),
@@ -1342,12 +1347,10 @@ export const getTypedNotificationsByEventItemIdResponse = zod
               sent: zod
                 .boolean()
                 .describe('Whether the notification has been sent.'),
-              updated_at: zod
-                .string()
+              updated_at: zod.iso
                 .datetime({})
                 .describe('When the notification was last updated.'),
-              viewed_at: zod
-                .string()
+              viewed_at: zod.iso
                 .datetime({})
                 .nullish()
                 .describe('When the notification was viewed\/seen.'),
@@ -1395,7 +1398,7 @@ export const enableNotificationTypeParams = zod.object({
  * @summary Typed wrapper for getting a single notification by ID.
  */
 export const getTypedNotificationByIdParams = zod.object({
-  notification_id: zod.string().uuid().describe('ID of the notification'),
+  notification_id: zod.uuid().describe('ID of the notification'),
 });
 
 export const getTypedNotificationByIdResponse = zod
@@ -1411,6 +1414,7 @@ export const getTypedNotificationByIdResponse = zod
         'email_thread',
         'team',
         'call',
+        'static_file',
       ])
       .describe('The type of an entity in Macro'),
   })
@@ -1419,19 +1423,17 @@ export const getTypedNotificationByIdResponse = zod
   )
   .and(
     zod.object({
-      created_at: zod
-        .string()
+      created_at: zod.iso
         .datetime({})
         .describe('When the notification was created.'),
-      deleted_at: zod
-        .string()
+      deleted_at: zod.iso
         .datetime({})
         .nullish()
         .describe('When the notification was deleted.'),
       done: zod
         .boolean()
         .describe('Whether the notification is marked as done.'),
-      id: zod.string().uuid().describe('The notification ID.'),
+      id: zod.uuid().describe('The notification ID.'),
       notification_event_type: zod
         .string()
         .describe(
@@ -1695,9 +1697,11 @@ export const getTypedNotificationByIdResponse = zod
                       "The sender's profile picture URL, if available."
                     ),
                   teamId: zod
-                    .string()
                     .uuid()
                     .describe('The unique identifier of the team'),
+                  teamInviteId: zod
+                    .uuid()
+                    .describe('The unique identifier of the team invite'),
                   teamName: zod
                     .string()
                     .describe('The name of the team being invited to'),
@@ -1745,12 +1749,10 @@ export const getTypedNotificationByIdResponse = zod
         .nullish()
         .describe('The user who triggered the notification.'),
       sent: zod.boolean().describe('Whether the notification has been sent.'),
-      updated_at: zod
-        .string()
+      updated_at: zod.iso
         .datetime({})
         .describe('When the notification was last updated.'),
-      viewed_at: zod
-        .string()
+      viewed_at: zod.iso
         .datetime({})
         .nullish()
         .describe('When the notification was viewed\/seen.'),
@@ -1763,7 +1765,7 @@ export const getTypedNotificationByIdResponse = zod
 export const bulkDeleteUserNotificationsV2Body = zod
   .object({
     notificationIds: zod
-      .array(zod.string().uuid())
+      .array(zod.uuid())
       .describe('The ids of the notifications to handle'),
   })
   .describe('the notification ids that we are bulk updating');
@@ -1774,7 +1776,7 @@ export const bulkDeleteUserNotificationsV2Body = zod
 export const bulkMarkNotificationsDoneBody = zod
   .object({
     notificationIds: zod
-      .array(zod.string().uuid())
+      .array(zod.uuid())
       .describe('The ids of the notifications to handle'),
   })
   .describe('the notification ids that we are bulk updating');
@@ -1785,7 +1787,7 @@ export const bulkMarkNotificationsDoneBody = zod
 export const bulkMarkNotificationsSeenBody = zod
   .object({
     notificationIds: zod
-      .array(zod.string().uuid())
+      .array(zod.uuid())
       .describe('The ids of the notifications to handle'),
   })
   .describe('the notification ids that we are bulk updating');
@@ -1796,7 +1798,7 @@ export const bulkMarkNotificationsSeenBody = zod
 export const bulkMarkNotificationsUndoneBody = zod
   .object({
     notificationIds: zod
-      .array(zod.string().uuid())
+      .array(zod.uuid())
       .describe('The ids of the notifications to handle'),
   })
   .describe('the notification ids that we are bulk updating');
@@ -1805,5 +1807,5 @@ export const bulkMarkNotificationsUndoneBody = zod
  * @summary Soft-delete a single user notification.
  */
 export const deleteUserNotificationV2Params = zod.object({
-  notification_id: zod.string().uuid().describe('ID of the notification'),
+  notification_id: zod.uuid().describe('ID of the notification'),
 });

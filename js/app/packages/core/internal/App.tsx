@@ -135,7 +135,7 @@ const App: Component = () => {
         <div class={`flex justify-center ${Alignments[active()]}`}>
           <span
             contentEditable
-            class="w-64 p-0.5 border-1 border-edge rounded-lg"
+            class="w-64 p-0.5 border border-edge rounded-lg"
           >
             macro
           </span>
