@@ -88,8 +88,7 @@
             LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
             OPENSSL_NO_VENDOR = "1";
             SQLX_OFFLINE = "true";
-            RUSTFLAGS = "-Dwarnings" + pkgs.lib.optionalString isLinux " -C link-arg=-fuse-ld=mold";
-            RUSTDOCFLAGS = "-Dwarnings";
+            RUSTFLAGS = pkgs.lib.optionalString isLinux "-C link-arg=-fuse-ld=mold";
             # Build deps + workspace + bins in dev profile so the test job (which runs
             # `cargo nextest` outside the sandbox using the test profile, inheriting dev)
             # can reuse the restored target/debug/ instead of recompiling all deps.
@@ -124,6 +123,8 @@
             doCheck = false;
             doInstallCargoArtifacts = true;
             cargoExtraArgs = "--locked --all-features --workspace --lib";
+            RUSTFLAGS = "-Dwarnings" + pkgs.lib.optionalString isLinux " -C link-arg=-fuse-ld=mold";
+            RUSTDOCFLAGS = "-Dwarnings";
           }
         );
 
@@ -325,6 +326,7 @@
             // {
               cargoArtifacts = workspaceArtifacts;
               cargoClippyExtraArgs = "--all-features -- -D warnings";
+              RUSTDOCFLAGS = "-Dwarnings";
             }
           );
           gen-api =
