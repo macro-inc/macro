@@ -34,34 +34,9 @@ jobs:
               - '.github/workflows/web-app-check-main.yml'
             api_changed:
               - 'rust/cloud-storage/**/*.rs'
-              - 'flake.nix'
-              - 'flake.lock'
-              - 'js/app/scripts/generate-api-schema.ts'
-              - 'js/app/scripts/services.ts'
-
-  build-workspace:
-    needs: path-check
-    if: needs.path-check.outputs.api_changed == 'true'
-    runs-on: linux-latest-beefy
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b  # v27
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: nix-community/cache-nix-action@d12e0f307e43ac49b7b098ea0e999f6e0b7bc02a
-        with:
-          primary-key: nix-x86_64-linux-workspace-${{ hashFiles('flake.lock') }}
-          restore-prefixes-first-match: nix-x86_64-linux-workspace-
-      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc  # v15
-        with:
-          name: macro-inc
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: build workspace artifacts
-        run: nix build .#packages.x86_64-linux.workspaceArtifacts
 
   typescript:
-    needs: [path-check, build-workspace]
+    needs: path-check
     # Run the type check if rust code or frontend code has changed.
     if: needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'
     name: Typecheck
@@ -75,27 +50,10 @@ jobs:
         uses: biomejs/setup-biome@v2
         with:
           version: 2.4.12
-      - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b  # v27
-        if: needs.path-check.outputs.api_changed == 'true'
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: nix-community/cache-nix-action@d12e0f307e43ac49b7b098ea0e999f6e0b7bc02a
-        if: needs.path-check.outputs.api_changed == 'true'
-        with:
-          primary-key: nix-x86_64-linux-gen-api-${{ hashFiles('flake.lock') }}
-          restore-prefixes-first-match: nix-x86_64-linux-gen-api-
-      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc  # v15
-        if: needs.path-check.outputs.api_changed == 'true'
-        with:
-          name: macro-inc
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Check API schemas
-        if: needs.path-check.outputs.api_changed == 'true'
-        run: nix build .#checks.x86_64-linux.gen-api
-      - name: Check TypeScript types from API
+      - name: Generate API Types
         if: needs.path-check.outputs.api_changed == 'true'
         working-directory: js/app
-        run: OPENAPI_BINS_DIR=$(nix build --print-out-paths ${{ github.workspace }}#packages.x86_64-linux.openApiBins)/bin bun run gen-api -- --check
+        run: bun run gen-api -- --check
       - name: Check Types
         working-directory: js/app
         run: |
@@ -185,13 +143,12 @@ jobs:
   status-check:
     name: Web App Status Check
     if: always()
-    needs: [path-check, build-workspace, typescript, biome-check, tailwind, test, cycles, build]
+    needs: [path-check, typescript, biome-check, tailwind, test, cycles, build]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
         run: |
           echo "path-check: ${{ needs.path-check.result }}"
-          echo "build-workspace: ${{ needs.build-workspace.result }}"
           echo "typescript: ${{ needs.typescript.result }}"
           echo "biome-check: ${{ needs.biome-check.result }}"
           echo "tailwind: ${{ needs.tailwind.result }}"
@@ -201,7 +158,6 @@ jobs:
 
           # Fail if any job failed (skipped and success are both OK)
           if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-             [[ "${{ needs.build-workspace.result }}" == "failure" ]] || \
              [[ "${{ needs.typescript.result }}" == "failure" ]] || \
              [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
              [[ "${{ needs.tailwind.result }}" == "failure" ]] || \
@@ -213,4 +169,3 @@ jobs:
           fi
 
           echo "✅ All jobs passed or were skipped"
-

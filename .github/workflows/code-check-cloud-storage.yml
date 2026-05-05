@@ -36,9 +36,7 @@ jobs:
               - 'rust/rust-toolchain.toml'
               - '.github/actions/setup-rust/**'
               - '.github/actions/setup-sccache/**'
-              - '.github/workflows/code-check-cloud-storage.yml'
-              - 'flake.nix'
-              - 'flake.lock'
+              - .github/workflows/code-check-cloud-storage.yml
       - name: compute nextest package filter
         id: package-filter
         if: steps.filter.outputs.should_run == 'true'
@@ -72,16 +70,16 @@ jobs:
           import glob
           import re
           from pathlib import Path
-          
+
           repo = Path.cwd().resolve()
           workspace = repo / 'rust' / 'cloud-storage'
           changed_files = [line for line in Path('/tmp/changed-files').read_text().splitlines() if line]
-          
+
           def workspace_members(manifest: Path) -> list[str]:
               members = []
               in_workspace = False
               in_members = False
-          
+
               for raw_line in manifest.read_text().splitlines():
                   line = raw_line.split('#', 1)[0].strip()
                   if not line:
@@ -98,7 +96,7 @@ jobs:
                       if ']' in line:
                           in_members = False
               return members
-          
+
           def package_name(manifest: Path) -> str | None:
               in_package = False
               for raw_line in manifest.read_text().splitlines():
@@ -113,7 +111,7 @@ jobs:
                       if match:
                           return match.group(1)
               return None
-          
+
           packages = []
           for member in workspace_members(workspace / 'Cargo.toml'):
               for member_dir in glob.glob(str(workspace / member)):
@@ -123,13 +121,13 @@ jobs:
                   name = package_name(manifest)
                   if name:
                       packages.append((manifest.parent.resolve(), name))
-          
+
           changed_packages = set()
           for changed_file in changed_files:
               path = (repo / changed_file).resolve()
               if path != workspace and workspace not in path.parents:
                   continue
-          
+
               matching_packages = [
                   (manifest_dir, name)
                   for manifest_dir, name in packages
@@ -138,7 +136,7 @@ jobs:
               if matching_packages:
                   _, name = max(matching_packages, key=lambda item: len(item[0].parts))
                   changed_packages.add(name)
-          
+
           def escape_nextest_name(name: str) -> str:
               return (
                   name
@@ -146,7 +144,7 @@ jobs:
                   .replace(')', '\\)')
                   .replace(',', '\\,')
               )
-          
+
           if changed_packages:
               print('|'.join(f'rdeps(={escape_nextest_name(name)})' for name in sorted(changed_packages)))
           PY
@@ -159,50 +157,55 @@ jobs:
           fi
           echo "nextest_filter=$filterset" >> "$GITHUB_OUTPUT"
 
-  build-workspace:
+  check:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-extra-beefy
+    env:
+      RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=lld"
+      RUSTDOCFLAGS: "-Dwarnings"
+      SQLX_OFFLINE: true
     steps:
       - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b
         with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: nix-community/cache-nix-action@d12e0f307e43ac49b7b098ea0e999f6e0b7bc02a
-        with:
-          primary-key: nix-x86_64-linux-workspace-${{ hashFiles('flake.lock') }}
-          restore-prefixes-first-match: nix-x86_64-linux-workspace-
-      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc
-        with:
-          name: macro-inc
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: build workspace artifacts
-        run: nix build .#packages.x86_64-linux.workspaceArtifacts
-
-  check:
-    needs: [path-check, build-workspace]
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: linux-extra-beefy
-    steps:
-      - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: nix-community/cache-nix-action@d12e0f307e43ac49b7b098ea0e999f6e0b7bc02a
-        with:
-          primary-key: nix-x86_64-linux-check-${{ hashFiles('flake.lock') }}
-          restore-prefixes-first-match: nix-x86_64-linux-check-
-      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc
-        with:
-          name: macro-inc
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: fmt + clippy
-        run: nix build .#checks.x86_64-linux.fmt .#checks.x86_64-linux.clippy
+          clean: false
+      - uses: ./.github/actions/setup-rust
+        env:
+          SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
+      - name: setup lld
+        run: |
+          if ! command -v ld.lld >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y lld
+          fi
+          ld.lld --version
+      - name: fmt
+        run: |
+          cd rust/cloud-storage
+          cargo fmt --check
+      - name: clippy
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          cd rust/cloud-storage
+          cargo clippy --all-features
+      - name: show sccache stats
+        if: always()
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: sccache --show-stats || true
 
   test:
-    needs: [path-check, build-workspace]
+    needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-extra-beefy
+    env:
+      NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
+      NEXTEST_TEST_THREADS: '32'
+      RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=lld"
+      SQLX_OFFLINE: true
     services:
       postgres:
         image: postgres:16
@@ -219,32 +222,48 @@ jobs:
         ports:
           - 6379:6379
         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
-    env:
-      NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
-      NEXTEST_TEST_THREADS: '32'
-      CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b
         with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: nix-community/cache-nix-action@d12e0f307e43ac49b7b098ea0e999f6e0b7bc02a
-        with:
-          primary-key: nix-x86_64-linux-test-${{ hashFiles('flake.lock') }}
-          restore-prefixes-first-match: nix-x86_64-linux-test-
-      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc
-        with:
-          name: macro-inc
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: build nextest archive
-        id: archive
+          clean: false
+      - uses: ./.github/actions/setup-rust
+        env:
+          SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
+      - name: setup lld
         run: |
-          ARCHIVE=$(nix build .#nextestArchive --no-link --print-out-paths)
-          echo "path=$ARCHIVE/nextest-archive.tar.zst" >> "$GITHUB_OUTPUT"
-      - name: prepare tests
+          if ! command -v ld.lld >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y lld
+          fi
+          ld.lld --version
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: check cargo-nextest
+        id: check-cargo-nextest
         run: |
-          nix develop --command just rust/cloud-storage/setup_test_envs
-          nix develop --command just rust/cloud-storage/initialize_dbs
+          if command -v cargo-nextest >/dev/null 2>&1; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+            cargo nextest --version
+          else
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: install cargo-nextest
+        if: steps.check-cargo-nextest.outputs.installed != 'true'
+        uses: taiki-e/install-action@e32179aa3c2a47939bd07439bd80ddf13f99979f
+      - name: install dependencies
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          command -v just || cargo install just --locked
+          command -v sqlx || cargo install sqlx-cli --locked
       - name: configure postgres for concurrent tests
         run: |
           postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "postgres:16" { print $1; exit }')"
@@ -259,24 +278,29 @@ jobs:
           until docker exec "$postgres_container" pg_isready -U user -d macrodb; do
             sleep 1
           done
+      - name: prepare tests
+        run: |
+          just rust/cloud-storage/setup_test_envs
+          just rust/cloud-storage/initialize_dbs
       - name: run tests
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          # Run tests from the pre-built nextest archive (built in nix sandbox,
-          # cached via cachix). Build-time flags like --all-features are baked
-          # into the archive — only runtime options are passed here.
-          args=(
-            --archive-file "${{ steps.archive.outputs.path }}"
-            --workspace-remap "$GITHUB_WORKSPACE/rust/cloud-storage"
-            --test-threads "$NEXTEST_TEST_THREADS"
-          )
+          cd rust/cloud-storage
+
+          args=(--all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS")
           if [ -n "$NEXTEST_FILTER" ]; then
             args+=(-E "$NEXTEST_FILTER")
           fi
 
-          nix develop --command cargo nextest run "${args[@]}"
+          cargo nextest run "${args[@]}"
+      - name: show sccache stats
+        if: always()
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: sccache --show-stats || true
 
   diff-check:
     needs: path-check
@@ -385,13 +409,12 @@ jobs:
   status-check:
     name: Cloud Storage Status Check
     if: always()
-    needs: [path-check, build-workspace, check, test, diff-check, check-lambdas, check-no-bootstrap-deletions]
+    needs: [path-check, check, test, diff-check, check-lambdas, check-no-bootstrap-deletions]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
         run: |
           echo "path-check: ${{ needs.path-check.result }}"
-          echo "build-workspace: ${{ needs.build-workspace.result }}"
           echo "check: ${{ needs.check.result }}"
           echo "test: ${{ needs.test.result }}"
           echo "diff-check: ${{ needs.diff-check.result }}"
@@ -400,7 +423,6 @@ jobs:
 
           # Fail if any job failed (skipped and success are both OK)
           if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-             [[ "${{ needs.build-workspace.result }}" == "failure" ]] || \
              [[ "${{ needs.check.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
              [[ "${{ needs.diff-check.result }}" == "failure" ]] || \
