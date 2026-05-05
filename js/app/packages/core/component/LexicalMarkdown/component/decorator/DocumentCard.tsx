@@ -452,9 +452,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                 {/*<div class="h-2"/>*/}
                 <DocumentInfo item={item()} blockName={props.blockName} />
                 <Show when={props.blockName === 'task'}>
-                  <Suspense
-                    fallback={<div class="w-full bg-hover/50 h-4 m-2" />}
-                  >
+                  <Suspense fallback={<div class="w-full bg-active h-4 m-2" />}>
                     <TaskPropertiesPreview taskId={item().id} />
                   </Suspense>
                 </Show>

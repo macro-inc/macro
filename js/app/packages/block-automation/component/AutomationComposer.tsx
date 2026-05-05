@@ -135,7 +135,7 @@ export function AutomationComposer() {
       'cursor-default border rounded-sm px-2 py-1 text-xs transition-colors',
       active
         ? 'border-accent/30 bg-accent/10 text-accent'
-        : 'border-edge-muted text-ink-muted hover:bg-hover/30'
+        : 'border-edge-muted text-ink-muted hover:bg-hover'
     );
 
   return (

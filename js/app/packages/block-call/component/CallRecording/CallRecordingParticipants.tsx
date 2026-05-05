@@ -63,7 +63,7 @@ export function CallRecordingParticipantsSection(props: {
               {(participant) => (
                 <button
                   type="button"
-                  class="flex items-center gap-2 min-h-10 px-2 py-2 text-sm w-full border-b border-edge-muted/50 last:border-b-0 hover:bg-hover/30 text-left "
+                  class="flex items-center gap-2 min-h-10 px-2 py-2 text-sm w-full border-b border-edge-muted/50 last:border-b-0 hover:bg-hover text-left "
                   onClick={() => openDirectMessage(participant.userId)}
                 >
                   <div class="shrink-0">

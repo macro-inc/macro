@@ -24,7 +24,7 @@ export function ParticipantsListItem(props: {
   );
 
   return (
-    <div class="flex items-center gap-2 min-h-10 px-2 py-2 text-sm w-full border-b border-edge-muted last:border-b-0 hover:bg-hover/30">
+    <div class="flex items-center gap-2 min-h-10 px-2 py-2 text-sm w-full border-b border-edge-muted last:border-b-0 hover:bg-hover">
       <button
         {...navigationHandlers}
         type="button"
