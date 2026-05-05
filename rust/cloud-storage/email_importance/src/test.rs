@@ -1,4 +1,4 @@
-use crate::{build_sender_importance_override_filter, get_sender_importance_override};
+use crate::build_sender_importance_override_filter;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::types::Uuid;
 use sqlx::{Pool, Postgres, QueryBuilder};
@@ -22,22 +22,18 @@ async fn fragment_matches(pool: &Pool<Postgres>, message_id: Uuid, is_important:
         .unwrap()
 }
 
-/// Asserts that `get_sender_importance_override` and `build_sender_importance_override_filter`
-/// agree: runtime result == `expected`, and the fragment matches exactly when expected.
-async fn assert_implementations_agree(
+/// Asserts that `build_sender_importance_override_filter` produces the expected result.
+/// `expected = Some(true)`: fragment(true) matches, fragment(false) does not.
+/// `expected = Some(false)`: fragment(false) matches, fragment(true) does not.
+/// `expected = None`: neither fragment matches.
+async fn assert_fragment_result(
     pool: &Pool<Postgres>,
-    contact_id: Uuid,
-    link_id: Uuid,
     message_id: Uuid,
     expected: Option<bool>,
 ) {
-    let runtime = get_sender_importance_override(pool, contact_id, link_id)
-        .await
-        .unwrap();
     let frag_true = fragment_matches(pool, message_id, true).await;
     let frag_false = fragment_matches(pool, message_id, false).await;
 
-    assert_eq!(runtime, expected, "runtime result mismatch");
     match expected {
         Some(true) => {
             assert!(frag_true, "fragment(true) should match");
@@ -146,11 +142,11 @@ async fn no_filter_returns_none(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let message_id = Uuid::new_v4();
     setup_link_contact_message(&pool, link_id, contact_id, message_id, "sender@example.com").await;
 
-    assert_implementations_agree(&pool, contact_id, link_id, message_id, None).await;
+    assert_fragment_result(&pool, message_id, None).await;
     Ok(())
 }
 
-/// Email-level override is_important=true → both return "important".
+/// Email-level override is_important=true → fragment(true) matches.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn email_level_important_true(pool: Pool<Postgres>) -> anyhow::Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
@@ -160,11 +156,11 @@ async fn email_level_important_true(pool: Pool<Postgres>) -> anyhow::Result<()> 
     setup_link_contact_message(&pool, link_id, contact_id, message_id, "sender@example.com").await;
     insert_email_filter(&pool, link_id, Some("sender@example.com"), None, true).await;
 
-    assert_implementations_agree(&pool, contact_id, link_id, message_id, Some(true)).await;
+    assert_fragment_result(&pool, message_id, Some(true)).await;
     Ok(())
 }
 
-/// Email-level override is_important=false → both return "noise".
+/// Email-level override is_important=false → fragment(false) matches.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn email_level_important_false(pool: Pool<Postgres>) -> anyhow::Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
@@ -174,11 +170,11 @@ async fn email_level_important_false(pool: Pool<Postgres>) -> anyhow::Result<()>
     setup_link_contact_message(&pool, link_id, contact_id, message_id, "sender@example.com").await;
     insert_email_filter(&pool, link_id, Some("sender@example.com"), None, false).await;
 
-    assert_implementations_agree(&pool, contact_id, link_id, message_id, Some(false)).await;
+    assert_fragment_result(&pool, message_id, Some(false)).await;
     Ok(())
 }
 
-/// Domain-level override is_important=true (no email-level) → both return "important".
+/// Domain-level override is_important=true (no email-level) → fragment(true) matches.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn domain_level_important_true(pool: Pool<Postgres>) -> anyhow::Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
@@ -188,11 +184,11 @@ async fn domain_level_important_true(pool: Pool<Postgres>) -> anyhow::Result<()>
     setup_link_contact_message(&pool, link_id, contact_id, message_id, "sender@important.com").await;
     insert_email_filter(&pool, link_id, None, Some("important.com"), true).await;
 
-    assert_implementations_agree(&pool, contact_id, link_id, message_id, Some(true)).await;
+    assert_fragment_result(&pool, message_id, Some(true)).await;
     Ok(())
 }
 
-/// Domain-level override is_important=false (no email-level) → both return "noise".
+/// Domain-level override is_important=false (no email-level) → fragment(false) matches.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn domain_level_important_false(pool: Pool<Postgres>) -> anyhow::Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
@@ -202,7 +198,7 @@ async fn domain_level_important_false(pool: Pool<Postgres>) -> anyhow::Result<()
     setup_link_contact_message(&pool, link_id, contact_id, message_id, "sender@noise.com").await;
     insert_email_filter(&pool, link_id, None, Some("noise.com"), false).await;
 
-    assert_implementations_agree(&pool, contact_id, link_id, message_id, Some(false)).await;
+    assert_fragment_result(&pool, message_id, Some(false)).await;
     Ok(())
 }
 
@@ -217,12 +213,11 @@ async fn email_true_overrides_domain_false(pool: Pool<Postgres>) -> anyhow::Resu
     insert_email_filter(&pool, link_id, Some("sender@mixed.com"), None, true).await;
     insert_email_filter(&pool, link_id, None, Some("mixed.com"), false).await;
 
-    assert_implementations_agree(&pool, contact_id, link_id, message_id, Some(true)).await;
+    assert_fragment_result(&pool, message_id, Some(true)).await;
     Ok(())
 }
 
-/// Email-level false takes precedence over domain-level true, and suppresses the domain
-/// match in the fragment.
+/// Email-level false takes precedence over domain-level true, and suppresses the domain match.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn email_false_overrides_domain_true(pool: Pool<Postgres>) -> anyhow::Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
@@ -233,7 +228,7 @@ async fn email_false_overrides_domain_true(pool: Pool<Postgres>) -> anyhow::Resu
     insert_email_filter(&pool, link_id, Some("sender@mixed.com"), None, false).await;
     insert_email_filter(&pool, link_id, None, Some("mixed.com"), true).await;
 
-    assert_implementations_agree(&pool, contact_id, link_id, message_id, Some(false)).await;
+    assert_fragment_result(&pool, message_id, Some(false)).await;
     Ok(())
 }
 
@@ -245,17 +240,14 @@ async fn email_level_case_insensitive(pool: Pool<Postgres>) -> anyhow::Result<()
     let link_id = Uuid::new_v4();
     let contact_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
-    // Contact stored with lowercase address.
     setup_link_contact_message(&pool, link_id, contact_id, message_id, "sender@example.com").await;
-    // Filter stored with mixed-case address.
     insert_email_filter(&pool, link_id, Some("Sender@EXAMPLE.COM"), None, true).await;
 
-    assert_implementations_agree(&pool, contact_id, link_id, message_id, Some(true)).await;
+    assert_fragment_result(&pool, message_id, Some(true)).await;
     Ok(())
 }
 
-/// Domain matching is case-insensitive: filter stored with uppercase domain still matches
-/// the sender's lowercase domain.
+/// Domain matching is case-insensitive: filter stored with uppercase domain still matches.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn domain_level_case_insensitive(pool: Pool<Postgres>) -> anyhow::Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
@@ -265,7 +257,7 @@ async fn domain_level_case_insensitive(pool: Pool<Postgres>) -> anyhow::Result<(
     setup_link_contact_message(&pool, link_id, contact_id, message_id, "sender@example.com").await;
     insert_email_filter(&pool, link_id, None, Some("EXAMPLE.COM"), true).await;
 
-    assert_implementations_agree(&pool, contact_id, link_id, message_id, Some(true)).await;
+    assert_fragment_result(&pool, message_id, Some(true)).await;
     Ok(())
 }
 
@@ -278,7 +270,6 @@ async fn filter_for_other_link_is_ignored(pool: Pool<Postgres>) -> anyhow::Resul
     let contact_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     setup_link_contact_message(&pool, link_id, contact_id, message_id, "sender@example.com").await;
-    // Set up the other link so the FK is satisfied, then insert a filter under it.
     let other_fauth = other_link_id.to_string();
     sqlx::query(
         "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
@@ -291,8 +282,7 @@ async fn filter_for_other_link_is_ignored(pool: Pool<Postgres>) -> anyhow::Resul
     .unwrap();
     insert_email_filter(&pool, other_link_id, Some("sender@example.com"), None, true).await;
 
-    // Our link has no filter, so both implementations must return None.
-    assert_implementations_agree(&pool, contact_id, link_id, message_id, None).await;
+    assert_fragment_result(&pool, message_id, None).await;
     Ok(())
 }
 
@@ -304,15 +294,11 @@ async fn domain_suppression_scoped_to_sender_address(pool: Pool<Postgres>) -> an
     let link_id = Uuid::new_v4();
     let contact_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
-    // Our sender: alice@company.com
     setup_link_contact_message(&pool, link_id, contact_id, message_id, "alice@company.com").await;
-    // Domain-level filter marks company.com as important.
     insert_email_filter(&pool, link_id, None, Some("company.com"), true).await;
-    // A different sender at the same domain has an email-level noise override.
-    // This must NOT suppress alice's domain match.
     insert_email_filter(&pool, link_id, Some("bob@company.com"), None, false).await;
 
-    assert_implementations_agree(&pool, contact_id, link_id, message_id, Some(true)).await;
+    assert_fragment_result(&pool, message_id, Some(true)).await;
     Ok(())
 }
 
@@ -327,6 +313,6 @@ async fn subdomain_does_not_match_parent_domain_filter(pool: Pool<Postgres>) -> 
     setup_link_contact_message(&pool, link_id, contact_id, message_id, "sender@mail.example.com").await;
     insert_email_filter(&pool, link_id, None, Some("example.com"), true).await;
 
-    assert_implementations_agree(&pool, contact_id, link_id, message_id, None).await;
+    assert_fragment_result(&pool, message_id, None).await;
     Ok(())
 }

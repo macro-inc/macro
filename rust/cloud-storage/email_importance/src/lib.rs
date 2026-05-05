@@ -1,9 +1,8 @@
 #![deny(missing_docs)]
-//! Sender-importance override SQL logic shared between the `email` and `email_service` crates.
+//! Sender-importance SQL logic shared between the `email` and `email_service` crates.
 //!
-//! The `email` crate uses [`build_sender_importance_override_filter`] to embed the logic as a
-//! correlated SQL subquery fragment. `email_service` uses [`get_sender_importance_override`] to
-//! run a standalone query at message-processing time. Both encode the same business rules:
+//! Provides parameterized SQL fragment builders used by both the dynamic query builder in
+//! `email` and the message-processing pipeline in `email_service`. Business rules:
 //! email-level overrides take precedence over domain-level; a domain-level match is suppressed
 //! by an email-level override of the opposite importance.
 
@@ -214,67 +213,6 @@ pub fn build_sender_importance_override_filter(is_important: bool) -> SqlFragmen
                     )
                 )"#,
     ))
-}
-
-/// Returns the sender's importance override: `Some(true)` = signal, `Some(false)` = noise,
-/// `None` = no override configured.
-///
-/// Email-level matches take precedence over domain-level; a domain-level match is suppressed
-/// by an email-level override of the opposite importance for the same address.
-/// Mirrors the SQL produced by [`build_sender_importance_override_filter`].
-#[tracing::instrument(err, skip(db))]
-pub async fn get_sender_importance_override(
-    db: &PgPool,
-    from_contact_id: Uuid,
-    link_id: Uuid,
-) -> Result<Option<bool>> {
-    let email_level = sqlx::query!(
-        r#"
-        SELECT ef.is_important
-        FROM email_contacts c
-        JOIN email_filters ef
-          ON ef.link_id = $2
-         AND ef.email_address IS NOT NULL
-         AND LOWER(ef.email_address) = LOWER(c.email_address)
-        WHERE c.id = $1
-        LIMIT 1
-        "#,
-        from_contact_id,
-        link_id,
-    )
-    .fetch_optional(db)
-    .await?;
-
-    if let Some(row) = email_level {
-        return Ok(Some(row.is_important));
-    }
-
-    let domain_level = sqlx::query!(
-        r#"
-        SELECT ef.is_important
-        FROM email_contacts c
-        JOIN email_filters ef
-          ON ef.link_id = $2
-         AND ef.email_domain IS NOT NULL
-         AND LOWER(ef.email_domain) = LOWER(split_part(c.email_address, '@', 2))
-        WHERE c.id = $1
-        AND NOT EXISTS (
-            SELECT 1
-            FROM email_filters ef_addr
-            WHERE ef_addr.link_id = $2
-              AND ef_addr.email_address IS NOT NULL
-              AND LOWER(ef_addr.email_address) = LOWER(c.email_address)
-              AND ef_addr.is_important != ef.is_important
-        )
-        LIMIT 1
-        "#,
-        from_contact_id,
-        link_id,
-    )
-    .fetch_optional(db)
-    .await?;
-
-    Ok(domain_level.map(|row| row.is_important))
 }
 
 /// Builds the inner SQL condition for an importance filter.
