@@ -14,17 +14,17 @@ use std::sync::Arc;
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Search for items by their content. For documents, this searches the document body text. For emails, this searches the email message body. For chats, this searches the message content. For call records, this searches the call transcript text. This tool finds items based on what's inside them, not their titles or names.",
+    description = "Search for items by their content. For documents, this searches the document body text. For emails, this searches across many fields at once: subject, body, sender/recipient/cc/bcc addresses, and the display names on those addresses — so a query like 'alice budget' matches emails where alice appears as a sender or recipient (by address or name) and emails whose subject or body mentions alice or budget. For chats, this searches the message content. For call records, this searches the call transcript text. This tool finds items based on what's inside them, not their titles or names.\n\nMulti-term behavior: for emails, multiple terms are combined with OR (a match on any term is enough), except that double-quoted terms are matched exactly as a phrase. For all other entity types, multiple terms are combined with AND (every term must match).\n\nPrefer searching all types by default — leave entityTypes empty unless the user's request clearly targets a specific type. Don't narrow the search just because the query mentions a noun like 'email' or 'doc'; only filter when the user has explicitly scoped the request to that type.",
     title = "ContentSearch"
 )]
 pub struct ContentSearch {
     #[schemars(
-        description = "The text content to search for. This searches within the body of documents, emails, messages, and call transcripts."
+        description = "The text content to search for. This searches within the body of documents, emails, messages, and call transcripts. Multiple terms separated by whitespace are ORed for emails (use \"double quotes\" for exact phrase match) and ANDed for all other entity types."
     )]
     pub query: String,
 
     #[schemars(
-        description = "Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']"
+        description = "Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']."
     )]
     #[serde(default)]
     pub entity_types: Vec<UnifiedSearchIndex>,
