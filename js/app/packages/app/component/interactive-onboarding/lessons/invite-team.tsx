@@ -1,11 +1,4 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  Index,
-  onMount,
-  Show,
-} from 'solid-js';
+import { createMemo, createSignal, Index, onMount, Show } from 'solid-js';
 import { Tooltip } from '@core/component/Tooltip';
 import { z } from 'zod';
 import { cn } from '@ui/utils/classname';
@@ -110,7 +103,10 @@ function InviteTeamDemo(props: LessonContentProps) {
     return domain ? `colleague@${domain}` : 'colleague@company.com';
   });
 
-  const isValid = () => teamName().trim().length > 0;
+  const isValid = () => {
+    const trimmed = teamName().trim();
+    return trimmed.length >= 1 && trimmed.length <= TEAM_NAME_MAX_LENGTH;
+  };
 
   const charCountColor = () => {
     const len = teamName().length;
@@ -130,7 +126,6 @@ function InviteTeamDemo(props: LessonContentProps) {
   onMount(() => {
     queueMicrotask(updateReadyState);
   });
-  createEffect(updateReadyState);
 
   const canAddEmail = () => {
     const entries = inviteEntries();
@@ -177,6 +172,12 @@ function InviteTeamDemo(props: LessonContentProps) {
     onboarding.setTeamName(value);
     if (errors().teamName) {
       setErrors((prev) => ({ ...prev, teamName: undefined }));
+    }
+    const trimmed = value.trim();
+    if (trimmed.length >= 1 && trimmed.length <= TEAM_NAME_MAX_LENGTH) {
+      props.onComplete('Continue', { skipFocus: true });
+    } else {
+      props.onUnready();
     }
   };
 
