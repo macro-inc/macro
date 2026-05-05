@@ -276,21 +276,10 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
                 </Show>
 
                 <Show when={props.canEdit}>
-                  <div class="pt-2">
+                  <div class="py-2">
                     <AddPinnedPropertyButton />
                   </div>
                 </Show>
-
-                <div class="pt-4 pb-2">
-                  <button
-                    class="flex items-center gap-1 opacity-75 hover:opacity-50 transition-opacity"
-                    onClick={toggleExpanded}
-                  >
-                    <EyeSlash class="w-3 h-3 mr-2" />
-                    <span class="text-ink-muted">Hide Properties</span>
-                  </button>
-                </div>
-
                 <Modals />
               </div>
               <div class="border-t border-edge-muted pt-2" />
