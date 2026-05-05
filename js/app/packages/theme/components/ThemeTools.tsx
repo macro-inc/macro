@@ -1,13 +1,12 @@
-import { importTheme, invertTheme, saveTheme } from '../utils/themeUtils';
 import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { createMemo, Show } from 'solid-js';
-import { cn } from '@ui/utils/classname';
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
-import IconImport from '@macro-icons/macro-import.svg';
+import { invertTheme, saveTheme } from '../utils/themeUtils';
 import { randomizeTheme } from './ThemeEditorBasic';
 import IconDice from '@macro-icons/macro-dice.svg';
 import IconSave from '@macro-icons/macro-save.svg';
+import { createMemo, Show } from 'solid-js';
+import { cn } from '@ui/utils/classname';
 
 export function ThemeTools() {
   let themeName!: HTMLDivElement;

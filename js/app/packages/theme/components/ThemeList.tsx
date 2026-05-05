@@ -150,9 +150,10 @@ export function ThemeList() {
                   </div>
 
                   <ThemeCrud themeId={theme.id} />
-                </>
-              )}
-            </For>
+                </div>
+              </div>
+            )}
+          </For>
           </div>
         </div>
       </div>
