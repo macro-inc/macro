@@ -11,6 +11,9 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
     // Keyed by call UUID — holds the channelId so it's available when CXAnswerCallAction fires.
     private var pendingCalls: [UUID: String] = [:]
 
+    // Last VoIP token received from PushKit; may arrive before the JS listener is ready.
+    private var cachedVoipToken: String?
+
     override public func load(webview: WKWebView) {
         let config = CXProviderConfiguration()
         config.supportsVideo = false
@@ -33,6 +36,7 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
     ) {
         guard type == .voIP else { return }
         let token = pushCredentials.token.map { String(format: "%02.2hhx", $0) }.joined()
+        cachedVoipToken = token
         trigger("voip-token-updated", data: ["token": token])
     }
 
@@ -48,7 +52,10 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
         let channelId = dict["channelId"] as? String ?? ""
         let callerName = dict["callerName"] as? String ?? "Incoming Call"
         let callIdString = dict["callId"] as? String ?? ""
-        let uuid = UUID(uuidString: callIdString) ?? UUID()
+        guard let uuid = UUID(uuidString: callIdString) else {
+            completion()
+            return
+        }
 
         pendingCalls[uuid] = channelId
 
@@ -67,12 +74,6 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
             }
             completion()
         }
-
-        trigger("incoming-call", data: [
-            "callId": callIdString,
-            "channelId": channelId,
-            "callerName": callerName,
-        ])
     }
 
     // MARK: - CXProviderDelegate
@@ -82,7 +83,10 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
     }
 
     public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
-        let channelId = pendingCalls[action.callUUID] ?? ""
+        guard let channelId = pendingCalls[action.callUUID] else {
+            action.fail()
+            return
+        }
         trigger("call-answered", data: [
             "callId": action.callUUID.uuidString,
             "channelId": channelId,
@@ -99,7 +103,15 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
         pendingCalls.removeValue(forKey: action.callUUID)
     }
 
-    // MARK: - Tauri command
+    // MARK: - Tauri commands
+
+    /// Returns the last VoIP token received from PushKit, or null if none has
+    /// arrived yet. JS calls this once at startup after registering the
+    /// voip-token-updated listener to drain any token that arrived before the
+    /// listener was ready.
+    @objc public func getVoipToken(_ invoke: Invoke) {
+        invoke.resolve(["token": cachedVoipToken as Any])
+    }
 
     /// Called by the JS layer when the user leaves a call from within the app,
     /// so the system CallKit UI is dismissed.
@@ -110,7 +122,7 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
         }
         let transaction = CXTransaction(action: CXEndCallAction(call: uuid))
         callController.request(transaction) { _ in }
-        pendingCalls.removeAll()
+        pendingCalls.removeValue(forKey: uuid)
         invoke.resolve()
     }
 }

@@ -47,7 +47,7 @@ pub struct CallServiceImpl<
     S: RecordingStorage,
     Sm: CallSummarizer = NoopCallSummarizer,
     I: CallSearchIndexer = NoOpCallSearchIndexer,
-    V: VoipPushSender = NoOpVoipPushSender,
+    V: VoipPushSender = (),
 > {
     repo: R,
     rtc_client: C,
@@ -71,7 +71,7 @@ impl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, NoOpCallSearchIndexer, NoOpVoipPushSender>
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, NoOpCallSearchIndexer, ()>
 {
     /// Create a new call service.
     pub fn new(
@@ -95,7 +95,7 @@ impl<
             egress_s3_config: None,
             internal_call_secret: None,
             summarizer: None,
-            voip_push_sender: NoOpVoipPushSender,
+            voip_push_sender: (),
         }
     }
 }
@@ -435,6 +435,14 @@ impl<
                                 .ok()
                                 .flatten();
 
+                            let caller_name = self
+                                .repo
+                                .get_user_display_name(user_id.copied())
+                                .await
+                                .ok()
+                                .flatten()
+                                .unwrap_or_else(|| user_id.email_str().to_string());
+
                             let req = SendNotificationRequestBuilder {
                                 notification_entity: EntityType::Channel
                                     .with_entity_string(channel_id_str.clone()),
@@ -460,7 +468,7 @@ impl<
                                 call_id: call.id.to_string(),
                                 channel_id: channel_id_str,
                                 channel_name: channel_name.unwrap_or_default(),
-                                caller_name: user_id.email_str().to_string(),
+                                caller_name,
                             };
                             self.voip_push_sender
                                 .send_voip_push(&recipient_vec, &voip_payload)
@@ -1265,25 +1273,6 @@ impl CallSummarizer for NoopCallSummarizer {
     }
 }
 
-/// Zero-sized no-op implementation of [`VoipPushSender`].
-///
-/// [`CallServiceImpl`]'s VoIP push sender generic defaults to this type so
-/// callers that do not need VoIP push at all have a zero-cost default. When
-/// VoIP push is conditionally enabled at runtime, prefer using
-/// `Option<ConcreteVoipPushSender>` as the type parameter (which also
-/// implements [`VoipPushSender`]) so that the type is fixed regardless of
-/// whether the `Option` is `Some` or `None`.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct NoOpVoipPushSender;
-
-impl VoipPushSender for NoOpVoipPushSender {
-    async fn send_voip_push(
-        &self,
-        _recipient_ids: &[macro_user_id::user_id::MacroUserIdStr<'_>],
-        _payload: &notification::domain::models::apple::VoipPushPayload,
-    ) {
-    }
-}
 
 /// Lightweight implementation of [`CallRecordQueryService`] for read-only
 /// call record queries. Unlike [`CallServiceImpl`], this only requires a

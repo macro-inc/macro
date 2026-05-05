@@ -23,10 +23,13 @@ type CallAnsweredPayload = { callId: string; channelId: string };
  * Must be mounted once at app startup on iOS (no-op on all other platforms).
  */
 export function useCallKitSetup() {
-  onMount(async () => {
+  onMount(() => {
     if (!isTauri() || !isPlatform('ios')) return;
 
-    const unlistenToken = await listen<VoipTokenPayload>(
+    const unlistens: Array<() => void> = [];
+    onCleanup(() => unlistens.forEach((u) => u()));
+
+    listen<VoipTokenPayload>(
       'plugin:call-kit:voip-token-updated',
       async (event) => {
         const { token } = event.payload;
@@ -36,9 +39,9 @@ export function useCallKitSetup() {
             console.error('callkit: failed to register VoIP token', err)
           );
       }
-    );
+    ).then((u) => unlistens.push(u));
 
-    const unlistenAnswer = await listen<CallAnsweredPayload>(
+    listen<CallAnsweredPayload>(
       'plugin:call-kit:call-answered',
       (event) => {
         const { channelId } = event.payload;
@@ -46,12 +49,20 @@ export function useCallKitSetup() {
           console.error('callkit: failed to join channel call', err)
         );
       }
-    );
+    ).then((u) => unlistens.push(u));
 
-    onCleanup(() => {
-      unlistenToken();
-      unlistenAnswer();
-    });
+    // Drain any VoIP token that arrived from PushKit before the listener above
+    // was registered (common on first launch).
+    invoke<{ token: string | null }>('plugin:call-kit|get_voip_token')
+      .then(({ token }) => {
+        if (!token) return;
+        return notificationServiceClient
+          .registerDevice({ token, deviceType: DEVICE_TYPE_IOS_VOIP })
+          .catch((err) =>
+            console.error('callkit: failed to register cached VoIP token', err)
+          );
+      })
+      .catch((err) => console.error('callkit: get_voip_token failed', err));
   });
 }
 

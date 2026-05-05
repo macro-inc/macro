@@ -3,6 +3,9 @@
 //! Sends PushKit VoIP pushes directly (no queue, no DB persistence) so that
 //! CallKit can display the native incoming-call UI on iOS.
 
+#[cfg(test)]
+mod test;
+
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::models::apple::VoipPushPayload;

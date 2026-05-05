@@ -392,6 +392,10 @@ pub trait VoipPushSender: Send + Sync + 'static {
     ) -> impl std::future::Future<Output = ()> + Send;
 }
 
+impl VoipPushSender for () {
+    async fn send_voip_push(&self, _: &[MacroUserIdStr<'_>], _: &VoipPushPayload) {}
+}
+
 impl<V: VoipPushSender> VoipPushSender for Option<V> {
     async fn send_voip_push(
         &self,
