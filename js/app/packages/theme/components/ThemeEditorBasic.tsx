@@ -510,6 +510,7 @@ export function ThemeEditorBasic(){
                 'left': `${(themeReactive.b0.c[0]() / (themeReactive.a0.c[0]() * 0.6) / 0.37) * 100}%`,
                 'transform': 'translate(-50%, -50%)',
                 'border': '1px solid var(--b4)',
+                'background-color': 'var(--b0)',
                 'box-sizing': 'border-box',
                 'border-radius': '2px',
                 'position': 'absolute',
@@ -604,6 +605,7 @@ export function ThemeEditorBasic(){
               style={{
                 'left': `${(getContrastFromY(themeReactive.b0.l[0]()) / 0.8) * 100}%`,
                 'transform': 'translate(-50%, -50%)',
+                'background-color': 'var(--b0)',
                 'border': '1px solid var(--b4)',
                 'box-sizing': 'border-box',
                 'border-radius': '2px',
@@ -699,6 +701,7 @@ export function ThemeEditorBasic(){
               style={{
                 'left': `${(themeDepth() / 0.4) * 100}%`,
                 'transform': 'translate(-50%, -50%)',
+                'background-color': 'var(--b0)',
                 'border': '1px solid var(--b4)',
                 'box-sizing': 'border-box',
                 'border-radius': '2px',
@@ -728,18 +731,15 @@ export function ThemeEditorBasic(){
                 left: -9px;
                 margin: 0;
                 top: 0;
-               "
+              "
+              value={themeDepth()}
               ref={sliderDepthRef}
               type="range"
               step="0.001"
-              value={themeDepth()}
               max="0.4"
               min="0.0"
             />
           </div>
-
-
-
         </div>
       </div>
     </>
