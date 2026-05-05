@@ -54,7 +54,7 @@ export function TierSelect(props: {
       itemComponent={(itemProps: { item: CollectionNode<TierOption> }) => (
         <Select.Item
           item={itemProps.item}
-          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
+          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover/50 cursor-pointer outline-none data-highlighted:bg-hover bracket-never"
         >
           <div class="flex flex-col">
             <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
@@ -83,7 +83,7 @@ export function TierSelect(props: {
         <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[220px] p-1">
+        <Select.Content class="flex flex-col justify-start items-start bg-menu shadow-lg ring-1 ring-edge-muted rounded-sm p-1 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>

@@ -1,8 +1,8 @@
+import InfoIcon from '@icon/regular/info.svg';
 import { createMemo, For, Show } from 'solid-js';
 import type { LessonContentProps, LessonDefinition } from '../types';
 import { useAnalytics } from '@app/component/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
 import { useOnboarding } from '../onboarding-context';
 import {
   PLANS,
@@ -12,7 +12,6 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import ArrowRightIcon from '@icon/regular/arrow-right.svg';
-import InfoIcon from '@icon/regular/info.svg';
 import LockIcon from '@icon/regular/lock.svg';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
@@ -195,18 +194,18 @@ function ReviewPayDemo(props: LessonContentProps) {
             <div class="flex-[2] border-r border-edge flex flex-col">
               {/* Header */}
               <Show when={onboarding.teamName()}>
-                <div class="px-5 py-3 border-b border-edge">
+                <div class="px-5 pt-3">
                   <span class="text-xs text-ink/40 uppercase tracking-wide">
                     Team
                   </span>
-                  <p class="text-lg font-semibold text-ink mt-0.5">
+                  <p class="text-lg font-semibold text-ink -mt-0.5">
                     {onboarding.teamName()}
                   </p>
                 </div>
               </Show>
 
               {/* Price */}
-              <div class="px-5 py-4 border-b border-edge flex items-baseline justify-between">
+              <div class="px-5 pt-1 pb-4 border-b border-edge flex items-baseline justify-between">
                 <div class="flex items-end gap-1.5">
                   <span class="text-4xl font-bold text-ink leading-none">
                     ${onboarding.totalCost()}
@@ -224,7 +223,9 @@ function ReviewPayDemo(props: LessonContentProps) {
                   Summary
                 </span>
                 <div class="flex flex-col text-sm mt-2">
-                  <div class={`flex justify-between py-2 ${onboarding.invitedMembers().length > 0 ? 'border-b border-ink/10' : ''}`}>
+                  <div
+                    class={cn('flex justify-between py-2', onboarding.invitedMembers().length > 0 && 'border-b border-ink/10')}
+                  >
                     <span class="text-ink/60">
                       Your seat · {selectedPlan()?.name}
                     </span>
@@ -239,12 +240,14 @@ function ReviewPayDemo(props: LessonContentProps) {
                         <span class="text-ink/60">
                           Team · {group.plan.name} × {group.count}
                         </span>
-                        <span>
-                          <span class="text-ink">
-                            ${group.plan.price * group.count}
+                        <Tooltip tooltip="Charged when invite is accepted">
+                          <span class="underline decoration-dotted underline-offset-4 italic cursor-help">
+                            <span class="text-ink">
+                              ${group.plan.price * group.count}
+                            </span>
+                            <span class="text-ink/40"> /month</span>
                           </span>
-                          <span class="text-ink/40"> /month</span>
-                        </span>
+                        </Tooltip>
                       </div>
                     )}
                   </For>
@@ -278,7 +281,11 @@ function ReviewPayDemo(props: LessonContentProps) {
                           <div class="flex justify-between text-sm">
                             <span class="text-ink/60">{feature.label}</span>
                             <span class="text-ink">
-                              {feature.values[onboarding.selectedPlan() ?? 'free']}
+                              {
+                                feature.values[
+                                  onboarding.selectedPlan() ?? 'free'
+                                ]
+                              }
                             </span>
                           </div>
                         )}
@@ -289,25 +296,6 @@ function ReviewPayDemo(props: LessonContentProps) {
               </div>
 
               {/* What's included - separate section when has invites */}
-              <Show when={onboarding.invitedMembers().length > 0}>
-                <div class="px-5 py-4 border-b border-edge">
-                  <span class="text-xs text-ink/40 uppercase tracking-wide">
-                    What's included · {selectedPlan()?.name}
-                  </span>
-                  <div class="flex flex-col gap-1 mt-2">
-                    <For each={PLAN_FEATURES}>
-                      {(feature) => (
-                        <div class="flex justify-between text-sm">
-                          <span class="text-ink/60">{feature.label}</span>
-                          <span class="text-ink">
-                            {feature.values[onboarding.selectedPlan() ?? 'free']}
-                          </span>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </Show>
 
               {/* CTA */}
               <div class="px-5 py-4 flex flex-col gap-2 mt-auto">
@@ -347,7 +335,9 @@ function ReviewPayDemo(props: LessonContentProps) {
                   <For each={onboarding.invitedMembers()}>
                     {(member) => (
                       <div class="flex items-center justify-between text-sm">
-                        <span class="text-ink/70 truncate mr-2">{member.email}</span>
+                        <span class="text-ink/70 truncate mr-2">
+                          {member.email}
+                        </span>
                         <span class="text-xs text-ink/40 shrink-0">
                           {PLANS.find((p) => p.tier === member.tier)?.name}
                         </span>
