@@ -4,10 +4,11 @@ import {
 } from '@block-canvas/signal/fileDrop';
 import { useRenderState } from '@block-canvas/store/RenderState';
 import { vec2 } from '@block-canvas/util/vector2';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { DropdownMenuContent } from '@core/component/Menu';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { Button } from '@ui/components/Button';
 import {
   blockAcceptsFileExtension,
   blockNameToFileExtensions,
@@ -136,12 +137,14 @@ export function MediaSelector() {
       onOpenChange={setImageSelectorOpen}
     >
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <DeprecatedIconButton
-          tooltip={{ label: 'Media' }}
-          theme="clear"
-          icon={Image}
+        <Button
+          variant="ghost"
+          size="icon-md"
+          tooltip={<LabelAndHotKey label="Media" />}
           tabIndex={-1}
-        />
+        >
+          <Image />
+        </Button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenuContent

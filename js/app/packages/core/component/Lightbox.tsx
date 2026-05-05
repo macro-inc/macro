@@ -24,7 +24,8 @@ import {
   downloadImage as downloadImageAction,
 } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
-import { DeprecatedIconButton } from './DeprecatedIconButton';
+import { LabelAndHotKey } from './Tooltip';
+import { Button } from '@ui/components/Button';
 import { Zoompinch, type ZoompinchHandle } from './Zoompinch';
 import { isIOS } from '@solid-primitives/platform';
 
@@ -284,26 +285,32 @@ export function Lightbox(props: LightboxProps) {
       <Dialog.Content class="flex items-center justify-center bg-panel">
         {/* Toolbar */}
         <LightboxToolbar isVisible={true}>
-          <DeprecatedIconButton
-            icon={isCopying() ? SpinnerIcon : ClipboardIcon}
-            theme="clear"
+          <Button
+            variant="ghost"
+            size="icon-md"
             onClick={copyToClipboard}
             disabled={isCopying()}
-            tooltip={{ label: 'Copy image' }}
-          />
-          <DeprecatedIconButton
-            icon={isDownloading() ? SpinnerIcon : DownloadIcon}
-            theme="clear"
+            tooltip={<LabelAndHotKey label="Copy image" />}
+          >
+            {isCopying() ? <SpinnerIcon /> : <ClipboardIcon />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-md"
             onClick={downloadImage}
             disabled={isDownloading()}
-            tooltip={{ label: 'Download image' }}
-          />
+            tooltip={<LabelAndHotKey label="Download image" />}
+          >
+            {isDownloading() ? <SpinnerIcon /> : <DownloadIcon />}
+          </Button>
           <Dialog.CloseButton>
-            <DeprecatedIconButton
-              icon={XIcon}
-              theme="clear"
-              tooltip={{ label: 'Close' }}
-            />
+            <Button
+              variant="ghost"
+              size="icon-md"
+              tooltip={<LabelAndHotKey label="Close" />}
+            >
+              <XIcon />
+            </Button>
           </Dialog.CloseButton>
         </LightboxToolbar>
 

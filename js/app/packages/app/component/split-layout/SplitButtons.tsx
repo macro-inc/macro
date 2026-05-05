@@ -1,4 +1,5 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { Button } from '@ui/components/Button';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import SplitIcon from '@icon/regular/square-half.svg';
@@ -11,13 +12,15 @@ export function SplitBackButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return '';
   return (
-    <DeprecatedIconButton
-      icon={ArrowLeft}
-      tooltip={{ label: 'Go Back' }}
+    <Button
+      variant="ghost"
+      size="icon-md"
+      tooltip={<LabelAndHotKey label="Go Back" />}
       disabled={!context.handle.canGoBack()}
-      theme="clear"
       onClick={context.handle.goBack}
-    />
+    >
+      <ArrowLeft />
+    </Button>
   );
 }
 
@@ -25,13 +28,15 @@ export function SplitForwardButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return '';
   return (
-    <DeprecatedIconButton
-      icon={ArrowRight}
-      tooltip={{ label: 'Go Forward' }}
+    <Button
+      variant="ghost"
+      size="icon-md"
+      tooltip={<LabelAndHotKey label="Go Forward" />}
       disabled={!context.handle.canGoForward()}
-      theme="clear"
       onClick={context.handle.goForward}
-    />
+    >
+      <ArrowRight />
+    </Button>
   );
 }
 
@@ -39,10 +44,10 @@ export function SplitCreateButton() {
   const context = useContext(SplitLayoutContext);
   if (!context) return '';
   return (
-    <DeprecatedIconButton
-      icon={SplitIcon}
-      theme="clear"
-      tooltip={{ label: 'Create new split' }}
+    <Button
+      variant="ghost"
+      size="icon-md"
+      tooltip={<LabelAndHotKey label="Create new split" />}
       onClick={() => {
         context.manager.createNewSplit({
           content: {
@@ -52,7 +57,9 @@ export function SplitCreateButton() {
           referredFrom: 'dock',
         });
       }}
-    />
+    >
+      <SplitIcon />
+    </Button>
   );
 }
 
@@ -60,11 +67,13 @@ export function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return '';
   return (
-    <DeprecatedIconButton
-      icon={CloseIcon}
-      theme="clear"
-      tooltip={{ label: 'Close' }}
+    <Button
+      variant="ghost"
+      size="icon-md"
+      tooltip={<LabelAndHotKey label="Close" />}
       onClick={context.handle.close}
-    />
+    >
+      <CloseIcon />
+    </Button>
   );
 }

@@ -5,9 +5,10 @@ import {
 import { cn } from '@ui/utils/classname';
 import { useCachedStyle } from '@block-canvas/signal/cachedStyle';
 import { useToolManager } from '@block-canvas/signal/toolManager';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { Button } from '@ui/components/Button';
 import {
   ENABLE_CANVAS_FILES,
   ENABLE_CANVAS_IMAGES,
@@ -30,6 +31,7 @@ import Text from '@icon/regular/text-t.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createSignal, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { Tools } from '../constants';
 import { FileSelector } from './FileSelector';
 import {
@@ -56,13 +58,14 @@ const ConnectorTypeSubMenu = (props: {
       onOpenChange={setConnectorTypeMenuTrigger}
     >
       <DropdownMenu.Trigger>
-        <DeprecatedIconButton
-          icon={SmallCaretDown}
-          theme="clear"
+        <Button
+          variant="ghost"
+          size="icon-md"
           style={{ width: '12px', margin: '0 -2px 0 -4px' }}
-          tooltip={null}
           tabIndex={-1}
-        />
+        >
+          <SmallCaretDown />
+        </Button>
       </DropdownMenu.Trigger>
       <DropdownMenuContent>
         <MenuItem
@@ -174,115 +177,145 @@ export function ToolBar() {
             canEdit() && 'border-r border-edge'
           )}
         >
-          <DeprecatedIconButton
-            tooltip={{
-              label: 'Hand tool',
-              hotkeyToken: TOKENS.canvas.handTool,
-            }}
-            showShortcut={true}
-            theme={activeTool() === Tools.Grab ? 'accent' : 'clear'}
-            icon={Hand}
+          <Button
+            variant={activeTool() === Tools.Grab ? 'active' : 'ghost'}
+            size="icon-md"
+            tooltip={
+              <LabelAndHotKey
+                label="Hand tool"
+                hotkeyToken={TOKENS.canvas.handTool}
+              />
+            }
             onClick={() => {
               toolManager.setSelectedTool(Tools.Grab);
             }}
-          />
+          >
+            <Hand />
+          </Button>
 
           <Show when={!isTouchDevice()}>
-            <DeprecatedIconButton
-              tooltip={[
-                { label: 'Zoom', hotkeyToken: TOKENS.canvas.zoomInTool },
-                {
-                  label: 'Zoom out',
-                  shortcut: `hold ${IS_MAC ? 'option' : 'alt'}`,
-                },
-              ]}
-              showShortcut={true}
-              theme={
+            <Button
+              variant={
                 activeTool() === Tools.ZoomIn || activeTool() === Tools.ZoomOut
-                  ? 'accent'
-                  : 'clear'
+                  ? 'active'
+                  : 'ghost'
               }
-              icon={activeTool() === Tools.ZoomOut ? ZoomOut : ZoomIn}
+              size="icon-md"
+              tooltip={
+                <>
+                  <LabelAndHotKey
+                    label="Zoom"
+                    hotkeyToken={TOKENS.canvas.zoomInTool}
+                  />
+                  <LabelAndHotKey
+                    label="Zoom out"
+                    shortcut={`hold ${IS_MAC ? 'option' : 'alt'}`}
+                  />
+                </>
+              }
               onClick={() => {
                 toolManager.setSelectedTool(Tools.ZoomIn);
               }}
-            />
+            >
+              {activeTool() === Tools.ZoomOut ? <ZoomOut /> : <ZoomIn />}
+            </Button>
           </Show>
 
           <Show when={canEdit()}>
-            <DeprecatedIconButton
-              tooltip={{ label: 'Move', hotkeyToken: TOKENS.canvas.selectTool }}
-              showShortcut={true}
-              theme={
+            <Button
+              variant={
                 activeTool() === Tools.Select ||
                 activeTool() === Tools.Resize ||
                 activeTool() === Tools.Move
-                  ? 'accent'
-                  : 'clear'
+                  ? 'active'
+                  : 'ghost'
               }
-              icon={Cursor}
+              size="icon-md"
+              tooltip={
+                <LabelAndHotKey
+                  label="Move"
+                  hotkeyToken={TOKENS.canvas.selectTool}
+                />
+              }
               onClick={() => {
                 toolManager.setSelectedTool(Tools.Select);
               }}
-            />
+            >
+              <Cursor />
+            </Button>
           </Show>
         </div>
         <Show when={canEdit()}>
           <div class="flex flex-row px-2 items-center space-x-2">
-            <DeprecatedIconButton
-              tooltip={{
-                label: 'Rectangle',
-                hotkeyToken: TOKENS.canvas.shapeTool,
-              }}
-              showShortcut={true}
-              theme={activeTool() === Tools.Shape ? 'accent' : 'clear'}
-              icon={Rectangle}
+            <Button
+              variant={activeTool() === Tools.Shape ? 'active' : 'ghost'}
+              size="icon-md"
+              tooltip={
+                <LabelAndHotKey
+                  label="Rectangle"
+                  hotkeyToken={TOKENS.canvas.shapeTool}
+                />
+              }
               onClick={() => {
                 toolManager.setSelectedTool(Tools.Shape);
               }}
-            />
+            >
+              <Rectangle />
+            </Button>
 
-            <DeprecatedIconButton
-              tooltip={{
-                label: 'Pencil',
-                hotkeyToken: TOKENS.canvas.pencilTool,
-              }}
-              showShortcut={true}
-              theme={activeTool() === Tools.Pencil ? 'accent' : 'clear'}
-              icon={PencilSimple}
+            <Button
+              variant={activeTool() === Tools.Pencil ? 'active' : 'ghost'}
+              size="icon-md"
+              tooltip={
+                <LabelAndHotKey
+                  label="Pencil"
+                  hotkeyToken={TOKENS.canvas.pencilTool}
+                />
+              }
               onClick={() => {
                 toolManager.setSelectedTool(Tools.Pencil);
               }}
-            />
+            >
+              <PencilSimple />
+            </Button>
 
-            <DeprecatedIconButton
-              tooltip={{
-                label: 'Connector',
-                hotkeyToken: TOKENS.canvas.lineTool,
-              }}
-              showShortcut={true}
-              theme={activeTool() === Tools.Line ? 'accent' : 'clear'}
-              icon={connectorIcon()}
+            <Button
+              variant={activeTool() === Tools.Line ? 'active' : 'ghost'}
+              size="icon-md"
+              tooltip={
+                <LabelAndHotKey
+                  label="Connector"
+                  hotkeyToken={TOKENS.canvas.lineTool}
+                />
+              }
               onClick={() => {
                 toolManager.setSelectedTool(Tools.Line);
               }}
-            />
+            >
+              <Dynamic component={connectorIcon()} />
+            </Button>
             <ConnectorTypeSubMenu onSelect={onSelectConnectionStyle} />
 
             <Show when={ENABLE_CANVAS_TEXT}>
-              <DeprecatedIconButton
-                tooltip={{ label: 'Text', hotkeyToken: TOKENS.canvas.textTool }}
-                showShortcut={true}
-                theme={
+              <Button
+                variant={
                   activeTool() === Tools.Text || activeTool() === Tools.Typing
-                    ? 'accent'
-                    : 'clear'
+                    ? 'active'
+                    : 'ghost'
                 }
-                icon={Text}
+                size="icon-md"
+                tooltip={
+                  <LabelAndHotKey
+                    label="Text"
+                    hotkeyToken={TOKENS.canvas.textTool}
+                  />
+                }
                 onClick={() => {
                   toolManager.setSelectedTool(Tools.Text);
                 }}
-              />
+              >
+                <Text />
+              </Button>
             </Show>
           </div>
         </Show>

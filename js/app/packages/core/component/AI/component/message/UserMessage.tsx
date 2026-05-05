@@ -1,9 +1,9 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
 import PencilIcon from '@icon/regular/note-pencil.svg';
 import QuoteIcon from '@phosphor-icons/core/bold/arrow-elbow-down-right-bold.svg?component-solid';
+import { Button } from '@ui/components/Button';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { DEFAULT_MODEL } from '../../constant';
@@ -122,11 +122,13 @@ export function UserMessage(props: {
                 />
                 <Show when={props.edit}>
                   <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <DeprecatedIconButton
-                      icon={PencilIcon}
-                      theme="clear"
+                    <Button
+                      variant="ghost"
+                      size="icon-md"
                       onClick={() => setIsEditing(true)}
-                    />
+                    >
+                      <PencilIcon />
+                    </Button>
                   </div>
                 </Show>
               </div>

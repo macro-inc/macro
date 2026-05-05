@@ -1,4 +1,4 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { Button } from '@ui/components/Button';
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
 import { isErr } from '@core/util/maybeResult';
@@ -359,7 +359,9 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
           <Dialog.Content class="relative max-w-[65%] max-h-[80vh] flex items-center justify-center">
             <div class="absolute bg-dialog top-2 right-2 flex flex-row z-10">
               <Dialog.CloseButton>
-                <DeprecatedIconButton icon={XIcon} theme="clear" />
+                <Button variant="ghost" size="icon-md">
+                  <XIcon />
+                </Button>
               </Dialog.CloseButton>
             </div>
             <video

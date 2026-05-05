@@ -1,13 +1,13 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   EntityIcon,
   type EntityWithValidIcon,
 } from '@core/component/EntityIcon';
 import { OldMenu } from '@core/component/OldMenu';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { blockAcceptedFileExtensionSet } from '@core/constant/allBlocks';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Layer } from '@ui';
+import { Button, Layer } from '@ui';
 import FileText from '@phosphor-icons/core/regular/file-text.svg?component-solid';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
@@ -94,12 +94,14 @@ export function FileSelector() {
   return (
     <DropdownMenu open={fileSelectorOpen()} onOpenChange={setFileSelectorOpen}>
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <DeprecatedIconButton
-          tooltip={{ label: 'File' }}
-          theme="clear"
-          icon={FileText}
+        <Button
+          variant="ghost"
+          size="icon-md"
+          tooltip={<LabelAndHotKey label="File" />}
           tabIndex={-1}
-        />
+        >
+          <FileText />
+        </Button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <Layer depth={2}>

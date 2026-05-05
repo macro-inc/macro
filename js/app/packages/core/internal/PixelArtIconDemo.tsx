@@ -1,4 +1,5 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { Button } from '@ui/components/Button';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { DebugSlider } from '@core/component/Slider';
@@ -517,24 +518,28 @@ function GlyphGrid(props: GlyphGridProps) {
                   </div>
 
                   <div class="absolute top-1 right-1 flex gap-0 opacity-0 bg-panel group-hover:opacity-100">
-                    <DeprecatedIconButton
-                      icon={Pencil}
-                      tooltip={{ label: 'Edit' }}
+                    <Button
+                      variant="secondary"
+                      size="icon-md"
+                      tooltip={<LabelAndHotKey label="Edit" />}
                       onClick={(e) => {
                         e.preventDefault();
                         props.onEditGlyph(glyph);
                       }}
-                      theme="base"
-                    />
-                    <DeprecatedIconButton
-                      icon={Trash}
-                      tooltip={{ label: 'Delete' }}
+                    >
+                      <Pencil />
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="icon-md"
+                      tooltip={<LabelAndHotKey label="Delete" />}
                       onClick={(e) => {
                         e.preventDefault();
                         props.onDeleteGlyph(glyph);
                       }}
-                      theme="red"
-                    />
+                    >
+                      <Trash />
+                    </Button>
                   </div>
                 </div>
               );
@@ -795,11 +800,9 @@ function GlyphEditor(props: GlyphEditorProps) {
         >
           <div class="p-2 border-b border-edge flex items-center justify-between">
             <h2 class="font-mono text-xs">Editor</h2>
-            <DeprecatedIconButton
-              icon={X}
-              onClick={props.onClose}
-              theme="clear"
-            />
+            <Button variant="ghost" size="icon-md" onClick={props.onClose}>
+              <X />
+            </Button>
           </div>
 
           <div class="flex flex-1 overflow-hidden">
@@ -934,24 +937,30 @@ function GlyphEditor(props: GlyphEditorProps) {
                 <div class="space-y-2 mb-4">
                   <h4 class="font-mono text-xs text-ink-muted">Transforms</h4>
                   <div class="flex gap-2">
-                    <DeprecatedIconButton
-                      tooltip={{ label: 'Mirror X' }}
+                    <Button
+                      variant="secondary"
+                      size="icon-md"
+                      tooltip={<LabelAndHotKey label="Mirror X" />}
                       onClick={handleMirrorX}
-                      theme="base"
-                      icon={MirrorX}
-                    />
-                    <DeprecatedIconButton
-                      tooltip={{ label: 'Mirror Y' }}
+                    >
+                      <MirrorX />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon-md"
+                      tooltip={<LabelAndHotKey label="Mirror Y" />}
                       onClick={handleMirrorY}
-                      theme="base"
-                      icon={MirrorY}
-                    />
-                    <DeprecatedIconButton
-                      tooltip={{ label: 'Rotate 90 CCW' }}
+                    >
+                      <MirrorY />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon-md"
+                      tooltip={<LabelAndHotKey label="Rotate 90 CCW" />}
                       onClick={handleRotate90CC}
-                      theme="base"
-                      icon={Rotate}
-                    />
+                    >
+                      <Rotate />
+                    </Button>
                   </div>
                 </div>
               </div>

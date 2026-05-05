@@ -1,4 +1,5 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { Button } from '@ui/components/Button';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { idToEmail } from '@core/user';
@@ -45,16 +46,16 @@ export function ParticipantsListItem(props: {
         {props.participant.role}
       </span>
       <div class="shrink-0">
-        <DeprecatedIconButton
-          tooltip={{
-            label: canRemove
-              ? 'Remove participant'
-              : 'Cannot remove participant',
-          }}
-          icon={IconX}
-          iconSize={16}
-          theme="clear"
-          size="sm"
+        <Button
+          tooltip={
+            <LabelAndHotKey
+              label={
+                canRemove ? 'Remove participant' : 'Cannot remove participant'
+              }
+            />
+          }
+          variant="ghost"
+          size="icon-sm"
           disabled={!canRemove}
           onClick={(event) => {
             event.preventDefault();
@@ -62,7 +63,9 @@ export function ParticipantsListItem(props: {
             if (!canRemove) return;
             props.onRemove();
           }}
-        />
+        >
+          <IconX />
+        </Button>
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
+import { Button } from '@ui/components/Button';
 import TagIcon from '@icon/regular/tag.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Suspense } from 'solid-js';
@@ -12,13 +13,14 @@ const DRAWER_ID = PROPERTIES_DRAWER_ID;
 export function EmailPropertiesButton(props: { buttonSize?: 'sm' | 'base' }) {
   const drawerControl = useDrawerControl(DRAWER_ID);
   return (
-    <DeprecatedIconButton
-      icon={TagIcon}
-      theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-      size={props.buttonSize ?? 'base'}
-      tooltip={{ label: 'Properties' }}
+    <Button
+      variant={drawerControl.isOpen() ? 'active' : 'ghost'}
+      size={props.buttonSize === 'sm' ? 'icon-sm' : 'icon-md'}
+      tooltip={<LabelAndHotKey label="Properties" />}
       onClick={drawerControl.toggle}
-    />
+    >
+      <TagIcon />
+    </Button>
   );
 }
 

@@ -2,13 +2,13 @@ import { useAlign } from '@block-canvas/signal/align';
 import { clamp } from '@block-canvas/util/math';
 import { cn } from '@ui/utils/classname';
 import { vec2 } from '@block-canvas/util/vector2';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   type DropdownPreset,
   SlidableNumberInput,
 } from '@core/component/SlidableNumberInput';
 import { themeColors, themeStyles } from '@core/component/Themes';
 import { Tooltip } from '@core/component/Tooltip';
+import { Button } from '@ui/components/Button';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import AlignBottom from '@phosphor-icons/core/regular/align-bottom.svg?component-solid';
 import AlignCenterHorizontal from '@phosphor-icons/core/regular/align-center-horizontal.svg?component-solid';
@@ -231,11 +231,14 @@ function MobileDeleteButton() {
   return (
     <Show when={selection.active() && isMobileWidth()}>
       <div class="max-h-12 flex p-2 bg-menu cursor-auto justify-center items-center rounded shadow-md ring ring-edge">
-        <DeprecatedIconButton
-          icon={TrashSimple}
+        <Button
+          variant="ghost"
+          size="icon-md"
           onClick={deleteSelection}
           class="text-failure"
-        />
+        >
+          <TrashSimple />
+        </Button>
       </div>
     </Show>
   );

@@ -1,6 +1,7 @@
 import { deleteTheme, exportTheme } from '../utils/themeUtils';
 import { userThemes } from '../signals/themeSignals';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { Button } from '@ui/components/Button';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { createMemo, Show } from 'solid-js';
 import IconClipboard from '@macro-icons/macro-clipboard.svg';
 import IconTrash from '@macro-icons/macro-trash.svg';
@@ -33,24 +34,26 @@ export function ThemeCrud(props: ThemeCrudProps) {
       onClick={stop}
       onPointerDown={stop}
     >
-      <DeprecatedIconButton
-        tooltip={{label: "Copy To Clipboard"}}
+      <Button
+        tooltip={<LabelAndHotKey label="Copy To Clipboard" />}
         onPointerDown={() => exportTheme(props.themeId)}
-        icon={IconClipboard}
-        theme="clear"
-        size="sm"
-      />
+        variant="ghost"
+        size="icon-sm"
+      >
+        <IconClipboard />
+      </Button>
 
       <Show when={isUserTheme()}>
-        <DeprecatedIconButton
+        <Button
           onPointerDown={() => {
             deleteTheme(props.themeId);
           }}
-          tooltip={{label: "Delete Theme"}}
-          icon={IconTrash}
-          theme="clear"
-          size="sm"
-        />
+          tooltip={<LabelAndHotKey label="Delete Theme" />}
+          variant="ghost"
+          size="icon-sm"
+        >
+          <IconTrash />
+        </Button>
       </Show>
     </div>
   );

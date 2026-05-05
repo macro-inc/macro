@@ -8,7 +8,8 @@ import Acorn from '@phosphor-icons/core/regular/acorn.svg?component-solid';
 import Subtract from '@phosphor-icons/core/regular/subtract.svg?component-solid';
 import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
 import { type Component, createSignal, For, Index } from 'solid-js';
-import { DeprecatedIconButton } from '../component/DeprecatedIconButton';
+import { Button } from '@ui/components/Button';
+import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import { DeprecatedTextButton } from '../component/DeprecatedTextButton';
 import { ItemPreview } from '../component/ItemPreview';
 import { DropdownMenuContent, MenuItem } from '../component/Menu';
@@ -109,25 +110,30 @@ const App: Component = () => {
       </div>
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={Themes}>
-          {(theme) => <DeprecatedIconButton theme={theme()} icon={Acorn} />}
-        </Index>
-      </div>
-      <div class="flex flex-row flex-wrap justify-center gap-4">
-        <Index each={ThemesWithSeparator}>
-          {(theme) => (
-            <DeprecatedIconButton theme={theme()} icon={Acorn} showChevron />
+          {() => (
+            <Button variant="secondary" size="icon-md">
+              <Acorn />
+            </Button>
           )}
         </Index>
       </div>
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
-          {(theme) => (
-            <DeprecatedIconButton
-              theme={theme()}
-              icon={Acorn}
-              showChevron
-              border
-            />
+          {() => (
+            <Button variant="secondary" size="icon-md">
+              <Acorn />
+              <CaretDown />
+            </Button>
+          )}
+        </Index>
+      </div>
+      <div class="flex flex-row flex-wrap justify-center gap-4">
+        <Index each={ThemesWithSeparator}>
+          {() => (
+            <Button variant="secondary" size="icon-md">
+              <Acorn />
+              <CaretDown />
+            </Button>
           )}
         </Index>
       </div>

@@ -1,5 +1,6 @@
 import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { Button } from '@ui/components/Button';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import { invertTheme, saveTheme } from '../utils/themeUtils';
 import { randomizeTheme } from './ThemeEditorBasic';
@@ -37,15 +38,16 @@ export function ThemeTools() {
       <div style={{ flex: 1 }}/>
 
       <Show when={!isThemeSaved()}>
-        <DeprecatedIconButton
+        <Button
           onPointerDown={() => {
             saveTheme(themeName.innerText);
           }}
-          tooltip={{label: "Save Theme"}}
-          icon={IconSave}
-          theme="clear"
-          size="sm"
-        />
+          tooltip={<LabelAndHotKey label="Save Theme" />}
+          variant="ghost"
+          size="icon-sm"
+        >
+          <IconSave />
+        </Button>
       </Show>
 
       {/*<Show when={DEV_MODE_ENV}>
@@ -66,21 +68,23 @@ export function ThemeTools() {
         size="sm"
       />*/}
 
-      <DeprecatedIconButton
-        tooltip={{label: "Randomize Theme"}}
+      <Button
+        tooltip={<LabelAndHotKey label="Randomize Theme" />}
         onPointerDown={randomizeTheme}
-        icon={IconDice}
-        theme="clear"
-        size="sm"
-      />
+        variant="ghost"
+        size="icon-sm"
+      >
+        <IconDice />
+      </Button>
 
-      <DeprecatedIconButton
-        tooltip={{label: "Toggle Light / Dark"}}
+      <Button
+        tooltip={<LabelAndHotKey label="Toggle Light / Dark" />}
         onPointerDown={invertTheme}
-        icon={IconLightDark}
-        theme="clear"
-        size="sm"
-      />
+        variant="ghost"
+        size="icon-sm"
+      >
+        <IconLightDark />
+      </Button>
 
       <div
         onKeyDown={(e) => {

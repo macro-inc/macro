@@ -2,7 +2,7 @@ import {
   activePlaceableIdSignal,
   newPlaceableSignal,
 } from '@block-pdf/signal/placeables';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { Button } from '@ui/components/Button';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { cn } from '@ui/utils/classname';
 import Dialog from '@corvu/dialog';
@@ -155,20 +155,24 @@ function SignatureEditor(props: SignatureEditorProps) {
             }}
           />
           <div class="flex flex-row w-full justify-center items-center border-t border-edge">
-            <DeprecatedIconButton
-              icon={Check}
-              theme="clear"
+            <Button
+              variant="ghost"
+              size="icon-md"
               onClick={(e: MouseEvent | KeyboardEvent) =>
                 updatePlaceable(e as MouseEvent)
               }
-            />
-            <DeprecatedIconButton
-              icon={Trash}
-              theme="clear"
+            >
+              <Check />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-md"
               onClick={() => {
                 deletePlaceable(props.id);
               }}
-            />
+            >
+              <Trash />
+            </Button>
           </div>
         </Dialog.Content>
       </Portal>

@@ -1,6 +1,7 @@
 import * as stackingContext from '@core/constant/stackingContext';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
+import { Button } from '@ui/components/Button';
 import { isMobile } from '@core/mobile/isMobile';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
@@ -75,11 +76,13 @@ function VideoViewerContent(props: {
       <Dialog.Content class="flex items-center justify-center bg-panel">
         <LightboxToolbar isVisible={true}>
           <Dialog.CloseButton>
-            <DeprecatedIconButton
-              icon={XIcon}
-              theme="clear"
-              tooltip={{ label: 'Close' }}
-            />
+            <Button
+              variant="ghost"
+              size="icon-md"
+              tooltip={<LabelAndHotKey label="Close" />}
+            >
+              <XIcon />
+            </Button>
           </Dialog.CloseButton>
         </LightboxToolbar>
 

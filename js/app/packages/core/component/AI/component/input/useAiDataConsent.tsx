@@ -2,8 +2,8 @@ import { useAiDataConsent } from '@core/context/user';
 import { authServiceClient } from '@service-auth/client';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { Dialog, Panel } from '@ui';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { Button, Dialog, Panel } from '@ui';
 
 import CloseIcon from '@icon/regular/x.svg';
 import { createSignal } from 'solid-js';
@@ -45,13 +45,13 @@ export function useAiDataConsentGate() {
             <div class="flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b border-b-edge-muted">
               <div class="flex flex-row items-center gap-2">
                 <Dialog.CloseButton>
-                  <DeprecatedIconButton
-                    tooltip={{ label: 'Close' }}
-                    icon={CloseIcon}
-                    iconSize={16}
-                    theme="clear"
-                    size="sm"
-                  />
+                  <Button
+                    tooltip={<LabelAndHotKey label="Close" />}
+                    variant="ghost"
+                    size="icon-sm"
+                  >
+                    <CloseIcon />
+                  </Button>
                 </Dialog.CloseButton>
                 <Dialog.Title>AI Data Sharing</Dialog.Title>
               </div>
