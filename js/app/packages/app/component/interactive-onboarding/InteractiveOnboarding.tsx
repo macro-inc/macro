@@ -29,6 +29,7 @@ import { cn } from '@ui/utils/classname';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
+import { useUserTeamsQuery } from '@queries/team';
 import { useIsAuthenticated } from '@core/auth';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -207,6 +208,8 @@ function InteractiveOnboardingInner() {
 
   const hasPaid = useHasPaidAccess();
   const isAuthenticated = useIsAuthenticated();
+  const userTeamsQuery = useUserTeamsQuery();
+  const hasExistingTeam = () => (userTeamsQuery.data?.length ?? 0) > 0;
   const inviteTeamEnabled = useFeatureFlag('enable-teams-onboarding', {
     enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
   });
@@ -215,12 +218,20 @@ function InteractiveOnboardingInner() {
       if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
         return false;
       if (l.id === 'about-us' && isAuthenticated()) return false;
+      // Skip team/payment lessons when feature flag disabled
       if (
         (l.id === 'team-choice' ||
           l.id === 'invite-team' ||
           l.id === 'review-pay') &&
         !inviteTeamEnabled().enabled
       )
+        return false;
+      // Skip review-pay if user already has subscription
+      if (l.id === 'review-pay' && hasPaid()) return false;
+      // Skip invite-team if user already has a team
+      if (l.id === 'invite-team' && hasExistingTeam()) return false;
+      // Skip team-choice if user has both subscription and team
+      if (l.id === 'team-choice' && hasPaid() && hasExistingTeam())
         return false;
       return true;
     })
