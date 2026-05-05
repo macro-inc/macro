@@ -13,7 +13,7 @@ import type { PaidPlanTier } from '@app/component/paywall/plans';
 function TeamChoiceContent() {
   return (
     <div class="flex flex-col gap-3 onboarding-stagger">
-      <p>Choose how you want to use Macro.</p>
+      <p>Continue on your own, or invite your team.</p>
     </div>
   );
 }
@@ -114,7 +114,7 @@ function TeamChoiceDemo(props: LessonContentProps) {
 
 export const teamChoiceLesson: LessonDefinition = {
   id: 'team-choice',
-  title: 'Set up your team',
+  title: 'How will you use Macro?',
   content: TeamChoiceContent,
   demo: TeamChoiceDemo,
   order: 89,

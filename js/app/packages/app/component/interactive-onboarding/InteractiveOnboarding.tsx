@@ -23,7 +23,8 @@ import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
 import { ContinueButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
-import { Panel } from '@ui';
+import { Panel, Button } from '@ui';
+import { cn } from '@ui/utils/classname';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
@@ -732,17 +733,21 @@ function InteractiveOnboardingInner() {
                         </div>
                         <Show when={getPreviousLesson()}>
                           {(prevLesson) => (
-                            <button
-                              type="button"
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => handleBack(prevLesson())}
-                              class="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-xs mt-8"
+                              class="mt-6 gap-1.5 rounded-xs"
                             >
                               <ArrowLeftIcon class="size-4" />
                               Back
-                            </button>
+                            </Button>
                           )}
                         </Show>
-                        <h2 class="text-3xl font-semibold text-ink-muted mt-4">
+                        <h2 class={cn(
+                          'text-3xl font-semibold text-ink-muted',
+                          getPreviousLesson() ? 'mt-4' : 'mt-12'
+                        )}>
                           {lesson().definition.title}
                         </h2>
                       </div>
