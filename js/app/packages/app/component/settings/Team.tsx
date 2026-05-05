@@ -660,13 +660,12 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
     const result = teamNameSchema.safeParse(teamName());
     if (!result.success) return;
 
-    const emails = invites()
-      .map((i) => i.email.trim())
-      .filter((email) => email !== '');
+    const inviteEntries = invites()
+      .filter((i) => i.email.trim() !== '')
+      .map((i) => ({ email: i.email.trim(), tier: i.tier }));
 
-    // TODO: Update mutation to accept invites with tiers once API supports it
     createTeamMutation.mutate(
-      { name: result.data, emails: emails.length > 0 ? emails : undefined },
+      { name: result.data, invites: inviteEntries.length > 0 ? inviteEntries : undefined },
       { onSuccess: props.onClose }
     );
   };
@@ -949,13 +948,12 @@ function TeamManagement(props: {
       return;
     }
 
-    // TODO: Update mutation to send invites with tiers once API supports it
-    const emails = currentInvites
-      .map((i) => i.email.trim())
-      .filter((email) => email !== '');
+    const inviteEntries = currentInvites
+      .filter((i) => i.email.trim() !== '')
+      .map((i) => ({ email: i.email.trim(), tier: i.tier }));
 
     inviteToTeamMutation.mutate(
-      { teamId: props.teamId, request: { emails } },
+      { teamId: props.teamId, request: { invites: inviteEntries } },
       {
         onSuccess: () => {
           setInvites([]);

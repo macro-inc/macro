@@ -343,13 +343,13 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
       authServiceClient.createTeam({ name: pendingTeam.name })
     );
 
-    const emails = pendingTeam.members
+    const invites = pendingTeam.members
       .filter((m) => m.email.trim())
-      .map((m) => m.email);
+      .map((m) => ({ email: m.email, tier: m.tier }));
 
-    if (emails.length > 0) {
+    if (invites.length > 0) {
       await throwOnErr(() =>
-        authServiceClient.inviteToTeam(team.id, { emails })
+        authServiceClient.inviteToTeam(team.id, { invites })
       );
     }
 
@@ -357,7 +357,7 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
     clearPendingTeam();
 
     analytics.track('onboarding_team_created', {
-      inviteCount: emails.length,
+      inviteCount: invites.length,
       teamId: team.id,
     });
 
