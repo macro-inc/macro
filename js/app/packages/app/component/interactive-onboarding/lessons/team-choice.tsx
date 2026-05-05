@@ -25,6 +25,8 @@ function TeamChoiceDemo(props: LessonContentProps) {
   const isAuthenticated = useIsAuthenticated();
   const [isRedirecting, setIsRedirecting] = createSignal(false);
 
+  // Returns to /welcome?subscriptionSuccess=true on success, which triggers
+  // completeOnParam on choose-plan and lands the user on launch.
   const checkoutMutation = useOnboardingCheckoutMutation({
     onSuccess: (result) => {
       analytics.track('subscription_start', {
@@ -57,10 +59,11 @@ function TeamChoiceDemo(props: LessonContentProps) {
     if (!tier || tier === 'free' || isPending()) return;
 
     if (!isAuthenticated()) {
-      toast.failure('Please sign in to continue');
       props.goToLesson('about-us');
       return;
     }
+
+    analytics.track('onboarding_team_skipped', { plan: tier });
 
     onboarding.setInvitedMembers([]);
     onboarding.setTeamName('');

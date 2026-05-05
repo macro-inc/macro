@@ -32,6 +32,8 @@ function ChoosePlanDemo(props: LessonContentProps) {
     enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
   });
 
+  // Returns to /welcome?subscriptionSuccess=true on success, which triggers
+  // completeOnParam and lands the user on the next lesson (team-choice or launch).
   const checkoutMutation = useOnboardingCheckoutMutation({
     onSuccess: (result) => {
       analytics.track('subscription_start', {
@@ -57,6 +59,10 @@ function ChoosePlanDemo(props: LessonContentProps) {
     setSelectedPlan(tier);
 
     if (tier === 'free') {
+      // Free bypasses Stripe, so fire subscription_success directly here to
+      // stay symmetric with the paid path (which fires it on Stripe return
+      // via Root.tsx's ?subscriptionSuccess handler).
+      analytics.track('subscription_success', { type: tier });
       props.skipLesson('team-choice');
       props.skipLesson('invite-team');
       props.skipLesson('review-pay');

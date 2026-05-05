@@ -18,6 +18,8 @@ export interface OnboardingCheckoutResult {
   checkoutUrl: string;
 }
 
+// Pending team info is saved to localStorage before checkout redirect,
+// then retrieved and used to create the team after successful payment return.
 export function savePendingTeam(team: PendingTeamInfo): void {
   localStorage.setItem(PENDING_TEAM_KEY, JSON.stringify(team));
 }

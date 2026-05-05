@@ -40,6 +40,8 @@ function ReviewPayDemo(props: LessonContentProps) {
   const isAuthenticated = useIsAuthenticated();
   const [isRedirecting, setIsRedirecting] = createSignal(false);
 
+  // Returns to /welcome?subscriptionSuccess=true on success, which triggers
+  // completeOnParam and runs onCompleteParam to create the pending team.
   const checkoutMutation = useOnboardingCheckoutMutation({
     onSuccess: (result) => {
       analytics.track('subscription_start', {
