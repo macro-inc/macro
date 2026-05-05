@@ -45,9 +45,12 @@ import {
   ListLayoutProvider,
   type SearchLocation,
   type ProjectEntity,
-  TaskListEntity,
-  TaskListHeader,
+  type WithNotification,
 } from '@entity';
+import { TaskListEntity } from './views/tasks/TaskListEntity';
+import { TaskListHeader } from './views/tasks/TaskListHeader';
+import type { EntityRowConfig } from '@entity/extractors-notification';
+import type { DateValue } from '@core/util/date';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -417,6 +420,41 @@ export const SoupView = (props: SoupViewProps) => {
       </SoupViewContextProvider>
     </SplitPanelContext.Provider>
   );
+};
+
+type ListEntryRendererProps = {
+  entity: WithNotification<EntityData>;
+  timestamp: DateValue | null | undefined;
+  highlighted: boolean;
+  checked: boolean;
+  showUnrollNotifications: boolean;
+  onMouseMove: () => void;
+  onChecked: (next: boolean, shiftKey: boolean) => void;
+  onClick: (event: MouseEvent) => void;
+  onProjectClick: (
+    entity: ProjectEntity,
+    event: PointerEvent | MouseEvent
+  ) => void;
+  onContentHitClick: (
+    event: PointerEvent | MouseEvent,
+    location?: SearchLocation
+  ) => void;
+  entityRowConfig: EntityRowConfig;
+};
+
+type ListEntryRenderer = (props: ListEntryRendererProps) => JSX.Element;
+type ListEntryRendererKey = 'task' | 'default';
+
+const LIST_ENTRY_RENDERERS: Record<ListEntryRendererKey, ListEntryRenderer> = {
+  task: (props) => (
+    <Show
+      when={isTaskEntity(props.entity) && props.entity}
+      fallback={<ListEntity {...props} />}
+    >
+      {(taskEntity) => <TaskListEntity {...props} entity={taskEntity()} />}
+    </Show>
+  ),
+  default: (props) => <ListEntity {...props} />,
 };
 
 interface SoupViewListProps {
@@ -971,6 +1009,75 @@ export const SoupViewList = (props: SoupViewListProps) => {
                               }
                             };
 
+                            const entryProps: ListEntryRendererProps = {
+                              get entity() {
+                                return row.original;
+                              },
+                              get timestamp() {
+                                return timestamp();
+                              },
+                              get highlighted() {
+                                return (
+                                  panel.isPanelActive() && row.isFocused()
+                                );
+                              },
+                              get checked() {
+                                return row.isSelected();
+                              },
+                              get showUnrollNotifications() {
+                                return (
+                                  soup.predicates.isActive('inbox') &&
+                                  !soup.predicates.isActive('noise')
+                                );
+                              },
+                              onMouseMove: () => {
+                                if (isKeypressActive()) return;
+                                if (soup.previewEntity()) return;
+                                soup.focus.set(row.original.id);
+                              },
+                              onChecked: (next, shiftKey) =>
+                                handleMultiSelectChecked({
+                                  entity: row.original,
+                                  entityIndex: i(),
+                                  next,
+                                  shiftKey: shiftKey ?? false,
+                                }),
+                              onClick: (event) =>
+                                onEntityClick({
+                                  type: 'entity',
+                                  entity: row.original,
+                                  event,
+                                  location: undefined,
+                                }),
+                              onProjectClick: (projectEntity, event) =>
+                                onEntityClick({
+                                  type: 'project',
+                                  projectEntity,
+                                  entity: row.original,
+                                  event,
+                                  location: undefined,
+                                }),
+                              onContentHitClick: (e, location) =>
+                                onEntityClick({
+                                  type: 'entity',
+                                  entity: row.original,
+                                  event: e,
+                                  location,
+                                }),
+                              entityRowConfig: {
+                                swipeLeftColor: 'bg-success',
+                                swipeLeftRevealedComponent: (
+                                  <CheckIcon class="size-8 text-panel" />
+                                ),
+                              },
+                            };
+
+                            const rendererKey =
+                              (): ListEntryRendererKey =>
+                                currentView() === 'tasks' && isTaskGridWide()
+                                  ? 'task'
+                                  : 'default';
+
                             return (
                               <>
                                 <Show when={i() === 0 && featuredCount() > 0}>
@@ -989,147 +1096,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   </div>
                                 </Show>
                                 <SoupEntityContextMenu entity={row.original}>
-                                  <Show
-                                    when={
-                                      currentView() === 'tasks' &&
-                                      isTaskGridWide() &&
-                                      isTaskEntity(row.original) &&
-                                      row.original
-                                    }
-                                    fallback={
-                                      <ListEntity
-                                        entity={row.original}
-                                        timestamp={timestamp()}
-                                        highlighted={
-                                          panel.isPanelActive() &&
-                                          row.isFocused()
-                                        }
-                                        onMouseMove={() => {
-                                          if (isKeypressActive()) return;
-                                          if (soup.previewEntity()) return;
-                                          soup.focus.set(row.original.id);
-                                        }}
-                                        showUnrollNotifications={
-                                          soup.predicates.isActive('inbox') &&
-                                          !soup.predicates.isActive('noise')
-                                        }
-                                        checked={row.isSelected()}
-                                        onChecked={(
-                                          next: boolean,
-                                          shiftKey: boolean
-                                        ) =>
-                                          handleMultiSelectChecked({
-                                            entity: row.original,
-                                            entityIndex: i(),
-                                            next,
-                                            shiftKey: shiftKey ?? false,
-                                          })
-                                        }
-                                        onClick={(event: MouseEvent) => {
-                                          onEntityClick({
-                                            type: 'entity',
-                                            entity: row.original,
-                                            event,
-                                            location: undefined,
-                                          });
-                                        }}
-                                        onProjectClick={(
-                                          projectEntity,
-                                          event
-                                        ) => {
-                                          onEntityClick({
-                                            type: 'project',
-                                            projectEntity,
-                                            entity: row.original,
-                                            event,
-                                            location: undefined,
-                                          });
-                                        }}
-                                        onContentHitClick={(
-                                          e: PointerEvent | MouseEvent,
-                                          location?: SearchLocation
-                                        ) => {
-                                          onEntityClick({
-                                            type: 'entity',
-                                            entity: row.original,
-                                            event: e,
-                                            location,
-                                          });
-                                        }}
-                                        entityRowConfig={{
-                                          swipeLeftColor: 'bg-success',
-                                          swipeLeftRevealedComponent: (
-                                            <CheckIcon class="size-8 text-panel" />
-                                          ),
-                                        }}
-                                      />
-                                    }
-                                  >
-                                    {(taskEntity) => (
-                                      <TaskListEntity
-                                        entity={taskEntity()}
-                                        timestamp={timestamp()}
-                                        highlighted={
-                                          panel.isPanelActive() &&
-                                          row.isFocused()
-                                        }
-                                        onMouseMove={() => {
-                                          if (isKeypressActive()) return;
-                                          if (soup.previewEntity()) return;
-                                          soup.focus.set(row.original.id);
-                                        }}
-                                        checked={row.isSelected()}
-                                        onChecked={(
-                                          next: boolean,
-                                          shiftKey: boolean
-                                        ) =>
-                                          handleMultiSelectChecked({
-                                            entity: row.original,
-                                            entityIndex: i(),
-                                            next,
-                                            shiftKey: shiftKey ?? false,
-                                          })
-                                        }
-                                        onClick={(event: MouseEvent) => {
-                                          onEntityClick({
-                                            type: 'entity',
-                                            entity: row.original,
-                                            event,
-                                            location: undefined,
-                                          });
-                                        }}
-                                        onProjectClick={(
-                                          projectEntity,
-                                          event
-                                        ) => {
-                                          onEntityClick({
-                                            type: 'project',
-                                            projectEntity,
-                                            entity: row.original,
-                                            event,
-                                            location: undefined,
-                                          });
-                                        }}
-                                        onContentHitClick={(
-                                          e: PointerEvent | MouseEvent,
-                                          location?: SearchLocation
-                                        ) => {
-                                          onEntityClick({
-                                            type: 'entity',
-                                            entity: row.original,
-                                            event: e,
-                                            location,
-                                          });
-                                        }}
-                                        entityRowConfig={{
-                                          swipeLeftColor: 'bg-success',
-                                          swipeLeftRevealedComponent: (
-                                            <CheckIcon class="size-8 text-panel" />
-                                          ),
-                                        }}
-                                      />
-                                    )}
-                                  </Show>
+                                  {LIST_ENTRY_RENDERERS[rendererKey()](
+                                    entryProps
+                                  )}
                                 </SoupEntityContextMenu>
                                 <Show
                                   when={

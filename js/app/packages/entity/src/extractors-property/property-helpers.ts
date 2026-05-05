@@ -149,6 +149,7 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
     isMultiSelect: definition.is_multi_select,
     isMetadata: definition.is_metadata,
     isSystemProperty: definition.is_system,
+    isRequired: definition.id === SYSTEM_PROPERTY_IDS.STATUS,
     options,
     owner: definition.owner,
     specificEntityType: definition.specific_entity_type,

@@ -1,4 +1,4 @@
-import './ListEntity.css';
+import '@entity/composed/ListEntity.css';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
@@ -18,29 +18,28 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
-import { Entity } from '../entity';
-import type { EntityRowConfig } from '../extractors-notification';
-import { type ProjectEntity, type TaskEntity } from '../types/entity';
 import {
-  isWithNotification,
-  type WithNotification,
-} from '../types/notification';
-import { type SearchLocation } from '../types/search';
-import { createEntityDraggable } from '../utils/draggable';
-import { unreadFilterFn } from '../utils/filter';
-import {
+  Entity,
+  createEntityDraggable,
   filterNotDoneNotifications,
   filterValidNotifications,
-} from '../utils/notification';
-import { useIsShared } from '../utils/shared';
+  isWithNotification,
+  type ProjectEntity,
+  type SearchLocation,
+  type TaskEntity,
+  unreadFilterFn,
+  useIsShared,
+  type WithNotification,
+} from '@entity';
+import type { EntityRowConfig } from '@entity/extractors-notification';
 import {
   hasSearchContentHits,
   type LayoutProps,
   useCharacterCount,
   useListLayout,
-} from './list-entity/shared';
-import { NarrowLayout } from './list-entity/narrow-layout';
-import { TaskGridLayout } from './list-entity/task-grid-layout';
+} from '@entity/composed/list-entity/shared';
+import { NarrowLayout } from '@entity/composed/list-entity/narrow-layout';
+import { TaskGridLayout } from './task-grid-layout';
 
 interface TaskListEntityProps {
   entity: WithNotification<TaskEntity>;

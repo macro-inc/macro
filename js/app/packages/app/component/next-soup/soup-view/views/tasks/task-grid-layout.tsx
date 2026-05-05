@@ -11,19 +11,19 @@ import type {
 } from '@core/component/Properties/types';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
-import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';
-import { UnreadIndicator } from '../../components/UnreadIndicator';
-import { Entity } from '../../entity';
-import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { soupPropertyToProperty } from '../../extractors-property';
 import {
-  isProjectContainedEntity,
+  Entity,
   type EntityData,
   type EntityWithProperties,
-} from '../../types/entity';
+  isProjectContainedEntity,
+  MultiSelectCheckbox,
+  ProjectBreadCrumb,
+  UnreadIndicator,
+} from '@entity';
+import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { soupPropertyToProperty } from '@entity/extractors-property';
+import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { ListPropertyValue } from './list-property-value';
-import type { LayoutProps } from './shared';
 import {
   TASK_GRID_COLUMNS,
   TASK_GRID_TEMPLATE_AREAS,

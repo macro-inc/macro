@@ -72,6 +72,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     hasChanges,
     initializeSelectedOptions,
     toggleOption,
+    clearOptions,
     addOption,
   } = usePropertyEditor(
     props.property,
@@ -304,6 +305,15 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
                       onToggleOption={toggleOption}
                       onAddOption={
                         props.property.isSystemProperty ? undefined : addOption
+                      }
+                      clearOption={
+                        !props.property.isMultiSelect &&
+                        !props.property.isRequired
+                          ? {
+                              label: `No ${props.property.displayName.toLowerCase()}`,
+                              onClear: clearOptions,
+                            }
+                          : undefined
                       }
                       onClose={handleClose}
                     />

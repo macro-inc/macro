@@ -4,7 +4,7 @@ import {
   TASK_GRID_COLUMNS,
   TASK_GRID_TEMPLATE_AREAS,
   TASK_GRID_TEMPLATE_COLUMNS,
-} from './list-entity/task-grid-template';
+} from './task-grid-template';
 
 /**
  * Sticky table header that mirrors the column template of TaskGridLayout

@@ -50,6 +50,9 @@ export type Property = {
   isMultiSelect: boolean;
   isMetadata?: boolean;
   isSystemProperty?: boolean;
+  /** Property must always have a value — disables the "No <name>" clear
+   * affordance in single-select editors. */
+  isRequired?: boolean;
   options?: PropertyOption[];
   owner: PropertyOwner;
   specificEntityType?: EntityType | null;
