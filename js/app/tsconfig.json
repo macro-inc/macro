@@ -30,8 +30,8 @@
       "webworker",
       "DOM.Iterable"
     ],
-    "jsx": "react-jsx",
-    "jsxImportSource": "react",
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
     "declaration": true,
     "declarationMap": true,
     "forceConsistentCasingInFileNames": true,

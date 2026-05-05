@@ -17,13 +17,12 @@ import {
   createMarkdownFile,
   createTask,
 } from '@core/util/create';
-import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Layer } from '@ui';
 import PlusIcon from '@icon/regular/plus.svg';
 import { createProject } from '@queries/storage/projects';
 import { type Component, createSignal, For } from 'solid-js';
-import { DialogWrapper } from '@core/component/DialogWrapper';
+import { Dialog, Panel } from '@ui';
 
 type MenuItemProps = {
   label: string;
@@ -224,8 +223,8 @@ function ProjectCreateDialog(props: {
 
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
-      <Dialog.Portal>
-        <DialogWrapper width="">
+      <Panel depth={2} active>
+        <div class="*:max-h-[75vh]">
           <div class="p-2">
             <Dialog.Title class="text-md font-semibold text-ink pb-3">
               Create in {props.name}
@@ -251,8 +250,8 @@ function ProjectCreateDialog(props: {
               )}
             </For>
           </div>
-        </DialogWrapper>
-      </Dialog.Portal>
+        </div>
+      </Panel>
     </Dialog>
   );
 }

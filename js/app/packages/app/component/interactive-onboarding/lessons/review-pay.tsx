@@ -22,7 +22,17 @@ import {
 } from '../use-onboarding-checkout';
 import { throwOnErr } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
+import { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
 import { invalidateUserTeams } from '@queries/team';
+
+function toTeamUserTier(tier: PaidPlanTier): TeamUserTier {
+  const map: Record<PaidPlanTier, TeamUserTier> = {
+    haiku: TeamUserTier.Haiku,
+    sonnet: TeamUserTier.Sonnet,
+    opus: TeamUserTier.Opus,
+  };
+  return map[tier];
+}
 import { analytics } from '@app/lib/analytics/analytics';
 import { Tooltip } from '@core/component/Tooltip';
 
@@ -343,13 +353,13 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
       authServiceClient.createTeam({ name: pendingTeam.name })
     );
 
-    const emails = pendingTeam.members
+    const invites = pendingTeam.members
       .filter((m) => m.email.trim())
-      .map((m) => m.email);
+      .map((m) => ({ email: m.email, tier: toTeamUserTier(m.tier) }));
 
-    if (emails.length > 0) {
+    if (invites.length > 0) {
       await throwOnErr(() =>
-        authServiceClient.inviteToTeam(team.id, { emails })
+        authServiceClient.inviteToTeam(team.id, { invites })
       );
     }
 
@@ -357,7 +367,7 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
     clearPendingTeam();
 
     analytics.track('onboarding_team_created', {
-      inviteCount: emails.length,
+      inviteCount: invites.length,
       teamId: team.id,
     });
 

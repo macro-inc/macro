@@ -14,17 +14,17 @@ use std::sync::Arc;
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Search for items by their content. For documents, this searches the document body text. For emails, this searches the email message body. For chats, this searches the message content. For call records, this searches the call transcript text. This tool finds items based on what's inside them, not their titles or names.",
+    description = "Search for items by their content. For documents, this searches the document body text. For emails, this searches across many fields at once — subject, body, sender/recipient/cc/bcc addresses, and the display names on those addresses — so a query like 'alice budget' matches emails where alice appears as sender/recipient (by address or display name) and the subject or body mentions budget. For chats, this searches the message content. For call records, this searches the call transcript text. This tool finds items based on what's inside them, not their titles or names.\n\nMulti-term behavior: every whitespace-separated term must match (AND). For emails, each term is tested with prefix matching against the text fields (subject, body, display names) and against the local-part of email-address fields, with the two field groups OR'd — so 'alice review' matches an email where alice appears in the To: line and 'review' appears in the body. Wrapping a value in double quotes (e.g. `\"alice@example.com\"` or `\"deal review\"`) keeps it as a single term and forces exact-token matching for that term — useful when you need a full email address or an exact phrase rather than a prefix. For all other entity types, the whole query is treated as a single phrase prefix, so 'release notes' looks for those words adjacent in that order.\n\nPrefer searching all types by default — leave entityTypes empty unless the user's request clearly targets a specific type. Don't narrow the search just because the query mentions a noun like 'email' or 'doc'; only filter when the user has explicitly scoped the request to that type.",
     title = "ContentSearch"
 )]
 pub struct ContentSearch {
     #[schemars(
-        description = "The text content to search for. This searches within the body of documents, emails, messages, and call transcripts."
+        description = "The text content to search for. This searches within the body of documents, emails, messages, and call transcripts. Whitespace-separated terms are ANDed (every term must match). For non-email types the whole query is matched as an adjacent phrase. For emails each term is matched independently across subject/body/sender/recipient fields; wrap a term in double quotes to force exact-token (or full-email-address) matching instead of prefix matching."
     )]
     pub query: String,
 
     #[schemars(
-        description = "Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']"
+        description = "Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']."
     )]
     #[serde(default)]
     pub entity_types: Vec<UnifiedSearchIndex>,

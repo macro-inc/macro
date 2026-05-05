@@ -8,7 +8,7 @@ pub async fn delete_chat_by_id(client: &opensearch::OpenSearch, chat_id: &str) -
     let query = serde_json::json!({
         "query": {
             "term": {
-                "chat_id": chat_id
+                "entity_id": chat_id
             }
         },
     });
@@ -66,7 +66,7 @@ pub async fn delete_chat_message_by_id(
                 "must": [
                     {
                         "term": {
-                            "chat_id": chat_id
+                            "entity_id": chat_id
                         }
                     },
                     {

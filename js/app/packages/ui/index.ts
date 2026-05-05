@@ -5,6 +5,7 @@ export { Keyboard } from './components/Keyboard';
 export { Button } from './components/Button';
 export { Layer } from './components/Layer';
 export { Panel } from './components/Panel';
+export { Dialog, type DialogProps } from './components/Dialog';
 
 /* utils */
 export { cn } from './utils/classname';

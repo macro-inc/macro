@@ -3,12 +3,21 @@ import {
   newPlaceableSignal,
 } from '@block-pdf/signal/placeables';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { Content, Modal, Overlay } from '@core/component/Modal';
+import { blockElementSignal } from '@core/signal/blockElement';
+import { cn } from '@ui/utils/classname';
+import Dialog from '@corvu/dialog';
 import Check from '@icon/regular/check.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import SignaturePad from 'signature_pad';
-import { onCleanup, onMount, Show } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { themeReactive } from '../../../theme/signals/themeReactive';
 import { useDeletePlaceable, useModifyPayload } from '../../store/placeables';
@@ -61,11 +70,81 @@ function SignatureEditor(props: SignatureEditorProps) {
     deletePlaceable(props.id);
   });
 
+  // Anchor the editor to the center of the active block rather than the
+  // viewport, so the signature canvas appears over the PDF block it belongs to
+  // (which may not be the only thing on screen).
+  const [blockRect, setBlockRect] = createSignal<DOMRect | undefined>(
+    undefined
+  );
+
+  onMount(() => {
+    const el = blockElementSignal.get();
+    if (!el) {
+      setBlockRect(undefined);
+      return;
+    }
+    setBlockRect(el.getBoundingClientRect());
+
+    const observer = new ResizeObserver(() => {
+      setBlockRect(el.getBoundingClientRect());
+    });
+    observer.observe(el);
+    onCleanup(() => observer.disconnect());
+  });
+
+  const positionStyle = createMemo<JSX.CSSProperties>(() => {
+    const rect = blockRect();
+    if (rect) {
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      return {
+        position: 'absolute',
+        top: `${centerY}px`,
+        left: `${centerX}px`,
+        transform: 'translate(-50%, -50%)',
+      };
+    }
+    return {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+    };
+  });
+
   return (
-    <Modal open={true} restoreFocus={false}>
+    <Dialog
+      open={true}
+      restoreFocus={false}
+      // prevents the dialog from immediately being dismissed
+      closeOnOutsidePointerStrategy="pointerdown"
+      closeOnOutsideFocus={false}
+      // this prevents the pointer events helper from getting stuck on dismissed
+      // this is because we often prevent default onMouseDown
+      noOutsidePointerEvents={false}
+    >
       <Portal mount={document.getElementById('modal') ?? undefined}>
-        <Overlay />
-        <Content>
+        <Dialog.Overlay
+          class="flex sm:max-h-full items-center justify-content z-modal-overlay fixed inset-0 bg-modal-overlay"
+          style={{
+            'max-height': `calc(100dvh - env(safe-area-inset-top, 0px))`,
+          }}
+        />
+        <Dialog.Content
+          class={cn(
+            'absolute z-modal min-w-[calc(100vw-2rem)]',
+            '@sm:min-w-96 p-3',
+            'bg-dialog shadow',
+            'rounded-lg border border-edge',
+            'flex-col justify-start inline-flex gap-3',
+            'duration-slow',
+            'data-open:animate-in',
+            'data-open:fade-in-0 data-open:zoom-in-95',
+            'data-closed:animate-out',
+            'data-closed:fade-out-0 data-closed:zoom-out-95'
+          )}
+          style={positionStyle()}
+        >
           <canvas
             width={400}
             height={100}
@@ -91,9 +170,9 @@ function SignatureEditor(props: SignatureEditorProps) {
               }}
             />
           </div>
-        </Content>
+        </Dialog.Content>
       </Portal>
-    </Modal>
+    </Dialog>
   );
 }
 

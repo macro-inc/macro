@@ -1,5 +1,4 @@
-import { DialogWrapper } from '@core/component/DialogWrapper';
-import { Dialog } from '@kobalte/core/dialog';
+import { Dialog, Panel } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
@@ -149,9 +148,13 @@ export function PropertyEditorModal() {
   const keybindings = useListKeyBindings(() => dialogRef());
 
   return (
-    <Dialog open={propertyEditorOpen()} onOpenChange={togglePropertyEditor}>
-      <Dialog.Portal>
-        <DialogWrapper contentRef={mergeRefs(attach, setDialogRef)}>
+    <Dialog
+      open={propertyEditorOpen()}
+      onOpenChange={togglePropertyEditor}
+      contentRef={mergeRefs(attach, setDialogRef)}
+    >
+      <Panel depth={2} active>
+        <div class="*:max-h-[75vh]">
           <div class="flex flex-col max-h-108 overflow-hidden text-sm">
             <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
               <span class="pl-2 pointer-events-none">❯</span>
@@ -197,8 +200,8 @@ export function PropertyEditorModal() {
               </Match>
             </Switch>
           </div>
-        </DialogWrapper>
-      </Dialog.Portal>
+        </div>
+      </Panel>
     </Dialog>
   );
 }

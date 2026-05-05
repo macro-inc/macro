@@ -1,12 +1,28 @@
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use models_opensearch::SearchEntityType;
 use opensearch_client::search::model::Highlight;
 
 use super::*;
 
+/// Build a message_states map that marks every content-match hit's
+/// channel_message_id as existing-and-active. Tests that want to exercise
+/// orphan filtering or soft-delete state should construct the map manually.
+fn active_states_for(
+    hits: &[opensearch_client::search::model::SearchHit],
+) -> HashMap<Uuid, Option<DateTime<Utc>>> {
+    hits.iter()
+        .filter_map(|hit| match &hit.goto {
+            Some(opensearch_client::search::model::SearchGotoContent::Channels(goto)) => {
+                Some((goto.channel_message_id, None))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 #[test]
 fn test_construct_search_result_empty_input() {
-    let result = construct_search_result(vec![], HashMap::new());
+    let result = construct_search_result(vec![], HashMap::new(), HashMap::new());
     assert!(result.is_ok());
     assert_eq!(result.unwrap().len(), 0);
 }
@@ -43,7 +59,8 @@ fn test_construct_search_result_single_channel() {
         create_channel_history(channel_uuid.to_string().as_str()),
     );
 
-    let result = construct_search_result(search_results, channel_histories).unwrap();
+    let states = active_states_for(&search_results);
+    let result = construct_search_result(search_results, channel_histories, states).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_id, channel_uuid);
@@ -125,7 +142,8 @@ fn test_construct_search_result_multiple_messages_same_channel() {
         create_channel_history(channel_uuid.to_string().as_str()),
     );
 
-    let result = construct_search_result(search_results, channel_histories).unwrap();
+    let states = active_states_for(&search_results);
+    let result = construct_search_result(search_results, channel_histories, states).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_id, channel_uuid);
@@ -207,7 +225,8 @@ fn test_construct_search_result_filters_messages_without_content() {
         create_channel_history(channel_uuid.to_string().as_str()),
     );
 
-    let result = construct_search_result(search_results, channel_histories).unwrap();
+    let states = active_states_for(&search_results);
+    let result = construct_search_result(search_results, channel_histories, states).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_message_search_results.len(), 2);
@@ -219,6 +238,60 @@ fn test_construct_search_result_filters_messages_without_content() {
             .to_string(),
         "11111111-1111-1111-1111-111111111111"
     );
+}
+
+#[test]
+fn test_construct_search_result_filters_orphans_and_propagates_deleted_at() {
+    let channel_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440099".parse().unwrap();
+    let active_message_id: Uuid = "11111111-1111-1111-1111-111111111111".parse().unwrap();
+    let deleted_message_id: Uuid = "22222222-2222-2222-2222-222222222222".parse().unwrap();
+    let orphan_message_id: Uuid = "33333333-3333-3333-3333-333333333333".parse().unwrap();
+
+    let search_results = vec![
+        create_test_channel_response(
+            &channel_uuid.to_string(),
+            &active_message_id.to_string(),
+            "user1",
+            Some(vec!["active".to_string()]),
+        ),
+        create_test_channel_response(
+            &channel_uuid.to_string(),
+            &deleted_message_id.to_string(),
+            "user2",
+            Some(vec!["deleted".to_string()]),
+        ),
+        create_test_channel_response(
+            &channel_uuid.to_string(),
+            &orphan_message_id.to_string(),
+            "user3",
+            Some(vec!["orphan".to_string()]),
+        ),
+    ];
+
+    let mut channel_histories = HashMap::new();
+    channel_histories.insert(
+        channel_uuid,
+        create_channel_history(channel_uuid.to_string().as_str()),
+    );
+
+    let deleted_at = DateTime::from_timestamp(1700000000, 0).unwrap();
+    let mut states: HashMap<Uuid, Option<DateTime<Utc>>> = HashMap::new();
+    states.insert(active_message_id, None);
+    states.insert(deleted_message_id, Some(deleted_at));
+    // orphan_message_id intentionally omitted to simulate a hard-deleted row.
+
+    let result = construct_search_result(search_results, channel_histories, states).unwrap();
+
+    assert_eq!(result.len(), 1);
+    let hits = &result[0].extra.channel_message_search_results;
+    assert_eq!(hits.len(), 2, "orphan hit should be filtered out");
+
+    let by_id: HashMap<Uuid, &ChannelSearchResult> =
+        hits.iter().map(|h| (h.message_id.unwrap(), h)).collect();
+
+    assert_eq!(by_id[&active_message_id].deleted_at, None);
+    assert_eq!(by_id[&deleted_message_id].deleted_at, Some(deleted_at));
+    assert!(!by_id.contains_key(&orphan_message_id));
 }
 
 fn create_test_channel_response(
@@ -293,7 +366,8 @@ fn test_channel_history_timestamps() {
     )];
 
     // Call the function under test
-    let result = construct_search_result(input, channel_histories).unwrap();
+    let states = active_states_for(&input);
+    let result = construct_search_result(input, channel_histories, states).unwrap();
 
     // Verify that timestamps were copied from the channel history
     assert_eq!(result.len(), 1);
@@ -334,7 +408,8 @@ fn test_channel_history_missing_entry() {
     channel_histories.insert(different_channel_uuid, history);
 
     // Call the function under test
-    let result = construct_search_result(input, channel_histories).unwrap();
+    let states = active_states_for(&input);
+    let result = construct_search_result(input, channel_histories, states).unwrap();
 
     // Channels without history info should not be returned
     assert_eq!(result.len(), 0);
@@ -368,7 +443,8 @@ fn test_channel_history_null_viewed_at() {
     channel_histories.insert(channel_uuid, history);
 
     // Call the function under test
-    let result = construct_search_result(input, channel_histories).unwrap();
+    let states = active_states_for(&input);
+    let result = construct_search_result(input, channel_histories, states).unwrap();
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
@@ -514,9 +590,13 @@ fn test_sort_stability() {
         );
     }
 
-    let result1 = construct_search_result(input.clone(), channel_histories.clone()).unwrap();
-    let result2 = construct_search_result(input.clone(), channel_histories.clone()).unwrap();
-    let result3 = construct_search_result(input.clone(), channel_histories.clone()).unwrap();
+    let states = active_states_for(&input);
+    let result1 =
+        construct_search_result(input.clone(), channel_histories.clone(), states.clone()).unwrap();
+    let result2 =
+        construct_search_result(input.clone(), channel_histories.clone(), states.clone()).unwrap();
+    let result3 =
+        construct_search_result(input.clone(), channel_histories.clone(), states).unwrap();
 
     assert_eq!(result1.len(), 5);
     assert_eq!(result2.len(), 5);

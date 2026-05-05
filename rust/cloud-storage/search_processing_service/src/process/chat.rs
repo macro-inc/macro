@@ -11,7 +11,7 @@ pub async fn insert_chat_message(
     db: &sqlx::Pool<sqlx::Postgres>,
     chat_message: &ChatMessage,
 ) -> anyhow::Result<()> {
-    let result = macro_db_client::chat::get::get_chat_message_info(
+    let info = macro_db_client::chat::get::get_chat_message_info(
         db,
         chat_message.chat_id.as_str(),
         chat_message.message_id.as_str(),
@@ -19,21 +19,35 @@ pub async fn insert_chat_message(
     .await
     .context("failed to get chat message info")?;
 
-    if let Some((title, content, role)) = result {
+    let Some(info) = info else {
+        return Ok(());
+    };
+
+    if info.deleted_at.is_some() {
+        tracing::trace!("chat is deleted, removing message from search index");
         opensearch_client
-            .upsert_chat_message(&UpsertChatMessageArgs {
-                chat_id: chat_message.chat_id.clone(),
-                chat_message_id: chat_message.message_id.clone(),
-                user_id: chat_message.user_id.clone(),
-                created_at_seconds: EpochSeconds::new(chat_message.created_at.clone().timestamp())?,
-                updated_at_seconds: EpochSeconds::new(chat_message.updated_at.clone().timestamp())?,
-                title,
-                content,
-                role,
-            })
+            .delete_chat_message(
+                chat_message.chat_id.as_str(),
+                chat_message.message_id.as_str(),
+            )
             .await
-            .context("failed to upsert chat message")?;
+            .context("failed to delete chat message from search")?;
+        return Ok(());
     }
+
+    opensearch_client
+        .upsert_chat_message(&UpsertChatMessageArgs {
+            chat_id: chat_message.chat_id.clone(),
+            chat_message_id: chat_message.message_id.clone(),
+            user_id: chat_message.user_id.clone(),
+            created_at_seconds: EpochSeconds::new(chat_message.created_at.timestamp())?,
+            updated_at_seconds: EpochSeconds::new(chat_message.updated_at.timestamp())?,
+            title: info.name,
+            content: info.content,
+            role: info.role,
+        })
+        .await
+        .context("failed to upsert chat message")?;
 
     Ok(())
 }

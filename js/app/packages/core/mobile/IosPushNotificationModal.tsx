@@ -1,9 +1,7 @@
-import { DialogWrapper } from '@core/component/DialogWrapper';
 import { isPlatform } from '@core/util/platform';
-import { Dialog } from '@kobalte/core/dialog';
 import { useNotificationSettings } from '@notifications/notification-settings';
 import { useIsAuthenticated } from '@queries/auth';
-import { Button } from '@ui/components/Button';
+import { Dialog, Button, Panel } from '@ui';
 import { createMemo, Show } from 'solid-js';
 
 const DEBUG_FORCE_OPEN = false;
@@ -23,13 +21,14 @@ export function IosPushNotificationModal() {
   return (
     <Show when={shouldShow()}>
       <Dialog
-        open={true}
+        open
         onOpenChange={(open) => {
           if (!open) settings.dismissPrompt();
         }}
+        class="w-[90%]"
       >
-        <Dialog.Portal>
-          <DialogWrapper width="90%">
+        <Panel depth={2} active>
+          <div class="*:max-h-[75vh]">
             <div class="flex flex-col gap-4 px-4 py-6">
               <Dialog.Title class="text-lg font-semibold text-ink">
                 Enable Push Notifications
@@ -57,8 +56,8 @@ export function IosPushNotificationModal() {
                 </Button>
               </div>
             </div>
-          </DialogWrapper>
-        </Dialog.Portal>
+          </div>
+        </Panel>
       </Dialog>
     </Show>
   );

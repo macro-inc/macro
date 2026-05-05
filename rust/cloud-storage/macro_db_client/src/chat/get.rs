@@ -49,7 +49,6 @@ pub async fn get_chat_messages_for_search_backfill(
             "ChatMessage" m
         JOIN
             "Chat" c on c."id" = m."chatId"
-        WHERE c."deletedAt" IS NULL
         ORDER BY
             m."createdAt" DESC
         LIMIT $1
@@ -91,7 +90,7 @@ async fn get_chat_messages_for_search_backfill_chat_ids(
         JOIN
             "Chat" c on c."id" = m."chatId"
         WHERE
-            m."chatId" = ANY($1) AND c."deletedAt" IS NULL
+            m."chatId" = ANY($1)
         ORDER BY
             m."createdAt" DESC
         LIMIT $2
@@ -134,7 +133,7 @@ async fn get_chat_messages_for_search_backfill_user_ids(
         JOIN
             "Chat" c on c."id" = m."chatId"
         WHERE
-            c."userId" = ANY($1) AND c."deletedAt" IS NULL
+            c."userId" = ANY($1)
         ORDER BY
             m."createdAt" DESC
         LIMIT $2
@@ -157,42 +156,59 @@ async fn get_chat_messages_for_search_backfill_user_ids(
     Ok(result)
 }
 
-/// Gets the chat title, message content and role used for search
-/// NOTE: this does not return persistent chats
+/// Chat message info used for search indexing. `deleted_at` is set when the
+/// owning chat has been soft-deleted, allowing the indexer to remove the
+/// message from the search index instead of upserting it.
+#[derive(Debug, Clone)]
+pub struct ChatMessageInfo {
+    pub name: String,
+    pub content: String,
+    pub role: String,
+    pub deleted_at: Option<DateTime<Utc>>,
+}
+
+/// Gets the chat title, message content and role used for search.
+/// Returns `None` when the message does not exist or the owning chat is
+/// persistent (persistent chats are not indexed). Soft-deleted chats are
+/// returned with `deleted_at` populated so the caller can prune the search
+/// index entry.
 #[tracing::instrument(skip(db))]
 pub async fn get_chat_message_info(
     db: &sqlx::Pool<sqlx::Postgres>,
     chat_id: &str,
     chat_message_id: &str,
-) -> anyhow::Result<Option<(String, String, String)>> {
+) -> anyhow::Result<Option<ChatMessageInfo>> {
     let result = sqlx::query!(
         r#"
         SELECT
             m.content as "content",
             c.name as "name",
-            m.role as "role"
+            m.role as "role",
+            c."deletedAt"::timestamptz as "deleted_at"
         FROM
             "ChatMessage" m
         JOIN
             "Chat" c on c."id" = m."chatId"
         WHERE
-            m.id = $1 AND m."chatId" = $2 AND c."deletedAt" IS NULL AND c."isPersistent" = false
+            m.id = $1 AND m."chatId" = $2 AND c."isPersistent" = false
         "#,
         chat_message_id,
         chat_id
     )
-    .map(|row| (row.name, row.content, row.role))
     .fetch_optional(db)
     .await?;
 
-    if let Some((name, content, role)) = result {
-        return serde_json::from_value::<ChatMessageContent>(content)
-            .map(|content| (name, content.message_text(), role))
-            .map_err(anyhow::Error::from)
-            .map(Some);
-    }
+    let Some(row) = result else {
+        return Ok(None);
+    };
 
-    Ok(None)
+    let content = serde_json::from_value::<ChatMessageContent>(row.content)?.message_text();
+    Ok(Some(ChatMessageInfo {
+        name: row.name,
+        content,
+        role: row.role,
+        deleted_at: row.deleted_at,
+    }))
 }
 
 /// Gets the chats metadata for updating the chat message metadata

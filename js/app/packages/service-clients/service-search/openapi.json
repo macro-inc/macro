@@ -550,6 +550,11 @@
             "format": "date-time",
             "description": "When the channel message was created\nThis is only prsent if the search result is on the message content"
           },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the channel message was deleted, if it has been"
+          },
           "highlight": {
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights for the channel message"

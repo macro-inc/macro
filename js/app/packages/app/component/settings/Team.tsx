@@ -8,13 +8,12 @@ import EnvelopeIcon from '@icon/regular/envelope.svg';
 import XIcon from '@icon/regular/x.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
-import { DialogWrapper } from '@core/component/DialogWrapper';
+
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { Button } from '@ui/components/Button';
-import { Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 import { cn } from '@ui/utils/classname';
-import { Dialog } from '@kobalte/core/dialog';
 import { Select } from '@kobalte/core/select';
 import { useUserId } from '@core/context/user';
 import { useDisplayName, tryMacroId } from '@core/user';
@@ -660,26 +659,27 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
     const result = teamNameSchema.safeParse(teamName());
     if (!result.success) return;
 
-    const emails = invites()
-      .map((i) => i.email.trim())
-      .filter((email) => email !== '');
+    const inviteEntries = invites()
+      .filter((i) => i.email.trim() !== '')
+      .map((i) => ({ email: i.email.trim(), tier: i.tier }));
 
-    // TODO: Update mutation to accept invites with tiers once API supports it
     createTeamMutation.mutate(
-      { name: result.data, emails: emails.length > 0 ? emails : undefined },
+      { name: result.data, invites: inviteEntries.length > 0 ? inviteEntries : undefined },
       { onSuccess: props.onClose }
     );
   };
 
   return (
-    <Dialog open={props.open} onOpenChange={(open) => !open && props.onClose()}>
-      <Dialog.Portal>
-        <DialogWrapper
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
-            teamNameInputRef?.focus();
-          }}
-        >
+    <Dialog
+      open={props.open}
+      onOpenChange={(open) => !open && props.onClose()}
+      onOpenAutoFocus={(e) => {
+        e.preventDefault();
+        teamNameInputRef?.focus();
+      }}
+    >
+      <Panel depth={2} active>
+        <div class="*:max-h-[75vh]">
           <div class="flex flex-col text-ink">
             <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
               <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
@@ -755,8 +755,8 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
               </div>
             </div>
           </div>
-        </DialogWrapper>
-      </Dialog.Portal>
+        </div>
+      </Panel>
     </Dialog>
   );
 }
@@ -949,13 +949,12 @@ function TeamManagement(props: {
       return;
     }
 
-    // TODO: Update mutation to send invites with tiers once API supports it
-    const emails = currentInvites
-      .map((i) => i.email.trim())
-      .filter((email) => email !== '');
+    const inviteEntries = currentInvites
+      .filter((i) => i.email.trim() !== '')
+      .map((i) => ({ email: i.email.trim(), tier: i.tier }));
 
     inviteToTeamMutation.mutate(
-      { teamId: props.teamId, request: { emails } },
+      { teamId: props.teamId, request: { invites: inviteEntries } },
       {
         onSuccess: () => {
           setInvites([]);
@@ -1129,11 +1128,15 @@ function TeamManagement(props: {
         open={showDeleteTeamModal()}
         onOpenChange={handleDeleteTeamModalClose}
       >
-        <Dialog.Portal>
-          <DialogWrapper>
+        <Panel depth={2} active>
+          <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
-                <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+                <Dialog.CloseButton
+                  as={Button}
+                  variant="ghost"
+                  size="icon-sm"
+                >
                   <XIcon />
                 </Dialog.CloseButton>
                 <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
@@ -1185,19 +1188,23 @@ function TeamManagement(props: {
                 </div>
               </div>
             </div>
-          </DialogWrapper>
-        </Dialog.Portal>
+          </div>
+        </Panel>
       </Dialog>
 
       <Dialog
         open={!!showRemoveModal()}
         onOpenChange={() => setShowRemoveModal(null)}
       >
-        <Dialog.Portal>
-          <DialogWrapper>
+        <Panel depth={2} active>
+          <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
-                <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+                <Dialog.CloseButton
+                  as={Button}
+                  variant="ghost"
+                  size="icon-sm"
+                >
                   <XIcon />
                 </Dialog.CloseButton>
                 <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
@@ -1234,19 +1241,23 @@ function TeamManagement(props: {
                 </div>
               </div>
             </div>
-          </DialogWrapper>
-        </Dialog.Portal>
+          </div>
+        </Panel>
       </Dialog>
 
       <Dialog
         open={!!showCancelInviteModal()}
         onOpenChange={() => setShowCancelInviteModal(null)}
       >
-        <Dialog.Portal>
-          <DialogWrapper>
+        <Panel depth={2} active>
+          <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
-                <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+                <Dialog.CloseButton
+                  as={Button}
+                  variant="ghost"
+                  size="icon-sm"
+                >
                   <XIcon />
                 </Dialog.CloseButton>
                 <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
@@ -1286,16 +1297,23 @@ function TeamManagement(props: {
                 </div>
               </div>
             </div>
-          </DialogWrapper>
-        </Dialog.Portal>
+          </div>
+        </Panel>
       </Dialog>
 
-      <Dialog open={showInviteModal()} onOpenChange={handleInviteModalClose}>
-        <Dialog.Portal>
-          <DialogWrapper>
+      <Dialog
+        open={showInviteModal()}
+        onOpenChange={handleInviteModalClose}
+      >
+        <Panel depth={2} active>
+          <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
-                <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+                <Dialog.CloseButton
+                  as={Button}
+                  variant="ghost"
+                  size="icon-sm"
+                >
                   <XIcon />
                 </Dialog.CloseButton>
                 <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
@@ -1340,8 +1358,8 @@ function TeamManagement(props: {
                 </div>
               </div>
             </div>
-          </DialogWrapper>
-        </Dialog.Portal>
+          </div>
+        </Panel>
       </Dialog>
     </div>
   );

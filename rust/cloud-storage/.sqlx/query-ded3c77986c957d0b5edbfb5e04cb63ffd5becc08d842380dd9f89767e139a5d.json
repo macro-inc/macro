@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            c.\"id\" as \"chat_id\",\n            m.id as \"message_id\",\n            c.\"userId\" as \"user_id\",\n            c.\"createdAt\" as \"created_at\",\n            c.\"updatedAt\" as \"updated_at\"\n        FROM\n            \"ChatMessage\" m\n        JOIN\n            \"Chat\" c on c.\"id\" = m.\"chatId\"\n        WHERE c.\"deletedAt\" IS NULL\n        ORDER BY\n            m.\"createdAt\" DESC\n        LIMIT $1\n        OFFSET $2\n        ",
+  "query": "\n        SELECT\n            c.\"id\" as \"chat_id\",\n            m.id as \"message_id\",\n            c.\"userId\" as \"user_id\",\n            c.\"createdAt\" as \"created_at\",\n            c.\"updatedAt\" as \"updated_at\"\n        FROM\n            \"ChatMessage\" m\n        JOIN\n            \"Chat\" c on c.\"id\" = m.\"chatId\"\n        ORDER BY\n            m.\"createdAt\" DESC\n        LIMIT $1\n        OFFSET $2\n        ",
   "describe": {
     "columns": [
       {
@@ -43,5 +43,5 @@
       false
     ]
   },
-  "hash": "01fe7f04dbd686c1488b3e98eb9c5ed15ff504b22dce8bc1589c9a557f511dcb"
+  "hash": "ded3c77986c957d0b5edbfb5e04cb63ffd5becc08d842380dd9f89767e139a5d"
 }

@@ -1,12 +1,10 @@
-import { Dialog } from '@kobalte/core/dialog';
 import { createSignal, Show } from 'solid-js';
 import { useReferralCode } from '@core/context/user';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { authServiceClient } from '@service-auth/client';
 import { contactsClient } from '@service-contacts/client';
 import { isOk } from '@core/util/maybeResult';
-import { DialogWrapper } from '@core/component/DialogWrapper';
-import { Button } from '@ui/components/Button';
+import { Dialog, Button, Panel } from '@ui';
 import { toast } from '@core/component/Toast/Toast';
 import CloseIcon from '@icon/regular/x.svg';
 import ClipboardIcon from '@icon/regular/clipboard.svg';
@@ -69,8 +67,8 @@ export const InviteModal = () => {
 
   return (
     <Dialog open={inviteModalOpen()} onOpenChange={(o) => !o && handleClose()}>
-      <Dialog.Portal>
-        <DialogWrapper>
+      <Panel depth={2} active>
+        <div class="*:max-h-[75vh]">
           <div class="flex flex-col text-ink">
             <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
               <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
@@ -153,8 +151,8 @@ export const InviteModal = () => {
               </Show>
             </div>
           </div>
-        </DialogWrapper>
-      </Dialog.Portal>
+        </div>
+      </Panel>
     </Dialog>
   );
 };

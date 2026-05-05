@@ -63,8 +63,7 @@ pub async fn get_documents_for_search(
             LIMIT 1
         ) di ON d."fileType" IS DISTINCT FROM 'docx' AND d."fileType" IS DISTINCT FROM 'pdf'
         WHERE
-            d."deletedAt" IS NULL
-            AND d."fileType" IS NOT NULL
+            d."fileType" IS NOT NULL
             AND ($3::text[] IS NULL OR d."fileType" = ANY($3))
             AND ($4::text IS NULL OR dst.sub_type::text = $4)
             AND ($5::timestamptz IS NULL OR d."createdAt" >= $5)

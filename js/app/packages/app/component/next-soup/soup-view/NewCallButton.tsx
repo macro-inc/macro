@@ -6,12 +6,10 @@ import type { WithCustomUserInput } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
 import { commsServiceClient } from '@service-comms/client';
-import { DialogWrapper } from '@core/component/DialogWrapper';
 import PhoneCallIcon from '@macro-icons/wide/call.svg';
 import XIcon from '@icon/regular/x.svg';
-import { Dialog } from '@kobalte/core/dialog';
 import { createSignal } from 'solid-js';
-import { Button } from '@ui/components/Button';
+import { Dialog, Button, Panel } from '@ui';
 
 export function NewCallButton() {
   const [isOpen, setIsOpen] = createSignal(false);
@@ -81,59 +79,61 @@ export function NewCallButton() {
   }
 
   return (
-    <Dialog
-      modal
-      open={isOpen()}
-      onOpenChange={(open) => {
-        setIsOpen(open);
-        if (!open) reset();
-      }}
-    >
-      <Dialog.Trigger
-        as={Button}
+    <>
+      <Button
         variant="secondary"
         size="sm"
         class="rounded-xs whitespace-nowrap px-2 text-ink-muted hover:text-ink"
+        onClick={() => setIsOpen(true)}
       >
         <PhoneCallIcon class="size-3.5" />
         New Call
-      </Dialog.Trigger>
-      <Dialog.Portal>
-        <DialogWrapper width="512px">
-          <div class="flex flex-col text-ink">
-            <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
-              <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-                <XIcon />
-              </Dialog.CloseButton>
-              <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
-                New Call
-              </Dialog.Title>
-            </div>
-            <div class="flex flex-col p-4 gap-4">
-              <RecipientSelector<'user' | 'contact' | 'channel'>
-                options={destinationOptions}
-                selectedOptions={selectedOptions()}
-                setSelectedOptions={setSelectedOptions}
-                placeholder="To: Macro users or email addresses"
-                triedToSubmit={triedToSubmit}
-                focusOnMount
-                triggerMode="input"
-              />
-              <div class="flex justify-end">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={isSubmitting()}
-                  onClick={handleStartCall}
-                >
-                  <PhoneCallIcon class="size-3.5" />
-                  {isSubmitting() ? 'Starting...' : 'Start Call'}
-                </Button>
+      </Button>
+      <Dialog
+        open={isOpen()}
+        onOpenChange={(open) => {
+          setIsOpen(open);
+          if (!open) reset();
+        }}
+        class="w-[512px]"
+      >
+        <Panel depth={2} active>
+          <div class="*:max-h-[75vh]">
+            <div class="flex flex-col text-ink">
+              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
+                <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+                  <XIcon />
+                </Dialog.CloseButton>
+                <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+                  New Call
+                </Dialog.Title>
+              </div>
+              <div class="flex flex-col p-4 gap-4">
+                <RecipientSelector<'user' | 'contact' | 'channel'>
+                  options={destinationOptions}
+                  selectedOptions={selectedOptions()}
+                  setSelectedOptions={setSelectedOptions}
+                  placeholder="To: Macro users or email addresses"
+                  triedToSubmit={triedToSubmit}
+                  focusOnMount
+                  triggerMode="input"
+                />
+                <div class="flex justify-end">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={isSubmitting()}
+                    onClick={handleStartCall}
+                  >
+                    <PhoneCallIcon class="size-3.5" />
+                    {isSubmitting() ? 'Starting...' : 'Start Call'}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
-        </DialogWrapper>
-      </Dialog.Portal>
-    </Dialog>
+        </Panel>
+      </Dialog>
+    </>
   );
 }

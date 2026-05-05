@@ -199,7 +199,7 @@ pub(crate) async fn update_document_metadata(
     let query = json!({
         "query": {
             "term": {
-                "document_id": document_id
+                "entity_id": document_id
             }
         },
         "script": {

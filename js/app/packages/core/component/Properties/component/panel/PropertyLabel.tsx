@@ -1,12 +1,10 @@
 import { useMaybeBlockAliasedName, useMaybeBlockId } from '@core/block';
 import { cn } from '@ui/utils/classname';
-import { Button } from '@ui/components/Button';
-import { DialogWrapper } from '@core/component/DialogWrapper';
+import { Dialog, Button, Panel } from '@ui';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
 import UnpinIcon from '@icon/regular/push-pin-slash.svg';
 import XIcon from '@icon/regular/x.svg';
-import { Dialog } from '@kobalte/core/dialog';
 import { useDeleteEntityPropertyMutation } from '@queries/properties/entity';
 import { type Component, createMemo, createSignal, Show } from 'solid-js';
 import {
@@ -157,8 +155,8 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         open={deleteConfirmVisible()}
         onOpenChange={setDeleteConfirmVisible}
       >
-        <Dialog.Portal>
-          <DialogWrapper>
+        <Panel depth={2} active>
+          <div class="*:max-h-[75vh]">
             <div class="flex flex-col overflow-hidden text-sm">
               <div class="flex items-center justify-between gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
                 <Dialog.Title class="pl-2 text-sm font-medium">
@@ -197,8 +195,8 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                 </Button>
               </div>
             </div>
-          </DialogWrapper>
-        </Dialog.Portal>
+          </div>
+        </Panel>
       </Dialog>
     </>
   );

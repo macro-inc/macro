@@ -8,7 +8,7 @@ pub async fn delete_channel_by_id(client: &opensearch::OpenSearch, channel_id: &
     let query = serde_json::json!({
         "query": {
             "term": {
-                "channel_id": channel_id
+                "entity_id": channel_id
             }
         },
     });
@@ -66,7 +66,7 @@ pub async fn delete_channel_message_by_id(
                 "must": [
                     {
                         "term": {
-                            "channel_id": channel_id
+                            "entity_id": channel_id
                         }
                     },
                     {

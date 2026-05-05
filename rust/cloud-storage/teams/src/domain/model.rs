@@ -17,6 +17,7 @@ use roles_and_permissions::domain::model::{RoleId, UserRolesAndPermissionsError}
     std::cmp::Ord,
     serde::Serialize,
     serde::Deserialize,
+    Default,
 )]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
@@ -26,6 +27,7 @@ use roles_and_permissions::domain::model::{RoleId, UserRolesAndPermissionsError}
 )]
 /// Ordered from lowest to highest tier top -> bottom
 pub enum TeamUserTier {
+    #[default]
     /// Haiku
     Haiku,
     /// Sonnet,
