@@ -66,10 +66,7 @@ export const InviteModal = () => {
   };
 
   return (
-    <Dialog
-      open={inviteModalOpen()}
-      onOpenChange={(o) => !o && handleClose()}
-    >
+    <Dialog open={inviteModalOpen()} onOpenChange={(o) => !o && handleClose()}>
       <Panel depth={2} active>
         <div class="*:max-h-[75vh]">
           <div class="flex flex-col text-ink">

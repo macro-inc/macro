@@ -73,7 +73,9 @@ function SignatureEditor(props: SignatureEditorProps) {
   // Anchor the editor to the center of the active block rather than the
   // viewport, so the signature canvas appears over the PDF block it belongs to
   // (which may not be the only thing on screen).
-  const [blockRect, setBlockRect] = createSignal<DOMRect | undefined>(undefined);
+  const [blockRect, setBlockRect] = createSignal<DOMRect | undefined>(
+    undefined
+  );
 
   onMount(() => {
     const el = blockElementSignal.get();

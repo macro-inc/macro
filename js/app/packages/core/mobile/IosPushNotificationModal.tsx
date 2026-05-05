@@ -25,7 +25,7 @@ export function IosPushNotificationModal() {
         onOpenChange={(open) => {
           if (!open) settings.dismissPrompt();
         }}
-        width="90%"
+        class="w-[90%]"
       >
         <Panel depth={2} active>
           <div class="*:max-h-[75vh]">
