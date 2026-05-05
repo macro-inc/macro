@@ -7,7 +7,7 @@ export const copyBranchNameToClipboard = async (documentId: string) => {
   const result = await storageServiceClient.getDocumentBranchName({
     documentId,
   });
-  if (!isOk(result) || !result[1].branchName) {
+  if (!isOk(result)) {
     toast.failure('Failed to copy branch name');
     return;
   }

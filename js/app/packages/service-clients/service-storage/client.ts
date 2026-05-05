@@ -560,17 +560,17 @@ export const storageServiceClient = {
   }): Promise<
     MaybeResult<
       FetchWithTokenErrorCode,
-      { shortId: string; branchName: string | null }
+      { shortId: string; branchName: string }
     >
   > {
     return mapOk(
-      await dssFetch<{ shortId: string; branchName?: string | null }>(
+      await dssFetch<{ shortId: string; branchName: string }>(
         `/documents/${documentId}/branch_name`,
         { method: 'GET' }
       ),
       (result) => ({
         shortId: result.shortId,
-        branchName: result.branchName ?? null,
+        branchName: result.branchName,
       })
     );
   },

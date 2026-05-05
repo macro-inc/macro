@@ -39,11 +39,10 @@ async function generateTaskPrompt(
   const result = await storageServiceClient.getDocumentBranchName({
     documentId,
   });
-  const shortId = isOk(result) ? result[1].shortId : documentId;
-  const branchName =
-    isOk(result) && result[1].branchName
-      ? result[1].branchName
-      : `macro-${shortId}`;
+  if (!isOk(result)) {
+    throw new Error('Failed to fetch branch name');
+  }
+  const { shortId, branchName } = result[1];
 
   const lines: string[] = [];
 

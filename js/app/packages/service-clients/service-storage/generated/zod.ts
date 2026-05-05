@@ -3181,8 +3181,8 @@ export const editDocumentResponse = zod
   .describe('Edit document response.');
 
 /**
- * Returns the short UUID for a document and, if the document is a task,
-its corresponding git branch name.
+ * Returns the short UUID and git branch name for a task document.
+Returns 400 if the document is not a task.
  * @summary Handler for `GET /documents/{document_id}/branch_name`.
  */
 export const getDocumentBranchNameParams = zod.object({
@@ -3193,10 +3193,7 @@ export const getDocumentBranchNameResponse = zod
   .object({
     branchName: zod
       .string()
-      .nullish()
-      .describe(
-        'The git branch name for the document. Only present when the document is a task.'
-      ),
+      .describe('The git branch name for the task document.'),
     shortId: zod.string().describe('The short id of the document.'),
   })
   .describe('Branch name response.');

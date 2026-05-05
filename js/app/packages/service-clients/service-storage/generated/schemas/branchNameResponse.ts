@@ -4,14 +4,13 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { BranchNameResponseBranchName } from './branchNameResponseBranchName';
 
 /**
  * Branch name response.
  */
 export interface BranchNameResponse {
-  /** The git branch name for the document. Only present when the document is a task. */
-  branchName?: BranchNameResponseBranchName;
+  /** The git branch name for the task document. */
+  branchName: string;
   /** The short id of the document. */
   shortId: string;
 }

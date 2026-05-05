@@ -20,15 +20,14 @@ use document_sub_type::DocumentSubType;
 pub struct BranchNameResponse {
     /// The short id of the document.
     pub short_id: String,
-    /// The git branch name for the document. Only present when the document is a task.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub branch_name: Option<String>,
+    /// The git branch name for the task document.
+    pub branch_name: String,
 }
 
 /// Handler for `GET /documents/{document_id}/branch_name`.
 ///
-/// Returns the short UUID for a document and, if the document is a task,
-/// its corresponding git branch name.
+/// Returns the short UUID and git branch name for a task document.
+/// Returns 400 if the document is not a task.
 #[utoipa::path(
     tag = "document",
     get,
@@ -39,6 +38,7 @@ pub struct BranchNameResponse {
     ),
     responses(
         (status = 200, body = BranchNameResponse),
+        (status = 400, body = model_error_response::ErrorResponse),
         (status = 401, body = model_error_response::ErrorResponse),
         (status = 404, body = model_error_response::ErrorResponse),
         (status = 500, body = model_error_response::ErrorResponse),
@@ -55,16 +55,17 @@ pub async fn get_branch_name_handler<T: DocumentService, Svc: EntityAccessServic
     let document = state.service.get_document(receipt.clone()).await?;
     let short_id = state.service.get_short_id(receipt).await?;
 
-    let branch_name = match document.document_metadata.sub_type {
-        Some(DocumentSubType::Task) => Some(build_task_branch_name(
-            &short_id,
-            &document.document_metadata.document_name,
-        )),
-        None => None,
-    };
-
-    Ok(Json(BranchNameResponse {
-        short_id,
-        branch_name,
-    }))
+    match document.document_metadata.sub_type {
+        Some(DocumentSubType::Task) => {
+            let branch_name =
+                build_task_branch_name(&short_id, &document.document_metadata.document_name);
+            Ok(Json(BranchNameResponse {
+                short_id,
+                branch_name,
+            }))
+        }
+        None => Err(DocumentError::BadRequest(format!(
+            "document {document_id} is not a task"
+        ))),
+    }
 }
