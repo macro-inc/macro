@@ -65,7 +65,9 @@ export function createTargetMessageController(
     setTargetMessageData({
       activeTargetMessageId: messageId,
       activeTargetMessageReplyId: replyId,
-      loadAroundMessageId: hasMessageLoaded(messageId) ? undefined : messageId,
+      loadAroundMessageId: hasMessageLoaded(messageId)
+        ? targetMessageData['loadAroundMessageId']
+        : messageId,
       pendingScrollTargetId: messageId,
       pendingTargetReplyId: replyId,
     });
