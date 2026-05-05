@@ -3733,6 +3733,7 @@ name = "email_importance"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "macro_db_migrator",
  "sqlx",
  "tokio",
  "tracing",

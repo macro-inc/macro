@@ -7,6 +7,9 @@
 //! email-level overrides take precedence over domain-level; a domain-level match is suppressed
 //! by an email-level override of the opposite importance.
 
+#[cfg(test)]
+mod test;
+
 use anyhow::Result;
 use sqlx::types::Uuid;
 use sqlx::{PgPool, Postgres, QueryBuilder};
