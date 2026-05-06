@@ -433,8 +433,8 @@ pub struct PlatformArnConfig {
     pub apns_platform_arn: String,
     /// SNS platform ARN for Android (FCM).
     pub fcm_platform_arn: String,
-    /// SNS platform ARN for iOS VoIP (APNS_VOIP). None if VoIP push is not configured.
-    pub apns_voip_platform_arn: Option<String>,
+    /// SNS platform ARN for iOS VoIP (APNS_VOIP).
+    pub apns_voip_platform_arn: String,
 }
 
 /// Service for reading and updating notifications.
@@ -685,11 +685,7 @@ where
         let platform_arn: &str = match device_type {
             DeviceType::Ios => self.platform_config.apns_platform_arn.as_str(),
             DeviceType::Android => self.platform_config.fcm_platform_arn.as_str(),
-            DeviceType::IosVoip => self
-                .platform_config
-                .apns_voip_platform_arn
-                .as_deref()
-                .ok_or_else(|| rootcause::report!("VoIP push not configured: SNS_APNS_VOIP_PLATFORM_ARN is not set"))?,
+            DeviceType::IosVoip => self.platform_config.apns_voip_platform_arn.as_str(),
         };
 
         // Get endpoint if exists, otherwise create new one

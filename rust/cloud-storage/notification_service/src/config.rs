@@ -49,8 +49,8 @@ pub struct Config {
     /// The sns android platform arn
     pub sns_fcm_platform_arn: String,
 
-    /// The sns ios VoIP platform arn (APNS_VOIP). Optional — VoIP push is disabled if not set.
-    pub sns_apns_voip_platform_arn: Option<String>,
+    /// The sns ios VoIP platform arn (APNS_VOIP).
+    pub sns_apns_voip_platform_arn: String,
 
     /// The sender base address
     // Explicitly allowed as it's used to ensure we have a correct sender base address in the lazy env var above
@@ -94,7 +94,8 @@ impl Config {
         let sns_fcm_platform_arn = std::env::var("SNS_FCM_PLATFORM_ARN")
             .context("SNS_FCM_PLATFORM_ARN must be provided")?;
 
-        let sns_apns_voip_platform_arn = std::env::var("SNS_APNS_VOIP_PLATFORM_ARN").ok();
+        let sns_apns_voip_platform_arn = std::env::var("SNS_APNS_VOIP_PLATFORM_ARN")
+            .context("SNS_APNS_VOIP_PLATFORM_ARN must be provided")?;
 
         let sender_base_address =
             std::env::var("SENDER_BASE_ADDRESS").context("SENDER_BASE_ADDRESS must be provided")?;
