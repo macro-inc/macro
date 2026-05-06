@@ -136,7 +136,6 @@ impl JobProgress {
     }
 }
 
-
 /// Terminal state of a tracked job. `Running` is the only non-terminal
 /// variant; the others are written exactly once when the worker future
 /// resolves or is cancelled.
