@@ -13,6 +13,7 @@ import {
 } from '@core/constant/allBlocks';
 import {
   DEV_MODE_ENV,
+  ENABLE_AUTO_UPDATE_UI,
   ENABLE_EMAIL,
   ENABLE_PROFILE_PICTURES,
 } from '@core/constant/featureFlags';
@@ -260,7 +261,9 @@ export function Account() {
                 </div>
               </Row>
 
-              <BundleUpdateRow />
+              <Show when={ENABLE_AUTO_UPDATE_UI}>
+                <BundleUpdateRow />
+              </Show>
 
               <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
                 <Row label="Email">
