@@ -174,17 +174,8 @@ async fn main() -> anyhow::Result<()> {
             tracing::trace!("libpdfium is present");
         }
 
-        let sync_service_auth_key = match config.environment {
-            Environment::Local => config.sync_service_auth_key.clone(),
-            _ => secretsmanager_client
-                .get_secret_value(&config.sync_service_auth_key)
-                .await
-                .context("unable to get secret")?
-                .to_string(),
-        };
-
         let lexical_client = LexicalClient::new(
-            sync_service_auth_key.clone(),
+            internal_auth_key.as_ref().to_string(),
             config.lexical_service_url.clone(),
         );
 

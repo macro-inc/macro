@@ -74,11 +74,6 @@ const INTERNAL_AUTH_KEY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-const SYNC_SERVICE_AUTH_KEY = config.require(`sync_service_auth_key`);
-const syncServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY })
-  .apply((secret) => secret.arn);
-
 const searchProcessingService = new SearchProcessingService(
   `${BASE_NAME}-${stack}`,
   {
@@ -86,7 +81,6 @@ const searchProcessingService = new SearchProcessingService(
       databaseUrlArn,
       databaseUrlReadonlyArn,
       opensearchPasswordArn,
-      syncServiceAuthKeyArn,
     ],
     searchEventQueueArn,
     ecsClusterArn: cloudStorageClusterArn,
@@ -144,10 +138,6 @@ const searchProcessingService = new SearchProcessingService(
       {
         name: 'INTERNAL_API_SECRET_KEY',
         value: INTERNAL_AUTH_KEY,
-      },
-      {
-        name: 'SYNC_SERVICE_AUTH_KEY',
-        value: SYNC_SERVICE_AUTH_KEY,
       },
       {
         name: 'WORKER_COUNT',

@@ -54,9 +54,6 @@ pub struct Config {
     /// The bucket where documents are stored
     pub document_storage_bucket: String,
 
-    /// API key for sync service
-    pub sync_service_auth_key: String,
-
     /// The number of workers to spawn
     pub worker_count: u8,
 
@@ -119,9 +116,6 @@ impl Config {
         let document_storage_bucket = std::env::var("DOCUMENT_STORAGE_BUCKET")
             .context("DOCUMENT_STORAGE_BUCKET must be provided")?;
 
-        let sync_service_auth_key = std::env::var("SYNC_SERVICE_AUTH_KEY")
-            .context("SYNC_SERVICE_AUTH_KEY must be provided")?;
-
         let worker_count: u8 = std::env::var("WORKER_COUNT")
             .unwrap_or("10".to_string())
             .parse::<u8>()
@@ -150,7 +144,6 @@ impl Config {
             opensearch_username,
             opensearch_password,
             document_storage_bucket,
-            sync_service_auth_key,
             worker_count,
             lexical_service_url,
             backfill_page_sizes,
