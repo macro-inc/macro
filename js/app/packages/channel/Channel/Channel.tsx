@@ -424,7 +424,7 @@ export function Channel(props: ChannelProps) {
                   isPending={findBar.isPending()}
                   direction="desc"
                   inputRef={findBar.setInputEl}
-                  placeholder="Find in channel"
+                  placeholder="Find"
                 />
               </Show>
               <Show when={messages().length > 0}>
