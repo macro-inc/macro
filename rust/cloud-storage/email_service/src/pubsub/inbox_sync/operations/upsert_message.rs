@@ -7,8 +7,14 @@ use crate::pubsub::util::cg_refresh_email;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use contacts::domain::ports::ContactsIngress;
+use email::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
+use email::domain::ports::EmailRepo;
+use email::outbound::EmailPgRepo;
 use email_db_client::threads;
 use email_utils::dedupe_emails;
+use filter_ast::Expr;
+use item_filters::{SharedEmailFilter, ast::email::EmailLiteral};
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
@@ -24,6 +30,7 @@ use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 use std::collections::HashSet;
 use std::result;
+use std::sync::Arc;
 use uuid::Uuid;
 
 // upsert a message into the db. could be a new message or an existing one that had changes
@@ -582,15 +589,43 @@ async fn filter_notifiable_message(
         return Ok(None);
     }
 
-    // 2. Single query mirroring Importance(true): sender override or label-based signal.
-    let important = email_importance::is_message_important(&ctx.db, new_message.db_id)
+    // 2. Use the same dynamic email preview path as the Signal tab:
+    //    emailView=inbox AND ef=(Importance(true) AND Shared(exclude)), scoped to this thread.
+    let signal_filter = Expr::and(
+        Expr::Literal(EmailLiteral::ThreadId(new_message.thread_db_id)),
+        Expr::and(
+            Expr::Literal(EmailLiteral::Importance(true)),
+            Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
+        ),
+    );
+
+    let macro_id_str = link.macro_id.to_string();
+    let user_id = MacroUserIdStr::parse_from_str(&macro_id_str).map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::InvalidData,
+            source: anyhow::anyhow!("failed to parse macro user id: {}", e),
+        })
+    })?;
+
+    let query = PreviewCursorQuery {
+        view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_id: link.id,
+        limit: 1,
+        query: models_pagination::Query::Sort(
+            models_pagination::SimpleSortMethod::UpdatedAt,
+            Some(Arc::new(signal_filter)),
+        ),
+    };
+
+    let previews = EmailPgRepo::new(ctx.db.clone())
+        .previews_for_view_cursor(query, user_id.into_owned())
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to evaluate message importance".to_string()),
+                source: anyhow::Error::new(e).context("Failed to evaluate Signal tab membership"),
             })
         })?;
 
-    Ok(important.then_some(new_message))
+    Ok((!previews.is_empty()).then_some(new_message))
 }
