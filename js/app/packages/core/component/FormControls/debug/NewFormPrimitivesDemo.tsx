@@ -46,7 +46,7 @@ const NewFormPrimitivesDemo = () => {
         </Button>
 
         <DropdownMenu
-          size="SM"
+          size="sm"
           triggerLabel="dropdown"
           open={openDropdown1()}
           onOpenChange={setOpenDropdown1}
@@ -119,7 +119,7 @@ const NewFormPrimitivesDemo = () => {
           onChange={(newValue) => setSelectItemFromList(newValue)}
         />
         <DropdownMenu
-          size="Base"
+          size="sm"
           triggerLabel="dropdown"
           open={openDropdown2()}
           onOpenChange={setOpenDropdown2}

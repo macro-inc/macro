@@ -37,8 +37,6 @@ const sizeStyles: Record<ButtonSize, string> = {
   'sm': 'p-1   text-xs   gap-1  ',
 };
 
-const TOOLTIP_DELAY = 250;
-
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
     'tooltipPlacement',
@@ -80,8 +78,8 @@ export const Button = (props: ButtonProps) => {
             flip: true,
           }}
           group="tooltip-single-group"
-          closeDelay={TOOLTIP_DELAY}
-          openDelay={TOOLTIP_DELAY}
+          closeDelay={250}
+          openDelay={250}
         >
           <CorvuTooltip.Trigger as={KButton} class={cls()} {...others}>
             {local.children}
