@@ -733,7 +733,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
     <ContextMenu>
       <ContextMenu.Trigger class="w-full">
         <Button
-          as="button"
           draggable={false}
           variant="ghost"
           class={cn(

@@ -55,7 +55,7 @@ export const Button = <T extends ValidComponent = 'button'>(
 
   const cls = () =>
     cn(
-      'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-xs',
+      'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-xs whitespace-nowrap',
       'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
       'outline-none focus-visible:bg-active',
       'data-disabled:cursor-not-allowed',
