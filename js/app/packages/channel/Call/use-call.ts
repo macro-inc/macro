@@ -1,12 +1,12 @@
+import { throwOnErr } from '@core/util/maybeResult';
 import { useLeaveCallMutation } from '@queries/call/call';
 import { queryClient } from '@queries/client';
-import { useMutation } from '@tanstack/solid-query';
 import { callServiceClient } from '@service-call/client';
-import { throwOnErr } from '@core/util/maybeResult';
+import { useMutation } from '@tanstack/solid-query';
 import { RoomEvent } from 'livekit-client';
-import { createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
-import { endCallKitCall } from './use-callkit';
+import { endCallKitCall, registerCallKitCallEndedHandler } from './use-callkit';
 
 type UseCallOptions = {
   /** Called after successfully joining a call. */
@@ -56,6 +56,26 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
   }
 
   onCleanup(() => cleanupDisconnectListener?.());
+
+  let callKitLeaveInFlight = false;
+  createEffect(() => {
+    if (!callCtx.isInCall() || callCtx.activeChannelId() !== channelId())
+      return;
+
+    const unregister = registerCallKitCallEndedHandler(async () => {
+      if (callKitLeaveInFlight) return;
+      callKitLeaveInFlight = true;
+      try {
+        await leaveCall({ endNativeCall: false });
+      } catch (e) {
+        console.error('callkit: failed to leave ended call', e);
+      } finally {
+        callKitLeaveInFlight = false;
+      }
+    });
+
+    onCleanup(unregister);
+  });
 
   /** Cleared in `joinCall` `finally` + safety timer so Try again never stays disabled if TanStack pending glitches. */
   const [joinUiPending, setJoinUiPending] = createSignal(false);
@@ -140,14 +160,18 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     }
   };
 
-  async function leaveCall() {
+  async function leaveCall(leaveOptions?: { endNativeCall?: boolean }) {
     const id = channelId();
     // Detach before disconnect so the RoomEvent.Disconnected handler
     // doesn't double-fire onLeave.
     cleanupDisconnectListener?.();
     cleanupDisconnectListener = null;
     // Dismiss the native CallKit call sheet if the user left from within the app.
-    await endCallKitCall();
+    // When the leave is initiated by CXEndCallAction, the native sheet is already
+    // ending, so avoid sending a second native end request back to CallKit.
+    if (leaveOptions?.endNativeCall !== false) {
+      await endCallKitCall();
+    }
     try {
       await callCtx.disconnect();
       options?.onLeave?.();
