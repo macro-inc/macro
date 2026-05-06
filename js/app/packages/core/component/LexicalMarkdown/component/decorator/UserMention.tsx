@@ -35,6 +35,7 @@ export function UserMention(props: UserMentionDecoratorProps) {
   return (
     <Tooltip
       placement="top"
+      spanMode
       unstyled
       tooltip={(close) => (
         <UserTooltip
