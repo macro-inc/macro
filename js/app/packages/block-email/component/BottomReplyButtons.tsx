@@ -27,7 +27,7 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
   return (
     <div class="w-full border-t border-edge-muted flex flex-row items-center justify-center gap-2 pt-3 pb-2">
       <Button
-        variant="secondary"
+        variant="base"
         size="md"
         class="rounded-full px-4 py-0.8"
         onClick={open('reply')}
@@ -36,7 +36,7 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
         <span>Reply</span>
       </Button>
       <Button
-        variant="secondary"
+        variant="base"
         size="md"
         class="rounded-full px-4 py-0.8"
         onClick={open('forward')}
