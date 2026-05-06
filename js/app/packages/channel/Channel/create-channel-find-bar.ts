@@ -126,6 +126,7 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
   };
 
   const hasUnsubmittedChanges = () => query().trim() !== submittedQuery();
+  const isPending = () => !!submittedQuery() && searchQuery.isFetching;
 
   return {
     isOpen,
@@ -133,6 +134,7 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
     setQuery,
     submittedQuery,
     hasUnsubmittedChanges,
+    isPending,
     activeIndex,
     resultsCount: () => results().length,
     open,

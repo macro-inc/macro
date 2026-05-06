@@ -22,19 +22,26 @@ export function SimpleSearch() {
 
   const [isOpen, setIsOpen] = isSearchOpenSignal;
   const [searchText, setSearchText] = searchSignal;
+  const [isPending, setIsPending] = createSignal(false);
 
   // Re-run the active search when the bar opens (or re-opens with prior text).
   createEffect(() => {
     if (untrack(locationPending)) return;
     const text = untrack(searchText);
-    if (isOpen()) searchStart({ query: text });
+    if (isOpen()) {
+      searchStart({ query: text });
+      if (text) setIsPending(true);
+    }
   });
 
   // Sync the input value when the search subsystem normalizes/echoes a query.
+  // Clear the pending flag once the results match the current query — guards
+  // against the controller emitting a stale matchesCount mid-transition.
   createEffect(() => {
-    const query = searchResults()?.query;
+    const r = searchResults();
     if (untrack(locationPending)) return;
-    if (query != null) setSearchText(query);
+    if (r?.query != null) setSearchText(r.query);
+    if (r?.query === untrack(searchText)) setIsPending(false);
   });
 
   const submittedQuery = () => searchResults()?.query ?? '';
@@ -44,6 +51,7 @@ export function SimpleSearch() {
   const submit = () => {
     const query = searchText();
     searchStart({ query });
+    if (query) setIsPending(true);
   };
 
   const next = () => {
@@ -109,6 +117,7 @@ export function SimpleSearch() {
         index={current()}
         total={total()}
         hasUnsubmittedChanges={searchText() !== submittedQuery()}
+        isPending={isPending()}
         inputRef={setInputEl}
       />
     </Show>

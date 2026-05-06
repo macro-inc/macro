@@ -19,6 +19,8 @@ export type FindBarProps = {
   total?: number;
   /** Whether the typed query differs from the most recently submitted one. */
   hasUnsubmittedChanges?: boolean;
+  /** True while a submitted query is in flight; suppresses the count. */
+  isPending?: boolean;
   /**
    * Which physical key advances the cursor. Defaults to `'asc'` —
    * ArrowDown/Enter advance, ArrowUp/Shift+Enter retreat. Use `'desc'` for
@@ -81,10 +83,10 @@ export function FindBar(props: FindBarProps) {
 
   const showCount = () =>
     typeof props.index === 'number' &&
-    props.index > 0 &&
     typeof props.total === 'number' &&
     !!props.query.trim() &&
-    !props.hasUnsubmittedChanges;
+    !props.hasUnsubmittedChanges &&
+    !props.isPending;
 
   return (
     <div
