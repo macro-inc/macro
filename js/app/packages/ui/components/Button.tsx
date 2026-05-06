@@ -1,4 +1,4 @@
-import { Button as KButton, type ButtonRootProps } from '@kobalte/core/button';
+import { Button as KobalteButton, type ButtonRootProps } from '@kobalte/core/button';
 import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
 import type { Placement } from '@floating-ui/dom';
 import CorvuTooltip from '@corvu/tooltip';
@@ -72,9 +72,9 @@ export const Button = (props: ButtonProps) => {
     <Layer depth={local.depth ?? 0}>
       <Show
         fallback={
-          <KButton class={cls()} {...others}>
+          <KobalteButton class={cls()} {...others}>
             {local.children}
-          </KButton>
+          </KobalteButton>
         }
         when={local.tooltip}
       >
@@ -90,7 +90,7 @@ export const Button = (props: ButtonProps) => {
           closeDelay={250}
           openDelay={250}
         >
-          <CorvuTooltip.Trigger as={KButton} class={cls()} {...others}>
+          <CorvuTooltip.Trigger as={KobalteButton} class={cls()} {...others}>
             {local.children}
           </CorvuTooltip.Trigger>
           <CorvuTooltip.Portal>
