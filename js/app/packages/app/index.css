@@ -81,7 +81,8 @@
   --color-accent-ink:      var(--a0);
   --color-accent:          var(--a0);
   --color-focus:           var(--a0);
-  --color-accent-bg:       oklch(from var(--a0) l c h / 0.15);
+  --color-accent-bg:       oklch(var(--a0) / 0.08);
+  --color-accent-hover:    oklch(var(--a0) / 0.20); /* hover, e.g. hover state for buttons/items */
 
   --color-panel:           var(--b0); /* block background */
   --color-page:            var(--b0); /* page background */
