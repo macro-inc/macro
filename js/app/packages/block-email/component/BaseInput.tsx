@@ -629,6 +629,8 @@ export function BaseInput(props: {
   const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   let draftSaveTimer: number | undefined;
+  let pendingDeletion = false;
+  let pendingSend = false;
   const DRAFT_DEBOUNCE_MS = 500;
 
   function collectDraft() {
@@ -665,7 +667,7 @@ export function BaseInput(props: {
   }
 
   async function executeSaveDraft() {
-    if (sendMutation.isPending) {
+    if (sendMutation.isPending || pendingDeletion || pendingSend) {
       return;
     }
     const draftToSave = collectDraft();
@@ -760,6 +762,25 @@ export function BaseInput(props: {
       void executeSaveDraft();
     }, DRAFT_DEBOUNCE_MS);
   }
+
+  onCleanup(() => {
+    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+  });
+
+  // After a send, the bottom input stays mounted and its replyingTo flips to
+  // the just-sent message once the thread refetches. Cancel the inhibited
+  // post-send save and re-enable saves so a fresh edit under the new form
+  // context can be persisted.
+  createEffect(
+    on(
+      () => props.replyingTo()?.db_id,
+      () => {
+        if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+        pendingSend = false;
+      },
+      { defer: true }
+    )
+  );
 
   const handleChipDragStart = (
     field: 'to' | 'cc' | 'bcc',
@@ -970,6 +991,12 @@ export function BaseInput(props: {
       },
     });
 
+    // Block any save scheduled by reset side effects (form().reset() callDirty,
+    // clearEmailBody editor onChange firing on a microtask). Without this, the
+    // 500ms timer fires after the thread refetches, the form memo switches to
+    // the just-sent message's reply context, and we POST an empty draft
+    // replying to the message we just sent — flipping it back to is_draft=TRUE.
+    pendingSend = true;
     resetState();
     clearDraftState();
 
@@ -992,6 +1019,14 @@ export function BaseInput(props: {
   };
 
   const deleteDraftAndReset = async () => {
+    // Block any further saves for the lifetime of this BaseInput. resetState()
+    // triggers two save schedulers (clearEmailBody → editor onChange, and
+    // form().reset() → callDirty), and the editor listener may run on a
+    // microtask, so synchronous clearTimeout calls aren't enough. The
+    // component unmounts via clearDraftState() right after this, so leaving
+    // the flag set is fine.
+    pendingDeletion = true;
+    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     const draftId = savedDraftId();
     if (draftId) {
       await deleteDraftMutation.mutateAsync({ draftId });

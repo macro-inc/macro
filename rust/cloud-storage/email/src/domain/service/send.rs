@@ -29,7 +29,7 @@ where
             .prepare_and_insert_db_message(link, input, false)
             .await?;
 
-        // FE displays "Undo" button for delay_secs. Give extra time for round trip of cancel request
+        // FE displays "Undo" button for delay_secs. Give extra time for round trip of cancel requesta
         let sqs_delay = delay_secs as i32 + 2;
         self.enqueuer
             .enqueue_scheduled_message(link.id, created.db_id, Some(sqs_delay))
