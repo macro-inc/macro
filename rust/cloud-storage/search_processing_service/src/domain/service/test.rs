@@ -112,7 +112,7 @@ fn page(messages: Vec<SearchQueueMessage>) -> SourcePage {
 }
 
 fn detached() -> (JobProgress, CancellationToken) {
-    (JobProgress::default(), CancellationToken::new())
+    (JobProgress::detached(), CancellationToken::new())
 }
 
 #[tokio::test]
@@ -134,7 +134,7 @@ async fn drains_source_across_full_pages() {
     .unwrap();
 
     assert_eq!(receipt.enqueued, 15);
-    assert_eq!(progress.enqueued(), 15);
+    assert_eq!(progress.local_count(), 15);
     assert_eq!(publisher.batch_count(), 3);
     assert_eq!(publisher.total_messages(), 15);
     assert_eq!(publisher.batch_sizes(), vec![5, 5, 5]);
@@ -312,7 +312,7 @@ async fn cancel_between_pages_stops_drain_after_current_page() {
     .unwrap();
 
     assert_eq!(receipt.enqueued, 5);
-    assert_eq!(progress.enqueued(), 5);
+    assert_eq!(progress.local_count(), 5);
     // First page fetched + published; cancellation prevents the second fetch.
     assert_eq!(source.observed_offsets(), vec![0]);
     assert_eq!(*publisher.seen.lock().unwrap(), vec![5]);

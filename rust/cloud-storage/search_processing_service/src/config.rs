@@ -62,6 +62,14 @@ pub struct Config {
 
     /// Per-entity DB page sizes for backfill adapters.
     pub backfill_page_sizes: BackfillPageSizes,
+
+    /// Redis connection URL for the backfill job registry. Same Redis the
+    /// connection-gateway exposes — backfills don't need a dedicated cluster.
+    pub redis_host: String,
+
+    /// TTL for backfill job records in Redis. Acts as the GC mechanism —
+    /// completed jobs vanish on their own without a separate cleanup task.
+    pub backfill_job_ttl_seconds: u64,
 }
 
 fn parse_page_size(name: &str, default: usize) -> anyhow::Result<usize> {
@@ -132,6 +140,12 @@ impl Config {
             emails: parse_page_size("BACKFILL_EMAILS_PAGE_SIZE", DEFAULT_EMAILS_PAGE)?,
         };
 
+        let redis_host = std::env::var("REDIS_HOST").context("REDIS_HOST must be provided")?;
+        let backfill_job_ttl_seconds: u64 = std::env::var("BACKFILL_JOB_TTL_SECONDS")
+            .unwrap_or_else(|_| (24 * 60 * 60).to_string())
+            .parse()
+            .context("BACKFILL_JOB_TTL_SECONDS must be a positive integer")?;
+
         Ok(Config {
             database_url,
             database_url_readonly,
@@ -147,6 +161,8 @@ impl Config {
             worker_count,
             lexical_service_url,
             backfill_page_sizes,
+            redis_host,
+            backfill_job_ttl_seconds,
         })
     }
 }

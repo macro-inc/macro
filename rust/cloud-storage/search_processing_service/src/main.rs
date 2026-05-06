@@ -196,7 +196,15 @@ async fn main() -> anyhow::Result<()> {
         run_search_processing_workers(ctx, config.worker_count);
     }
 
-    let backfill_jobs = BackfillJobs::new();
+    let redis_conn = redis::Client::open(config.redis_host.as_str())
+        .context("failed to construct redis client")?
+        .get_connection_manager()
+        .await
+        .context("failed to connect to redis for backfill registry")?;
+    let backfill_jobs = BackfillJobs::new(
+        redis_conn,
+        std::time::Duration::from_secs(config.backfill_job_ttl_seconds),
+    );
 
     api::setup_and_serve(ApiContext {
         db,

@@ -44,9 +44,11 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .context("error starting service")
 }
 
-/// Block on a SIGINT/SIGTERM signal, then fire every tracked backfill's
-/// cancellation token so drains stop between pages instead of being killed
-/// mid-publish when the runtime exits.
+/// Block on a SIGINT/SIGTERM signal, then fire every locally tracked
+/// backfill's cancellation token so drains stop between pages instead of
+/// being killed mid-publish when the runtime exits. Only jobs running on
+/// this pod are cancelled — the registry is shared via Redis but
+/// cancellation tokens are per-instance.
 async fn shutdown_signal(backfill_jobs: crate::domain::jobs::BackfillJobs) {
     let ctrl_c = async {
         if let Err(e) = tokio::signal::ctrl_c().await {
@@ -75,8 +77,8 @@ async fn shutdown_signal(backfill_jobs: crate::domain::jobs::BackfillJobs) {
         _ = terminate => {},
     }
 
-    tracing::info!("shutdown signal received; cancelling in-flight backfills");
-    backfill_jobs.cancel_all();
+    tracing::info!("shutdown signal received; cancelling in-flight backfills on this pod");
+    backfill_jobs.cancel_all_local();
 }
 
 fn api_router(internal_secret: LocalOrRemoteSecret<InternalApiSecretKey>) -> Router<ApiContext> {

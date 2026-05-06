@@ -2,11 +2,12 @@
 //!
 //! Each POST handler kicks the orchestrator onto a background tokio task
 //! and returns `202 Accepted` with a job id right away — prod-scale corpora
-//! can take many minutes to drain, well past the ALB idle timeout.
-//! Clients poll `GET /internal/backfill/{job_id}` for progress; the
-//! orchestrator updates the shared progress counter as each page lands.
-//! On shutdown the registry's cancellation tokens fire so drains stop
-//! between pages instead of being killed mid-publish.
+//! can take many minutes to drain, well past the ALB idle timeout. Clients
+//! poll `GET /internal/backfill/{job_id}` for progress; the orchestrator
+//! updates the shared progress counter in Redis as each page lands. Any
+//! SPS instance can answer the GET because state lives in Redis, not in
+//! process memory. On shutdown the registry's local cancellation tokens
+//! fire so drains stop between pages instead of being killed mid-publish.
 //!
 //! Adding a new entity is one POST handler + one `.route(...)`; the status
 //! handler is generic.
@@ -58,6 +59,7 @@ async fn calls(
         "calls",
         move |svc, progress, cancel| async move { svc.backfill_calls(req, progress, cancel).await },
     )
+    .await
 }
 
 #[tracing::instrument(skip(service, jobs, req))]
@@ -72,6 +74,7 @@ async fn chats(
         "chats",
         move |svc, progress, cancel| async move { svc.backfill_chats(req, progress, cancel).await },
     )
+    .await
 }
 
 #[tracing::instrument(skip(service, jobs, req))]
@@ -84,8 +87,11 @@ async fn channels(
         service,
         jobs,
         "channels",
-        move |svc, progress, cancel| async move { svc.backfill_channels(req, progress, cancel).await },
+        move |svc, progress, cancel| async move {
+            svc.backfill_channels(req, progress, cancel).await
+        },
     )
+    .await
 }
 
 #[tracing::instrument(skip(service, jobs, req))]
@@ -98,8 +104,11 @@ async fn documents(
         service,
         jobs,
         "documents",
-        move |svc, progress, cancel| async move { svc.backfill_documents(req, progress, cancel).await },
+        move |svc, progress, cancel| async move {
+            svc.backfill_documents(req, progress, cancel).await
+        },
     )
+    .await
 }
 
 #[tracing::instrument(skip(service, jobs, req))]
@@ -112,23 +121,30 @@ async fn emails(
         service,
         jobs,
         "emails",
-        move |svc, progress, cancel| async move { svc.backfill_emails(req, progress, cancel).await },
+        move |svc, progress, cancel| async move {
+            svc.backfill_emails(req, progress, cancel).await
+        },
     )
+    .await
 }
 
 #[tracing::instrument(skip(jobs))]
 async fn status(State(jobs): State<BackfillJobs>, Path(job_id): Path<String>) -> Response {
-    match jobs.snapshot(&JobId::from(job_id)) {
-        Some(snap) => axum::Json(snap).into_response(),
-        None => (StatusCode::NOT_FOUND, "unknown job id").into_response(),
+    match jobs.snapshot(&JobId::from(job_id)).await {
+        Ok(Some(snap)) => axum::Json(snap).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, "unknown job id").into_response(),
+        Err(e) => {
+            tracing::error!(error=?e, "failed to read backfill job snapshot");
+            (StatusCode::INTERNAL_SERVER_ERROR, "registry unavailable").into_response()
+        }
     }
 }
 
-/// Allocate a job slot, hand the progress + cancel token to the worker
-/// future the caller built, spawn it, and return `202 Accepted` with the
-/// job id. The worker future captures the request body so the HTTP body
-/// reference doesn't outlive the handler.
-fn spawn_backfill<F, Fut>(
+/// Allocate a job slot in Redis, hand the progress + cancel token to the
+/// worker future the caller built, spawn it, and return `202 Accepted`
+/// with the job id. The worker future captures the request body so the
+/// HTTP body reference doesn't outlive the handler.
+async fn spawn_backfill<F, Fut>(
     service: Arc<BackfillServiceImpl>,
     jobs: BackfillJobs,
     entity: &'static str,
@@ -149,7 +165,13 @@ where
             >,
         > + Send,
 {
-    let handle = jobs.start();
+    let handle = match jobs.start(entity).await {
+        Ok(h) => h,
+        Err(e) => {
+            tracing::error!(error=?e, entity, "failed to allocate backfill job in redis");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "registry unavailable").into_response();
+        }
+    };
     let id = handle.id.clone();
     let id_for_task = handle.id.clone();
     let jobs_for_task = jobs.clone();
@@ -163,7 +185,9 @@ where
         } else {
             tracing::info!(job_id = %id_for_task, entity, "backfill completed");
         }
-        jobs_for_task.finish(&id_for_task, result);
+        if let Err(e) = jobs_for_task.finish(&id_for_task, result).await {
+            tracing::error!(job_id = %id_for_task, error=?e, "failed to record backfill terminal status in redis");
+        }
     });
 
     (

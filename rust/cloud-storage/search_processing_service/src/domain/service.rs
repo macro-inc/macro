@@ -105,7 +105,7 @@ where
         publisher.publish(page.messages).await?;
         enqueued += page.rows_consumed;
         offset += page.rows_consumed;
-        progress.add(page.rows_consumed);
+        progress.add(page.rows_consumed).await;
     }
 
     Ok(BackfillReceipt { enqueued })

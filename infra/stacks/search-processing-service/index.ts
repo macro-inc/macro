@@ -44,6 +44,17 @@ const opensearchStack = new pulumi.StackReference('opensearch-stack', {
   name: `macro-inc/opensearch/${stack}`,
 });
 
+const connectionGatewayStack = new pulumi.StackReference(
+  'connection-gateway-stack',
+  {
+    name: `macro-inc/connection-gateway/${stack}`,
+  }
+);
+
+const connectionGatewayRedisUrl: pulumi.Output<string> = connectionGatewayStack
+  .getOutput('connectionGatewayRedisUrl')
+  .apply((url) => url as string);
+
 const OPENSEARCH_URL: pulumi.Output<string> = opensearchStack
   .getOutput('domainEndpoint')
   .apply((domainEndpoint) => `https://${domainEndpoint}`);
@@ -146,6 +157,10 @@ const searchProcessingService = new SearchProcessingService(
       {
         name: ServiceUrl.LEXICAL_SERVICE_URL,
         value: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
+      },
+      {
+        name: 'REDIS_HOST',
+        value: pulumi.interpolate`redis://${connectionGatewayRedisUrl}`,
       },
       // OpenTelemetry / Datadog tracing configuration
       {
