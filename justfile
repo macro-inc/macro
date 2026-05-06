@@ -111,6 +111,26 @@ run_local *ARGS:
     docker compose up
   fi
 
+# Reset and seed deterministic data used by the local Playwright smoke suite.
+local-e2e-seed:
+  just run_dbs -d
+  just rust/cloud-storage/macro_db_client/migrate_db
+  cd rust/cloud-storage/seed_cli && just local-e2e-smoke
+
+# Start the local stack, seed deterministic data, and run the Playwright smoke suite.
+local-e2e *ARGS:
+  AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
+  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml just run_local -d --wait
+  just local-e2e-seed
+  cd js/app && LOCAL_E2E=true bunx playwright test {{ ARGS }}
+
+# Start the local stack, seed deterministic data, and open Playwright UI mode.
+local-e2e-ui *ARGS:
+  AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
+  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml just run_local -d --wait
+  just local-e2e-seed
+  cd js/app && LOCAL_E2E=true bunx playwright test --ui {{ ARGS }}
+
 # Patches .env with local FusionAuth values if the Pulumi stack exists.
 # Requires FusionAuth to be running — starts it temporarily if needed.
 patch_local_fusionauth_env:

@@ -42,3 +42,24 @@ locally as they are not needed by the frontend when using dev assets.
 
 You can run the following command to get the frontend running pointed to local 
 services `cd js/app && bun i && just local`.
+
+### Local E2E smoke test
+
+After `just setup`, run:
+
+```bash
+just local-e2e
+```
+
+This starts the local stack using `docker-compose.local-e2e.yml` overrides so
+services use local Postgres/LocalStack instead of shared dev assets, seeds
+deterministic smoke-test data, launches the frontend with local services and
+local bearer-token auth, and runs the Playwright smoke test.
+
+The local E2E seed scenario is guarded in code: it requires `LOCAL_E2E_SEED=true`
+and refuses any `DATABASE_URL` that is not the local Docker database
+`postgres://user:...@(localhost|127.0.0.1|postgres):5432/macrodb`.
+
+Shared fixture data lives under `rust/cloud-storage/seed_cli/seed`; local users
+are in `local_e2e/users.json`, and Playwright tests can read the same data via
+`js/app/tests/e2e/fixtures/local-e2e-seed.ts`.
