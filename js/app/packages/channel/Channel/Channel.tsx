@@ -433,61 +433,59 @@ export function Channel(props: ChannelProps) {
               </Show>
               <Show when={messages().length > 0}>
                 <ThreadList
-                    keys={() => messageIndex.keys}
-                    initialScrollTarget={threadListInitialScrollTarget()}
-                    shift={shift}
-                    prepend={threadPaginator.isPrepending}
-                    onScrollNearTop={threadPaginator.shiftPaginate}
-                    onScrollNearBottom={threadPaginator.prependPaginate}
-                    onNavigationReady={setThreadListNavigation}
-                    onScrollStateChange={setThreadListScrollState}
-                  >
-                    {(item) => {
-                      const message = () => messageById().get(item.id);
-                      const state = threadManager.getOrCreateThreadState(
-                        item.id
-                      );
-                      const isNewestThread = () =>
-                        item.id === messageIndex.keys.at(-1);
+                  keys={() => messageIndex.keys}
+                  initialScrollTarget={threadListInitialScrollTarget()}
+                  shift={shift}
+                  prepend={threadPaginator.isPrepending}
+                  onScrollNearTop={threadPaginator.shiftPaginate}
+                  onScrollNearBottom={threadPaginator.prependPaginate}
+                  onNavigationReady={setThreadListNavigation}
+                  onScrollStateChange={setThreadListScrollState}
+                >
+                  {(item) => {
+                    const message = () => messageById().get(item.id);
+                    const state = threadManager.getOrCreateThreadState(item.id);
+                    const isNewestThread = () =>
+                      item.id === messageIndex.keys.at(-1);
 
-                      return (
-                        <Show when={message()}>
-                          {(m) => (
-                            <ChannelThread
-                              data={m}
-                              channelId={() => props.channelId}
-                              isNewestThread={isNewestThread()}
-                              getMessageActions={getMessageActions}
-                              targetReplyId={targetMessageController.activeTargetMessageReplyId()}
-                              onTargetReplyScrolled={(replyId) => {
-                                targetMessageController.completePendingReplyScroll(
-                                  m().id,
-                                  replyId
-                                );
-                              }}
-                              isExpanded={state.isExpanded}
-                              setIsExpanded={state.setIsExpanded}
-                              isReplying={state.isReplying}
-                              setIsReplying={state.setIsReplying}
-                              replyInputState={state.replyInputState}
-                              setReplyInputState={state.setReplyInputState}
-                              setReplyInputEl={state.setReplyInputEl}
-                              listMeta={listMetaByMessageId()[item.id]}
-                              messageEditor={messageEditor}
-                              threadActions={{
-                                onDismissNewMessages:
-                                  activityTracker.dismissNewMessages,
-                              }}
-                              isNewMessage={activityTracker.isNewMessage}
-                              selectedMessageId={selection.selectedId}
-                              onSelectMessage={selectMessage}
-                              onClearSelection={clearSelection}
-                              messageListScopeId={messageListScopeId}
-                            />
-                          )}
-                        </Show>
-                      );
-                    }}
+                    return (
+                      <Show when={message()}>
+                        {(m) => (
+                          <ChannelThread
+                            data={m}
+                            channelId={() => props.channelId}
+                            isNewestThread={isNewestThread()}
+                            getMessageActions={getMessageActions}
+                            targetReplyId={targetMessageController.activeTargetMessageReplyId()}
+                            onTargetReplyScrolled={(replyId) => {
+                              targetMessageController.completePendingReplyScroll(
+                                m().id,
+                                replyId
+                              );
+                            }}
+                            isExpanded={state.isExpanded}
+                            setIsExpanded={state.setIsExpanded}
+                            isReplying={state.isReplying}
+                            setIsReplying={state.setIsReplying}
+                            replyInputState={state.replyInputState}
+                            setReplyInputState={state.setReplyInputState}
+                            setReplyInputEl={state.setReplyInputEl}
+                            listMeta={listMetaByMessageId()[item.id]}
+                            messageEditor={messageEditor}
+                            threadActions={{
+                              onDismissNewMessages:
+                                activityTracker.dismissNewMessages,
+                            }}
+                            isNewMessage={activityTracker.isNewMessage}
+                            selectedMessageId={selection.selectedId}
+                            onSelectMessage={selectMessage}
+                            onClearSelection={clearSelection}
+                            messageListScopeId={messageListScopeId}
+                          />
+                        )}
+                      </Show>
+                    );
+                  }}
                 </ThreadList>
                 <ScrollToBottomOverlay
                   scrollState={threadListScrollState}

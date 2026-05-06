@@ -101,8 +101,7 @@ export function FindBar(props: FindBarProps) {
         aria-label="Search"
         onClick={() => props.onSubmit()}
         classList={{
-          '!text-accent':
-            !props.hasUnsubmittedChanges && !!props.query.trim(),
+          '!text-accent': !props.hasUnsubmittedChanges && !!props.query.trim(),
         }}
       >
         <MagnifyingGlass />
@@ -127,7 +126,9 @@ export function FindBar(props: FindBarProps) {
       <Button
         size="icon-sm"
         variant="ghost"
-        aria-label={props.direction === 'desc' ? 'Next match' : 'Previous match'}
+        aria-label={
+          props.direction === 'desc' ? 'Next match' : 'Previous match'
+        }
         onClick={() =>
           props.direction === 'desc' ? props.onNext() : props.onPrevious()
         }
@@ -137,7 +138,9 @@ export function FindBar(props: FindBarProps) {
       <Button
         size="icon-sm"
         variant="ghost"
-        aria-label={props.direction === 'desc' ? 'Previous match' : 'Next match'}
+        aria-label={
+          props.direction === 'desc' ? 'Previous match' : 'Next match'
+        }
         onClick={() =>
           props.direction === 'desc' ? props.onPrevious() : props.onNext()
         }
