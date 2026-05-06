@@ -41,7 +41,6 @@ export function FindBar(props: FindBarProps) {
     if (inputRef) props.inputRef?.(inputRef);
     if (props.autofocus !== false) {
       inputRef?.focus();
-      inputRef?.select();
     }
   });
 
