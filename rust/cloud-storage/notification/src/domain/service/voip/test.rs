@@ -31,21 +31,18 @@ fn payload() -> VoipPushPayload {
 // ─── Mock: NotificationRepository ────────────────────────────────────────────
 
 struct MockRepo {
-    endpoints: Result<
-        HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>,
-        &'static str,
-    >,
+    endpoints: Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, &'static str>,
 }
 
 impl MockRepo {
-    fn with_endpoints(
-        map: HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>,
-    ) -> Self {
+    fn with_endpoints(map: HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>) -> Self {
         Self { endpoints: Ok(map) }
     }
 
     fn failing() -> Self {
-        Self { endpoints: Err("db error") }
+        Self {
+            endpoints: Err("db error"),
+        }
     }
 }
 
@@ -103,10 +100,8 @@ impl NotificationRepository for MockRepo {
         _: uuid::Uuid,
         _: &str,
         _: Option<&str>,
-    ) -> Result<
-        Option<Vec<crate::domain::models::UserNotificationRow<std::sync::Arc<T>>>>,
-        Report,
-    > {
+    ) -> Result<Option<Vec<crate::domain::models::UserNotificationRow<std::sync::Arc<T>>>>, Report>
+    {
         unimplemented!()
     }
     async fn update_sent_status<'a>(
@@ -145,9 +140,7 @@ impl NotificationRepository for MockRepo {
     ) -> Result<Vec<crate::domain::models::UserNotificationRow<T>>, Report> {
         unimplemented!()
     }
-    async fn get_user_notifications_by_event_item_ids<
-        T: serde::de::DeserializeOwned + Send,
-    >(
+    async fn get_user_notifications_by_event_item_ids<T: serde::de::DeserializeOwned + Send>(
         &self,
         _: MacroUserIdStr<'_>,
         _: &[uuid::Uuid],
@@ -177,10 +170,7 @@ impl NotificationRepository for MockRepo {
     ) -> Result<(), Report> {
         unimplemented!()
     }
-    async fn delete_all_user_notifications(
-        &self,
-        _: MacroUserIdStr<'_>,
-    ) -> Result<(), Report> {
+    async fn delete_all_user_notifications(&self, _: MacroUserIdStr<'_>) -> Result<(), Report> {
         unimplemented!()
     }
     async fn get_users_with_type_disabled<'a>(
@@ -203,11 +193,7 @@ impl NotificationRepository for MockRepo {
     ) -> Result<(), Report> {
         unimplemented!()
     }
-    async fn enable_notification_type(
-        &self,
-        _: MacroUserIdStr<'_>,
-        _: &str,
-    ) -> Result<(), Report> {
+    async fn enable_notification_type(&self, _: MacroUserIdStr<'_>, _: &str) -> Result<(), Report> {
         unimplemented!()
     }
 }
@@ -221,28 +207,25 @@ struct MockPush {
 
 impl MockPush {
     fn new(calls: Arc<Mutex<Vec<String>>>) -> Self {
-        Self { calls, should_fail: false }
+        Self {
+            calls,
+            should_fail: false,
+        }
     }
 
     fn failing() -> Self {
-        Self { calls: Arc::new(Mutex::new(Vec::new())), should_fail: true }
+        Self {
+            calls: Arc::new(Mutex::new(Vec::new())),
+            should_fail: true,
+        }
     }
 }
 
 impl MobilePushOps for MockPush {
     async fn push_notification<T: Serialize + Send + Sync>(
         &self,
-        _: &str,
-        _: &SnsTarget<'_, T>,
-        _: HashMap<String, MessageAttributeValue>,
-    ) -> Result<String, Report> {
-        unimplemented!()
-    }
-
-    async fn push_notification_raw(
-        &self,
         endpoint_arn: &str,
-        _: String,
+        _: &SnsTarget<'_, T>,
         _: HashMap<String, MessageAttributeValue>,
     ) -> Result<String, Report> {
         if self.should_fail {
@@ -253,10 +236,7 @@ impl MobilePushOps for MockPush {
     }
 }
 
-fn make_service(
-    repo: MockRepo,
-    push: MockPush,
-) -> VoipPushServiceImpl<MockRepo, MockPush> {
+fn make_service(repo: MockRepo, push: MockPush) -> VoipPushServiceImpl<MockRepo, MockPush> {
     let adapter = MobilePushAdapter::new(push, "com.example.app".to_string())
         .with_voip_bundle_id("com.example.app.voip".to_string());
     VoipPushServiceImpl::new(repo, adapter)
@@ -280,7 +260,8 @@ async fn dispatches_to_ios_voip_endpoint() {
         push,
     );
 
-    svc.send_voip_push(&[user("alice@example.com")], &payload()).await;
+    svc.send_voip_push(&[user("alice@example.com")], &payload())
+        .await;
 
     assert_eq!(*calls.lock().unwrap(), vec!["arn:voip-alice"]);
 }
@@ -299,7 +280,8 @@ async fn skips_non_voip_endpoints() {
         push,
     );
 
-    svc.send_voip_push(&[user("bob@example.com")], &payload()).await;
+    svc.send_voip_push(&[user("bob@example.com")], &payload())
+        .await;
 
     assert!(calls.lock().unwrap().is_empty());
 }
@@ -337,7 +319,8 @@ async fn repo_error_does_not_panic() {
     let (push, calls) = tracked_push();
     let svc = make_service(MockRepo::failing(), push);
 
-    svc.send_voip_push(&[user("alice@example.com")], &payload()).await;
+    svc.send_voip_push(&[user("alice@example.com")], &payload())
+        .await;
 
     assert!(calls.lock().unwrap().is_empty());
 }
@@ -352,5 +335,6 @@ async fn sns_failure_does_not_panic() {
         MockPush::failing(),
     );
 
-    svc.send_voip_push(&[user("alice@example.com")], &payload()).await;
+    svc.send_voip_push(&[user("alice@example.com")], &payload())
+        .await;
 }

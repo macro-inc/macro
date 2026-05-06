@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use crate::domain::models::android::FCMMessage;
 use crate::domain::models::apple::{APNSPushNotification, VoipPushPayload};
-use crate::domain::models::mobile::{MessageAttributes, PushType, SnsTarget, SnsVoipPayload};
+use crate::domain::models::mobile::{MessageAttributes, PushType, SnsTarget};
 use crate::domain::ports::NotificationSender;
 
 /// Mobile push notification adapter.
@@ -51,17 +51,6 @@ pub trait MobilePushOps {
         message: &SnsTarget<'_, T>,
         attributes: HashMap<String, MessageAttributeValue>,
     ) -> impl std::future::Future<Output = Result<String, Report>> + Send;
-
-    /// Send a pre-serialized JSON message to the specified endpoint ARN.
-    ///
-    /// Used for VoIP pushes where the SNS message structure differs from the
-    /// standard APNS payload format.
-    fn push_notification_raw(
-        &self,
-        endpoint_arn: &str,
-        message: String,
-        attributes: HashMap<String, MessageAttributeValue>,
-    ) -> impl std::future::Future<Output = Result<String, Report>> + Send;
 }
 
 impl MobilePushOps for aws_sdk_sns::Client {
@@ -72,21 +61,11 @@ impl MobilePushOps for aws_sdk_sns::Client {
         attributes: HashMap<String, MessageAttributeValue>,
     ) -> Result<String, Report> {
         let payload = message.as_json()?;
-        self.push_notification_raw(endpoint_arn, payload, attributes)
-            .await
-    }
-
-    async fn push_notification_raw(
-        &self,
-        endpoint_arn: &str,
-        message: String,
-        attributes: HashMap<String, MessageAttributeValue>,
-    ) -> Result<String, Report> {
         let output = self
             .publish()
             .target_arn(endpoint_arn)
             .message_structure("json")
-            .message(message)
+            .message(payload)
             .set_message_attributes(Some(attributes))
             .send()
             .await
@@ -140,18 +119,14 @@ impl<P: MobilePushOps + Send + Sync + 'static> MobilePushAdapter<P> {
         endpoint_arn: &str,
         payload: &VoipPushPayload,
     ) -> Result<String, Report> {
-        let voip_bundle_id = self
-            .voip_bundle_id
-            .as_deref()
-            .ok_or_else(|| rootcause::report!("voip_bundle_id not configured on MobilePushAdapter"))?;
+        let voip_bundle_id = self.voip_bundle_id.as_deref().ok_or_else(|| {
+            rootcause::report!("voip_bundle_id not configured on MobilePushAdapter")
+        })?;
 
-        let message = SnsVoipPayload::new(payload)
-            .as_json()
-            .map_err(|e| rootcause::report!("{e}"))?;
-
+        let target: SnsTarget<'_, ()> = SnsTarget::Voip(payload);
         let attrs = build_voip_sns_attributes(voip_bundle_id);
         self.push_service
-            .push_notification_raw(endpoint_arn, message, attrs)
+            .push_notification(endpoint_arn, &target, attrs)
             .await
     }
 }

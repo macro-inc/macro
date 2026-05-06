@@ -13,6 +13,8 @@ use crate::domain::models::{
 pub enum SnsTarget<'a, T> {
     /// iOS target via APNS.
     Ios(&'a APNSPushNotification<T>),
+    /// iOS VoIP target via APNS_VOIP.
+    Voip(&'a VoipPushPayload),
     /// Android target via FCM.
     Android(&'a FCMMessage<T>),
 }
@@ -32,6 +34,17 @@ pub(crate) enum SnsPayload<'a, T> {
         #[serde(rename = "APNS_SANDBOX", serialize_with = "stringified_json")]
         apns_sandbox: &'a APNSPushNotification<T>,
     },
+    /// iOS VoIP payload with APNS_VOIP and APNS_VOIP_SANDBOX keys.
+    Voip {
+        /// Default message text.
+        default: String,
+        /// Production APNS VoIP payload.
+        #[serde(rename = "APNS_VOIP", serialize_with = "stringified_json")]
+        apns_voip: &'a VoipPushPayload,
+        /// Sandbox APNS VoIP payload.
+        #[serde(rename = "APNS_VOIP_SANDBOX", serialize_with = "stringified_json")]
+        apns_voip_sandbox: &'a VoipPushPayload,
+    },
     /// Android payload with GCM key.
     Android {
         /// Default message text.
@@ -40,33 +53,6 @@ pub(crate) enum SnsPayload<'a, T> {
         #[serde(rename = "GCM", serialize_with = "stringified_json")]
         gcm: &'a FCMMessage<T>,
     },
-}
-
-/// SNS message structure for APNS_VOIP delivery.
-///
-/// VoIP payloads use the `APNS_VOIP` / `APNS_VOIP_SANDBOX` SNS keys instead of
-/// `APNS` / `APNS_SANDBOX`, and carry no `aps` wrapper — just the raw custom dict.
-#[derive(Debug, Serialize)]
-pub(crate) struct SnsVoipPayload<'a> {
-    pub default: String,
-    #[serde(rename = "APNS_VOIP", serialize_with = "stringified_json")]
-    pub apns_voip: &'a VoipPushPayload,
-    #[serde(rename = "APNS_VOIP_SANDBOX", serialize_with = "stringified_json")]
-    pub apns_voip_sandbox: &'a VoipPushPayload,
-}
-
-impl<'a> SnsVoipPayload<'a> {
-    pub fn new(payload: &'a VoipPushPayload) -> Self {
-        Self {
-            default: format!("Incoming call in {}", payload.channel_name),
-            apns_voip: payload,
-            apns_voip_sandbox: payload,
-        }
-    }
-
-    pub fn as_json(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string(self)
-    }
 }
 
 fn stringified_json<T, S>(val: &T, ser: S) -> Result<S::Ok, S::Error>
@@ -99,6 +85,7 @@ impl<T> SnsTarget<'_, T> {
                     Alert::Dictionary(alert_dictionary) => alert_dictionary.title.clone(),
                 })
                 .unwrap_or(String::new()),
+            SnsTarget::Voip(payload) => format!("Incoming call in {}", payload.channel_name),
             SnsTarget::Android(fcmmessage) => fcmmessage.android.notification.clone(),
         }
     }
@@ -109,6 +96,11 @@ impl<T> SnsTarget<'_, T> {
                 default: self.default_string(),
                 apns: apnspush_notification,
                 apns_sandbox: apnspush_notification,
+            },
+            SnsTarget::Voip(payload) => SnsPayload::Voip {
+                default: self.default_string(),
+                apns_voip: payload,
+                apns_voip_sandbox: payload,
             },
             SnsTarget::Android(fcmmessage) => SnsPayload::Android {
                 default: self.default_string(),
