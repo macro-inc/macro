@@ -22,8 +22,8 @@ type ButtonSize = 'sm' | 'md' | 'lg' | 'icon-sm' | 'icon-md' | 'icon-lg';
 
 const variantStyles: Record<ButtonVariant, string> = {
   destructive: 'bg-transparent text-failure    border border-failure/50     not-disabled:hover:bg-failure/10   not-disabled:active:bg-failure/20                              disabled:opacity-50          ',
-  secondary:   'bg-transparent text-ink        border border-edge-muted     not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12                                  disabled:opacity-30          ',
-  active:      'bg-accent-bg   text-accent-ink border border-accent-ink     not-disabled:hover:bg-accent/20    not-disabled:active:bg-accent/25                               disabled:opacity-50          ',
+  secondary:   'bg-transparent text-ink        border border-edge           not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12                                  disabled:opacity-30          ',
+  active:      'bg-accent-bg   text-accent     border border-accent-ink                                                                                                                                    ',
   ghost:       'bg-transparent text-ink-muted                               not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12      not-disabled:hover:text-ink disabled:opacity-30          ',
   link:        'bg-transparent text-accent     underline-offset-2           not-disabled:hover:underline       not-disabled:active:text-accent/80                             disabled:text-ink-extra-muted',
 };
@@ -40,14 +40,6 @@ const sizeStyles: Record<ButtonSize, string> = {
 
 const TOOLTIP_DELAY = 250;
 
-const TOOLTIP_FLOATING_OPTIONS = {
-  size: { padding: 16, fitViewPort: true },
-  boundary: 'viewport' as const,
-  shift: { padding: 16 },
-  offset: 12,
-  flip: true,
-};
-
 export const Button = <T extends ValidComponent = 'button'>(
   props: ButtonProps<T>
 ) => {
@@ -61,17 +53,14 @@ export const Button = <T extends ValidComponent = 'button'>(
     'size',
   ]);
 
-  const variant = () => local.variant ?? 'ghost';
-  const size = () => local.size ?? 'md';
-
   const cls = () =>
     cn(
       'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-xs',
       'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
       'outline-none focus-visible:bg-active',
       'data-disabled:cursor-not-allowed',
-      variantStyles[variant()],
-      sizeStyles[size()],
+      variantStyles[local.variant ?? 'ghost'],
+      sizeStyles[local.size ?? 'md'],
       local.class
     );
 
@@ -87,7 +76,12 @@ export const Button = <T extends ValidComponent = 'button'>(
       >
         <CorvuTooltip
           placement={local.tooltipPlacement ?? 'bottom'}
-          floatingOptions={TOOLTIP_FLOATING_OPTIONS}
+          floatingOptions={{
+            size: { padding: 16, fitViewPort: true },
+            shift: { padding: 16 },
+            offset: 12,
+            flip: true,
+          }}
           group="tooltip-single-group"
           closeDelay={TOOLTIP_DELAY}
           openDelay={TOOLTIP_DELAY}
