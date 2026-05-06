@@ -73,8 +73,6 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
     }
   };
 
-  createEffect(on(submittedQuery, () => setActiveIndex(0), { defer: true }));
-
   createEffect(
     on(results, (rs) => {
       if (!isOpen()) return;
@@ -136,7 +134,15 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
 
   const submit = () => {
     const trimmed = query().trim();
-    setSubmittedQuery(validateSearchServiceText(trimmed) ? trimmed : '');
+    if (!validateSearchServiceText(trimmed)) {
+      // Invalid / too-short input — don't kick a search and don't drop the
+      // user's current selection.
+      setSubmittedQuery('');
+      setActiveIndex(0);
+      return;
+    }
+    setSubmittedQuery(trimmed);
+    setActiveIndex(0);
     options.clearSelection();
   };
 

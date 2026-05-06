@@ -66,7 +66,7 @@ export function SimpleSearch() {
     const result = searchResults();
     if (!result || result.count.total === 0) return;
     const { matches, count } = result;
-    const idx = count.current === 1 ? count.total - 1 : count.current - 2;
+    const idx = count.current <= 1 ? count.total - 1 : count.current - 2;
     jumpToResult(matches[idx]);
   };
 
