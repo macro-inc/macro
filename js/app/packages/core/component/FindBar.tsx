@@ -116,9 +116,12 @@ export function FindBar(props: FindBarProps) {
         onInput={(e) => props.onQueryChange(e.currentTarget.value)}
         onKeyDown={handleKeyDown}
       />
-      <Show when={showCount()}>
-        <span class="px-1 text-xs text-ink-muted tabular-nums whitespace-nowrap">
-          {props.index}/{props.total}
+      <Show when={typeof props.total === 'number'}>
+        <span
+          class="px-1 text-xs text-ink-muted tabular-nums whitespace-nowrap"
+          classList={{ invisible: !showCount() }}
+        >
+          {props.index ?? 0}/{props.total}
         </span>
       </Show>
       <Button
