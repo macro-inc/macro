@@ -17,6 +17,7 @@ import {
 } from 'solid-js';
 
 const FIND_BAR_PAGE_SIZE = 50;
+const FIND_BAR_PREFETCH_THRESHOLD = 10;
 
 type CreateChannelFindBarOptions = {
   channelId: Accessor<string>;
@@ -87,6 +88,19 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
       goToResult(rs[next - 1]);
     })
   );
+
+  // Prefetch the next page in the background when the cursor approaches
+  // the end of the loaded results, so navigating to the boundary doesn't
+  // stall on a network round-trip.
+  createEffect(() => {
+    const rs = results();
+    const idx = activeIndex();
+    if (idx === 0 || rs.length === 0) return;
+    if (!searchQuery.hasNextPage || searchQuery.isFetchingNextPage) return;
+    if (rs.length - idx <= FIND_BAR_PREFETCH_THRESHOLD) {
+      searchQuery.fetchNextPage();
+    }
+  });
 
   const next = () => {
     const rs = results();
