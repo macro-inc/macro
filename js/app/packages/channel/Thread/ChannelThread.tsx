@@ -73,7 +73,7 @@ export function ChannelThread(props: ThreadProps) {
     keys: () => activeReplies().map((r) => r.id),
   });
 
-  const isThreadFocused = () => isSelected() && !!replySelection.selectedId();
+  const isThreadFocused = () => !!replySelection.selectedId();
   const selectThreadMessage = () => {
     if (isSelected() && !isThreadFocused()) {
       props.onClearSelection?.();

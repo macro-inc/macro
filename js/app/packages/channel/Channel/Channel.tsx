@@ -304,7 +304,11 @@ export function Channel(props: ChannelProps) {
   };
 
   const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
-    selectMessage(messageId);
+    if (replyId) {
+      clearSelection();
+    } else {
+      selectMessage(messageId);
+    }
     targetMessageController.goToMessage(messageId, replyId);
   };
 
@@ -454,7 +458,7 @@ export function Channel(props: ChannelProps) {
                               channelId={() => props.channelId}
                               isNewestThread={isNewestThread()}
                               getMessageActions={getMessageActions}
-                              targetReplyId={targetMessageController.pendingTargetReplyId()}
+                              targetReplyId={targetMessageController.activeTargetMessageReplyId()}
                               onTargetReplyScrolled={(replyId) => {
                                 targetMessageController.completePendingReplyScroll(
                                   m().id,
