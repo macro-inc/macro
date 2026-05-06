@@ -413,21 +413,25 @@ function EmailContent(props: EmailViewProps) {
     hide: true,
   });
 
-  // Auto-open the bottom reply box when the last message has an in-progress
-  // draft, so a partly-written reply isn't hidden behind the buttons.
+  // On thread change: collapse the bottom reply, then re-evaluate auto-open
+  // for the current thread's last message. Single effect to avoid an
+  // ordering race between separate "reset on thread change" and "auto-open
+  // on draft" effects (Solid runs effects in declaration order on first
+  // mount, which can let the reset clobber the auto-open if both data
+  // sources are synchronously available).
+  let prevThreadId: string | undefined;
   createEffect(() => {
+    const tid = props.threadId();
+    if (prevThreadId !== tid) {
+      prevThreadId = tid;
+      context.messages.setBottomReplyOpen(false);
+    }
     const filtered = context.messages.list();
-    if (filtered.length === 0) return;
     const lastMessage = filtered.at(-1);
     if (!lastMessage?.db_id) return;
-    const draft = context.drafts.getDraftForMessage(lastMessage.db_id);
-    if (draft) context.messages.setBottomReplyOpen(true);
-  });
-
-  // Reset the bottom reply state when the thread changes.
-  createEffect(() => {
-    props.threadId();
-    context.messages.setBottomReplyOpen(false);
+    if (context.drafts.getDraftForMessage(lastMessage.db_id)) {
+      context.messages.setBottomReplyOpen(true);
+    }
   });
 
   const emailReplyInfo = createMemo(() => {
