@@ -544,6 +544,11 @@ export function BaseInput(props: {
 
   const sendMutation = useSendMessageMutation({
     onSuccess: async ({ message }) => {
+      // Cancel the post-reset save scheduled by sendEmail's resetState() and
+      // re-enable autosave for any future edits in this BaseInput instance
+      // (covers new-message flows where replyingTo never changes).
+      if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+      pendingSend = false;
       const draftId = message.db_id;
       const toastId = toast.success(
         'Email sent',
@@ -574,6 +579,9 @@ export function BaseInput(props: {
       }
     },
     onError: () => {
+      // Restore autosave so the user can keep editing after a failed send.
+      if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+      pendingSend = false;
       toast.failure('Failed to send email');
     },
   });
@@ -1019,22 +1027,32 @@ export function BaseInput(props: {
   };
 
   const deleteDraftAndReset = async () => {
-    // Block any further saves for the lifetime of this BaseInput. resetState()
-    // triggers two save schedulers (clearEmailBody → editor onChange, and
-    // form().reset() → callDirty), and the editor listener may run on a
-    // microtask, so synchronous clearTimeout calls aren't enough. The
-    // component unmounts via clearDraftState() right after this, so leaving
-    // the flag set is fine.
+    // Block any save scheduled by resetState's side effects (sync form.reset
+    // callDirty + async editor onChange listener). When clearDraftState() has
+    // a setShowReply, the BaseInput unmounts and the flag goes away with it;
+    // when it doesn't (e.g. the bottom-of-thread input), the component stays
+    // mounted and we must restore the flag so subsequent edits can autosave.
     pendingDeletion = true;
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     const draftId = savedDraftId();
-    if (draftId) {
-      await deleteDraftMutation.mutateAsync({ draftId });
-      refetchThreadMessages();
+    try {
+      if (draftId) {
+        await deleteDraftMutation.mutateAsync({ draftId });
+        refetchThreadMessages();
+      }
+      resetState();
+      form().setReplyAppended(false);
+      clearDraftState();
+    } finally {
+      // Yield past any sync/microtask save scheduling triggered by resetState,
+      // then cancel the resulting timer and re-enable autosave. Runs on both
+      // success and error paths so a failed delete doesn't leave the user
+      // unable to save further edits.
+      setTimeout(() => {
+        if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+        pendingDeletion = false;
+      }, 0);
     }
-    resetState();
-    form().setReplyAppended(false);
-    clearDraftState();
   };
 
   const handleUserMention = (mention: UserMentionRecord) => {
