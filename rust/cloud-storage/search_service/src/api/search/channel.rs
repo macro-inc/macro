@@ -113,7 +113,17 @@ pub fn construct_search_result(
     // now construct the search results in the original search result order
     let result: Vec<ChannelSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
-        .filter_map(|(entity_id, hits)| {
+        .filter_map(|(entity_id, mut hits)| {
+            // OpenSearch sorts content matches by created_at DESC, but ties on the
+            // second resolution are non-deterministic. message_id is uuidv7
+            // (time-ordered), so it can be used as a tiebreaker. Sort DESC to keep newer
+            // messages first, matching the primary sort.
+            hits.sort_by(|a, b| {
+                b.created_at
+                    .cmp(&a.created_at)
+                    .then_with(|| b.message_id.cmp(&a.message_id))
+            });
+
             if let Some(info) = channel_histories.get(&entity_id) {
                 let info = info.clone();
                 let metadata = models_search::channel::ChannelMetadata {

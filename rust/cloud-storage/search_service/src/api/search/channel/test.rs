@@ -230,13 +230,14 @@ fn test_construct_search_result_filters_messages_without_content() {
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_message_search_results.len(), 2);
+    // Sorted by created_at DESC, so the newer message (2222…, 1234567892) is first.
     assert_eq!(
         result[0].extra.channel_message_search_results[0]
             .message_id
             .as_ref()
             .unwrap()
             .to_string(),
-        "11111111-1111-1111-1111-111111111111"
+        "22222222-2222-2222-2222-222222222222"
     );
 }
 
@@ -613,5 +614,74 @@ fn test_sort_stability() {
         ids1,
         channel_ids.to_vec(),
         "Results should preserve original search result order"
+    );
+}
+
+#[test]
+fn test_construct_search_result_breaks_created_at_ties_by_message_id() {
+    // Within a channel, content matches that share a created_at second should
+    // fall back to message_id (uuidv7) DESC so newer messages stay first.
+    let channel_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440000".parse().unwrap();
+    let tied_at = DateTime::from_timestamp(1775080006, 0).unwrap();
+    let untied_later_at = DateTime::from_timestamp(1775080007, 0).unwrap();
+    let earlier_msg: Uuid = "019d4b03-62b5-772f-97ff-16a57f8f975c".parse().unwrap();
+    let later_msg: Uuid = "019d4b03-64d1-7c8b-8d5f-c879abc7c7eb".parse().unwrap();
+    let untied_msg: Uuid = "019d4b03-676b-71ef-afbb-0558420662f8".parse().unwrap();
+
+    let make_hit =
+        |msg_id: Uuid, created_at: DateTime<Utc>| opensearch_client::search::model::SearchHit {
+            entity_id: channel_uuid,
+            entity_type: SearchEntityType::Channels,
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: msg_id,
+                        created_at,
+                        updated_at: created_at,
+                        thread_id: None,
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
+            score: None,
+            highlight: Highlight {
+                content: vec!["test".to_string()],
+                ..Default::default()
+            },
+            updated_at: None,
+        };
+
+    // Pass tied messages in the "wrong" order to verify the sort actually re-orders them.
+    let search_results = vec![
+        make_hit(earlier_msg, tied_at),
+        make_hit(later_msg, tied_at),
+        make_hit(untied_msg, untied_later_at),
+    ];
+
+    let mut channel_histories = HashMap::new();
+    channel_histories.insert(
+        channel_uuid,
+        create_channel_history(&channel_uuid.to_string()),
+    );
+    let states = active_states_for(&search_results);
+
+    let result = construct_search_result(search_results, channel_histories, states).unwrap();
+    let hits = &result[0].extra.channel_message_search_results;
+
+    assert_eq!(hits.len(), 3);
+    assert_eq!(
+        hits[0].message_id,
+        Some(untied_msg),
+        "newest created_at first"
+    );
+    assert_eq!(
+        hits[1].message_id,
+        Some(later_msg),
+        "tied: larger uuidv7 first"
+    );
+    assert_eq!(
+        hits[2].message_id,
+        Some(earlier_msg),
+        "tied: smaller uuidv7 last"
     );
 }
