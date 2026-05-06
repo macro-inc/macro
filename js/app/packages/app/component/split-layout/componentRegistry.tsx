@@ -377,6 +377,11 @@ if (LOCAL_ONLY) {
     'hotkey-debugger',
     lazy(() => import('@app/component/HotkeyDebugger'))
   );
+
+  registerComponent(
+    'user-icon',
+    lazy(() => import('@core/internal/UserIconDemo'))
+  );
 }
 
 if (DEV_MODE_ENV) {

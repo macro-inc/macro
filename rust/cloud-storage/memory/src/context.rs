@@ -1,5 +1,7 @@
 use ai_tools::{
-    NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties, ToolServiceContext,
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
+    NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, ToolNotificationQueue,
+    ToolServiceContext,
 };
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
@@ -17,6 +19,8 @@ use entity_access::outbound::PgAccessRepository;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use lexical_client::LexicalClient;
+use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
+use notification::outbound::repository::DbNotificationRepository;
 use search_service_client::SearchServiceClient;
 use soup::domain::service::SoupImpl;
 use soup::outbound::pg_soup_repo::PgSoupRepo;
@@ -28,7 +32,7 @@ use crate::config::Config;
 /// Builds a [`ToolServiceContext`] from environment variables and a database pool.
 ///
 /// Required env vars: `INTERNAL_API_SECRET_KEY`, `DOCUMENT_STORAGE_SERVICE_URL`,
-/// `SEARCH_SERVICE_URL`, `EMAIL_SERVICE_URL`, `SYNC_SERVICE_URL`,
+/// `EMAIL_SERVICE_URL`, `SYNC_SERVICE_URL`,
 /// `DOCUMENT_COGNITION_SERVICE_URL`, `STATIC_FILE_SERVICE_URL`,
 /// `DOCUMENT_STORAGE_BUCKET`, `DOCX_DOCUMENT_UPLOAD_BUCKET`,
 /// `EMAIL_SCHEDULED_QUEUE`,
@@ -47,7 +51,7 @@ pub async fn build_tool_service_context(
     // Service clients
     let search_client = Arc::new(SearchServiceClient::new(
         config.internal_api_secret_key.clone(),
-        config.search_service_url.clone(),
+        config.document_storage_service_url.clone(),
     ));
     let sync_client = Arc::new(SyncServiceClient::new(
         config.internal_api_secret_key.clone(),
@@ -168,6 +172,31 @@ pub async fn build_tool_service_context(
         (*entity_access_service).clone(),
     );
 
+    let notification_reader_service = NotificationReaderService::new(
+        DbNotificationRepository::new(pool.clone()),
+        ToolNotificationQueue::NoOp,
+        NoOpSnsEndpointManager,
+        PlatformArnConfig {
+            apns_platform_arn: String::new(),
+            fcm_platform_arn: String::new(),
+        },
+    );
+    let notification_tool_context =
+        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+
+    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
+        chat::domain::service::ChatServiceImpl::new(
+            chat::outbound::postgres::PgChatRepo::new(pool.clone()),
+            Arc::new(ai_toolset::AsyncToolSet::new()),
+            (),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
+        ),
+        (*entity_access_service).clone(),
+    );
+
+
     Ok(ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
@@ -177,6 +206,8 @@ pub async fn build_tool_service_context(
         properties_tool_context,
         email_tool_context,
         call_tool_context,
+        notification_tool_context,
+        chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
     })

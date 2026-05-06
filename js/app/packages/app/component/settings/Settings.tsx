@@ -1,12 +1,11 @@
-import { createEffect, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, createMemo, For, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isMobile } from '@core/mobile/isMobile';
-import { usePermissions } from '@core/context/user';
 import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE, ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { Subscription } from './Subscription';
 import { MobileApp } from './MobileApp';
+import { Mcp } from './Mcp';
 import { Appearance } from './Appearance';
 import { Tabs } from '@core/component/Tabs';
 import { Account } from './Account';
@@ -15,17 +14,21 @@ import { Team } from './Team';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { SplitHeaderLeft, SplitHeaderRight } from '../split-layout/components/SplitHeader';
+import { CollapsibleHeaderItem } from '../split-layout/components/CollapsibleHeaderItem';
 import { SettingsButton } from './SettingsButton';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Layer } from '@ui';
+import ChevronDownIcon from '@icon/regular/caret-down.svg';
 
-/**
- * Wrapper for Settings Panel used in the split layout. Includes the correct Header button.
- */
 export function SettingsPanelComponentWrapper() {
   return (
     <>
-      <SplitHeaderRight>
-        <SettingsButton />
-      </SplitHeaderRight>
+      <Show when={isMobile()}>
+        <SplitHeaderRight>
+          <SettingsButton />
+        </SplitHeaderRight>
+      </Show>
       <SettingsPanel />
     </>
   )
@@ -37,8 +40,7 @@ type SettingsPanelProps = {
 
 export function SettingsPanel(props: SettingsPanelProps) {
   const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
-  const permissions = usePermissions();
-  const teamsFlag = useFeatureFlag('enable-teams-settings', { enabledOverride: ENABLE_TEAMS_OVERRIDE });
+    const teamsFlag = useFeatureFlag('enable-teams-settings', { enabledOverride: ENABLE_TEAMS_OVERRIDE });
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
@@ -60,11 +62,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
       { value: 'Appearance', label: 'Appearance' },
       { value: 'Account', label: 'Account' },
     ];
-
-    tabs.push({ value: 'Shortcuts', label: 'Shortcuts' });
     if (teamsFlag().enabled) { tabs.push({ value: 'Team', label: 'Team' }) }
-    if (permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()) { tabs.push({ value: 'Subscription', label: 'Subscription' }) }
+    tabs.push({ value: 'Shortcuts', label: 'Shortcuts' });
     if (ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()) { tabs.push({ value: 'Mobile App', label: 'App' }) }
+    if (!isNativeMobilePlatform()) { tabs.push({ value: 'MCP', label: 'MCP' }) }
     if (isNativeMobilePlatform() && DEV_MODE_ENV) { tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' }) }
     return tabs;
   }
@@ -153,21 +154,21 @@ export function SettingsPanel(props: SettingsPanelProps) {
   }
 
   const handleTabChange = (value: string) => {
-    if (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Shortcuts' || value === 'Mobile App' || value === 'Team') {
+    if (settingsTabs().some((tab) => tab.value === value)) {
       setActiveTabId(value as SettingsTab);
     }
   }
 
   function BottomTabs() {
     return (
-    <div class="bg-panel border-t border-edge-muted h-11 px-1">
+    <div class="bg-panel border-t border-edge-muted h-11 shrink-0 px-1">
       <Tabs
         list={settingsTabs()}
         value={activeTabId()}
         defaultValue="Appearance"
         onChange={handleTabChange}
         indicatorPosition="top"
-        class="**:data-indicator:h-[3px]"
+        class="**:data-indicator:h-0.75"
       />
     </div>
     );
@@ -175,7 +176,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   return (
     <div
-      class="size-full flex flex-col outline-none bracket-never"
+      class="size-full flex flex-col outline-none"
       classList={{ invisible: props.hide }}
       tabIndex={0}
       ref={settingsContainerRef}
@@ -187,11 +188,25 @@ export function SettingsPanel(props: SettingsPanelProps) {
             Settings
           </h1>
           <Show when={!isMobile()}>
-            <Tabs
-              list={settingsTabs()}
-              value={activeTabId()}
-              defaultValue="Appearance"
-              onChange={handleTabChange}
+            <CollapsibleHeaderItem
+              id="settings-tabs"
+              priority={1}
+              containerClass="h-full"
+              expanded={() => (
+                <Tabs
+                  list={settingsTabs()}
+                  value={activeTabId()}
+                  defaultValue="Appearance"
+                  onChange={handleTabChange}
+                />
+              )}
+              collapsed={() => (
+                <CollapsedSettingsTabs
+                  tabs={settingsTabs()}
+                  value={activeTabId()}
+                  onChange={handleTabChange}
+                />
+              )}
             />
           </Show>
         </div>
@@ -203,13 +218,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
             <Account />
           </Suspense>
         </Show>
-        <Show when={activeTabId() === 'Subscription' && permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
-          <Subscription />
-        </Show>
+
         <Show when={activeTabId() === 'Appearance'}>
           <Appearance />
         </Show>
-        <Show when={activeTabId() === 'Shortcuts'}>
+        <Show when={activeTabId() === 'Shortcuts' && !isTouchDevice()}>
           <Shortcuts />
         </Show>
         <Show when={activeTabId() === 'Team' && teamsFlag().enabled}>
@@ -220,11 +233,57 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <Show when={activeTabId() === 'Mobile App' && ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()}>
           <MobileApp />
         </Show>
+        <Show when={activeTabId() === 'MCP' && !isNativeMobilePlatform()}>
+          <Mcp />
+        </Show>
       </div>
 
       <Show when={isMobile()}>
         <BottomTabs />
       </Show>
     </div>
+  );
+}
+
+type CollapsedSettingsTabsProps = {
+  tabs: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+};
+
+function CollapsedSettingsTabs(props: CollapsedSettingsTabsProps) {
+  const activeLabel = createMemo(() => {
+    return (
+      props.tabs.find((item) => item.value === props.value)?.label ??
+      props.tabs[0]?.label
+    );
+  });
+
+  return (
+    <DropdownMenu placement="bottom-start" gutter={4}>
+      <DropdownMenu.Trigger class="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xs border border-edge-muted hover:bg-ink/6 transition-colors">
+        <span class="truncate">{activeLabel()}</span>
+        <ChevronDownIcon class="size-3 shrink-0" />
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <Layer depth={2}>
+          <DropdownMenu.Content class="z-action-menu bg-page border border-edge-muted rounded-sm shadow-sm p-1">
+            <For each={props.tabs}>
+              {(item) => (
+                <DropdownMenu.Item
+                  class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
+                  classList={{
+                    'font-semibold': props.value === item.value,
+                  }}
+                  onSelect={() => props.onChange(item.value)}
+                >
+                  {item.label}
+                </DropdownMenu.Item>
+              )}
+            </For>
+          </DropdownMenu.Content>
+        </Layer>
+      </DropdownMenu.Portal>
+    </DropdownMenu>
   );
 }

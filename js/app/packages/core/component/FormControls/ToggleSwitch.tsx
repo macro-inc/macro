@@ -9,7 +9,7 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
-import { DeprecatedButton } from './DeprecatedButton';
+import { Button } from '@ui';
 
 type Size = 'SM' | 'Base';
 const sizeClass: Record<Size, string> = {
@@ -91,7 +91,7 @@ export const ToggleSwitch: Component<
         </KSwitch.Label>
       </Show>
 
-      <div class="relative focus-bracket-within focus-within:[--focus-border-inset:-3px] w-fit h-fit">
+      <div class="relative w-fit h-fit rounded-full focus-within:bg-active">
         <KSwitch.Input class="absolute inset-0 h-full! w-full! pointer-events-none" />
         <KSwitch.Control
           classList={{
@@ -112,7 +112,7 @@ export const ToggleSwitch: Component<
             <div class="h-full min-w-[1.8333333333333333em] aspect-square invisible" />
             <div class="invisible" aria-hidden>
               {/* same button primitive to set correct height */}
-              <DeprecatedButton size={props.size}>False</DeprecatedButton>
+              <Button size={props.size === 'SM' ? 'sm' : 'md'}>False</Button>
             </div>
 
             {/* Visible Interactive, size relative to Fake Invisible Node */}

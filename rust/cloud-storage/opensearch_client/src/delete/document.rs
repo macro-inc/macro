@@ -12,7 +12,7 @@ pub async fn delete_document_by_id(
     let query = serde_json::json!({
         "query": {
             "term": {
-                "document_id": document_id
+                "entity_id": document_id
             }
         },
     });

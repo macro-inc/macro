@@ -278,7 +278,7 @@ function UserInfo(props: { userId: string }) {
     <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis flex items-center gap-1.5">
       <UserIconComponent
         id={props.userId}
-        size="xs"
+        size="sm"
         suppressClick
         showTooltip={false}
       />
@@ -382,7 +382,7 @@ const TASK_PREVIEW_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
 ];
 
-function TaskPropertiesPreview(props: { taskId: string }) {
+export function TaskPropertiesPreview(props: { taskId: string }) {
   const { properties, isLoading } = useEntityProperties(
     props.taskId,
     'TASK',
@@ -550,12 +550,7 @@ export function PopupPreview(props: {
   };
 
   const handleCopyBranchName = () => {
-    const previewItem = item();
-    const docName =
-      props.documentInfo.name ||
-      ('name' in previewItem ? (previewItem.name as string) : '') ||
-      '';
-    copyBranchNameToClipboard(props.documentInfo.id, docName);
+    copyBranchNameToClipboard(props.documentInfo.id);
   };
 
   const isSplitAlreadyOpen = () => {
@@ -774,7 +769,7 @@ export function PopupPreview(props: {
                   {/* Task properties: status, priority, assignees */}
                   <Show when={props.documentInfo.type === 'task'}>
                     <Suspense
-                      fallback={<div class="w-full bg-hover/50 h-4 m-2" />}
+                      fallback={<div class="w-full bg-active h-4 m-2" />}
                     >
                       <TaskPropertiesPreview taskId={props.documentInfo.id} />
                     </Suspense>

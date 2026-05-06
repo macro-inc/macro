@@ -88,7 +88,7 @@ export function MessageRowUI(
           >
             <div class="absolute">
               <UserIcon
-                size="xs"
+                size="sm"
                 suppressClick={true}
                 id={props.authorId}
                 isDeleted={false}

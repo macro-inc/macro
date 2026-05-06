@@ -201,7 +201,7 @@ function DmRecipientIcon(props: { channelId: string }) {
       fallback={<UserCircle class="shrink-0 w-4 h-4" />}
     >
       {(id) => (
-        <UserIcon id={id()} size="xs" isDeleted={false} showTooltip={false} />
+        <UserIcon id={id()} size="sm" isDeleted={false} showTooltip={false} />
       )}
     </Show>
   );
@@ -391,7 +391,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               <Show when={props.owner}>
                 <div class="flex justify-between">
                   <div class="flex items-center gap-2 overflow-hidden">
-                    <UserIcon isDeleted={false} id={props.owner!} size="xs" />
+                    <UserIcon isDeleted={false} id={props.owner!} size="sm" />
                     <div class="font-medium truncate">
                       {props.formattedOwner}
                     </div>
@@ -405,7 +405,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                 {(recipient) => (
                   <div class="flex justify-between">
                     <div
-                      class="flex items-center gap-2 overflow-hidden cursor-pointer"
+                      class="flex items-center gap-2 overflow-hidden"
                       onClick={() =>
                         props.navigateToChannel(recipient.channel_id)
                       }
@@ -519,7 +519,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                     />
                   </span>
                   <Button
-                    variant="secondary"
+                    variant="base"
                     size="sm"
                     class="flex items-center gap-1 rounded-xs px-2 py-1"
                     onClick={props.copyPublicLink}
@@ -1018,7 +1018,7 @@ export function ShareModal(props: ShareModalProps) {
                                 <UserIcon
                                   isDeleted={false}
                                   id={props.owner!}
-                                  size="xs"
+                                  size="sm"
                                 />
                                 <div class="font-medium truncate">
                                   {formattedOwner()}
@@ -1035,7 +1035,7 @@ export function ShareModal(props: ShareModalProps) {
                             {(recipient) => (
                               <div class="flex justify-between">
                                 <div
-                                  class="flex items-center gap-2 overflow-hidden cursor-pointer"
+                                  class="flex items-center gap-2 overflow-hidden"
                                   onClick={() =>
                                     navigateToChannel(recipient.channel_id)
                                   }
@@ -1169,7 +1169,7 @@ export function ShareModal(props: ShareModalProps) {
                     <Show when={publicAccessLevel() != null}>
                       <div class="flex items-center p-3 justify-between">
                         <Button
-                          variant="secondary"
+                          variant="base"
                           size="sm"
                           class="flex items-center gap-1 rounded-xs px-2 py-1"
                           onClick={copyPublicLink}
@@ -1431,7 +1431,7 @@ export function ShareOptions(props: {
         <Button
           disabled={props.disabled}
           class={`min-w-16.75 py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
-          variant="secondary"
+          variant="base"
         >
           {currentValueText()}
           <ChevronDownIcon class="size-4 text-ink-extra-muted/50" />
@@ -1452,7 +1452,7 @@ export function ShareOptions(props: {
                 return (
                   <DropdownMenu.RadioItem
                     value={option.value}
-                    class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg focus-bracket"
+                    class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-[highlighted]:bg-active"
                   >
                     <div class="w-4 h-4 shrink-0">
                       {Icon && <Icon class="w-full h-full" />}
@@ -1469,7 +1469,7 @@ export function ShareOptions(props: {
               <div class="my-1 border-t border-edge-muted w-full" />
               <DropdownMenu.RadioItem
                 value="none"
-                class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg focus-bracket"
+                class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-[highlighted]:bg-active"
               >
                 <div class="w-4 h-4 shrink-0">
                   <IconX class="w-full h-full" />

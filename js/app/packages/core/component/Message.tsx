@@ -14,7 +14,7 @@ import {
   splitProps,
   useContext,
 } from 'solid-js';
-import { BozzyBracket } from './BozzyBracket';
+
 import {
   CustomEntityIcon,
   EntityIcon,
@@ -218,7 +218,7 @@ const Root: Component<MessageRootProps> = (props) => {
   return (
     <MessageContext.Provider value={ctx}>
       <div
-        class="relative flex flex-row items-stretch w-full suppress-css-brackets transition-colors duration-1000 ease"
+        class="relative flex flex-row items-stretch w-full transition-colors duration-1000 ease"
         classList={{
           'bg-accent': props.isTarget,
         }}
@@ -231,16 +231,13 @@ const Root: Component<MessageRootProps> = (props) => {
             isParentNewMessage={props.isParentNewMessage}
           />
         </Show>
-        <BozzyBracket
-          active={props.focused}
-          unfocusable={props.isTarget || props.unfocusable}
-          class="flex flex-row"
+        <div
+          class="flex flex-row flex-1 min-w-0"
           style={{
             'margin-bottom': props.isLastInThread //|| props.showReply?.()
               ? `${replyHeight()}px`
               : '0px',
           }}
-          hover={props.shouldHover}
         >
           {/* Message Wrapper w/ Main Connector Line */}
           <div
@@ -257,7 +254,7 @@ const Root: Component<MessageRootProps> = (props) => {
             <div
               class={cn(
                 'relative flex flex-col pl-[calc(var(--user-icon-width)/2+var(--message-padding-x))] ml-(--left-of-connector)',
-                !props.hideConnectors && 'border-l',
+                !props.hideConnectors && !props.isLastMessage && 'border-l',
                 props.isNewMessage ? 'border-accent' : 'border-edge-muted',
                 !(
                   props.isConsecutive ||
@@ -339,7 +336,7 @@ const Root: Component<MessageRootProps> = (props) => {
               {props.children}
             </div>
           </div>
-        </BozzyBracket>
+        </div>
         <Show
           when={
             props.hoverActions &&
@@ -382,7 +379,7 @@ const Root: Component<MessageRootProps> = (props) => {
               when={props.shouldShowThreadAppendInput}
               fallback={
                 <div
-                  class="w-min -translate-x-1/2 icon-plus allow-css-brackets"
+                  class="w-min -translate-x-1/2 icon-plus"
                   style={{
                     'margin-left': `calc(var(--thread-shift) + var(--left-of-connector))`,
                   }}

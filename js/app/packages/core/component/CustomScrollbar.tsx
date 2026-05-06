@@ -223,7 +223,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
       >
         {/* Track */}
         <div
-          class="absolute inset-0 cursor-pointer bg-transparent"
+          class="absolute inset-0 bg-transparent"
           onClick={handleTrackClick}
         />
         {/* Thumb */}

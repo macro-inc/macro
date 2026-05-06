@@ -6,10 +6,10 @@ import { useSoup } from '@app/component/next-soup/soup-context';
 export function useNavigatedFromJK() {
   const soup = useSoup();
   const navigatedFromJK = createMemo(() => {
-    const entities = soup.data();
-    if (!entities) return false;
+    const rows = soup.rows();
+    if (!rows) return false;
     return (
-      entities.length > 0 &&
+      rows.length > 0 &&
       document.documentElement.getAttribute('data-modality') === 'keyboard' &&
       (lastExecutedCommand()?.hotkeyToken === TOKENS.entity.step.end ||
         lastExecutedCommand()?.hotkeyToken === TOKENS.entity.select.end)

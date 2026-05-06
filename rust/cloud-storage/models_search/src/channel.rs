@@ -22,6 +22,8 @@ pub struct ChannelSearchResult {
     /// When the channel message was last updated
     /// This is only prsent if the search result is on the message content
     pub updated_at: Option<DateTime<Utc>>,
+    /// When the channel message was deleted, if it has been
+    pub deleted_at: Option<DateTime<Utc>>,
     /// The highlights for the channel message
     pub highlight: SearchHighlight,
     /// The score of the result

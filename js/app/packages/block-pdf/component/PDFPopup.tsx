@@ -3,8 +3,7 @@ import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { Button } from '@ui/components/Button';
 // import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -223,38 +222,44 @@ export function PDFPopup(props: PDFPopupProps) {
           <div class="flex flex-row space-x-2 items-center">
             <Show when={completion() && props.insertProps}>
               {(insertProps) => (
-                <DeprecatedIconButton
-                  theme="clear"
-                  icon={PasteIcon}
+                <Button
+                  variant="ghost"
+                  size="icon-md"
                   onClick={() =>
                     insertProps().insertText(completion()!.content)
                   }
                   title="Insert AI response"
-                />
+                >
+                  <PasteIcon />
+                </Button>
               )}
             </Show>
 
             <Switch>
               <Match when={!props.highlightProps.currentHighlight}>
                 <Show when={props.highlightProps.canCreate}>
-                  <DeprecatedIconButton
-                    theme="clear"
-                    icon={HighlightIcon}
+                  <Button
+                    variant="ghost"
+                    size="icon-md"
                     onClick={() => {
                       props.highlightProps.highlight();
                     }}
-                  />
+                  >
+                    <HighlightIcon />
+                  </Button>
                 </Show>
               </Match>
               <Match when={props.highlightProps.currentHighlight}>
                 <Show when={props.highlightProps.canEdit}>
-                  <DeprecatedIconButton
-                    theme="clear"
-                    icon={TrashIcon}
+                  <Button
+                    variant="ghost"
+                    size="icon-md"
                     onClick={() => {
                       props.highlightProps.removeHighlight();
                     }}
-                  />
+                  >
+                    <TrashIcon />
+                  </Button>
                 </Show>
               </Match>
             </Switch>
@@ -266,30 +271,33 @@ export function PDFPopup(props: PDFPopupProps) {
                   : props.commentProps.canCreate
               }
             >
-              <DeprecatedIconButton
-                theme="clear"
-                icon={ChatIcon}
+              <Button
+                variant="ghost"
+                size="icon-md"
                 onClick={(e: MouseEvent | KeyboardEvent) =>
                   props.commentProps.placeComment(e as MouseEvent)
                 }
-              />
+              >
+                <ChatIcon />
+              </Button>
             </Show>
           </div>
           <Show when={props.shareLinkProps}>
             {(shareLinkProps) => (
-              <DeprecatedTextButton
-                theme="clear"
-                icon={
-                  locationCopied()
-                    ? () => <CheckIcon class="text-success size-4" />
-                    : LinkIcon
-                }
-                text={locationCopied() ? 'Copied' : 'Share'}
+              <Button
+                variant="ghost"
                 onClick={() => {
                   setLocationCopied(true);
                   shareLinkProps().share();
                 }}
-              />
+              >
+                {locationCopied() ? (
+                  <CheckIcon class="text-success" />
+                ) : (
+                  <LinkIcon />
+                )}
+                {locationCopied() ? 'Copied' : 'Share'}
+              </Button>
             )}
           </Show>
         </div>

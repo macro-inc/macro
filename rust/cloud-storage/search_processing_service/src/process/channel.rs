@@ -25,7 +25,10 @@ pub async fn process_channel_message_update(
         .context("unable to get channel message")?;
 
     if channel_message_info.channel_message.deleted_at.is_some() {
-        tracing::trace!("channel message is deleted, skipping");
+        tracing::trace!("channel message is deleted, removing from search index");
+        opensearch_client
+            .delete_channel_message(&message.channel_id, &message.message_id)
+            .await?;
         return Ok(());
     }
 

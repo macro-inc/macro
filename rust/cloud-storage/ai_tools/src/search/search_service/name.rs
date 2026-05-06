@@ -14,17 +14,17 @@ use std::sync::Arc;
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. For call records, this searches the channel name the call took place in. This tool finds items based on what they're called, not their content.",
+    description = "Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `\"deal review\"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.",
     title = "NameSearch"
 )]
 pub struct NameSearch {
     #[schemars(
-        description = "The name or title to search for. For emails, this is the subject line. For channels, this can be the channel name or participant names. For call records, this is the channel name the call belongs to."
+        description = "The name or title to search. Pass 1-3 keywords drawn from words that would literally appear in the title, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched against the subject. Wrap a term in double quotes to force exact-token matching."
     )]
     pub name: String,
 
     #[schemars(
-        description = "Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']"
+        description = "Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']."
     )]
     #[serde(default)]
     pub entity_types: Vec<UnifiedSearchIndex>,
@@ -102,7 +102,7 @@ mod tests {
             "Tool name should match the schemars title"
         );
         assert!(
-            description.contains("Search for items by their name"),
+            description.contains("Search items by their name"),
             "Description should contain expected text"
         );
     }

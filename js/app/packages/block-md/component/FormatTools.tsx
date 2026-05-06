@@ -201,7 +201,10 @@ const InlineFormatButton = (props: {
         />
       }
       size="icon-sm"
-      variant={props.selection()?.[props.format] ? 'tertiary' : 'ghost'}
+      variant="ghost"
+      classList={{
+        'bg-ink/10 text-ink': !!props.selection()?.[props.format],
+      }}
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
       }
@@ -253,11 +256,12 @@ export const ElementFormatButton = (props: {
       tooltip={name}
       size="icon-sm"
       class="rounded-xs"
-      variant={
-        props.selection()?.elementsInRange?.has(props.format)
-          ? 'tertiary'
-          : 'ghost'
-      }
+      variant="ghost"
+      classList={{
+        'bg-ink/10 text-ink': !!props
+          .selection()
+          ?.elementsInRange?.has(props.format),
+      }}
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
       }

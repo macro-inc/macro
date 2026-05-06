@@ -133,7 +133,7 @@ export const SoupViewCreateButton = () => {
           when={options().length > 1}
           fallback={
             <Button
-              variant="secondary"
+              variant="base"
               size="sm"
               class="rounded-xs whitespace-nowrap px-2 text-ink-muted hover:text-ink"
               onClick={() => handleSelect(options()[0])}
@@ -146,7 +146,7 @@ export const SoupViewCreateButton = () => {
           <DropdownMenu placement="bottom-start" gutter={4}>
             <DropdownMenu.Trigger
               as={Button}
-              variant="secondary"
+              variant="base"
               size="sm"
               class="rounded-xs whitespace-nowrap px-2 text-ink-muted hover:text-ink"
             >

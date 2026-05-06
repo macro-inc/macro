@@ -401,7 +401,6 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   height: 100%;
   animation: table-controls 0.2s ease;
   border: 0;
-  cursor: var(--cursor-pointer);
 }
 
 .md-table-add-columns:after {
@@ -428,7 +427,6 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   width: calc(100% - 25px);
   animation: table-controls 0.2s ease;
   border: 0;
-  cursor: var(--cursor-pointer);
 }
 
 .md-table-add-columns:after {
@@ -481,7 +479,6 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   width: 20px;
   height: 20px;
   color: var(--color-ink-muted);
-  cursor: var(--cursor-pointer);
   background-color: transparent;
 }
 
@@ -490,7 +487,6 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
 }
 
 .md-editor-equation {
-  cursor: var(--cursor-pointer);
   user-select: none;
 }
 

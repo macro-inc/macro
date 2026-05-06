@@ -1,6 +1,7 @@
 import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { DeprecatedButton } from '../DeprecatedButton';
+import { Button } from '@ui';
+import { LabelAndHotKey } from '../../Tooltip';
 import DropdownMenu from '../DropdownMenu';
 import { SegmentedControl } from '../SegmentControls';
 import { ToggleButton } from '../ToggleButton';
@@ -37,12 +38,15 @@ const NewFormPrimitivesDemo = () => {
         />
         <ToggleButton size="SM">Select Btn</ToggleButton>
 
-        <DeprecatedButton size="SM" hotkeyShortcut="cmd+k">
+        <Button
+          size="sm"
+          tooltip={<LabelAndHotKey label="Console" shortcut="cmd+k" />}
+        >
           Console
-        </DeprecatedButton>
+        </Button>
 
         <DropdownMenu
-          size="SM"
+          size="sm"
           triggerLabel="dropdown"
           open={openDropdown1()}
           onOpenChange={setOpenDropdown1}
@@ -79,28 +83,26 @@ const NewFormPrimitivesDemo = () => {
               </section>
             </div>
             <div class="grid grid-flow-col w-full border-edge border-t-2">
-              <DeprecatedButton
-                size="SM"
-                theme="secondary"
-                border={false}
+              <Button
+                size="sm"
+                variant="base"
                 onClick={() => {
                   // Reset logic here
                   setOpenDropdown1(false);
                 }}
               >
                 Reset
-              </DeprecatedButton>
-              <DeprecatedButton
-                size="SM"
-                theme="primary"
-                border={false}
+              </Button>
+              <Button
+                size="sm"
+                variant="base"
                 onClick={() => {
                   // submit logic here
                   setOpenDropdown1(false);
                 }}
               >
                 Submit
-              </DeprecatedButton>
+              </Button>
             </div>
           </div>
         </DropdownMenu>
@@ -117,7 +119,7 @@ const NewFormPrimitivesDemo = () => {
           onChange={(newValue) => setSelectItemFromList(newValue)}
         />
         <DropdownMenu
-          size="Base"
+          size="sm"
           triggerLabel="dropdown"
           open={openDropdown2()}
           onOpenChange={setOpenDropdown2}
@@ -154,35 +156,36 @@ const NewFormPrimitivesDemo = () => {
               </section>
             </div>
             <div class="grid grid-flow-col w-full border-edge border-t-2">
-              <DeprecatedButton
-                size="SM"
-                theme="secondary"
-                border={false}
+              <Button
+                size="sm"
+                variant="base"
                 onClick={() => {
                   // Reset logic here
                   setOpenDropdown2(false);
                 }}
               >
                 Reset
-              </DeprecatedButton>
-              <DeprecatedButton
-                size="SM"
-                theme="primary"
-                border={false}
+              </Button>
+              <Button
+                size="sm"
+                variant="base"
                 onClick={() => {
                   // submit logic here
                   setOpenDropdown2(false);
                 }}
               >
                 Submit
-              </DeprecatedButton>
+              </Button>
             </div>
           </div>
         </DropdownMenu>
         <ToggleButton size="Base">Select Btn</ToggleButton>
-        <DeprecatedButton size="Base" hotkeyShortcut="cmd+k">
+        <Button
+          size="md"
+          tooltip={<LabelAndHotKey label="Console" shortcut="cmd+k" />}
+        >
           Console
-        </DeprecatedButton>
+        </Button>
       </div>
       <hr class="my-4" />
       <h2>Misc</h2>

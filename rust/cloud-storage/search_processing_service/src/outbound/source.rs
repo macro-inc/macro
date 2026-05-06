@@ -100,6 +100,7 @@ impl BackfillSource for PgBackfillSource {
             offset as i64,
             chat_ids,
             user_ids,
+            req.deletion_filter.as_only_deleted(),
         )
         .await
         .map_err(BackfillError::Source)?;
@@ -126,13 +127,14 @@ impl BackfillSource for PgBackfillSource {
 
     async fn fetch_channels(
         &self,
-        _req: &ChannelBackfillRequest,
+        req: &ChannelBackfillRequest,
         offset: usize,
     ) -> Result<SourcePage, BackfillError> {
         let batch = comms_db_client::messages::get_messages::get_channel_messages(
             &self.db,
             self.page_sizes.channels as i64,
             offset as i64,
+            req.deletion_filter.as_only_deleted(),
         )
         .await
         .map_err(BackfillError::Source)?;
@@ -167,6 +169,7 @@ impl BackfillSource for PgBackfillSource {
             &req.sub_type,
             &req.created_after,
             &req.created_before,
+            req.deletion_filter.as_only_deleted(),
         )
         .await
         .map_err(BackfillError::Source)?;

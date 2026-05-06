@@ -130,7 +130,7 @@ export type MenuItemProps =
   | CheckboxMenuItemProps
   | RadioMenuItemProps;
 
-export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1 text-base' : 'py-1 pl-2 pr-2 text-sm'} font-medium justify-between items-center focus-bracket rounded-xs`;
+export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1 text-base' : 'py-1 pl-2 pr-2 text-sm'} font-medium justify-between items-center rounded-xs outline-none focus:bg-active data-[highlighted]:bg-active`;
 
 /**
  * A menu item component that can be used interchangeably within either a ContextMenu or DropdownMenu.

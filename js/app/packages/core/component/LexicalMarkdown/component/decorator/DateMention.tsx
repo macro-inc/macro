@@ -115,7 +115,7 @@ export function DateMention(props: DateMentionDecoratorProps) {
         ref={mentionRef}
         class="relative py-0.5 px-0.5 rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink cursor-default"
         classList={{
-          'bracket-offset-2': isSelectedAsNode(),
+          'bg-active': isSelectedAsNode(),
         }}
         onClick={() => setDatePickerOpen(true)}
         onMouseEnter={() => setHovered(true)}

@@ -87,7 +87,7 @@ function usePersonPicker() {
         label:
           s.id === uid ? `${s.data.name || 'Me'} (me)` : s.data.name || s.id,
         icon: () => (
-          <UserIcon id={s.id} size="xs" suppressClick showTooltip={false} />
+          <UserIcon id={s.id} size="sm" suppressClick showTooltip={false} />
         ),
       };
       if (s.id === uid) me = opt;

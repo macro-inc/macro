@@ -4,11 +4,12 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { InviteEntry } from './inviteEntry';
 
 /**
  * The request body to invite a user to a team
  */
 export interface InviteToTeamRequest {
-  /** The emails of the users you want to invite to the team */
-  emails: string[];
+  /** The invites to send, each with an email and tier */
+  invites: InviteEntry[];
 }

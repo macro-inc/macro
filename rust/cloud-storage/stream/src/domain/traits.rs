@@ -8,8 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 
-/// Default stream should not last longer than 5 minutes
-pub const DEFAULT_STREAM_TIMEOUT: Duration = Duration::from_secs(300);
+/// Default stream should not last longer than 30 minutes
+pub const DEFAULT_STREAM_TIMEOUT: Duration = Duration::from_secs(1800);
 
 /// A boxed stream that yields items with their offsets.
 pub type ItemStream = Pin<Box<dyn Stream<Item = StreamItem> + Send>>;

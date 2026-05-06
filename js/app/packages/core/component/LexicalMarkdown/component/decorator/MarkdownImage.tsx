@@ -1,6 +1,6 @@
 import { internalDrag } from '@core/directive/internalDragState';
 false && internalDrag;
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { Button } from '@ui/components/Button';
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
 import { isErr } from '@core/util/maybeResult';
@@ -269,7 +269,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         ref={containerRef}
         class={cn(
           'relative max-w-full my-4 grid place-items-center',
-          isSelectedAsNode() && 'bracket-offset-4 ring-3 ring-edge-muted',
+          isSelectedAsNode() && 'ring-3 ring-edge-muted',
           state() === 'error' && 'media-error min-h-44',
           // If there are no constrained dimensions, center the image
           !props.constrainedWidth && !props.constrainedHeight && 'mx-auto'
@@ -378,7 +378,9 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           <Dialog.Content class="relative max-w-[65%] max-h-[80vh] flex items-center justify-center">
             <div class="absolute bg-dialog top-2 right-2 flex flex-row">
               <Dialog.CloseButton>
-                <DeprecatedIconButton icon={XIcon} theme="clear" />
+                <Button variant="ghost" size="icon-md">
+                  <XIcon />
+                </Button>
               </Dialog.CloseButton>
             </div>
             <img

@@ -13,7 +13,7 @@ export function AttachmentEntityRow(props: {
     <Entity.Root
       entity={props.entity}
       onClick={() => props.onClick?.()}
-      class="flex items-center gap-2 min-h-10 px-2 text-sm hover:bg-hover/30 cursor-pointer w-full"
+      class="flex items-center gap-2 min-h-10 px-2 text-sm hover:bg-hover w-full"
     >
       <div class="size-4 shrink-0">
         <Entity.Icon entity={props.entity} />
@@ -24,7 +24,7 @@ export function AttachmentEntityRow(props: {
       <Show when={props.senderId}>
         {(id) => (
           <div class="shrink-0">
-            <UserIcon id={id()} size="xs" suppressClick showTooltip />
+            <UserIcon id={id()} size="sm" suppressClick showTooltip />
           </div>
         )}
       </Show>

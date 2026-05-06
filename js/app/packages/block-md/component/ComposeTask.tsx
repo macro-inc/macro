@@ -613,7 +613,7 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   return (
     <div
-      class="flex flex-col relative bracket-never h-full max-h-full min-h-0"
+      class="flex flex-col relative h-full max-h-full min-h-0"
       tabIndex={-1}
       ref={setContainerRef}
     >
@@ -731,7 +731,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           onClick={handleCreateTask}
           class="px-3 pr-2"
           disabled={title().trim().length === 0 || isCreating()}
-          variant="secondary"
+          variant="base"
         >
           <Show
             when={isCreating()}

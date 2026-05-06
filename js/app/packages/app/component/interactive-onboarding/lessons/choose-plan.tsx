@@ -1,10 +1,16 @@
-import { onMount, createSignal } from 'solid-js';
+import { createSignal, onMount, Show } from 'solid-js';
+import CheckIcon from '@icon/regular/check.svg';
+import SpinnerIcon from '@icon/regular/spinner.svg';
 import type { LessonContentProps, LessonDefinition } from '../types';
-import { stripeServiceClient } from '@service-stripe/client';
-import { useAnalytics } from '@app/component/analytics-context';
-import { toast } from '@core/component/Toast/Toast';
 import { PlanGrid } from '@app/component/paywall/PlanGrid';
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import type { PaidPlanTier, PlanTier } from '@app/component/paywall/plans';
+import { useOnboarding } from '../onboarding-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
+import { useOnboardingCheckoutMutation } from '../use-onboarding-checkout';
+import { useAnalytics } from '@app/component/analytics-context';
+import { useIsAuthenticated } from '@core/auth';
+import { toast } from '@core/component/Toast/Toast';
 
 function ChoosePlanContent(props: LessonContentProps) {
   onMount(() => props.onComplete());
@@ -17,41 +23,69 @@ function ChoosePlanContent(props: LessonContentProps) {
 }
 
 function ChoosePlanDemo(props: LessonContentProps) {
+  const { selectedPlan, setSelectedPlan } = useOnboarding();
   const analytics = useAnalytics();
-  const [loading, setLoading] = createSignal<string | null>(null);
+  const isAuthenticated = useIsAuthenticated();
+  const [isRedirecting, setIsRedirecting] = createSignal(false);
 
-  const handleCheckout = async (tier: string) => {
-    if (loading()) return;
+  const inviteTeamEnabled = useFeatureFlag('enable-teams-onboarding', {
+    enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
+  });
+
+  // Returns to /welcome?subscriptionSuccess=true on success, which triggers
+  // completeOnParam and lands the user on the next lesson (team-choice or launch).
+  const checkoutMutation = useOnboardingCheckoutMutation({
+    onSuccess: (result) => {
+      analytics.track('subscription_start', {
+        type: selectedPlan(),
+        seats: 1,
+      });
+      setIsRedirecting(true);
+      window.location.href = result.checkoutUrl;
+    },
+    onError: (error) => {
+      console.error('Checkout error:', error);
+      toast.failure(
+        error.message || 'Failed to start checkout. Please try again.'
+      );
+    },
+  });
+
+  const isPending = () => checkoutMutation.isPending || isRedirecting();
+
+  const handleSelectPlan = (tier: PlanTier) => {
+    if (isPending()) return;
+
+    setSelectedPlan(tier);
+
     if (tier === 'free') {
       // Free bypasses Stripe, so fire subscription_success directly here to
       // stay symmetric with the paid path (which fires it on Stripe return
       // via Root.tsx's ?subscriptionSuccess handler).
       analytics.track('subscription_success', { type: tier });
-      // Advance to the launch step rather than leaving onboarding.
+      props.skipLesson('team-choice');
+      props.skipLesson('invite-team');
+      props.skipLesson('review-pay');
       props.advance();
       return;
     }
-    setLoading(tier);
-    try {
-      // Return to the onboarding (not /app) on success so the launch step renders.
-      // `subscriptionSuccess` triggers the `completeOnParam` hook on this lesson, which
-      // pre-marks choose-plan complete in the state machine — the user lands on launch.
-      const successUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}welcome?subscriptionSuccess=true&type=${tier}`;
-      const url = await stripeServiceClient.createCheckoutSession({
-        tier,
-        successUrl,
-      });
-      analytics.track('subscription_start', { type: tier });
-      // Fire the lesson's completion analytics before leaving so the paid path
-      // has parity with the free branch. `advance()` also bumps the state machine,
-      // but we're redirecting immediately — on return, `completeOnParam` takes over.
-      props.advance();
-      window.location.href = url;
-    } catch (error) {
-      console.error('Checkout error:', error);
-      toast.failure('Failed to start checkout. Please try again.');
-      setLoading(null);
+
+    // When teams feature is disabled, go directly to checkout
+    if (!inviteTeamEnabled().enabled) {
+      if (!isAuthenticated()) {
+        props.goToLesson('about-us');
+        return;
+      }
+
+      props.skipLesson('team-choice');
+      props.skipLesson('invite-team');
+      props.skipLesson('review-pay');
+
+      checkoutMutation.mutate({ tier: tier as PaidPlanTier });
+      return;
     }
+
+    props.advance();
   };
 
   return (
@@ -62,21 +96,38 @@ function ChoosePlanDemo(props: LessonContentProps) {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              handleCheckout(plan.tier);
+              handleSelectPlan(plan.tier);
             }}
-            disabled={loading() !== null}
-            class="w-full py-2 rounded-xs text-base font-semibold"
+            disabled={isPending()}
+            class="w-full py-2 rounded-xs text-base font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             classList={{
-              'bg-accent text-panel': !!plan.highlighted,
-              'bg-ink/8 text-ink hover:bg-ink/12': !plan.highlighted,
-              'opacity-60': loading() !== null,
+              'bg-accent text-panel':
+                plan.highlighted && selectedPlan() !== plan.tier,
+              'bg-accent/20 text-accent': selectedPlan() === plan.tier,
+              'bg-ink/8 text-ink hover:bg-ink/12':
+                selectedPlan() !== plan.tier && !plan.highlighted,
             }}
           >
-            {loading() === plan.tier
-              ? 'Loading...'
-              : plan.tier === 'free'
-                ? 'Start free'
-                : 'Subscribe'}
+            <Show
+              when={isPending() && selectedPlan() === plan.tier}
+              fallback={
+                <>
+                  <Show
+                    when={selectedPlan() === plan.tier && plan.tier !== 'free'}
+                  >
+                    <CheckIcon class="size-4" />
+                  </Show>
+                  {plan.tier === 'free'
+                    ? 'Start free'
+                    : selectedPlan() === plan.tier
+                      ? 'Selected'
+                      : 'Select'}
+                </>
+              }
+            >
+              <SpinnerIcon class="size-4 animate-spin" />
+              Redirecting…
+            </Show>
           </button>
         )}
       />

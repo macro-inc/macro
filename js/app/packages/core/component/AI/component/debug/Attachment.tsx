@@ -1,5 +1,5 @@
 import type { Attachment, Model } from '@core/component/AI/types';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { Button } from '@ui/components/Button';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
@@ -112,11 +112,9 @@ export default function DebugAttachments() {
       <div class="flex flex-1 justify-center w-full ">
         <div class="w-4/5 grid grid-cols-2 border border-accent divide-accent divide-y divide-x">
           <Item>
-            <DeprecatedTextButton
-              theme="accent"
-              text="Send All"
-              onClick={sendAll}
-            />
+            <Button variant="active" onClick={sendAll}>
+              Send All
+            </Button>
           </Item>
           <For each={components}>
             {(component) => <Dynamic component={component} />}
@@ -208,13 +206,14 @@ function RequestDebugger(props: {
 
   return (
     <Item label={props.label} col class="max-h-[600px] overflow-y-auto">
-      <DeprecatedTextButton
-        text="Send"
-        theme="accent"
+      <Button
+        variant="active"
         onClick={() => {
           makeRequest();
         }}
-      />
+      >
+        Send
+      </Button>
       <div class="border border-edge font-mono p-2">
         <div class="text-accent italic">{props.simpleRequest.userRequest}</div>
         <div>

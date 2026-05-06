@@ -49,7 +49,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
 
   const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
     const currentIndex = soup.focus.index();
-    const nextEntity =
+    const nextRow =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
 
     const inPreview = previewPanel !== undefined;
@@ -70,8 +70,8 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
       }
 
       soup.selection.clear();
-      if (nextEntity) {
-        soup.focus.set(nextEntity.id);
+      if (nextRow) {
+        soup.focus.set(nextRow.id);
       }
 
       const toastId = toast.success(
@@ -100,12 +100,12 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
         toast.failure('Failed to move to Trash');
       });
 
-      restoreSoupFocus(nextEntity?.id, inPreview);
+      restoreSoupFocus(nextRow?.id, inPreview);
     };
 
     if (nonEmailEntities.length > 0) {
       // Handle non-email entities first via the bulk edit modal,
-      // then trash emails in onFinish so nextEntity/focus are still valid.
+      // then trash emails in onFinish so nextRow/focus are still valid.
       openBulkEditModal({
         view: 'delete',
         entities: nonEmailEntities,
@@ -128,10 +128,10 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
             trashEmailEntities();
           } else {
             soup.selection.clear();
-            if (nextEntity) {
-              soup.focus.set(nextEntity.id);
+            if (nextRow) {
+              soup.focus.set(nextRow.id);
             }
-            restoreSoupFocus(nextEntity?.id, inPreview);
+            restoreSoupFocus(nextRow?.id, inPreview);
           }
         },
         onCancel: () => {

@@ -13,7 +13,6 @@ import { useSoup } from '@app/component/next-soup/soup-context';
 import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
 import { MaybeSoupEntityActionDrawerManager } from '@app/component/next-soup/soup-view/SoupEntityActionDrawerManager';
 import {
-  type SoupRow,
   SoupViewContextProvider,
   useSoupView,
 } from '@app/component/next-soup/soup-view/soup-view-context';
@@ -108,12 +107,13 @@ import {
   invalidateSoupEntity,
   refetchSoupEntity,
 } from '@queries/soup/normalized-cache';
-import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import { Button } from '@ui';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
+import type { SoupRow } from '@app/component/next-soup/create-soup-state';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -173,9 +173,11 @@ type PersistedSoupViewState = {
   sort: SystemSortOption[];
   previewEntity: string | undefined;
   assigneeFilter: string[];
+  groupBy: string | undefined;
+  collapsedGroups: string[];
 };
 
-const PERSISTED_STATE_VERSION = 5;
+const PERSISTED_STATE_VERSION = 6;
 
 const listStateCache = new Map<
   string,
@@ -283,39 +285,56 @@ export const SoupView = (props: SoupViewProps) => {
             <SplitHeaderLeft>
               <div
                 class={cn('h-full flex gap-3 items-center', {
-                  'shrink-0': !narrowSearchExpanded(),
-                  'flex-1 min-w-0': narrowSearchExpanded(),
+                  'shrink-0':
+                    !narrowSearchExpanded() && !isComponentListView('search'),
+                  'flex-1 min-w-0':
+                    narrowSearchExpanded() || isComponentListView('search'),
                 })}
               >
-                <Show when={!isMobile()}>
-                  <h1 class="font-semibold text-ink select-none text-sm shrink-0">
-                    {props.viewName}
-                  </h1>
-                </Show>
-                <Show when={!narrowSearchExpanded()}>
-                  <Show when={!isMobile()}>
-                    <CollapsibleHeaderItem
-                      id="tabs"
-                      priority={1}
-                      expanded={() => <SoupViewTabs />}
-                      collapsed={() => <CollapsedSoupViewTabs />}
-                      containerClass="h-full"
-                    />
-                  </Show>
-                  <Show when={!isMobile()}>
-                    <SoupViewCreateButton />
-                  </Show>
-                  <Show when={isMobile()}>
-                    <MobileFilterDrawer />
-                  </Show>
-                </Show>
-                <Show when={narrowSearchExpanded()}>
+                <Show
+                  when={isComponentListView('search')}
+                  fallback={
+                    <>
+                      <Show when={!isMobile()}>
+                        <h1 class="font-semibold text-ink select-none text-sm shrink-0">
+                          {props.viewName}
+                        </h1>
+                      </Show>
+                      <Show when={!narrowSearchExpanded()}>
+                        <Show when={!isMobile()}>
+                          <CollapsibleHeaderItem
+                            id="tabs"
+                            priority={1}
+                            expanded={() => <SoupViewTabs />}
+                            collapsed={() => <CollapsedSoupViewTabs />}
+                            containerClass="h-full"
+                          />
+                        </Show>
+                        <Show when={!isMobile()}>
+                          <SoupViewCreateButton />
+                        </Show>
+                        <Show when={isMobile()}>
+                          <MobileFilterDrawer />
+                        </Show>
+                      </Show>
+                      <Show when={narrowSearchExpanded()}>
+                        <div class="flex-1 min-w-0">
+                          <SoupSearchbar
+                            variant="secondary"
+                            autoFocus
+                            initialValue={props.initialSearchText}
+                            onDismiss={() => setNarrowSearchExpanded(false)}
+                          />
+                        </div>
+                      </Show>
+                    </>
+                  }
+                >
                   <div class="flex-1 min-w-0">
                     <SoupSearchbar
                       variant="secondary"
-                      autoFocus
+                      placeholder="Search, @mention contacts"
                       initialValue={props.initialSearchText}
-                      onDismiss={() => setNarrowSearchExpanded(false)}
                     />
                   </div>
                 </Show>
@@ -361,7 +380,7 @@ export const SoupView = (props: SoupViewProps) => {
                 />
               </Show>
             </SplitHeaderRight>
-            <SoupFiltersBar initialSearchText={props.initialSearchText} />
+            <SoupFiltersBar />
           </div>
           <Show when={hasLinkError()}>
             <EmailPermissionsBanner />
@@ -746,6 +765,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
       batch(() => {
         soup.sort.setAll(initialPersistedState.sort ?? []);
         setAssigneeFilter(initialPersistedState.assigneeFilter ?? []);
+        soup.grouping.setActiveGroupId(initialPersistedState.groupBy);
+        soup.grouping.collapseAll(initialPersistedState.collapsedGroups ?? []);
       });
     } else {
       if (props.initialClientFilters) {
@@ -775,6 +796,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
           sort: soup.sort.active().map((s) => s.id),
           previewEntity: soup.previewEntity(),
           assigneeFilter: assigneeFilter(),
+          groupBy: soup.grouping.activeGroupId(),
+          collapsedGroups: [...soup.grouping.collapsedGroups()],
         }) satisfies PersistedSoupViewState,
       (state) => {
         if (!persistenceDisabled) setPersistedState(state);
@@ -832,7 +855,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
-        class="size-full bracket-never no-select-children"
+        class="size-full no-select-children"
         ref={(el) => {
           setSoupViewRef(el);
           attachHotkeys(el);
@@ -876,6 +899,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   </Match>
                   <Match when={!rows().length}>
                     <EmptyState
+                      listView={currentView()}
                       search={!!searchText()}
                       hasRefinementsFromBase={hasActiveRefinements()}
                       onClearFilters={resetToTabDefaults}
@@ -956,6 +980,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     More Results
                                   </div>
                                 </Show>
+
                                 <SoupEntityContextMenu entity={row.original}>
                                   <ListEntity
                                     entity={row.original}
@@ -966,10 +991,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     onMouseMove={() => {
                                       if (isKeypressActive()) return;
                                       if (soup.previewEntity()) return;
-                                      soup.focus.set(row.original.id);
+                                      soup.focus.set(row.id);
                                     }}
                                     showUnrollNotifications={
-                                      soup.predicates.isActive('inbox') &&
+                                      soup.predicates.isActive('signal') &&
                                       !soup.predicates.isActive('noise')
                                     }
                                     checked={row.isSelected()}

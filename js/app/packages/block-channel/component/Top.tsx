@@ -46,7 +46,7 @@ function TopIcon(props: TopIconProps) {
     >
       {(recipient) => {
         return (
-          <UserIcon id={recipient().user_id} isDeleted={false} size="xs" />
+          <UserIcon id={recipient().user_id} isDeleted={false} size="sm" />
         );
       }}
     </Show>

@@ -4,6 +4,7 @@ import { authServiceClient } from '@service-auth/client';
 import type { CreateTeamRequest } from '@service-auth/generated/schemas/createTeamRequest';
 import type { PatchTeamRequest } from '@service-auth/generated/schemas/patchTeamRequest';
 import type { Team } from '@service-auth/generated/schemas/team';
+import type { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
@@ -151,7 +152,7 @@ export function useDeleteTeamMutation(callbacks?: DeleteTeamCallbacks) {
 
 type CreateTeamWithInvitesArgs = {
   name: string;
-  emails?: string[];
+  invites?: { email: string; tier: TeamUserTier }[];
 };
 type CreateTeamWithInvitesContext = { previousTeams: Team[] | undefined };
 type CreateTeamWithInvitesCallbacks = MutationCallbacks<
@@ -165,14 +166,14 @@ export function useCreateTeamWithInvitesMutation(
   callbacks?: CreateTeamWithInvitesCallbacks
 ) {
   return useMutation(() => ({
-    mutationFn: async ({ name, emails }: CreateTeamWithInvitesArgs) => {
+    mutationFn: async ({ name, invites }: CreateTeamWithInvitesArgs) => {
       const team = await throwOnErr(() =>
         authServiceClient.createTeam({ name })
       );
 
-      if (emails && emails.length > 0) {
+      if (invites && invites.length > 0) {
         await throwOnErr(() =>
-          authServiceClient.inviteToTeam(team.id, { emails })
+          authServiceClient.inviteToTeam(team.id, { invites })
         );
       }
 
@@ -215,9 +216,9 @@ export function useCreateTeamWithInvitesMutation(
           return { previousTeams };
         },
 
-        onSuccess: (_team, { emails }) => {
+        onSuccess: (_team, { invites }) => {
           invalidateUserTeams();
-          const hasInvites = emails && emails.length > 0;
+          const hasInvites = invites && invites.length > 0;
           toast.success(
             hasInvites ? 'Team created and invitations sent' : 'Team created'
           );

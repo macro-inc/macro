@@ -77,7 +77,7 @@ function AutomationRenameModalContent(props: {
             <div class="pointer-events-auto w-full max-w-[min(36rem,calc(100%-1rem))] mx-auto mt-16 bg-menu border border-edge h-fit p-2">
               <div class="w-full my-1">
                 <EntityModalTitle title="Rename" />
-                <div class="w-full focus-within:bracket-offset-2">
+                <div class="w-full">
                   <input
                     ref={(el) => {
                       inputRef = el;
@@ -91,7 +91,7 @@ function AutomationRenameModalContent(props: {
                     value={editValue()}
                     onInput={(e) => setEditValue(e.currentTarget.value)}
                     onKeyDown={handleKeyDown}
-                    class="w-full p-2 text-sm border border-edge bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none selection:bg-ink selection:text-panel"
+                    class="w-full p-2 text-sm border border-edge bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none focus:bg-active selection:bg-ink selection:text-panel"
                     placeholder="Enter title..."
                   />
                 </div>

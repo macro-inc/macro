@@ -29,7 +29,7 @@ export function SearchContentHitRow(props: SearchContentHitRowProps) {
   return (
     <div
       class={cn(
-        'ph-no-capture flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-edge gap-4 hover:bg-edge'
+        'ph-no-capture flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-message gap-4 hover:bg-hover'
       )}
       onClick={handleClick}
       role="button"
@@ -38,7 +38,7 @@ export function SearchContentHitRow(props: SearchContentHitRowProps) {
         <Show when={hitHasSender(props.hit)}>
           <div class="flex items-center gap-1">
             <Show when={senderId()}>
-              {(id) => <UserIcon id={id()} size="xs" />}
+              {(id) => <UserIcon id={id()} size="sm" />}
             </Show>
             <span class="text-xs text-ink-muted">
               <SearchSender hit={props.hit} />

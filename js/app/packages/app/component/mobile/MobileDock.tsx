@@ -15,6 +15,7 @@ import type { ListView } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SearchState } from './mobileSearchState';
 import { useLocation } from '@solidjs/router';
+import { Layer } from '@ui';
 
 false && focusInput;
 
@@ -118,49 +119,51 @@ export function MobileDock() {
   };
 
   return (
-    <div class="relative z-mobile-nav-bar flex flex-row justify-between">
-      <div class="-z-1 absolute left-0 top-0 right-0 w-screen h-40 bg-panel" />
-      <MobileDockButton
-        icon={AnimatedInboxIcon}
-        active={isActive('inbox')}
-        onClick={() => {
-          navigate('inbox');
-        }}
-      />
-      <MobileDockButton
-        icon={AnimatedEmailIcon}
-        active={isActive('mail')}
-        onClick={() => navigate('mail')}
-      />
-      <MobileDockButton
-        icon={AnimatedChannelIcon}
-        active={isActive('channels')}
-        onClick={() => {
-          navigate('channels');
-        }}
-      />
-      <MobileDockButton
-        icon={AnimatedTaskIcon}
-        active={isActive('tasks')}
-        onClick={() => navigate('tasks')}
-      />
-      <MobileDockButton
-        icon={AnimatedFileMdIcon}
-        active={isActive('documents')}
-        onClick={() => navigate('documents')}
-      />
-      <MobileDockButton
-        icon={AnimatedStarIcon}
-        active={isActive('agents')}
-        onClick={() => navigate('agents')}
-      />
-      <SearchDockButton
-        active={isActive('search')}
-        onClick={() => {
-          SearchState.maybeResetState();
-          SearchState.open();
-        }}
-      />
-    </div>
+    <Layer depth={1}>
+      <div class="relative z-mobile-nav-bar flex flex-row justify-between">
+        <div class="-z-1 absolute left-0 top-0 right-0 w-screen h-40 bg-panel" />
+        <MobileDockButton
+          icon={AnimatedInboxIcon}
+          active={isActive('inbox')}
+          onClick={() => {
+            navigate('inbox');
+          }}
+        />
+        <MobileDockButton
+          icon={AnimatedEmailIcon}
+          active={isActive('mail')}
+          onClick={() => navigate('mail')}
+        />
+        <MobileDockButton
+          icon={AnimatedChannelIcon}
+          active={isActive('channels')}
+          onClick={() => {
+            navigate('channels');
+          }}
+        />
+        <MobileDockButton
+          icon={AnimatedTaskIcon}
+          active={isActive('tasks')}
+          onClick={() => navigate('tasks')}
+        />
+        <MobileDockButton
+          icon={AnimatedFileMdIcon}
+          active={isActive('documents')}
+          onClick={() => navigate('documents')}
+        />
+        <MobileDockButton
+          icon={AnimatedStarIcon}
+          active={isActive('agents')}
+          onClick={() => navigate('agents')}
+        />
+        <SearchDockButton
+          active={isActive('search')}
+          onClick={() => {
+            SearchState.maybeResetState();
+            SearchState.open();
+          }}
+        />
+      </div>
+    </Layer>
   );
 }

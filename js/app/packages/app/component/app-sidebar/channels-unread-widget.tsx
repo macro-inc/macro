@@ -189,8 +189,6 @@ function ChannelGroupItem(props: {
 
   const ButtonContent = () => (
     <Button
-      as={'a'}
-      href={`/channel/${props.group.entityId}`}
       class={cn(
         'flex items-center cursor-default rounded-xs',
         isSlim() ? 'justify-center size-8' : 'justify-start gap-3 size-full'
@@ -203,9 +201,6 @@ function ChannelGroupItem(props: {
         'opacity-100 translate-y-0': isVisible(),
       }}
       onClick={(e) => {
-        if (e.button === 1) return;
-
-        e.preventDefault();
         navigateToLatestNotification(e.shiftKey);
       }}
     >

@@ -162,6 +162,7 @@ where
         let mut content = String::new();
         let mut tool_calls: Vec<ChatCompletionMessageToolCalls> = vec![];
         let mut pending_tool_messages: Vec<ChatCompletionRequestMessage> = vec![];
+        let mut pending_part_tool_calls: Vec<ToolCall> = vec![];
 
         for item in stream_parts {
             match item {
@@ -218,66 +219,76 @@ where
                                 },
                             },
                         ));
-
-                        let tool_response_text = match self
-                            .toolset
-                            .try_tool_call(
-                                self.context.clone(),
-                                request_context.clone(),
-                                &call.name,
-                                &call.json,
-                            )
-                            .await
-                        {
-                            // found tool and call success
-                            Ok(ToolResult::Ok(output)) => {
-                                let json_string = serde_json::to_string_pretty(&output)
-                                    .unwrap_or_else(|_| {
-                                        "internal error formatting response".to_string()
-                                    });
-                                tool_responses.push(ToolResponse::Json {
-                                    id: call.id.clone(),
-                                    json: output,
-                                    name: call.name.clone(),
-                                });
-                                json_string
-                            }
-                            // found tool and call fail
-                            Ok(ToolResult::Err(fail)) => {
-                                tracing::error!(error=?fail, "tool execution error");
-                                tool_responses.push(ToolResponse::Err {
-                                    id: call.id.clone(),
-                                    description: fail.description.clone(),
-                                    name: call.name.clone(),
-                                });
-                                fail.description
-                            }
-                            // tool call not found | malformed json
-                            Err(err) => {
-                                tracing::error!(error=?err, "error calling tool");
-                                let desc = format!("Error calling tool: {}", err);
-                                tool_responses.push(ToolResponse::Err {
-                                    id: call.id.clone(),
-                                    description: desc.clone(),
-                                    name: call.name.clone(),
-                                });
-                                desc
-                            }
-                        };
-
-                        // response message in message chain
-                        pending_tool_messages.push(ChatCompletionRequestMessage::Tool(
-                            ChatCompletionRequestToolMessage {
-                                content: async_openai::types::chat::ChatCompletionRequestToolMessageContent::Text(
-                                    tool_response_text,
-                                ),
-                                tool_call_id: call.id,
-                            },
-                        ));
+                        pending_part_tool_calls.push(call);
                     }
                     StreamPart::Content(text) => content.push_str(text.as_str()),
                     StreamPart::Usage { .. } | StreamPart::ToolResponse(_) => {}
                 },
+            }
+        }
+
+        // Execute all tool calls concurrently
+        if !pending_part_tool_calls.is_empty() {
+            let tool_futures: Vec<_> = pending_part_tool_calls
+                .iter()
+                .map(|call| {
+                    let toolset = self.toolset.clone();
+                    let context = self.context.clone();
+                    let request_context = request_context.clone();
+                    let name = call.name.clone();
+                    let json = call.json.clone();
+                    async move {
+                        toolset
+                            .try_tool_call(context, request_context, &name, &json)
+                            .await
+                    }
+                })
+                .collect();
+
+            let results = futures::future::join_all(tool_futures).await;
+
+            for (call, result) in pending_part_tool_calls.iter().zip(results) {
+                let tool_response_text = match result {
+                    Ok(ToolResult::Ok(output)) => {
+                        let json_string = serde_json::to_string_pretty(&output)
+                            .unwrap_or_else(|_| "internal error formatting response".to_string());
+                        tool_responses.push(ToolResponse::Json {
+                            id: call.id.clone(),
+                            json: output,
+                            name: call.name.clone(),
+                        });
+                        json_string
+                    }
+                    Ok(ToolResult::Err(fail)) => {
+                        tracing::error!(error=?fail, "tool execution error");
+                        tool_responses.push(ToolResponse::Err {
+                            id: call.id.clone(),
+                            description: fail.description.clone(),
+                            name: call.name.clone(),
+                        });
+                        fail.description
+                    }
+                    Err(err) => {
+                        tracing::error!(error=?err, "error calling tool");
+                        let desc = format!("Error calling tool: {}", err);
+                        tool_responses.push(ToolResponse::Err {
+                            id: call.id.clone(),
+                            description: desc.clone(),
+                            name: call.name.clone(),
+                        });
+                        desc
+                    }
+                };
+
+                pending_tool_messages.push(ChatCompletionRequestMessage::Tool(
+                    ChatCompletionRequestToolMessage {
+                        content:
+                            async_openai::types::chat::ChatCompletionRequestToolMessageContent::Text(
+                                tool_response_text,
+                            ),
+                        tool_call_id: call.id.clone(),
+                    },
+                ));
             }
         }
 

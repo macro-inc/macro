@@ -3181,6 +3181,24 @@ export const editDocumentResponse = zod
   .describe('Edit document response.');
 
 /**
+ * Returns the short UUID and git branch name for a task document.
+Returns 400 if the document is not a task.
+ * @summary Handler for `GET /documents/{document_id}/branch_name`.
+ */
+export const getDocumentBranchNameParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const getDocumentBranchNameResponse = zod
+  .object({
+    branchName: zod
+      .string()
+      .describe('The git branch name for the task document.'),
+    shortId: zod.string().describe('The short id of the document.'),
+  })
+  .describe('Branch name response.');
+
+/**
  * Copies an existing document, creating a new document with the same content.
 Does not require re-uploading the document file.
  * @summary Handler for `POST /documents/{document_id}/copy`.
@@ -5181,6 +5199,12 @@ export const postItemsSoupBody = zod
           .nullish()
           .describe(
             'Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join.'
+          ),
+        call_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Call record IDs to filter by. Empty to include all calls.'
           ),
         channel_ids: zod
           .array(zod.string())
@@ -10095,6 +10119,10 @@ export const patchViewHandlerParams = zod.object({
 export const patchViewHandlerBody = zod.object({
   config: zod.unknown().optional(),
   name: zod.string().nullish(),
+});
+
+export const bulkWakeupSyncServiceDocumentsBody = zod.object({
+  document_ids: zod.array(zod.string()),
 });
 
 /**

@@ -1,3 +1,4 @@
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
@@ -81,6 +82,7 @@ function ChatInner(props: {
   const scopeId = blockHotkeyScopeSignal.get;
   const blockElement = blockElementSignal.get;
   const { navigatedFromJK } = useNavigatedFromJK();
+  const isPreview = !!useMaybePreviewPanel();
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
   const [showStreamDebug, setShowStreamDebug] = createSignal(false);
   const [markdownText, setMarkdownText] = createSignal(
@@ -311,7 +313,7 @@ function ChatInner(props: {
               chatId={chat.chatId()}
               onSend={onSend}
               onStop={onStop}
-              autoFocusOnMount={true}
+              autoFocusOnMount={!isPreview}
             />
           </div>
         </div>

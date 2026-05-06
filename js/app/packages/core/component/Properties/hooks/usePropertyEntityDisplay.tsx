@@ -113,7 +113,7 @@ export function usePropertyEntityDisplay(
 
   const icon = createMemo(() =>
     match(entityType())
-      .with('USER', () => <UserIcon id={entityId()} size="xs" />)
+      .with('USER', () => <UserIcon id={entityId()} size="sm" />)
       .with('CHANNEL', () => <CoreEntityIcon targetType="channel" size="xs" />)
       .with('TASK', () => <CoreEntityIcon targetType="task" size="xs" />)
       .with('DOCUMENT', () => {

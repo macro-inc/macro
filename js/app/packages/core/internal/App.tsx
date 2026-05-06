@@ -8,8 +8,9 @@ import Acorn from '@phosphor-icons/core/regular/acorn.svg?component-solid';
 import Subtract from '@phosphor-icons/core/regular/subtract.svg?component-solid';
 import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
 import { type Component, createSignal, For, Index } from 'solid-js';
-import { DeprecatedIconButton } from '../component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '../component/DeprecatedTextButton';
+import { Button } from '@ui/components/Button';
+import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
+
 import { ItemPreview } from '../component/ItemPreview';
 import { DropdownMenuContent, MenuItem } from '../component/Menu';
 import { Permissions } from '../component/SharePermissions';
@@ -73,61 +74,56 @@ const App: Component = () => {
       <Bar
         center={
           <Center>
-            <DeprecatedTextButton
-              theme="clear"
-              text={documentAccess()}
-              showChevron
-              onClick={togglePublicPermissions}
-            />
+            <Button variant="ghost" onClick={togglePublicPermissions}>
+              {documentAccess()} <CaretDown />
+            </Button>
           </Center>
         }
       />
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <For each={Themes}>
-          {(theme) => (
-            <DeprecatedTextButton
-              theme={theme}
-              text="Button Text"
-              icon={Subtract}
-              showChevron
-            />
+          {() => (
+            <Button variant="base">
+              <Subtract /> Button Text <CaretDown />
+            </Button>
           )}
         </For>
       </div>
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
-          {(theme) => (
-            <DeprecatedTextButton
-              theme={theme()}
-              text="Button Text"
-              icon={Subtract}
-              showChevron
-              showSeparator
-            />
+          {() => (
+            <Button variant="base">
+              <Subtract /> Button Text <CaretDown />
+            </Button>
           )}
         </Index>
       </div>
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={Themes}>
-          {(theme) => <DeprecatedIconButton theme={theme()} icon={Acorn} />}
-        </Index>
-      </div>
-      <div class="flex flex-row flex-wrap justify-center gap-4">
-        <Index each={ThemesWithSeparator}>
-          {(theme) => (
-            <DeprecatedIconButton theme={theme()} icon={Acorn} showChevron />
+          {() => (
+            <Button variant="base" size="icon-md">
+              <Acorn />
+            </Button>
           )}
         </Index>
       </div>
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
-          {(theme) => (
-            <DeprecatedIconButton
-              theme={theme()}
-              icon={Acorn}
-              showChevron
-              border
-            />
+          {() => (
+            <Button variant="base" size="icon-md">
+              <Acorn />
+              <CaretDown />
+            </Button>
+          )}
+        </Index>
+      </div>
+      <div class="flex flex-row flex-wrap justify-center gap-4">
+        <Index each={ThemesWithSeparator}>
+          {() => (
+            <Button variant="base" size="icon-md">
+              <Acorn />
+              <CaretDown />
+            </Button>
           )}
         </Index>
       </div>
@@ -144,7 +140,9 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <DropdownMenu>
           <DropdownMenu.Trigger>
-            <DeprecatedTextButton theme="base" text="Open" tabIndex={-1} />
+            <Button variant="base" tabIndex={-1}>
+              Open
+            </Button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenuContent>

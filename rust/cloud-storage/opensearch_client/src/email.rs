@@ -20,11 +20,6 @@ impl OpensearchClient {
         upsert::email::bulk_upsert_email_messages(&self.inner, messages, index_override).await
     }
 
-    /// Deletes all email messages with the specified thread_id
-    pub async fn delete_email_by_thread_id(&self, thread_id: &str) -> Result<()> {
-        delete::email::delete_email_by_thread_id(&self.inner, thread_id).await
-    }
-
     /// Deletes a particular email message
     pub async fn delete_email_message_by_id(&self, message_id: &str) -> Result<()> {
         delete::email::delete_email_message_by_id(&self.inner, message_id).await

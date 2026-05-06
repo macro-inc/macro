@@ -42,6 +42,7 @@ export * from './channelSearchResponseItemWithMetadataAllOf';
 export * from './channelSearchResponseItemWithMetadataAllOfMetadata';
 export * from './channelSearchResult';
 export * from './channelSearchResultCreatedAt';
+export * from './channelSearchResultDeletedAt';
 export * from './channelSearchResultMessageId';
 export * from './channelSearchResultScore';
 export * from './channelSearchResultSenderId';

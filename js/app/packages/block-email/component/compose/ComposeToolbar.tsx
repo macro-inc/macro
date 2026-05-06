@@ -85,7 +85,7 @@ export function EmailComposeToolbar(props: {
           />
         </div>
       </Show>
-      <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
+      <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 mt-2">
         <Show
           when={!isMobile()}
           fallback={
@@ -144,7 +144,7 @@ export function EmailComposeToolbar(props: {
           <div class="flex items-center gap-2">
             <Show when={ctx.onSaveDraft}>
               <Button
-                variant="secondary"
+                variant="base"
                 size="sm"
                 disabled={
                   ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()
@@ -221,7 +221,7 @@ function MobileToolbar(props: {
         >
           <Show when={ctx.onSaveDraft}>
             <Button
-              variant="secondary"
+              variant="base"
               size="sm"
               disabled={
                 ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()

@@ -1,4 +1,4 @@
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { Button } from '@ui/components/Button';
 import { INSERT_TABLE_COMMAND } from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
 import { createSignal, Index, type ParentProps } from 'solid-js';
@@ -68,7 +68,7 @@ const TableGrid = ({
 
                   return (
                     <div
-                      class="w-4 h-4 border border-edge cursor-pointer transition-colors duration-100"
+                      class="w-4 h-4 border border-edge transition-colors duration-100"
                       classList={{
                         'bg-hover': isHighlighted(),
                       }}
@@ -161,12 +161,13 @@ export function TableInsert(
             on:blur={(e) => e.stopPropagation()}
           />
         </div>
-        <DeprecatedTextButton
-          text="Insert Table"
-          theme="base"
+        <Button
+          variant="base"
           disabled={!rows() || !cols()}
           onClick={() => handleInsertTable(rows() ?? 0, cols() ?? 0)}
-        />
+        >
+          Insert Table
+        </Button>
       </div>
     </div>
   );

@@ -6,7 +6,7 @@
 
 use crate::tool_context::{
     NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
-    NoOpTaskProperties, ToolServiceContext,
+    NoOpSnsEndpointManager, NoOpTaskProperties, ToolNotificationQueue, ToolServiceContext,
 };
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
@@ -27,6 +27,9 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
+use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
+use notification::outbound::queue::SqsQueue;
+use notification::outbound::repository::DbNotificationRepository;
 use readonly_pool::ReadOnlyPool;
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::{SecretManager, SecretsManager};
@@ -38,7 +41,6 @@ use sync_service_client::SyncServiceClient;
 env_var! {
     struct ToolContextEnvVars {
         DocumentStorageServiceUrl,
-        SearchServiceUrl,
         EmailServiceUrl,
         SyncServiceUrl,
         SyncServiceAuthKey,
@@ -56,6 +58,7 @@ maybe_env_var! {
     struct ToolContextMaybeEnvVars {
         InternalApiSecretKey,
         LexicalServiceUrl,
+        NotificationQueue,
     }
 }
 
@@ -67,8 +70,8 @@ maybe_env_var! {
 /// are treated as AWS Secrets Manager secret names and resolved through the
 /// secrets manager. In `Local`, their values are used directly.
 ///
-/// Required env vars: `DOCUMENT_STORAGE_SERVICE_URL`, `SEARCH_SERVICE_URL`,
-/// `EMAIL_SERVICE_URL`, `SYNC_SERVICE_URL`, `SYNC_SERVICE_AUTH_KEY`,
+/// Required env vars: `DOCUMENT_STORAGE_SERVICE_URL`, `EMAIL_SERVICE_URL`,
+/// `SYNC_SERVICE_URL`, `SYNC_SERVICE_AUTH_KEY`,
 /// `STATIC_FILE_SERVICE_URL`, `DOCUMENT_STORAGE_BUCKET`,
 /// `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
@@ -78,6 +81,7 @@ maybe_env_var! {
 /// Optional env vars (with fallbacks for local dev):
 /// - `INTERNAL_API_SECRET_KEY` (defaults to `"local"`)
 /// - `LEXICAL_SERVICE_URL` (defaults to `http://localhost:8096`)
+/// - `NOTIFICATION_QUEUE` (if omitted, notification status updates skip push clearing)
 #[tracing::instrument(skip(pool), err)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
@@ -97,8 +101,16 @@ pub async fn build_tool_service_context_from_env(
         .context("expected LEXICAL_SERVICE_URL")?;
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+    let aws_sqs_client = aws_sdk_sqs::Client::new(&aws_config);
+    let sqs_client = sqs_client::SQS::new(aws_sqs_client.clone())
         .email_scheduled_queue(&env.email_scheduled_queue);
+    let notification_queue = maybe_env
+        .notification_queue
+        .as_ref()
+        .map(|queue_url| {
+            ToolNotificationQueue::Sqs(SqsQueue::new(aws_sqs_client, queue_url.to_string()))
+        })
+        .unwrap_or(ToolNotificationQueue::NoOp);
 
     let secretsmanager_client =
         SecretsManager::new(aws_sdk_secretsmanager::Client::new(&aws_config));
@@ -123,7 +135,7 @@ pub async fn build_tool_service_context_from_env(
 
     let search_client = Arc::new(SearchServiceClient::new(
         internal_api_secret_key.to_string(),
-        env.search_service_url.to_string(),
+        env.document_storage_service_url.to_string(),
     ));
     let sync_client = Arc::new(SyncServiceClient::new(
         sync_service_auth_key.clone(),
@@ -238,6 +250,18 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
     );
 
+    let notification_reader_service = NotificationReaderService::new(
+        DbNotificationRepository::new(pool.clone()),
+        notification_queue,
+        NoOpSnsEndpointManager,
+        PlatformArnConfig {
+            apns_platform_arn: String::new(),
+            fcm_platform_arn: String::new(),
+        },
+    );
+    let notification_tool_context =
+        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+
     let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone());
     let chat_service = chat::domain::service::ChatServiceImpl::new(
         chat_repo,
@@ -261,6 +285,7 @@ pub async fn build_tool_service_context_from_env(
         properties_tool_context,
         email_tool_context,
         call_tool_context,
+        notification_tool_context,
         chat_tool_context,
         channel_tool_context,
         schedule_tool_context: crate::NoOpScheduleContext,

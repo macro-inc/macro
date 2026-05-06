@@ -1,5 +1,5 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Tooltip } from '@core/component/Tooltip';
+import { Button } from '@ui/components/Button';
 import { EmailUserTooltip } from './EmailUserTooltip';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
@@ -140,12 +140,9 @@ function ExpandedHeader(props: {
         <Show when={props.message.internal_date_ts}>
           <span>{formatFullDate(props.message.internal_date_ts!)}</span>
         </Show>
-        <DeprecatedIconButton
-          theme="clear"
-          icon={CaretUp}
-          onclick={props.onClose}
-          iconSize={12}
-        />
+        <Button variant="ghost" size="icon-sm" onClick={props.onClose}>
+          <CaretUp />
+        </Button>
       </div>
     </div>
   );
@@ -214,15 +211,16 @@ function CollapsedHeader(props: {
           }}
         >
           <Tooltip tooltip={<span class="text-xs">Expand Message Header</span>}>
-            <DeprecatedIconButton
-              theme="clear"
-              icon={CaretDown}
-              onclick={(e) => {
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={(e) => {
                 e.stopPropagation();
                 props.onExpand();
               }}
-              iconSize={12}
-            />
+            >
+              <CaretDown />
+            </Button>
           </Tooltip>
         </div>
       </div>

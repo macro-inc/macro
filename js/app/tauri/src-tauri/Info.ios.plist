@@ -6,6 +6,10 @@
 	<array>
 		<string>voip</string>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>macro</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>This app needs access to the camera to take photos and videos for attachments.</string>
 	<key>NSMicrophoneUsageDescription</key>

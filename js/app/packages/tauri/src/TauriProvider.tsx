@@ -20,6 +20,7 @@ import { listen } from '@tauri-apps/api/event';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 import { useCallKitSetup } from '@channel/Call';
+import { ShareTargetProvider } from './ShareTargetProvider';
 
 type NotAndroid = 'not-android';
 
@@ -47,9 +48,7 @@ function TauriProvider(props: { children: JSX.Element }) {
   // we only care about this value on android.
   // ios should use the env(safe-area-inset-top) css properties
   // this css is not reliably set on android
-  const [insets, setInsets] = createSignal<NotAndroid | Insets>(
-    'not-android' as const
-  );
+  const [insets, setInsets] = createSignal<NotAndroid | Insets>('not-android');
   const [bundleUpdateStatus, setBundleUpdateStatus] =
     createSignal<BundleUpdateStatus>({ status: 'Idle' });
   const [waitingForWifi, setWaitingForWifi] = createSignal(false);
@@ -207,7 +206,7 @@ function TauriProvider(props: { children: JSX.Element }) {
 
   return (
     <TauriContext.Provider value={value}>
-      {props.children}
+      <ShareTargetProvider os={value.os}>{props.children}</ShareTargetProvider>
     </TauriContext.Provider>
   );
 }

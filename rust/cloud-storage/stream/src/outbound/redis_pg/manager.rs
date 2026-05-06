@@ -75,7 +75,10 @@ impl StreamManager for RedisPostgresStreamManager {
                                 }
                             },
                             Ok(_) => continue,
-                            Err(_) => break
+                            Err(e) => {
+                                tracing::warn!(error=%e, %entity_id, "stream notify channel error, ending subscription");
+                                break
+                            }
                         }
                     }
                 }

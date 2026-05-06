@@ -1,4 +1,3 @@
-import { DialogWrapper } from '@core/component/DialogWrapper';
 import {
   isCommandItem,
   isEntityItem,
@@ -7,7 +6,7 @@ import {
 } from './useCommandItems';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
-import { Dialog } from '@kobalte/core/dialog';
+import { Dialog, Panel } from '@ui';
 import { Tabs } from '@core/component/Tabs';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -84,23 +83,25 @@ export function CommandMenu() {
   };
 
   return (
-    <Dialog open={CommandState.isOpen()} onOpenChange={CommandState.setIsOpen}>
-      <Dialog.Portal>
-        <DialogWrapper
-          contentRef={setCommandMenuRef}
-          onCloseAutoFocus={(event) => {
-            if (suppressCloseAutoFocus) {
-              event.preventDefault();
-              suppressCloseAutoFocus = false;
-            }
-          }}
-        >
+    <Dialog
+      open={CommandState.isOpen()}
+      onOpenChange={CommandState.setIsOpen}
+      contentRef={setCommandMenuRef}
+      onCloseAutoFocus={(event) => {
+        if (suppressCloseAutoFocus) {
+          event.preventDefault();
+          suppressCloseAutoFocus = false;
+        }
+      }}
+    >
+      <Panel depth={2} active>
+        <div class="*:max-h-[75vh]">
           <CommandMenuInner
             commandMenuRef={commandMenuRef}
             onSelect={handleSelect}
           />
-        </DialogWrapper>
-      </Dialog.Portal>
+        </div>
+      </Panel>
     </Dialog>
   );
 }
@@ -137,8 +138,10 @@ export function CommandMenuInner(props: {
   });
 
   createEffect(
-    on(query, () => {
-      CommandState.setSelectedIndex(0);
+    on([query, CommandState.categoryFilter], () => {
+      const items = filteredItems();
+      const firstIsSearch = items[0] && isSearchItem(items[0]);
+      CommandState.setSelectedIndex(firstIsSearch && items.length > 1 ? 1 : 0);
     })
   );
 
@@ -362,7 +365,6 @@ export function CommandMenuInner(props: {
       );
       const nextIndex = (currentIndex + 1) % CATEGORIES.length;
       CommandState.setCategoryFilter(CATEGORIES[nextIndex].id);
-      CommandState.setSelectedIndex(0);
       return true;
     },
     runWithInputFocused: true,
@@ -380,7 +382,6 @@ export function CommandMenuInner(props: {
       const prevIndex =
         (currentIndex - 1 + CATEGORIES.length) % CATEGORIES.length;
       CommandState.setCategoryFilter(CATEGORIES[prevIndex].id);
-      CommandState.setSelectedIndex(0);
       return true;
     },
     runWithInputFocused: true,
@@ -572,9 +573,17 @@ function VirtualizedCommandList(props: {
 
   createEffect(() => {
     const index = props.selectedIndex;
-    if (index >= 0 && index < props.items.length && virtualizerHandle) {
-      virtualizerHandle.scrollToIndex(index, { align: 'nearest' });
+    if (index < 0 || index >= props.items.length || !virtualizerHandle) {
+      return;
     }
+    // Skip when all items fit: scrolling would be a no-op at the final
+    // container size, but during the height transition the container is
+    // briefly clipped and scrollToIndex shifts scrollTop, hiding the search
+    // row across category switches.
+    if (props.items.length * VIRTUAL_ITEM_HEIGHT <= MAX_LIST_HEIGHT) {
+      return;
+    }
+    virtualizerHandle.scrollToIndex(index, { align: 'nearest' });
   });
 
   const selector = createSelector(
@@ -686,7 +695,6 @@ function CategoryFilterTabs() {
         onChange={(value) => {
           if (value) {
             CommandState.setCategoryFilter(value as CategoryFilter);
-            CommandState.setSelectedIndex(0);
           }
         }}
       />

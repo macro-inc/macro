@@ -42,7 +42,7 @@ export const theme: EditorThemeClasses = {
   text: {
     bold: 'font-bold',
     italic: 'italic',
-    code: 'bg-edge font-mono rounded-xs md-inline-code p-0.5',
+    code: 'bg-message font-mono rounded-xs md-inline-code p-0.5',
     strikethrough: 'md-strike',
     underline: 'md-underline',
     highlight: 'text-accent font-semibold',
@@ -68,9 +68,9 @@ export const theme: EditorThemeClasses = {
   },
   link: 'text-accent-ink underline hover:underline cursor-default underline-offset-[0.15em]',
   quote: 'md-quote border-l-2 border-edge pl-4 py-2 italic text-ink-muted my-4',
-  code: 'bg-edge font-mono p-3 rounded block md-code-box before:text-ink-extra-muted/70 whitespace-pre mb-4',
+  code: 'bg-message font-mono p-3 rounded block md-code-box before:text-ink-extra-muted/70 whitespace-pre mb-4',
   static: {
-    'code-container': 'bg-edge rounded',
+    'code-container': 'bg-message rounded',
     'table-container': 'my-4 max-w-full',
   },
   codeHighlight,
@@ -156,7 +156,7 @@ export const aiChatTheme = createTheme(
     },
     code: 'w-full bg-transparent',
     static: {
-      'code-container': 'bg-edge m-2',
+      'code-container': 'bg-message m-2',
     },
   },
   theme,
@@ -168,7 +168,7 @@ export const channelTheme = createTheme(
     root: 'channel-markdown max-w-full min-w-0',
     code: 'rounded w-full bg-transparent',
     static: {
-      'code-container': 'bg-edge rounded m-2',
+      'code-container': 'bg-message rounded m-2',
     },
   },
   theme,
@@ -201,7 +201,7 @@ export const embeddedCodeBlock = createTheme({
 });
 
 export const unifiedListMarkdownTheme = createTheme({
-  code: 'font-mono overflow-hidden px-1.5 py-0.5 rounded bg-edge inline-block',
+  code: 'font-mono overflow-hidden px-1.5 py-0.5 rounded bg-message inline-block',
   quote: 'border-l-2 border-current/20 pl-1 italic text-current/80',
   static: {
     'code-container':

@@ -88,6 +88,8 @@ export type EmailContextValues = {
     isBodyExpanded: (id: string) => boolean;
     replyingToMessageId: Accessor<string | undefined>;
     setReplyingToMessageId: (id: string | undefined) => void;
+    bottomReplyOpen: Accessor<boolean>;
+    setBottomReplyOpen: (open: boolean) => void;
   };
   thread: Accessor<ApiThread | undefined>;
   permissions: Accessor<{
@@ -182,6 +184,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
   const [replyingToMessageId, setReplyingToMessageId] = createSignal<string>();
+  const [bottomReplyOpen, setBottomReplyOpen] = createSignal(false);
   const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
     Record<string, boolean>
   >({});
@@ -339,13 +342,13 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     if (!props) return false;
 
-    const selectedEntity = soup?.items.get(thread.db_id);
+    const selectedRow = soup?.items.get(thread.db_id);
 
-    if (selectedEntity) {
+    if (selectedRow) {
       if (soup) {
-        markAsDoneAction.executeWithSoup([selectedEntity], soup);
+        markAsDoneAction.executeWithSoup([selectedRow.original], soup);
       } else {
-        markAsDoneAction.execute([selectedEntity]);
+        markAsDoneAction.execute([selectedRow.original]);
       }
     } else {
       archiveMutation.mutate({
@@ -549,6 +552,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
             isBodyExpanded: (id: string) => expandedMessageBodyIds[id] ?? false,
             replyingToMessageId,
             setReplyingToMessageId,
+            bottomReplyOpen,
+            setBottomReplyOpen,
           },
           permissions: createMemo(() => {
             const perms = getPermissions(threadQuery.data?.access_level);

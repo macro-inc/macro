@@ -153,7 +153,7 @@ export const Dropdown = <T extends string | number>(
                           ? 'opacity-50 cursor-not-allowed'
                           : isSelected()
                             ? 'bg-active text-ink'
-                            : 'hover:bg-hover/50 text-ink'
+                            : 'hover:bg-hover text-ink'
                       )}
                     >
                       {props.renderOption?.(option, isSelected()) ??

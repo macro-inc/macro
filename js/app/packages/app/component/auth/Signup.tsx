@@ -81,21 +81,16 @@ export function Signup() {
         </div>
 
         <div class="w-full max-w-105 login-card">
-          <Panel depth={1}>
-            <div class="login-stagger">
-              <div class="flex items-center justify-center py-10">
-                <LogoIcon class="size-20 text-accent" />
-              </div>
-              <div class="text-center text-lg font-medium">
-                Welcome to Macro
-              </div>
-              <div class="px-8 pb-4 pt-2 text-center text-sm text-ink/60 leading-relaxed">
-                Sign up with Google to sync your inbox and set up your
-                workspace.
-              </div>
-              <div class="w-full">
-                <LoginOptions signupMode setStage={(_stage: Stage) => {}} />
-              </div>
+          <Panel depth={1} class="login-stagger">
+            <div class="flex items-center justify-center py-10">
+              <LogoIcon class="size-20 text-accent" />
+            </div>
+            <div class="text-center text-lg font-medium">Welcome to Macro</div>
+            <div class="px-8 pb-4 pt-2 text-center text-sm text-ink/60 leading-relaxed">
+              Sign up with Google to sync your inbox and set up your workspace.
+            </div>
+            <div class="w-full">
+              <LoginOptions signupMode setStage={(_stage: Stage) => {}} />
             </div>
           </Panel>
         </div>

@@ -545,7 +545,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                   },
                   {
                     "term": {
-                      "_index": "emails_alias"
+                      "_index": "emails"
                     }
                   },
                   {

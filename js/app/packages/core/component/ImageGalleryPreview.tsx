@@ -15,7 +15,7 @@ import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-so
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { copyImageToClipboard, downloadImage } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
-import { DeprecatedIconButton } from './DeprecatedIconButton';
+import { Button } from '@ui/components/Button';
 import { Lightbox } from './Lightbox';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 
@@ -138,14 +138,15 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                       onClick={() => setClickedIndex(index())}
                       disabled={props.isContext}
                     >
-                      <DeprecatedIconButton icon={ExpandIcon} theme="clear" />
+                      <Button variant="ghost" size="icon-md">
+                        <ExpandIcon />
+                      </Button>
                     </Dialog.Trigger>
                     <DropdownMenu>
                       <DropdownMenu.Trigger disabled={props.isContext}>
-                        <DeprecatedIconButton
-                          icon={ThreeDotsIcon}
-                          theme="clear"
-                        />
+                        <Button variant="ghost" size="icon-md">
+                          <ThreeDotsIcon />
+                        </Button>
                       </DropdownMenu.Trigger>
                       <DropdownMenu.Portal>
                         <div class="fixed inset-0 z-modal-overlay bg-transparent" />

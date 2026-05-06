@@ -2,12 +2,11 @@ import { useAnalytics } from '@app/component/analytics-context';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useChatInputContext } from '@core/component/AI/context';
 import type { Model, ToolSet } from '@core/component/AI/types';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey } from '@core/component/Hotkey';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -138,23 +137,25 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const LeftButton = () => (
     <div ref={setAttachMenuAnchorRef} class="shrink-0">
-      <DeprecatedIconButton
-        icon={showAttachMenu() ? XIcon : PlusIcon}
-        theme="base"
+      <Button
+        variant="base"
+        size="icon-md"
         onClick={() => setShowAttachMenu((prev) => !prev)}
-      />
+      >
+        {showAttachMenu() ? <XIcon /> : <PlusIcon />}
+      </Button>
     </div>
   );
 
   const StopButton = () => (
-    <DeprecatedIconButton
-      icon={Stop}
-      theme="base"
-      size="sm"
-      iconSize={14}
-      tooltip={{ label: 'Stop generating', shortcut: 'ctrl+c' }}
+    <Button
+      variant="base"
+      size="icon-sm"
+      tooltip={<LabelAndHotKey label="Stop generating" shortcut="ctrl+c" />}
       onClick={() => props.onStop?.()}
-    />
+    >
+      <Stop />
+    </Button>
   );
 
   const RightControls = () => (

@@ -1,20 +1,20 @@
-import { uploadProfilePicture } from '@core/component/ProfilePicture';
 import EditableField from '@core/component/EditableField';
 import { capitalize } from '@block-pdf/util/StringUtils';
 import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
 import { useLogout } from '@core/auth/logout';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { Modal, Overlay, Content, Header, Message, ButtonBar } from '@core/component/Modal';
 import { toast } from '@core/component/Toast/Toast';
-import { Button } from '@ui';
-import { Panel } from '@ui';
+import { staticFileIdEndpoint } from '@core/constant/servers';
+import { createStaticFile } from '@core/util/create';
+import { Dialog, Button, Panel } from '@ui';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
 import {
   DEV_MODE_ENV,
+  ENABLE_AUTO_UPDATE_UI,
   ENABLE_EMAIL,
   ENABLE_PROFILE_PICTURES,
 } from '@core/constant/featureFlags';
@@ -29,6 +29,9 @@ import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-sol
 import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
 import { createMemo, createResource, createSignal, Show } from 'solid-js';
+import { usePermissions } from '@core/context/user';
+import { useSettingsState } from '@core/constant/SettingsState';
+import PaywallComponent from '../paywall/PaywallComponent';
 import {
     useEmailLinks,
   useEmailLinksStatus,
@@ -43,6 +46,26 @@ import { invoke } from '@tauri-apps/api/core';
 
 // NOTE: solid directives
 false && fileSelector;
+
+// 16 megabytes
+const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
+
+async function uploadProfilePicture(
+  file: File
+): Promise<{ id: string; url: string } | void> {
+  if (file.size > MAX_PROFILE_PICTURE_SIZE) {
+    return toast.failure('Image size too large');
+  }
+
+  try {
+    const id = await createStaticFile(file);
+    const url = staticFileIdEndpoint(id);
+    await authServiceClient.putProfilePicture({ url });
+    return { id, url };
+  } catch (_error) {
+    return toast.failure('Failed to upload profile picture');
+  }
+}
 
 function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
   switch (status.status) {
@@ -86,6 +109,8 @@ export function Account() {
   const logout = useLogout();
   const { showPaywall } = usePaywallState();
   const hasPaidAccess = useHasPaidAccess();
+  const permissions = usePermissions();
+    const { toggleSettings } = useSettingsState();
   const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
   const [showEnableEmailModal, setShowEnableEmailModal] = createSignal<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
@@ -154,14 +179,27 @@ export function Account() {
       class="h-full overflow-y-auto p-2"
       style="scrollbar-width: none;"
     >
-      <div class="max-w-2xl w-full mx-auto">
+      <div class="max-w-200 w-full mx-auto">
         <Panel depth={2}>
           <div class="text-ink">
-            <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
+            <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
               <div class="text-sm font-semibold">Account</div>
+            </div>
+            <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
+              <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
+                <div class="bg-panel px-6 py-2">
+                  <PaywallComponent
+                    hideCloseButton
+                    cb={() => {}}
+                    handleGuest={() => toggleSettings()}
+                  />
+                </div>
+              </Show>
+
               <Show when={ENABLE_PROFILE_PICTURES && userId()}>
-                <div class="flex items-center gap-2">
+                <Row label="Profile Picture">
                   <div
+                    class="relative group"
                     use:fileSelector={{
                       acceptedFileExtensions: blockNameToFileExtensions.image,
                       acceptedMimeTypes: blockNameToMimeTypes.image,
@@ -181,142 +219,140 @@ export function Account() {
                       },
                     }}
                   >
-                    <Button variant="secondary" size="sm" depth={3}>
-                      <IconUpload class="size-4" />
-                      Upload
-                    </Button>
+                    <UserIcon
+                      id={userId() as string}
+                      isDeleted={false}
+                      size="lg"
+                      class="bg-transparent"
+                    />
+                    <div class="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <IconUpload class="size-5 text-white" />
+                    </div>
                   </div>
-                  <UserIcon
-                    id={userId() as string}
-                    isDeleted={false}
-                    size="md"
-                    class="bg-transparent"
-                  />
-                </div>
+                </Row>
               </Show>
-            </div>
-            <div class="grid gap-px bg-edge border-b border-edge">
 
-            <Row label="Email">
-              <span class="ph-no-capture text-sm text-ink-muted">
-                {email() ?? ''}
-              </span>
-            </Row>
-
-            <Row label="First Name">
-              <EditableField
-                class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
-                value={firstName()}
-                onSave={(newValue: string) => {
-                  setUpdatedFirstName(newValue);
-                  authServiceClient.putUserName({ first_name: newValue });
-                }}
-                placeholder="Enter First Name"
-                allowEmpty={true}
-              />
-            </Row>
-
-            <Row label="Last Name">
-              <EditableField
-                class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
-                value={lastName()}
-                onSave={(newValue: string) => {
-                  setUpdatedLastName(newValue);
-                  authServiceClient.putUserName({ last_name: newValue });
-                }}
-                placeholder="Enter Last Name"
-                allowEmpty={true}
-              />
-            </Row>
-
-            <Row label="License Status">
-              <div class="flex items-center gap-3">
-                <span class="text-sm text-ink-muted">
-                  {capitalize(licenseStatus() ?? '')}
-                </span>
-                <Show when={!hasPaidAccess()}>
-                  <Button
-                    variant="accent"
-                    size="sm"
-                    depth={3}
-                    onClick={() => showPaywall()}
-                  >
-                    Upgrade
-                  </Button>
-                </Show>
-              </div>
-            </Row>
-
-            <BundleUpdateRow />
-
-            <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
               <Row label="Email">
-                <Show
-                  when={!emailActive()}
-                  fallback={
+                <span class="ph-no-capture text-sm text-ink-muted">
+                  {email() ?? ''}
+                </span>
+              </Row>
+
+              <Row label="First Name">
+                <EditableField
+                  class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
+                  value={firstName()}
+                  onSave={(newValue: string) => {
+                    setUpdatedFirstName(newValue);
+                    authServiceClient.putUserName({ first_name: newValue });
+                  }}
+                  placeholder="Enter First Name"
+                  allowEmpty={true}
+                />
+              </Row>
+
+              <Row label="Last Name">
+                <EditableField
+                  class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
+                  value={lastName()}
+                  onSave={(newValue: string) => {
+                    setUpdatedLastName(newValue);
+                    authServiceClient.putUserName({ last_name: newValue });
+                  }}
+                  placeholder="Enter Last Name"
+                  allowEmpty={true}
+                />
+              </Row>
+
+              <Row label="License Status">
+                <div class="flex items-center gap-3">
+                  <span class="text-sm text-ink-muted">
+                    {capitalize(licenseStatus() ?? '')}
+                  </span>
+                  <Show when={!hasPaidAccess()}>
                     <Button
-                      variant="secondary"
+                      variant="active"
                       size="sm"
                       depth={3}
-                      onClick={() => setShowEmailModal(true)}
+                      onClick={() => showPaywall()}
                     >
-                      Disable
+                      Upgrade
                     </Button>
+                  </Show>
+                </div>
+              </Row>
+
+              <Show when={ENABLE_AUTO_UPDATE_UI}>
+                <BundleUpdateRow />
+              </Show>
+
+              <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
+                <Row label="Email">
+                  <Show
+                    when={!emailActive()}
+                    fallback={
+                      <Button
+                        variant="base"
+                        size="sm"
+                        depth={3}
+                        onClick={() => setShowEmailModal(true)}
+                      >
+                        Disable
+                      </Button>
+                    }
+                  >
+                    <Show when={!showEnableEmailModal()}>
+                      <Button
+                        variant="base"
+                        size="sm"
+                        depth={3}
+                        onClick={() => setShowEnableEmailModal(true)}
+                      >
+                        Enable
+                      </Button>
+                    </Show>
+                  </Show>
+                </Row>
+              </Show>
+
+              <Row label="GitHub">
+                <Show
+                  when={!githubLinkExists.loading}
+                  fallback={
+                    <span class="text-sm text-ink-muted">Loading…</span>
                   }
                 >
-                  <Show when={!showEnableEmailModal()}>
+                  <Show
+                    when={!githubLinkExists()}
+                    fallback={
+                      <Button
+                        variant="base"
+                        size="sm"
+                        depth={3}
+                        onClick={handleGithubDisable}
+                      >
+                        Disable
+                      </Button>
+                    }
+                  >
                     <Button
-                      variant="secondary"
+                      variant="base"
                       size="sm"
                       depth={3}
-                      onClick={() => setShowEnableEmailModal(true)}
+                      onClick={handleGithubEnable}
                     >
                       Enable
                     </Button>
                   </Show>
                 </Show>
               </Row>
-            </Show>
 
-            <Row label="GitHub">
-              <Show
-                when={!githubLinkExists.loading}
-                fallback={
-                  <span class="text-sm text-ink-muted">Loading…</span>
-                }
-              >
-                <Show
-                  when={!githubLinkExists()}
-                  fallback={
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      depth={3}
-                      onClick={handleGithubDisable}
-                    >
-                      Disable
-                    </Button>
-                  }
-                >
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    depth={3}
-                    onClick={handleGithubEnable}
-                  >
-                    Enable
-                  </Button>
-                </Show>
-              </Show>
-            </Row>
-
-            <NotificationToggle />
-
+              <NotificationToggle />
             </div>
 
             <div class="flex items-center justify-end h-10 px-6">
               <Button
-                variant="secondary"
+                variant="base"
                 size="sm"
                 depth={3}
                 onClick={logoutHandler}
@@ -393,48 +429,64 @@ export function Account() {
 
             <Show when={isNativeMobilePlatform()}>
               <div class="border-t border-edge pt-4">
-                <Button variant="destructive" depth={3} onClick={() => setShowDeleteModal(true)}>
+                <Button variant="danger" depth={3} onClick={() => setShowDeleteModal(true)}>
                   Delete Account
                 </Button>
-                <Modal open={showDeleteModal()} onOpenChange={setShowDeleteModal}>
-                  <Overlay />
-                  <Content>
-                    <Header>Delete Account</Header>
-                    <Message>
-                      Are you sure you want to delete your account? This action is
-                      permanent and cannot be undone.
-                    </Message>
-                    <ButtonBar>
-                      <Button variant="secondary" depth={3} onClick={() => setShowDeleteModal(false)}>
-                        Cancel
-                      </Button>
-                      <Button variant="destructive" depth={3} onClick={() => {
-                        setShowDeleteModal(false);
-                        setShowDeleteConfirmModal(true);
-                      }}>
-                        Delete
-                      </Button>
-                    </ButtonBar>
-                  </Content>
-                </Modal>
-                <Modal open={showDeleteConfirmModal()} onOpenChange={setShowDeleteConfirmModal}>
-                  <Overlay />
-                  <Content>
-                    <Header>Are you absolutely sure?</Header>
-                    <Message>
-                      This will permanently delete your account and all associated
-                      data. This cannot be undone.
-                    </Message>
-                    <ButtonBar>
-                      <Button variant="secondary" depth={3} onClick={() => setShowDeleteConfirmModal(false)}>
-                        Cancel
-                      </Button>
-                      <Button variant="destructive" depth={3} onClick={deleteAccountHandler}>
-                        Delete My Account
-                      </Button>
-                    </ButtonBar>
-                  </Content>
-                </Modal>
+                <Dialog
+                  open={showDeleteModal()}
+                  onOpenChange={setShowDeleteModal}
+                  position="center"
+                  class="w-120"
+                >
+                  <Panel active depth={2}>
+                    <div class="p-6 font-sans flex flex-col gap-3">
+                      <Dialog.Title class="text-ink text-lg font-semibold leading-7">
+                        Delete Account
+                      </Dialog.Title>
+                      <Dialog.Description class="text-ink-muted text-sm font-normal leading-tight">
+                        Are you sure you want to delete your account? This action is
+                        permanent and cannot be undone.
+                      </Dialog.Description>
+                      <div class="pt-3 justify-end items-center gap-3 inline-flex">
+                        <Button variant="base" depth={3} onClick={() => setShowDeleteModal(false)}>
+                          Cancel
+                        </Button>
+                        <Button variant="danger" depth={3} onClick={() => {
+                          setShowDeleteModal(false);
+                          setShowDeleteConfirmModal(true);
+                        }}>
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </Panel>
+                </Dialog>
+                <Dialog
+                  open={showDeleteConfirmModal()}
+                  onOpenChange={setShowDeleteConfirmModal}
+                  position="center"
+                  class="w-120"
+                >
+                  <Panel active depth={2}>
+                    <div class="p-6 font-sans flex flex-col gap-3">
+                      <Dialog.Title class="text-ink text-lg font-semibold leading-7">
+                        Are you absolutely sure?
+                      </Dialog.Title>
+                      <Dialog.Description class="text-ink-muted text-sm font-normal leading-tight">
+                        This will permanently delete your account and all associated
+                        data. This cannot be undone.
+                      </Dialog.Description>
+                      <div class="pt-3 justify-end items-center gap-3 inline-flex">
+                        <Button variant="base" depth={3} onClick={() => setShowDeleteConfirmModal(false)}>
+                          Cancel
+                        </Button>
+                        <Button variant="danger" depth={3} onClick={deleteAccountHandler}>
+                          Delete My Account
+                        </Button>
+                      </div>
+                    </div>
+                  </Panel>
+                </Dialog>
               </div>
             </Show>
           </div>
@@ -446,9 +498,9 @@ export function Account() {
 
 function Row(props: { label: string; children?: any }) {
   return (
-    <div class="grid grid-cols-[145px_1fr] gap-px bg-edge">
-      <div class="bg-panel flex items-center justify-start h-10 px-6 text-sm">{props.label}</div>
-      <div class="bg-panel flex items-center justify-end h-10 px-6 text-right">{props.children}</div>
+    <div class="bg-panel flex items-center justify-between h-15.25 px-6">
+      <div class="text-sm">{props.label}</div>
+      <div class="text-right">{props.children}</div>
     </div>
   );
 }
@@ -480,7 +532,7 @@ function NotificationSettings(props: {
   return (
     <Row label="Notifications">
       <Button
-        variant="secondary"
+        variant="base"
         size="sm"
         depth={3}
         onClick={handleToggle}
@@ -534,7 +586,7 @@ function BundleUpdateRow() {
               </span>
               <Show when={action()}>
                 {(a) => (
-                  <Button variant="accent" size="sm" depth={3} onClick={a().action}>
+                  <Button variant="active" size="sm" depth={3} onClick={a().action}>
                     {a().label}
                   </Button>
                 )}

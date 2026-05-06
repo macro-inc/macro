@@ -5,8 +5,8 @@ import {
   showTabBarSignal,
 } from '@block-pdf/signal/placeables';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { Tooltip } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { Button } from '@ui/components/Button';
 import {
   useCanComment,
   useCanEdit,
@@ -53,34 +53,36 @@ export function MarkupToolbar() {
 
   const dynamicButton = createMemo(() => ({
     cancel: () => (
-      <Tooltip tooltip={'Cancel'}>
-        <DeprecatedIconButton
-          size="sm"
-          theme="red"
-          icon={Cancel}
-          onClick={() => {
-            setMode(PayloadMode.NoMode);
-          }}
-        />
-      </Tooltip>
+      <Button
+        size="icon-sm"
+        variant="danger"
+        tooltip="Cancel"
+        onClick={() => {
+          setMode(PayloadMode.NoMode);
+        }}
+      >
+        <Cancel />
+      </Button>
     ),
     delete: () => (
-      <Tooltip tooltip={'Delete'}>
-        <DeprecatedIconButton
-          size="sm"
-          theme="red"
-          icon={Trash}
-          onClick={() => {
-            const activePlaceableIndex_ = activePlaceableId();
-            if (activePlaceableIndex_ == null) return;
-            deletePlaceable(activePlaceableIndex_);
-          }}
-        />
-      </Tooltip>
+      <Button
+        size="icon-sm"
+        variant="danger"
+        tooltip="Delete"
+        onClick={() => {
+          const activePlaceableIndex_ = activePlaceableId();
+          if (activePlaceableIndex_ == null) return;
+          deletePlaceable(activePlaceableIndex_);
+        }}
+      >
+        <Trash />
+      </Button>
     ),
     placeholder: () => (
       <div class="invisible">
-        <DeprecatedIconButton size="sm" icon={Cancel} />
+        <Button size="icon-sm">
+          <Cancel />
+        </Button>
       </div>
     ),
   }));
@@ -94,50 +96,50 @@ export function MarkupToolbar() {
         }}
       >
         <Show when={canEdit()}>
-          <DeprecatedIconButton
-            size="sm"
-            tooltip={{
-              label: showTabBar() ? 'Hide Tabs' : 'Show Tabs',
-            }}
-            theme="clear"
-            icon={Tabs}
+          <Button
+            size="icon-sm"
+            tooltip={
+              <LabelAndHotKey
+                label={showTabBar() ? 'Hide Tabs' : 'Show Tabs'}
+              />
+            }
+            variant="ghost"
             onClick={() => {
               setShowTabBar(!showTabBar());
             }}
-          />
+          >
+            <Tabs />
+          </Button>
           <div class="w-px h-5 bg-edge mx-2" />
-          <DeprecatedIconButton
-            size="sm"
-            tooltip={{
-              label: 'Text Box',
-            }}
-            theme="clear"
-            icon={Textbox}
+          <Button
+            size="icon-sm"
+            tooltip={<LabelAndHotKey label="Text Box" />}
+            variant="ghost"
             onClick={() => {
               setMode(PayloadMode.FreeTextAnnotation);
             }}
-          />
-          <DeprecatedIconButton
-            size="sm"
-            tooltip={{
-              label: 'Signature',
-            }}
-            theme="clear"
-            icon={Signature}
+          >
+            <Textbox />
+          </Button>
+          <Button
+            size="icon-sm"
+            tooltip={<LabelAndHotKey label="Signature" />}
+            variant="ghost"
             onClick={() => setMode(PayloadMode.Signature)}
-          />
+          >
+            <Signature />
+          </Button>
         </Show>
-        <DeprecatedIconButton
-          size="sm"
-          tooltip={{
-            label: 'Comment',
-          }}
-          theme="clear"
-          icon={ChatTeardrop}
+        <Button
+          size="icon-sm"
+          tooltip={<LabelAndHotKey label="Comment" />}
+          variant="ghost"
           onClick={() => {
             setMode(PayloadMode.Thread);
           }}
-        />
+        >
+          <ChatTeardrop />
+        </Button>
         <Dynamic component={dynamicButton()[dynamicButtonMode()]} />
       </div>
     </Show>

@@ -76,7 +76,7 @@ const LanguageIcons: Record<
 
 function StaticLabel(props: { language: SupportedLanguage }) {
   return (
-    <div class="text-sm font-sans font-medium flex items-center gap-2 p-2 text-ink-extra-muted">
+    <div class="text-xs font-sans font-medium flex items-center gap-1 p-2 text-ink-extra-muted/50">
       <Dynamic component={LanguageIcons[props.language]} class="size-4" />
       <span>{LanguageDefinitions[props.language].label}</span>
     </div>
@@ -108,7 +108,6 @@ export function CodeLanguageSelector(props: {
           fallback={<StaticLabel language={validCurrentLanguage()} />}
         >
           <Button
-            // TODO: Icon mapping moved to frontend package
             variant="ghost"
             size="sm"
             class="text-ink-extra-muted/50 rounded-xs p-1.5"
@@ -234,7 +233,7 @@ export function CodeBoxAccessory(props: {
           }));
         }}
       >
-        <div class="w-full flex justify-between content-center items-start p-1 pointer-events-auto text-ink-extra-muted">
+        <div class="w-full flex justify-between content-center items-start p-1 pointer-events-auto text-ink-extra-muted/50">
           <CodeLanguageSelector
             language={language}
             setLanguage={setLanguageOnNode}
@@ -243,7 +242,7 @@ export function CodeBoxAccessory(props: {
           <div class="flex gap-2 items-center h-full">
             <Show when={showPreviewToggle()}>
               <div class="flex items-center gap-2">
-                <div class="text-xs text-ink-extra-muted">Preview</div>
+                <div class="text-xs text-ink-extra-muted/50">Preview</div>
                 <Switch
                   checked={isPreviewMode()}
                   onChange={(enabled) => {
@@ -261,7 +260,7 @@ export function CodeBoxAccessory(props: {
             <Button
               variant="ghost"
               size="icon-sm"
-              class="text-ink-extra-muted rounded-xs h-full"
+              class="text-ink-extra-muted/50 rounded-xs h-full"
               tooltip="Copy Code"
               on:click={(e) => {
                 e.stopPropagation();
@@ -305,7 +304,7 @@ function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
     const content = props.svgContent();
     if (!content.trim()) {
       return (
-        <div class="flex items-center justify-center h-full text-ink-muted text-sm">
+        <div class="flex items-center justify-center h-full text-ink-extra-muted/50 text-sm">
           No SVG content
         </div>
       );
@@ -396,7 +395,7 @@ export const StaticCodeBoxAccessory = (props: {
     }
   };
 
-  const textColor = () => 'text-ink-extra-muted';
+  const textColor = () => 'text-ink-extra-muted/50';
   const language = () => normalizedLanguage(props.language);
 
   const showPreviewToggle = () => {
@@ -428,7 +427,7 @@ export const StaticCodeBoxAccessory = (props: {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="text-ink-extra-muted rounded-xs h-full"
+            class="text-ink-extra-muted/50 rounded-xs h-full"
             tooltip="Copy Code"
             on:click={(e) => {
               e.stopPropagation();

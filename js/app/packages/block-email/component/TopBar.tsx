@@ -56,7 +56,8 @@ export function TopBar(props: {
   const linksQuery = useEmailLinksQuery();
 
   const isInvite = () => {
-    const entity = soup?.items.get(props.id);
+    const row = soup?.items.get(props.id);
+    const entity = row?.original;
     return entity?.type === 'email' && entity.hasIcsAttachment === true;
   };
 
@@ -71,8 +72,8 @@ export function TopBar(props: {
     const thread = emailCtx.thread();
     if (!thread?.db_id) return;
 
-    // Calculate next entity before trashing so we can navigate to it
-    const nextEntity = (() => {
+    // Calculate next row before trashing so we can navigate to it
+    const nextRow = (() => {
       if (!soup) return undefined;
       const currentIndex = soup.focus.index();
       return soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
@@ -80,10 +81,10 @@ export function TopBar(props: {
 
     const handle = trashEmails([thread.db_id]);
 
-    if (soup && nextEntity) {
+    if (soup && nextRow) {
       soup.selection.clear();
-      soup.focus.set(nextEntity.id);
-      openEntityInSplitFromUnifiedList(nextEntity, {});
+      soup.focus.set(nextRow.id);
+      openEntityInSplitFromUnifiedList(nextRow.original, {});
     }
 
     const toastId = toast.success(

@@ -24,6 +24,7 @@ export type ArrayFieldFilters = {
   chatProjectId?: string[];
   folderId?: string[];
   folderOwnerId?: string[];
+  callId?: string[];
   callChannelId?: string[];
   callSpeakerId?: string[];
   properties?: PropertyFilter[];

@@ -1,5 +1,5 @@
 import { cn } from '@ui/utils/classname';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { Button } from '@ui/components/Button';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
@@ -337,14 +337,14 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         </Switch>
         <Show when={!showFullHTML() && hasHiddenReplyStructure()}>
           <div class="flex items-center gap-2 mt-2">
-            <DeprecatedIconButton
-              theme="clear"
-              icon={DotsThree}
-              onclick={() => setShowFullHTML(true)}
-              iconSize={15}
-              size="xxs"
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setShowFullHTML(true)}
               class={cn(props.isFocused ? 'hover:bg-panel' : 'hover:bg-active')}
-            />
+            >
+              <DotsThree />
+            </Button>
           </div>
         </Show>
       </div>

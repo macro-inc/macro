@@ -35,6 +35,28 @@ export type PotentialTask = {
 // Captures: (1) leading whitespace, (2) check state, (3) content after checkbox
 const CHECKBOX_LINE_PATTERN = /^(\s*)-\s*\[([ xX])\]\s*(.*)$/;
 
+const LEADING_USER_MENTION_PATTERN =
+  /^<m-user-mention>[^<]*<\/m-user-mention>\s*/;
+const TRAILING_USER_MENTION_PATTERN =
+  /\s*<m-user-mention>[^<]*<\/m-user-mention>$/;
+
+/**
+ * Trim user @mention tags from the start and end of a markdown string.
+ * Mentions in the middle are preserved.
+ */
+export function trimEdgeUserMentions(markdown: string): string {
+  let result = markdown.trim();
+  let prev: string;
+  do {
+    prev = result;
+    result = result
+      .replace(LEADING_USER_MENTION_PATTERN, '')
+      .replace(TRAILING_USER_MENTION_PATTERN, '')
+      .trim();
+  } while (result !== prev);
+  return result;
+}
+
 /**
  * Extract all checkbox items from a markdown string as potential tasks.
  *

@@ -8,7 +8,7 @@ export const EXCLUDE: string[] = [NIL_UUID];
 
 // Base filter that excludes all entity types by default
 export const QUERY_FILTERS_BASE: SoupItemsQueryFilters = {
-  call_filters: { channel_ids: EXCLUDE },
+  call_filters: { call_ids: EXCLUDE },
   channel_filters: { channel_ids: EXCLUDE },
   chat_filters: { chat_ids: EXCLUDE },
   document_filters: { document_ids: EXCLUDE },
@@ -75,7 +75,7 @@ export function filterSoupItemByRequestBody(
     .with(
       { tag: 'call' },
       ({ data }) =>
-        !isIdFilteredOut(body.call_filters?.channel_ids, data.channelId) &&
+        !isIdFilteredOut(body.call_filters?.call_ids, data.callId) &&
         !isAttendedFilteredOut(body.call_filters?.attended, data.attended)
     )
     .exhaustive();

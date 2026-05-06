@@ -306,21 +306,4 @@ export const ACTIONS: Action[] = [
     },
     dependencies: [HorizontalRuleNode],
   },
-  {
-    id: 'await',
-    name: 'Await TEST',
-    keywords: [],
-    icon: Minus,
-    category: ActionCategory.ELEMENT,
-    action: (editor: LexicalEditor) => {
-      queueMicrotask(() => {
-        editor.dispatchCommand(INSERT_AWAIT_NODE_COMMAND, {
-          awaitId: 'kasldasjd',
-          inline: true,
-          text: 'what the sigma',
-        });
-      });
-    },
-    dependencies: [],
-  },
 ];

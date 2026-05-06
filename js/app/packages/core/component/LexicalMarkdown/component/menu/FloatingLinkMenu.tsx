@@ -1,9 +1,8 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { UnfurlLink } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
+import { Button } from '@ui/components/Button';
 import clickOutside from '@core/directive/clickOutside';
 import { useUnfurl } from '@core/signal/unfurl';
 import NewTab from '@icon/regular/arrow-square-out.svg';
@@ -434,42 +433,42 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
             </div>
             <div class="relative flex items-center justify-end shrink">
               <div class="flex ease-in-out" classList={{ hidden: expanded() }}>
-                <Tooltip tooltip="Open in new tab">
-                  <DeprecatedIconButton
-                    onClick={openInNewTab}
-                    class="p-1 hover:bg-hover hover-transition-bg"
-                    theme="accent"
-                    icon={NewTab}
-                    size="sm"
-                  />
-                </Tooltip>
-                <Tooltip tooltip="Edit link">
-                  <DeprecatedIconButton
-                    onClick={handleEditClick}
-                    class="p-1 hover:bg-hover hover-transition-bg"
-                    theme="clear"
-                    icon={Pencil}
-                    size="sm"
-                  />
-                </Tooltip>
-                <Tooltip tooltip="Copy link">
-                  <DeprecatedIconButton
-                    onClick={copyLink}
-                    class="p-1 hover:bg-hover hover-transition-bg"
-                    theme="clear"
-                    icon={Copy}
-                    size="sm"
-                  />
-                </Tooltip>
-                <Tooltip tooltip="Remove link">
-                  <DeprecatedIconButton
-                    onClick={handleUnlink}
-                    class="p-1 hover:bg-hover hover-transition-bg"
-                    theme="clear"
-                    icon={Trash}
-                    size="sm"
-                  />
-                </Tooltip>
+                <Button
+                  onClick={openInNewTab}
+                  class="p-1 hover:bg-hover hover-transition-bg"
+                  variant="active"
+                  size="icon-sm"
+                  tooltip="Open in new tab"
+                >
+                  <NewTab />
+                </Button>
+                <Button
+                  onClick={handleEditClick}
+                  class="p-1 hover:bg-hover hover-transition-bg"
+                  variant="ghost"
+                  size="icon-sm"
+                  tooltip="Edit link"
+                >
+                  <Pencil />
+                </Button>
+                <Button
+                  onClick={copyLink}
+                  class="p-1 hover:bg-hover hover-transition-bg"
+                  variant="ghost"
+                  size="icon-sm"
+                  tooltip="Copy link"
+                >
+                  <Copy />
+                </Button>
+                <Button
+                  onClick={handleUnlink}
+                  class="p-1 hover:bg-hover hover-transition-bg"
+                  variant="ghost"
+                  size="icon-sm"
+                  tooltip="Remove link"
+                >
+                  <Trash />
+                </Button>
               </div>
             </div>
           </div>
@@ -519,16 +518,16 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
             }}
           >
             <Tooltip tooltip="Apply link changes">
-              <DeprecatedTextButton
+              <Button
                 onClick={handleSubmit}
                 class="focus:ring-failure focus:ring-2 focus:ring-offset-2"
-                theme="base"
+                variant="base"
                 disabled={
                   !pendingLinkInfo()?.url && !pendingLinkInfo()?.linkText
                 }
-                text="Apply"
-                icon={Check}
-              />
+              >
+                <Check /> Apply
+              </Button>
             </Tooltip>
           </div>
         </MenuWrapper>

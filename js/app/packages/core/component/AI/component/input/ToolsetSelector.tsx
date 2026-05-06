@@ -66,11 +66,7 @@ export function ToolsetSelector(props: {
 
       <Show when={toolset().type === 'all'}>
         <div class="flex">
-          <DropdownMenu
-            size="SM"
-            theme="secondary"
-            triggerLabel={<span>SOURCE</span>}
-          >
+          <DropdownMenu size="sm" triggerLabel={<span>SOURCE</span>}>
             <SegmentedControl
               defaultValue={SOURCE_TO_DISPLAY[source()]}
               onChange={(s) => {

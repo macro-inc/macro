@@ -1,21 +1,28 @@
 import type { Signal } from 'solid-js';
 
+type ThemeReactiveToken = {
+  l: Signal<number>;
+  c: Signal<number>;
+  h: Signal<number>;
+  description: string;
+};
+
 export type ThemeReactive = {
-  a0: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  a1: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  a2: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  a3: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  a4: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  b0: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  b1: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  b2: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  b3: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  b4: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  c0: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  c1: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  c2: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  c3: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
-  c4: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
+  a0: ThemeReactiveToken;
+  a1: ThemeReactiveToken;
+  a2: ThemeReactiveToken;
+  a3: ThemeReactiveToken;
+  a4: ThemeReactiveToken;
+  b0: ThemeReactiveToken;
+  b1: ThemeReactiveToken;
+  b2: ThemeReactiveToken;
+  b3: ThemeReactiveToken;
+  b4: ThemeReactiveToken;
+  c0: ThemeReactiveToken;
+  c1: ThemeReactiveToken;
+  c2: ThemeReactiveToken;
+  c3: ThemeReactiveToken;
+  c4: ThemeReactiveToken;
 };
 
 export type ThemeReactiveColor = ThemeReactive[keyof ThemeReactive];

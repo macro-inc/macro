@@ -156,6 +156,7 @@ function TeamInviteAcceptanceContent() {
 }
 
 function NoInviteId() {
+  const navigate = useNavigate();
   return (
     <div class="w-full flex flex-col items-center gap-4 text-center">
       <h2 class="text-lg font-medium text-ink">Invalid Invite Link</h2>
@@ -163,11 +164,10 @@ function NoInviteId() {
         This invite link appears to be invalid or incomplete.
       </p>
       <Button
-        as="a"
-        href="/"
-        variant="primary"
+        variant="base"
         size="md"
         class="w-full rounded-xs"
+        onClick={() => navigate('/')}
       >
         Go to Home
       </Button>
@@ -186,7 +186,7 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
         Sign in or create an account to view and accept this team invitation.
       </p>
       <Button
-        variant="primary"
+        variant="base"
         size="md"
         class="w-full rounded-xs"
         onClick={props.onLogin}
@@ -198,6 +198,7 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
 }
 
 function InviteNotFound() {
+  const navigate = useNavigate();
   return (
     <div class="w-full flex flex-col items-center gap-4 text-center">
       <h2 class="text-lg font-medium text-ink">Invite Not Found</h2>
@@ -206,11 +207,10 @@ function InviteNotFound() {
         a different email address.
       </p>
       <Button
-        as="a"
-        href="/"
-        variant="primary"
+        variant="base"
         size="md"
         class="w-full rounded-xs"
+        onClick={() => navigate('/')}
       >
         Go to Home
       </Button>
@@ -250,7 +250,7 @@ function InviteDetails(props: {
 
       <div class="flex flex-col gap-2 w-full">
         <Button
-          variant="primary"
+          variant="base"
           size="md"
           class="w-full rounded-xs"
           onClick={props.onAccept}

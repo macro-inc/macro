@@ -136,13 +136,10 @@ function CommandKDemo(props: LessonContentProps) {
 
   let contentEl: HTMLDivElement | undefined;
 
-  const soup = createSoupState({
-    initialData: filteredSandboxEntities(),
-    wrapNavigation: true,
-  });
+  const soup = createSoupState({ wrapNavigation: true });
 
   createEffect(() => {
-    soup.setData(filteredSandboxEntities());
+    soup.setRows(filteredSandboxEntities().map((e) => soup.buildRow(e)));
   });
 
   return (

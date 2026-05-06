@@ -28,30 +28,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { openMacroMcpSetupModal } from '@app/component/macro-mcp-setup-modal/MacroMcpSetupModal';
 import PlugIcon from '@icon/regular/plug.svg';
 
-const MAX_BRANCH_LENGTH = 200;
 const LAST_USED_KEY = 'dispatch-agent-last-used';
-
-const slugify = (title: string): string =>
-  title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-
-async function buildBranchName(
-  documentId: string,
-  documentName: string
-): Promise<{ shortId: string; branchName: string }> {
-  const result = await storageServiceClient.getDocumentShortId({ documentId });
-  const shortId = isOk(result) ? result[1] : documentId;
-  const slug = slugify(documentName);
-  const branchName = `macro-${shortId}${slug ? `-${slug}` : ''}`.slice(
-    0,
-    MAX_BRANCH_LENGTH
-  );
-  return { shortId, branchName };
-}
 
 async function generateTaskPrompt(
   documentId: string,
@@ -59,10 +36,13 @@ async function generateTaskPrompt(
   content: string,
   threads: CommentThread[]
 ): Promise<string> {
-  const { shortId, branchName } = await buildBranchName(
+  const result = await storageServiceClient.getDocumentBranchName({
     documentId,
-    documentName
-  );
+  });
+  if (!isOk(result)) {
+    throw new Error('Failed to fetch branch name');
+  }
+  const { shortId, branchName } = result[1];
 
   const lines: string[] = [];
 

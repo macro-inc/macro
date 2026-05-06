@@ -1,5 +1,5 @@
 import { cn } from '@ui/utils/classname';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { Button } from '@ui/components/Button';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { platformFetch } from '@core/util/platformFetch';
 import { connectionGatewayClient } from '@service-connection/client';
@@ -165,14 +165,14 @@ export default function HttpStreamDebug() {
             />
           </div>
           <div class="flex gap-2">
-            <DeprecatedTextButton
-              text={isStreaming() ? 'Streaming...' : 'Send Message'}
+            <Button
               onClick={sendMessage}
-              theme="accent"
+              variant="active"
               disabled={isStreaming()}
-            />
-            <DeprecatedTextButton
-              text="Reset"
+            >
+              {isStreaming() ? 'Streaming...' : 'Send Message'}
+            </Button>
+            <Button
               onClick={() => {
                 setChatId('');
                 setStreamId(null);
@@ -180,8 +180,10 @@ export default function HttpStreamDebug() {
                 setError(null);
                 setIsStreaming(false);
               }}
-              theme="base"
-            />
+              variant="base"
+            >
+              Reset
+            </Button>
           </div>
         </div>
 

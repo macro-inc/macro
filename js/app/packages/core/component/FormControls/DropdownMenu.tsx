@@ -2,6 +2,7 @@ import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { Popover, type PopoverRootProps } from '@kobalte/core/popover';
 import { createMutationObserver } from '@solid-primitives/mutation-observer';
 import {
+  type ComponentProps,
   createEffect,
   createSignal,
   type JSX,
@@ -9,16 +10,13 @@ import {
   type ParentComponent,
   Show,
 } from 'solid-js';
-import { DeprecatedButton } from './DeprecatedButton';
+import { Button } from '@ui/components/Button';
 
-type Size = 'SM' | 'Base';
-type Theme = 'primary' | 'secondary';
 type ShadowTheme = 'Base' | 'AccentSpread';
 
 const DropdownMenu: ParentComponent<
   {
-    size?: Size;
-    theme?: Theme;
+    size?: ComponentProps<typeof Button>['size'];
     shadowTheme?: ShadowTheme;
     dropdownCutout?: number;
     shadowAccent?: boolean;
@@ -98,13 +96,12 @@ const DropdownMenu: ParentComponent<
       boundary={props.boundary ?? panelRef}
     >
       <Popover.Trigger
-        size={props.size}
-        active={open()}
+        size={props.size ?? 'md'}
+        variant={open() ? 'active' : 'base'}
         classList={{
           'block!': true,
         }}
-        as={DeprecatedButton}
-        theme={props.theme}
+        as={Button}
         ref={triggerEl}
       >
         {props.triggerLabel}

@@ -1,4 +1,6 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { Button } from '@ui/components/Button';
+import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { INSERT_MEDIA_COMMAND } from '@core/component/LexicalMarkdown/plugins';
 import { DropdownMenuContent } from '@core/component/Menu';
@@ -120,14 +122,16 @@ export function MediaSelector(props: MediaSelectorProps) {
     // TODO bring up to menu best practices, ie. fully focusable menu items, etc.
     <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <DeprecatedIconButton
-          tooltip={{ label: 'Insert Media File' }}
-          theme="clear"
-          icon={ImageIcon}
-          showChevron
+        <Button
+          tooltip={<LabelAndHotKey label="Insert Media File" />}
+          variant="ghost"
+          size="icon-md"
           disabled={props?.buttonIsDisabled?.() ?? false}
           tabIndex={-1}
-        />
+        >
+          <ImageIcon />
+          <CaretDown />
+        </Button>
       </DropdownMenu.Trigger>
       <Show when={!props?.buttonIsDisabled?.()}>
         <DropdownMenu.Portal>

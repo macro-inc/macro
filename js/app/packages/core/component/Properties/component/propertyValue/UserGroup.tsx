@@ -1,46 +1,45 @@
 import { createMemo, For, Show } from 'solid-js';
+import { AvatarGroup } from '@ui';
 import type { EntityReference } from '../../types';
 import { UserIcon } from '@core/component/UserIcon';
 
-type UserEntityPillProps = {
+type UserEntityGroupProps = {
   entities: EntityReference[];
   maxUsers?: number;
 };
 
 /**
- * Pill for multiselect user entity properties that shows user avatars in LiveIndicators style
+ * Group display for multiselect user entity properties.
+ * Shows user avatars in an overlapping style.
+ *
+ * Uses --avatar-group-separator CSS variable for the separator color,
+ * allowing parent containers to override on hover states.
  */
-export const UserGroup = (props: UserEntityPillProps) => {
+export const UserGroup = (props: UserEntityGroupProps) => {
   const max = () => props.maxUsers ?? 3;
-  const remaining = createMemo(() => {
-    if (props.entities.length <= max()) return undefined;
-    return props.entities.length - max();
-  });
+
+  const remaining = createMemo(() =>
+    Math.max(0, props.entities.length - max())
+  );
 
   const displayEntities = () => props.entities.slice(0, max());
 
   return (
-    <div class="flex items-center shrink-0 w-fit">
+    <AvatarGroup size="sm">
       <For each={displayEntities()}>
         {(entity) => (
-          <div class="bg-panel rounded-full">
-            <UserIcon
-              id={entity.entity_id}
-              isDeleted={false}
-              size="xs"
-              suppressClick
-              showTooltip={false}
-            />
-          </div>
+          <UserIcon
+            id={entity.entity_id}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
         )}
       </For>
+
       <Show when={remaining()}>
-        <div class="z-placeable">
-          <div class="size-5 bg-menu border-2 text-[10px] -mr-2 text-ink border-panel rounded-full flex flex-col justify-center items-center">
-            <span>+{remaining()}</span>
-          </div>
-        </div>
+        <AvatarGroup.Count size="sm">+{remaining()}</AvatarGroup.Count>
       </Show>
-    </div>
+    </AvatarGroup>
   );
 };

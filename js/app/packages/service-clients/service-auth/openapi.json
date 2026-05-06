@@ -3464,17 +3464,32 @@
           }
         }
       },
+      "InviteEntry": {
+        "type": "object",
+        "description": "A single invite entry with email and tier",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email of the user to invite"
+          },
+          "tier": {
+            "$ref": "#/components/schemas/TeamUserTier",
+            "description": "The tier for this user (defaults to Haiku if not provided)"
+          }
+        }
+      },
       "InviteToTeamRequest": {
         "type": "object",
         "description": "The request body to invite a user to a team",
-        "required": ["emails"],
+        "required": ["invites"],
         "properties": {
-          "emails": {
+          "invites": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/InviteEntry"
             },
-            "description": "The emails of the users you want to invite to the team"
+            "description": "The invites to send, each with an email and tier"
           }
         }
       },

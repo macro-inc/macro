@@ -48,13 +48,10 @@ function SidebarNavContent(props: LessonContentProps) {
 }
 
 function SidebarNavDemo() {
-  const soup = createSoupState({
-    initialData: filteredSandboxEntities(),
-    wrapNavigation: true,
-  });
+  const soup = createSoupState({ wrapNavigation: true });
 
   createEffect(() => {
-    soup.setData(filteredSandboxEntities());
+    soup.setRows(filteredSandboxEntities().map((e) => soup.buildRow(e)));
   });
 
   return (

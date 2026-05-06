@@ -15,10 +15,7 @@ import { cn } from '@ui/utils/classname';
 import { useCallContext } from '../CallContext';
 
 const menuStyles = {
-  item: cn(
-    MENU_ITEM_CLASS,
-    'cursor-pointer hover:bg-hover hover-transition-bg'
-  ),
+  item: cn(MENU_ITEM_CLASS, 'hover:bg-hover hover-transition-bg'),
   groupLabel: cn(MENU_ITEM_CLASS, 'text-xs text-accent'),
 };
 
@@ -67,7 +64,7 @@ export function CallControlsPanelSmallRow(
                 callCtx.isScreenSharing())
               ? 'text-accent-2'
               : 'text-ink',
-            !isConnecting() && 'hover:bg-ink/5 cursor-pointer'
+            !isConnecting() && 'hover:bg-ink/5'
           )}
           aria-label="Call options"
         >
@@ -258,7 +255,7 @@ export function CallControlsPanelSmallRow(
             <DropdownMenu.Item
               class={cn(
                 MENU_ITEM_CLASS,
-                'cursor-pointer text-failure hover:bg-failure/10 hover-transition-bg'
+                'text-failure hover:bg-failure/10 hover-transition-bg'
               )}
               onSelect={() => void props.onLeave()}
             >

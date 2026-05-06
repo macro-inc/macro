@@ -28,7 +28,7 @@ export const makeMoveToProjectAction = () => {
 
   const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
     const currentIndex = soup.focus.index();
-    const nextEntity =
+    const nextRow =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
 
     const inPreview = previewPanel !== undefined;
@@ -38,15 +38,15 @@ export const makeMoveToProjectAction = () => {
       entities,
       onFinish: () => {
         soup.selection.clear();
-        if (nextEntity) {
-          soup.focus.set(nextEntity.id);
+        if (nextRow) {
+          soup.focus.set(nextRow.id);
         }
         toast.success(
           entities.length > 1
             ? `Moved ${entities.length} items`
             : 'Moved to folder'
         );
-        restoreSoupFocus(nextEntity?.id, inPreview);
+        restoreSoupFocus(nextRow?.id, inPreview);
       },
       onCancel: () => {
         const firstEntity = entities[0];

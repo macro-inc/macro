@@ -1,8 +1,8 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
+import { Button } from '@ui/components/Button';
 import { formatDate } from '@core/util/date';
 import {
   type Component,
@@ -213,7 +213,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
           </div>
 
           <details class="group">
-            <summary class="text-xs font-mono text-ink-muted uppercase cursor-pointer hover:text-accent">
+            <summary class="text-xs font-mono text-ink-muted uppercase hover:text-accent">
               Raw JSON ▸
             </summary>
             <pre class="bg-menu p-4 rounded-lg border border-edge-muted text-xs overflow-auto mt-2">
@@ -233,11 +233,12 @@ function PermissionButton(props: { platformNotif: any }) {
         <Show
           when={props.platformNotif.permission() === 'granted'}
           fallback={
-            <DeprecatedTextButton
-              theme="accent"
-              text="Enable Browser Notifications"
+            <Button
+              variant="active"
               onClick={() => props.platformNotif.requestPermission()}
-            />
+            >
+              Enable Browser Notifications
+            </Button>
           }
         >
           <div class="flex items-center gap-3 text-sm text-accent bg-accent/10 px-4 py-3 rounded-lg">
@@ -283,11 +284,12 @@ function CustomBuilder(props: {
         </div>
 
         <div class="pt-4 border-t border-edge-muted">
-          <DeprecatedTextButton
-            theme="accent"
-            text="🔔 Test Browser Notification"
+          <Button
+            variant="active"
             onClick={() => props.onTest(props.customNotification)}
-          />
+          >
+            🔔 Test Browser Notification
+          </Button>
         </div>
 
         <div>
@@ -358,11 +360,12 @@ function NotificationDetail(props: {
               {formatDate(props.notification.created_at)}
             </p>
           </div>
-          <DeprecatedTextButton
-            theme="accent"
-            text="🔔 Test Notification"
+          <Button
+            variant="active"
             onClick={() => props.onTest(props.notification)}
-          />
+          >
+            🔔 Test Notification
+          </Button>
         </div>
       </div>
 
@@ -431,7 +434,7 @@ function NotificationDetail(props: {
 
       <section>
         <details class="group">
-          <summary class="text-lg font-semibold text-ink mb-4 cursor-pointer hover:text-accent">
+          <summary class="text-lg font-semibold text-ink mb-4 hover:text-accent">
             Raw Notification Data ▸
           </summary>
           <pre class="bg-menu p-6 rounded-xl border border-edge-muted text-xs overflow-auto mt-4">

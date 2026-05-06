@@ -7,8 +7,8 @@ import {
   type GroupingConfig,
   getDocumentHistory,
 } from '@core/collab/time-travel';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { Button } from '@ui/components/Button';
 import {
   createLexicalWrapper,
   type LexicalWrapper,
@@ -88,13 +88,14 @@ async function getLoroDocFromId(documentId: string) {
 export function HistoryButton(props: { buttonSize?: 'sm' | 'base' }) {
   const drawerControl = useDrawerControl(HISTORY_DRAWER_ID);
   return (
-    <DeprecatedIconButton
-      tooltip={{ label: 'History' }}
-      icon={ClockIcon}
-      theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-      size={props.buttonSize ?? 'sm'}
+    <Button
+      tooltip={<LabelAndHotKey label="History" />}
+      variant={drawerControl.isOpen() ? 'active' : 'ghost'}
+      size={props.buttonSize === 'base' ? 'icon-md' : 'icon-sm'}
       onClick={drawerControl.toggle}
-    />
+    >
+      <ClockIcon />
+    </Button>
   );
 }
 
@@ -118,13 +119,14 @@ export function HistoryModal(props: { documentId: string }) {
 
   return (
     <>
-      <DeprecatedIconButton
-        tooltip={{ label: 'History' }}
-        icon={ClockIcon}
-        theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-        size="sm"
+      <Button
+        tooltip={<LabelAndHotKey label="History" />}
+        variant={drawerControl.isOpen() ? 'active' : 'ghost'}
+        size="icon-sm"
         onClick={drawerControl.toggle}
-      />
+      >
+        <ClockIcon />
+      </Button>
       <SplitDrawer
         id={HISTORY_DRAWER_ID}
         side="right"
@@ -251,10 +253,7 @@ export function History(props: HistoryProps) {
   };
 
   return (
-    <div
-      class="w-full h-full p-2 flex flex-col gap-2 pb-12 suppress-css-bracket"
-      tabindex={-1}
-    >
+    <div class="w-full h-full p-2 flex flex-col gap-2 pb-12" tabindex={-1}>
       <Suspense fallback={'loading...'}>
         <Show when={selectedVersion()}>
           {(selectedVersion) => {
@@ -271,19 +270,20 @@ export function History(props: HistoryProps) {
                           total={sortedHistory()!.length}
                         />
                         <div class="pr-4">
-                          <DeprecatedTextButton
-                            text="Copy Version"
-                            theme="accent"
+                          <Button
+                            variant="active"
                             disabled={isForking()}
                             onClick={handleFork}
-                          />
+                          >
+                            Copy Version
+                          </Button>
                         </div>
                       </div>
                     );
                   }}
                 </Show>
                 <div
-                  class="w-full h-[50%] overflow-y-scroll border border-edge suppress-css-bracket"
+                  class="w-full h-[50%] overflow-y-scroll border border-edge"
                   tabindex={-1}
                   ref={(ref) => {
                     ref.focus();
@@ -401,7 +401,7 @@ function DocumentPreview(props: {
     );
 
   return (
-    <div class="w-full h-full supress-css-bracket p-2">
+    <div class="w-full h-full p-2">
       <LexicalWrapperContext.Provider value={props.lexicalWrapper}>
         <Show when={props.isSelectedVersionEmpty}>
           <div class="w-full h-full flex items-center justify-center">

@@ -318,11 +318,11 @@ where
         &self,
         team_id: &uuid::Uuid,
         invited_by: &MacroUserIdStr<'_>,
-        emails: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        invites: non_empty::NonEmpty<&[(Email<Lowercase<'_>>, TeamUserTier)]>,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
         let invited = self
             .team_repository
-            .invite_users_to_team(team_id, invited_by, emails)
+            .invite_users_to_team(team_id, invited_by, invites)
             .await?;
 
         // Send notifications for new invites

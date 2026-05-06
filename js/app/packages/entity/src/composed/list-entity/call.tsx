@@ -90,7 +90,7 @@ export function CallNarrowBody(props: {
             <Show when={matches(h(), isCallRecordHit)}>
               {(callHit) => (
                 <Show when={callHit().senderId}>
-                  {(id) => <UserIcon id={id()} size="xs" />}
+                  {(id) => <UserIcon id={id()} size="sm" />}
                 </Show>
               )}
             </Show>
@@ -167,7 +167,7 @@ export function CallWideContent(props: {
               <Show when={matches(h(), isCallRecordHit)}>
                 {(callHit) => (
                   <Show when={callHit().senderId}>
-                    {(id) => <UserIcon id={id()} size="xs" />}
+                    {(id) => <UserIcon id={id()} size="sm" />}
                   </Show>
                 )}
               </Show>

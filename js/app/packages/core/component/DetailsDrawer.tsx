@@ -173,7 +173,7 @@ function OwnerValue(props: { ownerId: string }) {
   const [displayName] = useDisplayName(tryMacroId(props.ownerId));
   return (
     <>
-      <UserIcon id={props.ownerId} size="xs" showTooltip suppressClick />
+      <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
       <span class="truncate">{displayName()}</span>
     </>
   );

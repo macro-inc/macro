@@ -39,6 +39,25 @@ pub enum BackfillError {
     Publish(#[source] anyhow::Error),
 }
 
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DeletionFilter {
+    #[default]
+    Any,
+    Active,
+    Deleted,
+}
+
+impl DeletionFilter {
+    pub fn as_only_deleted(self) -> Option<bool> {
+        match self {
+            DeletionFilter::Any => None,
+            DeletionFilter::Active => Some(false),
+            DeletionFilter::Deleted => Some(true),
+        }
+    }
+}
+
 /// Call-record backfill filter. Empty `call_ids` means "all archived calls".
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -53,13 +72,16 @@ pub struct CallBackfillRequest {
 pub struct ChatBackfillRequest {
     pub chat_ids: Vec<String>,
     pub user_ids: Vec<String>,
+    pub deletion_filter: DeletionFilter,
 }
 
 /// Channel-message backfill filter. No scoping knobs yet — reserved so adding
 /// one later doesn't break the request shape.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct ChannelBackfillRequest {}
+pub struct ChannelBackfillRequest {
+    pub deletion_filter: DeletionFilter,
+}
 
 /// Document backfill filter. Every field is additive — all `None` means "every
 /// document this service knows about".
@@ -70,6 +92,7 @@ pub struct DocumentBackfillRequest {
     pub sub_type: Option<String>,
     pub created_after: Option<DateTime<Utc>>,
     pub created_before: Option<DateTime<Utc>>,
+    pub deletion_filter: DeletionFilter,
 }
 
 /// Email-thread backfill filter.

@@ -1,6 +1,7 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
+import CheckSquareIcon from '@icon/regular/check-square.svg';
 import CopyIcon from '@icon/regular/copy.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
@@ -25,7 +26,13 @@ import type {
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '😡'] as const;
 
-type ActionId = 'reply' | 'copy-link' | 'copy-message-text' | 'edit' | 'delete';
+type ActionId =
+  | 'reply'
+  | 'copy-link'
+  | 'copy-message-text'
+  | 'edit'
+  | 'delete'
+  | 'create-task';
 
 type ActionItem = {
   id: ActionId;
@@ -64,6 +71,12 @@ function buildActionItems(
       label: 'Copy link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
+    },
+    {
+      id: 'create-task',
+      label: 'Create task',
+      icon: CheckSquareIcon,
+      onClick: actions?.onCreateTask,
     },
     {
       id: 'edit',
@@ -240,7 +253,7 @@ export function ActionDrawer() {
                     <button
                       type="button"
                       data-message-action={action.id}
-                      class="flex items-center gap-3 px-4 py-3 text-sm text-ink hover:bg-hover hover-transition-bg text-left not-last:border-b border-page"
+                      class="flex items-center gap-3 px-4 py-3 text-sm text-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-panel"
                       ref={(el) => {
                         const getTarget = action.getFocusTarget;
                         if (getTarget) focusInput(el, () => ({ getTarget }));
@@ -265,7 +278,7 @@ export function ActionDrawer() {
                     <button
                       type="button"
                       data-message-action={action.id}
-                      class="flex items-center gap-3 px-4 py-3 text-sm text-failure-ink hover:bg-hover hover-transition-bg text-left not-last:border-b border-panel"
+                      class="flex items-center gap-3 px-4 py-3 text-sm text-failure-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-panel"
                       ref={(el) => {
                         const getTarget = action.getFocusTarget;
                         if (getTarget) focusInput(el, () => ({ getTarget }));

@@ -221,6 +221,16 @@ export const storageServiceClient = {
     );
   },
 
+  async bulkWakeupSyncServiceDocuments(args: { document_ids: string[] }) {
+    return mapOk(
+      await dssFetch<{ dispatched: number }>(`/sync_service/wakeup`, {
+        method: 'POST',
+        body: JSON.stringify({ document_ids: args.document_ids }),
+      }),
+      (result) => result
+    );
+  },
+
   async getSoupItems(args: {
     params: { cursor?: string | null };
     body: PostSoupRequest;
@@ -540,6 +550,28 @@ export const storageServiceClient = {
         method: 'GET',
       }),
       (result) => result.shortId
+    );
+  },
+
+  async getDocumentBranchName({
+    documentId,
+  }: {
+    documentId: string;
+  }): Promise<
+    MaybeResult<
+      FetchWithTokenErrorCode,
+      { shortId: string; branchName: string }
+    >
+  > {
+    return mapOk(
+      await dssFetch<{ shortId: string; branchName: string }>(
+        `/documents/${documentId}/branch_name`,
+        { method: 'GET' }
+      ),
+      (result) => ({
+        shortId: result.shortId,
+        branchName: result.branchName,
+      })
     );
   },
 

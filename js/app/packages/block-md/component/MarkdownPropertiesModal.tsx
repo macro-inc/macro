@@ -1,7 +1,8 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { useBlockAliasedName } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { Button } from '@ui/components/Button';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
@@ -22,13 +23,14 @@ export function MarkdownPropertiesButton(props: {
 }) {
   const drawerControl = useDrawerControl(DRAWER_ID);
   return (
-    <DeprecatedIconButton
-      icon={TagIcon}
-      theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-      size={props.buttonSize ?? 'base'}
-      tooltip={{ label: 'Properties' }}
+    <Button
+      variant={drawerControl.isOpen() ? 'active' : 'ghost'}
+      size={props.buttonSize === 'sm' ? 'icon-sm' : 'icon-md'}
+      tooltip={<LabelAndHotKey label="Properties" />}
       onClick={drawerControl.toggle}
-    />
+    >
+      <TagIcon />
+    </Button>
   );
 }
 
@@ -50,13 +52,14 @@ export function MarkdownPropertiesModal(props: {
 
   return (
     <>
-      <DeprecatedIconButton
-        icon={TagIcon}
-        theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-        size={props.buttonSize ?? 'base'}
-        tooltip={{ label: 'Properties' }}
+      <Button
+        variant={drawerControl.isOpen() ? 'active' : 'ghost'}
+        size={props.buttonSize === 'sm' ? 'icon-sm' : 'icon-md'}
+        tooltip={<LabelAndHotKey label="Properties" />}
         onClick={drawerControl.toggle}
-      />
+      >
+        <TagIcon />
+      </Button>
       <SplitDrawer id={DRAWER_ID} side="right" size={550} title="Properties">
         <Suspense fallback={<LoadingFallback />}>
           <MarkdownPropertiesContent documentId={props.documentId} />

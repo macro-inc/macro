@@ -2,15 +2,12 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   createSoupState,
   type SoupState,
+  type SoupRow,
+  type SoupEntity,
 } from '@app/component/next-soup/create-soup-state';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
-import {
-  isWithNotification,
-  type EntityData,
-  type WithNotification,
-  type WithSearch,
-} from '@entity';
+import { isWithNotification, type EntityData } from '@entity';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useNotificationsForEntity } from '@notifications';
 import { type SoupParams, useSoupAstItemsQuery } from '@queries/soup/items';
@@ -38,21 +35,6 @@ import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import type { InfiniteData } from '@tanstack/solid-query';
 import type { SoupPage } from '@service-storage/generated/schemas';
-
-type Row<T> = {
-  original: T;
-  id: string;
-  depth: number;
-  isSelected: () => boolean;
-  isExpanded: () => boolean;
-  isGrouped: () => boolean;
-  isFocused: () => boolean;
-  toggleExpanded: (expanded?: boolean) => void;
-};
-
-export type SoupRow = Row<SoupEntity>;
-
-export type SoupEntity = WithNotification<EntityData | WithSearch<EntityData>>;
 
 type DataSource<T> = {
   data: Accessor<T[]>;
@@ -221,32 +203,6 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  const attachMethods = (
-    entity: WithNotification<EntityData>,
-    depth = 0
-  ): SoupRow => {
-    return {
-      original: entity,
-      id: entity.id,
-      depth,
-      isFocused() {
-        return soup.focus.id() === entity.id;
-      },
-      isSelected() {
-        return soup.selection.isSelected(entity.id);
-      },
-      isGrouped() {
-        return false;
-      },
-      isExpanded() {
-        return soup.selection.isSelected(entity.id);
-      },
-      toggleExpanded() {
-        return soup.selection.isSelected(entity.id);
-      },
-    };
-  };
-
   const itemsQuery = useSoupAstItemsQuery(
     () => ({
       params: soupParams(),
@@ -349,7 +305,7 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const rows = createMemo(() => {
-    return entities().map((e) => attachMethods(e));
+    return entities().map((e) => soup.buildRow(e));
   });
 
   const { searchQuery } = search;
@@ -398,7 +354,7 @@ export const SoupViewContextProvider: FlowComponent<
     <SoupViewContext.Provider value={context}>
       {props.children}
       <Suspense>
-        <SyncWithSoup soup={soup} entities={entities()} />
+        <SyncWithSoup soup={soup} rows={rows()} />
       </Suspense>
     </SoupViewContext.Provider>
   );
@@ -406,11 +362,11 @@ export const SoupViewContextProvider: FlowComponent<
 
 interface SyncWithSoupProps {
   soup: SoupState;
-  entities: SoupEntity[];
+  rows: SoupRow[];
 }
 
 const SyncWithSoup = (props: SyncWithSoupProps) => {
-  createRenderEffect(on(() => props.entities, props.soup.setData));
+  createRenderEffect(on(() => props.rows, props.soup.setRows));
 
   return null;
 };

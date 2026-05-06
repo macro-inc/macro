@@ -30,6 +30,7 @@ import {
 import { isScrollingToMessage } from '../signal/scrollState';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { scrollToMessage } from '../util/scrollToMessage';
+import { BottomReplyButtons } from './BottomReplyButtons';
 import { EmailFormContextProvider } from './EmailFormContext';
 import { MessageList } from './MessageList';
 import { ModalsProvider } from './ModalsProvider';
@@ -412,6 +413,27 @@ function EmailContent(props: EmailViewProps) {
     hide: true,
   });
 
+  // On thread change: collapse the bottom reply, then re-evaluate auto-open
+  // for the current thread's last message. Single effect to avoid an
+  // ordering race between separate "reset on thread change" and "auto-open
+  // on draft" effects (Solid runs effects in declaration order on first
+  // mount, which can let the reset clobber the auto-open if both data
+  // sources are synchronously available).
+  let prevThreadId: string | undefined;
+  createEffect(() => {
+    const tid = props.threadId();
+    if (prevThreadId !== tid) {
+      prevThreadId = tid;
+      context.messages.setBottomReplyOpen(false);
+    }
+    const filtered = context.messages.list();
+    const lastMessage = filtered.at(-1);
+    if (!lastMessage?.db_id) return;
+    if (context.drafts.getDraftForMessage(lastMessage.db_id)) {
+      context.messages.setBottomReplyOpen(true);
+    }
+  });
+
   const emailReplyInfo = createMemo(() => {
     const filtered = context.messages.list();
 
@@ -507,25 +529,46 @@ function EmailContent(props: EmailViewProps) {
                     emailReplyInfo()
                   }
                 >
-                  {(info) => {
-                    return (
-                      <div class="shrink-0 w-full pb-2">
-                        <div class="relative w-full flex flex-row justify-center bg-panel macro-message-width macro-message-padding mx-auto">
-                          <FloatingInputLoader
-                            isLoading={context.query.isFetching}
-                            loadingText="Loading messages"
-                          />
+                  {(info) => (
+                    <div class="shrink-0 w-full pb-2">
+                      <div class="relative w-full flex flex-row justify-center bg-panel macro-message-width macro-message-padding mx-auto">
+                        <FloatingInputLoader
+                          isLoading={context.query.isFetching}
+                          loadingText="Loading messages"
+                        />
+                        <Show
+                          when={
+                            context.messages.bottomReplyOpen() ||
+                            info().replyingTo == null
+                          }
+                          fallback={
+                            <Show when={info().replyingTo}>
+                              {(lastMessage) => (
+                                <BottomReplyButtons
+                                  lastMessage={lastMessage()}
+                                />
+                              )}
+                            </Show>
+                          }
+                        >
                           <EmailInput
                             replyingTo={() => info().replyingTo}
                             draft={info().draft}
+                            setShowReply={(v) => {
+                              const next =
+                                typeof v === 'function'
+                                  ? v(context.messages.bottomReplyOpen())
+                                  : v;
+                              context.messages.setBottomReplyOpen(next);
+                            }}
                             markdownDomRef={(el) => {
                               markdownDomRef = el;
                             }}
                           />
-                        </div>
+                        </Show>
                       </div>
-                    );
-                  }}
+                    </div>
+                  )}
                 </Show>
               </div>
             </EmailFormContextProvider>

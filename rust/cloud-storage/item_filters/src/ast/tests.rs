@@ -802,9 +802,8 @@ fn entity_type_ast_deserialization_rejects_invalid() {
 #[test]
 fn it_expands_call_filter_with_attended_only() {
     let f = CallFilters {
-        channel_ids: vec![],
-        speaker_ids: vec![],
         attended: Some(true),
+        ..Default::default()
     };
     let ast = CallFilters::expand_ast(f)
         .unwrap()
@@ -817,9 +816,8 @@ fn it_expands_call_filter_with_attended_only() {
 #[test]
 fn it_expands_call_filter_with_attended_false() {
     let f = CallFilters {
-        channel_ids: vec![],
-        speaker_ids: vec![],
         attended: Some(false),
+        ..Default::default()
     };
     let ast = CallFilters::expand_ast(f).unwrap().unwrap();
     let json = serde_json::to_value(&ast).unwrap();
@@ -832,8 +830,8 @@ fn it_expands_call_filter_with_channel_and_attended_as_and() {
     let channel_id = Uuid::new_v4();
     let f = CallFilters {
         channel_ids: vec![channel_id.to_string()],
-        speaker_ids: vec![],
         attended: Some(true),
+        ..Default::default()
     };
     let ast = CallFilters::expand_ast(f).unwrap().unwrap();
     let json = serde_json::to_value(&ast).unwrap();
@@ -843,6 +841,19 @@ fn it_expands_call_filter_with_channel_and_attended_as_and() {
             { "l": { "Attended": true } }
         ]
     });
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn it_expands_call_filter_with_call_ids() {
+    let call_id = Uuid::new_v4();
+    let f = CallFilters {
+        call_ids: vec![call_id.to_string()],
+        ..Default::default()
+    };
+    let ast = CallFilters::expand_ast(f).unwrap().unwrap();
+    let json = serde_json::to_value(&ast).unwrap();
+    let exp = json!({ "l": { "CallId": call_id } });
     assert_eq!(json, exp);
 }
 

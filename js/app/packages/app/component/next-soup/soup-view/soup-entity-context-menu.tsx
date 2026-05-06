@@ -36,7 +36,7 @@ export const SoupEntityContextMenu: FlowComponent<
       </Match>
       <Match when={true}>
         <ContextMenu onOpenChange={props.onOpenChange}>
-          <ContextMenu.Trigger class="size-full">
+          <ContextMenu.Trigger class="size-full group/cm-trigger">
             {props.children}
           </ContextMenu.Trigger>
           <ContextMenu.Portal>

@@ -7,7 +7,7 @@ import { UserGroup } from '@core/component/UserGroup';
 interface NotificationSenderIconProps {
   notification?: Notification;
   stack?: NotificationStack;
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg';
 }
 
 /**
@@ -41,10 +41,11 @@ export function NotificationSenderIcon(props: NotificationSenderIconProps) {
     return [];
   };
 
+  const hasSenders = () => senderIds().length > 0;
   const hasMultipleSenders = () => senderIds().length > 1;
 
   return (
-    <Show when={senderIds().length > 0}>
+    <Show when={hasSenders()}>
       <Show
         when={hasMultipleSenders()}
         fallback={

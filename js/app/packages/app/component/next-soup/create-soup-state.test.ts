@@ -49,23 +49,24 @@ const createTestEntity = (id: string, name?: string): EntityData => ({
 
 describe('createSoupState', () => {
   describe('initial state', () => {
-    it('should start with empty data', () => {
+    it('should start with empty rows', () => {
       createRoot((dispose) => {
         const state = createSoupState();
 
-        expect(state.data()).toEqual([]);
+        expect(state.rows()).toEqual([]);
         expect(state.items.count()).toBe(0);
 
         dispose();
       });
     });
 
-    it('should accept initial data', () => {
+    it('should accept initial rows via setRows', () => {
       createRoot((dispose) => {
+        const state = createSoupState();
         const entities = [createTestEntity('1'), createTestEntity('2')];
-        const state = createSoupState({ initialData: entities });
+        state.setRows(entities.map((e) => state.buildRow(e)));
 
-        expect(state.data()).toEqual(entities);
+        expect(state.rows().map((r) => r.original)).toEqual(entities);
         expect(state.items.count()).toBe(2);
 
         dispose();
@@ -73,15 +74,15 @@ describe('createSoupState', () => {
     });
   });
 
-  describe('setData', () => {
-    it('should update data', () => {
+  describe('setRows', () => {
+    it('should update rows', () => {
       createRoot((dispose) => {
         const state = createSoupState();
         const entities = [createTestEntity('1'), createTestEntity('2')];
 
-        state.setData(entities);
+        state.setRows(entities.map((e) => state.buildRow(e)));
 
-        expect(state.data()).toEqual(entities);
+        expect(state.rows().map((r) => r.original)).toEqual(entities);
 
         dispose();
       });
@@ -89,28 +90,29 @@ describe('createSoupState', () => {
   });
 
   describe('items', () => {
-    it('should get item by id', () => {
+    it('should get row by id', () => {
       createRoot((dispose) => {
         const entity1 = createTestEntity('1');
         const entity2 = createTestEntity('2');
-        const state = createSoupState({ initialData: [entity1, entity2] });
+        const state = createSoupState();
+        state.setRows([entity1, entity2].map((e) => state.buildRow(e)));
 
-        expect(state.items.get('1')).toBe(entity1);
-        expect(state.items.get('2')).toBe(entity2);
+        expect(state.items.get('1')?.original).toBe(entity1);
+        expect(state.items.get('2')?.original).toBe(entity2);
         expect(state.items.get('nonexistent')).toBeUndefined();
 
         dispose();
       });
     });
 
-    it('should get item at index', () => {
+    it('should get row at index', () => {
       createRoot((dispose) => {
         const entity1 = createTestEntity('1');
         const entity2 = createTestEntity('2');
-        const state = createSoupState({ initialData: [entity1, entity2] });
+        const state = createSoupState({});
 
-        expect(state.items.at(0)).toBe(entity1);
-        expect(state.items.at(1)).toBe(entity2);
+        expect(state.items.at(0)?.original).toBe(entity1);
+        expect(state.items.at(1)?.original).toBe(entity2);
         expect(state.items.at(99)).toBeUndefined();
 
         dispose();
@@ -190,11 +192,11 @@ describe('createSoupState', () => {
         const state = createSoupState({ initialData: entities });
 
         const result1 = state.navigate.down();
-        expect(result1?.item).toBe(entities[0]);
+        expect(result1?.row.original).toBe(entities[0]);
         expect(result1?.index).toBe(0);
 
         const result2 = state.navigate.down();
-        expect(result2?.item).toBe(entities[1]);
+        expect(result2?.row.original).toBe(entities[1]);
         expect(result2?.index).toBe(1);
 
         dispose();
@@ -212,11 +214,11 @@ describe('createSoupState', () => {
 
         // When no focus, up goes to last
         const result1 = state.navigate.up();
-        expect(result1?.item).toBe(entities[2]);
+        expect(result1?.row.original).toBe(entities[2]);
         expect(result1?.index).toBe(2);
 
         const result2 = state.navigate.up();
-        expect(result2?.item).toBe(entities[1]);
+        expect(result2?.row.original).toBe(entities[1]);
         expect(result2?.index).toBe(1);
 
         dispose();
@@ -231,7 +233,7 @@ describe('createSoupState', () => {
         state.focus.set('2');
         const result = state.navigate.toFirst();
 
-        expect(result?.item).toBe(entities[0]);
+        expect(result?.row.original).toBe(entities[0]);
         expect(state.focus.id()).toBe('1');
 
         dispose();
@@ -246,7 +248,7 @@ describe('createSoupState', () => {
         state.focus.set('1');
         const result = state.navigate.toLast();
 
-        expect(result?.item).toBe(entities[1]);
+        expect(result?.row.original).toBe(entities[1]);
         expect(state.focus.id()).toBe('2');
 
         dispose();
@@ -264,7 +266,7 @@ describe('createSoupState', () => {
 
         const result = state.navigate.toIndex(1);
 
-        expect(result?.item).toBe(entities[1]);
+        expect(result?.row.original).toBe(entities[1]);
         expect(state.focus.id()).toBe('2');
 
         dispose();
@@ -278,7 +280,7 @@ describe('createSoupState', () => {
 
         const result = state.navigate.toId('2');
 
-        expect(result?.item).toBe(entities[1]);
+        expect(result?.row.original).toBe(entities[1]);
         expect(state.focus.id()).toBe('2');
 
         dispose();
@@ -356,7 +358,7 @@ describe('createSoupState', () => {
         expect(state.focus.id()).toBe('2');
 
         const peeked = state.navigate.peekOffset(1);
-        expect(peeked?.item).toBe(entities[2]);
+        expect(peeked?.row.original).toBe(entities[2]);
 
         // Focus should remain unchanged
         expect(state.focus.id()).toBe('2');
@@ -427,20 +429,37 @@ describe('createSoupState', () => {
     });
   });
 
-  describe('groups', () => {
-    it('should manage group configs', () => {
+  describe('grouping', () => {
+    it('should manage group expansion state', () => {
       createRoot((dispose) => {
         const state = createSoupState();
 
-        expect(state.groups()).toEqual([]);
+        // Groups start expanded
+        expect(state.grouping.isExpanded('group-1')).toBe(true);
 
-        const groupConfig = {
-          id: 'type',
-          getValue: (_item: unknown) => 'test',
-        };
-        state.setGroups([groupConfig]);
+        // Toggle to collapse
+        state.grouping.toggle('group-1');
+        expect(state.grouping.isExpanded('group-1')).toBe(false);
 
-        expect(state.groups()).toEqual([groupConfig]);
+        // Toggle to expand
+        state.grouping.toggle('group-1');
+        expect(state.grouping.isExpanded('group-1')).toBe(true);
+
+        dispose();
+      });
+    });
+
+    it('should collapse and expand all groups', () => {
+      createRoot((dispose) => {
+        const state = createSoupState();
+
+        state.grouping.collapseAll(['group-1', 'group-2']);
+        expect(state.grouping.isExpanded('group-1')).toBe(false);
+        expect(state.grouping.isExpanded('group-2')).toBe(false);
+
+        state.grouping.expandAll();
+        expect(state.grouping.isExpanded('group-1')).toBe(true);
+        expect(state.grouping.isExpanded('group-2')).toBe(true);
 
         dispose();
       });

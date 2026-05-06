@@ -89,8 +89,18 @@ impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> EmailToolCo
     }
 }
 
-/// Create an email toolset.
+/// Create the full email toolset including SendEmail.
 pub fn email_toolset<T, G, E>() -> AsyncToolSet<EmailToolContext<T, G, E>>
+where
+    T: EmailService,
+    G: GmailTokenProvider,
+    E: EntityAccessService,
+{
+    mcp_toolset().add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
+}
+
+/// Email toolset for the MCP server — excludes SendEmail.
+pub fn mcp_toolset<T, G, E>() -> AsyncToolSet<EmailToolContext<T, G, E>>
 where
     T: EmailService,
     G: GmailTokenProvider,
@@ -99,5 +109,4 @@ where
     AsyncToolSet::new()
         .add_tool::<UpdateThreadLabels, EmailToolContext<T, G, E>>()
         .add_tool::<GetThread, EmailToolContext<T, G, E>>()
-        .add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
 }

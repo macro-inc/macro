@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::{
     api::context::ApiContext,
-    domain::service::BackfillOrchestrator,
+    domain::{jobs::BackfillJobs, service::BackfillOrchestrator},
     outbound::{publisher::SqsSearchEventPublisher, source::PgBackfillSource},
     process::{context::SearchProcessingContext, worker::run_search_processing_workers},
 };
@@ -174,17 +174,8 @@ async fn main() -> anyhow::Result<()> {
             tracing::trace!("libpdfium is present");
         }
 
-        let sync_service_auth_key = match config.environment {
-            Environment::Local => config.sync_service_auth_key.clone(),
-            _ => secretsmanager_client
-                .get_secret_value(&config.sync_service_auth_key)
-                .await
-                .context("unable to get secret")?
-                .to_string(),
-        };
-
         let lexical_client = LexicalClient::new(
-            sync_service_auth_key.clone(),
+            internal_auth_key.as_ref().to_string(),
             config.lexical_service_url.clone(),
         );
 
@@ -205,6 +196,19 @@ async fn main() -> anyhow::Result<()> {
         run_search_processing_workers(ctx, config.worker_count);
     }
 
+    let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
+    let backfill_jobs = BackfillJobs::new(
+        dynamodb_client,
+        config.backfill_jobs_table.clone(),
+        std::time::Duration::from_secs(config.backfill_job_ttl_seconds),
+    );
+    if matches!(config.environment, Environment::Local) {
+        backfill_jobs
+            .ensure_table()
+            .await
+            .context("failed to ensure backfill jobs table exists")?;
+    }
+
     api::setup_and_serve(ApiContext {
         db,
         sqs_client,
@@ -212,6 +216,7 @@ async fn main() -> anyhow::Result<()> {
         internal_auth_key,
         config: Arc::new(config),
         backfill_service,
+        backfill_jobs,
     })
     .await?;
     Ok(())

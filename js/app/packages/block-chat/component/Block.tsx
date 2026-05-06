@@ -18,7 +18,7 @@ export default function ChatBlock() {
 
   return (
     <DocumentBlockContainer title={name()}>
-      <div class="size-full bracket-never" tabIndex={-1}>
+      <div class="size-full" tabIndex={-1}>
         <DebouncedNotificationReadMarker
           notificationSource={notificationSource}
           entity={{ type: 'chat', id: blockId }}

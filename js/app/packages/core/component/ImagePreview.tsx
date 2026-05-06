@@ -21,7 +21,7 @@ import {
   downloadImage as downloadImageAction,
 } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
-import { DeprecatedIconButton } from './DeprecatedIconButton';
+import { Button } from '@ui/components/Button';
 import { Lightbox } from './Lightbox';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 
@@ -155,11 +155,15 @@ export function ImagePreview(props: ImagePreviewProps) {
         <Show when={props.variant !== 'small'}>
           <div class="group-hover:visible invisible absolute top-2 right-2 bg-button rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">
             <Dialog.Trigger disabled={props.isContext}>
-              <DeprecatedIconButton icon={ExpandIcon} theme="clear" />
+              <Button variant="ghost" size="icon-md">
+                <ExpandIcon />
+              </Button>
             </Dialog.Trigger>
             <DropdownMenu>
               <DropdownMenu.Trigger disabled={props.isContext}>
-                <DeprecatedIconButton icon={ThreeDotsIcon} theme="clear" />
+                <Button variant="ghost" size="icon-md">
+                  <ThreeDotsIcon />
+                </Button>
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>
                 <div class="fixed inset-0 z-modal-overlay bg-transparent" />

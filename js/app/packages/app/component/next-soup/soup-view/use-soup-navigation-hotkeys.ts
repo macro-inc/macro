@@ -43,7 +43,7 @@ export const useSoupNavigationHotkeys = (
   const navigateAndSelectEntity = (offset: number) => {
     const nextRow = soup.navigate.by(offset);
     if (!nextRow) return true;
-    soup.selection.select(nextRow.item);
+    soup.selection.select(nextRow.row.original);
     scrollTo(nextRow.index);
     return true;
   };
@@ -54,12 +54,12 @@ export const useSoupNavigationHotkeys = (
 
     const selection = soup.selection;
 
-    const nextRow = next?.item;
-    if (!nextRow) return true;
+    const nextEntity = next?.row.original;
+    if (!nextEntity) return true;
 
     // At the boundary (top/bottom), peekOffset clamps and returns the
     // same item we're already focused on. No-op to avoid toggling.
-    if (focusedEntity && nextRow.id === focusedEntity.id) return true;
+    if (focusedEntity && nextEntity.id === focusedEntity.id) return true;
 
     if (!focusedEntity) {
       navigateAndSelectEntity(offset);
@@ -73,14 +73,14 @@ export const useSoupNavigationHotkeys = (
 
     if (
       !selection.isSelected(focusedEntity.id) &&
-      !selection.isSelected(nextRow.id)
+      !selection.isSelected(nextEntity.id)
     ) {
       selection.toggle(focusedEntity);
       navigateAndSelectEntity(offset);
       return true;
     }
 
-    if (selection.isSelected(nextRow.id)) {
+    if (selection.isSelected(nextEntity.id)) {
       selection.toggle(focusedEntity);
       soup.navigate.by(offset);
       scrollTo(next.index);
@@ -100,7 +100,7 @@ export const useSoupNavigationHotkeys = (
     if (!next) return true;
 
     scrollTo(next.index);
-    openEntity(next.item);
+    openEntity(next.row.original);
 
     return true;
   };
@@ -111,7 +111,7 @@ export const useSoupNavigationHotkeys = (
     if (!next) return true;
 
     scrollTo(next.index);
-    openEntity(next.item);
+    openEntity(next.row.original);
 
     return true;
   };

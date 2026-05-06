@@ -1,5 +1,5 @@
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { Bar } from '@core/component/TopBar/Bar';
+import { Button } from '@ui/components/Button';
 import { useContacts } from '@core/user';
 import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
 import Copy from '@phosphor-icons/core/regular/copy.svg?component-solid';
@@ -50,7 +50,7 @@ function SignalDebugCard(props: SignalDebugCardProps) {
       </div>
       <div class="border-t border-edge mt-3 pt-3">
         <details>
-          <summary class="cursor-pointer text-accent text-sm">Raw JSON</summary>
+          <summary class="text-accent text-sm">Raw JSON</summary>
           <div class="mt-2 relative">
             <button
               onClick={copyToClipboard}
@@ -88,12 +88,9 @@ const DataDebug: Component = () => {
           </div>
         }
         center={
-          <DeprecatedTextButton
-            theme="base"
-            text="Refresh"
-            icon={Refresh}
-            onClick={handleRefresh}
-          />
+          <Button variant="base" onClick={handleRefresh}>
+            <Refresh /> Refresh
+          </Button>
         }
       ></Bar>
       <div class="flex flex-col gap-6 p-6 overflow-scroll">

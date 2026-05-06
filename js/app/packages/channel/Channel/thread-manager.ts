@@ -22,7 +22,12 @@ export function createThreadManager() {
       batch(() => {
         const next: boolean =
           typeof val === 'function' ? val(isReplying()) : val;
-        if (next) setIsExpanded(true);
+        if (next) {
+          setIsExpanded(true);
+          requestAnimationFrame(() =>
+            replyInputEl()?.scrollIntoView({ block: 'nearest' })
+          );
+        }
         setIsReplyingRaw(next);
       });
     };

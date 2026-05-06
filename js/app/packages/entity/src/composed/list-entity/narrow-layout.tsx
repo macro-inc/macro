@@ -64,7 +64,7 @@ export function NarrowLayout(props: LayoutProps) {
                   {entity().channelName}
                 </span>
                 <Show when={entity().senderId}>
-                  {(id) => <UserIcon id={id()} size="xs" />}
+                  {(id) => <UserIcon id={id()} size="sm" />}
                 </Show>
                 <Show when={hit()}>
                   {(h) => (

@@ -207,7 +207,7 @@ export function References(props: ReferenceProps) {
                   </div>
 
                   <span class="inline-flex items-center gap-2 pl-4 text-sm">
-                    <UserIcon id={ref.sender_id} size="xs" isDeleted={false} />
+                    <UserIcon id={ref.sender_id} size="sm" isDeleted={false} />
                     <span class="font-medium text-ink">{userName()}</span>
                     <span class="text-ink-extra-muted">
                       {hasMessageContent ? 'referenced in' : 'attached in'}
@@ -248,7 +248,7 @@ export function References(props: ReferenceProps) {
                   </div>
 
                   <span class="inline-flex items-center gap-1 text-sm pl-4">
-                    <UserIcon id={userId} size="xs" isDeleted={false} />
+                    <UserIcon id={userId} size="sm" isDeleted={false} />
                     <span class="font-medium text-ink">{userName()}</span>
                     <span class="text-ink-extra-muted">mentioned in</span>
                     <InlineItemPreview

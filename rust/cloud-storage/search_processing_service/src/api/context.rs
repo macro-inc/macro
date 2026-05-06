@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::BackfillServiceImpl;
 use crate::config::Config;
+use crate::domain::jobs::BackfillJobs;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
@@ -14,4 +15,5 @@ pub(crate) struct ApiContext {
     pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
     pub config: Arc<Config>,
     pub backfill_service: Arc<BackfillServiceImpl>,
+    pub backfill_jobs: BackfillJobs,
 }
