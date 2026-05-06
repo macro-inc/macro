@@ -168,9 +168,24 @@ bun scripts/delete_indices.ts emails_v2
 
 ### Avoiding downtime — write window strategy
 
-The reindex script does `wait_for_completion=true` and then issues the
-atomic alias swap. Writes that arrive *during* the reindex land on the
-old index only and get cut off when the alias swaps. Two options:
+The reindex script submits the reindex *async* (`wait_for_completion=false`)
+with `slices=auto` (one sub-task per primary shard) and polls the OpenSearch
+task API every `REINDEX_POLL_SECONDS` (default 10s) until it completes,
+then issues the atomic alias swap. The async submission keeps a 60+ minute
+documents reindex from being killed by the ALB / proxy idle timeout that a
+synchronous request would hit.
+
+Tunable env vars:
+
+- `REINDEX_SLICES` — `auto` (default; matches the primary shard count) or a
+  positive integer.
+- `REINDEX_POLL_SECONDS` — poll cadence in seconds (default 10).
+
+Ctrl-C during polling sends a `tasks.cancel` for the running reindex so it
+doesn't keep running orphaned in the cluster.
+
+Writes that arrive *during* the reindex land on the old index only and get
+cut off when the alias swaps. Two options:
 
 - **Replay (default)**: accept the write window, then run a backfill
   bounded by `since=<reindex start time>` to replay anything that

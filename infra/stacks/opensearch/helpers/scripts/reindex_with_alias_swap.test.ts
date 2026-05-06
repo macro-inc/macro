@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { buildSwapActions } from './reindex_with_alias_swap';
+import {
+  buildSwapActions,
+  formatTaskProgress,
+} from './reindex_with_alias_swap';
 
 describe('buildSwapActions', () => {
   test('alias already in place — remove from old, add to new', () => {
@@ -54,5 +57,40 @@ describe('buildSwapActions', () => {
     expect(actions).toEqual([
       { add: { index: 'documents_v1', alias: 'documents' } },
     ]);
+  });
+});
+
+describe('formatTaskProgress', () => {
+  test('empty status renders sensibly', () => {
+    expect(formatTaskProgress({})).toBe('[0s] 0/0 (?)');
+  });
+
+  test('mid-run progress shows percent and elapsed', () => {
+    const line = formatTaskProgress({
+      total: 1000,
+      created: 250,
+      updated: 50,
+      running_time_in_nanos: 12_000_000_000,
+    });
+    expect(line).toBe('[12s] 300/1000 (30.0%)');
+  });
+
+  test('appends conflicts only when non-zero', () => {
+    expect(
+      formatTaskProgress({
+        total: 100,
+        created: 100,
+        version_conflicts: 0,
+        running_time_in_nanos: 5_000_000_000,
+      })
+    ).toBe('[5s] 100/100 (100.0%)');
+    expect(
+      formatTaskProgress({
+        total: 100,
+        created: 90,
+        version_conflicts: 3,
+        running_time_in_nanos: 5_000_000_000,
+      })
+    ).toBe('[5s] 90/100 (90.0%) conflicts=3');
   });
 });
