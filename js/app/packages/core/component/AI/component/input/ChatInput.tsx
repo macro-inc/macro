@@ -138,8 +138,9 @@ export function ChatInput(props: ChatInputComponentProps) {
   const LeftButton = () => (
     <div ref={setAttachMenuAnchorRef} class="shrink-0">
       <Button
-        variant="base"
+        variant="ghost"
         size="icon-md"
+        class="text-ink"
         onClick={() => setShowAttachMenu((prev) => !prev)}
       >
         {showAttachMenu() ? <XIcon /> : <PlusIcon />}
