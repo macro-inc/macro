@@ -961,7 +961,7 @@ function GlyphEditor(props: GlyphEditorProps) {
 
               <div class="pt-4 border-t border-edge">
                 <div class="grid grid-cols-2 gap-2">
-                  <Button variant="tertiary" onClick={props.onClose}>
+                  <Button variant="secondary" onClick={props.onClose}>
                     Cancel
                   </Button>
                   <Button variant="active" onClick={handleSave}>
