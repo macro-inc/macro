@@ -1,5 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { Redis } from '../../packages/resources';
 import {
   config,
   getSearchEventQueue,
@@ -44,16 +45,18 @@ const opensearchStack = new pulumi.StackReference('opensearch-stack', {
   name: `macro-inc/opensearch/${stack}`,
 });
 
-const connectionGatewayStack = new pulumi.StackReference(
-  'connection-gateway-stack',
-  {
-    name: `macro-inc/connection-gateway/${stack}`,
-  }
-);
-
-const connectionGatewayRedisUrl: pulumi.Output<string> = connectionGatewayStack
-  .getOutput('connectionGatewayRedisUrl')
-  .apply((url) => url as string);
+// Dedicated single-node Redis for the backfill job registry. Owning this
+// in-stack avoids a cross-stack dependency for what's essentially a TTL'd
+// job table, and keeps SPS deploys from being coupled to connection-gateway.
+const backfillRegistryRedis = new Redis('search-processing-redis', {
+  vpc,
+  tags,
+  redisArgs: {
+    nodeType: 'cache.t3.micro',
+    port: 6379,
+    engineVersion: '7.1',
+  },
+});
 
 const OPENSEARCH_URL: pulumi.Output<string> = opensearchStack
   .getOutput('domainEndpoint')
@@ -160,7 +163,7 @@ const searchProcessingService = new SearchProcessingService(
       },
       {
         name: 'REDIS_HOST',
-        value: pulumi.interpolate`redis://${connectionGatewayRedisUrl}`,
+        value: pulumi.interpolate`redis://${backfillRegistryRedis.endpoint}`,
       },
       // OpenTelemetry / Datadog tracing configuration
       {
