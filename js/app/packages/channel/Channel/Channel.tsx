@@ -420,7 +420,6 @@ export function Channel(props: ChannelProps) {
                   onPrevious={findBar.previous}
                   onNext={findBar.next}
                   index={findBar.activeIndex()}
-                  total={findBar.resultsCount()}
                   hasUnsubmittedChanges={findBar.hasUnsubmittedChanges()}
                   isPending={findBar.isPending()}
                   direction="desc"
