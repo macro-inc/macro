@@ -162,6 +162,10 @@ export function createEmailFormState(
   >();
 
   const [capturedEditor, setCapturedEditor] = createSignal<LexicalEditor>();
+  // If setReplyType('forward') is called before the Lexical editor mounts
+  // (e.g. user clicks Forward while the bottom reply input is collapsed),
+  // we stash the dispatch and replay it once the editor is captured.
+  let pendingForwardAppend = false;
 
   // We track the last reply type applied to replay against the current state when setOnReplyTypeApplied is attached
   const [lastReplyTypeApplied, setLastReplyTypeApplied] = createSignal<
@@ -236,11 +240,16 @@ export function createEmailFormState(
 
       if (rt === 'forward') {
         setState('withQuotedText', true);
-        capturedEditor()?.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
-          replyingTo: replyingTo,
-          replyType: rt,
-          visible: true,
-        });
+        const editor = capturedEditor();
+        if (editor) {
+          editor.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+            replyingTo: replyingTo,
+            replyType: rt,
+            visible: true,
+          });
+        } else {
+          pendingForwardAppend = true;
+        }
 
         // Populate forwarded attachments from original message (skip inline images)
         const fwdAttachments: DraftFormAttachment[] = (msg.attachments ?? [])
@@ -328,6 +337,20 @@ export function createEmailFormState(
     },
     setCapturedEditor: (editor: LexicalEditor) => {
       setCapturedEditor(editor);
+      if (pendingForwardAppend && replyingTo) {
+        pendingForwardAppend = false;
+        // Defer past the current Solid batch / microtask queue so that
+        // registerToggleAppendedThread (registered via lazyRegister, which
+        // uses createEffect) has actually attached the command handler
+        // before we dispatch. queueMicrotask runs too early.
+        setTimeout(() => {
+          editor.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+            replyingTo,
+            replyType: 'forward',
+            visible: true,
+          });
+        }, 0);
+      }
     },
     attachments: {
       list: attachments,

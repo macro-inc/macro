@@ -36,6 +36,9 @@ export function EmailInput(props: EmailInputProps) {
 
     // Set focus to new message if provided
     if (newMessageId) ctx.messages.setFocused(newMessageId);
+
+    // Collapse the input after sending (Gmail-style).
+    props.setShowReply?.(false);
   }
 
   return (

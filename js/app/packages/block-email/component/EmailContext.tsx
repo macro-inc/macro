@@ -88,6 +88,8 @@ export type EmailContextValues = {
     isBodyExpanded: (id: string) => boolean;
     replyingToMessageId: Accessor<string | undefined>;
     setReplyingToMessageId: (id: string | undefined) => void;
+    bottomReplyOpen: Accessor<boolean>;
+    setBottomReplyOpen: (open: boolean) => void;
   };
   thread: Accessor<ApiThread | undefined>;
   permissions: Accessor<{
@@ -182,6 +184,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
   const [replyingToMessageId, setReplyingToMessageId] = createSignal<string>();
+  const [bottomReplyOpen, setBottomReplyOpen] = createSignal(false);
   const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
     Record<string, boolean>
   >({});
@@ -549,6 +552,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
             isBodyExpanded: (id: string) => expandedMessageBodyIds[id] ?? false,
             replyingToMessageId,
             setReplyingToMessageId,
+            bottomReplyOpen,
+            setBottomReplyOpen,
           },
           permissions: createMemo(() => {
             const perms = getPermissions(threadQuery.data?.access_level);

@@ -1722,15 +1722,13 @@ export function BaseInput(props: {
                 disablePortal={isMobile()}
               />
             </Show>
-            <Show when={savedDraftId()}>
-              <Button
-                onclick={deleteDraftAndReset}
-                tooltip="Delete draft"
-                class="aspect-square p-1"
-              >
-                <Trash class="h-5" />
-              </Button>
-            </Show>
+            <Button
+              onclick={deleteDraftAndReset}
+              tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
+              class="aspect-square p-1"
+            >
+              <Trash class="h-5" />
+            </Button>
           </div>
 
           <Tooltip

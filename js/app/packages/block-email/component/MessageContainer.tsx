@@ -62,6 +62,11 @@ export function MessageContainer(props: MessageContainerProps) {
     ) {
       context.messages.setReplyingToMessageId(undefined);
     }
+    // Reply/Reply-All/Forward actions on the last message open the bottom
+    // reply input (the inline reply only renders for non-last messages).
+    if (props.isLastMessage) {
+      context.messages.setBottomReplyOpen(newValue);
+    }
   };
 
   const userId = useUserId();
