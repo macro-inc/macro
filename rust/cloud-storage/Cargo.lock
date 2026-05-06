@@ -3656,7 +3656,6 @@ dependencies = [
  "chrono",
  "doppleganger",
  "either",
- "email_importance",
  "email_utils",
  "entity_access",
  "filter_ast",
@@ -3729,18 +3728,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "email_importance"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "macro_db_migrator",
- "sqlx",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "email_refresh_handler"
 version = "0.1.0"
 dependencies = [
@@ -3807,7 +3794,6 @@ dependencies = [
  "ego-tree",
  "email",
  "email_db_client",
- "email_importance",
  "email_utils",
  "entity_access",
  "filter_ast",

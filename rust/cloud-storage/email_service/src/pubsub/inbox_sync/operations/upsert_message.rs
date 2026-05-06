@@ -545,7 +545,6 @@ async fn send_notifications(
         recipient_ids: HashSet::from([recipient]),
     }
     .into_request()
-    .with_apns()
     .with_conn_gateway();
 
     if let Err(e) = ctx
@@ -584,7 +583,7 @@ async fn filter_notifiable_message(
         return Ok(None);
     };
 
-    // 1. Sent and draft messages never generate notifications.
+    // 1. filter out sent and draft messages
     if new_message.is_sent || new_message.is_draft {
         return Ok(None);
     }

@@ -1,11 +1,9 @@
 use super::*;
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
-use email_importance::build_importance_condition;
 use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::EmailStr;
-use sqlx::{Execute, Postgres};
 use uuid::Uuid;
 
 #[test]
@@ -68,7 +66,6 @@ fn test_build_message_email_filter_importance_true_includes_email_filters() {
         debug
             .contains("LOWER(ef.email_domain) = LOWER(split_part(sender_c.email_address, '@', 2))")
     );
-    // Boolean values are inlined as TRUE/FALSE into the raw SQL.
     assert!(debug.contains("ef.is_important = TRUE"));
     assert!(debug.contains("ef_addr.is_important = FALSE"));
 }
@@ -630,42 +627,4 @@ fn test_has_thread_literals_true_when_calendar_only_present() {
 fn test_has_message_literals_false_when_only_calendar_only() {
     let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
     assert!(!has_message_literals(&expr));
-}
-
-/// Verifies that `build_message_email_filter` for `Importance(true)` embeds the exact SQL
-/// produced by `build_importance_condition(true)`. If the filter arm ever diverges from the
-/// shared condition (e.g. by inlining different SQL), this test fails.
-#[test]
-fn importance_true_filter_contains_shared_condition() {
-    let mut builder = sqlx::QueryBuilder::<Postgres>::new("");
-    build_importance_condition(true, &mut builder);
-    let condition_sql = builder.build().sql().to_owned();
-
-    let filter_sql =
-        build_message_email_filter(&Expr::Literal(EmailLiteral::Importance(true))).to_debug_sql();
-    assert!(
-        filter_sql.contains(&condition_sql),
-        "Importance(true) filter SQL does not contain build_importance_condition(true) output.\n\
-         filter:    {filter_sql}\n\
-         condition: {condition_sql}"
-    );
-}
-
-/// Verifies that `build_message_email_filter` for `Importance(false)` embeds the exact SQL
-/// produced by `build_importance_condition(false)`. If the filter arm ever diverges from the
-/// shared condition, this test fails.
-#[test]
-fn importance_false_filter_contains_shared_condition() {
-    let mut builder = sqlx::QueryBuilder::<Postgres>::new("");
-    build_importance_condition(false, &mut builder);
-    let condition_sql = builder.build().sql().to_owned();
-
-    let filter_sql =
-        build_message_email_filter(&Expr::Literal(EmailLiteral::Importance(false))).to_debug_sql();
-    assert!(
-        filter_sql.contains(&condition_sql),
-        "Importance(false) filter SQL does not contain build_importance_condition(false) output.\n\
-         filter:    {filter_sql}\n\
-         condition: {condition_sql}"
-    );
 }
