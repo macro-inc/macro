@@ -4,9 +4,9 @@
 //! and returns `202 Accepted` with a job id right away — prod-scale corpora
 //! can take many minutes to drain, well past the ALB idle timeout. Clients
 //! poll `GET /internal/backfill/{job_id}` for progress; the orchestrator
-//! updates the shared progress counter in Redis as each page lands. Any
-//! SPS instance can answer the GET because state lives in Redis, not in
-//! process memory. On shutdown the registry's local cancellation tokens
+//! updates the shared progress counter in DynamoDB as each page lands. Any
+//! SPS instance can answer the GET because state lives in DynamoDB, not
+//! in process memory. On shutdown the registry's local cancellation tokens
 //! fire so drains stop between pages instead of being killed mid-publish.
 //!
 //! Adding a new entity is one POST handler + one `.route(...)`; the status
@@ -140,10 +140,10 @@ async fn status(State(jobs): State<BackfillJobs>, Path(job_id): Path<String>) ->
     }
 }
 
-/// Allocate a job slot in Redis, hand the progress + cancel token to the
-/// worker future the caller built, spawn it, and return `202 Accepted`
-/// with the job id. The worker future captures the request body so the
-/// HTTP body reference doesn't outlive the handler.
+/// Allocate a job slot in the registry, hand the progress + cancel token
+/// to the worker future the caller built, spawn it, and return
+/// `202 Accepted` with the job id. The worker future captures the request
+/// body so the HTTP body reference doesn't outlive the handler.
 async fn spawn_backfill<F, Fut>(
     service: Arc<BackfillServiceImpl>,
     jobs: BackfillJobs,
@@ -168,7 +168,7 @@ where
     let handle = match jobs.start(entity).await {
         Ok(h) => h,
         Err(e) => {
-            tracing::error!(error=?e, entity, "failed to allocate backfill job in redis");
+            tracing::error!(error=?e, entity, "failed to allocate backfill job in registry");
             return (StatusCode::INTERNAL_SERVER_ERROR, "registry unavailable").into_response();
         }
     };
@@ -186,7 +186,7 @@ where
             tracing::info!(job_id = %id_for_task, entity, "backfill completed");
         }
         if let Err(e) = jobs_for_task.finish(&id_for_task, result).await {
-            tracing::error!(job_id = %id_for_task, error=?e, "failed to record backfill terminal status in redis");
+            tracing::error!(job_id = %id_for_task, error=?e, "failed to record backfill terminal status in registry");
         }
     });
 

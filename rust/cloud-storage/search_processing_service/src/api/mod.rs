@@ -47,7 +47,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 /// Block on a SIGINT/SIGTERM signal, then fire every locally tracked
 /// backfill's cancellation token so drains stop between pages instead of
 /// being killed mid-publish when the runtime exits. Only jobs running on
-/// this pod are cancelled — the registry is shared via Redis but
+/// this pod are cancelled — the registry is shared via DynamoDB but
 /// cancellation tokens are per-instance.
 async fn shutdown_signal(backfill_jobs: crate::domain::jobs::BackfillJobs) {
     let ctrl_c = async {
