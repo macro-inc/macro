@@ -172,16 +172,18 @@ jobs:
           clean: false
       - name: Add Nix to PATH
         run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
-        with:
-          workspaces: rust/cloud-storage
-          shared-key: cloud-storage-check
-          cache-on-failure: true
       - name: Enter Nix dev shell
         run: |
           set -euo pipefail
           nix print-dev-env --accept-flake-config > /tmp/dev-env
           echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+          source /tmp/dev-env
+          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
+        with:
+          workspaces: rust/cloud-storage
+          shared-key: cloud-storage-check
+          cache-on-failure: true
       - name: Configure sccache S3 backend
         env:
           SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
@@ -244,16 +246,18 @@ jobs:
           clean: false
       - name: Add Nix to PATH
         run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
-        with:
-          workspaces: rust/cloud-storage
-          shared-key: cloud-storage-test
-          cache-on-failure: true
       - name: Enter Nix dev shell
         run: |
           set -euo pipefail
           nix print-dev-env --accept-flake-config > /tmp/dev-env
           echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+          source /tmp/dev-env
+          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
+        with:
+          workspaces: rust/cloud-storage
+          shared-key: cloud-storage-test
+          cache-on-failure: true
       - name: Configure sccache S3 backend
         env:
           SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
@@ -293,6 +297,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           cd rust/cloud-storage
+
           args=(--all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS")
           if [ -n "$NEXTEST_FILTER" ]; then
             args+=(-E "$NEXTEST_FILTER")
