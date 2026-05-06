@@ -237,8 +237,11 @@ impl MobilePushOps for MockPush {
 }
 
 fn make_service(repo: MockRepo, push: MockPush) -> VoipPushServiceImpl<MockRepo, MockPush> {
-    let adapter = MobilePushAdapter::new(push, "com.example.app".to_string())
-        .with_voip_bundle_id("com.example.app.voip".to_string());
+    let adapter = MobilePushAdapter {
+        push_service: push,
+        apns_bundle_id: "com.example.app".to_string(),
+        voip_bundle_id: Some("com.example.app.voip".to_string()),
+    };
     VoipPushServiceImpl::new(repo, adapter)
 }
 

@@ -468,11 +468,11 @@ async fn main() -> anyhow::Result<()> {
     ) {
         let voip_repo =
             notification::outbound::repository::DbNotificationRepository::new(db.clone());
-        let voip_mobile = notification::outbound::mobile::MobilePushAdapter::new(
-            aws_sdk_sns::Client::new(&aws_config),
-            bundle_id.clone(),
-        )
-        .with_voip_bundle_id(format!("{}.voip", bundle_id));
+        let voip_mobile = notification::outbound::mobile::MobilePushAdapter {
+            push_service: aws_sdk_sns::Client::new(&aws_config),
+            apns_bundle_id: bundle_id.clone(),
+            voip_bundle_id: Some(format!("{}.voip", bundle_id)),
+        };
         tracing::info!(bundle_id, "voip push enabled");
         Some(notification::domain::service::VoipPushServiceImpl::new(
             voip_repo,

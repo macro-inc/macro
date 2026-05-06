@@ -15,27 +15,12 @@ use crate::domain::ports::NotificationSender;
 /// This adapter sends push notifications to mobile devices via APNS (iOS)
 /// and FCM (Android) through SNS.
 pub struct MobilePushAdapter<P> {
-    push_service: P,
-    apns_bundle_id: String,
+    /// Push service implementation used to send SNS messages.
+    pub push_service: P,
+    /// APNS topic / bundle ID for regular iOS push notifications.
+    pub apns_bundle_id: String,
     /// Set to `<bundle_id>.voip` when VoIP push is configured.
-    voip_bundle_id: Option<String>,
-}
-
-impl<P> MobilePushAdapter<P> {
-    /// Create a new mobile push adapter.
-    pub fn new(push_service: P, apns_bundle_id: String) -> Self {
-        Self {
-            push_service,
-            apns_bundle_id,
-            voip_bundle_id: None,
-        }
-    }
-
-    /// Enable VoIP push with the given APNS topic (typically `<bundle_id>.voip`).
-    pub fn with_voip_bundle_id(mut self, voip_bundle_id: String) -> Self {
-        self.voip_bundle_id = Some(voip_bundle_id);
-        self
-    }
+    pub voip_bundle_id: Option<String>,
 }
 
 /// Trait for mobile push service operations via SNS.
