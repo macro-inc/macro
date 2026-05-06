@@ -18,6 +18,7 @@ import {
   isProjectContainedEntity,
   MultiSelectCheckbox,
   ProjectBreadCrumb,
+  SharedBadge,
   UnreadIndicator,
 } from '@entity';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
@@ -143,7 +144,7 @@ export function TaskGridLayout(props: LayoutProps) {
           </span>
           <Show when={isProjectContainedEntity(props.entity) && props.entity}>
             {(entity) => (
-              <span class="ph-no-capture text-ink/50 shrink-0 truncate border border-edge-muted px-2 rounded-full py-0.5">
+              <span class="ph-no-capture text-ink text-xs shrink-0 truncate border border-edge px-2 rounded-full py-0.5">
                 <ProjectBreadCrumb
                   entity={entity()}
                   onClick={props.onProjectClick}
@@ -151,13 +152,14 @@ export function TaskGridLayout(props: LayoutProps) {
               </span>
             )}
           </Show>
+          <SharedBadge ownerId={props.entity.ownerId} />
         </Entity.Slot>
 
         <For each={TASK_GRID_COLUMNS}>
           {(col) => (
             <Entity.Slot
               placement={col.id}
-              class="flex items-center min-w-0 overflow-hidden text-sm ph-no-capture"
+              class="flex items-center min-w-0 overflow-hidden text-xs ph-no-capture"
             >
               <ListPropertyValue
                 property={
