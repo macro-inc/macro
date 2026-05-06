@@ -127,16 +127,20 @@ export function FindBar(props: FindBarProps) {
       <Button
         size="icon-sm"
         variant="ghost"
-        aria-label="Previous match"
-        onClick={() => props.onPrevious()}
+        aria-label={props.direction === 'desc' ? 'Next match' : 'Previous match'}
+        onClick={() =>
+          props.direction === 'desc' ? props.onNext() : props.onPrevious()
+        }
       >
         <CaretUp />
       </Button>
       <Button
         size="icon-sm"
         variant="ghost"
-        aria-label="Next match"
-        onClick={() => props.onNext()}
+        aria-label={props.direction === 'desc' ? 'Previous match' : 'Next match'}
+        onClick={() =>
+          props.direction === 'desc' ? props.onPrevious() : props.onNext()
+        }
       >
         <CaretDown />
       </Button>

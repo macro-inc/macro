@@ -160,13 +160,19 @@ export function ChannelThread(props: ThreadProps) {
         isExpanded,
         handle,
       ]) => {
-        if (!targetReplyId) return;
+        if (!targetReplyId) {
+          if (replySelection.selectedId()) replySelection.clear();
+          return;
+        }
         if (!canScroll) return;
 
         const targetReplyIndex = replies.findIndex(
           (reply) => reply.id === targetReplyId
         );
-        if (targetReplyIndex === -1) return;
+        if (targetReplyIndex === -1) {
+          if (replySelection.selectedId()) replySelection.clear();
+          return;
+        }
 
         props.onSelectMessage?.(props.data().id);
         replySelection.select(targetReplyId);
