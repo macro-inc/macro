@@ -9,6 +9,7 @@
 		"health": "bun run health.ts",
 		"create_indices": "bun run create_indices.ts",
 		"delete_indices": "bun run delete_indices.ts",
+		"reindex_with_alias_swap": "bun run scripts/reindex_with_alias_swap.ts",
     "set_refresh_interval": "bun run set_refresh_interval.ts"
 	},
 	"author": "Will Hutchinson",

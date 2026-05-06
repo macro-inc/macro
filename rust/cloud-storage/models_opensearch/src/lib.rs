@@ -3,21 +3,24 @@
 //! This crate should never contain utoipa or any service-level models.
 //! This is purely a crate containing models used for opensearch directly.
 
-/// Enum for all the search indices in OpenSearch
+/// Enum for all the search indices in OpenSearch.
+///
+/// Every variant resolves to a stable alias name. The underlying physical
+/// indices live behind the alias and can be swapped via the OpenSearch
+/// `_aliases` API to support zero-downtime reindexing.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, strum::Display, strum::EnumString, strum::AsRefStr)]
 #[strum(serialize_all = "lowercase")]
 pub enum SearchIndex {
-    /// The channel index
+    /// The channel alias
     Channels,
-    /// The chat index
+    /// The chat alias
     Chats,
-    /// The document index
+    /// The document alias
     Documents,
-    /// aliased email index
-    #[strum(serialize = "emails_alias")]
+    /// The email alias
     Emails,
-    /// aliased call records index
-    #[strum(serialize = "call_records_alias")]
+    /// The call records alias
+    #[strum(serialize = "call_records")]
     CallRecords,
 }
 
@@ -84,14 +87,16 @@ pub enum OpenSearchEntityType {
 }
 
 impl OpenSearchEntityType {
-    /// Returns the index name to use for OpenSearch queries.
+    /// Returns the alias name to use for OpenSearch queries. The alias points
+    /// at the current physical index for this entity; reindexes swap the alias
+    /// without requiring a code change here.
     pub fn index_name(&self) -> &'static str {
         match self {
             Self::Channels => "channels",
             Self::Chats => "chats",
             Self::Documents => "documents",
-            Self::Emails => "emails_alias",
-            Self::CallRecords => "call_records_alias",
+            Self::Emails => "emails",
+            Self::CallRecords => "call_records",
         }
     }
 }
