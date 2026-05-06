@@ -67,7 +67,7 @@ export function ToolsetSelector(props: {
       <Show when={toolset().type === 'all'}>
         <div class="flex">
           <DropdownMenu
-            size="SM"
+            size="sm"
             triggerLabel={<span>SOURCE</span>}
           >
             <SegmentedControl
