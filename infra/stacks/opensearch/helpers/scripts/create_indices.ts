@@ -28,6 +28,41 @@ async function createIndexWithAlias(
     await opensearchClient.indices.exists({ index: indexName })
   ).body;
 
+  // Guard: if the alias name is currently a bare physical index (i.e. an
+  // un-aliased pre-migration state), or if the alias already points at a
+  // different index, this script is the wrong tool. The operator should
+  // run reindex_with_alias_swap.ts (or add_alias.ts) instead. Failing
+  // loudly here prevents accidentally creating a multi-index alias that
+  // makes writes ambiguous.
+  const aliasNameIsPhysicalIndex = await (async () => {
+    const a = await opensearchClient.indices.existsAlias({ name: aliasName });
+    if (a.body) return false;
+    const i = await opensearchClient.indices.exists({ index: aliasName });
+    return i.body;
+  })();
+  if (aliasNameIsPhysicalIndex && aliasName !== indexName) {
+    throw new Error(
+      `Refusing to act: alias name "${aliasName}" is currently a bare ` +
+        `physical index. Use reindex_with_alias_swap.ts to migrate it ` +
+        `to "${indexName}" behind the alias.`
+    );
+  }
+  const aliasTargets = await (async () => {
+    try {
+      const r = await opensearchClient.indices.getAlias({ name: aliasName });
+      return Object.keys(r.body ?? {});
+    } catch {
+      return [] as string[];
+    }
+  })();
+  if (aliasTargets.length > 0 && !aliasTargets.includes(indexName)) {
+    throw new Error(
+      `Refusing to act: alias "${aliasName}" already points at ` +
+        `${aliasTargets.join(', ')}, not "${indexName}". Use ` +
+        `reindex_with_alias_swap.ts to swap it.`
+    );
+  }
+
   if (indexExists) {
     console.log(`${indexName} index already exists, ensuring alias...`);
     const aliasExists = (

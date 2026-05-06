@@ -41,6 +41,33 @@ that can be swapped without a code deploy.
 
 All three migration scripts default to `DRY_RUN=true`; pass `DRY_RUN=false` to apply.
 
+## Deploy ordering for this PR (read me first)
+
+The Rust SearchIndex enum starts using alias names for every index when
+this PR ships. Of the five aliases the new code references, four happen
+to coincide with the existing physical index name in dev/prod
+(`channels`, `chats`, `documents`, `call_records`), so OpenSearch
+resolves the write correctly even before any alias is added — those
+require **no** pre-merge action. The fifth, `emails`, does not exist
+yet (the index lives at `emails_v2` under the legacy `emails_alias`),
+so post-deploy email writes/reads would 404.
+
+Required pre-merge step in each environment:
+
+```sh
+DRY_RUN=false bun scripts/add_alias.ts emails emails_v2
+bun scripts/verify_aliases.ts   # emails entry should now show -> emails_v2
+```
+
+This is purely additive — old code keeps writing through `emails_alias`,
+new code writes through `emails`, both resolve to `emails_v2`. Drop
+`emails_alias` after the new code is fully rolled out.
+
+The bare-physical → versioned migrations (`channels` → `channels_v1`,
+etc.) and the `emails_v2` → `emails_v1` standardisation are independent
+follow-up operations that can be scheduled per index using the playbook
+below; they are not deploy-blocking for this PR.
+
 ## Migration playbook: bringing an existing environment to alias-based access
 
 Each environment starts in a different state. Before deploying code that
