@@ -97,16 +97,10 @@ function ChatInputBoxInner() {
     <Item label="Chat input - not connected to backend">
       <div class="w-full h-full">
         <div class="flex gap-2 py-2">
-          <Button
-            onClick={() => input.setIsGenerating(true)}
-            variant="active"
-          >
+          <Button onClick={() => input.setIsGenerating(true)} variant="active">
             Generate
           </Button>
-          <Button
-            onClick={() => input.setIsGenerating(false)}
-            variant="active"
-          >
+          <Button onClick={() => input.setIsGenerating(false)} variant="active">
             Stop
           </Button>
         </div>
@@ -474,10 +468,7 @@ function TableStreamInner() {
         <Button onClick={startStream} variant="active">
           Stream
         </Button>
-        <Button
-          onClick={() => setIsPaused((p) => !p)}
-          variant="active"
-        >
+        <Button onClick={() => setIsPaused((p) => !p)} variant="active">
           {isPaused() ? 'Resume' : 'Pause'}
         </Button>
         <label class="flex items-center gap-x-1 text-xs">

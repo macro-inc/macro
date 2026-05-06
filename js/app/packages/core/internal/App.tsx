@@ -140,7 +140,9 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <DropdownMenu>
           <DropdownMenu.Trigger>
-            <Button variant="base" tabIndex={-1}>Open</Button>
+            <Button variant="base" tabIndex={-1}>
+              Open
+            </Button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenuContent>

@@ -258,7 +258,9 @@ export const ElementFormatButton = (props: {
       class="rounded-xs"
       variant="ghost"
       classList={{
-        'bg-ink/10 text-ink': !!props.selection()?.elementsInRange?.has(props.format),
+        'bg-ink/10 text-ink': !!props
+          .selection()
+          ?.elementsInRange?.has(props.format),
       }}
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
