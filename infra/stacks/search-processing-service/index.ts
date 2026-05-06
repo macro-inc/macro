@@ -49,7 +49,7 @@ const backfillRegistryRedis = new Redis('search-processing-redis', {
   vpc,
   tags,
   redisArgs: {
-    nodeType: 'cache.t3.micro',
+    nodeType: 'cache.t4g.micro',
     port: 6379,
     engineVersion: '7.1',
   },
