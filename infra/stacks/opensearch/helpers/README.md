@@ -24,8 +24,13 @@ Application code (Rust) reads/writes via stable alias names defined in
 | `channels`     | `channels_v1`              |
 | `chats`        | `chats_v1`                 |
 | `documents`    | `documents_v1`             |
-| `emails`       | `emails_v2`                |
+| `emails`       | `emails_v1`                |
 | `call_records` | `call_records_v1`          |
+
+In existing environments the underlying email index is currently
+`emails_v2` (a leftover from a prior migration). Run
+`reindex_with_alias_swap.ts emails emails_v1` to bring it in line with
+the rest of the naming scheme.
 
 The alias is the contract; the physical index is an implementation detail
 that can be swapped without a code deploy.
