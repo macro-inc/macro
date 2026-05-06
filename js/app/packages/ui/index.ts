@@ -1,4 +1,12 @@
 /* components */
+export {
+  Avatar,
+  AvatarGroup,
+  type AvatarSize,
+  type AvatarProps,
+  type AvatarGroupSize,
+  type AvatarGroupProps,
+} from './components/Avatar';
 export { SegmentedControl } from './components/SegmentedControl';
 export { TabbedControl } from './components/TabbedControl';
 export { Keyboard } from './components/Keyboard';

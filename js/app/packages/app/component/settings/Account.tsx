@@ -1,4 +1,3 @@
-import { uploadProfilePicture } from '@core/component/ProfilePicture';
 import EditableField from '@core/component/EditableField';
 import { capitalize } from '@block-pdf/util/StringUtils';
 import { useHasPaidAccess } from '@core/auth/license';
@@ -6,6 +5,8 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useLogout } from '@core/auth/logout';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { toast } from '@core/component/Toast/Toast';
+import { staticFileIdEndpoint } from '@core/constant/servers';
+import { createStaticFile } from '@core/util/create';
 import { Dialog, Button, Panel } from '@ui';
 import {
   blockNameToFileExtensions,
@@ -44,6 +45,26 @@ import { invoke } from '@tauri-apps/api/core';
 
 // NOTE: solid directives
 false && fileSelector;
+
+// 16 megabytes
+const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
+
+async function uploadProfilePicture(
+  file: File
+): Promise<{ id: string; url: string } | void> {
+  if (file.size > MAX_PROFILE_PICTURE_SIZE) {
+    return toast.failure('Image size too large');
+  }
+
+  try {
+    const id = await createStaticFile(file);
+    const url = staticFileIdEndpoint(id);
+    await authServiceClient.putProfilePicture({ url });
+    return { id, url };
+  } catch (_error) {
+    return toast.failure('Failed to upload profile picture');
+  }
+}
 
 function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
   switch (status.status) {

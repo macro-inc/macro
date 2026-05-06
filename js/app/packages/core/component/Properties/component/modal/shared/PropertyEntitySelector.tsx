@@ -483,7 +483,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                       }}
                     >
                       <div class="flex items-center gap-2 flex-1 min-w-0">
-                        <div class="size-4 shrink-0">
+                        <div class="size-4 shrink-0 flex items-center">
                           <Show
                             when={entity.kind === 'entity'}
                             fallback={

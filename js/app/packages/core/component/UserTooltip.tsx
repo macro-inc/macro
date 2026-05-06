@@ -6,13 +6,12 @@ import IconCheck from '@icon/regular/check.svg';
 import WideCopy from '@macro-icons/wide/copy.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
 import WideTask from '@macro-icons/wide/task.svg';
-import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
 import { Button } from '@ui/components/Button';
-import { createSignal, Match, Show, Switch } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { debounce } from '@solid-primitives/scheduled';
-import { ProfilePicture } from './ProfilePicture';
+import { UserIcon } from './UserIcon';
 
 export type UserTooltipProps = {
   displayName: string;
@@ -79,40 +78,30 @@ export function UserTooltip(props: UserTooltipProps) {
   const buttonStyle =
     'px-3 text-xs w-full justify-start hover:bg-hover rounded-xs';
 
+  // Determine avatar props based on what we have
+  const avatarProps = () => {
+    if (props.id) {
+      return { id: props.id } as const;
+    }
+    if (props.email) {
+      return { email: props.email } as const;
+    }
+    // Fallback - use email even if empty to satisfy the union type
+    return { email: '?' } as const;
+  };
+
   return (
     <Panel depth={2} active>
       <div class="bg-panel text-ink box-border border-accent overflow-hidden max-w-lg">
         <div class="flex items-center gap-2 p-2">
-          <div class="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted pointer-events-none">
-            <Switch>
-              <Match when={props.isDeleted}>
-                <div class="size-10 shrink-0 rounded-full bg-ink-extra-muted/50 flex items-center justify-center">
-                  <Trash class="w-4 h-4 shrink-0" />
-                </div>
-              </Match>
-              <Match when={props.id}>
-                <ProfilePicture
-                  id={props.id}
-                  sizeClass={{
-                    container: 'size-10',
-                    icon: 'w-4 h-4',
-                    text: 'text-lg text-panel leading-none',
-                  }}
-                />
-              </Match>
-              <Match when={!props.id && props.email}>
-                <ProfilePicture
-                  id={undefined}
-                  email={props.email}
-                  sizeClass={{
-                    container: 'size-10',
-                    icon: 'w-4 h-4',
-                    text: 'text-lg text-panel leading-none',
-                  }}
-                />
-              </Match>
-            </Switch>
-          </div>
+          <UserIcon
+            {...avatarProps()}
+            size="lg"
+            isDeleted={props.isDeleted}
+            showTooltip={false}
+            suppressClick
+            class="pointer-events-none"
+          />
 
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium truncate">{props.displayName}</div>

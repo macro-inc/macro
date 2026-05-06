@@ -82,11 +82,11 @@ export function MentionsMenuItem(props: {
         e.stopPropagation();
       }}
       on:mousemove={() => props.setIndex(props.index)}
-      class={cn('group flex items-center p-1.5 mx-1.5 rounded-xs', {
+      class={cn('group flex items-center p-1.5 mx-1.5 rounded-sm', {
         'bg-hover': props.selected,
       })}
     >
-      <div class="mr-2">{icon()}</div>
+      <div class="mr-2 flex items-center">{icon()}</div>
       <span
         class="ph-no-capture text-ink text-xs sm:text-sm font-medium grow overflow-hidden text-nowrap"
         style={{ 'text-overflow': 'ellipsis' }}
