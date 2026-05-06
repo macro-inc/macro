@@ -1,5 +1,4 @@
 import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
-import { debouncedDependent } from '@core/util/debounce';
 import {
   isChannelMessageEntity,
   type ChannelMessageEntity,
@@ -14,7 +13,6 @@ import {
   on,
 } from 'solid-js';
 
-const FIND_BAR_DEBOUNCE_MS = 200;
 const FIND_BAR_PAGE_SIZE = 50;
 
 type CreateChannelFindBarOptions = {
@@ -27,17 +25,16 @@ export type ChannelFindBar = ReturnType<typeof createChannelFindBar>;
 export function createChannelFindBar(options: CreateChannelFindBarOptions) {
   const [isOpen, setIsOpen] = createSignal(false);
   const [query, setQuery] = createSignal('');
+  const [submittedQuery, setSubmittedQuery] = createSignal('');
   const [activeIndex, setActiveIndex] = createSignal(0);
   const [inputEl, setInputEl] = createSignal<HTMLInputElement>();
-
-  const debouncedQuery = debouncedDependent(query, FIND_BAR_DEBOUNCE_MS);
 
   const searchQuery = useSearchSoupQuery(
     () => ({
       params: { page_size: FIND_BAR_PAGE_SIZE },
       body: {
         match_type: 'partial',
-        query: debouncedQuery(),
+        query: submittedQuery(),
         search_on: 'content',
         filters: {
           ...QUERY_FILTERS_BASE,
@@ -45,7 +42,7 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
         },
       },
     }),
-    () => ({ enabled: isOpen() })
+    () => ({ enabled: isOpen() && submittedQuery().length > 0 })
   );
 
   const results = createMemo<WithSearch<ChannelMessageEntity>[]>(() => {
@@ -70,9 +67,7 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
     }
   };
 
-  // Clear the index on query change; the results effect below picks the
-  // most-recent match (last in the ascending list) once the new batch lands.
-  createEffect(on(debouncedQuery, () => setActiveIndex(0), { defer: true }));
+  createEffect(on(submittedQuery, () => setActiveIndex(0), { defer: true }));
 
   createEffect(
     on(results, (rs) => {
@@ -104,6 +99,10 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
     goToResult(rs[i - 1]);
   };
 
+  const submit = () => {
+    setSubmittedQuery(query().trim());
+  };
+
   const open = () => {
     if (!isOpen()) {
       setIsOpen(true);
@@ -122,14 +121,19 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
     setIsOpen(false);
   };
 
+  const hasUnsubmittedChanges = () => query().trim() !== submittedQuery();
+
   return {
     isOpen,
     query,
     setQuery,
+    submittedQuery,
+    hasUnsubmittedChanges,
     activeIndex,
     resultsCount: () => results().length,
     open,
     close,
+    submit,
     next,
     previous,
     setInputEl,

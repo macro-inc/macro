@@ -9,6 +9,7 @@ import { type JSX, onMount, Show } from 'solid-js';
 export type FindBarProps = {
   query: string;
   onQueryChange: (query: string) => void;
+  onSubmit: () => void;
   onClose: () => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -16,6 +17,8 @@ export type FindBarProps = {
   index?: number;
   /** Total number of results. Omit when total is not yet known. */
   total?: number;
+  /** Whether the typed query differs from the most recently submitted one. */
+  hasUnsubmittedChanges?: boolean;
   placeholder?: string;
   autofocus?: boolean;
   inputRef?: (el: HTMLInputElement) => void;
@@ -42,13 +45,23 @@ export function FindBar(props: FindBarProps) {
       props.onClose();
       return;
     }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (props.hasUnsubmittedChanges) {
+        props.onSubmit();
+      } else {
+        props.onPrevious();
+      }
+      return;
+    }
     if (e.key === 'ArrowDown' || (e.key === 'Enter' && e.shiftKey)) {
       e.preventDefault();
       e.stopPropagation();
       props.onNext();
       return;
     }
-    if (e.key === 'ArrowUp' || (e.key === 'Enter' && !e.shiftKey)) {
+    if (e.key === 'ArrowUp') {
       e.preventDefault();
       e.stopPropagation();
       props.onPrevious();
@@ -59,7 +72,8 @@ export function FindBar(props: FindBarProps) {
     typeof props.index === 'number' &&
     props.index > 0 &&
     typeof props.total === 'number' &&
-    !!props.query.trim();
+    !!props.query.trim() &&
+    !props.hasUnsubmittedChanges;
 
   return (
     <div
@@ -68,7 +82,15 @@ export function FindBar(props: FindBarProps) {
         props.class
       )}
     >
-      <MagnifyingGlass class="ml-1 size-4 text-ink-muted" />
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Search"
+        onClick={() => props.onSubmit()}
+        classList={{ '!text-accent': !props.hasUnsubmittedChanges }}
+      >
+        <MagnifyingGlass />
+      </Button>
       <input
         ref={inputRef}
         type="text"
