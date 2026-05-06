@@ -172,22 +172,46 @@ jobs:
           clean: false
       - name: Add Nix to PATH
         run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
-      - uses: ./.github/actions/setup-sccache
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
+        with:
+          workspaces: rust/cloud-storage
+          shared-key: cloud-storage-check
+          cache-on-failure: true
+      - name: Enter Nix dev shell
+        run: |
+          set -euo pipefail
+          nix print-dev-env --accept-flake-config > /tmp/dev-env
+          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+      - name: Configure sccache S3 backend
         env:
           SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.cache/sccache"
+          {
+            echo "SCCACHE_DIR=$HOME/.cache/sccache"
+            echo "SCCACHE_CACHE_SIZE=5G"
+            echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
+            if [ -n "${SCCACHE_BUCKET:-}" ]; then
+              echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
+              echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
+              echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
+            fi
+          } >> "$GITHUB_ENV"
+          sccache --version
       - name: fmt
-        run: nix develop --command bash -c "cd rust/cloud-storage && cargo fmt --check"
+        run: cd rust/cloud-storage && cargo fmt --check
       - name: clippy
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: nix develop --command bash -c "cd rust/cloud-storage && cargo clippy --all-features"
+        run: cd rust/cloud-storage && cargo clippy --all-features
       - name: show sccache stats
         if: always()
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: nix develop --command sccache --show-stats || true
+        run: sccache --show-stats || true
 
   test:
     needs: path-check
@@ -220,18 +244,33 @@ jobs:
           clean: false
       - name: Add Nix to PATH
         run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
-      - uses: ./.github/actions/setup-sccache
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
+        with:
+          workspaces: rust/cloud-storage
+          shared-key: cloud-storage-test
+          cache-on-failure: true
+      - name: Enter Nix dev shell
+        run: |
+          set -euo pipefail
+          nix print-dev-env --accept-flake-config > /tmp/dev-env
+          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+      - name: Configure sccache S3 backend
         env:
           SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.cache/sccache"
+          {
+            echo "SCCACHE_DIR=$HOME/.cache/sccache"
+            echo "SCCACHE_CACHE_SIZE=5G"
+            echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
+            if [ -n "${SCCACHE_BUCKET:-}" ]; then
+              echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
+              echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
+              echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
+            fi
+          } >> "$GITHUB_ENV"
+          sccache --version
       - name: configure postgres for concurrent tests
         run: |
           postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "postgres:16" { print $1; exit }')"
@@ -247,24 +286,24 @@ jobs:
             sleep 1
           done
       - name: prepare tests
-        run: nix develop --command bash -c "just rust/cloud-storage/setup_test_envs && just rust/cloud-storage/initialize_dbs"
+        run: just rust/cloud-storage/setup_test_envs && just rust/cloud-storage/initialize_dbs
       - name: run tests
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           cd rust/cloud-storage
+          args=(--all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS")
           if [ -n "$NEXTEST_FILTER" ]; then
-            nix develop --command cargo nextest run --all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS" -E "$NEXTEST_FILTER"
-          else
-            nix develop --command cargo nextest run --all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS"
+            args+=(-E "$NEXTEST_FILTER")
           fi
+          cargo nextest run "${args[@]}"
       - name: show sccache stats
         if: always()
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: nix develop --command sccache --show-stats || true
+        run: sccache --show-stats || true
 
   diff-check:
     needs: path-check
