@@ -22,6 +22,12 @@ type CreateTargetMessageControllerOptions = {
    * inside ThreadList.
    */
   didInitialScroll: Accessor<boolean>;
+  /**
+   * Pixel offset applied to scrollToId. Negative values pull the target
+   * downward in the viewport, leaving room above (e.g. for a find bar
+   * overlay).
+   */
+  scrollOffset?: Accessor<number>;
 };
 
 export type TargetMessageController = ReturnType<
@@ -104,7 +110,12 @@ export function createTargetMessageController(
         // true the effect re-fires and executes the scroll.
         if (!didInitialScroll) return;
 
-        if (!navigation.scrollToId(pendingTargetId)) return;
+        if (
+          !navigation.scrollToId(pendingTargetId, {
+            offset: options.scrollOffset?.(),
+          })
+        )
+          return;
 
         const restoredDefaultPagination =
           restoreDefaultChannelPaginationAfterTargetLoad(

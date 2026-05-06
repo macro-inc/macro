@@ -13,10 +13,10 @@ const BASE_BUFFER_SIZE: number = BASE_ITEM_SIZE;
 type ScrollAlignment = ScrollToIndexOpts['align'];
 
 export type ThreadListScrollTarget =
-  | { tag: 'top'; align?: ScrollAlignment }
-  | { tag: 'bottom'; align?: ScrollAlignment }
-  | { tag: 'index'; index: number; align?: ScrollAlignment }
-  | { tag: 'id'; id: string; align?: ScrollAlignment };
+  | { tag: 'top'; align?: ScrollAlignment; offset?: number }
+  | { tag: 'bottom'; align?: ScrollAlignment; offset?: number }
+  | { tag: 'index'; index: number; align?: ScrollAlignment; offset?: number }
+  | { tag: 'id'; id: string; align?: ScrollAlignment; offset?: number };
 
 export function defaultThreadListTargetFromMessage(
   targetMessageId: string | undefined
@@ -32,11 +32,17 @@ export function defaultThreadListTargetFromMessage(
 
 export type ThreadListNavigation = {
   scrollTo: (target: ThreadListScrollTarget) => boolean;
-  scrollToIndex: (index: number, opts?: { align?: ScrollAlignment }) => boolean;
+  scrollToIndex: (
+    index: number,
+    opts?: { align?: ScrollAlignment; offset?: number }
+  ) => boolean;
   scrollByDelta: (delta: number, opts?: { align?: ScrollAlignment }) => boolean;
   scrollToTop: (align?: ScrollAlignment) => boolean;
   scrollToBottom: (align?: ScrollAlignment) => boolean;
-  scrollToId: (id: string, opts?: { align?: ScrollAlignment }) => boolean;
+  scrollToId: (
+    id: string,
+    opts?: { align?: ScrollAlignment; offset?: number }
+  ) => boolean;
   navigatePrevious: () => boolean;
   navigateNext: () => boolean;
   isNearBottom: () => boolean;
@@ -145,7 +151,10 @@ export function ThreadList(props: ThreadListProps) {
   ): boolean => {
     const index = resolveTargetIndex(target);
     if (index < 0) return false;
-    handle.scrollToIndex(index, { align: getTargetAlign(target) });
+    handle.scrollToIndex(index, {
+      align: getTargetAlign(target),
+      offset: target.offset,
+    });
     return true;
   };
 
@@ -208,7 +217,12 @@ export function ThreadList(props: ThreadListProps) {
     scrollTo: (target) => scrollToTarget(handle, target),
 
     scrollToIndex: (index, opts = {}) =>
-      scrollToTarget(handle, { tag: 'index', index, align: opts.align }),
+      scrollToTarget(handle, {
+        tag: 'index',
+        index,
+        align: opts.align,
+        offset: opts.offset,
+      }),
 
     scrollByDelta: (delta, opts = {}) => {
       const current = getCurrentIndex(handle);
@@ -227,7 +241,12 @@ export function ThreadList(props: ThreadListProps) {
       scrollToTarget(handle, { tag: 'bottom', align }),
 
     scrollToId: (id, opts = {}) =>
-      scrollToTarget(handle, { tag: 'id', id, align: opts.align }),
+      scrollToTarget(handle, {
+        tag: 'id',
+        id,
+        align: opts.align,
+        offset: opts.offset,
+      }),
 
     navigatePrevious: () => {
       const current = getCurrentIndex(handle);

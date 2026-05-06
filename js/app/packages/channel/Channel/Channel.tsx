@@ -90,6 +90,8 @@ import { createThreadPaginator } from './thread-paginator';
 import { FindBar } from '@core/component/FindBar';
 import { createChannelFindBar } from './create-channel-find-bar';
 
+const FIND_BAR_SCROLL_INSET = 64;
+
 export type ChannelProps = {
   channelId: string;
   targetMessageId?: string | undefined;
@@ -134,6 +136,7 @@ export function Channel(props: ChannelProps) {
     messageKeys: () => [...messageIndex.keys],
     navigation: threadListNavigation,
     didInitialScroll: () => threadListScrollState()?.didInitialScroll ?? false,
+    scrollOffset: () => (findBar.isOpen() ? -FIND_BAR_SCROLL_INSET : 0),
   });
 
   const [channelInputSnapshot, setChannelInputSnapshot] =
@@ -398,7 +401,7 @@ export function Channel(props: ChannelProps) {
         <MaybeMessageActionDrawerManager>
           <ChannelDropZone dragState={dragState}>
             <div
-              class="ph-no-capture relative flex-1 min-h-0 outline-none flex flex-col"
+              class="ph-no-capture relative flex-1 min-h-0 outline-none"
               ref={(element) => {
                 setMessageListElement(element);
                 attachMessageListRef(element);
@@ -407,23 +410,20 @@ export function Channel(props: ChannelProps) {
               data-channel-message-list
             >
               <Show when={findBar.isOpen()}>
-                <div class="flex justify-end p-2">
-                  <FindBar
-                    class="w-80 max-w-full"
-                    query={findBar.query()}
-                    onQueryChange={findBar.setQuery}
-                    onClose={findBar.close}
-                    onPrevious={findBar.previous}
-                    onNext={findBar.next}
-                    index={findBar.activeIndex()}
-                    inputRef={findBar.setInputEl}
-                    placeholder="Find in channel"
-                  />
-                </div>
+                <FindBar
+                  class="absolute top-2 right-3 z-10 w-80 max-w-[calc(100%-1.5rem)]"
+                  query={findBar.query()}
+                  onQueryChange={findBar.setQuery}
+                  onClose={findBar.close}
+                  onPrevious={findBar.previous}
+                  onNext={findBar.next}
+                  index={findBar.activeIndex()}
+                  inputRef={findBar.setInputEl}
+                  placeholder="Find in channel"
+                />
               </Show>
               <Show when={messages().length > 0}>
-                <div class="relative flex-1 min-h-0">
-                  <ThreadList
+                <ThreadList
                     keys={() => messageIndex.keys}
                     initialScrollTarget={threadListInitialScrollTarget()}
                     shift={shift}
@@ -479,12 +479,11 @@ export function Channel(props: ChannelProps) {
                         </Show>
                       );
                     }}
-                  </ThreadList>
-                  <ScrollToBottomOverlay
-                    scrollState={threadListScrollState}
-                    onScrollToBottom={handleScrollToBottom}
-                  />
-                </div>
+                </ThreadList>
+                <ScrollToBottomOverlay
+                  scrollState={threadListScrollState}
+                  onScrollToBottom={handleScrollToBottom}
+                />
               </Show>
             </div>
             <DebugSuspense name="Channel.input">
