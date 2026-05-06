@@ -99,6 +99,7 @@ impl<P: MobilePushOps + Send + Sync + 'static> MobilePushAdapter<P> {
     /// Bypasses the normal notification pipeline — sent immediately without
     /// DB persistence. Wakes the app via PushKit so CallKit can report an
     /// incoming call.
+    #[tracing::instrument(err, skip(self, payload))]
     pub async fn send_voip_push(
         &self,
         endpoint_arn: &str,
@@ -186,6 +187,14 @@ fn build_voip_sns_attributes(voip_bundle_id: &str) -> HashMap<String, MessageAtt
             MessageAttributeValue::builder()
                 .data_type("String")
                 .string_value("10")
+                .build()
+                .expect("valid attribute"),
+        ),
+        (
+            "AWS.SNS.MOBILE.APNS.TTL".to_string(),
+            MessageAttributeValue::builder()
+                .data_type("String")
+                .string_value("0")
                 .build()
                 .expect("valid attribute"),
         ),

@@ -263,10 +263,12 @@ async fn dispatches_to_ios_voip_endpoint() {
         push,
     );
 
-    svc.send_voip_push(&[user("alice@example.com")], &payload())
+    let result = svc
+        .send_voip_push(&[user("alice@example.com")], &payload())
         .await;
 
     assert_eq!(*calls.lock().unwrap(), vec!["arn:voip-alice"]);
+    assert!(result.contains("macro|alice@example.com"));
 }
 
 #[tokio::test]
@@ -283,10 +285,12 @@ async fn skips_non_voip_endpoints() {
         push,
     );
 
-    svc.send_voip_push(&[user("bob@example.com")], &payload())
+    let result = svc
+        .send_voip_push(&[user("bob@example.com")], &payload())
         .await;
 
     assert!(calls.lock().unwrap().is_empty());
+    assert!(result.is_empty());
 }
 
 #[tokio::test]
@@ -306,15 +310,18 @@ async fn sends_to_multiple_recipients() {
         push,
     );
 
-    svc.send_voip_push(
-        &[user("alice@example.com"), user("bob@example.com")],
-        &payload(),
-    )
-    .await;
+    let result = svc
+        .send_voip_push(
+            &[user("alice@example.com"), user("bob@example.com")],
+            &payload(),
+        )
+        .await;
 
     let mut recorded = calls.lock().unwrap().clone();
     recorded.sort();
     assert_eq!(recorded, vec!["arn:voip-alice", "arn:voip-bob"]);
+    assert!(result.contains("macro|alice@example.com"));
+    assert!(result.contains("macro|bob@example.com"));
 }
 
 #[tokio::test]
@@ -322,10 +329,12 @@ async fn repo_error_does_not_panic() {
     let (push, calls) = tracked_push();
     let svc = make_service(MockRepo::failing(), push);
 
-    svc.send_voip_push(&[user("alice@example.com")], &payload())
+    let result = svc
+        .send_voip_push(&[user("alice@example.com")], &payload())
         .await;
 
     assert!(calls.lock().unwrap().is_empty());
+    assert!(result.is_empty());
 }
 
 #[tokio::test]
@@ -338,6 +347,9 @@ async fn sns_failure_does_not_panic() {
         MockPush::failing(),
     );
 
-    svc.send_voip_push(&[user("alice@example.com")], &payload())
+    let result = svc
+        .send_voip_push(&[user("alice@example.com")], &payload())
         .await;
+
+    assert!(result.is_empty());
 }

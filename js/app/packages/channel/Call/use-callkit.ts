@@ -52,39 +52,54 @@ export function useCallKitSetup() {
   onMount(() => {
     if (!isTauri() || !isPlatform('ios')) return;
 
+    let cleaned = false;
     const unlistens: Array<() => void> = [];
     onCleanup(() => {
-      unlistens.forEach((u) => {
-        u();
-      });
+      cleaned = true;
+      unlistens.forEach((u) => u());
     });
 
-    listen<VoipTokenPayload>(
-      'plugin:call-kit:voip-token-updated',
-      async (event) => {
-        const { token } = event.payload;
-        await notificationServiceClient
-          .registerDevice({ token, deviceType: DEVICE_TYPE_IOS_VOIP })
-          .catch((err) =>
-            console.error('callkit: failed to register VoIP token', err)
-          );
-      }
-    ).then((u) => unlistens.push(u));
+    // If cleanup runs before a listen() promise resolves, the unlisten arrives
+    // too late to be caught by the forEach above — call it immediately instead.
+    function track(p: Promise<() => void>) {
+      p.then((u) => {
+        if (cleaned) u();
+        else unlistens.push(u);
+      });
+    }
 
-    listen<CallAnsweredPayload>('plugin:call-kit:call-answered', (event) => {
-      const { channelId } = event.payload;
-      joinChannelCall(channelId).catch((err) =>
-        console.error('callkit: failed to join channel call', err)
-      );
-    }).then((u) => unlistens.push(u));
+    track(
+      listen<VoipTokenPayload>(
+        'plugin:call-kit:voip-token-updated',
+        async (event) => {
+          const { token } = event.payload;
+          await notificationServiceClient
+            .registerDevice({ token, deviceType: DEVICE_TYPE_IOS_VOIP })
+            .catch((err) =>
+              console.error('callkit: failed to register VoIP token', err)
+            );
+        }
+      )
+    );
 
-    listen<CallEndedPayload>('plugin:call-kit:call-ended', (event) => {
-      const handler = getActiveCallEndedHandler();
-      if (!handler) return;
-      Promise.resolve(handler(event.payload)).catch((err) =>
-        console.error('callkit: failed to handle ended call', err)
-      );
-    }).then((u) => unlistens.push(u));
+    track(
+      listen<CallAnsweredPayload>('plugin:call-kit:call-answered', (event) => {
+        const { channelId } = event.payload;
+        joinChannelCall(channelId).catch((err) =>
+          console.error('callkit: failed to join channel call', err)
+        );
+      })
+    );
+
+    track(
+      listen<CallEndedPayload>('plugin:call-kit:call-ended', (event) => {
+        const handler = getActiveCallEndedHandler();
+        if (!handler) return;
+        Promise.resolve(handler(event.payload)).catch((err) =>
+          console.error('callkit: failed to handle ended call', err)
+        );
+      })
+    );
 
     // Drain any VoIP token that arrived from PushKit before the listener above
     // was registered (common on first launch).
@@ -109,5 +124,7 @@ export function useCallKitSetup() {
  */
 export async function endCallKitCall(): Promise<void> {
   if (!isTauri() || !isPlatform('ios')) return;
-  await invoke('plugin:call-kit|end_active_call').catch(() => {});
+  await invoke('plugin:call-kit|end_active_call').catch((err) =>
+    console.error('callkit: failed to end active call', err)
+  );
 }

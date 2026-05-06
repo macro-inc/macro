@@ -1,4 +1,4 @@
-import { isTauri } from '@core/util/platform';
+import { isPlatform, isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';
 import type { RouteSectionProps } from '@solidjs/router';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
@@ -68,7 +68,7 @@ function TauriProvider(props: { children: JSX.Element }) {
     grantBundleUpdate();
   }
 
-  useCallKitSetup();
+  if (isTauri() && isPlatform('ios')) useCallKitSetup();
 
   const value: TauriContextValue = {
     runtimeInsets: insets,

@@ -56,7 +56,15 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
         let callerName = dict["callerName"] as? String ?? "Incoming Call"
         let callIdString = dict["callId"] as? String ?? ""
         guard let uuid = UUID(uuidString: callIdString) else {
-            completion()
+            // iOS terminates apps that skip reportNewIncomingCall inside this
+            // delegate. Report a ghost call and immediately end it as failed so
+            // the system requirement is satisfied while surfacing the server bug.
+            print("[CallKit] Invalid callId '\(callIdString)' in VoIP payload: \(dict)")
+            let fallbackUUID = UUID()
+            provider.reportNewIncomingCall(with: fallbackUUID, update: CXCallUpdate()) { [weak self] _ in
+                self?.provider.reportCall(with: fallbackUUID, endedAt: nil, reason: .failed)
+                completion()
+            }
             return
         }
 
@@ -82,7 +90,7 @@ class CallKitPlugin: Plugin, CXProviderDelegate, PKPushRegistryDelegate {
                 // CallKit refused (e.g. Do Not Disturb, max calls reached).
                 // Still must complete the PushKit handler.
                 self?.pendingCalls.removeValue(forKey: uuid)
-                self?.activeCallUUID = nil
+                if self?.activeCallUUID == uuid { self?.activeCallUUID = nil }
             }
             completion()
         }

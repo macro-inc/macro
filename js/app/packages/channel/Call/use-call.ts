@@ -57,22 +57,15 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
 
   onCleanup(() => cleanupDisconnectListener?.());
 
-  let callKitLeaveInFlight = false;
   createEffect(() => {
     if (!callCtx.isInCall() || callCtx.activeChannelId() !== channelId())
       return;
 
-    const unregister = registerCallKitCallEndedHandler(async () => {
-      if (callKitLeaveInFlight) return;
-      callKitLeaveInFlight = true;
-      try {
-        await leaveCall({ endNativeCall: false });
-      } catch (e) {
-        console.error('callkit: failed to leave ended call', e);
-      } finally {
-        callKitLeaveInFlight = false;
-      }
-    });
+    const unregister = registerCallKitCallEndedHandler(() =>
+      leaveCall({ endNativeCall: false }).catch((e) =>
+        console.error('callkit: failed to leave ended call', e)
+      )
+    );
 
     onCleanup(unregister);
   });
@@ -160,7 +153,10 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     }
   };
 
+  let leaveInFlight = false;
   async function leaveCall(leaveOptions?: { endNativeCall?: boolean }) {
+    if (leaveInFlight) return;
+    leaveInFlight = true;
     const id = channelId();
     // Detach before disconnect so the RoomEvent.Disconnected handler
     // doesn't double-fire onLeave.
@@ -169,14 +165,18 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     // Dismiss the native CallKit call sheet if the user left from within the app.
     // When the leave is initiated by CXEndCallAction, the native sheet is already
     // ending, so avoid sending a second native end request back to CallKit.
-    if (leaveOptions?.endNativeCall !== false) {
-      await endCallKitCall();
-    }
     try {
-      await callCtx.disconnect();
-      options?.onLeave?.();
+      if (leaveOptions?.endNativeCall !== false) {
+        await endCallKitCall();
+      }
+      try {
+        await callCtx.disconnect();
+        options?.onLeave?.();
+      } finally {
+        await leaveMutation.mutateAsync(id);
+      }
     } finally {
-      await leaveMutation.mutateAsync(id);
+      leaveInFlight = false;
     }
   }
 
