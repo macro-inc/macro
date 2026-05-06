@@ -249,7 +249,7 @@ export function Account() {
                   </span>
                   <Show when={!hasPaidAccess()}>
                     <Button
-                      variant="accent"
+                      variant="active"
                       size="sm"
                       depth={3}
                       onClick={() => showPaywall()}
@@ -412,7 +412,7 @@ export function Account() {
                   open={showDeleteModal()}
                   onOpenChange={setShowDeleteModal}
                   position="center"
-                  class="w-[480px]"
+                  class="w-120"
                 >
                   <Panel active depth={2}>
                     <div class="p-6 font-sans flex flex-col gap-3">
@@ -441,7 +441,7 @@ export function Account() {
                   open={showDeleteConfirmModal()}
                   onOpenChange={setShowDeleteConfirmModal}
                   position="center"
-                  class="w-[480px]"
+                  class="w-120"
                 >
                   <Panel active depth={2}>
                     <div class="p-6 font-sans flex flex-col gap-3">
@@ -562,7 +562,7 @@ function BundleUpdateRow() {
               </span>
               <Show when={action()}>
                 {(a) => (
-                  <Button variant="accent" size="sm" depth={3} onClick={a().action}>
+                  <Button variant="active" size="sm" depth={3} onClick={a().action}>
                     {a().label}
                   </Button>
                 )}

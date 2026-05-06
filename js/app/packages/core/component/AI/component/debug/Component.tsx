@@ -99,13 +99,13 @@ function ChatInputBoxInner() {
         <div class="flex gap-2 py-2">
           <Button
             onClick={() => input.setIsGenerating(true)}
-            variant="accent"
+            variant="active"
           >
             Generate
           </Button>
           <Button
             onClick={() => input.setIsGenerating(false)}
-            variant="accent"
+            variant="active"
           >
             Stop
           </Button>
@@ -471,12 +471,12 @@ function TableStreamInner() {
   return (
     <Item col label="Table stream with controls">
       <div class="flex gap-x-2 items-center">
-        <Button onClick={startStream} variant="accent">
+        <Button onClick={startStream} variant="active">
           Stream
         </Button>
         <Button
           onClick={() => setIsPaused((p) => !p)}
-          variant="accent"
+          variant="active"
         >
           {isPaused() ? 'Resume' : 'Pause'}
         </Button>
@@ -497,7 +497,7 @@ function TableStreamInner() {
           Raw
         </label>
         <Button
-          variant="accent"
+          variant="active"
           onClick={() => {
             setStream(undefined);
             setRawText('');

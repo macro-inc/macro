@@ -167,7 +167,7 @@ function ReviewPayDemo(props: LessonContentProps) {
             {/* CTA */}
             <div class="px-5 py-4 flex flex-col gap-2 mt-auto">
               <Button
-                variant="accent"
+                variant="active"
                 size="lg"
                 onClick={handleCheckout}
                 disabled={isPending()}
@@ -322,7 +322,7 @@ function ReviewPayDemo(props: LessonContentProps) {
           {/* CTA */}
           <div class="pt-4 flex flex-col gap-2">
             <Button
-              variant="accent"
+              variant="active"
               size="lg"
               onClick={handleCheckout}
               disabled={isPending()}

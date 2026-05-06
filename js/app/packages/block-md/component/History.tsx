@@ -271,7 +271,7 @@ export function History(props: HistoryProps) {
                         />
                         <div class="pr-4">
                           <Button
-                            variant="accent"
+                            variant="active"
                             disabled={isForking()}
                             onClick={handleFork}
                           >

@@ -540,7 +540,7 @@ function UserInviteRow(props: {
           </Show>
         </Button>
         <Button
-          variant="accent"
+          variant="active"
           class="px-2 py-1 rounded-xs"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onAccept}
@@ -736,7 +736,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
                   Cancel
                 </Button>
                 <Button
-                  variant="accent"
+                  variant="active"
                   class="rounded-xs"
                   disabled={
                     createTeamMutation.isPending ||
@@ -782,7 +782,7 @@ function EmptyTeamState() {
                 teams.
               </p>
               <Button
-                variant="accent"
+                variant="active"
                 class="rounded-xs"
                 onClick={() => showPaywall()}
               >
@@ -795,7 +795,7 @@ function EmptyTeamState() {
             Create a team to collaborate with others and manage access together.
           </p>
           <Button
-            variant="accent"
+            variant="active"
             class="rounded-xs"
             onClick={() => setShowCreateModal(true)}
           >
@@ -1020,7 +1020,7 @@ function TeamManagement(props: {
                 <div class="flex items-center gap-1 shrink-0">
                   <Tooltip tooltip="Save">
                     <Button
-                      variant="accent"
+                      variant="active"
                       size="icon-sm"
                       class="rounded-xs"
                       disabled={

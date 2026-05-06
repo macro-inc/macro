@@ -41,7 +41,7 @@ export function FatalError(props: FatalErrorProps) {
 
             <div class="flex flex-row gap-3 justify-center">
               <Button
-                variant="accent"
+                variant="active"
                 onClick={() => {
                   window.location.href = window.location.origin + '/app';
                 }}

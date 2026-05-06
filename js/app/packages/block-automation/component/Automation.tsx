@@ -260,7 +260,7 @@ export function Automation() {
             <div class="flex shrink-0 flex-col gap-3 p-3">
               <div class="flex items-center gap-2">
                 <Button
-                  variant="accent"
+                  variant="active"
                   size="sm"
                   class="cursor-default"
                   disabled={runNowMutation.isPending || isRunning()}

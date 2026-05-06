@@ -25,7 +25,7 @@ export function LoginButton() {
       </Button>
       <span class="text-xs text-ink-muted italic">or</span>
       <Button
-        variant="accent"
+        variant="active"
         size="sm"
         class="rounded-xs"
         onClick={() => navigate(`/welcome${window.location.search}`)}

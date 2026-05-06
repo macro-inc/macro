@@ -41,7 +41,7 @@ export function IosPushNotificationModal() {
                   Later
                 </Dialog.CloseButton>
                 <Button
-                  variant="accent"
+                  variant="active"
                   size="sm"
                   class="text-sm"
                   onClick={async () => {
