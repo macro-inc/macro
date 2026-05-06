@@ -45,9 +45,6 @@ const opensearchStack = new pulumi.StackReference('opensearch-stack', {
   name: `macro-inc/opensearch/${stack}`,
 });
 
-// Dedicated single-node Redis for the backfill job registry. Owning this
-// in-stack avoids a cross-stack dependency for what's essentially a TTL'd
-// job table, and keeps SPS deploys from being coupled to connection-gateway.
 const backfillRegistryRedis = new Redis('search-processing-redis', {
   vpc,
   tags,
