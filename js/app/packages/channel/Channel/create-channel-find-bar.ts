@@ -156,6 +156,9 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
 
   const close = () => {
     setIsOpen(false);
+    setQuery('');
+    setSubmittedQuery('');
+    setActiveIndex(0);
   };
 
   const hasUnsubmittedChanges = () => query().trim() !== submittedQuery();
