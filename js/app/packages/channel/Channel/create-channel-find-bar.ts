@@ -75,11 +75,6 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
 
   createEffect(on(submittedQuery, () => setActiveIndex(0), { defer: true }));
 
-  // Auto-navigate when:
-  // - activeIndex === 0: just submitted (or first results landing) — go to first hit
-  // - activeIndex > rs.length: pagination set the cursor speculatively past the
-  //   loaded tail; once the new page lands, navigate to the new tail item
-  // Reopen / refetch with cursor in-range falls through and preserves position.
   createEffect(
     on(results, (rs) => {
       if (!isOpen()) return;
@@ -88,16 +83,10 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
         return;
       }
       const current = activeIndex();
-      if (current === 0) {
-        setActiveIndex(1);
-        goToResult(rs[0]);
-        return;
-      }
-      if (current > rs.length) {
-        const clamped = Math.min(current, rs.length);
-        setActiveIndex(clamped);
-        goToResult(rs[clamped - 1]);
-      }
+      const next =
+        current === 0 ? 1 : Math.max(1, Math.min(current, rs.length));
+      setActiveIndex(next);
+      goToResult(rs[next - 1]);
     })
   );
 
@@ -165,8 +154,15 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
     el?.select();
   };
 
+  // Closing the find bar treats the typed query as "unsubmitted" — the input
+  // text is preserved so the user can see what they last searched, but
+  // submittedQuery / activeIndex reset so reopening doesn't auto-navigate
+  // off the user's current channel selection. They must hit Enter to
+  // re-run the query.
   const close = () => {
     setIsOpen(false);
+    setSubmittedQuery('');
+    setActiveIndex(0);
   };
 
   const hasUnsubmittedChanges = () => query().trim() !== submittedQuery();
