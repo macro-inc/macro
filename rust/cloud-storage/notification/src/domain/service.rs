@@ -8,9 +8,9 @@ pub mod device;
 mod egress;
 mod ingress;
 mod push_notification_event;
-mod voip;
 #[cfg(test)]
 mod test;
+mod voip;
 
 use thiserror::Error;
 
