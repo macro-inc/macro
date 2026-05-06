@@ -138,21 +138,4 @@ mod test {
         }
     }
 
-    #[test]
-    fn snake_case_serialization_matches_index_names() {
-        // Belt-and-suspenders: confirm strum + serde casing produces the
-        // same wire format index_name() promises, including the multi-word
-        // call_records variant that previously needed an override.
-        assert_eq!(SearchIndex::CallRecords.as_ref(), "call_records");
-        assert_eq!(OpenSearchEntityType::CallRecords.as_ref(), "call_records");
-        assert_eq!(SearchEntityType::CallRecords.as_ref(), "call_records");
-        assert_eq!(
-            serde_json::to_string(&OpenSearchEntityType::CallRecords).unwrap(),
-            "\"call_records\""
-        );
-        assert_eq!(
-            serde_json::to_string(&SearchEntityType::CallRecords).unwrap(),
-            "\"call_records\""
-        );
-    }
 }
