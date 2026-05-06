@@ -27,13 +27,129 @@ Application code (Rust) reads/writes via stable alias names defined in
 | `emails`       | `emails_v1`                |
 | `call_records` | `call_records_v1`          |
 
-In existing environments the underlying email index is currently
-`emails_v2` (a leftover from a prior migration). Run
-`reindex_with_alias_swap.ts emails emails_v1` to bring it in line with
-the rest of the naming scheme.
-
 The alias is the contract; the physical index is an implementation detail
 that can be swapped without a code deploy.
+
+### Helpers
+
+| Script                       | Purpose                                                                |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| `verify_aliases.ts`          | Pre/post-flight check: alias exists and points at the expected index.  |
+| `add_alias.ts`               | Idempotent additive alias (no reindex). Use to dual-alias an index.    |
+| `reindex_with_alias_swap.ts` | Reindex + atomic swap (handles `remove_index` for bare physical case). |
+| `create_indices.ts`          | Idempotent first-time creation of every versioned index + alias.       |
+
+All three migration scripts default to `DRY_RUN=true`; pass `DRY_RUN=false` to apply.
+
+## Migration playbook: bringing an existing environment to alias-based access
+
+Each environment starts in a different state. Before deploying code that
+relies on the new alias names, run the playbook for whichever index is
+not yet behind the expected alias. The order minimises the write window
+where new code could land before its alias is in place.
+
+Pre-flight: see what's missing.
+
+```sh
+bun scripts/verify_aliases.ts
+```
+
+The output flags each alias that's missing, points at the wrong index,
+or is currently a physical index (which needs a reindex). Three states
+show up in practice:
+
+1. **Bare physical index** (`channels`, `chats`, `documents`,
+   `call_records` in pre-migration envs). The name is a physical index
+   with no alias of the same name. Resolution: reindex + swap.
+2. **Already aliased under a legacy name** (`emails_v2` aliased as
+   `emails_alias`). The new code wants alias `emails`. Resolution: add
+   the new alias name additively, then drop the legacy alias once the
+   deploy is in.
+3. **Mismatched physical index** (`emails` alias pointing at `emails_v2`
+   when the canonical name is `emails_v1`). Resolution: reindex + swap.
+
+### State 1: bare physical index → versioned index behind alias
+
+```sh
+# 1. Create the new versioned physical index with the desired mappings.
+#    Either bump constants.ts and run create_indices.ts, or call the API
+#    directly. The new index must exist before the swap script runs.
+bun scripts/create_indices.ts
+
+# 2. Dry run the swap. Confirm the actions list looks correct.
+bun scripts/reindex_with_alias_swap.ts channels channels_v1
+
+# 3. Apply. The script reindexes channels -> channels_v1, validates doc
+#    counts, then issues an atomic _aliases call:
+#      [{ remove_index: { index: "channels" } },
+#       { add:          { index: "channels_v1", alias: "channels" } }]
+DRY_RUN=false bun scripts/reindex_with_alias_swap.ts channels channels_v1
+
+# 4. Replay writes that landed during the reindex window via the
+#    search_processing_service backfill endpoints. Bound the window with
+#    `since` set to just before step 3 started.
+
+# 5. Re-run verify.
+bun scripts/verify_aliases.ts
+```
+
+### State 2: legacy alias → add canonical alias additively, then drop legacy
+
+For `emails_v2` aliased as `emails_alias`, the new code uses alias
+`emails`. The safe order is:
+
+```sh
+# 1. Add the canonical alias on top of the existing physical index.
+#    This is purely additive — emails_alias keeps working.
+DRY_RUN=false bun scripts/add_alias.ts emails emails_v2
+
+# 2. Verify both aliases now point at emails_v2.
+bun scripts/verify_aliases.ts
+
+# 3. Deploy the new application code. Old code still writes via
+#    emails_alias; new code writes via emails. Both resolve to emails_v2.
+
+# 4. Once the new code is fully rolled out and stable, drop the legacy
+#    alias via the OpenSearch _aliases API:
+#      POST /_aliases { "actions": [{ "remove": { "index": "emails_v2", "alias": "emails_alias" }}] }
+```
+
+### State 3: standardise emails_v2 onto emails_v1 (optional cleanup)
+
+To bring the email physical index in line with the rest of the v1
+naming, run the swap script after the alias is in place:
+
+```sh
+# Prereq: the canonical `emails` alias already points at emails_v2 (state 2).
+# 1. Create emails_v1 with the same mapping (use create_indices.ts).
+bun scripts/create_indices.ts
+
+# 2. Dry run + apply.
+bun scripts/reindex_with_alias_swap.ts emails emails_v1
+DRY_RUN=false bun scripts/reindex_with_alias_swap.ts emails emails_v1
+
+# 3. Replay writes from the reindex window via backfill.
+# 4. Drop the old physical index.
+bun scripts/delete_indices.ts emails_v2
+```
+
+### Avoiding downtime — write window strategy
+
+The reindex script does `wait_for_completion=true` and then issues the
+atomic alias swap. Writes that arrive *during* the reindex land on the
+old index only and get cut off when the alias swaps. Two options:
+
+- **Replay (default)**: accept the write window, then run a backfill
+  bounded by `since=<reindex start time>` to replay anything that
+  arrived during reindex onto the new index. Idempotent on `_id`, so
+  re-running is safe.
+- **Pause writers**: stop the producers (SQS consumers in
+  search_processing_service) before the reindex, drain the queue, then
+  reindex with no live writes. Lower risk, but causes a real pause in
+  freshness rather than a backfill catch-up.
+
+The reindex script refuses the swap when the destination has fewer docs
+than the source, so it won't silently complete a half-finished migration.
 
 ## Runbook: reindex with new mapping (zero downtime)
 
