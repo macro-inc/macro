@@ -1,5 +1,4 @@
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
-import { SoupViewContextGroup } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-group';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { createMemo, createSignal, Show } from 'solid-js';
@@ -91,7 +90,6 @@ export const SoupFiltersBar = () => {
         </Tooltip>
         <Show when={!isSearchView()}>
           <SoupViewContextSort />
-          <SoupViewContextGroup />
         </Show>
       </div>
     </Show>

@@ -1,6 +1,5 @@
 import { createSortState } from '@app/component/next-soup/create-sort-state';
 import {
-  type FilterGroupConfig,
   SOUP_FILTERS,
   type FilterID,
 } from '@app/component/next-soup/filters/configs/';
@@ -37,11 +36,10 @@ export type SoupRow = {
   depth: number;
   group?: GroupMeta;
   parentGroupId: string | null;
+  isFocused: () => boolean;
   isSelected: () => boolean;
   isExpanded: () => boolean;
   isGrouped: () => boolean;
-  isFocused: () => boolean;
-  toggleExpanded: (expanded?: boolean) => void;
 };
 
 export type NavigationResult = { row: SoupRow; index: number } | undefined;
@@ -70,7 +68,6 @@ interface SoupContextOptions<TId extends string = FilterID> {
     or?: TId[];
   };
   predicateConfigs?: PredicateConfig<SoupEntity, string>[];
-  filterGroups?: FilterGroupConfig[];
   wrapNavigation?: boolean;
   skipGroupHeaders?: boolean;
 }
@@ -97,7 +94,10 @@ export const createSoupState = <TId extends string = FilterID>(
 
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);
 
+  const [focusedId, setFocusedId] = createSignal<string | undefined>();
+
   const [activeGroupId, setActiveGroupId] = createSignal<string | undefined>();
+
   const [collapsedGroups, setCollapsedGroups] = createSignal<Set<string>>(
     new Set()
   );
@@ -115,8 +115,6 @@ export const createSoupState = <TId extends string = FilterID>(
   };
 
   const isGroupExpanded = (groupId: string) => !collapsedGroups().has(groupId);
-
-  const [focusedId, setFocusedId] = createSignal<string | undefined>();
 
   const buildRow = (
     entity: SoupEntity,
@@ -137,8 +135,7 @@ export const createSoupState = <TId extends string = FilterID>(
       isFocused: () => focusedId() === rowId,
       isSelected: () => selection.isSelected(entity.id),
       isGrouped: () => parentGroupId !== null,
-      isExpanded: () => selection.isSelected(entity.id),
-      toggleExpanded: () => selection.toggle(entity),
+      isExpanded: () => (group ? isGroupExpanded(group.id) : false),
     };
   };
 

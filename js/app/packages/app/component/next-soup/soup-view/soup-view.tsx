@@ -1,6 +1,5 @@
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
-import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -982,70 +981,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   </div>
                                 </Show>
 
-                                <Show when={row.group}>
-                                  {(group) => {
-                                    const isFocused = () =>
-                                      panel.isPanelActive() && row.isFocused();
-                                    return (
-                                      <button
-                                        type="button"
-                                        data-row-id={row.id}
-                                        class={cn(
-                                          'relative w-full px-3 py-3 flex items-center gap-2 text-sm font-medium text-text-muted bg-ink/[0.02] hover:bg-ink/5',
-                                          {
-                                            'bg-accent/5 outline outline-1 outline-accent/20 outline-offset-[-1px]':
-                                              isFocused(),
-                                          }
-                                        )}
-                                        onClick={() => group().toggle()}
-                                        onMouseMove={() => {
-                                          if (isKeypressActive()) return;
-                                          if (soup.previewEntity()) return;
-                                          soup.focus.set(row.id);
-                                        }}
-                                      >
-                                        <div
-                                          class={cn(
-                                            'absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0',
-                                            { 'opacity-100': isFocused() }
-                                          )}
-                                        />
-                                        <ChevronRightIcon
-                                          class={cn('size-3', {
-                                            'rotate-90': group().isExpanded(),
-                                          })}
-                                        />
-                                        <Show
-                                          when={group().renderHeader}
-                                          fallback={
-                                            <span>{group().label}</span>
-                                          }
-                                        >
-                                          {group().renderHeader!({
-                                            value: group().value,
-                                            label: group().label,
-                                            count: group().count,
-                                          })}
-                                        </Show>
-                                        <span class="text-text-faint">
-                                          ({group().count})
-                                        </span>
-                                      </button>
-                                    );
-                                  }}
-                                </Show>
-                                <Show
-                                  when={!row.group || row.group.isExpanded()}
-                                >
-                                  <SoupEntityContextMenu entity={row.original}>
-                                    <ListEntity
-                                      entity={row.original}
-                                      timestamp={timestamp()}
-                                      highlighted={
-                                        panel.isPanelActive() &&
-                                        row.isFocused() &&
-                                        !row.group
-                                      }
+                                <SoupEntityContextMenu entity={row.original}>
+                                  <ListEntity
+                                    entity={row.original}
+                                    timestamp={timestamp()}
+                                    highlighted={
+                                      panel.isPanelActive() && row.isFocused()
+                                    }
                                       onMouseMove={() => {
                                         if (isKeypressActive()) return;
                                         if (soup.previewEntity()) return;
@@ -1103,10 +1045,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                         swipeLeftRevealedComponent: (
                                           <CheckIcon class="size-8 text-panel" />
                                         ),
-                                      }}
-                                    />
-                                  </SoupEntityContextMenu>
-                                </Show>
+                                    }}
+                                  />
+                                </SoupEntityContextMenu>
                                 <Show
                                   when={
                                     i() === rows().length - 1 &&

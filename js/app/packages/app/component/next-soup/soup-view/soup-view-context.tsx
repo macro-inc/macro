@@ -4,7 +4,6 @@ import {
   type SoupState,
   type SoupRow,
   type SoupEntity,
-  type GroupMeta,
 } from '@app/component/next-soup/create-soup-state';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
@@ -25,10 +24,6 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
-import {
-  GROUP_CONFIGS,
-  type GroupOptionId,
-} from '@app/component/next-soup/soup-view/group-options';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
 import {
   createQueryStore,
@@ -310,65 +305,7 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const rows = createMemo(() => {
-    const allEntities = entities();
-    const groupId = soup.grouping.activeGroupId();
-
-    if (!groupId || !(groupId in GROUP_CONFIGS)) {
-      return allEntities.map((e) => soup.buildRow(e));
-    }
-
-    const config = GROUP_CONFIGS[groupId as GroupOptionId];
-    const groupMap = new Map<unknown, SoupEntity[]>();
-    const groupOrder: unknown[] = [];
-
-    for (const entity of allEntities) {
-      const value = config.getValue(entity);
-      if (!groupMap.has(value)) {
-        groupMap.set(value, []);
-        groupOrder.push(value);
-      }
-      groupMap.get(value)!.push(entity);
-    }
-
-    const result: SoupRow[] = [];
-
-    for (const groupValue of groupOrder) {
-      const groupEntities = groupMap.get(groupValue)!;
-      const groupIdStr = `group-${config.id}-${String(groupValue)}`;
-      const label = config.getLabel
-        ? config.getLabel(groupValue)
-        : String(groupValue);
-
-      const groupMeta: GroupMeta = {
-        id: groupIdStr,
-        value: groupValue,
-        label,
-        count: groupEntities.length,
-        isExpanded: () => soup.grouping.isExpanded(groupIdStr),
-        toggle: () => soup.grouping.toggle(groupIdStr),
-        renderHeader: config.renderHeader,
-      };
-
-      const firstEntity = groupEntities[0];
-      result.push(
-        soup.buildRow(firstEntity, {
-          group: groupMeta,
-          parentGroupId: groupIdStr,
-        })
-      );
-
-      if (soup.grouping.isExpanded(groupIdStr)) {
-        for (let i = 1; i < groupEntities.length; i++) {
-          result.push(
-            soup.buildRow(groupEntities[i], {
-              parentGroupId: groupIdStr,
-            })
-          );
-        }
-      }
-    }
-
-    return result;
+    return entities().map((e) => soup.buildRow(e));
   });
 
   const { searchQuery } = search;
