@@ -421,6 +421,7 @@ export function Channel(props: ChannelProps) {
                   onNext={findBar.next}
                   index={findBar.activeIndex()}
                   hasUnsubmittedChanges={findBar.hasUnsubmittedChanges()}
+                  direction="desc"
                   inputRef={findBar.setInputEl}
                   placeholder="Find in channel"
                 />

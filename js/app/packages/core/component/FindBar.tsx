@@ -19,6 +19,13 @@ export type FindBarProps = {
   total?: number;
   /** Whether the typed query differs from the most recently submitted one. */
   hasUnsubmittedChanges?: boolean;
+  /**
+   * Which physical key advances the cursor. Defaults to `'asc'` —
+   * ArrowDown/Enter advance, ArrowUp/Shift+Enter retreat. Use `'desc'` for
+   * surfaces (like a chat channel) where the natural reading direction is
+   * bottom-to-top: ArrowUp/Enter advance, ArrowDown/Shift+Enter retreat.
+   */
+  direction?: 'asc' | 'desc';
   placeholder?: string;
   autofocus?: boolean;
   inputRef?: (el: HTMLInputElement) => void;
@@ -45,26 +52,30 @@ export function FindBar(props: FindBarProps) {
       props.onClose();
       return;
     }
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
-      if (props.hasUnsubmittedChanges) {
+      if (props.hasUnsubmittedChanges && !e.shiftKey) {
         props.onSubmit();
-      } else {
+      } else if (e.shiftKey) {
         props.onPrevious();
+      } else {
+        props.onNext();
       }
       return;
     }
-    if (e.key === 'ArrowDown' || (e.key === 'Enter' && e.shiftKey)) {
+    if (e.key === 'ArrowDown') {
       e.preventDefault();
       e.stopPropagation();
-      props.onNext();
+      if (props.direction === 'desc') props.onPrevious();
+      else props.onNext();
       return;
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       e.stopPropagation();
-      props.onPrevious();
+      if (props.direction === 'desc') props.onNext();
+      else props.onPrevious();
     }
   };
 

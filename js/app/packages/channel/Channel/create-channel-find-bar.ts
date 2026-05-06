@@ -55,13 +55,10 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
     if (!searchQuery.isSuccess) return [];
     const data = searchQuery.data;
     if (!data) return [];
-    // NOTE: reverse because search returns newest-first
-    return data
-      .filter(
-        (e): e is WithSearch<ChannelMessageEntity> =>
-          isChannelMessageEntity(e) && e.channelId === options.channelId()
-      )
-      .reverse();
+    return data.filter(
+      (e): e is WithSearch<ChannelMessageEntity> =>
+        isChannelMessageEntity(e) && e.channelId === options.channelId()
+    );
   });
 
   const goToResult = (result: ChannelMessageEntity) => {
@@ -82,7 +79,7 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
       }
       const current = activeIndex();
       const next =
-        current === 0 ? rs.length : Math.max(1, Math.min(current, rs.length));
+        current === 0 ? 1 : Math.max(1, Math.min(current, rs.length));
       setActiveIndex(next);
       goToResult(rs[next - 1]);
     })
