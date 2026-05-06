@@ -2,68 +2,47 @@ import { ENABLE_LIVE_INDICATORS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { createMemo, For, Show } from 'solid-js';
 import { useUserIndicators } from '../state/liveIndicators';
-import { Tooltip } from './Tooltip';
 import { UserIcon } from './UserIcon';
+import { AvatarGroup } from '@ui';
 
 const MAX_USER_INDICATORS = 3;
-
-export function UserIndicator(props: { userId: string }) {
-  return (
-    <Tooltip tooltip={props.userId?.split('|').at(1)?.split('@')[0]}>
-      <div class="bg-panel size-6 rounded-full p-[2px] -mr-3">
-        <UserIcon id={props.userId} isDeleted={false} size="fill" />
-      </div>
-    </Tooltip>
-  );
-}
 
 export function LiveIndicators(props: {
   userIds: string[];
   currentUserId?: string;
 }) {
-  const userIds = () =>
+  const userIds = createMemo(() =>
     props.currentUserId
       ? props.userIds.filter((id) => id !== props.currentUserId)
-      : props.userIds;
+      : props.userIds
+  );
 
-  const remaining = createMemo(() => {
-    if (userIds().length < MAX_USER_INDICATORS) return undefined;
-    return userIds().length - MAX_USER_INDICATORS;
-  });
-  const len = createMemo(() => userIds().length);
+  const displayUserIds = () => userIds().slice(0, MAX_USER_INDICATORS);
+  const remaining = createMemo(() =>
+    Math.max(0, userIds().length - MAX_USER_INDICATORS)
+  );
 
   return (
-    <div
-      class="flex items-center h-full shrink-0 overflow-hidden w-fit isolate"
-      classList={{
-        'pl-2 pr-4': len() > 0,
-        'width-0': len() === 0,
-      }}
-    >
-      <For each={userIds().splice(0, 3)}>
-        {(userId) => <UserIndicator userId={userId} />}
-      </For>
-      <Show when={remaining()}>
-        <div class="z-placeable">
-          <Tooltip
-            tooltip={userIds()
-              .slice(MAX_USER_INDICATORS)
-              .map((user) => user.split('|').at(1)?.split('@')[0])
-              .join(', ')}
-          >
-            <div class="size-6 bg-menu border-2 text-xxs -mr-3 border-panel rounded-full flex flex-col justify-center items-center">
-              <span>{`+${remaining()}`}</span>
-            </div>
-          </Tooltip>
-        </div>
-      </Show>
-    </div>
+    <Show when={userIds().length > 0}>
+      <AvatarGroup size="sm" class="pl-2 pr-1">
+        <For each={displayUserIds()}>
+          {(userId) => (
+            <UserIcon id={userId} size="sm" showTooltip suppressClick />
+          )}
+        </For>
+
+        <Show when={remaining()}>
+          <AvatarGroup.Count size="sm">+{remaining()}</AvatarGroup.Count>
+        </Show>
+      </AvatarGroup>
+    </Show>
   );
 }
 
 export function BlockLiveIndicators() {
   const indicators = useUserIndicators();
   const userId = useUserId();
+
   return (
     <Show when={ENABLE_LIVE_INDICATORS}>
       <LiveIndicators userIds={indicators() ?? []} currentUserId={userId()} />

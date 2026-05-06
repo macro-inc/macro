@@ -5,22 +5,18 @@ import type { UserIconProps } from '@core/component/UserIcon';
 import { cn } from '@ui/utils/classname';
 
 export function inCallAvatarPlaceholderClasses(size: UserIconProps['size']) {
-  const s = size ?? 'md';
+  const s = size ?? 'sm';
   const container = cn(
     'flex shrink-0 items-center justify-center rounded-full bg-ink-extra-muted text-panel leading-none',
-    s === 'xs' && 'size-4',
-    s === 'sm' && 'size-6',
-    s === 'md' && 'size-8',
+    s === 'sm' && 'size-4',
+    s === 'md' && 'size-6',
     s === 'lg' && 'size-10',
-    s === 'xl' && 'size-25',
-    s === 'fill' && 'size-8 w-full h-full'
+    s === 'fill' && 'size-full'
   );
   const icon = cn(
-    s === 'xs' && 'w-2 h-2',
-    s === 'sm' && 'w-3 h-3',
-    s === 'md' && 'w-4 h-4',
+    s === 'sm' && 'w-2 h-2',
+    s === 'md' && 'w-3 h-3',
     s === 'lg' && 'w-5 h-5',
-    s === 'xl' && 'w-16 h-16',
     s === 'fill' && 'w-4 h-4'
   );
   return { container, icon };

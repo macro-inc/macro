@@ -48,7 +48,7 @@ export function ChannelMessageNarrowBody(props: {
           <>
             <span class="text-ink-muted text-xs flex items-center gap-1">
               <Show when={props.entity.senderId}>
-                {(id) => <UserIcon id={id()} size="xs" />}
+                {(id) => <UserIcon id={id()} size="sm" />}
               </Show>
               <SearchSender hit={h()} />
             </span>
@@ -99,7 +99,7 @@ export function ChannelMessageWideContent(props: {
           {props.entity.channelName}
         </span>
         <Show when={props.entity.senderId}>
-          {(id) => <UserIcon id={id()} size="xs" />}
+          {(id) => <UserIcon id={id()} size="sm" />}
         </Show>
         <Show when={hit()}>
           {(h) => (

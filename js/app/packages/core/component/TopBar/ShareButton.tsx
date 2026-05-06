@@ -201,7 +201,7 @@ function DmRecipientIcon(props: { channelId: string }) {
       fallback={<UserCircle class="shrink-0 w-4 h-4" />}
     >
       {(id) => (
-        <UserIcon id={id()} size="xs" isDeleted={false} showTooltip={false} />
+        <UserIcon id={id()} size="sm" isDeleted={false} showTooltip={false} />
       )}
     </Show>
   );
@@ -391,7 +391,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               <Show when={props.owner}>
                 <div class="flex justify-between">
                   <div class="flex items-center gap-2 overflow-hidden">
-                    <UserIcon isDeleted={false} id={props.owner!} size="xs" />
+                    <UserIcon isDeleted={false} id={props.owner!} size="sm" />
                     <div class="font-medium truncate">
                       {props.formattedOwner}
                     </div>
@@ -1018,7 +1018,7 @@ export function ShareModal(props: ShareModalProps) {
                                 <UserIcon
                                   isDeleted={false}
                                   id={props.owner!}
-                                  size="xs"
+                                  size="sm"
                                 />
                                 <div class="font-medium truncate">
                                   {formattedOwner()}

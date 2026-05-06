@@ -24,7 +24,7 @@ export function AttachmentEntityRow(props: {
       <Show when={props.senderId}>
         {(id) => (
           <div class="shrink-0">
-            <UserIcon id={id()} size="xs" suppressClick showTooltip />
+            <UserIcon id={id()} size="sm" suppressClick showTooltip />
           </div>
         )}
       </Show>

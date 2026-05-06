@@ -69,8 +69,6 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
                     size="fill"
                     suppressClick
                     showTooltip={false}
-                    isDeleted={false}
-                    fetchUrl={false}
                   />
                 </div>
               )}

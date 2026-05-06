@@ -57,7 +57,7 @@ export const SearchOperatorAutocomplete = (
             ? `${c.data.name || 'Me'} (me)`
             : c.data.name || c.id,
         icon: () => (
-          <UserIcon id={c.id} size="xs" suppressClick showTooltip={false} />
+          <UserIcon id={c.id} size="sm" suppressClick showTooltip={false} />
         ),
       };
       if (c.id === currentUserId) {

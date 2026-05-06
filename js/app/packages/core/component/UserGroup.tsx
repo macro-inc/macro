@@ -25,7 +25,7 @@ export type UserGroupProps = {
  */
 export function UserGroup(props: UserGroupProps) {
   const max = () => props.maxUsers ?? 3;
-  const size = () => props.size ?? 'xs';
+  const size = () => props.size ?? 'sm';
 
   const remaining = createMemo(() => Math.max(0, props.userIds.length - max()));
   const displayUserIds = () => props.userIds.slice(0, max());

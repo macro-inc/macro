@@ -7,7 +7,7 @@ import { UserGroup } from '@core/component/UserGroup';
 interface NotificationSenderIconProps {
   notification?: Notification;
   stack?: NotificationStack;
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg';
 }
 
 /**

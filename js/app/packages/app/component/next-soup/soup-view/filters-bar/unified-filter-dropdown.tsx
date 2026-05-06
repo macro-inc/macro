@@ -718,7 +718,7 @@ export const UnifiedFilterDropdown = () => {
         icon: () => (
           <UserIcon
             id={contact.id}
-            size="xs"
+            size="sm"
             suppressClick
             showTooltip={false}
           />

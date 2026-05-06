@@ -141,7 +141,7 @@ export function NotificationStackRow(props: {
                 <UnreadIndicator active />
               </span>
               <div class="shrink-0">
-                <NotificationSenderIcon stack={props.stack} size="xs" />
+                <NotificationSenderIcon stack={props.stack} size="sm" />
               </div>
               <span class="ph-no-capture truncate min-w-0">
                 <NotificationDescription stack={props.stack} />

@@ -16,8 +16,8 @@ const MOCK_USERS = [
 
 const USER_IDS = MOCK_USERS.map((u) => u.id);
 
-const SIZES = ['xs', 'sm', 'md', 'lg', 'xl'] as const;
-type GroupSize = (typeof SIZES)[number];
+const SIZE_LABELS = ['sm', 'md', 'lg'] as const;
+type GroupSize = 'sm' | 'md' | 'lg';
 
 // Seed mock display names so tooltips work
 seedMockDisplayNames(MOCK_USERS);
@@ -69,16 +69,13 @@ export default function UserIconDemo() {
               <User class="size-5" />
             </Avatar.Fallback>
           </Avatar>
-          <Avatar size="xl">
-            <Avatar.Image src="https://i.pravatar.cc/200?img=2" alt="Random" />
-          </Avatar>
         </div>
       </Section>
 
       {/* Individual UserIcons at each size */}
       <Section title="UserIcon - All Sizes">
         <div class="space-y-4">
-          <For each={SIZES}>
+          <For each={SIZE_LABELS}>
             {(size) => (
               <div class="flex items-center gap-4">
                 <SizeLabel size={size} />
@@ -112,7 +109,7 @@ export default function UserIconDemo() {
       {/* UserGroup at each size */}
       <Section title="UserGroup - All Sizes">
         <div class="space-y-4">
-          <For each={SIZES}>
+          <For each={SIZE_LABELS}>
             {(size) => (
               <div class="flex items-center gap-4">
                 <SizeLabel size={size} />
@@ -234,7 +231,7 @@ export default function UserIconDemo() {
       {/* Deleted state */}
       <Section title="Deleted User State">
         <div class="flex items-center gap-3">
-          <For each={SIZES}>
+          <For each={SIZE_LABELS}>
             {(size) => (
               <UserIcon
                 id={MOCK_USERS[0].id}

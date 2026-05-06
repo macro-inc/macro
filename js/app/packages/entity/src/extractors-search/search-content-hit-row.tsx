@@ -38,7 +38,7 @@ export function SearchContentHitRow(props: SearchContentHitRowProps) {
         <Show when={hitHasSender(props.hit)}>
           <div class="flex items-center gap-1">
             <Show when={senderId()}>
-              {(id) => <UserIcon id={id()} size="xs" />}
+              {(id) => <UserIcon id={id()} size="sm" />}
             </Show>
             <span class="text-xs text-ink-muted">
               <SearchSender hit={props.hit} />

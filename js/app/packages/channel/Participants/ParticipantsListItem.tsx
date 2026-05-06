@@ -33,7 +33,7 @@ export function ParticipantsListItem(props: {
         <div class="shrink-0">
           <UserIcon
             id={props.participant.user_id}
-            size="xs"
+            size="sm"
             isDeleted={false}
           />
         </div>

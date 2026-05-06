@@ -489,7 +489,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                             fallback={
                               <UserIcon
                                 id={entity.id}
-                                size="xs"
+                                size="sm"
                                 isDeleted={false}
                                 suppressClick={true}
                               />

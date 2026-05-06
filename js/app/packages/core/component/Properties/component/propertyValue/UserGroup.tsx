@@ -25,12 +25,12 @@ export const UserGroup = (props: UserEntityGroupProps) => {
   const displayEntities = () => props.entities.slice(0, max());
 
   return (
-    <AvatarGroup size="xs">
+    <AvatarGroup size="sm">
       <For each={displayEntities()}>
         {(entity) => (
           <UserIcon
             id={entity.entity_id}
-            size="xs"
+            size="sm"
             suppressClick
             showTooltip={false}
           />
@@ -38,7 +38,7 @@ export const UserGroup = (props: UserEntityGroupProps) => {
       </For>
 
       <Show when={remaining()}>
-        <AvatarGroup.Count size="xs">+{remaining()}</AvatarGroup.Count>
+        <AvatarGroup.Count size="sm">+{remaining()}</AvatarGroup.Count>
       </Show>
     </AvatarGroup>
   );

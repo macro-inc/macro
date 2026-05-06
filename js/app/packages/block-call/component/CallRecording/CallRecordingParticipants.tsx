@@ -69,7 +69,7 @@ export function CallRecordingParticipantsSection(props: {
                   <div class="shrink-0">
                     <UserIcon
                       id={participant.userId}
-                      size="xs"
+                      size="sm"
                       isDeleted={false}
                     />
                   </div>

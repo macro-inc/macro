@@ -280,7 +280,9 @@ export function TopBar() {
       </SplitHeaderLeft>
 
       <SplitHeaderRight>
-        <BlockLiveIndicators />
+        <div class="-order-1">
+          <BlockLiveIndicators />
+        </div>
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
 

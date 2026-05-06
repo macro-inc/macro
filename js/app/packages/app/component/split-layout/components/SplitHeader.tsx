@@ -14,9 +14,7 @@ import SplitIcon from '@icon/regular/square-half.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import {
-  createEffect,
   createMemo,
-  createSignal,
   type ParentProps,
   type Setter,
   Show,
@@ -229,24 +227,16 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
   );
 }
 
-export function SplitHeaderLeft(props: ParentProps<{ order?: number }>) {
+export function SplitHeaderLeft(props: ParentProps) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
     throw new Error('<SplitHeaderLeft> must be used within a <SplitLayout>');
-  const [portalRef, setPortalRef] = createSignal<HTMLDivElement | null>(null);
-  createEffect(() => {
-    const ref = portalRef();
-    if (!ref) return;
-    ref.style.order = props.order?.toString() ?? '0';
-  });
+
   return (
     <Show when={ctx.layoutRefs.headerLeft}>
       <Portal
         mount={ctx.layoutRefs.headerLeft}
-        ref={(div) => {
-          setPortalRef(div);
-          div.style.display = 'contents';
-        }}
+        ref={(div) => (div.style.display = 'contents')}
       >
         {props.children}
       </Portal>
@@ -254,24 +244,16 @@ export function SplitHeaderLeft(props: ParentProps<{ order?: number }>) {
   );
 }
 
-export function SplitHeaderRight(props: ParentProps<{ order?: number }>) {
+export function SplitHeaderRight(props: ParentProps) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
     throw new Error('<SplitHeaderRight> must be used within a <SplitLayout>');
-  const [portalRef, setPortalRef] = createSignal<HTMLDivElement | null>(null);
-  createEffect(() => {
-    const ref = portalRef();
-    if (!ref) return;
-    ref.style.order = props.order?.toString() ?? '0';
-  });
+
   return (
     <Show when={ctx.layoutRefs.headerRight}>
       <Portal
         mount={ctx.layoutRefs.headerRight}
-        ref={(div) => {
-          setPortalRef(div);
-          div.style.display = 'contents';
-        }}
+        ref={(div) => (div.style.display = 'contents')}
       >
         {props.children}
       </Portal>

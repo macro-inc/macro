@@ -267,7 +267,9 @@ export function TopBar() {
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <BlockLiveIndicators />
+        <div class="-order-1">
+          <BlockLiveIndicators />
+        </div>
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
       <SplitToolbarLeft>
