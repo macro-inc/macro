@@ -53,10 +53,13 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
     if (!searchQuery.isSuccess) return [];
     const data = searchQuery.data;
     if (!data) return [];
-    return data.filter(
-      (e): e is WithSearch<ChannelMessageEntity> =>
-        isChannelMessageEntity(e) && e.channelId === options.channelId()
-    );
+    // NOTE: reverse because search returns newest-first
+    return data
+      .filter(
+        (e): e is WithSearch<ChannelMessageEntity> =>
+          isChannelMessageEntity(e) && e.channelId === options.channelId()
+      )
+      .reverse();
   });
 
   const goToResult = (result: ChannelMessageEntity) => {
@@ -67,17 +70,19 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
     }
   };
 
-  // Reset index when the query changes so the next results batch starts at 1.
-  createEffect(on(debouncedQuery, () => setActiveIndex(1), { defer: true }));
+  // Clear the index on query change; the results effect below picks the
+  // most-recent match (last in the ascending list) once the new batch lands.
+  createEffect(on(debouncedQuery, () => setActiveIndex(0), { defer: true }));
 
-  // When results arrive, jump to the active index (clamped).
   createEffect(
     on(results, (rs) => {
       if (rs.length === 0) {
         setActiveIndex(0);
         return;
       }
-      const next = Math.max(1, Math.min(activeIndex() || 1, rs.length));
+      const current = activeIndex();
+      const next =
+        current === 0 ? rs.length : Math.max(1, Math.min(current, rs.length));
       setActiveIndex(next);
       goToResult(rs[next - 1]);
     })

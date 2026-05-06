@@ -42,13 +42,13 @@ export function FindBar(props: FindBarProps) {
       props.onClose();
       return;
     }
-    if (e.key === 'ArrowDown' || (e.key === 'Enter' && !e.shiftKey)) {
+    if (e.key === 'ArrowDown' || (e.key === 'Enter' && e.shiftKey)) {
       e.preventDefault();
       e.stopPropagation();
       props.onNext();
       return;
     }
-    if (e.key === 'ArrowUp' || (e.key === 'Enter' && e.shiftKey)) {
+    if (e.key === 'ArrowUp' || (e.key === 'Enter' && !e.shiftKey)) {
       e.preventDefault();
       e.stopPropagation();
       props.onPrevious();
