@@ -232,7 +232,7 @@ const Root: Component<MessageRootProps> = (props) => {
           />
         </Show>
         <div
-          class="flex flex-row"
+          class="flex flex-row flex-1 min-w-0"
           style={{
             'margin-bottom': props.isLastInThread //|| props.showReply?.()
               ? `${replyHeight()}px`
