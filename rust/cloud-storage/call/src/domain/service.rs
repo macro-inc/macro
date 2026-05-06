@@ -443,36 +443,48 @@ impl<
                                 .flatten()
                                 .unwrap_or_else(|| user_id.email_str().to_string());
 
-                            let req = SendNotificationRequestBuilder {
-                                notification_entity: EntityType::Channel
-                                    .with_entity_string(channel_id_str.clone()),
-                                notification: CallStartedNotification {
-                                    sender_profile_picture_url,
-                                    channel_name: channel_name.clone(),
-                                },
-                                sender_id: Some(user_id.copied()),
-                                recipient_ids: recipient_ids.clone(),
-                            }
-                            .into_request()
-                            .with_apns();
-
-                            self.notification_ingress
-                                .send_notification(req)
-                                .await
-                                .map_err(|e| anyhow::anyhow!(e))?;
-
-                            // Send VoIP push for the native iOS incoming-call sheet (best-effort).
+                            // Send VoIP push for the native iOS incoming-call sheet first.
+                            // Recipients with successful VoIP delivery do not need the regular
+                            // APNS alert banner as well.
                             let recipient_vec: Vec<MacroUserIdStr<'_>> =
-                                recipient_ids.into_iter().collect();
+                                recipient_ids.iter().cloned().collect();
                             let voip_payload = VoipPushPayload {
                                 call_id: call.id.to_string(),
-                                channel_id: channel_id_str,
-                                channel_name: channel_name.unwrap_or_default(),
+                                channel_id: channel_id_str.clone(),
+                                channel_name: channel_name.clone().unwrap_or_default(),
                                 caller_name,
                             };
-                            self.voip_push_sender
+                            let voip_recipient_ids = self
+                                .voip_push_sender
                                 .send_voip_push(&recipient_vec, &voip_payload)
                                 .await;
+
+                            let apns_recipient_ids: HashSet<MacroUserIdStr<'_>> = recipient_ids
+                                .into_iter()
+                                .filter(|recipient_id| {
+                                    !voip_recipient_ids.contains(recipient_id.as_ref())
+                                })
+                                .collect();
+
+                            if !apns_recipient_ids.is_empty() {
+                                let req = SendNotificationRequestBuilder {
+                                    notification_entity: EntityType::Channel
+                                        .with_entity_string(channel_id_str.clone()),
+                                    notification: CallStartedNotification {
+                                        sender_profile_picture_url,
+                                        channel_name: channel_name.clone(),
+                                    },
+                                    sender_id: Some(user_id.copied()),
+                                    recipient_ids: apns_recipient_ids,
+                                }
+                                .into_request()
+                                .with_apns();
+
+                                self.notification_ingress
+                                    .send_notification(req)
+                                    .await
+                                    .map_err(|e| anyhow::anyhow!(e))?;
+                            }
 
                             Ok(())
                         }
@@ -1272,7 +1284,6 @@ impl CallSummarizer for NoopCallSummarizer {
         )
     }
 }
-
 
 /// Lightweight implementation of [`CallRecordQueryService`] for read-only
 /// call record queries. Unlike [`CallServiceImpl`], this only requires a

@@ -6,6 +6,8 @@
 #[cfg(test)]
 mod test;
 
+use std::collections::HashSet;
+
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::models::apple::VoipPushPayload;
@@ -39,28 +41,36 @@ where
         &self,
         recipient_ids: &[MacroUserIdStr<'_>],
         payload: &VoipPushPayload,
-    ) {
+    ) -> HashSet<String> {
         let device_map = match self.repository.get_device_endpoints(recipient_ids).await {
             Ok(m) => m,
             Err(e) => {
                 tracing::error!(error=?e, "voip push: failed to fetch device endpoints");
-                return;
+                return HashSet::new();
             }
         };
 
+        let mut delivered_user_ids = HashSet::new();
         for (user_id, endpoints) in &device_map {
             for endpoint in endpoints {
                 let DeviceEndpoint::IosVoip(arn) = endpoint else {
                     continue;
                 };
-                if let Err(e) = self.mobile.send_voip_push(arn, payload).await {
-                    tracing::error!(
-                        error=?e,
-                        user_id=%user_id,
-                        "voip push: SNS delivery failed"
-                    );
+                match self.mobile.send_voip_push(arn, payload).await {
+                    Ok(_) => {
+                        delivered_user_ids.insert(user_id.as_ref().to_string());
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            error=?e,
+                            user_id=%user_id,
+                            "voip push: SNS delivery failed"
+                        );
+                    }
                 }
             }
         }
+
+        delivered_user_ids
     }
 }
