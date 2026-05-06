@@ -26,7 +26,13 @@ import type {
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '😡'] as const;
 
-type ActionId = 'reply' | 'copy-link' | 'copy-message-text' | 'edit' | 'delete' | 'create-task';
+type ActionId =
+  | 'reply'
+  | 'copy-link'
+  | 'copy-message-text'
+  | 'edit'
+  | 'delete'
+  | 'create-task';
 
 type ActionItem = {
   id: ActionId;
