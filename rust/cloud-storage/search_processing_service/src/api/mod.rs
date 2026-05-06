@@ -21,6 +21,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 
     let port = state.config.port;
     let env = state.config.environment;
+    let backfill_jobs = state.backfill_jobs.clone();
     let app = api_router(state.internal_auth_key.clone())
         .with_state(state)
         .layer(cors.clone())
@@ -38,8 +39,44 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         port
     );
     axum::serve(listener, app.into_make_service())
+        .with_graceful_shutdown(shutdown_signal(backfill_jobs))
         .await
         .context("error starting service")
+}
+
+/// Block on a SIGINT/SIGTERM signal, then fire every tracked backfill's
+/// cancellation token so drains stop between pages instead of being killed
+/// mid-publish when the runtime exits.
+async fn shutdown_signal(backfill_jobs: crate::domain::jobs::BackfillJobs) {
+    let ctrl_c = async {
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            tracing::error!(error=?e, "failed to install ctrl_c handler");
+        }
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(e) => {
+                tracing::error!(error=?e, "failed to install SIGTERM handler");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    tracing::info!("shutdown signal received; cancelling in-flight backfills");
+    backfill_jobs.cancel_all();
 }
 
 fn api_router(internal_secret: LocalOrRemoteSecret<InternalApiSecretKey>) -> Router<ApiContext> {

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::{
     api::context::ApiContext,
-    domain::service::BackfillOrchestrator,
+    domain::{jobs::BackfillJobs, service::BackfillOrchestrator},
     outbound::{publisher::SqsSearchEventPublisher, source::PgBackfillSource},
     process::{context::SearchProcessingContext, worker::run_search_processing_workers},
 };
@@ -196,6 +196,8 @@ async fn main() -> anyhow::Result<()> {
         run_search_processing_workers(ctx, config.worker_count);
     }
 
+    let backfill_jobs = BackfillJobs::new();
+
     api::setup_and_serve(ApiContext {
         db,
         sqs_client,
@@ -203,6 +205,7 @@ async fn main() -> anyhow::Result<()> {
         internal_auth_key,
         config: Arc::new(config),
         backfill_service,
+        backfill_jobs,
     })
     .await?;
     Ok(())

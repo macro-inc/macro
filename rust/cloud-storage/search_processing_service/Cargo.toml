@@ -60,7 +60,8 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
 sqs_worker = { path = "../sqs_worker" }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }

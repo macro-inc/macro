@@ -8,34 +8,51 @@
 //! — adapters stay single-concern.
 
 use std::future::Future;
+use std::sync::Arc;
 
+use tokio_util::sync::CancellationToken;
+
+use super::jobs::JobProgress;
 use super::models::{
     BackfillError, BackfillReceipt, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest, SourcePage,
 };
 use super::ports::{BackfillSource, SearchEventPublisher};
 
-/// Inbound contract for all backfill HTTP routes.
+/// Inbound contract for all backfill HTTP routes. Each call drives a single
+/// orchestration to completion (or to cancellation via `cancel`); the HTTP
+/// layer is responsible for spawning these onto a background task and
+/// reporting progress through `progress`.
 pub trait BackfillService: Send + Sync + 'static {
     fn backfill_calls(
         &self,
         req: CallBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
     ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
     fn backfill_chats(
         &self,
         req: ChatBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
     ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
     fn backfill_channels(
         &self,
         req: ChannelBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
     ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
     fn backfill_documents(
         &self,
         req: DocumentBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
     ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
     fn backfill_emails(
         &self,
         req: EmailBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
     ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
 }
 
@@ -59,8 +76,14 @@ where
 /// Offset advances by `rows_consumed`, *not* by message count — sources are
 /// free to fold many rows into a smaller batch of messages (see the email
 /// path) without confusing the loop into re-reading rows.
+///
+/// Checks `cancel` at the top of each iteration so a shutdown signal stops
+/// the drain between pages instead of mid-publish; the receipt that comes
+/// back reflects the rows actually enqueued before cancellation.
 async fn drain_source<Fut, P>(
     publisher: &P,
+    progress: &JobProgress,
+    cancel: &CancellationToken,
     fetch: impl Fn(usize) -> Fut,
 ) -> Result<BackfillReceipt, BackfillError>
 where
@@ -71,6 +94,10 @@ where
     let mut enqueued = 0usize;
 
     loop {
+        if cancel.is_cancelled() {
+            tracing::info!(enqueued, "backfill cancelled between pages");
+            break;
+        }
         let page = fetch(offset).await?;
         if page.rows_consumed == 0 {
             break;
@@ -78,6 +105,7 @@ where
         publisher.publish(page.messages).await?;
         enqueued += page.rows_consumed;
         offset += page.rows_consumed;
+        progress.add(page.rows_consumed);
     }
 
     Ok(BackfillReceipt { enqueued })
@@ -91,8 +119,10 @@ where
     async fn backfill_calls(
         &self,
         req: CallBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source(&self.publisher, |offset| {
+        drain_source(&self.publisher, &progress, &cancel, |offset| {
             self.source.fetch_calls(&req, offset)
         })
         .await
@@ -101,8 +131,10 @@ where
     async fn backfill_chats(
         &self,
         req: ChatBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source(&self.publisher, |offset| {
+        drain_source(&self.publisher, &progress, &cancel, |offset| {
             self.source.fetch_chats(&req, offset)
         })
         .await
@@ -111,8 +143,10 @@ where
     async fn backfill_channels(
         &self,
         req: ChannelBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source(&self.publisher, |offset| {
+        drain_source(&self.publisher, &progress, &cancel, |offset| {
             self.source.fetch_channels(&req, offset)
         })
         .await
@@ -121,8 +155,10 @@ where
     async fn backfill_documents(
         &self,
         req: DocumentBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source(&self.publisher, |offset| {
+        drain_source(&self.publisher, &progress, &cancel, |offset| {
             self.source.fetch_documents(&req, offset)
         })
         .await
@@ -131,8 +167,10 @@ where
     async fn backfill_emails(
         &self,
         req: EmailBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source(&self.publisher, |offset| {
+        drain_source(&self.publisher, &progress, &cancel, |offset| {
             self.source.fetch_emails(&req, offset)
         })
         .await
