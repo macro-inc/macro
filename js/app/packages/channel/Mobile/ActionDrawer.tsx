@@ -1,6 +1,7 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
+import CheckSquareIcon from '@icon/regular/check-square.svg';
 import CopyIcon from '@icon/regular/copy.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
@@ -25,7 +26,7 @@ import type {
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '😡'] as const;
 
-type ActionId = 'reply' | 'copy-link' | 'copy-message-text' | 'edit' | 'delete';
+type ActionId = 'reply' | 'copy-link' | 'copy-message-text' | 'edit' | 'delete' | 'create-task';
 
 type ActionItem = {
   id: ActionId;
@@ -64,6 +65,12 @@ function buildActionItems(
       label: 'Copy link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
+    },
+    {
+      id: 'create-task',
+      label: 'Create task',
+      icon: CheckSquareIcon,
+      onClick: actions?.onCreateTask,
     },
     {
       id: 'edit',
