@@ -77,6 +77,7 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
 
   createEffect(
     on(results, (rs) => {
+      if (!isOpen()) return;
       if (rs.length === 0) {
         setActiveIndex(0);
         return;

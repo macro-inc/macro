@@ -73,6 +73,21 @@ export function ChannelThread(props: ThreadProps) {
     keys: () => activeReplies().map((r) => r.id),
   });
 
+  // Clear the local reply selection when the channel-level selection moves
+  // away from this thread (e.g., user presses arrow keys after selecting a
+  // reply). Without this, the reply stays highlighted alongside the new
+  // selection.
+  createEffect(
+    on(
+      () => props.selectedMessageId?.(),
+      (selectedId) => {
+        if (selectedId === props.data().id) return;
+        if (replySelection.selectedId()) replySelection.clear();
+      },
+      { defer: true }
+    )
+  );
+
   const isThreadFocused = () => !!replySelection.selectedId();
   const selectThreadMessage = () => {
     if (isSelected() && !isThreadFocused()) {
