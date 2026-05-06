@@ -8,19 +8,25 @@
 
 use std::time::Duration;
 
+use aws_sdk_dynamodb::config::{BehaviorVersion, Credentials, Region};
+
 use super::*;
 
 const LOCAL_TABLE: &str = "search_processing_backfill_jobs_test";
 const LOCAL_ENDPOINT: &str = "http://127.0.0.1:8000";
 
 async fn try_jobs() -> Option<BackfillJobs> {
-    let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .test_credentials()
+    // Build the DynamoDB client config directly via the SDK's own builder
+    // — `aws-config` is wrapped by `macro_aws_config` workspace-wide, but
+    // we need a per-client endpoint override that the wrapper doesn't
+    // expose, so use the SDK builder here and skip `aws-config` entirely.
+    let config = aws_sdk_dynamodb::config::Builder::new()
+        .behavior_version(BehaviorVersion::latest())
+        .region(Region::new("us-east-1"))
+        .credentials_provider(Credentials::new("fake", "fake", None, None, "test"))
         .endpoint_url(LOCAL_ENDPOINT)
-        .load()
-        .await;
-    let client = aws_sdk_dynamodb::Client::new(&config);
+        .build();
+    let client = aws_sdk_dynamodb::Client::from_conf(config);
     // Probe: list_tables fails fast if dynamodb-local isn't running.
     if client.list_tables().send().await.is_err() {
         return None;
