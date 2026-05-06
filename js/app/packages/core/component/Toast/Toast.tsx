@@ -210,7 +210,7 @@ function ActionButtons(props: { actions: ToastAction[] }) {
       {(action) => (
         <Button
           onClick={action.onClick}
-          variant="secondary"
+          variant="base"
           class="flex items-center gap-1.5 rounded py-1 px-2 text-sm font-semibold shrink-0"
         >
           <Show when={action.icon}>

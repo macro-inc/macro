@@ -97,7 +97,7 @@ const DropdownMenu: ParentComponent<
     >
       <Popover.Trigger
         size={props.size ?? 'md'}
-        variant={open() ? 'active' : 'secondary'}
+        variant={open() ? 'active' : 'base'}
         classList={{
           'block!': true,
         }}

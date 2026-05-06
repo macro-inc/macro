@@ -519,7 +519,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                     />
                   </span>
                   <Button
-                    variant="secondary"
+                    variant="base"
                     size="sm"
                     class="flex items-center gap-1 rounded-xs px-2 py-1"
                     onClick={props.copyPublicLink}
@@ -1169,7 +1169,7 @@ export function ShareModal(props: ShareModalProps) {
                     <Show when={publicAccessLevel() != null}>
                       <div class="flex items-center p-3 justify-between">
                         <Button
-                          variant="secondary"
+                          variant="base"
                           size="sm"
                           class="flex items-center gap-1 rounded-xs px-2 py-1"
                           onClick={copyPublicLink}
@@ -1431,7 +1431,7 @@ export function ShareOptions(props: {
         <Button
           disabled={props.disabled}
           class={`min-w-16.75 py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
-          variant="secondary"
+          variant="base"
         >
           {currentValueText()}
           <ChevronDownIcon class="size-4 text-ink-extra-muted/50" />

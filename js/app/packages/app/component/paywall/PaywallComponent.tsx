@@ -218,7 +218,7 @@ const PaywallComponent = (props: PaywallComponent) => {
           fallback={
             <Button
               onClick={handleContinue}
-              variant="secondary"
+              variant="base"
               size="lg"
               depth={3}
               class="w-full"

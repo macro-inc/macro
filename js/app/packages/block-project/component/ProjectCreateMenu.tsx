@@ -339,7 +339,7 @@ export function ProjectCreateMenu(props: { id: string }) {
     <DropdownMenu open={open()} onOpenChange={setOpen}>
       <div class="flex items-center">
         <DropdownMenu.Trigger class="h-min">
-          <Button size="sm" variant={open() ? 'active' : 'secondary'}>
+          <Button size="sm" variant={open() ? 'active' : 'base'}>
             Create
           </Button>
         </DropdownMenu.Trigger>

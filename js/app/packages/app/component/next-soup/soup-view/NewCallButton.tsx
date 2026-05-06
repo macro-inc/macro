@@ -81,7 +81,7 @@ export function NewCallButton() {
   return (
     <>
       <Button
-        variant="secondary"
+        variant="base"
         size="sm"
         class="rounded-xs whitespace-nowrap px-2 text-ink-muted hover:text-ink"
         onClick={() => setIsOpen(true)}
@@ -120,7 +120,7 @@ export function NewCallButton() {
                 />
                 <div class="flex justify-end">
                   <Button
-                    variant="secondary"
+                    variant="base"
                     size="sm"
                     disabled={isSubmitting()}
                     onClick={handleStartCall}

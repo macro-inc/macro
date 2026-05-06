@@ -15,7 +15,7 @@ export function EmailPermissionsBanner() {
         </span>
         <span class="grow" />
         <Button
-          variant="secondary"
+          variant="base"
           size="sm"
           class="px-2"
           onClick={() => logout()}

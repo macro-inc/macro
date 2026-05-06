@@ -435,7 +435,7 @@ function GlyphGrid(props: GlyphGridProps) {
           </button>
         </div>
         <Button
-          variant="secondary"
+          variant="base"
           onClick={() => {
             props.onNewGlyph();
           }}
@@ -519,7 +519,7 @@ function GlyphGrid(props: GlyphGridProps) {
 
                   <div class="absolute top-1 right-1 flex gap-0 opacity-0 bg-panel group-hover:opacity-100">
                     <Button
-                      variant="secondary"
+                      variant="base"
                       size="icon-md"
                       tooltip={<LabelAndHotKey label="Edit" />}
                       onClick={(e) => {
@@ -920,10 +920,10 @@ function GlyphEditor(props: GlyphEditorProps) {
                 </div>
 
                 <div class="grid grid-cols-2 gap-2 mb-4">
-                  <Button variant="secondary" onClick={clearAll}>
+                  <Button variant="base" onClick={clearAll}>
                     <Erase /> Clear Grid
                   </Button>
-                  <Button variant="secondary" onClick={fillAll}>
+                  <Button variant="base" onClick={fillAll}>
                     <Fill /> Fill Grid
                   </Button>
                 </div>
@@ -932,7 +932,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                   <h4 class="font-mono text-xs text-ink-muted">Transforms</h4>
                   <div class="flex gap-2">
                     <Button
-                      variant="secondary"
+                      variant="base"
                       size="icon-md"
                       tooltip={<LabelAndHotKey label="Mirror X" />}
                       onClick={handleMirrorX}
@@ -940,7 +940,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                       <MirrorX />
                     </Button>
                     <Button
-                      variant="secondary"
+                      variant="base"
                       size="icon-md"
                       tooltip={<LabelAndHotKey label="Mirror Y" />}
                       onClick={handleMirrorY}
@@ -948,7 +948,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                       <MirrorY />
                     </Button>
                     <Button
-                      variant="secondary"
+                      variant="base"
                       size="icon-md"
                       tooltip={<LabelAndHotKey label="Rotate 90 CCW" />}
                       onClick={handleRotate90CC}
@@ -961,7 +961,7 @@ function GlyphEditor(props: GlyphEditorProps) {
 
               <div class="pt-4 border-t border-edge">
                 <div class="grid grid-cols-2 gap-2">
-                  <Button variant="secondary" onClick={props.onClose}>
+                  <Button variant="base" onClick={props.onClose}>
                     Cancel
                   </Button>
                   <Button variant="active" onClick={handleSave}>
@@ -1063,16 +1063,16 @@ function GlyphSidebar(props: GlyphSidebarProps) {
         <div class="mt-6 space-y-2">
           <h4 class="font-mono text-xs text-ink-muted">Batch Operations</h4>
           <div class="grid grid-cols-1 gap-2">
-            <Button variant="secondary" onClick={props.onExportAll}>
+            <Button variant="base" onClick={props.onExportAll}>
               <Copy /> Export to Clipboard
             </Button>
-            <Button variant="secondary" onClick={props.onImportAll}>
+            <Button variant="base" onClick={props.onImportAll}>
               <Upload /> Import from Clipboard
             </Button>
-            <Button variant="secondary" onClick={props.onCopyAllSVGs}>
+            <Button variant="base" onClick={props.onCopyAllSVGs}>
               <Copy /> Copy SVGs
             </Button>
-            <Button variant="secondary" onClick={props.onDownloadAllSVGs}>
+            <Button variant="base" onClick={props.onDownloadAllSVGs}>
               <Download /> Download SVGs
             </Button>
           </div>

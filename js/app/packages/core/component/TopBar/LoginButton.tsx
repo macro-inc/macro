@@ -16,7 +16,7 @@ export function LoginButton() {
   return (
     <div class="flex gap-2 justify-center w-max items-center">
       <Button
-        variant="secondary"
+        variant="base"
         size="sm"
         class="rounded-xs"
         onClick={() => navigate(`/login${window.location.search}`)}

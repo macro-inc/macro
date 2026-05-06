@@ -172,7 +172,7 @@ function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
         class="mt-2"
         disabled={retrying()}
         onClick={handleRetry}
-        variant="secondary"
+        variant="base"
       >
         {retrying() ? 'Retrying…' : 'Retry'}
       </Button>
@@ -321,7 +321,7 @@ const ROUTES: RouteDefinition[] = [
         <div class="h-full overflow-y-hidden">
           <div class="relative flex flex-row items-center pt-4 h-full">
             <Button
-              variant="secondary"
+              variant="base"
               onClick={() => {
                 channel.postMessage({ type: 'login-success' });
                 channel.close();

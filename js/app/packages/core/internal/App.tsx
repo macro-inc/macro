@@ -83,7 +83,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <For each={Themes}>
           {() => (
-            <Button variant="secondary">
+            <Button variant="base">
               <Subtract /> Button Text <CaretDown />
             </Button>
           )}
@@ -92,7 +92,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="secondary">
+            <Button variant="base">
               <Subtract /> Button Text <CaretDown />
             </Button>
           )}
@@ -101,7 +101,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={Themes}>
           {() => (
-            <Button variant="secondary" size="icon-md">
+            <Button variant="base" size="icon-md">
               <Acorn />
             </Button>
           )}
@@ -110,7 +110,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="secondary" size="icon-md">
+            <Button variant="base" size="icon-md">
               <Acorn />
               <CaretDown />
             </Button>
@@ -120,7 +120,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="secondary" size="icon-md">
+            <Button variant="base" size="icon-md">
               <Acorn />
               <CaretDown />
             </Button>
@@ -140,7 +140,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <DropdownMenu>
           <DropdownMenu.Trigger>
-            <Button variant="secondary" tabIndex={-1}>Open</Button>
+            <Button variant="base" tabIndex={-1}>Open</Button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenuContent>

@@ -30,7 +30,7 @@ export function AiChatEmptyState() {
                 <div class="flex items-center justify-between gap-3 border-b border-edge-muted px-4 py-2">
                   <span class="text-sm text-ink-muted">{item.label}</span>
                   <Button
-                    variant={copiedKey() === item.key ? 'secondary' : 'ghost'}
+                    variant={copiedKey() === item.key ? 'base' : 'ghost'}
                     size="sm"
                     class="shrink-0"
                     onClick={() => copy(item.key, item.command)}
@@ -66,7 +66,7 @@ export function AiChatEmptyState() {
                 Paste under `mcpServers`
               </span>
               <Button
-                variant={copiedKey() === 'json' ? 'secondary' : 'ghost'}
+                variant={copiedKey() === 'json' ? 'base' : 'ghost'}
                 size="sm"
                 class="shrink-0"
                 onClick={() => copy('json', MACRO_MCP_CONFIG)}

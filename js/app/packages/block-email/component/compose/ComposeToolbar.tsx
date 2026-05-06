@@ -144,7 +144,7 @@ export function EmailComposeToolbar(props: {
           <div class="flex items-center gap-2">
             <Show when={ctx.onSaveDraft}>
               <Button
-                variant="secondary"
+                variant="base"
                 size="sm"
                 disabled={
                   ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()
@@ -221,7 +221,7 @@ function MobileToolbar(props: {
         >
           <Show when={ctx.onSaveDraft}>
             <Button
-              variant="secondary"
+              variant="base"
               size="sm"
               disabled={
                 ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()

@@ -731,7 +731,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           onClick={handleCreateTask}
           class="px-3 pr-2"
           disabled={title().trim().length === 0 || isCreating()}
-          variant="secondary"
+          variant="base"
         >
           <Show
             when={isCreating()}

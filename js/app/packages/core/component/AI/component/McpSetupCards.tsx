@@ -50,7 +50,7 @@ function CollapsibleCard(props: {
               <code>{props.copyValue}</code>
             </pre>
             <Button
-              variant={isCopied() ? 'secondary' : 'ghost'}
+              variant={isCopied() ? 'base' : 'ghost'}
               size="sm"
               class="shrink-0"
               onClick={() => props.onCopy(props.copyKey, props.copyValue)}

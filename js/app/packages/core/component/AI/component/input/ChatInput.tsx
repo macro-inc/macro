@@ -138,7 +138,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const LeftButton = () => (
     <div ref={setAttachMenuAnchorRef} class="shrink-0">
       <Button
-        variant="secondary"
+        variant="base"
         size="icon-md"
         onClick={() => setShowAttachMenu((prev) => !prev)}
       >
@@ -149,7 +149,7 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const StopButton = () => (
     <Button
-      variant="secondary"
+      variant="base"
       size="icon-sm"
       tooltip={<LabelAndHotKey label="Stop generating" shortcut="ctrl+c" />}
       onClick={() => props.onStop?.()}

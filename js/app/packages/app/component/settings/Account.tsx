@@ -268,7 +268,7 @@ export function Account() {
                     when={!emailActive()}
                     fallback={
                       <Button
-                        variant="secondary"
+                        variant="base"
                         size="sm"
                         depth={3}
                         onClick={() => setShowEmailModal(true)}
@@ -279,7 +279,7 @@ export function Account() {
                   >
                     <Show when={!showEnableEmailModal()}>
                       <Button
-                        variant="secondary"
+                        variant="base"
                         size="sm"
                         depth={3}
                         onClick={() => setShowEnableEmailModal(true)}
@@ -302,7 +302,7 @@ export function Account() {
                     when={!githubLinkExists()}
                     fallback={
                       <Button
-                        variant="secondary"
+                        variant="base"
                         size="sm"
                         depth={3}
                         onClick={handleGithubDisable}
@@ -312,7 +312,7 @@ export function Account() {
                     }
                   >
                     <Button
-                      variant="secondary"
+                      variant="base"
                       size="sm"
                       depth={3}
                       onClick={handleGithubEnable}
@@ -328,7 +328,7 @@ export function Account() {
 
             <div class="flex items-center justify-end h-10 px-6">
               <Button
-                variant="secondary"
+                variant="base"
                 size="sm"
                 depth={3}
                 onClick={logoutHandler}
@@ -424,7 +424,7 @@ export function Account() {
                         permanent and cannot be undone.
                       </Dialog.Description>
                       <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                        <Button variant="secondary" depth={3} onClick={() => setShowDeleteModal(false)}>
+                        <Button variant="base" depth={3} onClick={() => setShowDeleteModal(false)}>
                           Cancel
                         </Button>
                         <Button variant="destructive" depth={3} onClick={() => {
@@ -453,7 +453,7 @@ export function Account() {
                         data. This cannot be undone.
                       </Dialog.Description>
                       <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                        <Button variant="secondary" depth={3} onClick={() => setShowDeleteConfirmModal(false)}>
+                        <Button variant="base" depth={3} onClick={() => setShowDeleteConfirmModal(false)}>
                           Cancel
                         </Button>
                         <Button variant="destructive" depth={3} onClick={deleteAccountHandler}>
@@ -508,7 +508,7 @@ function NotificationSettings(props: {
   return (
     <Row label="Notifications">
       <Button
-        variant="secondary"
+        variant="base"
         size="sm"
         depth={3}
         onClick={handleToggle}

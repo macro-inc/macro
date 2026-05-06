@@ -493,7 +493,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                       Options
                     </label>
                     <Button
-                      variant="secondary"
+                      variant="base"
                       size="sm"
                       class="rounded-xs"
                       onClick={() => {
@@ -574,7 +574,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
               Cancel
             </Button>
             <Button
-              variant="secondary"
+              variant="base"
               class="rounded-xs"
               onClick={handleCreateProperty}
               disabled={

@@ -269,7 +269,7 @@ export function Automation() {
                   Run Now
                 </Button>
                 <Button
-                  variant="secondary"
+                  variant="base"
                   size="sm"
                   class="cursor-default"
                   onClick={() =>

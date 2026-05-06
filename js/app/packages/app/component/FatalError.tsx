@@ -48,7 +48,7 @@ export function FatalError(props: FatalErrorProps) {
               >
                 <HomeIcon /> Home
               </Button>
-              <Button variant="secondary" onClick={props.reset}>
+              <Button variant="base" onClick={props.reset}>
                 <ResetIcon /> Try Again
               </Button>
             </div>

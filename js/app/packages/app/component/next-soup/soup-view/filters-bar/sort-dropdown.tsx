@@ -36,7 +36,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       <Tooltip tooltip={<LabelAndHotKey label="Sort" shortcut="S" />}>
         <DropdownMenu.Trigger
           as={Button}
-          variant="secondary"
+          variant="base"
           size="sm"
           class="whitespace-nowrap rounded-xs [&_svg]:size-4"
         >

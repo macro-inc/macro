@@ -232,7 +232,7 @@ function InviteEntryRow(props: {
         <Show when={props.showRemove}>
           <Tooltip tooltip="Remove">
             <Button
-              variant="secondary"
+              variant="base"
               size="icon-sm"
               class="rounded-xs shrink-0 focus:border-accent/50"
               tabIndex={0}
@@ -365,7 +365,7 @@ function InviteEmailsInput(props: {
         </div>
       </Show>
       <Button
-        variant="secondary"
+        variant="base"
         class="rounded-xs w-full justify-center focus:border-accent/50"
         tabIndex={0}
         disabled={!canAddRow()}
@@ -530,7 +530,7 @@ function UserInviteRow(props: {
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <Button
-          variant="secondary"
+          variant="base"
           class="px-2 py-1 rounded-xs"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onDecline}
@@ -980,7 +980,7 @@ function TeamManagement(props: {
         <Show when={isOwner()}>
           <div class="flex items-center gap-2">
             <Button
-              variant="secondary"
+              variant="base"
               size="sm"
               class="rounded-xs"
               onClick={() => setShowInviteModal(true)}

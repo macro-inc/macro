@@ -15,13 +15,13 @@ type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
   class?: string;
 };
 
-type ButtonVariant = 'destructive' | 'secondary' | 'active' | 'ghost' | 'link';
+type ButtonVariant = 'destructive' | 'base' | 'active' | 'ghost' | 'link';
 
 type ButtonSize = 'sm' | 'md' | 'lg' | 'icon-sm' | 'icon-md' | 'icon-lg';
 
 const variantStyles: Record<ButtonVariant, string> = {
   destructive: 'bg-transparent text-failure    border border-failure/50     not-disabled:hover:bg-failure/10   not-disabled:active:bg-failure/20                              disabled:opacity-50          ',
-  secondary:   'bg-transparent text-ink        border border-edge           not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12                                  disabled:opacity-30          ',
+  base:        'bg-transparent text-ink        border border-edge           not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12                                  disabled:opacity-30          ',
   active:      'bg-accent-bg   text-accent     border border-accent-ink                                                                                                                                    ',
   ghost:       'bg-transparent text-ink-muted                               not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12      not-disabled:hover:text-ink disabled:opacity-30          ',
   link:        'bg-transparent text-accent     underline-offset-2           not-disabled:hover:underline       not-disabled:active:text-accent/80                             disabled:text-ink-extra-muted',

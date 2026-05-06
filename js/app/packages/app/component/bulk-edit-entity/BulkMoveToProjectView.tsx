@@ -503,7 +503,7 @@ export const BulkMoveToProjectView = (props: {
           </Button>
           <Button
             type="button"
-            variant="secondary"
+            variant="base"
             class="rounded-xs"
             onClick={finishEditing}
             disabled={!selectedProject()}

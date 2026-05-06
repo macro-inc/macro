@@ -85,7 +85,7 @@ const NewFormPrimitivesDemo = () => {
             <div class="grid grid-flow-col w-full border-edge border-t-2">
               <Button
                 size="sm"
-                variant="secondary"
+                variant="base"
                 onClick={() => {
                   // Reset logic here
                   setOpenDropdown1(false);
@@ -95,7 +95,7 @@ const NewFormPrimitivesDemo = () => {
               </Button>
               <Button
                 size="sm"
-                variant="secondary"
+                variant="base"
                 onClick={() => {
                   // submit logic here
                   setOpenDropdown1(false);
@@ -158,7 +158,7 @@ const NewFormPrimitivesDemo = () => {
             <div class="grid grid-flow-col w-full border-edge border-t-2">
               <Button
                 size="sm"
-                variant="secondary"
+                variant="base"
                 onClick={() => {
                   // Reset logic here
                   setOpenDropdown2(false);
@@ -168,7 +168,7 @@ const NewFormPrimitivesDemo = () => {
               </Button>
               <Button
                 size="sm"
-                variant="secondary"
+                variant="base"
                 onClick={() => {
                   // submit logic here
                   setOpenDropdown2(false);

@@ -521,7 +521,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
               <Button
                 onClick={handleSubmit}
                 class="focus:ring-failure focus:ring-2 focus:ring-offset-2"
-                variant="secondary"
+                variant="base"
                 disabled={
                   !pendingLinkInfo()?.url && !pendingLinkInfo()?.linkText
                 }

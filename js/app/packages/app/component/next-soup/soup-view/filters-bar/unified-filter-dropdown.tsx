@@ -799,7 +799,7 @@ export const UnifiedFilterDropdown = () => {
         <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="F" />}>
           <DropdownMenu.Trigger
             as={Button}
-            variant="secondary"
+            variant="base"
             size="sm"
             class="rounded-xs [&_svg]:size-4"
           >
