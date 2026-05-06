@@ -1,12 +1,11 @@
 import { Button as KButton, type ButtonRootProps } from '@kobalte/core/button';
-import { type JSX, Show, splitProps, type ValidComponent } from 'solid-js';
-import type { PolymorphicProps } from '@kobalte/core/polymorphic';
+import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
 import type { Placement } from '@floating-ui/dom';
 import CorvuTooltip from '@corvu/tooltip';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
 
-type ButtonProps<T extends ValidComponent = 'button'> = PolymorphicProps<T, ButtonRootProps<T>> & {
+type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
   tooltipPlacement?: Placement;
   variant?: ButtonVariant;
@@ -40,10 +39,8 @@ const sizeStyles: Record<ButtonSize, string> = {
 
 const TOOLTIP_DELAY = 250;
 
-export const Button = <T extends ValidComponent = 'button'>(
-  props: ButtonProps<T>
-) => {
-  const [local, others] = splitProps(props as ButtonProps<'button'>, [
+export const Button = (props: ButtonProps) => {
+  const [local, others] = splitProps(props, [
     'tooltipPlacement',
     'children',
     'variant',
