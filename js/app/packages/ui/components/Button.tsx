@@ -6,10 +6,6 @@ import CorvuTooltip from '@corvu/tooltip';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
 
-export type ButtonVariant = 'destructive' | 'secondary' | 'active' | 'ghost' | 'link';
-
-export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon-sm' | 'icon-md' | 'icon-lg';
-
 export type ButtonProps<T extends ValidComponent = 'button'> = PolymorphicProps<T, ButtonRootProps<T>> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
   tooltipPlacement?: Placement;
@@ -19,6 +15,10 @@ export type ButtonProps<T extends ValidComponent = 'button'> = PolymorphicProps<
   size?: ButtonSize;
   class?: string;
 };
+
+export type ButtonVariant = 'destructive' | 'secondary' | 'active' | 'ghost' | 'link';
+
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon-sm' | 'icon-md' | 'icon-lg';
 
 const variantStyles: Record<ButtonVariant, string> = {
   destructive: 'bg-transparent text-failure    border border-failure/50     not-disabled:hover:bg-failure/10   not-disabled:active:bg-failure/20                              disabled:opacity-50          ',
@@ -44,8 +44,8 @@ const TOOLTIP_FLOATING_OPTIONS = {
   size: { padding: 16, fitViewPort: true },
   boundary: 'viewport' as const,
   shift: { padding: 16 },
-  flip: true,
   offset: 12,
+  flip: true,
 };
 
 export const Button = <T extends ValidComponent = 'button'>(
@@ -61,19 +61,19 @@ export const Button = <T extends ValidComponent = 'button'>(
     'size',
   ]);
 
-  const variant = () => local.variant ?? 'ghost';
-  const size = () => local.size ?? 'md';
-
-  const cls = () =>
-    cn(
-      'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-xs',
-      'outline-none focus-visible:bg-active',
-      'data-disabled:cursor-not-allowed',
-      'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
-      variantStyles[variant()],
-      sizeStyles[size()],
-      local.class
-    );
+function cls() {
+  cn(
+    `
+      relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-xs
+      touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6
+      outline-none focus-visible:bg-active
+      data-disabled:cursor-not-allowed
+    `,
+    variantStyles[local.variant ?? 'ghost'],
+    sizeStyles[local.size ?? 'md'],
+    local.class
+  );
+}
 
   return (
     <Layer depth={local.depth ?? 0}>
