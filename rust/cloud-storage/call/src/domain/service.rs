@@ -252,6 +252,20 @@ impl<
     }
 }
 
+fn exclude_voip_recipients<'a>(
+    recipient_ids: HashSet<MacroUserIdStr<'a>>,
+    voip_recipient_ids: &HashSet<MacroUserIdStr<'static>>,
+) -> HashSet<MacroUserIdStr<'a>> {
+    recipient_ids
+        .into_iter()
+        .filter(|recipient_id| {
+            !voip_recipient_ids
+                .iter()
+                .any(|voip_recipient_id| voip_recipient_id.as_ref() == recipient_id.as_ref())
+        })
+        .collect()
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 struct CallStartedNotification {
     sender_profile_picture_url: Option<String>,
@@ -459,12 +473,8 @@ impl<
                                 .send_voip_push(&recipient_vec, &voip_payload)
                                 .await;
 
-                            let apns_recipient_ids: HashSet<MacroUserIdStr<'_>> = recipient_ids
-                                .into_iter()
-                                .filter(|recipient_id| {
-                                    !voip_recipient_ids.contains(recipient_id.as_ref())
-                                })
-                                .collect();
+                            let apns_recipient_ids =
+                                exclude_voip_recipients(recipient_ids, &voip_recipient_ids);
 
                             if !apns_recipient_ids.is_empty() {
                                 let req = SendNotificationRequestBuilder {

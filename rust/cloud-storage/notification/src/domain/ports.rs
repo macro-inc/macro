@@ -386,13 +386,13 @@ pub trait NotificationIngressQueue: Send + Sync + 'static {
 pub trait VoipPushSender: Send + Sync + 'static {
     /// Send a VoIP push to all registered VoIP device endpoints of the given users.
     ///
-    /// Errors are logged but do not propagate. The returned set contains user
-    /// IDs that received at least one successful VoIP push delivery.
+    /// Errors are logged but do not propagate. The returned set contains users
+    /// that received at least one successful VoIP push delivery.
     fn send_voip_push(
         &self,
         recipient_ids: &[MacroUserIdStr<'_>],
         payload: &VoipPushPayload,
-    ) -> impl std::future::Future<Output = HashSet<String>> + Send;
+    ) -> impl std::future::Future<Output = HashSet<MacroUserIdStr<'static>>> + Send;
 }
 
 impl VoipPushSender for () {
@@ -400,7 +400,7 @@ impl VoipPushSender for () {
         &self,
         _: &[MacroUserIdStr<'_>],
         _: &VoipPushPayload,
-    ) -> HashSet<String> {
+    ) -> HashSet<MacroUserIdStr<'static>> {
         HashSet::new()
     }
 }
@@ -410,7 +410,7 @@ impl<V: VoipPushSender> VoipPushSender for Option<V> {
         &self,
         recipient_ids: &[MacroUserIdStr<'_>],
         payload: &VoipPushPayload,
-    ) -> HashSet<String> {
+    ) -> HashSet<MacroUserIdStr<'static>> {
         if let Some(inner) = self {
             inner.send_voip_push(recipient_ids, payload).await
         } else {

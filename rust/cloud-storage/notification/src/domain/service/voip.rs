@@ -41,7 +41,7 @@ where
         &self,
         recipient_ids: &[MacroUserIdStr<'_>],
         payload: &VoipPushPayload,
-    ) -> HashSet<String> {
+    ) -> HashSet<MacroUserIdStr<'static>> {
         let device_map = match self.repository.get_device_endpoints(recipient_ids).await {
             Ok(m) => m,
             Err(e) => {
@@ -58,7 +58,7 @@ where
                 };
                 match self.mobile.send_voip_push(arn, payload).await {
                     Ok(_) => {
-                        delivered_user_ids.insert(user_id.as_ref().to_string());
+                        delivered_user_ids.insert(user_id.clone());
                     }
                     Err(e) => {
                         tracing::error!(
