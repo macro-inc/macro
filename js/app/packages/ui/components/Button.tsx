@@ -37,6 +37,16 @@ const sizeStyles: Record<ButtonSize, string> = {
   'sm': 'p-1   text-xs   gap-1  ',
 };
 
+// const sizeStyles: Record<ButtonSize, string> = {
+//   'icon-lg': 'p-2   size-7  [&_svg]:size-5',
+//   'icon-md': 'p-1.5 size-7  [&_svg]:size-5',
+//   'icon-sm': 'p-1   size-7  [&_svg]:size-5',
+
+//   'lg': 'p-2.5 text-xs gap-1',
+//   'md': 'p-2   text-xs gap-1',
+//   'sm': 'p-1   text-xs gap-1',
+// };
+
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
     'tooltipPlacement',
@@ -50,7 +60,7 @@ export const Button = (props: ButtonProps) => {
 
   const cls = () =>
     cn(
-      'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-xs whitespace-nowrap',
+      'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-sm whitespace-nowrap',
       'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
       'outline-none focus-visible:bg-active',
       'data-disabled:cursor-not-allowed',
