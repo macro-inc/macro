@@ -9,7 +9,7 @@
 /// indices live behind the alias and can be swapped via the OpenSearch
 /// `_aliases` API to support zero-downtime reindexing.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, strum::Display, strum::EnumString, strum::AsRefStr)]
-#[strum(serialize_all = "lowercase")]
+#[strum(serialize_all = "snake_case")]
 pub enum SearchIndex {
     /// The channel alias
     Channels,
@@ -20,7 +20,6 @@ pub enum SearchIndex {
     /// The email alias
     Emails,
     /// The call records alias
-    #[strum(serialize = "call_records")]
     CallRecords,
 }
 
@@ -37,8 +36,8 @@ pub enum SearchIndex {
     serde::Serialize,
     serde::Deserialize,
 )]
-#[strum(serialize_all = "lowercase")]
-#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum SearchEntityType {
     /// The channel entity type (has OpenSearch index)
     Channels,
@@ -51,8 +50,6 @@ pub enum SearchEntityType {
     /// The project entity type (Postgres-only)
     Projects,
     /// The call records entity type (has OpenSearch index)
-    #[strum(serialize = "call_records")]
-    #[serde(rename = "call_records")]
     CallRecords,
 }
 
@@ -69,8 +66,8 @@ pub enum SearchEntityType {
     serde::Serialize,
     serde::Deserialize,
 )]
-#[strum(serialize_all = "lowercase")]
-#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum OpenSearchEntityType {
     /// The channel index
     Channels,
@@ -81,8 +78,6 @@ pub enum OpenSearchEntityType {
     /// The email index
     Emails,
     /// The call records index
-    #[strum(serialize = "call_records")]
-    #[serde(rename = "call_records")]
     CallRecords,
 }
 
@@ -141,5 +136,23 @@ mod test {
             let from_index: SearchIndex = variant.clone().into();
             assert_eq!(variant.index_name(), from_index.as_ref());
         }
+    }
+
+    #[test]
+    fn snake_case_serialization_matches_index_names() {
+        // Belt-and-suspenders: confirm strum + serde casing produces the
+        // same wire format index_name() promises, including the multi-word
+        // call_records variant that previously needed an override.
+        assert_eq!(SearchIndex::CallRecords.as_ref(), "call_records");
+        assert_eq!(OpenSearchEntityType::CallRecords.as_ref(), "call_records");
+        assert_eq!(SearchEntityType::CallRecords.as_ref(), "call_records");
+        assert_eq!(
+            serde_json::to_string(&OpenSearchEntityType::CallRecords).unwrap(),
+            "\"call_records\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SearchEntityType::CallRecords).unwrap(),
+            "\"call_records\""
+        );
     }
 }
