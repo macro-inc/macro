@@ -7,9 +7,8 @@ import type {
   SortOption,
   SystemSortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
-import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import { Button, Layer } from '@ui';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import { Layer } from '@ui';
 
 export interface SortDropdownProps {
   /** Current sort value */

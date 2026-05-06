@@ -11,7 +11,7 @@ import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
-import { Button } from './button';
+import { Button } from '@ui';
 import {
   VIEW_FILTER_CATEGORIES,
   buildContactLabel,

@@ -6,7 +6,7 @@ import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filter
 import { ActiveFilterChips } from '@app/component/next-soup/soup-view/filters-bar/active-filter-chips';
 import { isMobile } from '@core/mobile/isMobile';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import { Button } from './button';
+import { Button } from '@ui';
 import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
 import { useSoup } from '../../soup-context';
 import { registerHotkey } from '@core/hotkey/hotkeys';
