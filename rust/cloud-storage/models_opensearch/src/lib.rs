@@ -137,5 +137,4 @@ mod test {
             assert_eq!(variant.index_name(), from_index.as_ref());
         }
     }
-
 }
