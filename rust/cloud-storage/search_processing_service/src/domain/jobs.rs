@@ -1,23 +1,24 @@
-//! Redis-backed registry of long-running backfill jobs.
+//! DynamoDB-backed registry of long-running backfill jobs.
 //!
 //! Backfills can take many minutes for prod-scale entities — well past the
 //! ALB idle timeout — so the HTTP handler kicks the orchestrator onto a
 //! background tokio task and returns a [`JobId`] right away. Clients poll
 //! [`BackfillJobs::snapshot`] for progress; the orchestrator updates the
-//! shared [`JobProgress`] (HINCRBY into the same Redis hash) as each page
-//! lands.
+//! shared [`JobProgress`] (`UpdateItem ADD enqueued`) as each page lands.
 //!
-//! Why Redis: SPS scales between 1 and 10 ECS tasks with no ALB stickiness,
-//! so a status poll can land on a different instance from the one that
-//! handled the POST. An in-memory registry would 404 in that case.
+//! Why DynamoDB: SPS scales between 1 and 10 ECS tasks with no ALB
+//! stickiness, so a status poll can land on a different instance from the
+//! one that handled the POST. An in-memory registry would 404 in that
+//! case. DynamoDB gives us a shared store with native TTL for cleanup and
+//! pay-per-request pricing — no infra to provision.
 //!
-//! Each job is one Redis hash at `sps:backfill:job:{id}`. A TTL set on
-//! creation acts as the cleanup mechanism — nothing GCs by hand. The
+//! Each job is one item keyed on `id`. Items carry an `expires_at` epoch
+//! attribute that DynamoDB's background TTL process sweeps. The
 //! `Cancelled` status is a best-effort signal: cancellation tokens are
 //! per-instance (kept in a local `HashMap`) since they don't replicate
 //! across pods, so SIGTERM only stops jobs running on that pod. Since
-//! workers re-index idempotently, a cancelled-but-not-recorded backfill is
-//! recoverable by re-kicking it.
+//! workers re-index idempotently, a cancelled-but-not-recorded backfill
+//! is recoverable by re-kicking it.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -26,22 +27,16 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+use aws_sdk_dynamodb::Client;
+use aws_sdk_dynamodb::types::AttributeValue;
 use chrono::{DateTime, Utc};
-use redis::{AsyncCommands, aio::ConnectionManager};
+use ensure_exists::EnsureExists;
+use ensure_exists::dynamodb::{CreateTableErr, DefineTable, DynamoClientWrapper};
 use serde::Serialize;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use super::models::{BackfillError, BackfillReceipt};
-
-/// Redis key prefix for every backfill job hash. Bumping this is the same
-/// as wiping all in-flight + recent jobs (keys with the old prefix simply
-/// expire on their own).
-const KEY_PREFIX: &str = "sps:backfill:job:";
-
-fn job_key(id: &JobId) -> String {
-    format!("{KEY_PREFIX}{}", id.0)
-}
 
 /// Opaque identifier the API hands back when a backfill is queued.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
@@ -66,16 +61,54 @@ impl std::fmt::Display for JobId {
     }
 }
 
+/// Newtype around the table name so `DefineTable` knows what to create.
+/// Used by [`BackfillJobs::ensure_table`] for local-dev table bootstrap;
+/// in deployed environments Pulumi creates the table.
+#[derive(Debug, Clone)]
+pub struct BackfillJobsTable(Arc<str>);
+
+impl AsRef<str> for BackfillJobsTable {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl DefineTable for BackfillJobsTable {
+    async fn create_table(&self, client: &aws_sdk_dynamodb::Client) -> Result<(), CreateTableErr> {
+        client
+            .create_table()
+            .table_name(self.as_ref())
+            .key_schema(
+                aws_sdk_dynamodb::types::KeySchemaElement::builder()
+                    .attribute_name("id")
+                    .key_type(aws_sdk_dynamodb::types::KeyType::Hash)
+                    .build()
+                    .map_err(aws_sdk_dynamodb::Error::from)?,
+            )
+            .attribute_definitions(
+                aws_sdk_dynamodb::types::AttributeDefinition::builder()
+                    .attribute_name("id")
+                    .attribute_type(aws_sdk_dynamodb::types::ScalarAttributeType::S)
+                    .build()
+                    .map_err(aws_sdk_dynamodb::Error::from)?,
+            )
+            .billing_mode(aws_sdk_dynamodb::types::BillingMode::PayPerRequest)
+            .send()
+            .await
+            .map_err(aws_sdk_dynamodb::Error::from)?;
+        Ok(())
+    }
+}
+
 /// Per-page progress hook handed to the orchestrator.
 ///
 /// Two backends so `drain_source` doesn't need to know whether it's running
-/// against a real Redis or a unit-test fake:
+/// against a real DynamoDB or a unit-test fake:
 ///
-/// - `Detached` — bumps an in-process atomic. Used by tests (and as a
-///   degraded fallback if we ever need it).
-/// - `Redis` — fires `HINCRBY sps:backfill:job:{id} enqueued <n>` per page.
-///   A page is the same boundary the cancellation token is checked at, so
-///   the round trip cost is amortised over the page work.
+/// - `Detached` — bumps an in-process atomic. Used by tests.
+/// - `Dynamo` — fires `UpdateItem ADD enqueued :n` per page. Page bounds
+///   are the same point the cancellation token is checked, so the round
+///   trip cost is amortised over the page work.
 pub struct JobProgress {
     backend: ProgressBackend,
 }
@@ -83,14 +116,15 @@ pub struct JobProgress {
 enum ProgressBackend {
     #[cfg(test)]
     Detached(AtomicUsize),
-    Redis {
-        conn: ConnectionManager,
-        key: String,
+    Dynamo {
+        client: Client,
+        table: Arc<str>,
+        id: JobId,
     },
 }
 
 impl JobProgress {
-    /// In-memory progress for tests. Production always uses the Redis
+    /// In-memory progress for tests. Production always uses the DynamoDB
     /// backend so other instances can read the live counter.
     #[cfg(test)]
     pub fn detached() -> Self {
@@ -99,39 +133,42 @@ impl JobProgress {
         }
     }
 
-    fn redis(conn: ConnectionManager, key: String) -> Self {
+    fn dynamo(client: Client, table: Arc<str>, id: JobId) -> Self {
         Self {
-            backend: ProgressBackend::Redis { conn, key },
+            backend: ProgressBackend::Dynamo { client, table, id },
         }
     }
 
-    /// Add `n` to the running enqueued count. Best effort against Redis: a
-    /// failed write logs and continues so a transient blip doesn't kill the
-    /// whole drain (the next page's HINCRBY will reconcile).
+    /// Add `n` to the running enqueued count. Best effort against
+    /// DynamoDB: a failed write logs and continues so a transient blip
+    /// doesn't kill the whole drain (the next page's `ADD` reconciles).
     pub async fn add(&self, n: usize) {
         match &self.backend {
             #[cfg(test)]
             ProgressBackend::Detached(a) => {
                 a.fetch_add(n, Ordering::Relaxed);
             }
-            ProgressBackend::Redis { conn, key } => {
-                let mut conn = conn.clone();
-                let result: redis::RedisResult<i64> =
-                    conn.hincr(key.as_str(), "enqueued", n as i64).await;
+            ProgressBackend::Dynamo { client, table, id } => {
+                let result = client
+                    .update_item()
+                    .table_name(table.as_ref())
+                    .key("id", AttributeValue::S(id.0.clone()))
+                    .update_expression("ADD enqueued :n")
+                    .expression_attribute_values(":n", AttributeValue::N(n.to_string()))
+                    .send()
+                    .await;
                 if let Err(e) = result {
-                    tracing::warn!(error=?e, key=%key, "failed to update backfill progress in redis");
+                    tracing::warn!(error=?e, id=%id, "failed to update backfill progress in dynamodb");
                 }
             }
         }
     }
 
-    /// Test-only accessor for the in-memory count. Always 0 for the Redis
-    /// backend (the snapshot endpoint reads from Redis directly).
     #[cfg(test)]
     pub fn local_count(&self) -> usize {
         match &self.backend {
             ProgressBackend::Detached(a) => a.load(Ordering::Relaxed),
-            ProgressBackend::Redis { .. } => 0,
+            ProgressBackend::Dynamo { .. } => 0,
         }
     }
 }
@@ -190,12 +227,13 @@ pub struct JobHandle {
     pub cancel: CancellationToken,
 }
 
-/// Async-shareable registry of backfill jobs, backed by Redis. Cheap to
-/// clone — the `ConnectionManager` is internally `Arc`-y and the local
-/// cancel map sits behind one `Arc<Mutex<…>>`.
+/// Async-shareable registry of backfill jobs, backed by DynamoDB. Cheap to
+/// clone — the SDK `Client` is internally `Arc`-y and the local cancel
+/// map sits behind one `Arc<Mutex<…>>`.
 #[derive(Clone)]
 pub struct BackfillJobs {
-    redis: ConnectionManager,
+    client: Client,
+    table: Arc<str>,
     /// Per-instance cancellation tokens. Cancellation does not replicate
     /// across pods (we have no cancel endpoint, and the token is the only
     /// mechanism `drain_source` checks). Entries are removed on `finish`.
@@ -204,31 +242,53 @@ pub struct BackfillJobs {
 }
 
 impl BackfillJobs {
-    pub fn new(redis: ConnectionManager, ttl: Duration) -> Self {
+    pub fn new(client: Client, table: impl Into<Arc<str>>, ttl: Duration) -> Self {
         Self {
-            redis,
+            client,
+            table: table.into(),
             local_cancels: Arc::new(Mutex::new(HashMap::new())),
             ttl,
         }
     }
 
+    /// Create the DynamoDB table if it doesn't exist. Used in local
+    /// development against the dynamodb-local container; in deployed
+    /// environments Pulumi owns the table and this is a no-op (DescribeTable
+    /// finds it and returns).
+    pub async fn ensure_table(&self) -> anyhow::Result<()> {
+        let table = BackfillJobsTable(self.table.clone());
+        let wrapper = DynamoClientWrapper {
+            client: &self.client,
+            table_name: table,
+        };
+        wrapper.ensure_exists().await?;
+        Ok(())
+    }
+
     /// Allocate a new job slot and return the handle the spawning code
-    /// needs to drive and observe it. Writes the initial hash + TTL before
-    /// returning so a subsequent status poll can find it.
+    /// needs to drive and observe it. Writes the initial item with TTL
+    /// before returning so a subsequent status poll can find it.
     pub async fn start(&self, entity: &str) -> anyhow::Result<JobHandle> {
         let id = JobId::new();
-        let key = job_key(&id);
         let started_at = Utc::now();
+        let expires_at = started_at + chrono::Duration::from_std(self.ttl)?;
 
-        let mut conn = self.redis.clone();
-        let _: () = redis::pipe()
-            .atomic()
-            .hset(&key, "status", JobStatus::Running.as_str())
-            .hset(&key, "enqueued", 0i64)
-            .hset(&key, "started_at", started_at.to_rfc3339())
-            .hset(&key, "entity", entity)
-            .expire(&key, self.ttl.as_secs() as i64)
-            .query_async(&mut conn)
+        self.client
+            .put_item()
+            .table_name(self.table.as_ref())
+            .item("id", AttributeValue::S(id.0.clone()))
+            .item(
+                "status",
+                AttributeValue::S(JobStatus::Running.as_str().to_string()),
+            )
+            .item("enqueued", AttributeValue::N("0".to_string()))
+            .item("started_at", AttributeValue::S(started_at.to_rfc3339()))
+            .item("entity", AttributeValue::S(entity.to_string()))
+            .item(
+                "expires_at",
+                AttributeValue::N(expires_at.timestamp().to_string()),
+            )
+            .send()
             .await?;
 
         let cancel = CancellationToken::new();
@@ -238,8 +298,12 @@ impl BackfillJobs {
             .insert(id.clone(), cancel.clone());
 
         Ok(JobHandle {
-            id,
-            progress: Arc::new(JobProgress::redis(self.redis.clone(), key)),
+            id: id.clone(),
+            progress: Arc::new(JobProgress::dynamo(
+                self.client.clone(),
+                self.table.clone(),
+                id,
+            )),
             cancel,
         })
     }
@@ -266,50 +330,67 @@ impl BackfillJobs {
             Err(e) => (JobStatus::Failed, Some(format!("{e}"))),
         };
 
-        let key = job_key(id);
-        let finished_at = Utc::now().to_rfc3339();
-        let mut conn = self.redis.clone();
-        let mut pipe = redis::pipe();
-        pipe.atomic()
-            .hset(&key, "status", status.as_str())
-            .hset(&key, "finished_at", finished_at)
-            .expire(&key, self.ttl.as_secs() as i64);
-        if let Some(e) = error {
-            pipe.hset(&key, "error", e);
-        }
-        let _: () = pipe.query_async(&mut conn).await?;
+        let mut update = self
+            .client
+            .update_item()
+            .table_name(self.table.as_ref())
+            .key("id", AttributeValue::S(id.0.clone()))
+            .expression_attribute_names("#s", "status")
+            .expression_attribute_values(":s", AttributeValue::S(status.as_str().to_string()))
+            .expression_attribute_values(":f", AttributeValue::S(Utc::now().to_rfc3339()));
 
+        let expr = if let Some(e) = error {
+            update = update
+                .expression_attribute_names("#e", "error")
+                .expression_attribute_values(":e", AttributeValue::S(e));
+            "SET #s = :s, finished_at = :f, #e = :e"
+        } else {
+            "SET #s = :s, finished_at = :f"
+        };
+
+        update.update_expression(expr).send().await?;
         Ok(())
     }
 
-    /// Read the current state of a job from Redis. `Ok(None)` when the key
-    /// has expired or never existed.
+    /// Read the current state of a job from DynamoDB. `Ok(None)` when the
+    /// item has expired or never existed.
     pub async fn snapshot(&self, id: &JobId) -> anyhow::Result<Option<JobSnapshot>> {
-        let key = job_key(id);
-        let mut conn = self.redis.clone();
-        let map: HashMap<String, String> = conn.hgetall(&key).await?;
-        if map.is_empty() {
+        let resp = self
+            .client
+            .get_item()
+            .table_name(self.table.as_ref())
+            .key("id", AttributeValue::S(id.0.clone()))
+            .send()
+            .await?;
+        let Some(item) = resp.item else {
             return Ok(None);
-        }
+        };
 
-        let status = map
+        let status = item
             .get("status")
+            .and_then(|v| v.as_s().ok())
             .and_then(|s| JobStatus::from_str(s))
             .unwrap_or(JobStatus::Running);
-        let enqueued: usize = map
+        let enqueued: usize = item
             .get("enqueued")
+            .and_then(|v| v.as_n().ok())
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
-        let started_at = map
+        let started_at = item
             .get("started_at")
+            .and_then(|v| v.as_s().ok())
             .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
             .map(|dt| dt.with_timezone(&Utc))
             .unwrap_or_else(Utc::now);
-        let finished_at = map
+        let finished_at = item
             .get("finished_at")
+            .and_then(|v| v.as_s().ok())
             .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
             .map(|dt| dt.with_timezone(&Utc));
-        let error = map.get("error").cloned();
+        let error = item
+            .get("error")
+            .and_then(|v| v.as_s().ok())
+            .map(|s| s.to_string());
 
         Ok(Some(JobSnapshot {
             job_id: id.clone(),

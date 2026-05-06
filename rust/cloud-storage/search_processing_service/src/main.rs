@@ -196,15 +196,18 @@ async fn main() -> anyhow::Result<()> {
         run_search_processing_workers(ctx, config.worker_count);
     }
 
-    let redis_conn = redis::Client::open(config.redis_host.as_str())
-        .context("failed to construct redis client")?
-        .get_connection_manager()
-        .await
-        .context("failed to connect to redis for backfill registry")?;
+    let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let backfill_jobs = BackfillJobs::new(
-        redis_conn,
+        dynamodb_client,
+        config.backfill_jobs_table.clone(),
         std::time::Duration::from_secs(config.backfill_job_ttl_seconds),
     );
+    if matches!(config.environment, Environment::Local) {
+        backfill_jobs
+            .ensure_table()
+            .await
+            .context("failed to ensure backfill jobs table exists")?;
+    }
 
     api::setup_and_serve(ApiContext {
         db,

@@ -17,6 +17,8 @@ required-features = ["processing", "service"]
 
 [dependencies]
 anyhow = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
@@ -47,8 +49,8 @@ models_opensearch = { path = "../models_opensearch" }
 models_search = { path = "../models_search" }
 nom = { workspace = true }
 opensearch_client = { path = "../opensearch_client" }
+ensure_exists = { path = "../ensure_exists", features = ["dynamodb"] }
 pdfium-render = { workspace = true }
-redis = { workspace = true, features = ["aio", "connection-manager", "tokio-comp", "tokio-native-tls-comp"] }
 rust-embed = "8.6.0"
 s3_client = { path = "../s3_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }

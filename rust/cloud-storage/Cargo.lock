@@ -324,15 +324,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arc-swap"
-version = "1.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9f3647c145568cec02c42054e07bdf9a5a698e15b466fb2341bfc393cd24aa5"
-dependencies = [
- "rustversion",
-]
-
-[[package]]
 name = "arcstr"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1472,15 +1463,6 @@ dependencies = [
  "pin-project-lite",
  "rand 0.8.5",
  "tokio",
-]
-
-[[package]]
-name = "backon"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cffb0e931875b666fc4fcb20fee52e9bbd1ef836fd9e9e04ec21555f9f85f7ef"
-dependencies = [
- "fastrand 2.3.0",
 ]
 
 [[package]]
@@ -9034,14 +9016,11 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e969d1d702793536d5fda739a82b88ad7cbe7d04f8386ee8cd16ad3eff4854a5"
 dependencies = [
- "arc-swap",
  "arcstr",
- "backon",
  "bytes",
  "cfg-if",
  "combine",
  "crc16",
- "futures-channel",
  "futures-util",
  "itoa",
  "log",
@@ -9763,6 +9742,8 @@ name = "search_processing_service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aws-config",
+ "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -9771,6 +9752,7 @@ dependencies = [
  "comms_db_client",
  "document_sub_type",
  "email_db_client",
+ "ensure_exists",
  "futures",
  "http-body-util",
  "lexical_client",
@@ -9791,7 +9773,6 @@ dependencies = [
  "nom 8.0.0",
  "opensearch_client",
  "pdfium-render",
- "redis",
  "rust-embed",
  "s3_client",
  "s3_key",

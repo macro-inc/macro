@@ -13,6 +13,7 @@ type DynamoDBTableArgs = {
   billingMode?: 'PROVISIONED' | 'PAY_PER_REQUEST';
   tags?: { [key: string]: string };
   pointInTimeRecoveryEnabled?: boolean;
+  ttl?: { attributeName: string; enabled?: boolean };
 };
 
 export class DynamoDBTable extends pulumi.ComponentResource {
@@ -36,6 +37,7 @@ export class DynamoDBTable extends pulumi.ComponentResource {
       billingMode = 'PAY_PER_REQUEST',
       tags,
       pointInTimeRecoveryEnabled = stack === 'prod',
+      ttl,
     } = args;
 
     this.table = new aws.dynamodb.Table(
@@ -51,6 +53,9 @@ export class DynamoDBTable extends pulumi.ComponentResource {
         pointInTimeRecovery: {
           enabled: pointInTimeRecoveryEnabled,
         },
+        ttl: ttl
+          ? { attributeName: ttl.attributeName, enabled: ttl.enabled ?? true }
+          : undefined,
       },
       { parent: this }
     );

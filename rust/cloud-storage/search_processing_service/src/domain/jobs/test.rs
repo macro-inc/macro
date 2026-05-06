@@ -1,29 +1,39 @@
-//! Integration-ish tests for the Redis-backed backfill registry.
+//! Integration-ish tests for the DynamoDB-backed backfill registry.
 //!
-//! These exercise real Redis (matching the DCS test pattern at
-//! `document_cognition_service/src/api/context/test.rs:383`). Each test
-//! generates fresh `JobId`s (UUIDs) so parallel test runs don't collide on
-//! the shared Redis at `redis://127.0.0.1:6379/`. Skipped if Redis is
-//! unreachable rather than failing — this keeps `cargo test` working in
-//! environments without a running Redis (e.g. CI without docker-compose
-//! up).
+//! These exercise local DynamoDB (the `my-dynamodb` container started by
+//! `just ensure_dynamodb`). Each test uses the same shared table; fresh
+//! `JobId`s (UUIDs) keep parallel runs from clobbering each other. Tests
+//! short-circuit if dynamodb-local isn't reachable so `cargo test` works
+//! without the container running.
 
 use std::time::Duration;
 
 use super::*;
 
-/// Try to connect to local Redis. Returns `None` if Redis isn't running so
-/// the test can short-circuit instead of failing.
+const LOCAL_TABLE: &str = "search_processing_backfill_jobs_test";
+const LOCAL_ENDPOINT: &str = "http://127.0.0.1:8000";
+
 async fn try_jobs() -> Option<BackfillJobs> {
-    let client = redis::Client::open("redis://127.0.0.1:6379/").ok()?;
-    let conn = client.get_connection_manager().await.ok()?;
-    Some(BackfillJobs::new(conn, Duration::from_secs(60)))
+    let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region("us-east-1")
+        .test_credentials()
+        .endpoint_url(LOCAL_ENDPOINT)
+        .load()
+        .await;
+    let client = aws_sdk_dynamodb::Client::new(&config);
+    // Probe: list_tables fails fast if dynamodb-local isn't running.
+    if client.list_tables().send().await.is_err() {
+        return None;
+    }
+    let jobs = BackfillJobs::new(client, LOCAL_TABLE, Duration::from_secs(60));
+    jobs.ensure_table().await.ok()?;
+    Some(jobs)
 }
 
 #[tokio::test]
 async fn snapshot_reflects_progress_updates() {
     let Some(jobs) = try_jobs().await else {
-        eprintln!("skipping: redis not reachable at localhost:6379");
+        eprintln!("skipping: dynamodb-local not reachable at {LOCAL_ENDPOINT}");
         return;
     };
     let handle = jobs.start("calls").await.expect("start");
@@ -40,7 +50,7 @@ async fn snapshot_reflects_progress_updates() {
 #[tokio::test]
 async fn finish_ok_after_cancel_marks_cancelled() {
     let Some(jobs) = try_jobs().await else {
-        eprintln!("skipping: redis not reachable at localhost:6379");
+        eprintln!("skipping: dynamodb-local not reachable at {LOCAL_ENDPOINT}");
         return;
     };
     let handle = jobs.start("chats").await.expect("start");
@@ -57,7 +67,7 @@ async fn finish_ok_after_cancel_marks_cancelled() {
 #[tokio::test]
 async fn finish_err_records_failure_message() {
     let Some(jobs) = try_jobs().await else {
-        eprintln!("skipping: redis not reachable at localhost:6379");
+        eprintln!("skipping: dynamodb-local not reachable at {LOCAL_ENDPOINT}");
         return;
     };
     let handle = jobs.start("documents").await.expect("start");
@@ -80,7 +90,7 @@ async fn finish_err_records_failure_message() {
 #[tokio::test]
 async fn cancel_all_local_fires_every_local_token() {
     let Some(jobs) = try_jobs().await else {
-        eprintln!("skipping: redis not reachable at localhost:6379");
+        eprintln!("skipping: dynamodb-local not reachable at {LOCAL_ENDPOINT}");
         return;
     };
     let a = jobs.start("calls").await.expect("a");
@@ -95,7 +105,7 @@ async fn cancel_all_local_fires_every_local_token() {
 #[tokio::test]
 async fn snapshot_returns_none_for_unknown_id() {
     let Some(jobs) = try_jobs().await else {
-        eprintln!("skipping: redis not reachable at localhost:6379");
+        eprintln!("skipping: dynamodb-local not reachable at {LOCAL_ENDPOINT}");
         return;
     };
     assert!(
@@ -108,11 +118,8 @@ async fn snapshot_returns_none_for_unknown_id() {
 
 #[tokio::test]
 async fn finish_drops_local_cancel_entry() {
-    // After finish() the local cancel map shouldn't keep the token —
-    // otherwise long-lived processes accumulate handles for finished jobs
-    // alongside the Redis-side TTL'd state.
     let Some(jobs) = try_jobs().await else {
-        eprintln!("skipping: redis not reachable at localhost:6379");
+        eprintln!("skipping: dynamodb-local not reachable at {LOCAL_ENDPOINT}");
         return;
     };
     let handle = jobs.start("emails").await.expect("start");
@@ -121,7 +128,5 @@ async fn finish_drops_local_cancel_entry() {
         .await
         .expect("finish");
 
-    // Calling cancel_all_local now is a no-op for this id; verify the map
-    // doesn't still contain it.
     assert!(!jobs.local_cancels.lock().unwrap().contains_key(&id));
 }

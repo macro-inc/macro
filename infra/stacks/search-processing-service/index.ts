@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { Redis } from '../../packages/resources';
+import { DynamoDBTable } from '../../packages/resources';
 import {
   config,
   getSearchEventQueue,
@@ -45,14 +45,12 @@ const opensearchStack = new pulumi.StackReference('opensearch-stack', {
   name: `macro-inc/opensearch/${stack}`,
 });
 
-const backfillRegistryRedis = new Redis('search-processing-redis', {
-  vpc,
+const backfillJobsTable = new DynamoDBTable('search-processing-backfill-jobs', {
+  baseName: 'search-processing-backfill-jobs',
+  attributes: [{ name: 'id', type: 'S' }],
+  hashKey: 'id',
+  ttl: { attributeName: 'expires_at' },
   tags,
-  redisArgs: {
-    nodeType: 'cache.t4g.micro',
-    port: 6379,
-    engineVersion: '7.1',
-  },
 });
 
 const OPENSEARCH_URL: pulumi.Output<string> = opensearchStack
@@ -93,6 +91,7 @@ const searchProcessingService = new SearchProcessingService(
       databaseUrlReadonlyArn,
       opensearchPasswordArn,
     ],
+    extraManagedPolicyArns: [backfillJobsTable.policy.arn],
     searchEventQueueArn,
     ecsClusterArn: cloudStorageClusterArn,
     documentStorageBucketArn,
@@ -159,8 +158,8 @@ const searchProcessingService = new SearchProcessingService(
         value: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
       },
       {
-        name: 'REDIS_HOST',
-        value: pulumi.interpolate`redis://${backfillRegistryRedis.endpoint}`,
+        name: 'BACKFILL_JOBS_TABLE',
+        value: backfillJobsTable.table.name,
       },
       // OpenTelemetry / Datadog tracing configuration
       {

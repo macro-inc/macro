@@ -63,12 +63,13 @@ pub struct Config {
     /// Per-entity DB page sizes for backfill adapters.
     pub backfill_page_sizes: BackfillPageSizes,
 
-    /// Redis connection URL for the backfill job registry. Same Redis the
-    /// connection-gateway exposes — backfills don't need a dedicated cluster.
-    pub redis_host: String,
+    /// DynamoDB table name backing the backfill job registry. Items carry an
+    /// `expires_at` epoch attribute that DynamoDB's TTL sweeps in the
+    /// background, so completed jobs vanish on their own.
+    pub backfill_jobs_table: String,
 
-    /// TTL for backfill job records in Redis. Acts as the GC mechanism —
-    /// completed jobs vanish on their own without a separate cleanup task.
+    /// TTL applied to the `expires_at` attribute on each job record. Acts as
+    /// the GC mechanism — DynamoDB removes items shortly after this elapses.
     pub backfill_job_ttl_seconds: u64,
 }
 
@@ -140,7 +141,8 @@ impl Config {
             emails: parse_page_size("BACKFILL_EMAILS_PAGE_SIZE", DEFAULT_EMAILS_PAGE)?,
         };
 
-        let redis_host = std::env::var("REDIS_HOST").context("REDIS_HOST must be provided")?;
+        let backfill_jobs_table =
+            std::env::var("BACKFILL_JOBS_TABLE").context("BACKFILL_JOBS_TABLE must be provided")?;
         let backfill_job_ttl_seconds: u64 = std::env::var("BACKFILL_JOB_TTL_SECONDS")
             .unwrap_or_else(|_| (24 * 60 * 60).to_string())
             .parse()
@@ -161,7 +163,7 @@ impl Config {
             worker_count,
             lexical_service_url,
             backfill_page_sizes,
-            redis_host,
+            backfill_jobs_table,
             backfill_job_ttl_seconds,
         })
     }
