@@ -235,7 +235,7 @@ export function ChatInput(props: ChatInputComponentProps) {
             id="chat-input-text-area"
             class={cn('text-sm sm:text-sm text-ink')}
             classList={{
-              'pl-8': !isMultiline(),
+              'pl-12': !isMultiline(),
               'pr-[48px]': !isMultiline() && isTouchDevice(),
               'pr-[130px]': !isMultiline() && !isTouchDevice(),
               'pl-0 pr-0 pb-8': isMultiline(),

@@ -46,10 +46,10 @@ export function FatalError(props: FatalErrorProps) {
                   window.location.href = window.location.origin + '/app';
                 }}
               >
-                <HomeIcon /> Home
+                <HomeIcon class="size-4" /> Home
               </Button>
               <Button variant="base" onClick={props.reset}>
-                <ResetIcon /> Try Again
+                <ResetIcon class="size-4" /> Try Again
               </Button>
             </div>
           </div>
