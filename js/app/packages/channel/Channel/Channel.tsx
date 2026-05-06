@@ -293,6 +293,13 @@ export function Channel(props: ChannelProps) {
 
   const selection = createMessageSelection({
     keys: () => messageIndex.keys,
+    // Don't auto-clear the selection when it points at a target the channel is
+    // actively trying to bring into view but hasn't loaded yet (around-fetch
+    // in flight). Without this, navigating to a message outside the loaded
+    // window would set selection, immediately get auto-cleared because the id
+    // isn't in messageIndex.keys, and the orange highlight would never appear
+    // once the around-fetch eventually lands.
+    protectedId: targetMessageController.activeTargetMessageId,
   });
 
   const selectMessage = (messageId: string) => {

@@ -2,6 +2,15 @@ import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 
 type CreateMessageSelectionOptions = {
   keys: Accessor<string[]>;
+  /**
+   * If the currently selected id matches this accessor's value, the auto-clear
+   * effect will leave it alone even when it isn't in `keys`. Use this to
+   * protect a target the channel is actively trying to bring into view (e.g.
+   * a find-bar / URL-deeplink target whose around-fetch hasn't landed yet) so
+   * the selection survives the gap between "select called" and "message
+   * appears in messageIndex".
+   */
+  protectedId?: Accessor<string | undefined>;
 };
 
 export type MessageSelection = {
@@ -18,13 +27,14 @@ export function createMessageSelection(
 ): MessageSelection {
   const [selectedId, setSelectedId] = createSignal<string | undefined>();
 
-  // Auto-clear if selected ID disappears from keys
+  // Auto-clear if selected ID disappears from keys, *unless* it's the
+  // currently-protected target — see `protectedId` doc above.
   createEffect(
     on(options.keys, (keys) => {
       const current = selectedId();
-      if (current && !keys.includes(current)) {
-        setSelectedId(undefined);
-      }
+      if (!current || keys.includes(current)) return;
+      if (current === options.protectedId?.()) return;
+      setSelectedId(undefined);
     })
   );
 
