@@ -87,7 +87,10 @@ export function FindBar(props: FindBarProps) {
         variant="ghost"
         aria-label="Search"
         onClick={() => props.onSubmit()}
-        classList={{ '!text-accent': !props.hasUnsubmittedChanges }}
+        classList={{
+          '!text-accent':
+            !props.hasUnsubmittedChanges && !!props.query.trim(),
+        }}
       >
         <MagnifyingGlass />
       </Button>
