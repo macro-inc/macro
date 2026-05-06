@@ -405,7 +405,7 @@ export function Account() {
 
             <Show when={isNativeMobilePlatform()}>
               <div class="border-t border-edge pt-4">
-                <Button variant="destructive" depth={3} onClick={() => setShowDeleteModal(true)}>
+                <Button variant="danger" depth={3} onClick={() => setShowDeleteModal(true)}>
                   Delete Account
                 </Button>
                 <Dialog
@@ -427,7 +427,7 @@ export function Account() {
                         <Button variant="base" depth={3} onClick={() => setShowDeleteModal(false)}>
                           Cancel
                         </Button>
-                        <Button variant="destructive" depth={3} onClick={() => {
+                        <Button variant="danger" depth={3} onClick={() => {
                           setShowDeleteModal(false);
                           setShowDeleteConfirmModal(true);
                         }}>
@@ -456,7 +456,7 @@ export function Account() {
                         <Button variant="base" depth={3} onClick={() => setShowDeleteConfirmModal(false)}>
                           Cancel
                         </Button>
-                        <Button variant="destructive" depth={3} onClick={deleteAccountHandler}>
+                        <Button variant="danger" depth={3} onClick={deleteAccountHandler}>
                           Delete My Account
                         </Button>
                       </div>

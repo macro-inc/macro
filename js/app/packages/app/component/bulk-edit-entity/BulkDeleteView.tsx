@@ -79,7 +79,7 @@ export const BulkDeleteView = (props: {
               );
             }}
             type="button"
-            variant="destructive"
+            variant="danger"
             onClick={handleDelete}
           >
             Delete

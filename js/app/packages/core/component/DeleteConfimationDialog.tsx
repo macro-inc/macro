@@ -25,7 +25,7 @@ export function DeleteConfimationDialog(props: DeleteConfimationDialogProps) {
             <Dialog.CloseButton>
               <Button variant="ghost">Cancel</Button>
             </Dialog.CloseButton>
-            <Button variant="destructive" onClick={props.onDelete}>
+            <Button variant="danger" onClick={props.onDelete}>
               Delete
             </Button>
           </div>

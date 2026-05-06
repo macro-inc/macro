@@ -187,7 +187,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                   Cancel
                 </Button>
                 <Button
-                  variant="destructive"
+                  variant="danger"
                   onClick={handleDeleteConfirm}
                   disabled={deleteMutation.isPending}
                 >

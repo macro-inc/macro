@@ -530,7 +530,7 @@ function GlyphGrid(props: GlyphGridProps) {
                       <Pencil />
                     </Button>
                     <Button
-                      variant="destructive"
+                      variant="danger"
                       size="icon-md"
                       tooltip={<LabelAndHotKey label="Delete" />}
                       onClick={(e) => {

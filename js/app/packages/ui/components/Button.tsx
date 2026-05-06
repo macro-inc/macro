@@ -15,12 +15,12 @@ type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
   class?: string;
 };
 
-type ButtonVariant = 'destructive' | 'base' | 'active' | 'ghost' | 'link';
+type ButtonVariant = 'danger' | 'base' | 'active' | 'ghost' | 'link';
 
 type ButtonSize = 'sm' | 'md' | 'lg' | 'icon-sm' | 'icon-md' | 'icon-lg';
 
 const variantStyles: Record<ButtonVariant, string> = {
-  destructive: 'bg-transparent text-failure    border border-failure/50     not-disabled:hover:bg-failure/10   not-disabled:active:bg-failure/20                              disabled:opacity-50          ',
+  danger:      'bg-transparent text-failure    border border-failure/50     not-disabled:hover:bg-failure/10   not-disabled:active:bg-failure/20                              disabled:opacity-50          ',
   base:        'bg-transparent text-ink        border border-edge           not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12                                  disabled:opacity-30          ',
   active:      'bg-accent-bg   text-accent     border border-accent-ink                                                                                                                                    ',
   ghost:       'bg-transparent text-ink-muted                               not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12      not-disabled:hover:text-ink disabled:opacity-30          ',
@@ -28,7 +28,7 @@ const variantStyles: Record<ButtonVariant, string> = {
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  'icon-lg': 'p-2   size-11 [&_svg]:size-7',
+  'icon-lg': 'p-2   size-11 [&_svg]:size-7', /* not used anywhere */
   'icon-md': 'p-1.5 size-9  [&_svg]:size-6',
   'icon-sm': 'p-1   size-7  [&_svg]:size-5',
 
@@ -38,7 +38,6 @@ const sizeStyles: Record<ButtonSize, string> = {
 };
 
 // const sizeStyles: Record<ButtonSize, string> = {
-//   'icon-lg': 'p-2   size-7  [&_svg]:size-5',
 //   'icon-md': 'p-1.5 size-7  [&_svg]:size-5',
 //   'icon-sm': 'p-1   size-7  [&_svg]:size-5',
 

@@ -55,7 +55,7 @@ export function MarkupToolbar() {
     cancel: () => (
       <Button
         size="icon-sm"
-        variant="destructive"
+        variant="danger"
         tooltip="Cancel"
         onClick={() => {
           setMode(PayloadMode.NoMode);
@@ -67,7 +67,7 @@ export function MarkupToolbar() {
     delete: () => (
       <Button
         size="icon-sm"
-        variant="destructive"
+        variant="danger"
         tooltip="Delete"
         onClick={() => {
           const activePlaceableIndex_ = activePlaceableId();

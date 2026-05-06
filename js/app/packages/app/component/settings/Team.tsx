@@ -989,7 +989,7 @@ function TeamManagement(props: {
               Invite
             </Button>
             <Button
-              variant="destructive"
+              variant="danger"
               size="sm"
               class="rounded-xs"
               onClick={() => setShowDeleteTeamModal(true)}
@@ -1173,7 +1173,7 @@ function TeamManagement(props: {
                     Cancel
                   </Button>
                   <Button
-                    variant="destructive"
+                    variant="danger"
                     class="rounded-xs"
                     disabled={!canDeleteTeam() || deleteTeamMutation.isPending}
                     onClick={handleDeleteTeam}
@@ -1229,7 +1229,7 @@ function TeamManagement(props: {
                     Cancel
                   </Button>
                   <Button
-                    variant="destructive"
+                    variant="danger"
                     class="rounded-xs"
                     disabled={removeUserMutation.isPending}
                     onClick={handleRemoveMember}
@@ -1282,7 +1282,7 @@ function TeamManagement(props: {
                     Keep
                   </Button>
                   <Button
-                    variant="destructive"
+                    variant="danger"
                     class="rounded-xs"
                     disabled={deleteInviteMutation.isPending}
                     onClick={handleCancelInvite}
