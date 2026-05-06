@@ -32,7 +32,7 @@ export function Appearance() {
       >
         <Panel depth={2}>
           <div class="flex flex-col h-full overflow-hidden">
-            <div class="relative flex items-center gap-3 h-10 shrink-0 px-[20px] after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
+            <div class="relative flex items-center gap-3 h-10 shrink-0 px-5 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
               <div class="h-full shrink-0">
                 <Tabs
                   list={tabList}
@@ -49,7 +49,7 @@ export function Appearance() {
             </div>
 
             <Show when={isMobile()}>
-              <div class="flex items-center px-[20px] py-1.5 border-b border-edge-muted shrink-0 min-w-0 overflow-hidden">
+              <div class="flex items-center px-5 py-1.5 border-b border-edge-muted shrink-0 min-w-0 overflow-hidden">
                 <ThemeTools />
               </div>
             </Show>

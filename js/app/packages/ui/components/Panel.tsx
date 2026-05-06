@@ -1,11 +1,11 @@
-import { cn } from '../utils/classname';
 import { splitProps, type JSX } from 'solid-js';
+import { cn } from '../utils/classname';
 import { Layer } from './Layer';
 
 export type PanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
+  depth?: 0 | 1 | 2 | 3 | 4 | 5;
   highlightColor?: string;
   active?: boolean;
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
   hidden?: boolean;
 };
 
