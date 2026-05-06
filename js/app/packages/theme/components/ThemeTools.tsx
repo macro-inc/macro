@@ -9,7 +9,7 @@ import IconSave from '@macro-icons/macro-save.svg';
 import { createMemo, Show } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 
-export function ThemeTools() {
+export function ThemeTools(props: { class?: string }) {
   let themeName!: HTMLDivElement;
 
   const defaultThemeName = 'New Theme';
@@ -22,17 +22,13 @@ export function ThemeTools() {
 
   return (
     <div
+      class={cn('flex items-center overflow-hidden w-full min-w-0', props.class)}
       style={{
         'gap': '4.5px' /* (41 - 32) / 2 */,
         'font-family': 'var(--font-sans)',
         'scrollbar-width': 'none',
-        'align-items': 'center',
-        'overflow': 'hidden',
         'font-size': '14px',
         'height': '39.5px',
-        'display': 'flex',
-        'width': '100%',
-        'min-width': '0',
       }}
     >
       <div style={{ flex: 1 }}/>

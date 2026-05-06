@@ -2,6 +2,7 @@ import type { ParentProps } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 import type { PanelProps } from './Panel';
 import { Panel } from './Panel';
+import { cn } from '../utils/classname';
 
 /**
  * ```tsx
@@ -34,10 +35,12 @@ export function Window(props: WindowProps) {
   );
 }
 
-Window.Header = (props: ParentProps) => (
+type SlotProps = ParentProps<{ class?: string }>;
+
+Window.Header = (props: SlotProps) => (
   <Show when={props.children}>
     <div
-      class="box-border flex h-10 items-center gap-1 border-b border-edge-muted px-2"
+      class={cn('flex h-10 items-center gap-1 border-b border-edge-muted px-5', props.class)}
       style={{ 'grid-area': 'header' }}
     >
       {props.children}
@@ -45,10 +48,10 @@ Window.Header = (props: ParentProps) => (
   </Show>
 );
 
-Window.Toolbar = (props: ParentProps) => (
+Window.Toolbar = (props: SlotProps) => (
   <Show when={props.children}>
     <div
-      class="box-border flex h-10 items-center gap-1 border-b border-edge-muted px-2"
+      class={cn('flex h-10 items-center gap-1 border-b border-edge-muted px-5', props.class)}
       style={{ 'grid-area': 'toolbar' }}
     >
       {props.children}
@@ -56,10 +59,16 @@ Window.Toolbar = (props: ParentProps) => (
   </Show>
 );
 
-Window.Body = (props: ParentProps) => (
+type BodyProps = ParentProps<{ class?: string; scroll?: boolean }>;
+
+Window.Body = (props: BodyProps) => (
   <Show when={props.children}>
     <div
-      class="relative min-h-0 min-w-0 overflow-hidden"
+      class={cn(
+        'relative min-h-0 min-w-0',
+        props.scroll ? 'overflow-auto' : 'overflow-hidden',
+        props.class,
+      )}
       style={{ 'grid-area': 'body' }}
     >
       {props.children}
@@ -67,10 +76,10 @@ Window.Body = (props: ParentProps) => (
   </Show>
 );
 
-Window.Footer = (props: ParentProps) => (
+Window.Footer = (props: SlotProps) => (
   <Show when={props.children}>
     <div
-      class="flex h-10 items-center gap-1 border-t border-edge-muted px-2"
+      class={cn('flex h-10 items-center gap-1 border-t border-edge-muted px-5', props.class)}
       style={{ 'grid-area': 'footer' }}
     >
       {props.children}
