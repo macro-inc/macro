@@ -20,6 +20,77 @@ type CreateIndexArgs = {
   body: Record<string, unknown>;
 };
 
+export type CreateIndexState = {
+  indexExists: boolean;
+  aliasExistsOnIndex: boolean;
+  aliasNameIsPhysicalIndex: boolean;
+  aliasTargets: string[];
+};
+
+export type CreatePlan =
+  | { kind: 'noop'; reason: string }
+  | { kind: 'create_with_alias' }
+  | { kind: 'create_without_alias'; nextStep: string }
+  | { kind: 'add_alias' }
+  | { kind: 'defer_alias'; nextStep: string };
+
+/**
+ * Pure decision: given the observed cluster state for one (indexName,
+ * aliasName) pair, what should this script do?
+ *
+ * The interesting cases are mid-migration ones. If the alias name is
+ * currently a bare physical index (e.g. `channels` is a physical index
+ * and we want to create `channels_v1` aliased as `channels`), we can't
+ * add the alias yet — that has to happen atomically alongside the
+ * removal of the conflicting physical index, which is the swap script's
+ * job. So we create the new versioned index without an alias and tell
+ * the operator to run `reindex_with_alias_swap.ts` next. Same logic
+ * when the alias already points at a different index.
+ */
+export function planCreateIndex(state: CreateIndexState): CreatePlan {
+  const {
+    indexExists,
+    aliasExistsOnIndex,
+    aliasNameIsPhysicalIndex,
+    aliasTargets,
+  } = state;
+  const aliasOnDifferentIndex =
+    aliasTargets.length > 0 && !aliasTargets.includes('__SELF__');
+  // Caller passes '__SELF__' in aliasTargets when the alias already includes
+  // indexName, so we can keep this function pure of indexName.
+
+  const aliasIsBlocked = aliasNameIsPhysicalIndex || aliasOnDifferentIndex;
+  const aliasBlockReason = aliasNameIsPhysicalIndex
+    ? `alias name is currently a bare physical index`
+    : `alias points at ${aliasTargets.join(', ')}`;
+
+  if (indexExists) {
+    if (aliasExistsOnIndex) {
+      return { kind: 'noop', reason: 'index and alias already in place' };
+    }
+    if (aliasIsBlocked) {
+      return {
+        kind: 'defer_alias',
+        nextStep:
+          `index exists but alias "${aliasBlockReason}". Run ` +
+          `reindex_with_alias_swap.ts to complete the migration.`,
+      };
+    }
+    return { kind: 'add_alias' };
+  }
+
+  if (aliasIsBlocked) {
+    return {
+      kind: 'create_without_alias',
+      nextStep:
+        `creating index now; alias deferred (${aliasBlockReason}). ` +
+        `Run reindex_with_alias_swap.ts next to swap the alias atomically.`,
+    };
+  }
+
+  return { kind: 'create_with_alias' };
+}
+
 async function createIndexWithAlias(
   opensearchClient: Client,
   { indexName, aliasName, body }: CreateIndexArgs
@@ -28,26 +99,21 @@ async function createIndexWithAlias(
     await opensearchClient.indices.exists({ index: indexName })
   ).body;
 
-  // Guard: if the alias name is currently a bare physical index (i.e. an
-  // un-aliased pre-migration state), or if the alias already points at a
-  // different index, this script is the wrong tool. The operator should
-  // run reindex_with_alias_swap.ts (or add_alias.ts) instead. Failing
-  // loudly here prevents accidentally creating a multi-index alias that
-  // makes writes ambiguous.
+  const aliasExistsOnIndex = (
+    await opensearchClient.indices.existsAlias({
+      name: aliasName,
+      index: indexName,
+    })
+  ).body;
+
   const aliasNameIsPhysicalIndex = await (async () => {
     const a = await opensearchClient.indices.existsAlias({ name: aliasName });
     if (a.body) return false;
     const i = await opensearchClient.indices.exists({ index: aliasName });
     return i.body;
   })();
-  if (aliasNameIsPhysicalIndex && aliasName !== indexName) {
-    throw new Error(
-      `Refusing to act: alias name "${aliasName}" is currently a bare ` +
-        `physical index. Use reindex_with_alias_swap.ts to migrate it ` +
-        `to "${indexName}" behind the alias.`
-    );
-  }
-  const aliasTargets = await (async () => {
+
+  const rawAliasTargets = await (async () => {
     try {
       const r = await opensearchClient.indices.getAlias({ name: aliasName });
       return Object.keys(r.body ?? {});
@@ -55,42 +121,51 @@ async function createIndexWithAlias(
       return [] as string[];
     }
   })();
-  if (aliasTargets.length > 0 && !aliasTargets.includes(indexName)) {
-    throw new Error(
-      `Refusing to act: alias "${aliasName}" already points at ` +
-        `${aliasTargets.join(', ')}, not "${indexName}". Use ` +
-        `reindex_with_alias_swap.ts to swap it.`
-    );
-  }
+  // Normalize: if the alias already includes our target index, we want
+  // planCreateIndex to ignore those targets. We collapse "alias touches
+  // indexName" to a sentinel so the pure function doesn't need indexName.
+  const aliasTargets = rawAliasTargets.includes(indexName)
+    ? ['__SELF__']
+    : rawAliasTargets;
 
-  if (indexExists) {
-    console.log(`${indexName} index already exists, ensuring alias...`);
-    const aliasExists = (
-      await opensearchClient.indices.existsAlias({
-        name: aliasName,
-        index: indexName,
-      })
-    ).body;
-    if (!aliasExists) {
+  const plan = planCreateIndex({
+    indexExists,
+    aliasExistsOnIndex,
+    aliasNameIsPhysicalIndex,
+    aliasTargets,
+  });
+
+  switch (plan.kind) {
+    case 'noop':
+      console.log(`${indexName}: ${plan.reason}`);
+      return;
+    case 'add_alias':
       console.log(`Adding alias ${aliasName} -> ${indexName}`);
       await opensearchClient.indices.putAlias({
         index: indexName,
         name: aliasName,
       });
-    }
-    return;
+      return;
+    case 'create_with_alias':
+      console.log(
+        `${indexName} does not exist, creating with alias ${aliasName}`
+      );
+      await opensearchClient.indices.create({
+        index: indexName,
+        body: { ...body, aliases: { [aliasName]: {} } },
+      });
+      return;
+    case 'create_without_alias':
+      console.log(`${indexName}: ${plan.nextStep}`);
+      await opensearchClient.indices.create({
+        index: indexName,
+        body,
+      });
+      return;
+    case 'defer_alias':
+      console.log(`${indexName}: ${plan.nextStep}`);
+      return;
   }
-
-  console.log(`${indexName} does not exist, creating with alias ${aliasName}`);
-  await opensearchClient.indices.create({
-    index: indexName,
-    body: {
-      ...body,
-      aliases: {
-        [aliasName]: {},
-      },
-    },
-  });
 }
 
 const CHANNEL_BODY = {
@@ -466,4 +541,6 @@ async function createIndices() {
   }
 }
 
-createIndices();
+if (import.meta.main) {
+  createIndices();
+}

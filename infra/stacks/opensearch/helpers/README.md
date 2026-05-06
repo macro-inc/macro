@@ -98,9 +98,12 @@ show up in practice:
 ### State 1: bare physical index → versioned index behind alias
 
 ```sh
-# 1. Create the new versioned physical index with the desired mappings.
-#    Either bump constants.ts and run create_indices.ts, or call the API
-#    directly. The new index must exist before the swap script runs.
+# 1. Create the new empty versioned physical index. Idempotent.
+#    create_indices.ts detects that the alias name (e.g. "channels") is
+#    currently a bare physical index and creates the new versioned index
+#    *without* attempting to add the alias — the alias has to be added
+#    atomically with the deletion of the conflicting physical index, and
+#    that's the swap script's job.
 bun scripts/create_indices.ts
 
 # 2. Dry run the swap. Confirm the actions list looks correct.
@@ -148,7 +151,10 @@ naming, run the swap script after the alias is in place:
 
 ```sh
 # Prereq: the canonical `emails` alias already points at emails_v2 (state 2).
-# 1. Create emails_v1 with the same mapping (use create_indices.ts).
+# 1. Create emails_v1 with the same mapping. create_indices.ts notices
+#    that the `emails` alias already points at emails_v2 (a different
+#    index), so it creates emails_v1 *without* attempting to add the
+#    alias. The swap in step 2 handles that atomically.
 bun scripts/create_indices.ts
 
 # 2. Dry run + apply.
