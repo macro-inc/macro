@@ -243,7 +243,7 @@ const PaywallComponent = (props: PaywallComponent) => {
         <Show when={!hasPaid() && props.handleGuest}>
           <Button
             onClick={() => props.handleGuest?.()}
-            variant="link"
+            variant="base"
             size="sm"
             class="mt-3 text-ink/40 hover:text-ink/60"
           >
