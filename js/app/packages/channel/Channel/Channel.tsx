@@ -311,6 +311,7 @@ export function Channel(props: ChannelProps) {
   const findBar = createChannelFindBar({
     channelId: () => props.channelId,
     goToMessage,
+    clearSelection,
   });
 
   const { messageListScopeId, attachMessageListRef, attachInputRef } =

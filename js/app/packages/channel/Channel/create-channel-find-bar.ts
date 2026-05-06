@@ -4,7 +4,10 @@ import {
   type ChannelMessageEntity,
   type WithSearch,
 } from '@entity';
-import { useSearchSoupQuery } from '@queries/soup/search';
+import {
+  useSearchSoupQuery,
+  validateSearchServiceText,
+} from '@queries/soup/search';
 import {
   type Accessor,
   createEffect,
@@ -18,6 +21,7 @@ const FIND_BAR_PAGE_SIZE = 50;
 type CreateChannelFindBarOptions = {
   channelId: Accessor<string>;
   goToMessage: (messageId: string, replyId?: string) => void;
+  clearSelection: () => void;
 };
 
 export type ChannelFindBar = ReturnType<typeof createChannelFindBar>;
@@ -46,6 +50,7 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
   );
 
   const results = createMemo<WithSearch<ChannelMessageEntity>[]>(() => {
+    if (!submittedQuery()) return [];
     // NOTE: this guard prevents the Channel from blanking while the query is pending
     if (!searchQuery.isSuccess) return [];
     const data = searchQuery.data;
@@ -100,7 +105,9 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
   };
 
   const submit = () => {
-    setSubmittedQuery(query().trim());
+    const trimmed = query().trim();
+    setSubmittedQuery(validateSearchServiceText(trimmed) ? trimmed : '');
+    options.clearSelection();
   };
 
   const open = () => {
