@@ -9,26 +9,20 @@ import {
   type ParentComponent,
   Show,
 } from 'solid-js';
-import { Button, type ButtonSize, type ButtonVariant } from '@ui/components/Button';
+import { Button, type ButtonSize } from '@ui/components/Button';
 
 type Size = 'SM' | 'Base';
-type Theme = 'primary' | 'secondary';
 
 const SIZE_TO_BUTTON_SIZE: Record<Size, ButtonSize> = {
   SM: 'sm',
   Base: 'md',
 };
 
-const THEME_TO_BUTTON_VARIANT: Record<Theme, ButtonVariant> = {
-  primary: 'primary',
-  secondary: 'secondary',
-};
 type ShadowTheme = 'Base' | 'AccentSpread';
 
 const DropdownMenu: ParentComponent<
   {
     size?: Size;
-    theme?: Theme;
     shadowTheme?: ShadowTheme;
     dropdownCutout?: number;
     shadowAccent?: boolean;
@@ -109,11 +103,7 @@ const DropdownMenu: ParentComponent<
     >
       <Popover.Trigger
         size={SIZE_TO_BUTTON_SIZE[props.size ?? 'Base']}
-        variant={
-          open()
-            ? 'active'
-            : THEME_TO_BUTTON_VARIANT[props.theme ?? 'primary']
-        }
+        variant={open() ? 'active' : 'secondary'}
         classList={{
           'block!': true,
         }}

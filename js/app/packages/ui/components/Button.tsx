@@ -6,7 +6,7 @@ import CorvuTooltip from '@corvu/tooltip';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
 
-export type ButtonVariant = 'destructive' | 'secondary' | 'tertiary' | 'primary' | 'active' | 'ghost' | 'link';
+export type ButtonVariant = 'destructive' | 'secondary' | 'tertiary' | 'active' | 'ghost' | 'link';
 
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon-sm' | 'icon-md' | 'icon-lg';
 
@@ -24,7 +24,6 @@ const variantStyles: Record<ButtonVariant, string> = {
   destructive: 'bg-transparent text-failure    border border-failure/50     not-disabled:hover:bg-failure/10   not-disabled:active:bg-failure/20                              disabled:opacity-50          ',
   secondary:   'bg-transparent text-ink        border border-edge-muted     not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12                                  disabled:opacity-30          ',
   tertiary:    'bg-ink/10      text-ink-muted                               not-disabled:hover:bg-ink/20       not-disabled:active:bg-ink/15      not-disabled:hover:text-ink disabled:opacity-50          ',
-  primary:     'bg-ink         text-page                                    not-disabled:hover:bg-ink/90       not-disabled:active:bg-ink/80                                  disabled:bg-ink-extra-muted  ',
   active:      'bg-accent-bg   text-accent-ink border border-accent-ink     not-disabled:hover:bg-accent/20    not-disabled:active:bg-accent/25                               disabled:opacity-50          ',
   ghost:       'bg-transparent text-ink-muted                               not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12      not-disabled:hover:text-ink disabled:opacity-30          ',
   link:        'bg-transparent text-accent     underline-offset-2           not-disabled:hover:underline       not-disabled:active:text-accent/80                             disabled:text-ink-extra-muted',

@@ -95,7 +95,7 @@ const NewFormPrimitivesDemo = () => {
               </Button>
               <Button
                 size="sm"
-                variant="primary"
+                variant="secondary"
                 onClick={() => {
                   // submit logic here
                   setOpenDropdown1(false);
@@ -168,7 +168,7 @@ const NewFormPrimitivesDemo = () => {
               </Button>
               <Button
                 size="sm"
-                variant="primary"
+                variant="secondary"
                 onClick={() => {
                   // submit logic here
                   setOpenDropdown2(false);

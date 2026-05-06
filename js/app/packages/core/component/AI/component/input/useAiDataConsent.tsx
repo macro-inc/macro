@@ -65,7 +65,7 @@ export function useAiDataConsentGate() {
                 <Button variant="secondary" onClick={denyConsent}>
                   Cancel
                 </Button>
-                <Button variant="primary" onClick={grantConsent}>
+                <Button variant="secondary" onClick={grantConsent}>
                   Accept
                 </Button>
               </div>

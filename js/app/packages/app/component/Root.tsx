@@ -172,7 +172,7 @@ function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
         class="mt-2"
         disabled={retrying()}
         onClick={handleRetry}
-        variant="primary"
+        variant="secondary"
       >
         {retrying() ? 'Retrying…' : 'Retry'}
       </Button>

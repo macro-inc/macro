@@ -68,7 +68,6 @@ export function ToolsetSelector(props: {
         <div class="flex">
           <DropdownMenu
             size="SM"
-            theme="secondary"
             triggerLabel={<span>SOURCE</span>}
           >
             <SegmentedControl
