@@ -351,7 +351,7 @@ impl ChatRepo for PgChatRepo {
             .map_err(to_chat_err)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip(self))]
     async fn get_resolved_message(&self, message_id: &str) -> Result<FormattedParts> {
         queries::get_resolved_message::get_resolved_message(&self.pool, message_id)
             .await
@@ -446,7 +446,7 @@ impl MessageRepo for PgChatRepo {
             .map_err(to_chat_err)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip(self))]
     async fn get_resolved_message(&self, message_id: &str) -> Result<FormattedParts> {
         queries::get_resolved_message::get_resolved_message(&self.pool, message_id)
             .await
