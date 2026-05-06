@@ -51,6 +51,9 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
 
   const results = createMemo<WithSearch<ChannelMessageEntity>[]>(() => {
     if (!submittedQuery()) return [];
+    // While a new submitted-query is in flight, ignore the placeholder data
+    // from the previous query so we don't auto-jump to a stale result.
+    if (searchQuery.isFetching) return [];
     // NOTE: this guard prevents the Channel from blanking while the query is pending
     if (!searchQuery.isSuccess) return [];
     const data = searchQuery.data;
