@@ -32,13 +32,15 @@ describe('buildSwapActions', () => {
 
   test('first-time alias setup — just add', () => {
     const actions = buildSwapActions({
-      alias: 'names',
-      newIndex: 'names_v1',
+      alias: 'documents',
+      newIndex: 'documents_v1',
       oldIndex: undefined,
       aliasExists: false,
       aliasNameIsPhysicalIndex: false,
     });
-    expect(actions).toEqual([{ add: { index: 'names_v1', alias: 'names' } }]);
+    expect(actions).toEqual([
+      { add: { index: 'documents_v1', alias: 'documents' } },
+    ]);
   });
 
   test('no-op swap (oldIndex === newIndex) skips remove', () => {
