@@ -1,19 +1,18 @@
 import { createSignal, onCleanup, onMount, splitProps, type JSX } from 'solid-js';
 
-export type ScrollProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
-  style?: JSX.CSSProperties;
-};
+export type ScrollProps = JSX.HTMLAttributes<HTMLDivElement> & { style?: JSX.CSSProperties };
 
 const THUMB_HEIGHT = 200;
+const GUTTER_WIDTH = 8;
 const THUMB_INSET = 3;
 
 export function Scroll(props: ScrollProps) {
   const [local, rest] = splitProps(props, ['children', 'style']);
-
-  let scrollRef!: HTMLDivElement;
+  const [isScrolling, setIsScrolling] = createSignal(false);
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
   const [thumbTop, setThumbTop] = createSignal(0);
-  const [isScrolling, setIsScrolling] = createSignal(false);
+  let gutterRef!: HTMLDivElement;
+  let scrollRef!: HTMLDivElement;
 
   function update() {
     const el = scrollRef;
@@ -23,14 +22,52 @@ export function Scroll(props: ScrollProps) {
     const maxTop = Math.max(0, clientHeight - THUMB_HEIGHT - THUMB_INSET * 2);
     const offset = maxScroll > 0 ? (scrollTop / maxScroll) * maxTop : 0;
     setThumbTop(THUMB_INSET + offset);
-  };
+  }
+
+  function showThumb() {
+    setIsScrolling(true);
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => setIsScrolling(false), 500);
+  }
 
   function handleScroll() {
     update();
-    setIsScrolling(true);
-    if (hideTimer) clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => setIsScrolling(false), 800);
-  };
+    showThumb();
+  }
+
+  function scrollToPointer(clientY: number) {
+    const el = scrollRef;
+    if (!el) return;
+    const rect = gutterRef.getBoundingClientRect();
+    const { scrollHeight, clientHeight } = el;
+    const maxScroll = Math.max(0, scrollHeight - clientHeight);
+    if (maxScroll <= 0) return;
+    const maxTop = Math.max(0, clientHeight - THUMB_HEIGHT - THUMB_INSET * 2);
+    if (maxTop <= 0) return;
+    const localY = clientY - rect.top - THUMB_HEIGHT / 2;
+    const clamped = Math.max(0, Math.min(maxTop, localY - THUMB_INSET));
+    el.scrollTop = (clamped / maxTop) * maxScroll;
+  }
+
+  function handlePointerDown(e: PointerEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    gutterRef.setPointerCapture(e.pointerId);
+    showThumb();
+    scrollToPointer(e.clientY);
+  }
+
+  function handlePointerMove(e: PointerEvent) {
+    if (!gutterRef.hasPointerCapture(e.pointerId)) return;
+    showThumb();
+    scrollToPointer(e.clientY);
+  }
+
+  function handlePointerUp(e: PointerEvent) {
+    if (gutterRef.hasPointerCapture(e.pointerId)) {
+      gutterRef.releasePointerCapture(e.pointerId);
+    }
+  }
 
   onMount(() => {
     update();
@@ -38,7 +75,6 @@ export function Scroll(props: ScrollProps) {
     const ro = new ResizeObserver(update);
     ro.observe(scrollRef);
 
-    // Catch content size changes (e.g. children added/removed/resized).
     const mo = new MutationObserver(update);
     mo.observe(scrollRef, {
       characterData: true,
@@ -80,21 +116,37 @@ export function Scroll(props: ScrollProps) {
         {local.children}
       </div>
       <div
-        aria-hidden="true"
+        onPointerCancel={handlePointerUp}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
         style={{
-          'transform': `translateY(${thumbTop()}px)`,
-          'transition': 'opacity 200ms ease-out',
-          'opacity': isScrolling() ? 1 : 0,
-          'background-color': 'var(--a0)',
-          'height': `${THUMB_HEIGHT}px`,
-          'pointer-events': 'none',
-          'border-radius': '1px',
+          'width': `${GUTTER_WIDTH}px`,
+          'touch-action': 'none',
           'position': 'absolute',
-          'width': '2px',
-          'right': '3px',
+          'height': '100%',
+          'right': '0',
           'top': '0',
         }}
-      />
+        onPointerUp={handlePointerUp}
+        aria-hidden="true"
+        ref={gutterRef}
+      >
+        <div
+          style={{
+            'transform': `translateY(${thumbTop()}px)`,
+            'transition': 'opacity 150ms ease-in-out',
+            'opacity': isScrolling() ? 1 : 0,
+            'background-color': 'var(--a0)',
+            'height': `${THUMB_HEIGHT}px`,
+            'pointer-events': 'none',
+            'border-radius': '1px',
+            'position': 'absolute',
+            'width': '2px',
+            'right': '3px',
+            'top': '0',
+          }}
+        />
+      </div>
     </div>
   );
 }
