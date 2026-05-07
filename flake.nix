@@ -190,6 +190,20 @@
             cargo-info
             cargo-udeps
             cargo-lambda
+            (writeShellScriptBin "rustup" ''
+              set -euo pipefail
+              rustc_path="$(${coreutils}/bin/readlink -f "$(command -v rustc)")"
+              toolchain="$(${coreutils}/bin/basename "$(${coreutils}/bin/dirname "$(${coreutils}/bin/dirname "$rustc_path")")")"
+              case "$1 $2" in
+                "toolchain list") echo "$toolchain (default)" ;;
+                "toolchain add") exit 0 ;;
+                "target list") echo "x86_64-unknown-linux-gnu (installed)"; echo "aarch64-unknown-linux-gnu" ;;
+                "target add") exit 0 ;;
+                "component list") echo "rust-src-x86_64-unknown-linux-gnu (installed)"; echo "clippy-x86_64-unknown-linux-gnu (installed)" ;;
+                "component add") exit 0 ;;
+                *) echo "rustup shim only supports commands used by cross" >&2; exit 1 ;;
+              esac
+            '')
             cargo-cross
             cargo-deny
             cargo-nextest
