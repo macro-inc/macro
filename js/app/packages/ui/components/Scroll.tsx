@@ -15,13 +15,30 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   let contentRef!: HTMLDivElement;
   let gutterRef!: HTMLDivElement;
   let scrollRef!: HTMLDivElement;
+  let rafId: number | undefined;
+  let clientHeight = 0;
+  let scrollHeight = 0;
 
   function update() {
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef;
+    const scrollTop = scrollRef.scrollTop;
     const maxScroll = Math.max(0, scrollHeight - clientHeight);
     const maxTop = Math.max(0, clientHeight - THUMB_HEIGHT - THUMB_INSET * 2);
     const offset = maxScroll > 0 ? (scrollTop / maxScroll) * maxTop : 0;
     setThumbTop(THUMB_INSET + offset);
+  }
+
+  function config() {
+    scrollHeight = scrollRef.scrollHeight;
+    clientHeight = scrollRef.clientHeight;
+    update();
+  }
+
+  function scheduleUpdate() {
+    if (rafId !== undefined) { return; }
+    rafId = requestAnimationFrame(() => {
+      rafId = undefined;
+      update();
+    });
   }
 
   function showThumb() {
@@ -31,12 +48,11 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   }
 
   function handleScroll() {
-    update();
+    scheduleUpdate();
     showThumb();
   }
 
   function scrollToLocalY(localY: number) {
-    const { scrollHeight, clientHeight } = scrollRef;
     const maxScroll = Math.max(0, scrollHeight - clientHeight);
     if (maxScroll <= 0) { return; }
     const maxTop = Math.max(0, clientHeight - THUMB_HEIGHT - THUMB_INSET * 2);
@@ -61,15 +77,16 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   }
 
   onMount(() => {
-    update();
+    config();
 
-    const ro = new ResizeObserver(update);
+    const ro = new ResizeObserver(config);
     ro.observe(scrollRef);
     ro.observe(contentRef);
 
     onCleanup(() => {
       ro.disconnect();
       if (hideTimer) { clearTimeout(hideTimer); }
+      if (rafId !== undefined) { cancelAnimationFrame(rafId); }
     });
   });
 
