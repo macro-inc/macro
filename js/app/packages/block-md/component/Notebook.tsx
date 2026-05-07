@@ -1,3 +1,4 @@
+import { SidePanel } from '@app/component/side-panel';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
@@ -33,9 +34,10 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { FrontMatterProperties } from './FrontMatterProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
+import { DocumentDetailsSection } from './sidepanel/DocumentDetailsSection';
+import { PropertiesSection } from './sidepanel/PropertiesSection';
 import { TaskDiscussion } from './TaskDiscussion';
 import { TitleEditor } from './TitleEditor';
 import { registerMarkdownCommands } from './useMarkdownCommands';
@@ -281,33 +283,37 @@ export function Notebook() {
   });
 
   return (
-    <div class={containerClasses()} ref={notebookRef}>
-      <div class={contentDivClasses()} ref={contentRef}>
-        <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
-        <FrontMatterProperties
-          canEdit={canEdit()}
-          documentName={documentName()}
-          fallback={<div class="h-6 w-full" />}
-        />
-        <ParamsProvider>
-          <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
-          <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
-            <TaskDiscussion />
-          </Show>
-        </ParamsProvider>
+    <SidePanel.Layout>
+      <div class={containerClasses()} ref={notebookRef}>
+        <div class={contentDivClasses()} ref={contentRef}>
+          <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
+          <div class="spacer h-6" />
+          <ParamsProvider>
+            <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
+            <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
+              <TaskDiscussion />
+            </Show>
+          </ParamsProvider>
+        </div>
+        <div
+          class={commentPositioning().classes}
+          style={commentPositioning().style}
+          ref={commentMarginRef}
+          classList={{
+            block: hasComment(),
+            hidden: !hasComment(),
+          }}
+        >
+          <CommentMargin />
+        </div>
       </div>
-      <div
-        class={commentPositioning().classes}
-        style={commentPositioning().style}
-        ref={commentMarginRef}
-        classList={{
-          block: hasComment(),
-          hidden: !hasComment(),
-        }}
-      >
-        <CommentMargin />
-      </div>
-    </div>
+      <SidePanel.Section id="details" title="Details" defaultOpen>
+        <DocumentDetailsSection />
+      </SidePanel.Section>
+      <SidePanel.Section id="properties" title="Properties" defaultOpen>
+        <PropertiesSection canEdit={canEdit()} documentName={documentName()} />
+      </SidePanel.Section>
+    </SidePanel.Layout>
   );
 }
 
