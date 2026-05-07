@@ -1,5 +1,4 @@
 import { createSignal, onCleanup, onMount, splitProps} from 'solid-js';
-import { cn } from '../utils/classname';
 import type { JSX } from 'solid-js'
 
 const THUMB_WIDTH = 2;
@@ -9,7 +8,7 @@ const THUMB_RADIUS = THUMB_WIDTH * 0.5;
 const THUMB_INSET = (GUTTER_WIDTH - THUMB_WIDTH) * 0.5;
 
 export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+  const [local, rest] = splitProps(props, ['children']);
   const [isScrolling, setIsScrolling] = createSignal(false);
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
   const [thumbTop, setThumbTop] = createSignal(0);
@@ -61,12 +60,6 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
     scrollToLocalY(e.offsetY);
   }
 
-  function handlePointerUp(e: PointerEvent) {
-    if (gutterRef.hasPointerCapture(e.pointerId)) {
-      gutterRef.releasePointerCapture(e.pointerId);
-    }
-  }
-
   onMount(() => {
     update();
 
@@ -83,7 +76,13 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       {...rest}
-      class={cn('relative h-full min-h-0 w-full min-w-0', local.class)}
+      style={{
+        'position': 'relative',
+        'min-height': '0',
+        'min-width': '0',
+        'height': '100%',
+        'width': '100%',
+      }}
     >
       <div
         style={{
@@ -101,7 +100,6 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
         </div>
       </div>
       <div
-        onPointerCancel={handlePointerUp}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         style={{
@@ -112,7 +110,6 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
           'right': '0',
           'top': '0',
         }}
-        onPointerUp={handlePointerUp}
         aria-hidden="true"
         ref={gutterRef}
       >
