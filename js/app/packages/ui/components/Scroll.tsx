@@ -42,33 +42,31 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   function seek(localY: number) {
     if (maxScroll <= 0 || maxTop <= 0) { return; }
     scrollRef.scrollTop = Math.max(0, Math.min(maxTop, localY - THUMB_HEIGHT / 2 - THUMB_INSET)) / maxTop * maxScroll;
+    reveal();
   }
 
   function handlePointerDown(e: PointerEvent) {
     if (e.button !== 0) { return; }
     e.preventDefault();
     gutterRef.setPointerCapture(e.pointerId);
-    reveal();
     seek(e.offsetY);
   }
 
   function handlePointerMove(e: PointerEvent) {
     if (!gutterRef.hasPointerCapture(e.pointerId)) { return; }
-    // reveal();
     seek(e.offsetY);
   }
 
-  function handleOnMount() {
+  onMount(() => {
     const ro = new ResizeObserver(config);
     ro.observe(scrollRef);
     ro.observe(contentRef);
+
     onCleanup(() => {
       ro.disconnect();
       clearTimeout(hideTimer);
     });
-  }
-
-  onMount(handleOnMount);
+  });
 
   return (
     <div
