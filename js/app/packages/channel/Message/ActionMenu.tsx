@@ -5,7 +5,6 @@ import AddEmojiIcon from '@macro-icons/square/add-emoji.svg';
 import TrashIcon from '@macro-icons/square/trash.svg';
 import StarIcon from '@macro-icons/wide/star.svg';
 import TaskIcon from '@macro-icons/wide/task.svg';
-import { cn } from '@ui/utils/classname';
 import { createSignal, For, Show, type Component, type JSX } from 'solid-js';
 import { useMessage, useMessageActions } from './context';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
@@ -135,42 +134,32 @@ export function ActionMenu(props: ActionMenuProps) {
                     onClick={(event) => {
                       handleReaction(emoji, event);
                     }}
+                    tooltip={`React ${emoji}`}
+                    aria-label={`React ${emoji}`}
+                    data-message-action="react-quick"
+                    data-emoji={emoji}
                   >
                     <span class="text-md my-0">{emoji}</span>
                   </Button>
-
-                  // <button
-                  //   type="button"
-                  //   title={`React ${emoji}`}
-                  //   aria-label={`React ${emoji}`}
-                  //   data-message-action="react-quick"
-                  //   data-emoji={emoji}
-                  //   class="size-8 flex items-center justify-center hover:bg-hover hover-transition-bg text-lg/none"
-                  //   onClick={(event) => {
-                  //     handleReaction(emoji, event);
-                  //   }}
-                  // >
-                  //   {emoji}
-                  // </button>
                 )}
               </For>
 
-              {/*<EmojiReactionPopover
+              <EmojiReactionPopover
                 placement="left"
                 open={emojiMenuOpen()}
                 onOpenChange={setEmojiMenuOpen}
                 onEmojiSelect={(emoji) => {
                   handleReaction(emoji);
                 }}
-                trigger={renderIcon(AddEmojiIcon)}
+                trigger={renderIcon(AddEmojiIcon, 'size-3')}
                 triggerProps={{
                   title: 'More reactions',
                   'aria-label': 'More reactions',
-                  'data-message-action': 'react-open-menu',
-                  class:
-                    'size-8 flex items-center justify-center text-ink-muted hover:bg-hover hover-transition-bg',
+                  tooltip: 'More reactions',
+                  variant: 'ghost',
+                  size: 'icon-sm',
                 }}
-              />*/}
+              />
               <Show when={visibleActions.length > 0}>
                 <div class="w-px self-stretch bg-edge-muted mx-1" />
               </Show>

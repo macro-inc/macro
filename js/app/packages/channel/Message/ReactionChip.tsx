@@ -4,6 +4,7 @@ import { idToDisplayName } from '@core/user';
 import { cn } from '@ui/utils/classname';
 import { Popover } from '@kobalte/core/popover';
 import { createSignal, type JSX, Show } from 'solid-js';
+import { Button } from '@ui';
 
 type ReactionChipProps = {
   emoji: string;
@@ -76,8 +77,7 @@ export function ReactionChip(props: ReactionChipProps) {
           }
           placement="top"
         >
-          <button
-            type="button"
+          <Button
             data-message-reaction-chip
             data-emoji={props.emoji}
             ref={(el) =>
@@ -88,13 +88,15 @@ export function ReactionChip(props: ReactionChipProps) {
                 stopTouchStartPropagation: true,
               }))
             }
+            size="sm"
+            variant="base"
             class={cn(
-              'flex flex-row items-center gap-2 py-1 px-2 bg-menu border h-8',
+              'flex flex-row items-center h-7 min-w-7 gap-2 rounded-sm',
               {
                 'text-accent-ink border-accent': props.selected,
-                'border-edge-muted hover:bg-hover hover:scale-105 transition-none hover:transition':
-                  !props.selected && props.interactive,
-                'border-edge-muted': !props.selected && !props.interactive,
+                'ring-edge-muted hover:bg-hover hover:scale-105 transition-none hover:transition':
+                  props.interactive,
+                'ring-edge-muted': !props.selected && !props.interactive,
                 'cursor-default': !props.interactive,
                 'pointer-events-auto': !props.interactive,
               }
@@ -105,11 +107,11 @@ export function ReactionChip(props: ReactionChipProps) {
               props.onClick?.(event);
             }}
           >
-            <span class="text-md">{props.emoji}</span>
+            <span class="text-lg leading-0">{props.emoji}</span>
             <Show when={props.count > 1}>
               <span class="text-xs">{props.count}</span>
             </Show>
-          </button>
+          </Button>
         </Tooltip>
       </Popover.Anchor>
       <Popover.Portal>

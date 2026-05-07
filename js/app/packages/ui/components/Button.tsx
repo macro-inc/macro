@@ -5,7 +5,7 @@ import CorvuTooltip from '@corvu/tooltip';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
 
-type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
+export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
   tooltipPlacement?: Placement;
   variant?: ButtonVariant;

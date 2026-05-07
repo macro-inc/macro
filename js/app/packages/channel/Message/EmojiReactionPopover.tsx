@@ -1,21 +1,16 @@
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import { Popover } from '@kobalte/core/popover';
-import { Layer } from '@ui';
 import { createSignal, splitProps, type JSX } from 'solid-js';
+import { Button, type ButtonProps, Layer } from '@ui';
 
 type EmojiReactionPopoverPlacement = 'top' | 'right' | 'bottom' | 'left';
-
-type ButtonDataAttributes = {
-  [key in `data-${string}`]?: string | number | boolean | undefined;
-};
 
 type EmojiReactionPopoverProps = {
   open: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onEmojiSelect: (emoji: string) => void;
   trigger: JSX.Element;
-  triggerProps?: JSX.ButtonHTMLAttributes<HTMLButtonElement> &
-    ButtonDataAttributes;
+  triggerProps?: ButtonProps;
   placement?: EmojiReactionPopoverPlacement;
 };
 
@@ -38,7 +33,7 @@ export function EmojiReactionPopover(props: EmojiReactionPopoverProps) {
       overflowPadding={8}
       slide={true}
     >
-      <Popover.Trigger type="button" {...local.triggerProps}>
+      <Popover.Trigger as={Button} {...local.triggerProps}>
         {local.trigger}
       </Popover.Trigger>
       <Popover.Portal>
