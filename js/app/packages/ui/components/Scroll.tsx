@@ -13,6 +13,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [thumbTop, setThumbTop] = createSignal(0);
   let gutterRef!: HTMLDivElement;
   let scrollRef!: HTMLDivElement;
+  let contentRef!: HTMLDivElement;
 
   function update() {
     const { scrollTop, scrollHeight, clientHeight } = scrollRef;
@@ -70,18 +71,10 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
 
     const ro = new ResizeObserver(update);
     ro.observe(scrollRef);
-
-    const mo = new MutationObserver(update);
-    mo.observe(scrollRef, {
-      characterData: true,
-      attributes: true,
-      childList: true,
-      subtree: true,
-    });
+    ro.observe(contentRef);
 
     onCleanup(() => {
       ro.disconnect();
-      mo.disconnect();
       if (hideTimer) { clearTimeout(hideTimer); }
     });
   });
@@ -102,7 +95,9 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
         onScroll={handleScroll}
         ref={scrollRef}
       >
-        {local.children}
+        <div ref={contentRef}>
+          {local.children}
+        </div>
       </div>
       <div
         onPointerCancel={handlePointerUp}
