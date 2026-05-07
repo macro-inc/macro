@@ -1,6 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { idToDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import Check from '@icon/regular/check.svg';
@@ -9,7 +9,7 @@ import NotePencil from '@icon/regular/note-pencil.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { type ParentProps, Show, useContext } from 'solid-js';
 import { CommentsContext } from './Thread';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 
 // SCUFFED: how should we define these tag colors?
 const NewTag = () => {

@@ -5,7 +5,7 @@
  */
 
 import { isMobile } from '@core/mobile/isMobile';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   autoUpdate,

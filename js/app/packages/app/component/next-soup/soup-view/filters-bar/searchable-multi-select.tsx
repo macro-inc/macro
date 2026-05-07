@@ -1,6 +1,6 @@
 import { Combobox } from '@kobalte/core/combobox';
 import type { CollectionNode } from '@kobalte/core';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   type Accessor,
   createMemo,

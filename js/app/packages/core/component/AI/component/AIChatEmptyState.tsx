@@ -1,6 +1,6 @@
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { For } from 'solid-js';
 import { CLI_COMMANDS, MACRO_MCP_CONFIG } from './mcpConstants';
 import { useClipboardCopy } from './useClipboardCopy';

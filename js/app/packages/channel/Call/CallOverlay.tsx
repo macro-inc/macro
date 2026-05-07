@@ -1,6 +1,6 @@
 import { Track, type RemoteParticipant } from 'livekit-client';
 import { For, Show, type JSXElement } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { TrackView } from './TrackView';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useCallContext } from './CallContext';

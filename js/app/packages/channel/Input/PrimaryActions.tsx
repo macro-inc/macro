@@ -1,11 +1,11 @@
 import { children, Show, splitProps, type JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useInput, useInputCommands } from './context';
 import { isReplyInput } from './types';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 

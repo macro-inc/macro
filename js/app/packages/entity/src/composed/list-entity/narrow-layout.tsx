@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
 import { UserIcon } from '@core/component/UserIcon';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
 import { Entity } from '../../entity';

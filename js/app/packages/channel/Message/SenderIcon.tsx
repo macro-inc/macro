@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { useMessage } from './context';
 

@@ -1,6 +1,6 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { searchLocationPendingSignal } from '@block-pdf/signal/location';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { IS_MAC } from '@core/constant/isMac';
 import { blockElementSignal } from '@core/signal/blockElement';
 import CaretDown from '@icon/regular/caret-down.svg';

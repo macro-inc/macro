@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { formatDate, formatTime } from '@core/util/date';
 import { useMessage } from './context';
 import { Match, Switch } from 'solid-js';

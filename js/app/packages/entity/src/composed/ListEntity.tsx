@@ -15,7 +15,7 @@ import {
   subscribeToStreamState,
 } from '@service-connection/stream-events';
 import { mergeRefs } from '@solid-primitives/refs';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   createEffect,
   createMemo,

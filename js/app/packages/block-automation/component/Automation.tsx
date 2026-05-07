@@ -15,8 +15,8 @@ import {
 } from '@queries/agent-schedule/schedules';
 import { useChatQuery } from '@queries/chat';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button } from '@ui';
+import { cn } from '@ui';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
 import { AutomationRenameModal } from './AutomationRenameModal';

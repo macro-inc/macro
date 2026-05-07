@@ -1,6 +1,6 @@
 import { useBlockId } from '@core/block';
-import { Button } from '@ui/components/Button';
-import { SegmentedControl } from '@ui/components/SegmentedControl';
+import { Button } from '@ui';
+import { SegmentedControl } from '@ui';
 import { Dialog, Surface } from '@ui';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';

@@ -1,5 +1,5 @@
 import type { JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 type HoverActionsProps = {

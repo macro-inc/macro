@@ -1,5 +1,5 @@
 import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import { invertTheme, saveTheme } from '../utils/themeUtils';
@@ -7,7 +7,7 @@ import { randomizeTheme } from './ThemeEditorBasic';
 import IconDice from '@macro-icons/macro-dice.svg';
 import IconSave from '@macro-icons/macro-save.svg';
 import { createMemo, Show } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 export function ThemeTools(props: { class?: string }) {
   let themeName!: HTMLDivElement;

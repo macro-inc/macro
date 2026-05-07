@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { splitProps, type JSX } from 'solid-js';
 
 function ActionsRoot(props: JSX.HTMLAttributes<HTMLDivElement>) {

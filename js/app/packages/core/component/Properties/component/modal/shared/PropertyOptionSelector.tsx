@@ -1,5 +1,5 @@
 import { Hotkey } from '@core/component/Hotkey';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';

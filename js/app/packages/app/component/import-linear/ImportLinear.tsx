@@ -7,7 +7,7 @@ import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useContacts } from '@core/user';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 

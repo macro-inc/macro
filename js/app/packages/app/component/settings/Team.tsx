@@ -11,9 +11,9 @@ import CheckIcon from '@icon/regular/check.svg';
 
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { Dialog, Panel } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { Select } from '@kobalte/core/select';
 import { useUserId } from '@core/context/user';
 import { useDisplayName, tryMacroId } from '@core/user';

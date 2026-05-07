@@ -8,7 +8,7 @@ import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/f
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { logger } from '@observability/logger';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,

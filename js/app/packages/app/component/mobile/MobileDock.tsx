@@ -9,7 +9,7 @@ import { hapticImpact } from '@core/mobile/haptics';
 import { focusInput } from '@core/directive/focusInput';
 import { type Component, createSignal, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useSplitLayout } from '../split-layout/layout';
 import type { ListView } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';

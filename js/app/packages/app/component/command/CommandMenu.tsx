@@ -29,7 +29,7 @@ import { useCommandItems } from './useCommandItems';
 import { trackCommandUsage } from './recency';
 import type { CategoryFilter } from './types';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import Macro from '@macro-icons/macro-logo.svg';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import { debouncedDependent } from '@core/util/debounce';

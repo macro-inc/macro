@@ -1,5 +1,5 @@
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { DebugSlider } from '@core/component/Slider';

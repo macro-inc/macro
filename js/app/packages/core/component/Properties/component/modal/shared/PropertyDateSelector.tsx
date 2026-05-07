@@ -1,7 +1,7 @@
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { useSearchInputFocus } from '@core/component/Properties/utils';
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { format } from 'date-fns';
 import {

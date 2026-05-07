@@ -1,5 +1,5 @@
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { internalDrag } from '@core/directive/internalDragState';
 import {
   type ParentProps,

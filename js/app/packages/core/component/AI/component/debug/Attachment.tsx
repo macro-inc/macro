@@ -1,5 +1,5 @@
 import type { Attachment, Model } from '@core/component/AI/types';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';

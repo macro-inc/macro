@@ -8,7 +8,7 @@ import {
   $setSelection,
 } from 'lexical';
 import { createSignal, useContext } from 'solid-js';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 export function HorizontalRule(props: HorizontalRuleDecoratorProps) {

@@ -8,7 +8,7 @@ import {
 } from 'solid-js';
 import MacroIcon from '@macro-icons/macro-logo.svg';
 import { Dynamic } from 'solid-js/web';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   sidebarFilter,
   setSidebarFilter,

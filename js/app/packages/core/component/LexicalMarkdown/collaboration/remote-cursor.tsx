@@ -3,7 +3,7 @@ import {
   isAwarenessWithSelection,
   type PeerAwareness,
 } from '@core/collab/awareness';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { LoroManager } from '@core/collab/manager';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { idToEmail } from '@core/user';

@@ -1,6 +1,6 @@
 import { internalDrag } from '@core/directive/internalDragState';
 false && internalDrag;
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
@@ -15,7 +15,7 @@ import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-so
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { copyImageToClipboard, downloadImage } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { Lightbox } from './Lightbox';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 

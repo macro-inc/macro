@@ -1,5 +1,5 @@
 import { children, Show, splitProps, type JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useInput } from './context';
 import { isReplyInput } from './types';
 

@@ -26,7 +26,7 @@ import {
 } from './state/propertyEditor';
 import { useAllProperties } from './hooks/useAllProperties';
 import { usePropertySelection } from '@core/component/Properties/hooks';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type {
   Property,

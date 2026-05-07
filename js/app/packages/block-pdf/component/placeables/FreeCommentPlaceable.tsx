@@ -4,7 +4,7 @@ import {
   useIsActiveThreadSelector,
 } from '@block-pdf/store/comments/commentStore';
 import type { IThreadPlaceable } from '@block-pdf/type/placeables';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { Component } from 'solid-js';
 
 export const FreeCommentPlaceable: Component<{

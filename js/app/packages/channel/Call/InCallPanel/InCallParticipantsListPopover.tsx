@@ -8,7 +8,7 @@ import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-cre
 import type { InCallPanelMember, UseInCallPanelResult } from './types';
 import { InCallParticipantAvatar } from './InCallParticipantAvatar';
 import { profilePictureIdForMember } from './profile-picture-id-for-member';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 /** Shared shell for “In this call” (popover content + +N tooltip). */
 export const IN_CALL_ROSTER_CARD_CLASS =

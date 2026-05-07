@@ -30,7 +30,7 @@ import {
   type SplitState,
 } from './layoutManager';
 import { decodePairs } from './layoutUtils';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   createMobileSwipeLayout,
   type MobileSwipeLayout,

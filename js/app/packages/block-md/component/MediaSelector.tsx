@@ -1,5 +1,5 @@
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { INSERT_MEDIA_COMMAND } from '@core/component/LexicalMarkdown/plugins';

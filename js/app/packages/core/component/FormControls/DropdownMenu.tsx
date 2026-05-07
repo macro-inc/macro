@@ -10,7 +10,7 @@ import {
   type ParentComponent,
   Show,
 } from 'solid-js';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 
 type ShadowTheme = 'Base' | 'AccentSpread';
 

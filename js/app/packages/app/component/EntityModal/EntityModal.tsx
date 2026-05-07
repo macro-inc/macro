@@ -3,7 +3,7 @@ import { isInBlock } from '@core/block';
 import clickOutside from '@core/directive/clickOutside';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { Dialog } from '@kobalte/core/dialog';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { ComponentProps } from 'solid-js';
 import {
   type Accessor,

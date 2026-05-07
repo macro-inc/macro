@@ -8,7 +8,7 @@ import Acorn from '@phosphor-icons/core/regular/acorn.svg?component-solid';
 import Subtract from '@phosphor-icons/core/regular/subtract.svg?component-solid';
 import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
 import { type Component, createSignal, For, Index } from 'solid-js';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 
 import { ItemPreview } from '../component/ItemPreview';

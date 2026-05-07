@@ -35,7 +35,7 @@ import {
   type EntityIconProps,
   getPreviewItemIconType,
 } from './EntityIcon';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   const [item] = useItemPreview(entity);

@@ -6,7 +6,7 @@ import {
   itemToBlockName,
 } from '@core/constant/allBlocks';
 import { match } from 'ts-pattern';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { USE_WIDE_ICONS } from '@core/constant/featureFlags';
 import Building from '@icon/duotone/building-duotone.svg';
 import Chat from '@icon/duotone/chat-duotone.svg';

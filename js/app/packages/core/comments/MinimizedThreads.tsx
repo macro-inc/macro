@@ -1,5 +1,5 @@
 import ChatTeardrop from '@icon/regular/chat-teardrop.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import {
   createEffect,

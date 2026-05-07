@@ -9,7 +9,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import CheckIcon from '@icon/bold/check-bold.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 interface CalloutShellProps {
   leader: string;

@@ -3,8 +3,8 @@ import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { createBulkRenameDssEntityMutation } from '@macro-entity';
 import { type EntityData, InlineEntity } from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button } from '@ui';
+import { cn } from '@ui';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 
 type RenameMode = 'total' | 'prepend' | 'append' | 'replace';

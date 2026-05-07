@@ -32,8 +32,8 @@ import {
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { CommandState } from '@app/component/command';
-import { cn } from '@ui/utils/classname';
-import { Button } from '@ui/components/Button';
+import { cn } from '@ui';
+import { Button } from '@ui';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
 import { globalSplitManager } from '@app/signal/splitLayout';

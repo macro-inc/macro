@@ -1,5 +1,5 @@
 import { For } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { LessonState } from './types';
 
 interface OnboardingProgressProps {

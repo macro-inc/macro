@@ -1,6 +1,6 @@
 import type { ParentProps } from 'solid-js';
 import { UserIcon } from '@core/component/UserIcon';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 function Badge(props: ParentProps<{ class?: string }>) {
   return (

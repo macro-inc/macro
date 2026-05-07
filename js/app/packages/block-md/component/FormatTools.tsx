@@ -78,7 +78,7 @@ import {
 import { mdStore } from '../signal/markdownBlockData';
 import { MediaSelector } from './MediaSelector';
 import { TableInsert } from './TableInsert';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { Dynamic } from 'solid-js/web';
 

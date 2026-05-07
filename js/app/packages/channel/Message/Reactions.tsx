@@ -1,6 +1,6 @@
 import { useUserId } from '@core/context/user';
 import SmileyIcon from '@icon/regular/smiley.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { useMessage, useMessageActions } from './context';

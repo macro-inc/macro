@@ -21,8 +21,8 @@ import {
   type EntityWithValidIcon,
 } from './EntityIcon';
 import { UserIcon } from './UserIcon';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button } from '@ui';
+import { cn } from '@ui';
 
 false && observedSize;
 

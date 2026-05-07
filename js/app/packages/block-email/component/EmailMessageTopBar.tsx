@@ -1,5 +1,5 @@
 import { Tooltip } from '@core/component/Tooltip';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { EmailUserTooltip } from './EmailUserTooltip';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';

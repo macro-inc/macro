@@ -1,7 +1,7 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { Hotkey } from '@core/component/Hotkey';
 import { Keyboard, Panel } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createSignal, For, Index, type JSX } from 'solid-js';
 
 const cmdOrCtrl = IS_MAC ? 'cmd' : 'ctrl';

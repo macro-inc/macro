@@ -50,7 +50,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import { Layer } from '@ui';
 

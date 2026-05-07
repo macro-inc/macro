@@ -1,5 +1,5 @@
 import type { JSX, ParentProps } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { ICON_SIZES } from '../EntityIcon';
 
 interface ButtonWrapperProps extends ParentProps {

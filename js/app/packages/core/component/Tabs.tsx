@@ -13,7 +13,7 @@ import {
   on,
   splitProps,
 } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 

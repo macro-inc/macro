@@ -12,7 +12,7 @@ import EnvelopeIcon from '@icon/regular/envelope.svg';
 import UserPlusIcon from '@icon/regular/user-plus.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import PhoneIcon from '@macro-icons/wide/call.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 interface NotificationIconProps {
   notification?: Notification;

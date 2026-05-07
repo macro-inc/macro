@@ -1,6 +1,6 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
 import CaretRight from '@icon/regular/caret-right.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';

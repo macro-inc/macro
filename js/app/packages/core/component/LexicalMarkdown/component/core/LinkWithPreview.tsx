@@ -1,5 +1,5 @@
 import { UnfurlLink } from '@core/component/Link';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { useUnfurl } from '@core/signal/unfurl';
 import { debounce } from '@solid-primitives/scheduled';

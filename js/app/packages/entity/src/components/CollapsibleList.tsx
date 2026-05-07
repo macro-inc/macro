@@ -1,5 +1,5 @@
 import ChevronDownIcon from '@icon/regular/caret-down.svg?component-solid';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 
 interface ToggleButtonProps {

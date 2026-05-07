@@ -13,8 +13,8 @@ import {
   stackNotifications,
 } from '@notifications';
 import type { UnifiedNotification } from '@notifications';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button } from '@ui';
+import { cn } from '@ui';
 import { createEffect, type JSX, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { CollapsibleList } from '../components/CollapsibleList';

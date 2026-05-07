@@ -1,4 +1,4 @@
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import type { Component } from 'solid-js';
 
 interface AddPropertyButtonProps {

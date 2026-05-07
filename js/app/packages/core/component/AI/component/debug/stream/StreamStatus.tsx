@@ -1,5 +1,5 @@
 import type { ChatMessageStream } from '@service-connection/stream';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { Match, Switch } from 'solid-js';
 
 type Props = {

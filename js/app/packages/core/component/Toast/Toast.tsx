@@ -4,8 +4,8 @@ import Spinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
 import { Surface } from '@ui';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button } from '@ui';
+import { cn } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import {
   createEffect,

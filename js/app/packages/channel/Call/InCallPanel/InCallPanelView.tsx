@@ -18,7 +18,7 @@ import {
   InCallStripAvatarImage,
   type InCallStripImage,
 } from './InCallStripAvatarImage';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 export const InCallPanel: Component<InCallPanelProps> = (props) => {
   const panel = useInCallPanel({

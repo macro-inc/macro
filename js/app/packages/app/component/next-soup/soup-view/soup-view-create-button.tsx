@@ -14,7 +14,7 @@ import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import UploadIcon from '@icon/regular/upload-simple.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { createMemo, For, Show } from 'solid-js';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { NewCallButton } from './NewCallButton';
 
 // Which blocks to show as create options per view, in order

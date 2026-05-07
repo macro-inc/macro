@@ -15,8 +15,8 @@ import {
 import { createBulkMoveToProjectDssEntityMutation } from '@macro-entity';
 import { type EntityData, InlineEntity } from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button } from '@ui';
+import { cn } from '@ui';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 
 type ProjectWithDepth = Project & { depth?: number; path?: string };

@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ItemType } from '@service-storage/client';
 import { type Component, For, type JSX, Show } from 'solid-js';
@@ -14,7 +14,7 @@ import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from './split-layout/components/SplitToolbar';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { Dynamic } from 'solid-js/web';
 import { SplitPermissionsBadge } from './split-layout/components/SplitLabel';
 import { LabelAndHotKey } from '@core/component/Tooltip';

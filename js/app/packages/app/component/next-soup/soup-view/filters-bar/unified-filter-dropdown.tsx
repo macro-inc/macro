@@ -1,6 +1,6 @@
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Button, Layer } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';

@@ -8,7 +8,7 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   getActiveTranscriptSequenceNum,
   getSegmentVideoSeconds,

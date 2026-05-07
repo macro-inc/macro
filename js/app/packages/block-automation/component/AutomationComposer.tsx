@@ -4,7 +4,7 @@ import { createControlledOpenSignal } from '@core/util/createControlledOpenSigna
 import { useCreateScheduleMutation } from '@queries/agent-schedule/schedules';
 import { debounce } from '@solid-primitives/scheduled';
 import { Dialog, Button, Surface } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   createEffect,
   createMemo,

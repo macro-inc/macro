@@ -12,7 +12,7 @@ import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import SplitIcon from '@icon/regular/square-half.svg';
 import CloseIcon from '@icon/regular/x.svg';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import {
   createMemo,
   type ParentProps,
@@ -23,7 +23,7 @@ import {
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { isListViewID } from '@app/constants/list-views';
 
 function SplitBackButton() {

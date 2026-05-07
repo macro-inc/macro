@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import {

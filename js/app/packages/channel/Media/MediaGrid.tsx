@@ -1,9 +1,9 @@
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
 import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { MediaImage } from './MediaImage';
 import { MediaVideo } from './MediaVideo';
 import type { MediaItem } from './media-items';

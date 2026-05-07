@@ -1,6 +1,6 @@
 import XIcon from '@icon/regular/x.svg?component-solid';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { registerSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';

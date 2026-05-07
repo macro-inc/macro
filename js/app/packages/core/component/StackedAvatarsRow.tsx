@@ -11,7 +11,7 @@ import {
 } from 'solid-js';
 import { Tooltip } from './Tooltip';
 import type { UserIconProps } from './UserIcon';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 /** Same keys as {@link UserIconProps} `size` (aligned ring + overlap + overflow chip). */
 export type StackedAvatarsSize = NonNullable<UserIconProps['size']>;

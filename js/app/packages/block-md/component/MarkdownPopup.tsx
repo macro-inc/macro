@@ -69,7 +69,7 @@ import {
   useContext,
 } from 'solid-js';
 import { FormatTools } from './FormatTools';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { Dynamic } from 'solid-js/web';
 import { Layer } from '@ui';
 

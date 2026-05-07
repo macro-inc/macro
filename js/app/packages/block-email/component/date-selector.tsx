@@ -16,7 +16,7 @@ import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { format, setHours, setMinutes, startOfDay } from 'date-fns';
 import { Layer } from '@ui';
 

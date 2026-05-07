@@ -1,7 +1,7 @@
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { Accessor, Setter } from 'solid-js';
 import { Show } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { CallRecordingParticipantsSection } from './CallRecordingParticipants';
 import { CallRecordingSummarySection } from './CallRecordingSummary';
 import { CallRecordingVideo } from './CallRecordingVideo';

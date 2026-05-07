@@ -18,7 +18,7 @@ import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?compone
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,

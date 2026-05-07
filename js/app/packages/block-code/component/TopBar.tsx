@@ -44,7 +44,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import type { CodeBlockMode } from './Block';
-import { TabbedControl } from '@ui/components/TabbedControl';
+import { TabbedControl } from '@ui';
 
 export const TopBar: Component<{
   isHtmlFile: boolean;

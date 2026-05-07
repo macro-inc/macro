@@ -45,7 +45,7 @@ import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';

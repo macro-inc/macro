@@ -1,6 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { Entity } from '@core/types';
 import { compareDateDesc, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';

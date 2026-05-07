@@ -1,5 +1,5 @@
 import type { JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 type RibbonButtonProps = {
   label: string;

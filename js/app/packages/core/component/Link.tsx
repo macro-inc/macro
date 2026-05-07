@@ -4,7 +4,7 @@ import GlobeIcon from '@icon/regular/globe-simple.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 

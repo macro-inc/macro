@@ -2,7 +2,7 @@ import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { DropdownMenuContent } from '@core/component/Menu';
 import CaretDown from '@icon/regular/caret-down.svg';
 import { createMemo, Show, type JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   CallControlButton,
   callControlButtonStyles,

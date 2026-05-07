@@ -6,7 +6,7 @@ import { action, useAction, useSubmission } from '@solidjs/router';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { sendEmailCode, useResetEmailCode } from './EmailForm';
 import { ErrorMsg, Input, Stage } from './Shared';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 
 const verifyCode = action(async (formData: FormData) => {

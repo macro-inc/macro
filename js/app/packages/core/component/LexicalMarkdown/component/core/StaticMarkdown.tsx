@@ -5,7 +5,7 @@
 
 import type { CodeNode } from '@lexical/code';
 import { PrismTokenizer } from '@lexical/code';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { LinkNode } from '@lexical/link';
 import { $getListDepth, type ListItemNode, type ListNode } from '@lexical/list';
 import type { HeadingNode, QuoteNode } from '@lexical/rich-text';

@@ -1,5 +1,5 @@
 import CaretRight from '@icon/regular/caret-right.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createMemo, Index } from 'solid-js';
 import {
   FILE_LIST_CARET_WIDTH,

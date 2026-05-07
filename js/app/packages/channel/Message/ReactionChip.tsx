@@ -1,7 +1,7 @@
 import { Tooltip } from '@core/component/Tooltip';
 import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { Popover } from '@kobalte/core/popover';
 import { createSignal, type JSX, Show } from 'solid-js';
 

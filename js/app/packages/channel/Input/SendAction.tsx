@@ -1,5 +1,5 @@
 import { children, Show, splitProps, type JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useInput, useInputCommands } from './context';
 import ArrowUpIcon from '@icon/bold/arrow-up-bold.svg';
 import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';

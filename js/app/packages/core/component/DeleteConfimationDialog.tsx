@@ -1,5 +1,5 @@
 import { Dialog } from '@kobalte/core/dialog';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 
 type DeleteConfimationDialogProps = {
   open: boolean;

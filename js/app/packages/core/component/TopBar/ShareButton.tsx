@@ -65,8 +65,8 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button } from '@ui';
+import { cn } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -84,7 +84,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
-import { Window } from '@ui/components/Panel';
+import { Panel } from '@ui';
 import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
@@ -954,8 +954,8 @@ export function ShareModal(props: ShareModalProps) {
               style={{ width: '800px' }}
             >
               {/* Card 1: Share form — gradient border */}
-              <Window active>
-                <Window.Header class="px-3">
+              <Panel active>
+                <Panel.Header class="px-3">
                   <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
                     <span class="shrink-0">Share:</span>
                     <EntityIcon
@@ -965,8 +965,8 @@ export function ShareModal(props: ShareModalProps) {
                     />
                     <span class="truncate">{props.name}</span>
                   </Dialog.Title>
-                </Window.Header>
-                <Window.Body>
+                </Panel.Header>
+                <Panel.Body>
                   <ForwardToChannel
                     submitPermissionInfo={{
                       setChannelPermissions: (id, accessLevel) =>
@@ -985,21 +985,21 @@ export function ShareModal(props: ShareModalProps) {
                     blockId={props.id}
                     blockName={props.blockAlias}
                   />
-                </Window.Body>
-              </Window>
+                </Panel.Body>
+              </Panel>
 
               {/* Card 2: Recipients — plain border */}
               <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
-                <Window>
-                  <Window.Header class="px-3">
+                <Panel>
+                  <Panel.Header class="px-3">
                     <span class="text-sm font-medium">
                       People with access to this{' '}
                       {props.itemType === 'email'
                         ? 'email thread'
                         : props.itemType}
                     </span>
-                  </Window.Header>
-                  <Window.Body class="text-ink">
+                  </Panel.Header>
+                  <Panel.Body class="text-ink">
                     <div class="relative">
                       <ScrollIndicators
                         scrollRef={recipientScrollRef}
@@ -1113,8 +1113,8 @@ export function ShareModal(props: ShareModalProps) {
                         </div>
                       </div>
                     </div>
-                  </Window.Body>
-                </Window>
+                  </Panel.Body>
+                </Panel>
               </Show>
 
               {/* Card 3: Public link — plain border */}
@@ -1124,8 +1124,8 @@ export function ShareModal(props: ShareModalProps) {
                   props.itemType !== 'email'
                 }
               >
-                <Window>
-                  <Window.Header class="justify-between px-3">
+                <Panel>
+                  <Panel.Header class="justify-between px-3">
                     <div class="flex items-center gap-2">
                       <span class="text-sm font-medium">Public link</span>
                       <div
@@ -1156,9 +1156,9 @@ export function ShareModal(props: ShareModalProps) {
                         setPublicPermissions(on ? 'view' : null)
                       }
                     />
-                  </Window.Header>
+                  </Panel.Header>
                   <Show when={publicAccessLevel() != null}>
-                    <Window.Body class="text-ink">
+                    <Panel.Body class="text-ink">
                       <div class="flex items-center p-3 justify-between">
                         <Button
                           variant="base"
@@ -1181,9 +1181,9 @@ export function ShareModal(props: ShareModalProps) {
                           />
                         </span>
                       </div>
-                    </Window.Body>
+                    </Panel.Body>
                   </Show>
-                </Window>
+                </Panel>
               </Show>
             </Dialog.Content>
           </div>

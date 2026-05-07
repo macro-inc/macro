@@ -11,7 +11,7 @@ import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
 import VideoConference from '@icon/regular/video-conference.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { For, Show } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useCallContext } from '../CallContext';
 
 const menuStyles = {

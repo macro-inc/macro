@@ -5,7 +5,7 @@ import {
   type Component,
   type JSX,
 } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { OverrideComponentProps } from '@kobalte/core';
 
 export type CallControlButtonSize = 'sm' | 'md';

@@ -1,6 +1,6 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import type { Model } from '@core/component/AI/types';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { isErr } from '@core/util/maybeResult';

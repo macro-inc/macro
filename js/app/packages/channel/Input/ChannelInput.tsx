@@ -1,4 +1,4 @@
-import { Surface } from '@ui/components/Surface';
+import { Surface } from '@ui';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { isMobile } from '@core/mobile/isMobile';
 import { isIOS } from '@solid-primitives/platform';

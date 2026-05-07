@@ -1,5 +1,5 @@
-import { cn } from '@ui/utils/classname';
-import { Button } from '@ui/components/Button';
+import { cn } from '@ui';
+import { Button } from '@ui';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { platformFetch } from '@core/util/platformFetch';
 import { connectionGatewayClient } from '@service-connection/client';

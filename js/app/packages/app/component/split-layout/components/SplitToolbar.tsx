@@ -8,7 +8,7 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 
 export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {

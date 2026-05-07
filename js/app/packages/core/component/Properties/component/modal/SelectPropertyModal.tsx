@@ -4,7 +4,7 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   createEffect,
   createMemo,

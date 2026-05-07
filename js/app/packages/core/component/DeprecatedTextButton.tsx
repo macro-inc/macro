@@ -1,5 +1,5 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import CaretDown from '@icon/regular/caret-down.svg';
 import { type Component, type JSX, Show, useContext } from 'solid-js';
 import {

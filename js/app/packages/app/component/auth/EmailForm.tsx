@@ -8,7 +8,7 @@ import { action, useSearchParams, useSubmission } from '@solidjs/router';
 import { platformFetch } from 'core/util/platformFetch';
 import { createEffect, createSignal, Show, untrack } from 'solid-js';
 import { ErrorMsg, Input, Stage } from './Shared';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 

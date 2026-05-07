@@ -14,7 +14,7 @@ import { Entity } from '../entity';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useNotificationStackActions } from './notification-actions';
 import { NotificationContent } from './notification-content';
 import { NotificationTimestamp } from './notification-timestamp';

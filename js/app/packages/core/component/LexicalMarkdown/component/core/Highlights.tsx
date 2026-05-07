@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createDOMRange } from '@lexical/selection';
 import type { NodeIdMappings } from '@lexical-core';
 import {

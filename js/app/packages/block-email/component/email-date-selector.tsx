@@ -5,9 +5,9 @@ import { addYears } from 'date-fns/addYears';
 import { format } from 'date-fns/format';
 import { Show, type VoidComponent } from 'solid-js';
 import IconX from '@icon/regular/x.svg';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { isMobile } from '@core/mobile/isMobile';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 interface EmailDateSelectorProps {
   sendTime?: Date | null;

@@ -25,7 +25,7 @@ import { LESSONS } from './lessons';
 import { ContinueButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
 import { Surface, Button } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';

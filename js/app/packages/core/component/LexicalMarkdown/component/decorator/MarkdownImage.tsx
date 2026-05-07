@@ -1,10 +1,10 @@
 import { internalDrag } from '@core/directive/internalDragState';
 false && internalDrag;
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
 import { isErr } from '@core/util/maybeResult';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import ImageIcon from '@icon/regular/image-broken.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';

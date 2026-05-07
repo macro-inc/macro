@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useUserId } from '@core/context/user';
 import { useChannelType } from '@core/context/channels';

@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { Accordion } from '@kobalte/core/accordion';
 import Scrollbars from 'solid-custom-scrollbars';
 import { createMemo, createSignal, For, type JSX } from 'solid-js';

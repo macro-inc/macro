@@ -2,13 +2,13 @@ import {
   type EdgeConnectionStyle,
   EdgeConnectionStyles,
 } from '@block-canvas/model/CanvasModel';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useCachedStyle } from '@block-canvas/signal/cachedStyle';
 import { useToolManager } from '@block-canvas/signal/toolManager';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import {
   ENABLE_CANVAS_FILES,
   ENABLE_CANVAS_IMAGES,

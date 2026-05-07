@@ -1,6 +1,6 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   type Accessor,

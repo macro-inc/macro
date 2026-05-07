@@ -2,7 +2,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { formatDate } from '@core/util/date';
 import {
   type Component,

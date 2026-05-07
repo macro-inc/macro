@@ -14,7 +14,7 @@ import {
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import {
   FormatButtons,
   Input,

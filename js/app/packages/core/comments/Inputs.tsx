@@ -4,8 +4,8 @@ import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
 import XIcon from '@icon/regular/x.svg';
 import { batch, createEffect, createSignal, Show, useContext } from 'solid-js';
 import { CommentsContext, ThreadContext } from './Thread';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button } from '@ui';
+import { cn } from '@ui';
 
 export function EditBottomRow(props: {
   handleCancel: (e: MouseEvent) => void;

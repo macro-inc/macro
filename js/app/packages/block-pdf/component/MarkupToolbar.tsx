@@ -6,7 +6,7 @@ import {
 } from '@block-pdf/signal/placeables';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import {
   useCanComment,
   useCanEdit,

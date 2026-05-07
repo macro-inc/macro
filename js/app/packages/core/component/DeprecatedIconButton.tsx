@@ -1,6 +1,6 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import {
   type Component,

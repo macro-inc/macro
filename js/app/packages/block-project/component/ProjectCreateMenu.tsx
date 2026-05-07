@@ -1,5 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';

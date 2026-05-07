@@ -2,7 +2,7 @@ import {
   generatedAndWaitingSignal,
   isGeneratingSignal,
 } from '@block-md/signal/generateSignal';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   InlineInputDisabled,
   InlineInputLoading,

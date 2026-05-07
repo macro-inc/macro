@@ -1,5 +1,5 @@
 import CheckIcon from '@icon/regular/check.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { Show } from 'solid-js';
 
 export interface MultiSelectCheckboxProps {

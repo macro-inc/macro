@@ -20,8 +20,8 @@ import { Tooltip } from '@core/component/Tooltip';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import type { SidebarState } from '@app/component/app-sidebar/sidebar';
-import { cn } from '@ui/utils/classname';
-import { Button } from '@ui/components/Button';
+import { cn } from '@ui';
+import { Button } from '@ui';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;

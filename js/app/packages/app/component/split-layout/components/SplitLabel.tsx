@@ -18,7 +18,7 @@ import { buildEntityData, type BuildEntityDataArgs } from '@entity';
 import { createEffect, type JSX, Show } from 'solid-js';
 import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
 import { useSplitPanelOrThrow } from '../layoutUtils';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 export function StaticSplitLabel(props: {
   label: string;

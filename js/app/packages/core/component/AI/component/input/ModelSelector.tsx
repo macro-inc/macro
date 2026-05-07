@@ -8,7 +8,7 @@ import type { TModel } from '@core/component/AI/types';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import type { Accessor } from 'solid-js';
 import { For } from 'solid-js';
 

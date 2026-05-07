@@ -1,5 +1,5 @@
 import type { PortalScope } from '@core/component/ScopedPortal';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   COMMAND_PRIORITY_HIGH,
   KEY_ENTER_COMMAND,

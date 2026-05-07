@@ -8,7 +8,7 @@ import WideChat from '@macro-icons/wide/chat.svg';
 import WideTask from '@macro-icons/wide/task.svg';
 import { commsServiceClient } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { debounce } from '@solid-primitives/scheduled';
 import { UserIcon } from './UserIcon';

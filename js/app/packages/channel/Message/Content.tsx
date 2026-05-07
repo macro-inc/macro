@@ -2,7 +2,7 @@ import { Show, createMemo } from 'solid-js';
 
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { isEmojiOnly } from '@core/util/string';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useMessage } from './context';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 

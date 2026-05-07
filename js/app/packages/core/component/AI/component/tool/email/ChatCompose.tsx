@@ -2,7 +2,7 @@ import {
   ComposeLayout,
   EmailComposeToolbar,
 } from '@block-email/component/compose';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   type ComposeContextValue,
   ComposeProvider,

@@ -5,7 +5,7 @@ import { usePaywallState } from '@core/constant/PaywallState';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,

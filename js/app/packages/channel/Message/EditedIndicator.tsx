@@ -1,5 +1,5 @@
 import { Show } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useMessage } from './context';
 
 type EditedIndicatorProps = {

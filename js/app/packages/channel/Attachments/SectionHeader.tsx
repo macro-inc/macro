@@ -1,7 +1,7 @@
 import { type Accessor, Show, type JSX } from 'solid-js';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { Panel } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 
 export function AttachmentSection(props: {

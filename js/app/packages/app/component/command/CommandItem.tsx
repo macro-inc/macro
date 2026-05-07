@@ -16,7 +16,7 @@ import {
   enqueueDocumentWakeup,
   isWakeableDocument,
 } from '@queries/preview';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import { Dynamic } from 'solid-js/web';

@@ -1,5 +1,5 @@
 import clickOutside from '@core/directive/clickOutside';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createEffect, createSignal, on, Show } from 'solid-js';
 import { INPUT_CLASS, isValidTime } from './automationUtils';
 

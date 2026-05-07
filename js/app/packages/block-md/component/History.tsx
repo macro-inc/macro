@@ -8,7 +8,7 @@ import {
   getDocumentHistory,
 } from '@core/collab/time-travel';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import {
   createLexicalWrapper,
   type LexicalWrapper,

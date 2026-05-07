@@ -46,7 +46,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { createEffect, createSignal, getOwner, Show, Suspense } from 'solid-js';
 import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import ChatDebugIcon from '@icon/regular/chat-text.svg';
 
 export function Chat(props: { data: ChatData }) {

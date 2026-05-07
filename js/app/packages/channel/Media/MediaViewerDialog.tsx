@@ -1,14 +1,14 @@
 import * as stackingContext from '@core/constant/stackingContext';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { isMobile } from '@core/mobile/isMobile';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { Show, type Accessor, createMemo } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { MediaItem } from './media-items';
 
 type MediaViewerDialogProps = {

@@ -1,5 +1,5 @@
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import CaretUp from '@icon/regular/caret-up.svg';
 import Stats from '@icon/regular/chart-bar.svg';
 import { Popover } from '@kobalte/core/popover';

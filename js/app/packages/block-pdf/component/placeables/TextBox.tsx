@@ -1,5 +1,5 @@
 import { Color } from '@block-pdf/model/Color';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { activePlaceableIdSignal } from '@block-pdf/signal/placeables';
 import {
   useDeletePlaceable,

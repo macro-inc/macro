@@ -1,5 +1,5 @@
-import { cn } from '@ui/utils/classname';
-import { Button } from '@ui/components/Button';
+import { cn } from '@ui';
+import { Button } from '@ui';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';

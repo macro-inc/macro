@@ -3,7 +3,7 @@ import {
   EntityIcon,
   getEntityIconConfig,
 } from '@core/component/EntityIcon';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { ExplorerSpacer } from '@core/component/FileList/ExplorerSpacer';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import Fragment from '@core/util/Fragment';

@@ -1,5 +1,5 @@
 import { useCanvasFileDrop } from '@block-canvas/signal/fileDrop';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { type BlockName, useBlockId, useIsNestedBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import type { EntityDragEvent } from '@entity';

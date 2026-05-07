@@ -1,7 +1,7 @@
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import type { HotkeyCommand, ValidHotkey } from '@core/hotkey/types';
 import { prettyPrintHotkeyString } from '@core/hotkey/utils';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { StaticSplitLabel } from './split-layout/components/SplitLabel';

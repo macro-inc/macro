@@ -4,7 +4,7 @@ import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
 import SubtitlesSlash from '@phosphor-icons/core/assets/regular/subtitles-slash.svg';
 import UserCircle from '@phosphor-icons/core/assets/regular/user-circle.svg';
 import UserCircleMinus from '@phosphor-icons/core/assets/regular/user-circle-minus.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { format } from 'date-fns';
 import { Show } from 'solid-js';
 import {

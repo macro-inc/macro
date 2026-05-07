@@ -5,7 +5,7 @@ import AddEmojiIcon from '@macro-icons/square/add-emoji.svg';
 import TrashIcon from '@macro-icons/square/trash.svg';
 import StarIcon from '@macro-icons/wide/star.svg';
 import TaskIcon from '@macro-icons/wide/task.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createSignal, For, Show, type Component, type JSX } from 'solid-js';
 import { useMessage, useMessageActions } from './context';
 import { EmojiReactionPopover } from './EmojiReactionPopover';

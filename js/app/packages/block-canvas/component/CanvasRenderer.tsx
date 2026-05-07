@@ -1,7 +1,7 @@
 import { useIsNestedBlock } from '@core/block';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useCanEdit } from '@core/signal/permissions';
 import Circuitry from '@icon/regular/circuitry.svg';
 import { nanoid } from 'nanoid';

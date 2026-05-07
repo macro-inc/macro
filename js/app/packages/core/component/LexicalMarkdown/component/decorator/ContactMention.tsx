@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import BuildingIcon from '@icon/regular/buildings.svg';

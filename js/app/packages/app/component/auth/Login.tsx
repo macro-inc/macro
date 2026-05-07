@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isOk } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';

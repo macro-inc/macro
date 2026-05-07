@@ -8,7 +8,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { DropdownMenuContent } from '@core/component/Menu';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import {
   blockAcceptsFileExtension,
   blockNameToFileExtensions,

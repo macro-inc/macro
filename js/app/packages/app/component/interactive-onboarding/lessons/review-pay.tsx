@@ -12,8 +12,8 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import ArrowRightIcon from '@icon/regular/arrow-right.svg';
 import LockIcon from '@icon/regular/lock.svg';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button } from '@ui';
+import { cn } from '@ui';
 import {
   useOnboardingCheckoutMutation,
   getPendingTeam,

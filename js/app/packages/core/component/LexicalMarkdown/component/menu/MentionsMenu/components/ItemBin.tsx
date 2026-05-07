@@ -1,6 +1,6 @@
 import type { Accessor, ParentProps } from 'solid-js';
 import { Show } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 export function ItemBin(
   props: ParentProps<{

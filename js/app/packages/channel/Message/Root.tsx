@@ -1,5 +1,5 @@
 import { splitProps, type JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { MessageActionsProvider, MessageProvider } from './context';
 import type { MessageActions, MessageData } from './types';
 

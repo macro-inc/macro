@@ -1,7 +1,7 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import CorvuTooltip, { type FloatingOptions } from '@corvu/tooltip';
 import type { Placement } from '@floating-ui/dom';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   For,
   type JSX,

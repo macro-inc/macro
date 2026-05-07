@@ -10,8 +10,8 @@ import ThreeDots from '@icon/regular/list.svg';
 import Rename from '@icon/regular/pencil-line.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button } from '@ui';
+import { cn } from '@ui';
 import {
   type Component,
   createMemo,

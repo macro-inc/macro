@@ -1,6 +1,6 @@
 import { internalDrag } from '@core/directive/internalDragState';
 false && internalDrag;
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { maybeThrow } from '@core/util/maybeResult';
@@ -21,7 +21,7 @@ import {
   downloadImage as downloadImageAction,
 } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { Lightbox } from './Lightbox';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 

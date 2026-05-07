@@ -4,7 +4,7 @@ import type { ProjectEntity, ProjectContainedEntity } from '../types/entity';
 import { useProjectPreviewQuery } from '@queries/storage/project-preview';
 import { truncatedPath } from '../utils/path';
 import FolderIcon from '@icon/regular/folder-simple.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 const MAX_PATH_LENGTH = 30;
 

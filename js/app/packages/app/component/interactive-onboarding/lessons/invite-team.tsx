@@ -1,7 +1,7 @@
 import { createMemo, createSignal, Index, onMount, Show } from 'solid-js';
 import { Tooltip } from '@core/component/Tooltip';
 import { z } from 'zod';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import TrashIcon from '@icon/regular/trash-simple.svg';

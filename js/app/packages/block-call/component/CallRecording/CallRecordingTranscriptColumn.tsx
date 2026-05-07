@@ -3,7 +3,7 @@ import UsersThree from '@phosphor-icons/core/assets/regular/users-three.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { Accessor } from 'solid-js';
 import { Show } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { CallTranscript } from '../CallTranscript';
 import { CallRecordingParticipantsSection } from './CallRecordingParticipants';
 import { CallRecordingSectionShell } from './CallRecordingSectionShell';

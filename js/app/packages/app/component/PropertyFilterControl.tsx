@@ -1,5 +1,5 @@
 import type { PropertyDefinitionDomain } from '@core/component/Properties/types';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   isPropertyDefinition,
   toPropertyDefinitionDomain,

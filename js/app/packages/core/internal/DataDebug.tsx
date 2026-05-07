@@ -1,5 +1,5 @@
 import { Bar } from '@core/component/TopBar/Bar';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { useContacts } from '@core/user';
 import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
 import Copy from '@phosphor-icons/core/regular/copy.svg?component-solid';

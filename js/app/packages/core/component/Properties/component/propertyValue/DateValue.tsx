@@ -7,7 +7,7 @@ import {
   stubSaveHandler,
   type PropertyValueProps,
 } from './ValueComponents';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 /**
  * Display component for date properties

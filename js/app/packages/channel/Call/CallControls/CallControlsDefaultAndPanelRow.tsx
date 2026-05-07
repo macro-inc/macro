@@ -8,7 +8,7 @@ import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
 import Users from '@icon/regular/users.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { For, Show, type Accessor } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   GroupLabel,
   MenuGroup,

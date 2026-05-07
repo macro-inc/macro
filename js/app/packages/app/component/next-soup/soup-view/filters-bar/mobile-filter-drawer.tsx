@@ -3,7 +3,7 @@ import {
   scrollToFocusedInput,
 } from '@app/component/mobile/MobileDrawer';
 import { Accordion } from '@kobalte/core/accordion';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';

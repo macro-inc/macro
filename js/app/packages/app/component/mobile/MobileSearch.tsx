@@ -12,7 +12,7 @@ import {
 } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { useSplitLayout } from '../split-layout/layout';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import { debouncedDependent } from '@core/util/debounce';

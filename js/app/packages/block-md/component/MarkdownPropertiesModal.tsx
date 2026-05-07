@@ -2,7 +2,7 @@ import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer'
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { useBlockAliasedName } from '@core/block';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,

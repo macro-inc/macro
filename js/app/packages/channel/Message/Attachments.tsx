@@ -1,6 +1,6 @@
 import { ItemPreview } from '@core/component/ItemPreview';
 import { stringToItemType } from '@service-storage/client';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import {
   type MediaItem,

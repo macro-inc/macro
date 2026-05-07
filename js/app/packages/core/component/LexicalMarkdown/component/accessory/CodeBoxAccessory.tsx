@@ -3,7 +3,7 @@
  * language selector.
  */
 import { isInBlock, useIsNestedBlock } from '@core/block';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
@@ -47,7 +47,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { glueToElement } from '../../directive/glueToElement';
 import { autoRegister } from '../../plugins/shared/utils';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 
 false && glueToElement;
 

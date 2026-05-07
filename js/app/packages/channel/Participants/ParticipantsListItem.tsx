@@ -1,4 +1,4 @@
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';

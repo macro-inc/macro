@@ -1,7 +1,7 @@
 import { Match, Show, Switch } from 'solid-js';
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
 import { Entity } from '../../entity';

@@ -5,7 +5,7 @@ import CaretRight from '@icon/regular/caret-right.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { Show, Match, Switch } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 import { ComposeTool } from './email/ChatCompose';

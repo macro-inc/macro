@@ -7,7 +7,7 @@ import {
 } from '@core/constant/servers';
 import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
 import XIcon from '@icon/regular/x.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   children,
   createMemo,

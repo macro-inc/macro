@@ -51,7 +51,7 @@ import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   type Accessor,
   batch,

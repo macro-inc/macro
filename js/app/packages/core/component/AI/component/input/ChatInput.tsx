@@ -19,7 +19,7 @@ import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
 import { Surface } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';

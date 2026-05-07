@@ -1,4 +1,4 @@
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import type { JSX } from 'solid-js';
 

@@ -1,5 +1,5 @@
 import { useMaybeBlockAliasedName, useMaybeBlockId } from '@core/block';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { Dialog, Button, Surface } from '@ui';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';

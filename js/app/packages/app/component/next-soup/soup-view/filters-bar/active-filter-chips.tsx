@@ -1,14 +1,14 @@
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Combobox } from '@kobalte/core/combobox';
 import { Layer } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import XIcon from '@icon/regular/x.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import type { FilterOption } from './unified-filter-dropdown';
 import type { SearchableOption } from './search-filter-controls';
 import { SearchableMultiSelect } from './searchable-multi-select';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { truncateLabel } from '@core/util/string';
 
 export type ActiveFilter = {

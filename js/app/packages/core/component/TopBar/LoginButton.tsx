@@ -1,6 +1,6 @@
 import { useIsAuthenticated } from '@core/auth';
 import { useNavigate } from '@solidjs/router';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 
 export function openLoginModal() {
   const isAuthenticated = useIsAuthenticated();

@@ -8,7 +8,7 @@ import {
   shift,
 } from '@floating-ui/dom';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   type Accessor,
   type Component,

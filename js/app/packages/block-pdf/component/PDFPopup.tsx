@@ -3,7 +3,7 @@ import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 // import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { blockElementSignal } from '@core/signal/blockElement';

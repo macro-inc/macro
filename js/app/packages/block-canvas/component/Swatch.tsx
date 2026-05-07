@@ -1,5 +1,5 @@
 import { getTailwindColor } from '@block-canvas/util/style';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { Show } from 'solid-js';
 
 type ColorOption = {

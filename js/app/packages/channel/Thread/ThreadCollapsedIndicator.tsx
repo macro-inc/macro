@@ -1,7 +1,7 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { formatRelativeDate } from '@core/util/time';
 import CaretRight from '@icon/regular/caret-right.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   For,
   Match,

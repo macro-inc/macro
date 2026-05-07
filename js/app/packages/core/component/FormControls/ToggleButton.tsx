@@ -2,7 +2,7 @@ import {
   ToggleButton as KToggleButton,
   type ToggleButtonRootOptions,
 } from '@kobalte/core/toggle-button';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   createEffect,
   createSignal,

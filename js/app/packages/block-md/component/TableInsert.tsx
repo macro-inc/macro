@@ -1,4 +1,4 @@
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { INSERT_TABLE_COMMAND } from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
 import { createSignal, Index, type ParentProps } from 'solid-js';

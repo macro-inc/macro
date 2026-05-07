@@ -1,5 +1,5 @@
 import Caution from '@icon/regular/warning.svg';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { useLogout } from '@core/auth/logout';
 
 export function EmailPermissionsBanner() {

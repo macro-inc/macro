@@ -10,7 +10,7 @@ import { useTeamQuery } from '@queries/team/teams';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { Surface } from '@ui';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
 import LogoIcon from '@macro-icons/macro-logo.svg';

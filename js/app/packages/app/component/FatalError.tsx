@@ -3,7 +3,7 @@ import HomeIcon from '@icon/regular/house.svg';
 import { logger } from '@observability';
 import { Show } from 'solid-js';
 import { Dialog, Surface } from '@ui';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 
 interface FatalErrorProps {
   error?: Error;

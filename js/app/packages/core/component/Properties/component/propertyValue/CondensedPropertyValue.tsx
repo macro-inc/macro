@@ -21,7 +21,7 @@ import {
 import { PropertyTooltip } from './PropertyTooltip';
 import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
 import { UserGroup } from './UserGroup';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 type CondensedPropertyValueProps = {
   property: Property;

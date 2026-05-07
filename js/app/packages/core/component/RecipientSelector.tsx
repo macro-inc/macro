@@ -42,7 +42,7 @@ import {
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 function RecipientChip(props: {
   icon?: JSX.Element;

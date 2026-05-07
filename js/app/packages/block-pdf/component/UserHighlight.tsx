@@ -2,7 +2,7 @@ import {
   activeCommentThreadSignal,
   noScrollToActiveCommentThreadSignal,
 } from '@block-pdf/store/comments/commentStore';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createBlockSignal } from '@core/block';
 import { createCallback } from '@solid-primitives/rootless';
 import {

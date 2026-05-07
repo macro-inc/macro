@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 
 const SCROLL_THRESHOLD = 20;

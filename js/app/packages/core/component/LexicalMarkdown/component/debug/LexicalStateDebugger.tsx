@@ -1,5 +1,5 @@
 import { blockElementSignal } from '@core/signal/blockElement';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import Collapse from '@icon/regular/arrow-down-right.svg';
 import Expand from '@icon/regular/arrow-up-left.svg';
 import { CodeNode } from '@lexical/code';

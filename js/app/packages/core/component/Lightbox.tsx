@@ -1,5 +1,5 @@
 import * as stackingContext from '@core/constant/stackingContext';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { isMobile } from '@core/mobile/isMobile';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
@@ -25,7 +25,7 @@ import {
 } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
 import { LabelAndHotKey } from './Tooltip';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { Zoompinch, type ZoompinchHandle } from './Zoompinch';
 import { isIOS } from '@solid-primitives/platform';
 

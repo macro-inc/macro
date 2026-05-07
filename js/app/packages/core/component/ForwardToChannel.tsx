@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { useAnalytics } from '@app/component/analytics-context';
@@ -28,7 +28,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { Permissions } from './SharePermissions';

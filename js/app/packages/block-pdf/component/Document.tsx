@@ -1,6 +1,6 @@
 import '../PdfViewer/pdf_viewer.css';
 
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 import type { PDFViewer } from '@block-pdf/PdfViewer';
 import { ZOOM_MAX, ZOOM_MIN } from '@block-pdf/PdfViewer/zoom';

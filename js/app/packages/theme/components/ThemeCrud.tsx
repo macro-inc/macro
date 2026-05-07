@@ -1,6 +1,6 @@
 import { deleteTheme, exportTheme } from '../utils/themeUtils';
 import { userThemes } from '../signals/themeSignals';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { createMemo, Show } from 'solid-js';
 import IconClipboard from '@macro-icons/macro-clipboard.svg';

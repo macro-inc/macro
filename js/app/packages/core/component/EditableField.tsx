@@ -1,5 +1,5 @@
 import PencilSimpleLine from '@icon/regular/pencil-simple-line.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { DeprecatedEditingTextButton } from './DeprecatedTextButton';
 

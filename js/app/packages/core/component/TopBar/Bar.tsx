@@ -1,5 +1,5 @@
 import { isInBlock, useIsNestedBlock } from '@core/block';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { observedSize } from '@core/directive/observedSize';
 import { TOP_BAR_HEIGHT } from '@core/signal/layout';
 import { throttle } from '@solid-primitives/scheduled';

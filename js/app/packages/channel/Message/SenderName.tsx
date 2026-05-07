@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { tryMacroId } from '@core/user';
 import { useDisplayName } from '@core/user';
 import { Show } from 'solid-js';

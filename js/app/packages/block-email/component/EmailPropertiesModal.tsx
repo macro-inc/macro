@@ -2,7 +2,7 @@ import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer'
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import TagIcon from '@icon/regular/tag.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Suspense } from 'solid-js';

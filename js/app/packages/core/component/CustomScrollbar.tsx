@@ -1,5 +1,5 @@
 import { debounce } from '@solid-primitives/scheduled';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 
 interface CustomScrollbarProps {

@@ -3,7 +3,7 @@ import { useDrawerControl } from '@app/component/split-layout/components/SplitDr
 import type { BlockName } from '@core/block';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import TagIcon from '@icon/regular/tag.svg';

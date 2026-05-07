@@ -13,7 +13,7 @@ import {
 } from '../comments/discussionResource';
 import { makePersisted } from '@solid-primitives/storage';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { createSignal, For, type Component, type JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import CaretDown from '@icon/regular/caret-down.svg';
