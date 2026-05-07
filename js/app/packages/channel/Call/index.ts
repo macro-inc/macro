@@ -15,6 +15,9 @@ export type {
 } from './CallControls/CallControls';
 export { CallControls } from './CallControls/CallControls';
 export { CallEventSync } from './CallEventSync';
+export { ChannelCallAutoJoin } from './ChannelCallAutoJoin';
+export { ChannelCallButton } from './ChannelCallButton';
+export { ChannelCallTab } from './ChannelCallTab';
 export { CallOverlay } from './CallOverlay';
 export { CallStartedNotifier } from './CallStartedNotifier';
 export { joinChannelCall } from './join-channel-call';
