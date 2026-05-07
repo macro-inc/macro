@@ -3,7 +3,7 @@ import ExclamationIcon from '@icon/regular/exclamation-mark.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
-import { Panel } from '@ui';
+import { Surface } from '@ui';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
 import type { Component, JSX } from 'solid-js';
@@ -118,7 +118,7 @@ export interface ToastAction {
 /**
  * Config for a fully custom toast.
  * Replaces the icon, title, and accent color of the standard layout while
- * still using the shared Panel chrome and progress/dismiss machinery.
+ * still using the shared Surface chrome and progress/dismiss machinery.
  */
 export interface CustomToastConfig {
   title: string;
@@ -311,7 +311,7 @@ function ToastContent(props: {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <Panel
+      <Surface
         highlightColor={accentColor()}
         active
         class="relative w-[90vw] sm:w-md p-2 sm:p-3"
@@ -414,7 +414,7 @@ function ToastContent(props: {
             }}
           />
         </Show>
-      </Panel>
+      </Surface>
     </Toast>
   );
 }
@@ -571,7 +571,7 @@ function embed(
 
 /**
  * Show a toast with a fully custom title, icon, accent color, body content,
- * and actions row — while still using the shared Panel chrome and
+ * and actions row — while still using the shared Surface chrome and
  * progress/dismiss machinery.
  */
 function custom(

@@ -1,6 +1,6 @@
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { Dialog, Panel } from '@ui';
+import { Dialog, Surface } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
@@ -130,7 +130,7 @@ function PopoverSplitModal(props: {
         bindHotKeyDom(r);
       }}
     >
-      <Panel depth={2} active>
+      <Surface depth={2} active>
         <div class="*:max-h-[75vh]">
           <SplitPanelContext.Provider value={stubPanelContext}>
             <SoupContextProvider>
@@ -140,7 +140,7 @@ function PopoverSplitModal(props: {
             </SoupContextProvider>
           </SplitPanelContext.Provider>
         </div>
-      </Panel>
+      </Surface>
     </Dialog>
   );
 }

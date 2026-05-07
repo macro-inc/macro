@@ -1,4 +1,4 @@
-import { Panel } from '@ui';
+import { Surface } from '@ui';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { toast } from '@core/component/Toast/Toast';
@@ -81,7 +81,7 @@ export function Signup() {
         </div>
 
         <div class="w-full max-w-105 login-card">
-          <Panel depth={1} class="login-stagger">
+          <Surface depth={1} class="login-stagger">
             <div class="flex items-center justify-center py-10">
               <LogoIcon class="size-20 text-accent" />
             </div>
@@ -92,7 +92,7 @@ export function Signup() {
             <div class="w-full">
               <LoginOptions signupMode setStage={(_stage: Stage) => {}} />
             </div>
-          </Panel>
+          </Surface>
         </div>
       </div>
     </Show>

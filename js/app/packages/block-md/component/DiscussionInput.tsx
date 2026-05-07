@@ -29,7 +29,7 @@ import type { IUser } from '@core/user/types';
 import { InputActionButton } from '@channel/Input/ActionButton';
 import { useInputCommands } from '@channel/Input/context';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { Panel } from '@ui';
+import { Surface } from '@ui';
 
 export type DiscussionInputProps = InputCallbacks & {
   input: InputData;
@@ -199,7 +199,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
 
   return (
     <Input.Root input={inputView()} commands={commands}>
-      <Panel depth={2}>
+      <Surface depth={2}>
         <Input.Layout>
           <Input.FormatRibbon>
             <FormatButtons
@@ -240,7 +240,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
             </Switch>
           </Input.Footer>
         </Input.Layout>
-      </Panel>
+      </Surface>
     </Input.Root>
   );
 }

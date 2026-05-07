@@ -14,7 +14,7 @@ export { Dialog  } from './components/Dialog';
 export { Window  } from './components/Window';
 export { Button } from './components/Button';
 export { Layer } from './components/Layer';
-export { Panel } from './components/Panel';
+export { Surface } from './components/Surface';
 
 /* types */
 export type { DialogProps } from './components/Dialog';

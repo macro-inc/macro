@@ -38,7 +38,7 @@ import { commsServiceClient } from '@service-comms/client';
 import InfoIcon from '@icon/regular/info.svg';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
-import { Panel } from '@ui';
+import { Surface } from '@ui';
 
 export function ChannelCompose() {
   const [channelName, setChannelName] = createSignal<string>('');
@@ -267,7 +267,7 @@ export function ChannelCompose() {
               input={inputState.view()}
               commands={inputState.commands}
             >
-              <Panel depth={2}>
+              <Surface depth={2}>
                 <Input.DropZone
                   onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
                   onDragEnd={() => inputState.setIsDraggedOver(false)}
@@ -318,7 +318,7 @@ export function ChannelCompose() {
                     </Input.Footer>
                   </Input.Layout>
                 </Input.DropZone>
-              </Panel>
+              </Surface>
             </Input.Root>
           </ChannelInputContainer>
         </div>

@@ -9,7 +9,7 @@ import { commsServiceClient } from '@service-comms/client';
 import PhoneCallIcon from '@macro-icons/wide/call.svg';
 import XIcon from '@icon/regular/x.svg';
 import { createSignal } from 'solid-js';
-import { Dialog, Button, Panel } from '@ui';
+import { Dialog, Button, Surface } from '@ui';
 
 export function NewCallButton() {
   const [isOpen, setIsOpen] = createSignal(false);
@@ -97,7 +97,7 @@ export function NewCallButton() {
         }}
         class="w-[512px]"
       >
-        <Panel depth={2} active>
+        <Surface depth={2} active>
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
@@ -132,7 +132,7 @@ export function NewCallButton() {
               </div>
             </div>
           </div>
-        </Panel>
+        </Surface>
       </Dialog>
     </>
   );

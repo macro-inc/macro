@@ -24,7 +24,7 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { useAnalytics } from '@app/component/analytics-context';
 import { detect } from 'detect-browser';
 import { useUserInfo } from '@queries/auth';
-import { Panel } from '@ui';
+import { Surface } from '@ui';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import { useEmailLinks } from '@core/email-link';
@@ -178,7 +178,7 @@ export function Login() {
         </div>
 
         <div class="w-full max-w-105 login-card">
-          <Panel depth={1}>
+          <Surface depth={1}>
             <div class="login-stagger">
               <div
                 class={cn(
@@ -202,7 +202,7 @@ export function Login() {
                 </Switch>
               </div>
             </div>
-          </Panel>
+          </Surface>
         </div>
       </div>
     </Show>

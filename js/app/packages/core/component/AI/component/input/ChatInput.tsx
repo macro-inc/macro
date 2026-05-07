@@ -18,7 +18,7 @@ import XIcon from '@icon/regular/x.svg';
 import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
-import { Panel } from '@ui';
+import { Surface } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
@@ -202,7 +202,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   return (
-    <Panel depth={2}>
+    <Surface depth={2}>
       <div id="chat-input" ref={containerRef} class="relative flex flex-col">
         <Show when={hasAttachments()}>
           <div class="px-2 pt-2 w-full">
@@ -277,6 +277,6 @@ export function ChatInput(props: ChatInputComponentProps) {
         </div>
         <ConsentDialog />
       </div>
-    </Panel>
+    </Surface>
   );
 }

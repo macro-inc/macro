@@ -25,7 +25,7 @@ import {
   toPropertyDefinitionDomain,
   useSearchInputFocus,
 } from '../../utils';
-import { Dialog, Panel } from '@ui';
+import { Dialog, Surface } from '@ui';
 
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
@@ -157,7 +157,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
       }}
       contentRef={setDialogRef}
     >
-      <Panel depth={2} class="*:max-h-[75vh]">
+      <Surface depth={2} class="*:max-h-[75vh]">
         <div class="flex flex-col text-sm">
           <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
             <span class="pl-2 pointer-events-none text-ink-extra-muted">❯</span>
@@ -233,7 +233,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
             </Show>
           </div>
         </div>
-      </Panel>
+      </Surface>
     </Dialog>
   );
 }

@@ -8,7 +8,7 @@ import {
 } from '@queries/team/invitations';
 import { useTeamQuery } from '@queries/team/teams';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import { Panel } from '@ui';
+import { Surface } from '@ui';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { Button } from '@ui/components/Button';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
@@ -112,7 +112,7 @@ function TeamInviteAcceptanceContent() {
       </div>
 
       <div class="w-full max-w-105 invite-card">
-        <Panel>
+        <Surface>
           <div class="flex flex-col gap-6 py-6 px-6">
             <div class="flex justify-center">
               <LogoIcon class="size-10 text-accent" />
@@ -149,7 +149,7 @@ function TeamInviteAcceptanceContent() {
               </Switch>
             </div>
           </div>
-        </Panel>
+        </Surface>
       </div>
     </div>
   );

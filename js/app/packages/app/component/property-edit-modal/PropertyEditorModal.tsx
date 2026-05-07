@@ -1,4 +1,4 @@
-import { Dialog, Panel } from '@ui';
+import { Dialog, Surface } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
@@ -153,7 +153,7 @@ export function PropertyEditorModal() {
       onOpenChange={togglePropertyEditor}
       contentRef={mergeRefs(attach, setDialogRef)}
     >
-      <Panel depth={2} active>
+      <Surface depth={2} active>
         <div class="*:max-h-[75vh]">
           <div class="flex flex-col max-h-108 overflow-hidden text-sm">
             <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
@@ -201,7 +201,7 @@ export function PropertyEditorModal() {
             </Switch>
           </div>
         </div>
-      </Panel>
+      </Surface>
     </Dialog>
   );
 }

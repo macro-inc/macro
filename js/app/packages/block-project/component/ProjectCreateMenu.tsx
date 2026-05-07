@@ -22,7 +22,7 @@ import { Layer } from '@ui';
 import PlusIcon from '@icon/regular/plus.svg';
 import { createProject } from '@queries/storage/projects';
 import { type Component, createSignal, For } from 'solid-js';
-import { Dialog, Panel } from '@ui';
+import { Dialog, Surface } from '@ui';
 
 type MenuItemProps = {
   label: string;
@@ -223,7 +223,7 @@ function ProjectCreateDialog(props: {
 
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
-      <Panel depth={2} active>
+      <Surface depth={2} active>
         <div class="*:max-h-[75vh]">
           <div class="p-2">
             <Dialog.Title class="text-md font-semibold text-ink pb-3">
@@ -251,7 +251,7 @@ function ProjectCreateDialog(props: {
             </For>
           </div>
         </div>
-      </Panel>
+      </Surface>
     </Dialog>
   );
 }

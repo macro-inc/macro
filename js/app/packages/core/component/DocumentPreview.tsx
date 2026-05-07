@@ -12,7 +12,7 @@ import {
 } from '@core/block';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { Panel } from '@ui';
+import { Surface } from '@ui';
 import { toast } from '@core/component/Toast/Toast';
 import {
   isAccessiblePreviewItem,
@@ -718,7 +718,7 @@ export function PopupPreview(props: {
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <Panel active depth={3}>
+      <Surface active depth={3}>
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>
@@ -903,7 +903,7 @@ export function PopupPreview(props: {
             )}
           </Match>
         </Switch>
-      </Panel>
+      </Surface>
     </div>
   );
 }

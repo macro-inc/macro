@@ -1,4 +1,4 @@
-import { Panel } from '@ui/components/Panel';
+import { Surface } from '@ui/components/Surface';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { isMobile } from '@core/mobile/isMobile';
 import { isIOS } from '@solid-primitives/platform';
@@ -181,7 +181,7 @@ export function ChannelInput(props: ChannelInputProps) {
 
   return (
     <Input.Root input={inputState.view()} commands={inputState.commands}>
-      <Panel depth={2}>
+      <Surface depth={2}>
         <Input.DropZone
           onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
           onDragEnd={() => inputState.setIsDraggedOver(false)}
@@ -231,7 +231,7 @@ export function ChannelInput(props: ChannelInputProps) {
             </Input.Footer>
           </Input.Layout>
         </Input.DropZone>
-      </Panel>
+      </Surface>
     </Input.Root>
   );
 }

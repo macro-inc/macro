@@ -24,7 +24,7 @@ import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
 import { ContinueButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
-import { Panel, Button } from '@ui';
+import { Surface, Button } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
@@ -631,7 +631,7 @@ function InteractiveOnboardingInner() {
 
       {/* Centered card */}
       <div class="size-full max-w-400 max-h-225">
-        <Panel depth={1}>
+        <Surface depth={1}>
           <div class="size-full flex">
             <Show
               when={state.currentLesson()}
@@ -871,7 +871,7 @@ function InteractiveOnboardingInner() {
               )}
             </Show>
           </div>
-        </Panel>
+        </Surface>
       </div>
     </div>
   );

@@ -2,14 +2,14 @@ import { splitProps, type JSX } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
 
-export type PanelProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
+export type SurfaceProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
   style?: JSX.CSSProperties;
   highlightColor?: string;
   active?: boolean;
 };
 
-export function Panel(props: PanelProps) {
+export function Surface(props: SurfaceProps) {
   const [local, rest] = splitProps(props, [
     'highlightColor',
     'children',

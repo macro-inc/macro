@@ -1,7 +1,7 @@
 import { isPlatform } from '@core/util/platform';
 import { useNotificationSettings } from '@notifications/notification-settings';
 import { useIsAuthenticated } from '@queries/auth';
-import { Dialog, Button, Panel } from '@ui';
+import { Dialog, Button, Surface } from '@ui';
 import { createMemo, Show } from 'solid-js';
 
 const DEBUG_FORCE_OPEN = false;
@@ -27,7 +27,7 @@ export function IosPushNotificationModal() {
         }}
         class="w-[90%]"
       >
-        <Panel depth={2} active>
+        <Surface depth={2} active>
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col gap-4 px-4 py-6">
               <Dialog.Title class="text-lg font-semibold text-ink">
@@ -57,7 +57,7 @@ export function IosPushNotificationModal() {
               </div>
             </div>
           </div>
-        </Panel>
+        </Surface>
       </Dialog>
     </Show>
   );
