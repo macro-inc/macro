@@ -169,9 +169,14 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     // Dismiss the native CallKit call sheet if the user left from within the app.
     // When the leave is initiated by CXEndCallAction, the native sheet is already
     // ending, so avoid sending a second native end request back to CallKit.
+    // Isolated try/catch so a CallKit dismissal failure never skips disconnect.
     try {
       if (leaveOptions?.endNativeCall !== false) {
-        await endCallKitCall();
+        try {
+          await endCallKitCall();
+        } catch (e) {
+          console.error('callkit: failed to dismiss call sheet', e);
+        }
       }
       try {
         await callCtx.disconnect();

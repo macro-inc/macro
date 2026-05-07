@@ -11,4 +11,5 @@ export type DeviceType = (typeof DeviceType)[keyof typeof DeviceType];
 export const DeviceType = {
   ios: 'ios',
   android: 'android',
+  iosvoip: 'iosvoip',
 } as const;
