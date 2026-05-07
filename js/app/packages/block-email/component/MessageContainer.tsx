@@ -6,6 +6,7 @@ import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
 import { getSenderMacroId } from '@block-email/util/emailUser';
+import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { Message } from '@core/component/Message';
 import { toast } from '@core/component/Toast/Toast';
@@ -22,7 +23,6 @@ import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
 
 interface MessageContainerProps {
   message: ApiMessage;
