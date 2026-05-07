@@ -125,7 +125,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
             'transform': `translateY(${thumbTop()}px)`,
             'transition': 'opacity 150ms ease-in-out',
             'opacity': isScrolling() ? 1 : 0,
-            'background-color': 'var(--a0)',
+            'background-color': 'var(--c4)',
             'height': `${THUMB_HEIGHT}px`,
             'pointer-events': 'none',
             'border-radius': '1px',
