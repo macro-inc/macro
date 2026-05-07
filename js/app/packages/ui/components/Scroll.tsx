@@ -2,18 +2,20 @@ import { createSignal, onCleanup, onMount, splitProps} from 'solid-js';
 import { cn } from '../utils/classname';
 import type { JSX } from 'solid-js'
 
-const THUMB_HEIGHT = 200;
+const THUMB_WIDTH = 2;
 const GUTTER_WIDTH = 8;
-const THUMB_INSET = 3;
+const THUMB_HEIGHT = 200;
+const THUMB_RADIUS = THUMB_WIDTH * 0.5;
+const THUMB_INSET = (GUTTER_WIDTH - THUMB_WIDTH) * 0.5;
 
 export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   const [isScrolling, setIsScrolling] = createSignal(false);
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
   const [thumbTop, setThumbTop] = createSignal(0);
+  let contentRef!: HTMLDivElement;
   let gutterRef!: HTMLDivElement;
   let scrollRef!: HTMLDivElement;
-  let contentRef!: HTMLDivElement;
 
   function update() {
     const { scrollTop, scrollHeight, clientHeight } = scrollRef;
@@ -34,15 +36,14 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
     showThumb();
   }
 
-  function scrollToPointer(clientY: number) {
-    const rect = gutterRef.getBoundingClientRect();
+  function scrollToLocalY(localY: number) {
     const { scrollHeight, clientHeight } = scrollRef;
     const maxScroll = Math.max(0, scrollHeight - clientHeight);
     if (maxScroll <= 0) { return; }
     const maxTop = Math.max(0, clientHeight - THUMB_HEIGHT - THUMB_INSET * 2);
     if (maxTop <= 0) { return; }
-    const localY = clientY - rect.top - THUMB_HEIGHT / 2;
-    const clamped = Math.max(0, Math.min(maxTop, localY - THUMB_INSET));
+    const centered = localY - THUMB_HEIGHT / 2 - THUMB_INSET;
+    const clamped = Math.max(0, Math.min(maxTop, centered));
     scrollRef.scrollTop = (clamped / maxTop) * maxScroll;
   }
 
@@ -51,13 +52,13 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
     e.preventDefault();
     gutterRef.setPointerCapture(e.pointerId);
     showThumb();
-    scrollToPointer(e.clientY);
+    scrollToLocalY(e.offsetY);
   }
 
   function handlePointerMove(e: PointerEvent) {
     if (!gutterRef.hasPointerCapture(e.pointerId)) { return; }
     showThumb();
-    scrollToPointer(e.clientY);
+    scrollToLocalY(e.offsetY);
   }
 
   function handlePointerUp(e: PointerEvent) {
@@ -119,14 +120,14 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
           style={{
             'transform': `translateY(${thumbTop()}px)`,
             'transition': 'opacity 150ms ease-in-out',
+            'border-radius': `${THUMB_RADIUS}px`,
             'opacity': isScrolling() ? 1 : 0,
             'background-color': 'var(--c4)',
             'height': `${THUMB_HEIGHT}px`,
+            'right': `${THUMB_INSET}px`,
+            'width': `${THUMB_WIDTH}px`,
             'pointer-events': 'none',
-            'border-radius': '1px',
             'position': 'absolute',
-            'width': '2px',
-            'right': '3px',
             'top': '0',
           }}
         />
