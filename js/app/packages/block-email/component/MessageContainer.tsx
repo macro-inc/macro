@@ -23,7 +23,6 @@ import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
-import { replyInputOffsetX } from '@channel/Thread/utils';
 
 interface MessageContainerProps {
   message: ApiMessage;
