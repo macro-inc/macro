@@ -97,7 +97,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
 
   return (
     <div class="relative flex-1 min-h-0 overflow-hidden">
-      <div class="macro-message-width macro-message-padding mx-auto flex h-full min-h-0 w-full flex-col gap-6 py-4">
+      <div class="macro-message-width macro-message-padding mx-auto flex size-full min-h-0 flex-col gap-6 py-4">
         <Show when={canAddParticipants()}>
           <ParticipantsSection title="Add participants">
             <ParticipantsAddPanel

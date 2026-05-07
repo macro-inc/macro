@@ -173,7 +173,7 @@ export function MediaSelector() {
             </Show>
             <DropdownMenu.Item closeOnSelect={false}>
               <div
-                class="w-72 flex flex-row select-none items-center gap-1 "
+                class="w-72 flex flex-row select-none items-center gap-1"
                 onmousedown={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
@@ -196,7 +196,7 @@ export function MediaSelector() {
                     },
                   }}
                 >
-                  <UploadSimple class="w-3.5 h-3.5 shrink-0 text-accent-ink" />
+                  <UploadSimple class="size-3.5 shrink-0 text-accent-ink" />
                   <span class="text-sm font-medium text-accent-ink">
                     Upload File
                   </span>

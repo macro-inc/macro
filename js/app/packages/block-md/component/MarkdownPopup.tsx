@@ -545,11 +545,11 @@ export function MarkdownPopup(props: {
                           <Show
                             when={!isLoading() && !isGenerating()}
                             fallback={
-                              <LoadingIcon class="w-3 h-3 animate-spin" />
+                              <LoadingIcon class="size-3 animate-spin" />
                             }
                           >
                             {' '}
-                            <PencilIcon class="w-3 h-3" />{' '}
+                            <PencilIcon class="size-3" />{' '}
                           </Show>{' '}
                           <p>Accept Changes</p>{' '}
                         </button>{' '}
@@ -564,11 +564,9 @@ export function MarkdownPopup(props: {
                       >
                         <Show
                           when={!isLoading() && !isGenerating()}
-                          fallback={
-                            <LoadingIcon class="w-3 h-3 animate-spin" />
-                          }
+                          fallback={<LoadingIcon class="size-3 animate-spin" />}
                         >
-                          <NotesIcon class="w-3 h-3 text-note" />
+                          <NotesIcon class="size-3 text-note" />
                         </Show>
                         <p>Edit in Notes</p>
                       </button>
@@ -580,17 +578,13 @@ export function MarkdownPopup(props: {
                       >
                         <Show
                           when={!isGenerating()}
-                          fallback={
-                            <LoadingIcon class="w-3 h-3 animate-spin" />
-                          }
+                          fallback={<LoadingIcon class="size-3 animate-spin" />}
                         >
                           <Show
                             when={!copied()}
-                            fallback={
-                              <CheckIcon class="w-3 h-3 text-success" />
-                            }
+                            fallback={<CheckIcon class="size-3 text-success" />}
                           >
-                            <ClipboardIcon class="w-3 h-3" />
+                            <ClipboardIcon class="size-3" />
                           </Show>
                         </Show>
                         <p>{copied() ? 'Copied!' : 'Copy'}</p>

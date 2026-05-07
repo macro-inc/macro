@@ -116,9 +116,9 @@ export function UserTooltip(props: UserTooltipProps) {
             <Show when={props.email}>
               <Button onClick={handleCopyEmail} class={buttonStyle}>
                 {copied() ? (
-                  <IconCheck class="w-3.5 h-3.5" />
+                  <IconCheck class="size-3.5" />
                 ) : (
-                  <WideCopy class="w-3.5 h-3.5" />
+                  <WideCopy class="size-3.5" />
                 )}
                 Copy email
               </Button>
@@ -129,13 +129,13 @@ export function UserTooltip(props: UserTooltipProps) {
               }
             >
               <Button onClick={openDM} class={buttonStyle}>
-                <WideChat class="w-3.5 h-3.5" />
+                <WideChat class="size-3.5" />
                 DM
               </Button>
             </Show>
             <Show when={props.id && !props.isDeleted}>
               <Button onClick={openTaskComposer} class={buttonStyle}>
-                <WideTask class="w-3.5 h-3.5" />
+                <WideTask class="size-3.5" />
                 Assign task
               </Button>
             </Show>

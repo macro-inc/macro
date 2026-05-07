@@ -135,7 +135,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
               }}
             >
               <ArrowsOut
-                class={cn('text-accent', slim() ? 'h-3.5 w-3.5' : 'h-4 w-4')}
+                class={cn('text-accent', slim() ? 'size-3.5' : 'size-4')}
               />
             </button>
           </Show>

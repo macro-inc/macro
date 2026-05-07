@@ -74,7 +74,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
         >
           {/* Rail line - behind avatar */}
           <div
-            class="absolute top-0 bottom-0 border-l border-edge-muted z-0"
+            class="absolute inset-y-0 border-l border-edge-muted z-0"
             style={{
               left: 'var(--left-of-connector)',
             }}

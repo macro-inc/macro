@@ -95,12 +95,12 @@ export function NewCallButton() {
           setIsOpen(open);
           if (!open) reset();
         }}
-        class="w-[512px]"
+        class="w-lg"
       >
         <Surface depth={2} active>
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col text-ink">
-              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
+              <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
                 <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                   <XIcon />
                 </Dialog.CloseButton>

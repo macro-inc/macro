@@ -45,7 +45,7 @@ export function Signup() {
 
   return (
     <Show when={!userInfo()?.authenticated} fallback={<PostSignupRedirect />}>
-      <div class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative">
+      <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
         <style>
           {
             /*css*/ `
@@ -86,7 +86,7 @@ export function Signup() {
               <LogoIcon class="size-20 text-accent" />
             </div>
             <div class="text-center text-lg font-medium">Welcome to Macro</div>
-            <div class="px-8 pb-4 pt-2 text-center text-sm text-ink/60 leading-relaxed">
+            <div class="px-8 pb-4 pt-2 text-center text-sm/relaxed text-ink/60">
               Sign up with Google to sync your inbox and set up your workspace.
             </div>
             <div class="w-full">

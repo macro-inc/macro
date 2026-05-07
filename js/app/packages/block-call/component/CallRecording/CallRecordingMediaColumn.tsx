@@ -45,7 +45,7 @@ export function CallRecordingMediaColumn(props: {
             </div>
           }
         >
-          <div class="flex min-h-[120px] flex-1 items-center justify-center px-4 text-center text-sm text-ink-faint">
+          <div class="flex min-h-30 flex-1 items-center justify-center px-4 text-center text-sm text-ink-faint">
             No video recording for this call.
           </div>
         </Show>

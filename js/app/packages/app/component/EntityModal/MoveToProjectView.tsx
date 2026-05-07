@@ -478,7 +478,7 @@ export const MoveToProjectView = (props: {
 
                         {/* Expand/collapse caret */}
                         <div
-                          class="flex items-center justify-center w-4 h-4 hover:bg-edge rounded"
+                          class="flex items-center justify-center size-4 hover:bg-edge rounded"
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleExpanded(project.id);
@@ -489,7 +489,7 @@ export const MoveToProjectView = (props: {
                         >
                           <CaretRight
                             class={cn(
-                              'w-3 h-3 transition-transform duration-150',
+                              'size-3 transition-transform duration-150',
                               isExpanded() && !searchQuery() && 'rotate-90'
                             )}
                           />

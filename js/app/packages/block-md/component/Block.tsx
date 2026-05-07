@@ -32,7 +32,7 @@ export default function BlockMarkdown() {
   return (
     <DocumentBlockContainer>
       <div
-        class="w-full h-full select-none overscroll-none overflow-hidden flex flex-col relative"
+        class="size-full select-none overscroll-none overflow-hidden flex flex-col relative"
         tabIndex={-1}
       >
         <ModalsProvider>
@@ -60,7 +60,7 @@ export default function BlockMarkdown() {
           />
           <div class="w-full grow overflow-hidden relative" data-block-content>
             <div
-              class="w-full h-full relative overflow-auto portal-scope scrollbar-hidden"
+              class="size-full relative overflow-auto portal-scope scrollbar-hidden"
               ref={setScrollRef}
             >
               <Suspense>

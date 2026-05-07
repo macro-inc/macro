@@ -468,7 +468,7 @@ export const BulkMoveToProjectView = (props: {
                   >
                     <div
                       class={cn(
-                        'mr-2 w-4 h-4 flex items-center justify-center text-xs',
+                        'mr-2 size-4 flex items-center justify-center text-xs',
                         !hasChildren() && 'opacity-20'
                       )}
                       onClick={(e) => {

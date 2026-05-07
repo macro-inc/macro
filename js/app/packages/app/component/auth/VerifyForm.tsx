@@ -156,7 +156,7 @@ export function VerifyForm(props: { setStage: (next: Stage) => void }) {
             onClick={resetEmailCode}
             type="button"
           >
-            <ArrowLeft class="w-5 h-5" />
+            <ArrowLeft class="size-5" />
             <span>Back</span>
           </button>
 
@@ -166,7 +166,7 @@ export function VerifyForm(props: { setStage: (next: Stage) => void }) {
             disabled={submission.pending}
           >
             <span>Continue</span>
-            <ArrowRight class="w-5 h-5" />
+            <ArrowRight class="size-5" />
           </button>
         </div>
 

@@ -209,7 +209,7 @@ export const MobileFilterDrawer = () => {
         >
           <SlidersHorizontalIcon />
           <Show when={activeCount() > 0}>
-            <span class="absolute -top-0.5 right-0 translate-x-1/2 size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
+            <span class="absolute -top-0.5 right-0 translate-x-1/2 size-4 flex items-center justify-center rounded-full bg-accent text-page text-xxs font-medium leading-none">
               {activeCount()}
             </span>
           </Show>
@@ -308,7 +308,7 @@ export const MobileFilterDrawer = () => {
                           >
                             <Accordion.Header>
                               <Accordion.Trigger
-                                class="w-full flex bg-panel items-center justify-between px-3 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group mb-px"
+                                class="w-full flex bg-panel items-center justify-between p-3 text-sm text-ink hover:bg-hover transition-colors outline-none group mb-px"
                                 onClick={(e) =>
                                   scrollAccordionItemToTop(e, scrollRef())
                                 }
@@ -318,7 +318,7 @@ export const MobileFilterDrawer = () => {
                                 </span>
                                 <div class="flex items-center gap-2">
                                   <Show when={activeCount() > 0}>
-                                    <span class="group-data-expanded:hidden size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
+                                    <span class="group-data-expanded:hidden size-4 flex items-center justify-center rounded-full bg-accent text-page text-xxs font-medium leading-none">
                                       {activeCount()}
                                     </span>
                                   </Show>
@@ -377,7 +377,7 @@ export const MobileFilterDrawer = () => {
                     <MobileDrawer.Section as={Accordion.Item} value="assignee">
                       <Accordion.Header>
                         <Accordion.Trigger
-                          class="w-full flex items-center justify-between px-3 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group bg-panel mb-px"
+                          class="w-full flex items-center justify-between p-3 text-sm text-ink hover:bg-hover transition-colors outline-none group bg-panel mb-px"
                           onClick={(e) =>
                             scrollAccordionItemToTop(e, scrollRef())
                           }

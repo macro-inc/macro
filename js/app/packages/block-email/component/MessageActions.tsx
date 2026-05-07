@@ -68,30 +68,30 @@ export function MessageActions(props: {
         fallback={
           <Show when={!props.hiddenActions?.includes('reply')}>
             <Button
-              class="h-8 w-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+              class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
               onClick={onChangeReplyType('reply')}
               tooltip={<span>Reply</span>}
             >
-              <ArrowBendUpLeft class="h-5 w-5" />
+              <ArrowBendUpLeft class="size-5" />
             </Button>
           </Show>
         }
       >
         <Button
-          class="h-8 w-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+          class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
           onClick={onChangeReplyType('reply-all')}
           tooltip={<span>Reply all</span>}
         >
-          <ArrowBendDoubleUpLeft class="h-5 w-5" />
+          <ArrowBendDoubleUpLeft class="size-5" />
         </Button>
       </Show>
       <Show when={!props.hiddenActions?.includes('forward')}>
         <Button
-          class="h-8 w-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+          class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
           onClick={onChangeReplyType('forward')}
           tooltip={<span>Forward</span>}
         >
-          <ArrowBendUpRight class="h-5 w-5" />
+          <ArrowBendUpRight class="size-5" />
         </Button>
       </Show>
     </div>

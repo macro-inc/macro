@@ -71,7 +71,7 @@ const PANELS: { icon: () => JSX.Element; label: string }[] = [
 
 function AboutUsDemo() {
   return (
-    <div class="h-full w-full flex items-center justify-center px-8">
+    <div class="size-full flex items-center justify-center px-8">
       <div
         class="w-full max-w-2xl items-start"
         classList={{

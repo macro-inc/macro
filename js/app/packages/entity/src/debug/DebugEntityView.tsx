@@ -66,7 +66,7 @@ export default function DebugEntityView() {
         <StaticSplitLabel label="Enity Component Demo (mock data)" />
         jk
       </SplitHeaderLeft>
-      <div class="w-full h-full overflow-auto">
+      <div class="size-full overflow-auto">
         <For each={entitiesWithNotifications}>
           {(entity, index) => (
             <ListEntity

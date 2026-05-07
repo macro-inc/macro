@@ -159,7 +159,7 @@ export function MediaSelector(props: MediaSelectorProps) {
                     },
                   }}
                 >
-                  <UploadSimple class="w-3.5 h-3.5 shrink-0" />
+                  <UploadSimple class="size-3.5 shrink-0" />
                   <span class="text-sm font-medium">Upload file</span>
                 </div>
               </div>

@@ -84,7 +84,7 @@ function TeamInviteAcceptanceContent() {
   );
 
   return (
-    <div class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative">
+    <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
       <style>
         {`
           @keyframes invite-fade-up {
@@ -112,7 +112,7 @@ function TeamInviteAcceptanceContent() {
 
       <div class="w-full max-w-105 invite-card">
         <Surface>
-          <div class="flex flex-col gap-6 py-6 px-6">
+          <div class="flex flex-col gap-6 p-6">
             <div class="flex justify-center">
               <LogoIcon class="size-10 text-accent" />
             </div>

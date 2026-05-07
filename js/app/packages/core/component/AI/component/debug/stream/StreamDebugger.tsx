@@ -65,7 +65,7 @@ function StreamDebuggerWithControlsInner(props: {
         </Button>
       </div>
       <StreamStatus stream={stream} />
-      <div data-chat-scroll class="min-h-0 max-h-[400px] overflow-y-auto">
+      <div data-chat-scroll class="min-h-0 max-h-100 overflow-y-auto">
         <ChatMessages />
       </div>
     </div>

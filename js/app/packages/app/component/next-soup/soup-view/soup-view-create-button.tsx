@@ -154,7 +154,7 @@ export const SoupViewCreateButton = () => {
               <ChevronDownIcon class="size-3" />
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
-              <DropdownMenuContent class="z-action-menu min-w-[160px]">
+              <DropdownMenuContent class="z-action-menu min-w-40">
                 <For each={options()}>
                   {(item) => (
                     <MenuItem

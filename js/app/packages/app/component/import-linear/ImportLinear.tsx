@@ -197,7 +197,7 @@ export default function ImportLinear() {
   };
 
   return (
-    <div class="flex flex-col h-full w-full">
+    <div class="flex flex-col size-full">
       <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         <div class="flex items-center justify-between">
           <div class="text-lg font-medium text-ink">Import Linear CSV</div>

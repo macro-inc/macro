@@ -63,7 +63,7 @@ export function TierSelect(props: {
             </span>
           </div>
           <Select.ItemIndicator>
-            <CheckIcon class="w-3 h-3" />
+            <CheckIcon class="size-3" />
           </Select.ItemIndicator>
         </Select.Item>
       )}
@@ -73,14 +73,14 @@ export function TierSelect(props: {
         tabIndex={0}
         class={
           props.triggerClass ??
-          'rounded-xs px-2 py-1 text-xs data-[expanded]:bg-ink/10'
+          'rounded-xs px-2 py-1 text-xs data-expanded:bg-ink/10'
         }
         disabled={props.disabled}
       >
         <Select.Value<TierOption>>
           {(state) => state.selectedOption().label}
         </Select.Value>
-        <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
+        <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
         <Select.Content class="flex flex-col justify-start items-start bg-menu shadow-lg ring-1 ring-edge-muted rounded-sm p-1 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal">

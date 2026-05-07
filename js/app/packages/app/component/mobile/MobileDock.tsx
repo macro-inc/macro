@@ -53,7 +53,7 @@ function MobileDockButton(props: MobileDockButtonProps) {
         props.active && 'text-accent'
       )}
     >
-      <div class={cn('w-6 h-6 [&_svg]:size-6', props.iconClass)}>
+      <div class={cn('size-6 [&_svg]:size-6', props.iconClass)}>
         <Dynamic component={props.icon} triggerAnimation={animating()} />
       </div>
       <Show when={props.label}>
@@ -84,7 +84,7 @@ function SearchDockButton(props: { active: boolean; onClick: () => void }) {
         props.active && 'text-accent'
       )}
     >
-      <div class="w-6 h-6 [&_svg]:size-6">
+      <div class="size-6 [&_svg]:size-6">
         <Dynamic
           component={AnimatedSearchIcon}
           triggerAnimation={animating()}
@@ -120,7 +120,7 @@ export function MobileDock() {
   return (
     <Layer depth={1}>
       <div class="relative z-mobile-nav-bar flex flex-row justify-between">
-        <div class="-z-1 absolute left-0 top-0 right-0 w-screen h-40 bg-panel" />
+        <div class="-z-1 absolute inset-x-0 top-0 w-screen h-40 bg-panel" />
         <MobileDockButton
           icon={AnimatedInboxIcon}
           active={isActive('inbox')}

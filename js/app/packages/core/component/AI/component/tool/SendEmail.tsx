@@ -107,7 +107,7 @@ function DraftPreviewButton(props: {
         })
       }
     >
-      <div class="flex justify-start items-center w-3.5 h-3.5 mr-2">
+      <div class="flex justify-start items-center size-3.5 mr-2">
         <EntityIcon targetType="email" size="xs" />
       </div>
       <div class="flex-1 text-left leading-5 min-w-0 truncate">
@@ -137,7 +137,7 @@ function SentEmailResponse(props: {
             <span class="shrink-0 text-ink-muted">
               <CaretRight
                 class={cn(
-                  'h-4 w-4 transition-transform',
+                  'size-4 transition-transform',
                   'group-open:rotate-90'
                 )}
               />

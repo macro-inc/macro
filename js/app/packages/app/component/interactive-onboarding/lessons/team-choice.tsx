@@ -74,7 +74,7 @@ function TeamChoiceDemo(props: LessonContentProps) {
   };
 
   return (
-    <div class="h-full w-full flex items-center justify-center p-12">
+    <div class="size-full flex items-center justify-center p-12">
       <div class="flex flex-col gap-4 w-full max-w-md">
         <button
           type="button"

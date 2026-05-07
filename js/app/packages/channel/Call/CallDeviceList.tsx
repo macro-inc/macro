@@ -35,7 +35,7 @@ export function CallDeviceList(props: {
               <div class="min-w-0 flex-1">{device.label}</div>
               <span class="inline-flex w-3 shrink-0 justify-center">
                 <Show when={props.activeDeviceId === device.deviceId}>
-                  <CheckIcon class="h-3 w-3 text-accent" />
+                  <CheckIcon class="size-3 text-accent" />
                 </Show>
               </span>
             </DropdownMenu.RadioItem>

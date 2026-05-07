@@ -45,7 +45,7 @@ function CollapsibleCard(props: {
             </div>
           </Show>
           <div class="flex items-start justify-between gap-3 px-4 py-3">
-            <pre class="flex-1 min-w-0 overflow-x-auto text-[12px] leading-5 text-ink select-text cursor-text whitespace-pre-wrap break-all">
+            <pre class="flex-1 min-w-0 overflow-x-auto text-[12px]/5 text-ink select-text cursor-text whitespace-pre-wrap break-all">
               <code>{props.copyValue}</code>
             </pre>
             <Button

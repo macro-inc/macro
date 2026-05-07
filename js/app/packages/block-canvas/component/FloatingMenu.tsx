@@ -184,7 +184,7 @@ function ReverseEdgeButton() {
         class={cn(
           themeColors['base'],
           themeStyles['base'],
-          'h-6 w-6 flex border-0 rounded-md justify-center items-center'
+          'size-6 flex border-0 rounded-md justify-center items-center'
         )}
         onClick={() => {
           edges.batchUpdate(

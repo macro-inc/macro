@@ -90,7 +90,7 @@ export function AutomationTimePicker(props: {
       </button>
       <Show when={open()}>
         <div
-          class="absolute left-0 right-0 top-full mt-1 z-action-menu bg-dialog border border-edge-muted rounded-sm p-3"
+          class="absolute inset-x-0 top-full mt-1 z-action-menu bg-dialog border border-edge-muted rounded-sm p-3"
           use:clickOutside={() => setOpen(false)}
         >
           <div class="flex items-center gap-2">
@@ -100,7 +100,7 @@ export function AutomationTimePicker(props: {
                 inputmode="numeric"
                 maxLength={2}
                 aria-label="Hour"
-                class="w-10 text-center bg-active border border-edge-muted rounded-sm px-1 py-1 text-sm focus:outline-none focus:border-accent"
+                class="w-10 text-center bg-active border border-edge-muted rounded-sm p-1 text-sm focus:outline-none focus:border-accent"
                 value={hourDisplay()}
                 onKeyDown={(e) => {
                   if (e.key.length === 1 && !/\d/.test(e.key)) {
@@ -124,7 +124,7 @@ export function AutomationTimePicker(props: {
                 inputmode="numeric"
                 maxLength={2}
                 aria-label="Minute"
-                class="w-10 text-center bg-active border border-edge-muted rounded-sm px-1 py-1 text-sm focus:outline-none focus:border-accent"
+                class="w-10 text-center bg-active border border-edge-muted rounded-sm p-1 text-sm focus:outline-none focus:border-accent"
                 value={minuteDisplay()}
                 onKeyDown={(e) => {
                   if (e.key.length === 1 && !/\d/.test(e.key)) {

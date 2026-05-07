@@ -83,7 +83,7 @@ export function MessageRowUI(
       >
         {!props.hideBubble && (
           <div
-            class={`w-4 h-4 relative flex items-center justify-center shrink-0 rounded-xs`}
+            class={`size-4 relative flex items-center justify-center shrink-0 rounded-xs`}
           >
             <div class="absolute">
               <UserIcon

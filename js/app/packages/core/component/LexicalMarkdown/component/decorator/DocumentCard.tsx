@@ -398,7 +398,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
           <Show when={props.item.owner}>
             {(owner) => (
               <div class="flex items-center text-xs text-ink-extra-muted">
-                <UserIcon class="w-3 h-3 mr-1" />
+                <UserIcon class="size-3 mr-1" />
                 <span class="truncate">{owner().replace('macro|', '')}</span>
               </div>
             )}
@@ -406,7 +406,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
           <Show when={props.item.updatedAt}>
             {(updatedAt) => (
               <div class="flex items-center text-xs text-ink-extra-muted pr-1">
-                <ClockIcon class="w-3 h-3 mr-1" />
+                <ClockIcon class="size-3 mr-1" />
                 <span>{formatDate(updatedAt())}</span>
               </div>
             )}
@@ -443,7 +443,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         <Switch>
           <Match when={item().loading}>
             <div class="flex items-center justify-center p-4 text-ink-muted">
-              <LoadingSpinner class="w-6 h-6 animate-spin" />
+              <LoadingSpinner class="size-6 animate-spin" />
             </div>
           </Match>
           <Match when={matches(item(), isAccessiblePreviewItem)}>

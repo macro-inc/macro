@@ -240,7 +240,7 @@ export function Account() {
 
               <Row label="First Name">
                 <EditableField
-                  class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
+                  class="ph-no-capture [&_span]:text-sm/normal [&_span]:text-ink-muted"
                   value={firstName()}
                   onSave={(newValue: string) => {
                     setUpdatedFirstName(newValue);
@@ -253,7 +253,7 @@ export function Account() {
 
               <Row label="Last Name">
                 <EditableField
-                  class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
+                  class="ph-no-capture [&_span]:text-sm/normal [&_span]:text-ink-muted"
                   value={lastName()}
                   onSave={(newValue: string) => {
                     setUpdatedLastName(newValue);
@@ -445,7 +445,7 @@ export function Account() {
                                         </Dialog.Title>
                                       </Panel.Header>
                                       <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-                                        <Dialog.Description class="text-ink-muted text-sm font-normal leading-tight">
+                                        <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
                                           Are you sure you want to delete your account? This action is
                                           permanent and cannot be undone.
                                         </Dialog.Description>
@@ -476,7 +476,7 @@ export function Account() {
                                         </Dialog.Title>
                                       </Panel.Header>
                                       <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-                                        <Dialog.Description class="text-ink-muted text-sm font-normal leading-tight">
+                                        <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
                                           This will permanently delete your account and all associated
                                           data. This cannot be undone.
                                         </Dialog.Description>

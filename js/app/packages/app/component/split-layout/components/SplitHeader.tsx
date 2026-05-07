@@ -115,7 +115,7 @@ function SplitCloseButton() {
         }
         onClick={context.handle.close}
       >
-        <CloseIcon class="w-4 h-4" />
+        <CloseIcon class="size-4" />
       </Button>
     </Show>
   );

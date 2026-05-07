@@ -528,12 +528,12 @@ export function EntityRow(
       {/* Swipe Surface */}
       <div
         data-swipe-surface
-        class="relative min-h-0 h-full z-annotation-layer w-full select-none [touch-action:pan-y]"
+        class="relative min-h-0 size-full z-annotation-layer select-none [touch-action:pan-y]"
       >
         {/* Swipe Content */}
         <div
           data-swipe-content
-          class="w-full h-full min-h-0 overflow-hidden flex items-center p-0 bg-panel"
+          class="size-full min-h-0 overflow-hidden flex items-center p-0 bg-panel"
         >
           {props.children}
         </div>

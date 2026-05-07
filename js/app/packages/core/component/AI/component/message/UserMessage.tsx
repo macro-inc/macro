@@ -76,7 +76,7 @@ export function UserMessage(props: {
       <Show when={quote()}>
         <div class="relative w-full text-xs flex flex-row space-x-2 items-start text-ink-muted">
           <div class="flex flex-row items-center space-x-3">
-            <QuoteIcon class="w-3 h-3 shrink-0" />
+            <QuoteIcon class="size-3 shrink-0" />
             <p>"{quote()?.substring(0, 300)}..."</p>
           </div>
         </div>

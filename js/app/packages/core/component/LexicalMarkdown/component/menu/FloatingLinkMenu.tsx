@@ -407,7 +407,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
                 'bg-active': activeInput() === urlInputRef,
               }}
             >
-              <Link class="text-ink-extra-muted w-4 h-4" />
+              <Link class="text-ink-extra-muted size-4" />
               <input
                 ref={urlInputRef}
                 tabIndex={2}
@@ -485,7 +485,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
                 'bg-active': activeInput() === linkTextInputRef,
               }}
             >
-              <LinkText class="text-ink-extra-muted w-4 h-4" />
+              <LinkText class="text-ink-extra-muted size-4" />
               <input
                 tabIndex={3}
                 type="text"

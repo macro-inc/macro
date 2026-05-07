@@ -137,7 +137,7 @@ function ButtonNoAccess(props: StatusDisplayProps) {
       )}
     >
       <div class={cn(DEFAULT_ICON_CLASS, props.iconClass)}>
-        <EyeSlash class="text-ink-muted w-3.5 h-3.5" />
+        <EyeSlash class="text-ink-muted size-3.5" />
       </div>
       <div class={cn(DEFAULT_TEXT_CLASS, props.textClass)}>No Access</div>
     </div>
@@ -147,8 +147,8 @@ function ButtonNoAccess(props: StatusDisplayProps) {
 function InlineNoAccess() {
   return (
     <span class="inline-flex items-center gap-1.5">
-      <span class="w-4 h-4">
-        <EyeSlash class="text-ink-muted w-4 h-4" />
+      <span class="size-4">
+        <EyeSlash class="text-ink-muted size-4" />
       </span>
       <span class="text-ink-muted">No Access</span>
     </span>
@@ -165,7 +165,7 @@ function ButtonDeleted(props: StatusDisplayProps) {
       )}
     >
       <div class={cn(DEFAULT_ICON_CLASS, props.iconClass)}>
-        <TrashSimple class="text-ink-muted w-3.5 h-3.5" />
+        <TrashSimple class="text-ink-muted size-3.5" />
       </div>
       <div class={cn(DEFAULT_TEXT_CLASS, props.textClass)}>Deleted</div>
     </div>
@@ -175,8 +175,8 @@ function ButtonDeleted(props: StatusDisplayProps) {
 function InlineDeleted() {
   return (
     <span class="inline-flex items-center gap-1.5">
-      <span class="w-4 h-4">
-        <TrashSimple class="text-ink-muted w-4 h-4" />
+      <span class="size-4">
+        <TrashSimple class="text-ink-muted size-4" />
       </span>
       <span class="text-ink-muted">Deleted</span>
     </span>
@@ -193,7 +193,7 @@ function ButtonLoading(props: StatusDisplayProps) {
       )}
     >
       <div class={cn(DEFAULT_ICON_CLASS, props.iconClass)}>
-        <div class="w-3.5 h-3.5 animate-spin">
+        <div class="size-3.5 animate-spin">
           <LoadingSpinner />
         </div>
       </div>
@@ -205,7 +205,7 @@ function ButtonLoading(props: StatusDisplayProps) {
 function InlineLoading() {
   return (
     <span class="inline-flex items-center gap-1.5">
-      <span class="w-4 h-4 animate-spin">
+      <span class="size-4 animate-spin">
         <LoadingSpinner />
       </span>
       <span class="text-ink-muted">Loading...</span>
@@ -343,7 +343,7 @@ export function InlineItemPreview(props: ItemEntity) {
           <Switch>
             <Match when={matches(loadedItem(), isAccessiblePreviewItem)}>
               <span class="inline-flex items-center gap-1">
-                <span class="w-4 h-4">
+                <span class="size-4">
                   <ItemEntityIcon size="fill" />
                 </span>
                 <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">

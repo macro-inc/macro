@@ -33,7 +33,7 @@ export default function MobileWebSignupSent(props: Props) {
   });
 
   return (
-    <div class="flex flex-col h-full w-full p-6 overflow-hidden relative">
+    <div class="flex flex-col size-full p-6 overflow-hidden relative">
       <div class="inset-0 absolute text-edge bg-panel opacity-10 -z-1">
         <PcNoiseGrid
           cellSize={30}

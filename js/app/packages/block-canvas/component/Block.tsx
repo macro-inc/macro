@@ -40,7 +40,7 @@ import { ToolBar } from './ToolBar';
 import { TopBar } from './TopBar';
 
 const LoadingView = () => (
-  <div class="w-full h-full flex items-center justify-center">
+  <div class="size-full flex items-center justify-center">
     <Loading />
   </div>
 );
@@ -286,7 +286,7 @@ export default function BlockCanvas(props: BlockCanvasProps) {
   return (
     <DocumentBlockContainer>
       <div
-        class="w-full h-full select-none flex flex-col bg-panel"
+        class="size-full select-none flex flex-col bg-panel"
         // TODO: we need a more robust solution for preventing parent blocks from stealing clicks
         // This is a temporary fix for canvas in markdown but it doesn't necessarily generalize well
         on:click={(e) => {

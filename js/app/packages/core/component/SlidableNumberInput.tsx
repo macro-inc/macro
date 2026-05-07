@@ -263,7 +263,7 @@ export function SlidableNumberInput(props: SlidableNumberInputProps) {
                               return (
                                 <Dynamic
                                   component={preset.icon}
-                                  class="w-4 h-4"
+                                  class="size-4"
                                   classList={{
                                     'rotate-y-180': props.flip,
                                   }}

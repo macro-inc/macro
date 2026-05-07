@@ -135,7 +135,7 @@ export function NewReplyInput(props: {
         when={props.isEditing}
         fallback={
           <div
-            class="px-2 py-2 mt-2 cursor-default text-sm text-ink-extra-muted bg-input border border-edge-muted rounded-sm"
+            class="p-2 mt-2 cursor-default text-sm text-ink-extra-muted bg-input border border-edge-muted rounded-sm"
             on:click={(e) => {
               e.stopPropagation();
               props.setEditing(true);

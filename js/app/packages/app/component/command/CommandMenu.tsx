@@ -517,9 +517,7 @@ export function CommandMenuInner(props: {
           <Show
             when={filteredItems().length > 0}
             fallback={
-              <div class="px-4 py-4 text-center text-ink-muted">
-                No results found
-              </div>
+              <div class="p-4 text-center text-ink-muted">No results found</div>
             }
           >
             <VirtualizedCommandList
@@ -537,10 +535,10 @@ export function CommandMenuInner(props: {
       <Panel.Footer class="gap-4 px-4 bg-panel text-xs text-ink-extra-muted/80">
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
-            <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
+            <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
               <Hotkey shortcut="arrowup" class="space-x-1" />
             </div>
-            <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
+            <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
               <Hotkey shortcut="arrowdown" class="space-x-1" />
             </div>
           </div>
@@ -666,7 +664,7 @@ function VirtualizedCommandList(props: {
 function HotkeyHint(props: { shortcut: string; label: string }) {
   return (
     <span class="flex items-center gap-1">
-      <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
+      <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
         <Hotkey shortcut={props.shortcut} class="space-x-1" />
       </div>
       {props.label}

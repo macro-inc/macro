@@ -280,7 +280,7 @@ export function StackedAvatarsRow<T = unknown>(
       !(useFillWidthLayout() && fillStepMarginPx() !== null) && overlap(),
       !(useFillWidthLayout() && fillStepMarginPx() !== null) &&
         lastNoOverflowChip &&
-        '!mr-0'
+        'mr-0!'
     );
 
   const faceWrapperStyle = (

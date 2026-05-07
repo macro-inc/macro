@@ -383,7 +383,7 @@ function IosShareSheetComposer(props: {
         />
         <MobileDrawer.Label>Recipients</MobileDrawer.Label>
         <MobileDrawer.Section>
-          <div class="shrink-0 px-2 py-2">
+          <div class="shrink-0 p-2">
             <RecipientSelector<'user' | 'contact' | 'channel'>
               placeholder="To: Email or group"
               setSelectedOptions={setSelectedOptions}

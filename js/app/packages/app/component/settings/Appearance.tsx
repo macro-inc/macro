@@ -21,7 +21,7 @@ export function Appearance() {
   return (
     <div class="h-full overflow-hidden flex justify-center p-2">
       <div
-        class="max-w-200 w-full h-full"
+        class="max-w-200 size-full"
         style={{
           'grid-template-rows': 'min-content 1fr',
           'grid-template-columns': '1fr',

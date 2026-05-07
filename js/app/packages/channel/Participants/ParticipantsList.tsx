@@ -17,7 +17,7 @@ export function ParticipantsList(props: {
       when={props.participants().length > 0}
       fallback={<ParticipantsEmptyState searchQuery={props.searchQuery()} />}
     >
-      <div class="min-h-0 h-full overflow-hidden md:h-[420px]">
+      <div class="min-h-0 h-full overflow-hidden md:h-105">
         <VList
           data={props.participants()}
           class="h-full"

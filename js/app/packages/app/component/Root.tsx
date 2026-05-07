@@ -167,7 +167,7 @@ function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
   };
 
   return (
-    <div class="flex flex-col items-center justify-center gap-4 h-full w-full text-ink-muted">
+    <div class="flex flex-col items-center justify-center gap-4 size-full text-ink-muted">
       <p class="text-sm">Unable to connect. Please check your network.</p>
       <Button
         class="mt-2"
@@ -343,7 +343,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/welcome',
     component: () => (
-      <div class="flex *:flex-1 w-full h-full overflow-y-hidden">
+      <div class="flex *:flex-1 size-full overflow-y-hidden">
         <InteractiveOnboarding />
       </div>
     ),

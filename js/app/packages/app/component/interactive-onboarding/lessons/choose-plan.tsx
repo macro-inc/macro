@@ -89,7 +89,7 @@ function ChoosePlanDemo(props: LessonContentProps) {
   };
 
   return (
-    <div class="h-full w-full flex items-center justify-center px-8">
+    <div class="size-full flex items-center justify-center px-8">
       <PlanGrid
         footer={(plan) => (
           <button

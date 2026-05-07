@@ -249,7 +249,7 @@ function InviteTeamDemo(props: LessonContentProps) {
   };
 
   return (
-    <div class="h-full w-full flex items-start justify-center p-12 pt-[12%] overflow-hidden">
+    <div class="size-full flex items-start justify-center p-12 pt-[12%] overflow-hidden">
       <form
         id={INVITE_FORM_ID}
         onSubmit={handleSubmit}

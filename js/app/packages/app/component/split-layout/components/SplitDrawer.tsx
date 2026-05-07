@@ -32,7 +32,7 @@ function DrawerInner(props: ParentProps<{ id: string }>) {
   }
 
   return (
-    <div class="w-full h-full p-2 overflow-auto shrink" ref={ref}>
+    <div class="size-full p-2 overflow-auto shrink" ref={ref}>
       {props.children}
     </div>
   );

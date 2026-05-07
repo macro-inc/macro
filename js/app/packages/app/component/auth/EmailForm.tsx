@@ -125,7 +125,7 @@ export function EmailForm(props: { setStage: (next: Stage) => void }) {
       <form action={sendEmailCode} method="post" class="m-0">
         <div
           class={cn(
-            'flex items-center justify-center text-center py-4 px-6 border-t border-b border-edge-muted',
+            'flex items-center justify-center text-center py-4 px-6 border-y border-edge-muted',
             virtualKeyboardVisible() && 'border-t border-edge-muted'
           )}
         >
@@ -164,7 +164,7 @@ export function EmailForm(props: { setStage: (next: Stage) => void }) {
             }}
             type="button"
           >
-            <ArrowLeft class="w-5 h-5" />
+            <ArrowLeft class="size-5" />
             <span>Back</span>
           </button>
 
@@ -184,7 +184,7 @@ export function EmailForm(props: { setStage: (next: Stage) => void }) {
             }}
           >
             <span>Continue</span>
-            <ArrowRight class="w-5 h-5" />
+            <ArrowRight class="size-5" />
           </button>
         </div>
         <ErrorMsg msg={submission.error?.message} />

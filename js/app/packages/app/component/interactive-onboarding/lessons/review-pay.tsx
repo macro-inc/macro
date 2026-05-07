@@ -126,7 +126,7 @@ function ReviewPayDemo(props: LessonContentProps) {
   };
 
   return (
-    <div class="h-full w-full flex items-start justify-center p-12 pt-[12%]">
+    <div class="size-full flex items-start justify-center p-12 pt-[12%]">
       <Show
         when={hasTeam()}
         fallback={

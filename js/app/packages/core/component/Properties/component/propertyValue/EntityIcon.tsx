@@ -58,7 +58,7 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
   return (
     <div
       ref={containerRef}
-      class="relative inline-flex max-w-[140px] shrink-0"
+      class="relative inline-flex max-w-35 shrink-0"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >

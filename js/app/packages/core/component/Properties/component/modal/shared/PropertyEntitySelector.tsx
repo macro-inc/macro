@@ -392,7 +392,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     <div>
       <div class="relative">
         <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-          <SearchIcon class="h-4 w-4 text-ink-muted" />
+          <SearchIcon class="size-4 text-ink-muted" />
           <input
             class="w-full caret-accent"
             ref={searchInputRef}

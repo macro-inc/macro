@@ -493,7 +493,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
         highlightLayer={props.highlighLayerRef}
       />
       <ScopedPortal scope="block">
-        <div class="absolute bottom-4 right-4 w-fit h-fit">
+        <div class="absolute bottom-4 right-4 size-fit">
           <CollabStatus />
         </div>
       </ScopedPortal>

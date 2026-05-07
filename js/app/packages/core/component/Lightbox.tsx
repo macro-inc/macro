@@ -327,7 +327,7 @@ export function Lightbox(props: LightboxProps) {
               disabled={!props.onPrevious}
               aria-label="Previous image"
             >
-              <ChevronLeftIcon class="w-5 h-5 text-ink" />
+              <ChevronLeftIcon class="size-5 text-ink" />
             </button>
 
             <button
@@ -341,7 +341,7 @@ export function Lightbox(props: LightboxProps) {
               disabled={!props.onNext}
               aria-label="Next image"
             >
-              <ChevronRightIcon class="w-5 h-5 text-ink" />
+              <ChevronRightIcon class="size-5 text-ink" />
             </button>
           </Show>
         </Show>
@@ -362,12 +362,12 @@ export function Lightbox(props: LightboxProps) {
         </Show>
 
         {/* Image */}
-        <div class="w-full h-full flex items-center justify-center">
+        <div class="size-full flex items-center justify-center">
           <Show
             when={props.src()}
             fallback={
-              <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge rounded-md bg-menu">
-                <Spinner class="w-4 h-4 animate-spin" />
+              <div class="flex flex-col items-center justify-center gap-2 size-15 border border-edge rounded-md bg-menu">
+                <Spinner class="size-4 animate-spin" />
               </div>
             }
           >
@@ -380,11 +380,11 @@ export function Lightbox(props: LightboxProps) {
                 onWindowMove: touchOnWindowMove,
                 onWindowEnd: touchOnWindowEnd,
               }}
-              class="w-full h-full relative overflow-hidden rounded-2xl"
+              class="size-full relative overflow-hidden rounded-2xl"
               style={{ cursor: cursor() }}
             >
               <img
-                class="w-full h-full sm:min-w-[200px] sm:max-h-[80vh] object-contain select-none"
+                class="size-full sm:min-w-50 sm:max-h-[80vh] object-contain select-none"
                 style={{ '-webkit-touch-callout': 'none' }}
                 src={props.src()}
                 alt="preview"

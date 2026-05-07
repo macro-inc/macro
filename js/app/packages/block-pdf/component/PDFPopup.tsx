@@ -72,9 +72,7 @@ type PDFPopupProps = {
 
 // SCUFFED styling: how do we want to handle this color?
 function HighlightIcon() {
-  return (
-    <div class="w-4 h-4 bg-[oklch(0.905_0.182_98.111)] rounded-full"></div>
-  );
+  return <div class="size-4 bg-[oklch(0.905_0.182_98.111)] rounded-full"></div>;
 }
 
 function LoadingContent(props: { lines: number }) {
@@ -338,9 +336,9 @@ export function PDFPopup(props: PDFPopupProps) {
                     >
                       <Show
                         when={!isLoading() && !isGenerating()}
-                        fallback={<LoadingIcon class="w-3 h-3 animate-spin" />}
+                        fallback={<LoadingIcon class="size-3 animate-spin" />}
                       >
-                        <NotesIcon class="w-3 h-3 text-note" />
+                        <NotesIcon class="size-3 text-note" />
                       </Show>
                       <p>Edit in Notes</p>
                     </button>
@@ -352,13 +350,13 @@ export function PDFPopup(props: PDFPopupProps) {
                     >
                       <Show
                         when={!isGenerating()}
-                        fallback={<LoadingIcon class="w-3 h-3 animate-spin" />}
+                        fallback={<LoadingIcon class="size-3 animate-spin" />}
                       >
                         <Show
                           when={!copied()}
-                          fallback={<CheckIcon class="w-3 h-3 text-success" />}
+                          fallback={<CheckIcon class="size-3 text-success" />}
                         >
-                          <ClipboardIcon class="w-3 h-3" />
+                          <ClipboardIcon class="size-3" />
                         </Show>
                       </Show>
                       <p>{copied() ? 'Copied!' : 'Copy'}</p>

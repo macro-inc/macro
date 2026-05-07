@@ -130,7 +130,7 @@ export default function HttpStreamDebug() {
   };
 
   return (
-    <div class="h-full w-full overflow-auto p-4">
+    <div class="size-full overflow-auto p-4">
       <div class="max-w-5xl mx-auto space-y-4">
         <h1 class="text-lg font-medium">HTTP Stream Debug</h1>
 

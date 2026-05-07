@@ -142,7 +142,7 @@ export function Login() {
 
   return (
     <Show when={!userInfo()?.authenticated} fallback={<PostLoginRedirect />}>
-      <div class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative">
+      <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
         <style>{
           /*css*/ `
           @keyframes login-fade-up {

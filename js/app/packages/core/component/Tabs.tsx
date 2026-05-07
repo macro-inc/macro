@@ -78,7 +78,7 @@ export const Tabs = (
         <Indicator
           data-indicator
           class={cn(
-            'absolute h-[2px]! bg-accent transition-[transform,width] duration-150 pointer-events-none',
+            'absolute h-0.5! bg-accent transition-[transform,width] duration-150 pointer-events-none',
             (local.indicatorPosition ?? 'bottom') === 'top'
               ? 'top-0'
               : 'bottom-0'

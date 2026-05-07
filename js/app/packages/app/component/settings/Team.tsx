@@ -114,23 +114,23 @@ function RoleSelect(props: {
         >
           <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
           <Select.ItemIndicator>
-            <CheckIcon class="w-3 h-3" />
+            <CheckIcon class="size-3" />
           </Select.ItemIndicator>
         </Select.Item>
       )}
     >
       <Select.Trigger
         as={Button}
-        class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-[expanded]:bg-ink/10"
+        class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
         disabled={props.disabled}
       >
         <Select.Value<RoleOption>>
           {(state) => state.selectedOption().label}
         </Select.Value>
-        <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
+        <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[100px] p-1">
+        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-25 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -166,7 +166,7 @@ function TierSelect(props: {
             <span class="text-xs text-ink/50">{itemProps.item.rawValue.description}</span>
           </div>
           <Select.ItemIndicator>
-            <CheckIcon class="w-3 h-3" />
+            <CheckIcon class="size-3" />
           </Select.ItemIndicator>
         </Select.Item>
       )}
@@ -174,15 +174,15 @@ function TierSelect(props: {
       <Select.Trigger
         as={props.triggerAs}
         tabIndex={0}
-        class={props.triggerClass ?? 'rounded-xs px-2 py-1 text-xs data-[expanded]:bg-ink/10'}
+        class={props.triggerClass ?? 'rounded-xs px-2 py-1 text-xs data-expanded:bg-ink/10'}
       >
         <Select.Value<TierOption>>
           {(state) => state.selectedOption().label}
         </Select.Value>
-        <CaretDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
+        <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-[220px] p-1">
+        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-55 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -443,14 +443,14 @@ function MemberRow(props: {
                   disabled
                   class="rounded-xs opacity-50 cursor-not-allowed"
                 >
-                  <TrashIcon class="w-4 h-4" />
+                  <TrashIcon class="size-4" />
                 </Button>
               </Tooltip>
             }
           >
             <Tooltip tooltip="Remove member">
               <Button variant="ghost" size="sm" onClick={props.onRemove}>
-                <TrashIcon class="w-4 h-4" />
+                <TrashIcon class="size-4" />
               </Button>
             </Tooltip>
           </Show>
@@ -473,7 +473,7 @@ function InviteRow(props: {
   return (
     <div class="flex items-center justify-between py-2 border-b border-edge-muted last:border-b-0 gap-2">
       <div class="flex items-center gap-3 min-w-0 flex-1">
-        <div class="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+        <div class="size-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
           <EnvelopeIcon class="size-4 text-accent" />
         </div>
         <div class="min-w-0 flex-1">
@@ -494,7 +494,7 @@ function InviteRow(props: {
             class="shrink-0"
             onClick={props.onCancel}
           >
-            <XIcon class="w-4 h-4" />
+            <XIcon class="size-4" />
           </Button>
         </Tooltip>
       </Show>
@@ -517,7 +517,7 @@ function UserInviteRow(props: {
   return (
     <div class="flex items-center justify-between py-3 border-b border-edge-muted last:border-b-0 gap-3">
       <div class="flex items-center gap-3 min-w-0 flex-1">
-        <div class="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+        <div class="size-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
           <EnvelopeIcon class="size-4 text-accent" />
         </div>
         <div class="min-w-0 flex-1">
@@ -776,7 +776,7 @@ function EmptyTeamState() {
         </Panel.Header>
         <Panel.Body>
           <div class="flex flex-col items-center justify-center py-12 text-center px-6">
-            <div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mb-4">
+            <div class="size-12 rounded-full bg-accent/10 flex items-center justify-center mb-4">
               <UsersIcon class="size-6 text-accent" />
             </div>
             <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
@@ -1398,7 +1398,7 @@ export function Team() {
     <div
       class="h-full overflow-hidden flex justify-center p-2"
     >
-      <div class="max-w-200 w-full h-full">
+      <div class="max-w-200 size-full">
         <Panel depth={2} class="h-full overflow-hidden text-ink">
                   <Suspense fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />}>
                     <TeamContent />

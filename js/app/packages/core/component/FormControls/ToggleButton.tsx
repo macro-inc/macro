@@ -83,7 +83,7 @@ export const ToggleButton: ParentComponent<
     >
       {(state) => (
         <div
-          class="border border-edge-muted min-w-[22px] font-mono text-center uppercase leading-none whitespace-nowrap"
+          class="border border-edge-muted min-w-5.5 font-mono text-center uppercase leading-none whitespace-nowrap"
           classList={{
             [`${sizeClass[props.size || 'Base']}`]: true,
             'bg-edge-muted text-ink': state.pressed(),

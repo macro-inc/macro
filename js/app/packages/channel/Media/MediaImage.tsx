@@ -37,7 +37,7 @@ function ImagePlaceholder(props: {
               }
       }
     >
-      <Spinner class="h-4 w-4 animate-spin" />
+      <Spinner class="size-4 animate-spin" />
     </div>
   );
 }

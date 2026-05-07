@@ -183,7 +183,7 @@ export function CommandItem(props: CommandItemProps) {
     >
       {/* Accent bar indicator */}
       <div
-        class={cn('absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0', {
+        class={cn('absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0', {
           'opacity-100': props.selected,
         })}
       />

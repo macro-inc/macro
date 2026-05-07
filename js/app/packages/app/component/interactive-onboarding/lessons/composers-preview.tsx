@@ -28,7 +28,7 @@ function ComposersPreviewContent(props: LessonContentProps) {
 
 function ComposersPreviewDemo() {
   return (
-    <div class="h-full w-full flex flex-col items-center justify-center gap-6 px-10 py-8">
+    <div class="size-full flex flex-col items-center justify-center gap-6 px-10 py-8">
       {/* Task composer */}
       <div class="w-full max-w-lg rounded-sm border border-edge-muted bg-panel flex flex-col overflow-hidden">
         <div class="px-4 pt-3 pb-1">
@@ -46,7 +46,7 @@ function ComposersPreviewDemo() {
           <div class="flex items-center gap-1.5">
             <UsersIcon class="size-3.5 text-ink/50" />
             <span class="text-ink/50">Assignees</span>
-            <span class="bg-accent/15 text-accent text-[10px] px-1.5 py-0.5 rounded-xs font-medium">
+            <span class="bg-accent/15 text-accent text-xxs px-1.5 py-0.5 rounded-xs font-medium">
               seam
             </span>
             <PlusIcon class="size-3 text-ink/30" />
@@ -113,7 +113,7 @@ function ComposersPreviewDemo() {
         <div class="mx-4 h-px bg-edge-muted" />
 
         {/* Body */}
-        <div class="px-4 py-4 flex-1 min-h-[80px]">
+        <div class="p-4 flex-1 min-h-20">
           <span class="text-sm text-ink/25">Use `@` to reference files</span>
         </div>
 

@@ -34,7 +34,7 @@ export function CallRecordingTranscriptColumn(props: {
       <Show
         when={props.hasTranscripts()}
         fallback={
-          <div class="flex h-full min-h-0 w-full min-w-0 flex-1 items-center justify-center px-4 py-10 text-center text-sm text-ink-muted">
+          <div class="flex size-full min-h-0 min-w-0 flex-1 items-center justify-center px-4 py-10 text-center text-sm text-ink-muted">
             No transcripts for this call.
           </div>
         }

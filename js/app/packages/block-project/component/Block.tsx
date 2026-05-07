@@ -127,7 +127,7 @@ const Block: Component = () => {
     <DocumentBlockContainer>
       <div
         ref={attachHotkeys}
-        class="w-full h-full bg-panel flex flex-col relative"
+        class="size-full bg-panel flex flex-col relative"
         use:fileFolderDrop={{
           onDragStart: () => setIsDragging(true),
           onDragEnd: () => setIsDragging(false),

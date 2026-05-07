@@ -71,7 +71,7 @@ function MobileForwardToChannelLayout(
           triedToSubmit={props.triedToSubmit}
           options={props.destinationOptions}
           triggerMode="input"
-          class="border-1 border-edge-muted p-1"
+          class="border border-edge-muted p-1"
           focusOnMount
         />
       </div>
@@ -92,7 +92,7 @@ function MobileForwardToChannelLayout(
                 type="checkbox"
               />
               <div
-                class={`w-4 h-4 border ${
+                class={`size-4 border ${
                   !props.canSendAsGroup()
                     ? 'border-edge peer-checked:bg-menu/20'
                     : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
@@ -101,7 +101,7 @@ function MobileForwardToChannelLayout(
                 <Show
                   when={props.sendAsGroupMessage() && props.canSendAsGroup()}
                 >
-                  <CheckIcon class="w-full h-full text-accent p-0.5" />
+                  <CheckIcon class="size-full text-accent p-0.5" />
                 </Show>
               </div>
             </div>
@@ -139,11 +139,11 @@ function MobileForwardToChannelLayout(
         </div>
       </Show>
 
-      <div class="flex-1 min-h-20 flex flex-col w-full mt-3 border-t-1 border-edge-muted relative">
+      <div class="flex-1 min-h-20 flex flex-col w-full mt-3 border-t border-edge-muted relative">
         <ScrollIndicators scrollRef={props.mdScrollRef} noBorderStart />
         <CustomScrollbar scrollContainer={props.mdScrollRef} />
         <div
-          class="grow-1 shrink-1 min-h-20 overflow-y-auto scrollbar-hidden px-3 py-[6px] w-full text-sm"
+          class="grow shrink min-h-20 overflow-y-auto scrollbar-hidden px-3 py-1.5 w-full text-sm"
           onClick={() => props.markdownEditor.controls.focus()}
           ref={props.setMdScrollRef}
         >
@@ -481,7 +481,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
             <CustomScrollbar scrollContainer={mdScrollRef} />
             <div
-              class="grow shrink min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-[12px] py-[6px] w-full text-sm"
+              class="grow shrink min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-3 py-1.5 w-full text-sm"
               onClick={() => markdownEditor.controls.focus()}
               ref={setMdScrollRef}
             >
@@ -515,14 +515,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   />
                   <div
                     class={cn(
-                      'w-4 h-4 border',
+                      'size-4 border',
                       !canSendAsGroup()
                         ? 'border-edge peer-checked:bg-menu/20'
                         : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
                     )}
                   >
                     <Show when={sendAsGroupMessage() && canSendAsGroup()}>
-                      <CheckIcon class="w-full h-full text-accent p-0.5" />
+                      <CheckIcon class="size-full text-accent p-0.5" />
                     </Show>
                   </div>
                 </div>
@@ -560,7 +560,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               <Button
                 variant={selectedOptions().length > 0 ? 'active' : 'base'}
                 size="sm"
-                class="pl-2 pr-2 rounded-xs flex items-center gap-1"
+                class="px-2 rounded-xs flex items-center gap-1"
                 disabled={selectedOptions().length === 0}
                 onClick={() => {
                   const options = selectedOptions();

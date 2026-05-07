@@ -28,20 +28,20 @@ export function UnfurlLink(props: UnfurlLinkProps) {
       class="hover:bg-hover p-1 px-1.5 overflow-clip text-xs transition-colors hover:transition-none"
       onClick={() => window.open(props.unfurled.url)}
     >
-      <div class="flex flex-row items-center gap-1.5 w-full h-full">
+      <div class="flex flex-row items-center gap-1.5 size-full">
         <div class="shrink-0">
           <Show
             when={props.unfurled.favicon_url}
-            fallback={<LinkIcon class="w-4 h-4" />}
+            fallback={<LinkIcon class="size-4" />}
           >
             {(icon) => (
               <Show
                 when={!badLinks[icon()]}
-                fallback={<LinkIcon class="w-4 h-4" />}
+                fallback={<LinkIcon class="size-4" />}
               >
                 <img
                   src={proxyResource(icon())}
-                  class="content-center rounded-sm w-4 h-4 object-cover"
+                  class="content-center rounded-sm size-4 object-cover"
                   crossorigin="anonymous"
                   alt="ico"
                   on:error={() => {
@@ -82,7 +82,7 @@ export function UnfurledLinkCollection(props: UnfurledLinkCollection) {
       >
         <div>
           <div class="flex items-center gap-2">
-            <GlobeIcon class="w-6 h-6" />
+            <GlobeIcon class="size-6" />
             <div>
               <div class="flex items-center gap-1 font-medium">Sources</div>
               <div class="flex gap-1 text-xs">
@@ -114,7 +114,7 @@ export function UnfurledLinkCollection(props: UnfurledLinkCollection) {
       <div
         class={cn(
           'flex flex-col divide-y divide-edge transition-all duration-150 ease-in-out overflow-clip',
-          isCollapsed() ? 'collapse max-h-0' : 'visible max-h-[1920px]'
+          isCollapsed() ? 'collapse max-h-0' : 'visible max-h-480'
         )}
       >
         <For each={props.links}>

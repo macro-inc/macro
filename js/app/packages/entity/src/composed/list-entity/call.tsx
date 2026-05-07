@@ -24,11 +24,11 @@ function ParticipantItem(props: { userId: string }) {
     { fallbackIcon: null }
   );
   return (
-    <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit">
+    <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted size-fit">
       <div class="size-4 rounded-full overflow-hidden shrink-0">
         <UserIcon id={props.userId} isDeleted={false} size="fill" />
       </div>
-      <span class="truncate max-w-[150px]">{name()}</span>
+      <span class="truncate max-w-37.5">{name()}</span>
     </div>
   );
 }

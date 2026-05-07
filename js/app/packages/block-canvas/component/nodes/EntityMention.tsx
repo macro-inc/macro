@@ -33,7 +33,7 @@ function ErrorMessage(props: {
   const { currentScale } = useRenderState();
   return (
     <div
-      class="w-full h-full bg-menu/40 rounded border border-dashed border-edge"
+      class="size-full bg-menu/40 rounded border border-dashed border-edge"
       style={{
         'font-size': 12 * (props.node.width / fileWidth) + 'px',
         'background-size':
@@ -47,7 +47,7 @@ function ErrorMessage(props: {
     >
       <Switch>
         <Match when={props.error === 'UNAUTHORIZED'}>
-          <div class="w-full h-full flex flex-row items-center">
+          <div class="size-full flex flex-row items-center">
             <LockKey
               width={18 * (props.node.width / fileWidth) + 'px'}
               class="mx-1 fill-failure bg-menu rounded-full"
@@ -56,7 +56,7 @@ function ErrorMessage(props: {
           </div>
         </Match>
         <Match when={props.error === 'MISSING'}>
-          <div class="w-full h-full flex flex-row items-center px-2">
+          <div class="size-full flex flex-row items-center px-2">
             <Question
               width={18 * (props.node.width / fileWidth) + 'px'}
               class="mx-1 fill-ink-extra-muted bg-menu rounded-full"
@@ -65,7 +65,7 @@ function ErrorMessage(props: {
           </div>
         </Match>
         <Match when={props.error === 'INVALID'}>
-          <div class="w-full h-full flex flex-row items-center px-2">
+          <div class="size-full flex flex-row items-center px-2">
             <Question
               width={18 * (props.node.width / fileWidth) + 'px'}
               class="mx-1 fill-ink-extra-muted bg-menu rounded-full"
@@ -74,7 +74,7 @@ function ErrorMessage(props: {
           </div>
         </Match>
         <Match when={props.error === 'LOADING'}>
-          <div class="w-full h-full flex items-center justify-center">
+          <div class="size-full flex items-center justify-center">
             <CircleSpinner />
           </div>
         </Match>
@@ -203,7 +203,7 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
                 >
                   <div
                     ref={setFileRef}
-                    class="w-full h-full bg-panel rounded-lg shadow-md flex items-center"
+                    class="size-full bg-panel rounded-lg shadow-md flex items-center"
                   >
                     <div class="flex flex-row p-2 truncate">
                       <div

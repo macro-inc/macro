@@ -89,7 +89,7 @@ export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
 
   return (
     <Tooltip tooltip="Chat with Agent">
-      <div class="border-1 border-edge-muted flex ml-1 items-stretch rounded-xs">
+      <div class="border border-edge-muted flex ml-1 items-stretch rounded-xs">
         <button
           class="h-7 px-2 flex items-center gap-1 text-xs hover:bg-hover hover-transition-bg"
           onMouseEnter={() => setHovering(true)}

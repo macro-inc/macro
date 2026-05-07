@@ -178,7 +178,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       <Combobox.Portal>
         <Combobox.Content
           class={cn(
-            'z-action-menu bg-menu border border-edge-muted rounded-sm shadow-md w-[260px] max-w-[90vw] overflow-hidden',
+            'z-action-menu bg-menu border border-edge-muted rounded-sm shadow-md w-65 max-w-[90vw] overflow-hidden',
             props.contentClass
           )}
         >

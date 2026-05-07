@@ -226,7 +226,7 @@ export function ListEntity(props: ListEntityProps) {
     >
       <div
         data-accent-bar
-        class={cn('absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0', {
+        class={cn('absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0', {
           'opacity-100': props.highlighted && !isMobile(),
         })}
       />
@@ -278,7 +278,7 @@ export function ListEntity(props: ListEntityProps) {
       </Switch>
 
       <Show when={hasNotifications() && !isMobile()}>
-        <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
+        <div class="flex gap-2 size-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
           <div class={cn('min-w-0 flex-1 truncate ml-2 @lg/entity:ml-6')}>
             <Show when={isWithNotification(props.entity) && !showContentHits()}>
               <Entity.Notification.Stacks
@@ -291,7 +291,7 @@ export function ListEntity(props: ListEntityProps) {
       </Show>
 
       <Show when={showContentHits()}>
-        <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0">
+        <div class="flex gap-2 size-full items-center text-sm px-2 pb-1 -mt-2 min-w-0">
           <div
             class={cn('min-w-0 flex-1 overflow-hidden ml-4 @lg/entity:ml-6')}
           >

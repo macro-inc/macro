@@ -47,7 +47,7 @@ export function MediaGallery(props: {
             {expanded() ? 'Show less' : 'See all'}
             <ChevronDownIcon
               aria-hidden="true"
-              class="w-3 h-3 transition-transform"
+              class="size-3 transition-transform"
               classList={{ 'rotate-180': expanded() }}
             />
           </button>

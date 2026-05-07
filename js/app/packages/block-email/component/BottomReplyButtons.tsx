@@ -32,7 +32,7 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
         class="rounded-full px-4 py-1"
         onClick={open('reply')}
       >
-        <ArrowBendUpLeft class="h-4 w-4" />
+        <ArrowBendUpLeft class="size-4" />
         <span>Reply</span>
       </Button>
       <Button
@@ -41,7 +41,7 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
         class="rounded-full px-4 py-1"
         onClick={open('forward')}
       >
-        <ArrowBendUpRight class="h-4 w-4" />
+        <ArrowBendUpRight class="size-4" />
         <span>Forward</span>
       </Button>
     </div>

@@ -185,7 +185,7 @@ export function ClickCallout(props: ClickCalloutProps) {
     >
       <span
         class={cn(
-          'inline-grid place-items-center rounded-sm border aspect-square h-[34px]',
+          'inline-grid place-items-center rounded-sm border aspect-square h-8.5',
           props.completed
             ? 'bg-ink/20 border-edge text-ink'
             : 'bg-ink/10 border-edge text-ink'

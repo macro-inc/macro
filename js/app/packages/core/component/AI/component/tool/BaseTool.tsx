@@ -23,7 +23,7 @@ function BaseToolCall(props: ToolCallProps) {
       classList={{ 'opacity-50': !!error }}
     >
       <div class="flex w-full items-center gap-x-2">
-        <props.icon class="h-[20px] w-[20px] shrink-0 text-accent" />
+        <props.icon class="size-5 shrink-0 text-accent" />
         <div class="min-w-0 flex-1 p-2">{props.children}</div>
         <Show when={error}>
           <span class="shrink-0 pr-2 text-ink-muted">Failed</span>

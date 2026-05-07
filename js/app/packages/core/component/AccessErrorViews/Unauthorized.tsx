@@ -20,7 +20,7 @@ export default function Unauthorized() {
   return (
     <div class="flex flex-col items-center justify-center h-full space-y-4">
       <div class="rounded-full">
-        <Lock class="w-10 h-10" />
+        <Lock class="size-10" />
       </div>
       <p class="text-ink-muted text-nowrap">
         You {currentUserEmail() ? `(${currentUserEmail()})` : ''} do not have

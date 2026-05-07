@@ -76,7 +76,7 @@ function Kbd(props: { shortcut: string; class?: string }) {
         props.class
       )}
     >
-      <Hotkey shortcut={props.shortcut} class="flex gap-[2px]" lowercase />
+      <Hotkey shortcut={props.shortcut} class="flex gap-0.5" lowercase />
     </span>
   );
 }
@@ -161,7 +161,7 @@ function ShortcutsContent() {
 export function Shortcuts() {
   return (
     <div class="h-full overflow-hidden flex justify-center p-2">
-      <div class="max-w-200 w-full h-full">
+      <div class="max-w-200 size-full">
         <Panel depth={2} class="h-full overflow-hidden text-ink">
                   <ShortcutsContent />
                 </Panel>

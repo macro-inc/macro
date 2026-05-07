@@ -182,13 +182,13 @@ function SignatureEditor(props: SignatureEditorProps) {
 export function Signature(props: SignatureProps) {
   return (
     <div
-      class="w-full h-full bg-transparent"
+      class="size-full bg-transparent"
       style={{ outline: props.isActive ? `1px dotted grey` : 'none' }}
     >
       <Show when={props.base64}>
         {(base64) => (
           <img
-            class="w-full h-full"
+            class="size-full"
             alt="signature"
             draggable={false}
             src={base64()}

@@ -583,7 +583,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 when={!createPropertyMutation.isPending}
                 fallback={
                   <div class="flex items-center gap-1.5">
-                    <div class="w-3 h-3 animate-spin">
+                    <div class="size-3 animate-spin">
                       <LoadingSpinner />
                     </div>
                     Creating...

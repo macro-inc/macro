@@ -159,7 +159,7 @@ function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {
                 onClick={[copyEmail, r.participant.email]}
               >
                 <span class="truncate">{r.participant.email}</span>
-                <WideCopy class="w-3 h-3 shrink-0 opacity-60" />
+                <WideCopy class="size-3 shrink-0 opacity-60" />
               </div>
             )}
           </For>

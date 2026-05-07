@@ -233,7 +233,7 @@ function PopupIconButton(props: {
         }}
         class="rounded-md py-1 hover:bg-hover transition flex items-center gap-1.5"
       >
-        <div class="w-fit flex justify-right items-center mx-0.5 my-0.5 text-xs font-normal text-current/90">
+        <div class="w-fit flex justify-right items-center m-0.5 text-xs font-normal text-current/90">
           <PopupIcon icon={props.icon} />
         </div>
       </button>
@@ -256,8 +256,7 @@ function MetadataInfo(props: {
         'mt-2',
         props.align === 'left' && 'w-fit max-w-[66%]',
         'text-ink-muted',
-        props.align === 'left' &&
-          'overflow-hidden whitespace-nowrap text-ellipsis'
+        props.align === 'left' && 'truncate  '
       )}
     >
       <span class="relative text-[0.8em] text-ink-muted max-w-full flex items-center">
@@ -274,7 +273,7 @@ function MetadataInfo(props: {
 function UserInfo(props: { userId: string }) {
   const [displayName] = useDisplayName(tryMacroId(props.userId));
   return (
-    <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis flex items-center gap-1.5">
+    <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted truncate flex items-center gap-1.5">
       <UserIconComponent
         id={props.userId}
         size="sm"
@@ -353,7 +352,7 @@ function ImageCoverStrip(props: {
             <img
               src={url()}
               class={cn(
-                'absolute inset-0 w-full h-full object-cover',
+                'absolute inset-0 size-full object-cover',
                 shouldFadeIn && 'opacity-0 transition-opacity duration-300'
               )}
               onLoad={
@@ -792,7 +791,7 @@ export function PopupPreview(props: {
                       props.snapshotInfo
                     }
                   >
-                    <div class="px-2 py-2 border-t border-edge-muted">
+                    <div class="p-2 border-t border-edge-muted">
                       <Show when={messageContext()}>
                         {(context) => (
                           <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
@@ -894,7 +893,7 @@ export function PopupPreview(props: {
                     </div>
                     <div class="flex shrink-0">{renderActionButtons()}</div>
                   </div>
-                  <div class="line-clamp-2 break-words px-2 mb-2">
+                  <div class="line-clamp-2 wrap-break-word px-2 mb-2">
                     {props.documentInfo.name}
                   </div>
                 </div>

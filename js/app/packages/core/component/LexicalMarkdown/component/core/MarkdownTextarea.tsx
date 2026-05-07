@@ -307,7 +307,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       <div
         ref={scrollContainerRef}
-        class={cn('relative w-full h-full overflow-auto min-h-8', props.class)}
+        class={cn('relative size-full overflow-auto min-h-8', props.class)}
         on:keydown={(e) => {
           e.stopPropagation();
         }}

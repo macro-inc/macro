@@ -24,7 +24,7 @@ export function MacroMcpSetupModal() {
       <Dialog
         open={macroMcpSetupOpen()}
         onOpenChange={setMacroMcpSetupOpen}
-        class="w-[760px]"
+        class="w-190"
       >
         <Surface depth={2} active>
           <div class="*:max-h-[75vh]">

@@ -275,7 +275,7 @@ export function UserHighlight(props: VoidProps<IHighlightObj>) {
       data-highlight-id={props.highlightId}
     >
       <div
-        class="relative top-0 left-0 w-full h-full cursor-default"
+        class="relative top-0 left-0 size-full cursor-default"
         style={{
           'background-color': Color.toRgbaString(alphaColor()),
           outline:

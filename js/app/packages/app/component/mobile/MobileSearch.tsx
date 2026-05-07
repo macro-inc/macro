@@ -357,7 +357,7 @@ function FullTextResultItem(props: {
 
   return (
     <div
-      class="px-2 py-2 text-sm font-semibold"
+      class="p-2 text-sm font-semibold"
       onClick={() => props.onSelect(props.entity)}
     >
       <div class="flex items-center gap-2 min-w-0">
@@ -387,7 +387,7 @@ function CategoryFilterTabs() {
           if (value) SearchState.setCategoryFilter(value as CategoryFilter);
         }}
         indicatorPosition="top"
-        class="w-max **:data-indicator:h-[3px]"
+        class="w-max **:data-indicator:h-0.75"
       />
     </div>
   );

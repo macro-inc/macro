@@ -250,7 +250,7 @@ export function CodeBoxAccessory(props: {
                 >
                   <Switch.Input class="sr-only" />
                   <Switch.Control class="inline-flex h-4 w-8 hover:ring-1 hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-checked:bg-accent">
-                    <Switch.Thumb class="block h-3 w-3 rounded-full bg-dialog transition-transform data-checked:translate-x-4" />
+                    <Switch.Thumb class="block size-3 rounded-full bg-dialog transition-transform data-checked:translate-x-4" />
                   </Switch.Control>
                 </Switch>
               </div>
@@ -343,10 +343,10 @@ function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
       };
 
       return (
-        <div class="w-full h-full overflow-hidden p-2">
+        <div class="size-full overflow-hidden p-2">
           <div
             ref={setContainerRef}
-            class="w-full h-full flex items-center justify-center min-h-0"
+            class="size-full flex items-center justify-center min-h-0"
             innerHTML={sanitizedContent}
           />
         </div>
@@ -362,7 +362,7 @@ function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
   };
 
   return (
-    <div class={'absolute top-12 left-0 right-0 bottom-0 z-10 p-2'}>
+    <div class={'absolute top-12 inset-x-0 bottom-0 z-10 p-2'}>
       {renderSvg()}
     </div>
   );
@@ -417,7 +417,7 @@ export const StaticCodeBoxAccessory = (props: {
               <Switch checked={isPreviewMode()} onChange={setIsPreviewMode}>
                 <Switch.Input class="sr-only" />
                 <Switch.Control class="inline-flex h-4 w-8 hover:ring-1 hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-checked:bg-accent">
-                  <Switch.Thumb class="block h-3 w-3 rounded-full transition-transform data-checked:translate-x-4 bg-dialog" />
+                  <Switch.Thumb class="block size-3 rounded-full transition-transform data-checked:translate-x-4 bg-dialog" />
                 </Switch.Control>
               </Switch>
             </div>

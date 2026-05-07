@@ -57,7 +57,7 @@ function SignalDebugCard(props: SignalDebugCardProps) {
               class="absolute top-2 right-2 p-1 rounded bg-surface-secondary hover:bg-surface-tertiary text-text-secondary hover:text-text-primary transition-colors z-10"
               title="Copy to clipboard"
             >
-              <Copy class="w-4 h-4" />
+              <Copy class="size-4" />
             </button>
             <pre class="text-xs bg-message p-3 rounded overflow-auto max-h-80 border border-edge">
               {formatJson(props.data)}
@@ -80,7 +80,7 @@ const DataDebug: Component = () => {
   };
 
   return (
-    <div class="flex flex-col h-full w-full">
+    <div class="flex flex-col size-full">
       <Bar
         left={
           <div class="p-2 text-sm w-2xl truncate">

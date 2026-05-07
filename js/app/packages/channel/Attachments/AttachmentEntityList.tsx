@@ -33,7 +33,7 @@ export function AttachmentEntityList(props: {
         </Show>
 
         <Show when={hasDocuments()}>
-          <div class="min-h-0 h-full overflow-y-auto md:h-[420px]">
+          <div class="min-h-0 h-full overflow-y-auto md:h-105">
             <For each={props.rows}>
               {(row) => (
                 <AttachmentEntityRow

@@ -103,9 +103,9 @@ export function TaskDiscussion() {
           onClick={toggleExpanded}
         >
           {isExpanded() ? (
-            <CaretDown class="w-3 h-3" />
+            <CaretDown class="size-3" />
           ) : (
-            <CaretRight class="w-3 h-3" />
+            <CaretRight class="size-3" />
           )}
           <span class="text-xs">Discussion</span>
         </button>

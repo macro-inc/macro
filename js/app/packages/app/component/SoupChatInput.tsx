@@ -135,7 +135,7 @@ function SoupChatInputInner() {
   return (
     <div
       ref={containerRef}
-      class="absolute bottom-0 right-px left-px pb-2 px-2 flex justify-center pointer-events-none"
+      class="absolute bottom-0 inset-x-px pb-2 px-2 flex justify-center pointer-events-none"
       classList={{ hidden: !!soup.previewEntity() }}
       style={{
         'background-image': `linear-gradient(transparent, var(--color-panel) 85%)`,

@@ -99,7 +99,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         {/* Always reserve space for delete button to prevent layout shift */}
         <Show
           when={canEdit && !props.property.isMetadata}
-          fallback={<div class="w-3 h-3 shrink-0" />}
+          fallback={<div class="size-3 shrink-0" />}
         >
           <Show
             when={

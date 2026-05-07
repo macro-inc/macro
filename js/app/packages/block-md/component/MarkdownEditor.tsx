@@ -1045,7 +1045,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
         <ScopedPortal scope="block">
           <Show when={!isBlankMarkdown() && !isMobile()}>
-            <div class="absolute bottom-2 left-2 w-fit h-fit">
+            <div class="absolute bottom-2 left-2 size-fit">
               <Wordcount stats={wordcountStats} />
             </div>
           </Show>

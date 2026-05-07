@@ -103,7 +103,7 @@ export function SoupViewMobileCreateButton(props: {
             createAction()?.();
           }}
         >
-          <div class="w-5 h-5 [&_svg]:size-5">
+          <div class="size-5 [&_svg]:size-5">
             <Dynamic component={createIcon()} triggerAnimation={animating()} />
           </div>
           <div>Create</div>

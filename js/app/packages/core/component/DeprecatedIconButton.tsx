@@ -196,7 +196,7 @@ export function DeprecatedIconButton(props: IconButtonProps) {
             class="flex h-full justify-center items-center"
             classList={{ 'text-panel': local.theme === 'reverse' }}
           >
-            <CaretDown class="flex w-3 h-3" />
+            <CaretDown class="flex size-3" />
           </div>
         </Show>
         <Show when={props.showShortcut && primaryHotkeyToken()}>

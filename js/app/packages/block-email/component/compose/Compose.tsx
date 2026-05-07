@@ -648,7 +648,7 @@ export function EmailCompose(props: EmailComposeProps) {
           />
         </SplitHeaderLeft>
       </Show>
-      <div class="relative flex flex-col w-full h-full min-h-0 overflow-hidden text-sm">
+      <div class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm">
         <Show when={hasLinkError()}>
           <EmailPermissionsBanner />
         </Show>
@@ -658,7 +658,7 @@ export function EmailCompose(props: EmailComposeProps) {
           >
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
-              class="w-full h-full p-4 bg-input max-h-full mobile:max-h-none overflow-y-auto flex flex-col min-h-0 mobile:min-h-full"
+              class="size-full p-4 bg-input max-h-full mobile:max-h-none overflow-y-auto flex flex-col min-h-0 mobile:min-h-full"
             />
           </WrapUnlessMobile>
         </div>

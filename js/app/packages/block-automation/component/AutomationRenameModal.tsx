@@ -68,11 +68,11 @@ function AutomationRenameModalContent(props: {
       <Portal mount={getSplitPanelRef() ?? undefined}>
         <Dialog.Overlay
           as="div"
-          class="absolute z-modal left-px right-px bottom-px top-px bg-modal-overlay"
+          class="absolute z-modal inset-px bg-modal-overlay"
           use:clickOutside={close}
           on:click={close}
         />
-        <div class="absolute z-modal pointer-events-none px-2 left-px right-px bottom-px top-px">
+        <div class="absolute z-modal pointer-events-none px-2 inset-px">
           <Dialog.Content class="pointer-events-none!">
             <div class="pointer-events-auto w-full max-w-[min(36rem,calc(100%-1rem))] mx-auto mt-16 bg-menu border border-edge h-fit p-2">
               <div class="w-full my-1">

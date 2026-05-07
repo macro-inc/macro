@@ -211,7 +211,7 @@ export function DispatchAgentButton() {
           size="icon-sm"
           class="p-1"
         >
-          <CaretDown class="w-3 h-3" />
+          <CaretDown class="size-3" />
         </DropdownMenu.Trigger>
       </div>
       <DropdownMenu.Portal>

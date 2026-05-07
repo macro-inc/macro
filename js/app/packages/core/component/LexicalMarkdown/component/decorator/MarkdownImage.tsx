@@ -332,14 +332,14 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         />
 
         <Show when={state() === 'error'}>
-          <div class="absolute top-0 left-0 w-full h-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted min-h-44">
+          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted min-h-44">
             <ImageIcon class="size-5" />
             <div>{ImageErrors[imageError() ?? 'FALLBACK']}</div>
           </div>
         </Show>
 
         <Show when={state() === 'loading'}>
-          <div class="absolute top-0 left-0 w-full h-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
+          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
             <Spinner />
           </div>
         </Show>
@@ -357,7 +357,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
             (state() === 'ok' || state() === 'error')
           }
         >
-          <div class="w-full h-full absolute top-0 left-0 pointer-events-none bg-edge/10" />
+          <div class="size-full absolute top-0 left-0 pointer-events-none bg-edge/10" />
           <MediaButtons
             delete={interactable() ? deleteImage : undefined}
             enlarge={state() === 'ok' ? viewFull : undefined}
@@ -386,7 +386,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
             </div>
             <img
               crossorigin="anonymous"
-              class="max-w-full max-h-[80vh] w-auto h-auto object-contain"
+              class="max-w-full max-h-[80vh] size-auto object-contain"
               src={imageUrl()}
             />
           </Dialog.Content>

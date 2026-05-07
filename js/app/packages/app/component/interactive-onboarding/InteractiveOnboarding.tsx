@@ -590,7 +590,7 @@ function InteractiveOnboardingInner() {
   return (
     <div
       ref={shellRef}
-      class="flex items-center justify-center h-full w-full p-6 sm:p-8 overflow-hidden relative"
+      class="flex items-center justify-center size-full p-6 sm:p-8 overflow-hidden relative"
       tabIndex={-1}
     >
       {/* Scoped keyframes */}
@@ -840,7 +840,7 @@ function InteractiveOnboardingInner() {
 
                   {/* Right panel — demo (~2/3) */}
                   <div class="flex-1 min-w-0 flex items-center justify-center bg-surface-secondary/30 overflow-hidden">
-                    <div style={bodyStyle()} class="w-full h-full">
+                    <div style={bodyStyle()} class="size-full">
                       <Show
                         when={lesson().definition.demo}
                         fallback={

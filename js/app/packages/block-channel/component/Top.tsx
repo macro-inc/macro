@@ -42,7 +42,7 @@ function TopIcon(props: TopIconProps) {
   return (
     <Show
       when={props.channelType === ChannelTypeEnum.DirectMessage && recipient()}
-      fallback={<HashIcon class="w-4 h-4 shrink-0" />}
+      fallback={<HashIcon class="size-4 shrink-0" />}
     >
       {(recipient) => {
         return (

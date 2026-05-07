@@ -647,7 +647,7 @@ const TableCell: RenderableElement<TableCellNode> = {
     return (
       <Dynamic
         component={'td'}
-        class={cn(props.theme.tableCell, 'min-w-[100px] max-w-[350px]')}
+        class={cn(props.theme.tableCell, 'min-w-25 max-w-87.5')}
         colspan={props.node.__colSpan}
         rowspan={props.node.__rowSpan}
       >

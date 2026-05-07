@@ -14,10 +14,10 @@ export function inCallAvatarPlaceholderClasses(size: UserIconProps['size']) {
     s === 'fill' && 'size-full'
   );
   const icon = cn(
-    s === 'sm' && 'w-2 h-2',
-    s === 'md' && 'w-3 h-3',
-    s === 'lg' && 'w-5 h-5',
-    s === 'fill' && 'w-4 h-4'
+    s === 'sm' && 'size-2',
+    s === 'md' && 'size-3',
+    s === 'lg' && 'size-5',
+    s === 'fill' && 'size-4'
   );
   return { container, icon };
 }
@@ -41,7 +41,7 @@ export const InCallAvatarPlaceholderShell: Component<{
 
       <Show when={props.variant === 'view-more'}>
         <DotsThree
-          class="block h-6 w-6 bg-transparent text-accent"
+          class="block size-6 bg-transparent text-accent"
           aria-hidden
         />
       </Show>

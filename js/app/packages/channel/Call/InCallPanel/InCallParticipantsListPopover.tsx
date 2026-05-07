@@ -28,9 +28,7 @@ export function InCallRosterListSection(props: {
       <div class="max-h-64 overflow-y-auto p-1">
         <Show
           when={props.members.length > 0}
-          fallback={
-            <div class="px-2 py-2 text-sm text-ink-muted">Connecting…</div>
-          }
+          fallback={<div class="p-2 text-sm text-ink-muted">Connecting…</div>}
         >
           <For each={props.members}>
             {(member) => (
@@ -101,7 +99,7 @@ export function InCallParticipantNameRow(props: {
         isInteractive() ? (e) => e.key === 'Enter' && void openDm() : undefined
       }
       class={cn(
-        'flex min-w-0 items-center gap-2 rounded-xs px-1 py-1',
+        'flex min-w-0 items-center gap-2 rounded-xs p-1',
         isInteractive() ? 'hover:bg-hover' : 'cursor-default'
       )}
     >
@@ -149,14 +147,14 @@ export function InCallParticipantsListPopover(
         as="button"
         type="button"
         class={cn(
-          'inline-flex items-center justify-center rounded-full bg-transparent p-0 transition-colors hover:bg-accent/15  text-accent',
+          'inline-flex items-center justify-center rounded-full bg-transparent p-0 transition-colors hover:bg-accent/15 text-accent',
           props.class
         )}
         aria-haspopup="dialog"
         aria-expanded={open()}
         aria-label="Everyone in call"
       >
-        <UserCircle class="block h-4 w-4" />
+        <UserCircle class="block size-4" />
       </Popover.Trigger>
 
       <Popover.Portal>

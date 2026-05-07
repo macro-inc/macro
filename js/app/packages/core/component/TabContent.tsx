@@ -33,15 +33,15 @@ interface TabContentRowProps {
 
 export function TabContentRow(props: ParentProps<TabContentRowProps>) {
   return (
-    <div class="mb-[18px]">
+    <div class="mb-4.5">
       <div class="text-sm">{props.text}</div>
       <Show
         when={!props.isLoading}
         fallback={
-          <div class="animate-pulse bg-ink-extra-muted rounded max-w-[100px] min-h-[20px] leading-5"></div>
+          <div class="animate-pulse bg-ink-extra-muted rounded max-w-25 min-h-5 leading-5"></div>
         }
       >
-        <div class={cn('text-ink-muted text-xs leading-5', props.class)}>
+        <div class={cn('text-ink-muted text-xs/5', props.class)}>
           {props.subtext}
         </div>
         {props.children}

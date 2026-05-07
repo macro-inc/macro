@@ -339,10 +339,10 @@ export function FindAndReplace() {
                       : 'no matches'}
                 </p>
               </div>
-              <div class=" ml-4 flex justify-end items-center">
+              <div class="ml-4 flex justify-end items-center">
                 <Tooltip tooltip={`Previous Match`}>
                   <div
-                    class="flex items-center px-1 w-6 h-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
+                    class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
                     onMouseDown={() => {
                       jumpTo('prev');
                     }}
@@ -352,7 +352,7 @@ export function FindAndReplace() {
                 </Tooltip>
                 <Tooltip tooltip={`Next Match`}>
                   <div
-                    class="flex items-center px-1 w-6 h-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
+                    class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
                     onMouseDown={() => {
                       jumpTo('next');
                     }}
@@ -362,7 +362,7 @@ export function FindAndReplace() {
                 </Tooltip>
                 <Tooltip tooltip={`Close Search Bar`}>
                   <div
-                    class="flex items-center px-1 w-6 h-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
+                    class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
                     onMouseDown={closeSearch}
                   >
                     <X />
@@ -390,7 +390,7 @@ export function FindAndReplace() {
               <div class="flex grow justify-center ml-2">
                 <Tooltip tooltip={`Replace`}>
                   <div
-                    class="flex items-center px-1 w-6 h-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
+                    class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
                     onMouseDown={() => {
                       replaceTextAtIndex();
                     }}
@@ -400,7 +400,7 @@ export function FindAndReplace() {
                 </Tooltip>
                 <Tooltip tooltip={`Replace All`}>
                   <div
-                    class="flex items-center px-1 w-6 h-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
+                    class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
                     onMouseDown={() => {
                       replaceTextAll();
                     }}

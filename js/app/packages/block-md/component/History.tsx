@@ -253,7 +253,7 @@ export function History(props: HistoryProps) {
   };
 
   return (
-    <div class="w-full h-full p-2 flex flex-col gap-2 pb-12" tabindex={-1}>
+    <div class="size-full p-2 flex flex-col gap-2 pb-12" tabindex={-1}>
       <Suspense fallback={'loading...'}>
         <Show when={selectedVersion()}>
           {(selectedVersion) => {
@@ -401,16 +401,16 @@ function DocumentPreview(props: {
     );
 
   return (
-    <div class="w-full h-full p-2">
+    <div class="size-full p-2">
       <LexicalWrapperContext.Provider value={props.lexicalWrapper}>
         <Show when={props.isSelectedVersionEmpty}>
-          <div class="w-full h-full flex items-center justify-center">
+          <div class="size-full flex items-center justify-center">
             <p class="text-ink-placeholder italic">
               This version of the document is empty
             </p>
           </div>
         </Show>
-        <div class="w-full h-full" ref={mountRef} contentEditable={false} />
+        <div class="size-full" ref={mountRef} contentEditable={false} />
       </LexicalWrapperContext.Provider>
     </div>
   );

@@ -140,7 +140,7 @@ function SplitModal(
           as="div"
           class="absolute z-modal"
           classList={{
-            'left-px right-px bottom-px top-px': props.mode === 'split',
+            'inset-px': props.mode === 'split',
             'inset-0': props.mode !== 'split',
             'bg-modal-overlay': props.scrim !== false,
           }}
@@ -150,7 +150,7 @@ function SplitModal(
         <div
           class="absolute z-modal pointer-events-none px-2"
           classList={{
-            'left-px right-px bottom-px top-px': props.mode === 'split',
+            'inset-px': props.mode === 'split',
             'inset-0': props.mode !== 'split',
           }}
         >

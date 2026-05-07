@@ -176,7 +176,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
               when={!listPropertiesQuery.isLoading}
               fallback={
                 <div class="flex items-center justify-center py-8">
-                  <div class="w-5 h-5 animate-spin">
+                  <div class="size-5 animate-spin">
                     <LoadingSpinner />
                   </div>
                   <span class="ml-2 text-ink-muted">Loading properties...</span>

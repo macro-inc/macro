@@ -34,7 +34,7 @@ const UnifiedSearchToolResponse = (props: {
   );
 
   return (
-    <div class="max-h-[480px] overflow-y-auto">
+    <div class="max-h-120 overflow-y-auto">
       <For each={entities()}>
         {(entity) => {
           if (!entity) return null;
@@ -108,7 +108,7 @@ const createHandler = (name: 'NameSearch' | 'ContentSearch') =>
                   }}
                 >
                   <CaretRight
-                    class="h-4 w-4 transition-transform"
+                    class="size-4 transition-transform"
                     classList={{
                       'rotate-90': isExpanded(),
                     }}

@@ -143,7 +143,7 @@ const PaywallComponent = (props: PaywallComponent) => {
           onClick={props.cb}
           class="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 text-ink-extra-muted hover:text-ink transition-colors z-10"
         >
-          <IconX class="w-5 sm:w-6 h-5 sm:h-6" />
+          <IconX class="size-5 sm:size-6" />
         </button>
       </Show>
       <Show when={!hasPaid()}>

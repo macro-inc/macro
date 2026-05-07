@@ -184,7 +184,7 @@ export default function BlockPdf() {
   return (
     <DocumentBlockContainer>
       <div
-        class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col"
+        class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col"
         onContextMenu={(e) => e.preventDefault()}
         data-tut="App"
       >
@@ -200,7 +200,7 @@ export default function BlockPdf() {
             </Show>
           </Show>
           <div
-            class="flex h-full w-full relative justify-end overflow-visible z-main-view-layout"
+            class="flex size-full relative justify-end overflow-visible z-main-view-layout"
             id="main-view"
           >
             {/* {ENABLE_VIEWER_SIDE_PANEL && <ViewerNavStack />} */}

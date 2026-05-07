@@ -39,7 +39,7 @@ export function Caret(props: { isExpanded: boolean; size: FileListSize }) {
         props.isExpanded && 'rotate-90'
       )}
     >
-      <CaretRight class={`w-3 h-3`} />
+      <CaretRight class={`size-3`} />
     </div>
   );
 }

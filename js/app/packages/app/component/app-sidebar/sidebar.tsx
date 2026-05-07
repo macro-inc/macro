@@ -545,9 +545,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
       data-slim={isSlim()}
       style={{ transition: SIDEBAR_MAX_WIDTH_TRANSITION_STYLE }}
     >
-      <div class="flex items-center justify-between py-2 pl-2 pr-2 relative">
+      <div class="flex items-center justify-between p-2 relative">
         <div class="flex items-center group/logo-area w-full">
-          <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 ">
+          <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0">
             <LogoIcon class="size-6" />
           </div>
           <div class="grow shrink-10 min-w-0" />
@@ -587,7 +587,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <nav>
-        <ul class="w-full h-full px-2 flex flex-col gap-1">
+        <ul class="size-full px-2 flex flex-col gap-1">
           <For each={visibleLinks()}>
             {(link) => (
               <li class="flex items-center justify-center">
