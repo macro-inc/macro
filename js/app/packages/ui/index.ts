@@ -12,7 +12,6 @@ export { Layer } from './components/Layer';
 
 /* types */
 export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
-export type { ScrollProps } from './components/Scroll';
 export type { DialogProps } from './components/Dialog';
 export type { PanelProps } from './components/Panel';
 

@@ -1,13 +1,13 @@
-import { createSignal, onCleanup, onMount, splitProps, type JSX } from 'solid-js';
-
-export type ScrollProps = JSX.HTMLAttributes<HTMLDivElement> & { style?: JSX.CSSProperties };
+import { createSignal, onCleanup, onMount, splitProps} from 'solid-js';
+import { cn } from '../utils/classname';
+import type { JSX } from 'solid-js'
 
 const THUMB_HEIGHT = 200;
 const GUTTER_WIDTH = 8;
 const THUMB_INSET = 3;
 
-export function Scroll(props: ScrollProps) {
-  const [local, rest] = splitProps(props, ['children', 'style']);
+export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
   const [isScrolling, setIsScrolling] = createSignal(false);
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
   const [thumbTop, setThumbTop] = createSignal(0);
@@ -15,9 +15,7 @@ export function Scroll(props: ScrollProps) {
   let scrollRef!: HTMLDivElement;
 
   function update() {
-    const el = scrollRef;
-    if (!el) return;
-    const { scrollTop, scrollHeight, clientHeight } = el;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef;
     const maxScroll = Math.max(0, scrollHeight - clientHeight);
     const maxTop = Math.max(0, clientHeight - THUMB_HEIGHT - THUMB_INSET * 2);
     const offset = maxScroll > 0 ? (scrollTop / maxScroll) * maxTop : 0;
@@ -26,7 +24,7 @@ export function Scroll(props: ScrollProps) {
 
   function showThumb() {
     setIsScrolling(true);
-    if (hideTimer) clearTimeout(hideTimer);
+    if (hideTimer) { clearTimeout(hideTimer); }
     hideTimer = setTimeout(() => setIsScrolling(false), 500);
   }
 
@@ -36,21 +34,19 @@ export function Scroll(props: ScrollProps) {
   }
 
   function scrollToPointer(clientY: number) {
-    const el = scrollRef;
-    if (!el) return;
     const rect = gutterRef.getBoundingClientRect();
-    const { scrollHeight, clientHeight } = el;
+    const { scrollHeight, clientHeight } = scrollRef;
     const maxScroll = Math.max(0, scrollHeight - clientHeight);
-    if (maxScroll <= 0) return;
+    if (maxScroll <= 0) { return; }
     const maxTop = Math.max(0, clientHeight - THUMB_HEIGHT - THUMB_INSET * 2);
-    if (maxTop <= 0) return;
+    if (maxTop <= 0) { return; }
     const localY = clientY - rect.top - THUMB_HEIGHT / 2;
     const clamped = Math.max(0, Math.min(maxTop, localY - THUMB_INSET));
-    el.scrollTop = (clamped / maxTop) * maxScroll;
+    scrollRef.scrollTop = (clamped / maxTop) * maxScroll;
   }
 
   function handlePointerDown(e: PointerEvent) {
-    if (e.button !== 0) return;
+    if (e.button !== 0) { return; }
     e.preventDefault();
     gutterRef.setPointerCapture(e.pointerId);
     showThumb();
@@ -58,7 +54,7 @@ export function Scroll(props: ScrollProps) {
   }
 
   function handlePointerMove(e: PointerEvent) {
-    if (!gutterRef.hasPointerCapture(e.pointerId)) return;
+    if (!gutterRef.hasPointerCapture(e.pointerId)) { return; }
     showThumb();
     scrollToPointer(e.clientY);
   }
@@ -86,21 +82,14 @@ export function Scroll(props: ScrollProps) {
     onCleanup(() => {
       ro.disconnect();
       mo.disconnect();
-      if (hideTimer) clearTimeout(hideTimer);
+      if (hideTimer) { clearTimeout(hideTimer); }
     });
   });
 
   return (
     <div
       {...rest}
-      style={{
-        'position': 'relative',
-        'min-height': '0',
-        'height': '100%',
-        'min-width': '0',
-        'width': '100%',
-        ...local.style,
-      }}
+      class={cn('relative h-full min-h-0 w-full min-w-0', local.class)}
     >
       <div
         style={{
