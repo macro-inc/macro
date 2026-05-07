@@ -10,7 +10,6 @@ export function AttachmentSection(props: {
   action?: JSX.Element;
   class?: string;
   label: string;
-
 }) {
   return (
     <Panel depth={2} class={cn('h-auto', props.class)}>
