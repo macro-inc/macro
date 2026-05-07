@@ -11,7 +11,7 @@ pub async fn process_remove_message(
     remove_message: &DocumentId,
 ) -> anyhow::Result<()> {
     opensearch_client
-        .delete_document(remove_message.document_id.as_str())
+        .delete_document(remove_message.document_id.as_str(), None)
         .await?;
 
     Ok(())

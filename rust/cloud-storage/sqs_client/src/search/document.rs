@@ -23,6 +23,9 @@ pub struct SearchExtractorMessage {
     /// NOTE: this will become deprecated once we remove document versioning
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document_version_id: Option<String>,
+    /// Optional override for the target OpenSearch index (e.g. "documents_v1" for migration backfills)
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub index_override: Option<String>,
 }
 
 impl<'a> From<&'a BackfillSearchDocumentInformation> for SearchExtractorMessage {
@@ -34,6 +37,7 @@ impl<'a> From<&'a BackfillSearchDocumentInformation> for SearchExtractorMessage 
                     document_id: value.document_id.clone(),
                     file_type: FileType::Pdf, // Explicitly override the file type to pdf since we are looking for the converted file
                     document_version_id: Some(CONVERTED_DOCUMENT_FILE_NAME.to_string()),
+                    index_override: None,
                 }
             }
             _ => SearchExtractorMessage {
@@ -41,6 +45,7 @@ impl<'a> From<&'a BackfillSearchDocumentInformation> for SearchExtractorMessage 
                 document_id: value.document_id.clone(),
                 file_type: value.file_type,
                 document_version_id: Some(value.document_version_id.to_string()),
+                index_override: None,
             },
         }
     }

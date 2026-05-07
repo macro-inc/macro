@@ -93,6 +93,8 @@ pub struct DocumentBackfillRequest {
     pub created_after: Option<DateTime<Utc>>,
     pub created_before: Option<DateTime<Utc>>,
     pub deletion_filter: DeletionFilter,
+    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
+    pub index_override: Option<String>,
 }
 
 /// Email-thread backfill filter.

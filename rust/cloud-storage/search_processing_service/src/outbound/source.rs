@@ -178,10 +178,12 @@ impl BackfillSource for PgBackfillSource {
         let messages: Vec<SearchQueueMessage> = batch
             .iter()
             .map(|d| {
+                let mut msg: sqs_client::search::document::SearchExtractorMessage = d.into();
+                msg.index_override.clone_from(&req.index_override);
                 if d.file_type == FileType::Md {
-                    SearchQueueMessage::ExtractSync(d.into())
+                    SearchQueueMessage::ExtractSync(msg)
                 } else {
-                    SearchQueueMessage::ExtractDocumentText(d.into())
+                    SearchQueueMessage::ExtractDocumentText(msg)
                 }
             })
             .collect();

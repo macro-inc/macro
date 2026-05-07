@@ -35,10 +35,10 @@ pub struct UpsertDocumentArgs {
     pub sub_type: Option<String>,
 }
 
-/// Process a single chunk of documents
 async fn bulk_upsert_single_chunk(
     client: &opensearch::OpenSearch,
     documents: &[UpsertDocumentArgs],
+    index_override: Option<&str>,
 ) -> Result<BulkUpsertResult> {
     let mut bulk_body = Vec::new();
 
@@ -60,13 +60,9 @@ async fn bulk_upsert_single_chunk(
         })?);
     }
 
-    let result = super::bulk_upsert_to_index(
-        client,
-        SearchIndex::Documents.as_ref(),
-        bulk_body,
-        "bulk_upsert_single_chunk",
-    )
-    .await?;
+    let index = index_override.unwrap_or(SearchIndex::Documents.as_ref());
+    let result =
+        super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_single_chunk").await?;
 
     tracing::trace!(
         chunk_total = documents.len(),
@@ -79,11 +75,11 @@ async fn bulk_upsert_single_chunk(
     Ok(result)
 }
 
-/// Bulk upsert documents to reduce version conflicts with automatic chunking
 #[tracing::instrument(skip(client, documents))]
 pub(crate) async fn bulk_upsert_documents(
     client: &opensearch::OpenSearch,
     documents: &[UpsertDocumentArgs],
+    index_override: Option<&str>,
 ) -> Result<BulkUpsertResult> {
     if documents.is_empty() {
         return Ok(BulkUpsertResult::default());
@@ -109,7 +105,7 @@ pub(crate) async fn bulk_upsert_documents(
             "processing chunk"
         );
 
-        match bulk_upsert_single_chunk(client, chunk).await {
+        match bulk_upsert_single_chunk(client, chunk, index_override).await {
             Ok(chunk_result) => {
                 overall_result.successful += chunk_result.successful;
                 overall_result.failed += chunk_result.failed;
@@ -146,13 +142,12 @@ pub(crate) async fn bulk_upsert_documents(
 pub(crate) async fn upsert_document(
     client: &opensearch::OpenSearch,
     args: &UpsertDocumentArgs,
+    index_override: Option<&str>,
 ) -> Result<()> {
     let id = format!("{}:{}", args.document_id, args.node_id);
+    let index = index_override.unwrap_or(SearchIndex::Documents.as_ref());
     let response = client
-        .index(opensearch::IndexParts::IndexId(
-            SearchIndex::Documents.as_ref(),
-            &id,
-        ))
+        .index(opensearch::IndexParts::IndexId(index, &id))
         .body(args)
         .send()
         .await
