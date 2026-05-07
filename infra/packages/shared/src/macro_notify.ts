@@ -24,11 +24,13 @@ export function getMacroNotify(): {
       .apply((name) => name as string);
 
   const notificationApnsVoipPlatformArn: pulumi.Output<string> =
-    notificationServiceStack.requireOutput('notificationApnsVoipPlatformArn');
+    notificationServiceStack
+      .requireOutput('notificationApnsVoipPlatformArn')
+      .apply((arn) => arn as string);
 
   return {
-  notificationIngressQueueName,
-  notificationIngressQueueArn,
-  notificationApnsVoipPlatformArn,
-};
+    notificationIngressQueueName,
+    notificationIngressQueueArn,
+    notificationApnsVoipPlatformArn,
+  };
 }
