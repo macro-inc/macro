@@ -2,6 +2,7 @@ import { createSignal, onCleanup, onMount, splitProps} from 'solid-js';
 import type { JSX } from 'solid-js'
 
 const THUMB_WIDTH = 2;
+const HIDE_DELAY = 500;
 const GUTTER_WIDTH = 8;
 const THUMB_HEIGHT = 200;
 const THUMB_RADIUS = THUMB_WIDTH * 0.5;
@@ -11,15 +12,20 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [isScrolling, setIsScrolling] = createSignal(false);
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
   const [local, rest] = splitProps(props, ['children']);
-  const [thumbTop, setThumbTop] = createSignal(0);
   let contentRef!: HTMLDivElement;
   let gutterRef!: HTMLDivElement;
   let scrollRef!: HTMLDivElement;
+  let thumbRef!: HTMLDivElement;
   let clientHeight = 0;
+  let lastActivity = 0;
   let scrollHeight = 0;
   let maxScroll = 0;
   let maxTop = 0;
   let ratio = 0;
+
+  function update() {
+    thumbRef.style.transform = `translateY(${THUMB_INSET + scrollRef.scrollTop * ratio}px)`;
+  }
 
   function config() {
     scrollHeight = scrollRef.scrollHeight;
@@ -27,11 +33,8 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
     maxScroll = Math.max(0, scrollHeight - clientHeight);
     maxTop = Math.max(0, clientHeight - THUMB_HEIGHT - THUMB_INSET * 2);
     ratio = maxScroll > 0 ? maxTop / maxScroll : 0;
-    setThumbTop(THUMB_INSET + scrollRef.scrollTop * ratio);
+    update();
   }
-
-  const HIDE_DELAY = 500;
-  let lastActivity = 0;
 
   function onHideTick() {
     const remaining = HIDE_DELAY - (performance.now() - lastActivity);
@@ -52,7 +55,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   }
 
   function handleScroll() {
-    setThumbTop(THUMB_INSET + scrollRef.scrollTop * ratio);
+    update();
     showThumb();
   }
 
@@ -130,7 +133,6 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
       >
         <div
           style={{
-            'transform': `translateY(${thumbTop()}px)`,
             'transition': 'opacity 150ms ease-in-out',
             'border-radius': `${THUMB_RADIUS}px`,
             'opacity': isScrolling() ? 1 : 0,
@@ -141,6 +143,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
             'pointer-events': 'none',
             'position': 'absolute',
           }}
+          ref={thumbRef}
         />
       </div>
     </div>
