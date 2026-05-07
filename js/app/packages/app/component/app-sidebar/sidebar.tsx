@@ -570,7 +570,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-edge-muted" />
+        <hr class="border-transparent" />
       </div>
 
       <div class="w-full px-2 my-[4.5px]">
@@ -584,7 +584,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-edge-muted mb-2" />
+        <hr class="border-transparent mb-2" />
       </div>
 
       <nav>
@@ -604,7 +604,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </nav>
 
       <div class="px-2">
-        <hr class="border-edge-muted my-2" />
+        <hr class="border-transparent my-2" />
       </div>
 
       <div class="block max-h-[clamp(10%,60%,20rem)]">
@@ -618,7 +618,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </Show>
 
       <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
-        <hr class="border-edge-muted mb-2" />
+        <hr class="border-transparent mb-2" />
       </div>
 
       <div class="w-full px-2 flex flex-col">
