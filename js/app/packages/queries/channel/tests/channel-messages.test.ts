@@ -57,6 +57,10 @@ describe('channelMessagesQueryOptions', () => {
       error = err;
     }
 
+    if (!(error instanceof Error)) {
+      throw new Error('Expected queryFn to throw an Error');
+    }
+
     expect(error).toBeInstanceOf(MaybeResultError);
     expect(isMissingChannelMessageError(error)).toBe(true);
     expect(options.retry(0, error)).toBe(false);
