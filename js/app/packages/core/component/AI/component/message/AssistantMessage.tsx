@@ -182,7 +182,7 @@ export function AssistantMessage(props: {
             </Show>
           </div>
           <Show when={!props.isStreaming}>
-            <div class="flex flex-row w-full justify-start items-center h-[32px] px-4 space-x-2 ">
+            <div class="flex flex-row w-full justify-start items-center h-8 px-4 space-x-2">
               <div class="flex flex-row space-x-2 items-center text-xs text-ink-muted">
                 <div class="w-fit">
                   <button
@@ -193,9 +193,9 @@ export function AssistantMessage(props: {
                   >
                     <Show
                       when={!isLoading()}
-                      fallback={<LoadingIcon class="w-3 h-3 animate-spin" />}
+                      fallback={<LoadingIcon class="size-3 animate-spin" />}
                     >
-                      <NotesIcon class="w-3 h-3 text-note" />
+                      <NotesIcon class="size-3 text-note" />
                     </Show>
                     <p>{isLoading() ? 'Loading Notes' : 'Edit in Notes'}</p>
                   </button>
@@ -207,9 +207,9 @@ export function AssistantMessage(props: {
                   >
                     <Show
                       when={!copied()}
-                      fallback={<CheckIcon class="w-3 h-3 text-success" />}
+                      fallback={<CheckIcon class="size-3 text-success" />}
                     >
-                      <ClipboardIcon class="w-3 h-3" />
+                      <ClipboardIcon class="size-3" />
                     </Show>
                     <p>{copied() ? 'Copied!' : 'Copy'}</p>
                   </button>

@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { Accessor } from 'solid-js';
 import { threadConnectorStyle } from './utils/thread-rail-geometry';
 
@@ -13,7 +13,7 @@ export function ThreadReplyRailDecorations(props: ThreadReplyRailProps) {
       <div class="pointer-events-none absolute" style={threadConnectorStyle}>
         <div
           class={cn(
-            'absolute text-edge-muted -z-1 w-full h-full',
+            'absolute text-edge-muted -z-1 size-full',
             props.firstThreadReplyNewMessage && 'text-accent'
           )}
         >

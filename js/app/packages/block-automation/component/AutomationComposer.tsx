@@ -3,8 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useCreateScheduleMutation } from '@queries/agent-schedule/schedules';
 import { debounce } from '@solid-primitives/scheduled';
-import { Dialog, Button, Panel } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { Button, cn, Dialog, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -141,7 +140,7 @@ export function AutomationComposer() {
       open={automationComposerOpen()}
       onOpenChange={(open) => setAutomationComposerOpen(open, false)}
     >
-      <Panel depth={2} active>
+      <Surface depth={2} active>
         <div class="*:max-h-[75vh]">
           <div class="flex cursor-default flex-col text-ink">
             <div class="flex items-center justify-between border-b border-edge-muted px-3 py-2">
@@ -153,7 +152,7 @@ export function AutomationComposer() {
               </Dialog.CloseButton>
             </div>
 
-            <div class="grid max-h-[70vh] gap-3 overflow-y-auto px-3 py-3">
+            <div class="grid max-h-[70vh] gap-3 overflow-y-auto p-3">
               <div class="grid gap-1.5">
                 <label class="text-xs font-medium text-ink-muted cursor-default">
                   Name
@@ -319,7 +318,7 @@ export function AutomationComposer() {
             </div>
           </div>
         </div>
-      </Panel>
+      </Surface>
     </Dialog>
   );
 }

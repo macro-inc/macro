@@ -98,6 +98,7 @@ impl SearchEventPublisher for ExplodingPublisher {
 fn msg(id: &str) -> SearchQueueMessage {
     SearchQueueMessage::CallRecord(CallRecordMessage {
         call_id: id.to_string(),
+        index_override: None,
     })
 }
 

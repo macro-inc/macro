@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { unreadFilterFn } from '../src/utils/filter';
 import type { EntityData } from '../src/types/entity';
 import type { WithNotification } from '../src/types/notification';
+import { unreadFilterFn } from '../src/utils/filter';
 
 describe('unreadFilterFn', () => {
   describe('email entities', () => {

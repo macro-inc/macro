@@ -136,6 +136,20 @@ const notificationApnsPlatform = new aws.sns.PlatformApplication(
   }
 );
 
+const notificationApnsVoipPlatform = new aws.sns.PlatformApplication(
+  'notification-apns-voip-platform',
+  {
+    name: `notification-apns-voip-platform-${stack}`,
+    platform: stack === 'prod' ? 'APNS_VOIP' : 'APNS_VOIP_SANDBOX',
+    applePlatformTeamId: APPLE_TEAM_ID,
+    applePlatformBundleId: pulumi.interpolate`${APPLE_BUNDLE_ID}.voip`,
+    platformPrincipal: APNS_KEY_ID,
+    platformCredential: APNS_PRIVATE_KEY,
+    eventDeliveryFailureTopicArn: pushNotificationEventHandlerTopicArn,
+    eventEndpointDeletedTopicArn: pushNotificationEventHandlerTopicArn,
+  }
+);
+
 const notificationFcmPlatform = new aws.sns.PlatformApplication(
   'notification-fcm-platform',
   {
@@ -154,8 +168,10 @@ export const notificationIngressQueueArn = notificationIngressQueue.queue.arn;
 export const notificationIngressQueueName = notificationIngressQueue.queue.name;
 export const notificationSnsPlatformArns = [
   notificationApnsPlatform.arn,
+  notificationApnsVoipPlatform.arn,
   notificationFcmPlatform.arn,
 ];
+export const notificationApnsVoipPlatformArn = notificationApnsVoipPlatform.arn;
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
@@ -241,6 +257,10 @@ const notificationService = new NotificationService('notification-service', {
     {
       name: 'SNS_FCM_PLATFORM_ARN',
       value: pulumi.interpolate`${notificationFcmPlatform.arn}`,
+    },
+    {
+      name: 'SNS_APNS_VOIP_PLATFORM_ARN',
+      value: pulumi.interpolate`${notificationApnsVoipPlatform.arn}`,
     },
     {
       name: 'SENDER_BASE_ADDRESS',

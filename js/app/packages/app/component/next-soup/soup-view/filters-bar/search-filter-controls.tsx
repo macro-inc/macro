@@ -1,20 +1,24 @@
+import type { FilterID } from '@app/component/next-soup/filters/configs';
+import {
+  defineQueryFilters,
+  NIL_UUID,
+  type Query,
+} from '@app/component/next-soup/filters/filter-store';
+import {
+  activeSoupViewCounts,
+  soupViewCacheKey,
+} from '@app/component/next-soup/soup-view/soup-view-cache-key';
+import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
-import type { FilterID } from '@app/component/next-soup/filters/configs';
-import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import {
-  soupViewCacheKey,
-  activeSoupViewCounts,
-} from '@app/component/next-soup/soup-view/soup-view-cache-key';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import {
-  NIL_UUID,
-  defineQueryFilters,
-  type Query,
-} from '@app/component/next-soup/filters/filter-store';
+import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
+import type {
+  ChannelFilters,
+  EmailFilters,
+} from '@service-storage/generated/schemas';
 import {
   type Accessor,
   batch,
@@ -22,10 +26,6 @@ import {
   createMemo,
   type JSX,
 } from 'solid-js';
-import type {
-  ChannelFilters,
-  EmailFilters,
-} from '@service-storage/generated/schemas';
 
 export type SearchableOption = {
   id: string;

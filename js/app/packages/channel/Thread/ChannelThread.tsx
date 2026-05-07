@@ -1,24 +1,24 @@
-import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import { createEffect, createSignal, on, Show } from 'solid-js';
-import { ChannelMessage } from '../Message';
-import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import { useUserId } from '@core/context/user';
-import { deferredGate } from '@core/util/debounce';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { Thread } from './Thread';
-import type { ThreadProps } from './types';
+import { deferredGate } from '@core/util/debounce';
+import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
+import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import type { ApiThreadReply } from '@service-comms/client';
-import { ThreadTypingIndicator } from './ThreadTypingIndicator';
+import { createEffect, createSignal, on, Show } from 'solid-js';
+import { createMessageSelection } from '../Channel/create-message-selection';
+import { ChannelMessage } from '../Message';
+import { createThreadHotkeys } from './create-thread-hotkeys';
+import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
+import { ThreadTypingIndicator } from './ThreadTypingIndicator';
+import type { ThreadProps } from './types';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
   getThreadLatestReplyAt,
   getUniqueReplyUserIds,
 } from './utils/thread-reply-indicator-helpers';
-import { createMessageSelection } from '../Channel/create-message-selection';
-import { createThreadHotkeys } from './create-thread-hotkeys';
-import { DebugSuspense } from '@channel/DebugSuspense';
 
 export function ChannelThread(props: ThreadProps) {
   const userId = useUserId();

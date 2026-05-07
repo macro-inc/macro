@@ -1,11 +1,11 @@
-import { compareDateDesc } from '@core/util/date';
-import type { UnifiedNotification } from './types';
 import type { NotificationType } from '@core/types';
+import { compareDateDesc } from '@core/util/date';
+import { match } from 'ts-pattern';
 import {
   isChannelNotification,
   isDocumentCommentNotification,
 } from './notification-helpers';
-import { match } from 'ts-pattern';
+import type { UnifiedNotification } from './types';
 
 export interface NotificationStack {
   type: NotificationType;

@@ -20,14 +20,6 @@ runs:
       run: |
         set -euo pipefail
 
-        # Rustup may be installed but missing from PATH if /etc/environment was overwritten
-        export PATH="$HOME/.cargo/bin:$PATH"
-        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-
-        if ! command -v rustup >/dev/null 2>&1; then
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-        fi
-
         if [[ -f rust/rust-toolchain.toml ]]; then
           toolchain="$(grep -E '^[[:space:]]*channel[[:space:]]*=' rust/rust-toolchain.toml | sed -E 's/.*"([^"]+)".*/\1/')"
         else

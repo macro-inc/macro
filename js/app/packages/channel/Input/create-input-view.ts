@@ -1,11 +1,11 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { makePersisted } from '@solid-primitives/storage';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
   on,
-  type Accessor,
 } from 'solid-js';
 import type {
   InputAttachmentTracker,

@@ -1,5 +1,5 @@
 import type { ChannelParticipant } from '@queries/channel/types';
-import { Show, type Accessor } from 'solid-js';
+import { type Accessor, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { ParticipantsEmptyState } from './ParticipantsEmptyState';
 import { ParticipantsListItem } from './ParticipantsListItem';
@@ -17,7 +17,7 @@ export function ParticipantsList(props: {
       when={props.participants().length > 0}
       fallback={<ParticipantsEmptyState searchQuery={props.searchQuery()} />}
     >
-      <div class="min-h-0 h-full overflow-hidden md:h-[420px]">
+      <div class="min-h-0 h-full overflow-hidden md:h-105">
         <VList
           data={props.participants()}
           class="h-full"

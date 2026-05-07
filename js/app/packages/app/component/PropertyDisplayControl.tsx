@@ -60,7 +60,7 @@ const PropertyDropdown: Component<PropertyDropdownProps> = (props) => {
     <Show when={props.isOpen()}>
       <div
         ref={props.dropdownRef}
-        class="absolute left-0 right-0 top-full mt-1 z-full-page-modal-base
+        class="absolute inset-x-0  top-full mt-1 z-full-page-modal-base
                border border-edge bg-menu shadow-lg
                max-h-48 overflow-y-auto
                font-mono"
@@ -104,8 +104,8 @@ const SuggestedPill: Component<SuggestedPillProps> = (props) => {
     <button
       type="button"
       onClick={props.onClick}
-      class="inline-flex max-w-[140px] shrink-0
-             w-fit min-h-[24px]
+      class="inline-flex max-w-35 shrink-0
+             w-fit min-h-6
              items-center gap-2
              px-2 py-1
              text-xs text-ink
@@ -123,9 +123,9 @@ const SuggestedPill: Component<SuggestedPillProps> = (props) => {
 
 const PropertyPill: Component<PropertyPillProps> = (props) => {
   return (
-    <div class="inline-flex max-w-[200px] shrink-0">
+    <div class="inline-flex max-w-50 shrink-0">
       <div
-        class="min-h-[24px]
+        class="min-h-6
                inline-flex items-center gap-1.5
                px-2 py-1
                text-xs text-ink

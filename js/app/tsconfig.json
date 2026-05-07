@@ -1,6 +1,7 @@
 {
   "include": [
     "./packages/**/*",
+    "../loro-mirror/**/*",
     "../lexical-core/**/*"
   ],
   "exclude": [
@@ -9,7 +10,7 @@
     "./packages/core/**/*.spec.ts",
     "./packages/block-code/scripts/**/*",
     "./packages/service-clients/service-sync/scripts/**/*",
-    "./packages/loro-mirror/packages/react/**/*",
+    "../loro-mirror/packages/react/**/*",
     "../lexical-core/tests/**/*"
   ],
   "compilerOptions": {
@@ -180,7 +181,7 @@
         "./packages/service-clients/service-contacts/*"
       ],
       "@loro-mirror/*": [
-        "./packages/loro-mirror/*"
+        "../loro-mirror/*"
       ],
       "@websocket": [
         "./packages/websocket"
@@ -251,7 +252,7 @@
       "path": "./packages/observability"
     },
     {
-      "path": "./packages/loro-mirror"
+      "path": "../loro-mirror"
     },
     {
       "path": "./packages/websocket"

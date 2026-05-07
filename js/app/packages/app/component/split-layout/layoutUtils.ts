@@ -1,3 +1,4 @@
+import { LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
@@ -12,9 +13,9 @@ import {
   useContext,
 } from 'solid-js';
 import {
+  type CollapsibleItemInput,
   SplitLayoutContext,
   SplitPanelContext,
-  type CollapsibleItemInput,
 } from './context';
 import type {
   SplitContent,
@@ -22,7 +23,6 @@ import type {
   SplitHandle,
   SplitManager,
 } from './layoutManager';
-import { LIST_VIEW_ID } from '@app/constants/list-views';
 
 export function decodePairs(segments: string[]): SplitContent[] {
   const pairs: SplitContent[] = [];

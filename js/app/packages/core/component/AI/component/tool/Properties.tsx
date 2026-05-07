@@ -1,5 +1,5 @@
-import Sliders from '@phosphor-icons/core/regular/sliders.svg';
 import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
+import Sliders from '@phosphor-icons/core/regular/sliders.svg';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 

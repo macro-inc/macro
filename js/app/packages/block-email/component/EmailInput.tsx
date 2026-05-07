@@ -3,11 +3,11 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
+import { Layer } from '@ui';
 import { type Accessor, createMemo, type Setter, Show } from 'solid-js';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
 import { plainTextToHtml } from '../util/plainTextToHtml';
 import { BaseInput } from './BaseInput';
-import { Layer } from '@ui';
 
 interface EmailInputProps {
   replyingTo: Accessor<ApiMessage | undefined>;

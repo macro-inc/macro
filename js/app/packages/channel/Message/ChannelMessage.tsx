@@ -2,7 +2,7 @@ import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-co
 import { longPressHighlight } from '@core/directive/longPressHighlight';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import TrashIcon from '@macro-icons/square/trash.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';

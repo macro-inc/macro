@@ -1,13 +1,13 @@
-import { createMemo, type Accessor } from 'solid-js';
 import type { DateValue } from '@core/util/date';
-import type {
-  ApiActivity as ChannelsActivity,
-  ApiChannelWithLatest,
-} from '@service-comms/generated/models';
-import { ChannelTypeEnum } from '@service-comms/client';
-import { useListChannelsQuery } from '@queries/channel/channels';
 import { useChannelsActivityQuery } from '@queries/channel/activity';
+import { useListChannelsQuery } from '@queries/channel/channels';
 import { queryReadyGate } from '@queries/gate';
+import { ChannelTypeEnum } from '@service-comms/client';
+import type {
+  ApiChannelWithLatest,
+  ApiActivity as ChannelsActivity,
+} from '@service-comms/generated/models';
+import { type Accessor, createMemo } from 'solid-js';
 import { createAssertedContextProvider } from './createContext';
 import { useUserId } from './user';
 

@@ -1,4 +1,5 @@
 import { useUnfurl } from '@core/signal/unfurl';
+import DeleteIcon from '@icon/bold/x-bold.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { Component } from 'solid-js';
@@ -10,12 +11,11 @@ import {
   isValidUrl,
   normalizeUrl,
 } from '../../utils';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 import {
   AddPropertyValueButton,
   EmptyValue,
-  stubSaveHandler,
   type PropertyValueProps,
+  stubSaveHandler,
 } from './ValueComponents';
 
 export const LinkValue: Component<PropertyValueProps> = (props) => {
@@ -235,7 +235,7 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
 
   return (
     <div
-      class="relative inline-flex max-w-[200px] shrink-0"
+      class="relative inline-flex max-w-50 shrink-0"
       onMouseEnter={() => props.setHoveredLink(props.url)}
       onMouseLeave={() => props.setHoveredLink(null)}
     >
@@ -245,16 +245,16 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
         title={props.url}
         disabled={props.isRemoving}
       >
-        <div class="shrink-0 w-4 h-4 flex items-center justify-center">
+        <div class="shrink-0 size-4 flex items-center justify-center">
           <Show
             when={
               faviconUrl() && !imageError() && !props.badLinks[faviconUrl()!]
             }
-            fallback={<LinkIcon class="w-3.5 h-3.5 text-ink-muted" />}
+            fallback={<LinkIcon class="size-3.5 text-ink-muted" />}
           >
             <img
               src={faviconUrl()!}
-              class="w-4 h-4 object-cover rounded-sm"
+              class="size-4 object-cover rounded-sm"
               crossorigin="anonymous"
               alt="favicon"
               onError={() => {

@@ -1,11 +1,11 @@
-import { formatDocumentName } from '@service-storage/util/filename';
-import { match } from 'ts-pattern';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
+import { formatDocumentName } from '@service-storage/util/filename';
 import { Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { EntityData } from '../types/entity';
 import { isSearchEntity } from '../types/search';
-import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 
 function extractRawTitle(entity: EntityData): string {
   return match(entity)

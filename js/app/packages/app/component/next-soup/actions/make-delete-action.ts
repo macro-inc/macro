@@ -1,12 +1,12 @@
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
+import { globalRemoveFromSplitHistory } from '@app/component/split-layout/layoutUtils';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
-import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { globalRemoveFromSplitHistory } from '@app/component/split-layout/layoutUtils';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import type { SoupState } from '../create-soup-state';
 import { restoreSoupFocus, trashEmails } from '../utils';
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 
 type MakeDeleteOptions = {
   userId: () => string | undefined;

@@ -1,8 +1,9 @@
-import { cn, Panel } from '@ui';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { fuzzyFilter } from '@core/util/fuzzy';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import { debounce } from '@solid-primitives/scheduled';
+import { cn, Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
@@ -25,14 +26,13 @@ import {
 import { ACTIONS } from '../../plugins/actions/actions';
 import type { Action } from '../../plugins/actions/types';
 import type { MenuOperations } from '../../shared/inlineMenu';
-import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
 false && clickOutside;
 false && floatWithSelection;
 false && floatWithElement;
 
-// Panel's p-px border (2px) + py-2 padding (16px)
+// Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
 
 export function ActionsMenuItem(props: {
@@ -128,7 +128,7 @@ export function ActionMenu(props: {
   >(undefined);
 
   // Cap at 256px (16rem) so the menu stays compact when plenty of space is available,
-  // and floor at 0 after subtracting Panel decorations.
+  // and floor at 0 after subtracting Surface decorations.
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
     if (h === undefined) return undefined;
@@ -320,7 +320,7 @@ export function ActionMenu(props: {
           on:touchstart={(e) => e.stopPropagation()}
           ref={menuRef}
         >
-          <Panel depth={2} active class="py-2">
+          <Surface depth={2} active class="py-2">
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{
@@ -332,7 +332,7 @@ export function ActionMenu(props: {
             >
               {inner()}
             </div>
-          </Panel>
+          </Surface>
         </div>
       </ScopedPortal>
     </Show>

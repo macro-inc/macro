@@ -7,12 +7,12 @@ import {
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isErr } from '@core/util/maybeResult';
 import { utf8Encode } from '@core/util/string';
-import { storageServiceClient } from '@service-storage/client';
+import { createRenameDssEntityMutation } from '@macro-entity';
 import { refetchHistory } from '@queries/history/history';
+import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo } from 'solid-js';
 import { mdStore } from './markdownBlockData';
-import { createRenameDssEntityMutation } from '@macro-entity';
 
 export const useBlockSave = () => {
   const pendingComment = createMemo(() => activeCommentThreadSignal() === -1);

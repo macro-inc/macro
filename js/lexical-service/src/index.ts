@@ -6,6 +6,7 @@ import { CognitionPresignedEndpoint } from './endpoints/cognition-presigned';
 import { CognitionTextEndpoint } from './endpoints/cognition-text';
 import { CognitionV2Endpoint } from './endpoints/cognition-v2';
 import { MarkdownEndpoint } from './endpoints/markdown';
+import { MarkdownSnapshotEndpoint } from './endpoints/markdown-snapshot';
 import { PlaintextEndpoint } from './endpoints/plaintext';
 import { SearchTextEndpoint } from './endpoints/search-text';
 
@@ -59,6 +60,14 @@ app.use('/markdown/*', async (c, next) => {
   await next();
 });
 
+app.use('/snapshot/*', async (c, next) => {
+  const authKey = c.req.header('x-internal-auth-key');
+  if (!authKey || authKey !== c.env.INTERNAL_AUTH_KEY) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  await next();
+});
+
 app.use('/internal/health', async (c, next) => {
   const authKey = c.req.header('x-internal-auth-key');
   if (!authKey || authKey !== c.env.INTERNAL_AUTH_KEY) {
@@ -85,6 +94,7 @@ openapi.get('/cognition/:docId', CognitionTextEndpoint);
 openapi.get('/cognitionv2/:docId', CognitionV2Endpoint);
 openapi.get('/search/:docId', SearchTextEndpoint);
 openapi.get('/markdown/:docId', MarkdownEndpoint);
+openapi.post('/snapshot/markdown', MarkdownSnapshotEndpoint);
 openapi.get('/internal/health', (c) => c.json({ status: 'healthy' }));
 
 export default app;

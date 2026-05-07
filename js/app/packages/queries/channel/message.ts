@@ -1,39 +1,40 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
-  commsServiceClient,
   type ApiChannelMessage,
   type ApiThreadReply,
+  commsServiceClient,
   type IdResponse,
   type MessageResponse,
 } from '@service-comms/client';
 import type {
+  Attachment,
   ChannelMessage,
   CountedReaction,
+  Message,
   PostMessageRequest,
 } from '@service-comms/generated/models';
-import type { Attachment, Message } from '@service-comms/generated/models';
 import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { ChannelNonceKeys } from './keys';
-import { getChannelMessagesQueryKeyPrefix } from './channel-messages';
 import { createMutationNonce, registerNonce } from '../nonce';
+import { getChannelMessagesQueryKeyPrefix } from './channel-messages';
+import { ChannelNonceKeys } from './keys';
 import {
   captureDeleteSnapshotForTarget,
+  type DeleteTargetSnapshot,
   getTargetMessageState,
   insertMessageIntoTargetCaches,
   removeMessageFromTargetCaches,
+  replaceTargetMessageId,
   replaceTargetMessageState,
+  resolveMessageTarget,
   restoreMessageInTargetCaches,
   softInvalidateTargetCaches,
-  replaceTargetMessageId,
-  resolveMessageTarget,
-  type DeleteTargetSnapshot,
 } from './reconcile';
-import { useAnalytics } from '@app/component/analytics-context';
 
 /**
  * Register nonces for both message and attachment deduplication.

@@ -1,4 +1,4 @@
-import { Suspense, type JSX } from 'solid-js';
+import { type JSX, Suspense } from 'solid-js';
 
 type DebugSuspenseProps = {
   name: string;

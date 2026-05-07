@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  visibleLength,
-  extractSearchTerms,
   extractSearchSnippet,
-  mergeAdjacentMacroEmTags,
+  extractSearchTerms,
   highlightTermsInText,
-  windowSearchMatch,
+  mergeAdjacentMacroEmTags,
   parseSearchHighlightSegments,
+  visibleLength,
+  windowSearchMatch,
 } from './searchHighlight';
 
 describe('visibleLength', () => {

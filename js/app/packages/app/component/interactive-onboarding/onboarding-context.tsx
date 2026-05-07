@@ -1,12 +1,12 @@
+import type { PlanTier } from '@app/component/paywall/plans';
+import { PLANS } from '@app/component/paywall/plans';
 import {
   createContext,
   createMemo,
   createSignal,
-  useContext,
   type ParentProps,
+  useContext,
 } from 'solid-js';
-import type { PlanTier } from '@app/component/paywall/plans';
-import { PLANS } from '@app/component/paywall/plans';
 
 export interface InvitedMember {
   email: string;

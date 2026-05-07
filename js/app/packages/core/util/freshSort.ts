@@ -2,15 +2,16 @@
  * Wrap the fuzzy library in some addition utils for ranking by fuzzy match score
  * alongside freshness.
  */
-import type { Accessor } from 'solid-js';
+
 import uFuzzy from '@leeoniya/ufuzzy';
 import { differenceInMilliseconds } from 'date-fns';
+import type { Accessor } from 'solid-js';
 import type { DateValue } from './date';
-import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
 import {
   type ParsedDuration,
   parsedDurationToMilliseconds,
 } from './dateSearch/dateParser';
+import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
 
 const uf = new uFuzzy({});
 

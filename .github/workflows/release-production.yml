@@ -39,7 +39,7 @@ jobs:
   build:
     name: Build
     needs: [deploy-cloud-storage]
-    runs-on: linux-latest-beefy
+    runs-on: linux-extra-beefy
     env:
       CI: "true"
     steps:
@@ -65,7 +65,7 @@ jobs:
 
   deploy:
     name: Deploy Web App
-    runs-on: linux-latest-beefy
+    runs-on: linux-extra-beefy
     needs: [build]
     env:
       CI: "true"

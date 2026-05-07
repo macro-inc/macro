@@ -1,9 +1,9 @@
+import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
-import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
 import type { SoupState } from '../create-soup-state';
 import { restoreSoupFocus } from '../utils';
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 
 export const makeMoveToProjectAction = () => {
   const canExecute = (entity: EntityData): boolean => {

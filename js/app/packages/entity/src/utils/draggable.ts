@@ -1,8 +1,8 @@
+import { useDragOperation } from '@app/component/ItemDragAndDrop';
 import { createDraggable } from '@thisbeyond/solid-dnd';
 import { createUniqueId } from 'solid-js';
-import type { EntityData } from '../types/entity';
 import type { EntityDragData } from '../types/drag';
-import { useDragOperation } from '@app/component/ItemDragAndDrop';
+import type { EntityData } from '../types/entity';
 
 export function createEntityDraggable(options: {
   entity: EntityData;

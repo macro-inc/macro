@@ -8,7 +8,7 @@ import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
 import ShareFat from '@macro-icons/wide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { toast } from 'core/component/Toast/Toast';
 import { useGetFileBlob } from '../signal/blockData';
 import { ModalsProvider } from './ModalsProvider';
@@ -17,7 +17,7 @@ import { TopBar } from './TopBar';
 export default function BlockUnknown() {
   return (
     <DocumentBlockContainer>
-      <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
+      <div class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
         <ModalsProvider>
           <div class="relative">
             <TopBar />

@@ -2,6 +2,11 @@ import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { compareDateDesc } from '@core/util/date';
 import { isOk } from '@core/util/maybeResult';
+import {
+  refetchHistory,
+  useUpsertToHistoryMutation,
+} from '@queries/history/history';
+import { setPreviewOnCreate } from '@queries/preview/preview';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { Project } from '@service-storage/generated/schemas/project';
@@ -9,11 +14,6 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 import { v4 as uuidv4 } from 'uuid';
 import { queryClient } from '../client';
 import { storageKeys } from './keys';
-import {
-  useUpsertToHistoryMutation,
-  refetchHistory,
-} from '@queries/history/history';
-import { setPreviewOnCreate } from '@queries/preview/preview';
 
 const PROJECTS_STALE_TIME = 5 * 60 * 1000;
 const PROJECTS_GC_TIME = 10 * 60 * 1000;

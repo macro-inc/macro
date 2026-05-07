@@ -1,9 +1,9 @@
 import { ENABLE_LIVE_INDICATORS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { AvatarGroup } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { useUserIndicators } from '../state/liveIndicators';
 import { UserIcon } from './UserIcon';
-import { AvatarGroup } from '@ui';
 
 const MAX_USER_INDICATORS = 3;
 

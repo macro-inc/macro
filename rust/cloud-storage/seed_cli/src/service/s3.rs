@@ -10,6 +10,7 @@ use anyhow::Context;
 use mockall::automock;
 
 /// Wrapper around the database connection pool.
+#[cfg_attr(test, allow(dead_code))]
 pub struct SeedS3 {
     bucket: String,
     /// The macrodb pool
@@ -17,6 +18,7 @@ pub struct SeedS3 {
 }
 
 #[cfg_attr(test, automock)]
+#[cfg_attr(test, allow(dead_code))]
 impl SeedS3 {
     /// Create a new database wrapper.
     pub fn new(bucket: &str, inner: aws_sdk_s3::Client) -> Self {

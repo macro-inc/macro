@@ -14,7 +14,7 @@
 		"search": "bash scripts/test-search.sh",
 		"deploy-dev": "wrangler deploy --env dev",
 		"deploy-prod": "wrangler deploy --env prod",
-		"check": "tsc --noEmit"
+		"check": "tsc --noEmit --project tsconfig.check.json"
 	},
 	"dependencies": {
 		"@lexical/code": "0.32.1",
@@ -33,6 +33,7 @@
 		"chanfana": "^3.3.0",
 		"hono": "^4.6.20",
 		"lexical": "0.32.1",
+		"loro-crdt": "1.5.9",
 		"nanoid": "^5.1.5",
 		"zod": "^4.3.6"
 	},

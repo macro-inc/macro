@@ -1,8 +1,8 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { DebouncedNotificationReadMarker } from '@notifications';
 import { Show } from 'solid-js';

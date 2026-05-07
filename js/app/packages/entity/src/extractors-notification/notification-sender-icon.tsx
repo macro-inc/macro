@@ -1,8 +1,8 @@
+import { UserGroup } from '@core/component/UserGroup';
+import { UserIcon } from '@core/component/UserIcon';
+import type { NotificationStack } from '@notifications';
 import { Show } from 'solid-js';
 import type { Notification } from '../types/notification';
-import type { NotificationStack } from '@notifications';
-import { UserIcon } from '@core/component/UserIcon';
-import { UserGroup } from '@core/component/UserGroup';
 
 interface NotificationSenderIconProps {
   notification?: Notification;

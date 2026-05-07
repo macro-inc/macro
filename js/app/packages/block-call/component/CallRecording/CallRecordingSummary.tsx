@@ -1,7 +1,7 @@
 import Notepad from '@phosphor-icons/core/assets/regular/notepad.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { Accessor } from 'solid-js';
-import { Show, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { CallRecordingSectionShell } from './CallRecordingSectionShell';
 
 export function CallRecordingSummarySection(props: {

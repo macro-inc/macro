@@ -14,10 +14,10 @@ import PencilIcon from '@icon/regular/pencil.svg';
 import SimpleTagIcon from '@icon/regular/tag-simple.svg';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import type { Component } from 'solid-js';
-import type { Property } from '../types';
-import { match } from 'ts-pattern';
-import { twMerge } from 'tailwind-merge';
 import { Dynamic } from 'solid-js/web';
+import { twMerge } from 'tailwind-merge';
+import { match } from 'ts-pattern';
+import type { Property } from '../types';
 
 export const EntityDataTypeIcon: Component<{
   property: Pick<Property, 'specificEntityType'>;

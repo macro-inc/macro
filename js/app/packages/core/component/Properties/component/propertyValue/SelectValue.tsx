@@ -1,14 +1,14 @@
+import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { PROPERTY_STYLES } from '../../styles/styles';
 import { formatPropertyValue, getSelectValues } from '../../utils';
 import { PropertyValueIcon } from './PropertyValueIcon';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 import {
   AddPropertyValueButton,
   EmptyValue,
-  stubSaveHandler,
   type PropertyValueProps,
+  stubSaveHandler,
 } from './ValueComponents';
 
 /**
@@ -63,7 +63,7 @@ export const SelectValue: Component<PropertyValueProps> = (props) => {
           const isHovered = () => hoveredValue() === value;
           return (
             <div
-              class="relative inline-flex max-w-[140px] shrink-0"
+              class="relative inline-flex max-w-35 shrink-0"
               onMouseEnter={() => setHoveredValue(value)}
               onMouseLeave={() => setHoveredValue(null)}
             >

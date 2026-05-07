@@ -1,4 +1,3 @@
-import type { BlockName } from '../block';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import {
   hasSoupEntity,
@@ -8,12 +7,13 @@ import {
 } from '@queries/soup/cache';
 import {
   blockNameToItemType,
-  isCloudStorageItem,
   type ItemType,
+  isCloudStorageItem,
 } from '@service-storage/client';
 import type { QueryClient } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { match } from 'ts-pattern';
+import type { BlockName } from '../block';
 
 function isSoupEntityTag(
   itemType: ItemType

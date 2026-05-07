@@ -24,10 +24,11 @@ pub async fn process_channel_message_update(
         .await
         .context("unable to get channel message")?;
 
+    let index_override = message.index_override.as_deref();
     if channel_message_info.channel_message.deleted_at.is_some() {
         tracing::trace!("channel message is deleted, removing from search index");
         opensearch_client
-            .delete_channel_message(&message.channel_id, &message.message_id)
+            .delete_channel_message(&message.channel_id, &message.message_id, index_override)
             .await?;
         return Ok(());
     }
@@ -57,7 +58,7 @@ pub async fn process_channel_message_update(
     };
 
     opensearch_client
-        .upsert_channel_message(&upsert_channel_message_args)
+        .upsert_channel_message(&upsert_channel_message_args, index_override)
         .await?;
 
     Ok(())
@@ -67,14 +68,15 @@ pub async fn process_remove_channel_message(
     opensearch_client: &OpensearchClient,
     message: &RemoveChannelMessage,
 ) -> anyhow::Result<()> {
+    let index_override = message.index_override.as_deref();
     if let Some(message_id) = &message.message_id {
         opensearch_client
-            .delete_channel_message(&message.channel_id, message_id)
+            .delete_channel_message(&message.channel_id, message_id, index_override)
             .await?;
     } else {
         tracing::trace!("message id is empty, deleting channel");
         opensearch_client
-            .delete_channel(&message.channel_id)
+            .delete_channel(&message.channel_id, index_override)
             .await?;
     }
 

@@ -1,20 +1,51 @@
 import {
-  Channel as NewChannel,
+  ChatWithAgentButton,
+  toChatChannelType,
+} from '@app/component/ChatWithAgentButton';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
+import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { URL_PARAMS } from '@block-channel/constants';
+import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
+import {
+  CallEventSync,
+  ChannelCallAutoJoin,
+  ChannelCallButton,
+  ChannelCallTab,
+  useCall,
+  useCallContextOptional,
+} from '@channel/Call';
+import {
   type ChannelHandle,
   type ChannelProps,
+  Channel as NewChannel,
 } from '@channel/Channel/Channel';
-import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
 import {
   ChannelTabProvider,
   useChannelTab,
 } from '@channel/Channel/ChannelTabContext';
+import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
 import {
+  CHANNEL_TABS,
+  type ChannelTabId,
+  DEFAULT_CHANNEL_TAB,
+} from '@channel/Channel/channel-tabs';
+import {
+  URL_PARAMS as CHANNEL_URL_PARAMS,
   isJoinCallRequested,
   isOpenCallTabRequested,
-  URL_PARAMS as CHANNEL_URL_PARAMS,
 } from '@channel/Channel/link';
+import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { useChannelName, useChannelType } from '@core/context/channels';
+import { createMethodRegistration } from '@core/orchestrator';
+import { blockHandleSignal } from '@core/signal/load';
+import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+import { ChannelTypeEnum } from '@service-comms/client';
+import { useSearchParams } from '@solidjs/router';
 import {
   createComputed,
   createSignal,
@@ -25,38 +56,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { useSearchParams } from '@solidjs/router';
-import { blockHandleSignal } from '@core/signal/load';
-import { createMethodRegistration } from '@core/orchestrator';
-import { URL_PARAMS } from '@block-channel/constants';
-import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { ChannelTopLeft } from './Top';
-import { useChannelName, useChannelType } from '@core/context/channels';
-import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
-import { ChannelTypeEnum } from '@service-comms/client';
-import {
-  CHANNEL_TABS,
-  DEFAULT_CHANNEL_TAB,
-  type ChannelTabId,
-} from '@channel/Channel/channel-tabs';
-import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
-import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
-import {
-  CallEventSync,
-  ChannelCallAutoJoin,
-  ChannelCallButton,
-  ChannelCallTab,
-  useCall,
-  useCallContextOptional,
-} from '@channel/Call';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import {
-  ChatWithAgentButton,
-  toChatChannelType,
-} from '@app/component/ChatWithAgentButton';
-import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
-import { globalSplitManager } from '@app/signal/splitLayout';
 
 type ChannelTargetMessageParams = {
   [URL_PARAMS.message]?: string;

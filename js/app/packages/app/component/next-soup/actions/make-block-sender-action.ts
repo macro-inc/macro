@@ -1,6 +1,6 @@
 import type { EntityData } from '@entity';
-import type { SoupState } from '../create-soup-state';
 import { blockSenderWithToast } from '@queries/email/thread';
+import type { SoupState } from '../create-soup-state';
 
 export const makeBlockSenderAction = () => {
   const canExecute = (entity: EntityData): boolean => {

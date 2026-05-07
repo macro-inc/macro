@@ -1,28 +1,29 @@
 import {
-  type PresetContext,
   getViewPreset,
+  type PresetContext,
   VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import {
-  type FilterID,
   type FilterContext,
+  type FilterID,
   NO_ASSIGNEE,
 } from '@app/component/next-soup/filters';
 import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { useUserContext, useUserId } from '@core/context/user';
+import { deepEqual } from '@core/util/compareUtils';
 import { useContacts } from '@queries/contacts/contacts';
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import type { ActiveFilter } from './active-filter-chips';
-import { INDEX_OPTIONS } from './search-filter-controls';
 import {
   cacheCallSubFilters,
   cacheChannelSubFilters,
   cacheEmailSubFilters,
+  INDEX_OPTIONS,
   type SearchableOption,
   useSearchFilterOptions,
   useSearchIndexController,
@@ -31,7 +32,6 @@ import {
   buildContactLabel,
   VIEW_FILTER_CATEGORIES,
 } from './unified-filter-dropdown';
-import { deepEqual } from '@core/util/compareUtils';
 
 // Filter IDs that are set by tabs and should not be shown as removable chips
 const TAB_ONLY_FILTERS = new Set([

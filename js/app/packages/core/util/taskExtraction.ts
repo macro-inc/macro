@@ -4,12 +4,12 @@
  */
 
 import {
-  extractUserMentions,
   extractDateMention,
   extractTitleFromMarkdown,
+  extractUserMentions,
 } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task/checkboxParsing';
 
-export { extractUserMentions, extractDateMention, extractTitleFromMarkdown };
+export { extractDateMention, extractTitleFromMarkdown, extractUserMentions };
 
 /**
  * Represents a potential task extracted from markdown text.

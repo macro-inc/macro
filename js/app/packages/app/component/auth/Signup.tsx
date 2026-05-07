@@ -1,13 +1,13 @@
-import { Panel } from '@ui';
+import { useAnalytics } from '@app/component/analytics-context';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks } from '@core/email-link';
+import LogoIcon from '@macro-icons/macro-logo.svg';
 import { useUserInfo } from '@queries/auth';
 import { useNavigate } from '@solidjs/router';
+import { Surface } from '@ui';
 import { onMount, Show } from 'solid-js';
-import { useAnalytics } from '@app/component/analytics-context';
-import LogoIcon from '@macro-icons/macro-logo.svg';
 import { LoginOptions } from './LoginOptions';
 import type { Stage } from './Shared';
 
@@ -45,7 +45,7 @@ export function Signup() {
 
   return (
     <Show when={!userInfo()?.authenticated} fallback={<PostSignupRedirect />}>
-      <div class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative">
+      <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
         <style>
           {
             /*css*/ `
@@ -81,18 +81,18 @@ export function Signup() {
         </div>
 
         <div class="w-full max-w-105 login-card">
-          <Panel depth={1} class="login-stagger">
+          <Surface depth={1} class="login-stagger">
             <div class="flex items-center justify-center py-10">
               <LogoIcon class="size-20 text-accent" />
             </div>
             <div class="text-center text-lg font-medium">Welcome to Macro</div>
-            <div class="px-8 pb-4 pt-2 text-center text-sm text-ink/60 leading-relaxed">
+            <div class="px-8 pb-4 pt-2 text-center text-sm/relaxed text-ink/60">
               Sign up with Google to sync your inbox and set up your workspace.
             </div>
             <div class="w-full">
               <LoginOptions signupMode setStage={(_stage: Stage) => {}} />
             </div>
-          </Panel>
+          </Surface>
         </div>
       </div>
     </Show>

@@ -18,6 +18,11 @@ pub enum DeviceType {
     Ios,
     /// Android (FCM).
     Android,
+    /// iOS VoIP (PushKit / CallKit). Uses the APNS_VOIP SNS platform application.
+    #[serde(rename = "iosvoip")]
+    #[sqlx(rename = "iosvoip")]
+    #[strum(serialize = "iosvoip")]
+    IosVoip,
 }
 
 /// Request to register or unregister a device for push notifications.

@@ -203,7 +203,7 @@ const PropertiesDebug: Component = () => {
       <SplitHeaderLeft>
         <StaticSplitLabel label="Properties Playground" />
       </SplitHeaderLeft>
-      <div class="flex flex-col h-full w-full">
+      <div class="flex flex-col size-full">
         <div class="flex flex-col gap-4 p-4">
           <Suspense
             fallback={<div class="text-center py-4">Loading Properties...</div>}

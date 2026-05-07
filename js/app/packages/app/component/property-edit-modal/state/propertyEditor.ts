@@ -1,10 +1,10 @@
-import type { EntityData } from '@entity';
 import type {
   Property,
   PropertyDefinitionDomain,
 } from '@core/component/Properties/types';
-import { createStore, reconcile } from 'solid-js/store';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
+import type { EntityData } from '@entity';
+import { createStore, reconcile } from 'solid-js/store';
 
 export type PropertyEditorMode = 'selector' | 'direct';
 

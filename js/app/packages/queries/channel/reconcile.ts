@@ -1,3 +1,10 @@
+import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
+import type {
+  Attachment as ApiAttachment,
+  CountedReaction,
+} from '@service-comms/generated/models';
+import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import { queryClient } from '../client';
 import {
   findThreadIdInChannelMessages,
   findThreadPreviewReplySnapshotInChannelMessages,
@@ -6,19 +13,19 @@ import {
   insertTopLevelMessageIntoChannelMessages,
   removeThreadReplyFromChannelMessages,
   removeTopLevelMessageFromChannelMessages,
-  replaceThreadReplyStateInChannelMessages,
-  replaceTopLevelMessageStateInChannelMessages,
-  restoreThreadPreviewReplyInChannelMessages,
-  restoreTopLevelMessageInChannelMessages,
+  replaceThreadReplyAttachmentsInChannelMessages,
   replaceThreadReplyIdInChannelMessages,
   replaceThreadReplyReactionsInChannelMessages,
-  replaceThreadReplyAttachmentsInChannelMessages,
+  replaceThreadReplyStateInChannelMessages,
+  replaceTopLevelMessageAttachmentsInChannelMessages,
+  replaceTopLevelMessageAttachmentsInChannelMessagesByIds,
   replaceTopLevelMessageIdInChannelMessages,
   replaceTopLevelMessageReactionsInChannelMessages,
-  replaceTopLevelMessageAttachmentsInChannelMessages,
   replaceTopLevelMessageReactionsInChannelMessagesByIds,
-  replaceTopLevelMessageAttachmentsInChannelMessagesByIds,
+  replaceTopLevelMessageStateInChannelMessages,
   replaceTopLevelMessageStateInChannelMessagesByIds,
+  restoreThreadPreviewReplyInChannelMessages,
+  restoreTopLevelMessageInChannelMessages,
   setChannelMessagesByIdsData,
   setChannelMessagesData,
   softInvalidateChannelMessages,
@@ -32,21 +39,14 @@ import {
   getThreadReplySnapshot,
   insertThreadReply,
   removeThreadReply,
-  replaceThreadReplyState,
-  restoreThreadReply,
+  replaceThreadReplyAttachments,
   replaceThreadReplyId,
   replaceThreadReplyReactions,
-  replaceThreadReplyAttachments,
+  replaceThreadReplyState,
+  restoreThreadReply,
   softInvalidateThreadReplies,
   type ThreadReplySnapshot,
 } from './thread-replies';
-import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
-import type {
-  Attachment as ApiAttachment,
-  CountedReaction,
-} from '@service-comms/generated/models';
-import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
-import { queryClient } from '../client';
 
 export type MessageTarget =
   | {

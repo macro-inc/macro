@@ -2,6 +2,8 @@ import type {
   SortConfig,
   SoupEntity,
 } from '@app/component/next-soup/create-soup-state';
+import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
+import { compareDateDesc } from '@core/util/date';
 import type {
   EntityData,
   TaskEntityWithProperties,
@@ -11,14 +13,12 @@ import {
   getTaskPriorityOptionId,
   getTaskStatusOptionId,
 } from '@entity/utils/task-properties';
-import { compareDateDesc } from '@core/util/date';
-import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
-import type { JSX } from 'solid-js';
-import ClockIcon from '@icon/regular/clock.svg';
 import ArrowClockwiseIcon from '@icon/regular/arrow-clockwise.svg';
+import ClockIcon from '@icon/regular/clock.svg';
 import EyeIcon from '@icon/regular/eye.svg';
 import FlagIcon from '@icon/regular/flag.svg';
 import ListChecksIcon from '@icon/regular/list-checks.svg';
+import type { JSX } from 'solid-js';
 
 export type SystemSortOption =
   | 'updated_at'

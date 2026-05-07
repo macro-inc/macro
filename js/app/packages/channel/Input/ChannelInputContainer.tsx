@@ -1,5 +1,5 @@
+import { cn } from '@ui';
 import type { JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
 
 export function ChannelInputContainer(props: {
   ref?: (el: HTMLDivElement) => void;

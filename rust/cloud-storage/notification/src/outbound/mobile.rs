@@ -6,7 +6,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 
 use crate::domain::models::android::FCMMessage;
-use crate::domain::models::apple::APNSPushNotification;
+use crate::domain::models::apple::{APNSPushNotification, VoipPushPayload};
 use crate::domain::models::mobile::{MessageAttributes, PushType, SnsTarget};
 use crate::domain::ports::NotificationSender;
 
@@ -15,25 +15,19 @@ use crate::domain::ports::NotificationSender;
 /// This adapter sends push notifications to mobile devices via APNS (iOS)
 /// and FCM (Android) through SNS.
 pub struct MobilePushAdapter<P> {
-    push_service: P,
-    apns_bundle_id: String,
-}
-
-impl<P> MobilePushAdapter<P> {
-    /// Create a new mobile push adapter.
-    pub fn new(push_service: P, apns_bundle_id: String) -> Self {
-        Self {
-            push_service,
-            apns_bundle_id,
-        }
-    }
+    /// Push service implementation used to send SNS messages.
+    pub push_service: P,
+    /// APNS topic / bundle ID for regular iOS push notifications.
+    pub apns_bundle_id: String,
+    /// Set to `<bundle_id>.voip` when VoIP push is configured.
+    pub voip_bundle_id: Option<String>,
 }
 
 /// Trait for mobile push service operations via SNS.
 ///
 /// This allows the adapter to work with different SNS client implementations.
 pub trait MobilePushOps {
-    /// Send a push notification to the specified endpoint ARN.
+    /// Send a push notification to the specified endpoint ARN using a typed SNS target.
     ///
     /// Returns the SNS message ID on success.
     fn push_notification<T: Serialize + Send + Sync>(
@@ -52,7 +46,6 @@ impl MobilePushOps for aws_sdk_sns::Client {
         attributes: HashMap<String, MessageAttributeValue>,
     ) -> Result<String, Report> {
         let payload = message.as_json()?;
-
         let output = self
             .publish()
             .target_arn(endpoint_arn)
@@ -100,7 +93,31 @@ impl<P: MobilePushOps + Send + Sync + 'static> NotificationSender for MobilePush
     }
 }
 
-/// Build SNS message attributes from our domain attributes.
+impl<P: MobilePushOps + Send + Sync + 'static> MobilePushAdapter<P> {
+    /// Send a VoIP push notification via APNS_VOIP.
+    ///
+    /// Bypasses the normal notification pipeline — sent immediately without
+    /// DB persistence. Wakes the app via PushKit so CallKit can report an
+    /// incoming call.
+    #[tracing::instrument(err, skip(self, payload))]
+    pub async fn send_voip_push(
+        &self,
+        endpoint_arn: &str,
+        payload: &VoipPushPayload,
+    ) -> Result<String, Report> {
+        let voip_bundle_id = self.voip_bundle_id.as_deref().ok_or_else(|| {
+            rootcause::report!("voip_bundle_id not configured on MobilePushAdapter")
+        })?;
+
+        let target: SnsTarget<'_, ()> = SnsTarget::Voip(payload);
+        let attrs = build_voip_sns_attributes(voip_bundle_id);
+        self.push_service
+            .push_notification(endpoint_arn, &target, attrs)
+            .await
+    }
+}
+
+/// Build SNS message attributes for a regular APNS notification.
 fn build_sns_attributes(
     apns_bundle_id: &str,
     attributes: &MessageAttributes,
@@ -140,6 +157,44 @@ fn build_sns_attributes(
             MessageAttributeValue::builder()
                 .data_type("String")
                 .string_value(&attributes.collapse_key)
+                .build()
+                .expect("valid attribute"),
+        ),
+    ])
+}
+
+/// Build SNS message attributes for a VoIP (APNS_VOIP) notification.
+fn build_voip_sns_attributes(voip_bundle_id: &str) -> HashMap<String, MessageAttributeValue> {
+    HashMap::from([
+        (
+            "AWS.SNS.MOBILE.APNS.TOPIC".to_string(),
+            MessageAttributeValue::builder()
+                .data_type("String")
+                .string_value(voip_bundle_id)
+                .build()
+                .expect("valid attribute"),
+        ),
+        (
+            "AWS.SNS.MOBILE.APNS.PUSH_TYPE".to_string(),
+            MessageAttributeValue::builder()
+                .data_type("String")
+                .string_value("voip")
+                .build()
+                .expect("valid attribute"),
+        ),
+        (
+            "AWS.SNS.MOBILE.APNS.PRIORITY".to_string(),
+            MessageAttributeValue::builder()
+                .data_type("String")
+                .string_value("10")
+                .build()
+                .expect("valid attribute"),
+        ),
+        (
+            "AWS.SNS.MOBILE.APNS.TTL".to_string(),
+            MessageAttributeValue::builder()
+                .data_type("String")
+                .string_value("0")
                 .build()
                 .expect("valid attribute"),
         ),

@@ -32,9 +32,9 @@ export function ScrollContainer(props: ScrollContainerProps) {
   }
 
   return (
-    <div class="relative w-[800px] h-[400px]">
+    <div class="relative w-200 h-100">
       <div
-        class="w-[800px] h-[400px] border border-[#666] overflow-y-auto overflow-x-hidden scrollbar-hide"
+        class="w-200 h-100 border border-[#666] overflow-y-auto overflow-x-hidden scrollbar-hide"
         style={{ 'scrollbar-width': 'none' }}
         ref={scrollContainerRef}
         onScroll={handleScroll}

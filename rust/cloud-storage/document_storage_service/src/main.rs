@@ -462,6 +462,39 @@ async fn main() -> anyhow::Result<()> {
         call_service_builder = call_service_builder.with_egress(config);
     }
 
+    // VoIP push is optional: enabled only when both env vars are present.
+    // APPLE_BUNDLE_ID:           the app bundle ID (e.g. "com.macro.app.prod")
+    // SNS_APNS_VOIP_PLATFORM_ARN: SNS platform app ARN for APNS_VOIP
+    //
+    // Option<VoipPushServiceImpl<...>> is used as the type parameter so the
+    // type stays stable regardless of whether VoIP push is configured.
+    let voip_sender = if let (Ok(bundle_id), Ok(voip_arn)) = (
+        std::env::var("APPLE_BUNDLE_ID"),
+        std::env::var("SNS_APNS_VOIP_PLATFORM_ARN"),
+    ) {
+        if voip_arn.is_empty() {
+            tracing::warn!("voip push disabled: SNS_APNS_VOIP_PLATFORM_ARN is set but empty");
+            None
+        } else {
+            let voip_repo =
+                notification::outbound::repository::DbNotificationRepository::new(db.clone());
+            let voip_mobile = notification::outbound::mobile::MobilePushAdapter {
+                push_service: aws_sdk_sns::Client::new(&aws_config),
+                apns_bundle_id: bundle_id.clone(),
+                voip_bundle_id: Some(format!("{}.voip", bundle_id)),
+            };
+            tracing::info!(bundle_id, voip_arn, "voip push enabled");
+            Some(notification::domain::service::VoipPushServiceImpl::new(
+                voip_repo,
+                voip_mobile,
+            ))
+        }
+    } else {
+        tracing::info!("voip push disabled: APPLE_BUNDLE_ID or SNS_APNS_VOIP_PLATFORM_ARN not set");
+        None
+    };
+    let call_service_builder = call_service_builder.with_voip_push_sender(voip_sender);
+
     let call_search_indexer = crate::service::call_search_indexer::SqsCallSearchIndexer::new(
         Arc::new(sqs_client.clone()),
     );

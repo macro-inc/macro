@@ -1,8 +1,8 @@
-import { For, Show } from 'solid-js';
-import type { EntityData } from '@entity';
 import type { DateValue } from '@core/util/date';
-import { AttachmentSection, LoadMoreButton } from './SectionHeader';
+import type { EntityData } from '@entity';
+import { For, Show } from 'solid-js';
 import { AttachmentEntityRow } from './AttachmentEntityRow';
+import { AttachmentSection, LoadMoreButton } from './SectionHeader';
 
 export type AttachmentEntityListRow = {
   entity: EntityData;
@@ -33,7 +33,7 @@ export function AttachmentEntityList(props: {
         </Show>
 
         <Show when={hasDocuments()}>
-          <div class="min-h-0 h-full overflow-y-auto md:h-[420px]">
+          <div class="min-h-0 h-full overflow-y-auto md:h-105">
             <For each={props.rows}>
               {(row) => (
                 <AttachmentEntityRow

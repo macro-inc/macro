@@ -18,6 +18,11 @@ struct LexicalResponse {
     data: Vec<LexicalResponseItem>,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct MarkdownSnapshotRequest<'a> {
+    markdown: &'a str,
+}
+
 impl From<LexicalResponseItem> for MarkdownParseResult {
     fn from(result: LexicalResponseItem) -> MarkdownParseResult {
         MarkdownParseResult {
@@ -74,6 +79,22 @@ impl LexicalClient {
     pub async fn parse_cognition_v2(&self, document_id: &str) -> Result<CognitionV2ResponseData> {
         let url = format!("{}/cognitionv2/{}", self.url, document_id);
         self.get_json(&url).await
+    }
+
+    #[tracing::instrument(skip(self, markdown), err)]
+    pub async fn markdown_to_loro_snapshot(&self, markdown: &str) -> Result<Vec<u8>> {
+        let url = format!("{}/snapshot/markdown", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&MarkdownSnapshotRequest { markdown })
+                .send()
+                .await?,
+        )
+        .await?;
+
+        let bytes = response.bytes().await?;
+        Ok(bytes.to_vec())
     }
 
     async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {

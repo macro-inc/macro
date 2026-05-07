@@ -8,7 +8,7 @@ export function CallRecordingSplitHeaderLoading() {
   return (
     <SplitHeaderLeft>
       <div class="h-full my-auto flex min-w-0 items-center justify-start gap-3">
-        <div class="ph-no-capture z-3 relative flex h-full max-w-full min-w-0 shrink items-center gap-2">
+        <div class="ph-no-capture z-page-overlay relative flex h-full max-w-full min-w-0 shrink items-center gap-2">
           <StaticSplitLabel
             label="Call Recording"
             icon={
@@ -28,7 +28,7 @@ export function CallRecordingSplitHeader(props: {
   return (
     <SplitHeaderLeft>
       <div class="h-full my-auto flex min-w-0 items-center justify-start gap-3">
-        <div class="ph-no-capture z-3 relative flex h-full max-w-full min-w-0 shrink items-center gap-2">
+        <div class="ph-no-capture z-page-overlay relative flex h-full max-w-full min-w-0 shrink items-center gap-2">
           <StaticSplitLabel
             label={record().channelName ?? 'Call'}
             icon={

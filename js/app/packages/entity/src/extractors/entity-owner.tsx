@@ -1,5 +1,5 @@
-import { tryMacroId, useDisplayName } from '@core/user';
 import { useUserId } from '@core/context/user';
+import { tryMacroId, useDisplayName } from '@core/user';
 import type { EntityData } from '../types/entity';
 
 export function EntityOwner(props: { entity: EntityData }) {

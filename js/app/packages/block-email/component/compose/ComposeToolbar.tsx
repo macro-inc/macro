@@ -1,7 +1,7 @@
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
-import { FormatButtons } from '@channel/Input/FormatButtons';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
+import { FormatButtons } from '@channel/Input/FormatButtons';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
@@ -18,7 +18,7 @@ import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?compone
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,

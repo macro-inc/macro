@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SoupLabelListVisibility } from './soupLabelListVisibility';
-import type { SoupMessageListVisibility } from './soupMessageListVisibility';
 import type { SoupLabelType } from './soupLabelType';
+import type { SoupMessageListVisibility } from './soupMessageListVisibility';
 
 export interface SoupLabel {
   createdAt: string;

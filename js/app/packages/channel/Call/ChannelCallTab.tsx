@@ -1,8 +1,8 @@
-import { type Accessor, Match, Show, Switch } from 'solid-js';
-import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
-import { useCall } from './use-call';
+import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
+import { type Accessor, Match, Show, Switch } from 'solid-js';
 import { CallOverlay } from './CallOverlay';
+import { useCall } from './use-call';
 
 export function ChannelCallTab(props: {
   channelId: string;

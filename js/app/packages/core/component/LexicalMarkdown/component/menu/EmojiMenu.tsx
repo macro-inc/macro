@@ -1,9 +1,10 @@
-import { cn, Panel } from '@ui';
 import { resolveEmoji, useEmojiData } from '@core/component/Emoji/emojis';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import { InlineSearchNode } from '@lexical-core';
 import { debounce } from '@solid-primitives/scheduled';
+import { cn, Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
@@ -21,7 +22,6 @@ import {
   REMOVE_EMOJI_SEARCH_COMMAND,
 } from '../../plugins';
 import type { MenuOperations } from '../../shared/inlineMenu';
-import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
 false && clickOutside;
@@ -255,7 +255,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
           on:touchstart={(e) => e.stopPropagation()}
           ref={menuRef}
         >
-          <Panel depth={2} active class="py-2">
+          <Surface depth={2} active class="py-2">
             <div class="flex flex-col gap-1 px-2 w-full">
               <Show
                 when={emojiOptions().length > 0}
@@ -293,7 +293,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
                 </VList>
               </Show>
             </div>
-          </Panel>
+          </Surface>
         </div>
       </ScopedPortal>
     </Show>

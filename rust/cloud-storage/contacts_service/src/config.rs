@@ -62,6 +62,7 @@ impl Config {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)]
     pub fn new_testing() -> Self {
         Config {
             port: 0,

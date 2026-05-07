@@ -1,4 +1,3 @@
-import { DiscussionInput } from './DiscussionInput';
 import type { InputSnapshot } from '@channel/Input/types';
 import { Message } from '@channel/Message/Message';
 import type {
@@ -9,20 +8,20 @@ import { Thread } from '@channel/Thread/Thread';
 import { ThreadRail } from '@channel/Thread/ThreadRail';
 import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
 import { replyInputOffsetX } from '@channel/Thread/utils/thread-rail-geometry';
-import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { useBlockId } from '@core/block';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import { useUrlParams } from '@core/component/ParamsProvider';
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { useCanEdit } from '@core/signal/permissions';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import { toast } from '@core/component/Toast/Toast';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
 import CaretRight from '@icon/bold/caret-right-bold.svg';
-import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type { Comment } from '@service-storage/generated/schemas/comment';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import type { CreateCommentRequestMentions } from '@service-storage/generated/schemas/createCommentRequestMentions';
-import { useUrlParams } from '@core/component/ParamsProvider';
 import {
   createEffect,
   createMemo,
@@ -31,7 +30,6 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { URL_PARAMS } from '../constants';
 import {
   commentToApiChannelMessage,
   commentToMessageData,
@@ -44,6 +42,8 @@ import {
   useDeleteDiscussionComment,
   useEditDiscussionComment,
 } from '../comments/discussionResource';
+import { URL_PARAMS } from '../constants';
+import { DiscussionInput } from './DiscussionInput';
 
 function buildCommentMentions(
   mentions: ItemMention[]
@@ -103,9 +103,9 @@ export function TaskDiscussion() {
           onClick={toggleExpanded}
         >
           {isExpanded() ? (
-            <CaretDown class="w-3 h-3" />
+            <CaretDown class="size-3" />
           ) : (
-            <CaretRight class="w-3 h-3" />
+            <CaretRight class="size-3" />
           )}
           <span class="text-xs">Discussion</span>
         </button>

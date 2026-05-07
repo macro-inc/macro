@@ -1,4 +1,4 @@
-import { Show, createMemo } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import type { EntityData } from '../types/entity';
 import { isWithNotification } from '../types/notification';
 import {

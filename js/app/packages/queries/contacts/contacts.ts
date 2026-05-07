@@ -1,11 +1,11 @@
 import type { IUser } from '@core/user/types';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import { throwOnErr } from '@core/util/maybeResult';
-import { contactsKeys } from './keys';
+import { queryClient } from '@queries/client';
 import { contactsClient } from '@service-contacts/client';
 import { useQuery } from '@tanstack/solid-query';
-import { queryClient } from '@queries/client';
 import type { Accessor } from 'solid-js';
+import { contactsKeys } from './keys';
 
 function contactsQueryOptions() {
   return {

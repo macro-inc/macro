@@ -247,9 +247,9 @@ async fn call_fn(name: &str, args: &str) -> Result<Value, Box<dyn std::error::Er
 }
 
 fn get_current_weather(location: &str, unit: &str) -> serde_json::Value {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
-    let temperature: i32 = rng.gen_range(20..=55);
+    let temperature: i32 = rng.random_range(20..=55);
 
     let forecasts = [
         "sunny", "cloudy", "overcast", "rainy", "windy", "foggy", "snowy",

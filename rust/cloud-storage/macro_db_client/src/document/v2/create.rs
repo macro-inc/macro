@@ -323,9 +323,9 @@ async fn insert_document_with_id(
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
-    use chrono::{TimeZone, Utc};
-    use model::folder::FileSystemNode::File;
+    use chrono::TimeZone;
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]

@@ -5,11 +5,11 @@ import {
   loadResult,
 } from '@core/block';
 import { createLoroManager } from '@core/collab/manager';
-import { rawStateToLoroSnapshot } from '@core/collab/utils';
 import { serializedStateFromBlob } from '@core/component/LexicalMarkdown/collaboration/utils';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
 import { isErr, ok } from '@core/util/maybeResult';
-import { type SchemaType, schema } from '@loro-mirror/packages/core/src';
+import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
+import { rawMarkdownStateToLoroSnapshot } from '@lexical-core/markdown-loro-snapshot';
 import { storageServiceClient } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
@@ -19,37 +19,6 @@ import { untrack } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import MarkdownBlock from './component/Block';
 import type { MarkdownRewriteOutput } from './signal/rewriteSignal';
-
-const nodeSchema = schema.LoroMap({
-  $: schema.LoroMap({} as any, {
-    required: false,
-  }),
-  text: schema.LoroText({
-    required: false,
-  }),
-  ids: schema.LoroList(schema.String(), (idStr) => idStr, {
-    required: false,
-  }),
-  children: schema.LoroMovableList(
-    {} as SchemaType,
-    (item) => {
-      const id = item?.$?.id;
-      if (!id) {
-        console.error('no id for item', item);
-      }
-      return id;
-    },
-    {
-      required: false,
-    }
-  ),
-});
-
-nodeSchema.definition.children.itemSchema = nodeSchema;
-
-export const MARKDOWN_LORO_SCHEMA = schema({
-  root: nodeSchema,
-});
 
 /** 5 second cache timeout */
 const CACHE_THRESHOLD = 5000;
@@ -118,10 +87,7 @@ const migrateToSyncService = async (documentId: string) => {
     return LoadErrors.INVALID;
   }
 
-  const snapshot = await rawStateToLoroSnapshot(
-    MARKDOWN_LORO_SCHEMA,
-    state as any
-  );
+  const snapshot = await rawMarkdownStateToLoroSnapshot(state as any);
 
   if (!snapshot) {
     console.error('Failed to create snapshot from blob');

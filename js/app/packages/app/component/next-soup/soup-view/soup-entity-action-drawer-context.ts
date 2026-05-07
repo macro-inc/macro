@@ -1,5 +1,5 @@
-import { createContext, useContext, type Accessor } from 'solid-js';
 import type { EntityData } from '@entity';
+import { type Accessor, createContext, useContext } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 
 export type SoupEntityActionDrawerState = {

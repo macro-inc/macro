@@ -156,6 +156,33 @@ pub struct APNSPushNotification<T> {
     pub push_notification_data: T,
 }
 
+/// Empty `aps` object required by SNS APNS_VOIP payload validation.
+///
+/// SNS rejects VoIP push messages that lack an `aps` key, even though Apple
+/// passes the full payload verbatim to `pushRegistry(_:didReceiveIncomingPushWith:)`
+/// regardless of whether `aps` is present.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct VoipAps {}
+
+/// Payload for a VoIP push notification (PushKit / CallKit).
+///
+/// SNS's APNS_VOIP validator requires an `aps` key to be present; the value is
+/// an empty object and has no effect on delivery or the PushKit delegate payload.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct VoipPushPayload {
+    /// Required by SNS APNS_VOIP validation; empty at the Apple level.
+    pub aps: VoipAps,
+    /// UUID string that identifies the call (used as the CallKit call UUID).
+    pub call_id: String,
+    /// Channel ID that the call belongs to.
+    pub channel_id: String,
+    /// Human-readable channel name displayed in the CallKit sheet.
+    pub channel_name: String,
+    /// Display name of the caller shown in the CallKit incoming-call UI.
+    pub caller_name: String,
+}
+
 /// the value we send as the payload in the ios notification
 /// This data is accessible to the client
 #[derive(Serialize, Deserialize, Debug, Clone)]

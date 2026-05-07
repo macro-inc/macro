@@ -1,5 +1,5 @@
+import { cn } from '@ui';
 import { type JSX, splitProps } from 'solid-js';
-import { cn } from '@ui/utils/classname';
 import type { EntityData } from '../types/entity';
 
 export function Root(

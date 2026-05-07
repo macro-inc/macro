@@ -1,5 +1,5 @@
 import ChevronDownIcon from '@icon/regular/caret-down.svg?component-solid';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 
 interface ToggleButtonProps {
@@ -23,7 +23,7 @@ function ToggleButton(props: ToggleButtonProps) {
           onClick={props.toggle}
         >
           <ChevronDownIcon
-            class={cn('w-3 h-3 transition-transform duration-100', {
+            class={cn('size-3 transition-transform duration-100', {
               'rotate-180': props.showAll,
             })}
           />

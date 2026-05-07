@@ -1,3 +1,4 @@
+import type { ListView } from '@app/constants/list-views';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
@@ -5,10 +6,8 @@ import { fileSelector } from '@core/directive/fileSelector';
 import { folderSelector } from '@core/directive/folderSelector';
 import { useEmailLinksStatus } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
-import type { ListView } from '@app/constants/list-views';
 import type { ViewId } from '@core/types/view';
 import { handleFolderSelect } from '@core/util/upload';
-import { createMemo, Match, Show, Switch } from 'solid-js';
 import Arcanum001 from '@macro-icons/arcanum/arcanum-001.svg';
 import Arcanum002 from '@macro-icons/arcanum/arcanum-002.svg';
 import Arcanum004 from '@macro-icons/arcanum/arcanum-004.svg';
@@ -16,6 +15,7 @@ import Arcanum005 from '@macro-icons/arcanum/arcanum-005.svg';
 import Arcanum006 from '@macro-icons/arcanum/arcanum-006.svg';
 import Arcanum007 from '@macro-icons/arcanum/arcanum-007.svg';
 import Arcanum009 from '@macro-icons/arcanum/arcanum-009.svg';
+import { createMemo, Match, Show, Switch } from 'solid-js';
 
 false && fileSelector;
 false && folderSelector;

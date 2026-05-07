@@ -1,6 +1,6 @@
 import GitBranchIcon from '@icon/regular/git-branch.svg';
 import { makePersisted } from '@solid-primitives/storage';
-import { createSignal, createMemo, Show } from 'solid-js';
+import { createMemo, createSignal, Show } from 'solid-js';
 
 const PORT_COLORS = [
   '#2563eb', // blue - 3000

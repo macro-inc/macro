@@ -1,5 +1,5 @@
-import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { onCleanup, onMount } from 'solid-js';
 
 /**

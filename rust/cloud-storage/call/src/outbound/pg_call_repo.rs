@@ -1239,6 +1239,34 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_user_display_name<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Option<String>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                NULLIF(mui.first_name,  'N/A') AS first_name,
+                NULLIF(mui.last_name,   'N/A') AS last_name
+            FROM macro_user_info mui
+            JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+            WHERE u.id = $1
+            LIMIT 1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.and_then(|r| match (r.first_name, r.last_name) {
+            (None, None) => None,
+            (None, Some(last)) => Some(last),
+            (Some(first), None) => Some(first),
+            (Some(first), Some(last)) => Some(format!("{first} {last}")),
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn resolve_channel_name<'a>(
         &self,
         channel_id: &Uuid,

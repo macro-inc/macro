@@ -1,6 +1,6 @@
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { blockAcceptedFileExtensionToMimeType } from '@core/constant/allBlocks';
 import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
 import { setCopiedItem } from '@core/state/clipboard';
@@ -59,18 +59,18 @@ export default function BlockImage() {
 
   return (
     <DocumentBlockContainer>
-      <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
+      <div class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
         <ModalsProvider>
           <TopBar />
           <Show
             when={imageUrl()}
             fallback={
-              <div class="w-full h-full flex items-center justify-center">
+              <div class="size-full flex items-center justify-center">
                 {/* Loading state handled by DocumentBlockContainer */}
               </div>
             }
           >
-            <div class="w-full h-full flex items-center justify-center">
+            <div class="size-full flex items-center justify-center">
               <img
                 src={imageUrl()}
                 alt={blockMetadataSignal()?.documentName || 'Image'}

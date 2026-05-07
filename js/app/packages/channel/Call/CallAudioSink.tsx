@@ -32,7 +32,7 @@ export function CallAudioSink() {
   return (
     <Show when={callCtx.isInCall()}>
       <div
-        class="absolute w-0 h-0 overflow-hidden pointer-events-none"
+        class="absolute size-0 overflow-hidden pointer-events-none"
         aria-hidden="true"
       >
         <For each={remoteMicTracks()}>

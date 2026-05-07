@@ -1,10 +1,10 @@
-import type { ApiChannelAttachment } from '@service-comms/client';
-import { stringToItemType } from '@service-storage/client';
-import type { EntityData } from '@entity';
-import { match } from 'ts-pattern';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { SplitContent } from '@app/component/split-layout/layoutManager';
 import { getChannelParams } from '@channel/Channel/link';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import type { EntityData } from '@entity';
+import type { ApiChannelAttachment } from '@service-comms/client';
+import { stringToItemType } from '@service-storage/client';
+import { match } from 'ts-pattern';
 
 /** size-23 = 92px */
 export const THUMB_SIZE = 92;

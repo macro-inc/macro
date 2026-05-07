@@ -1,12 +1,12 @@
-import { getDestinationFromOptions } from '@core/util/destination';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
   recipientEntityMapper,
   useContacts,
   type WithCustomUserInput,
 } from '@core/user';
+import { getDestinationFromOptions } from '@core/util/destination';
 import type { ChannelParticipant } from '@queries/channel/types';
-import { createSignal, type Accessor } from 'solid-js';
+import { type Accessor, createSignal } from 'solid-js';
 
 export function ParticipantsAddPanel(props: {
   participants: Accessor<ChannelParticipant[]>;
