@@ -1,3 +1,4 @@
+import { useCallKitSetup } from '@channel/Call';
 import { isPlatform, isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';
 import type { RouteSectionProps } from '@solidjs/router';
@@ -19,7 +20,6 @@ import { getNetworkInfo } from 'tauri-plugin-device-info-api';
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
-import { useCallKitSetup } from '@channel/Call';
 import { ShareTargetProvider } from './ShareTargetProvider';
 
 type NotAndroid = 'not-android';

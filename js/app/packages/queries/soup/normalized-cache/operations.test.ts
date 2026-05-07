@@ -39,8 +39,8 @@ vi.mock('./normalizer', () => ({
 }));
 
 import { soupKeys } from '../keys';
-// biome-ignore lint/correctness/noPrivateImports: testing private export
 import {
+  // biome-ignore lint/correctness/noPrivateImports: testing private export
   buildSingleEntityFilter,
   getSoupItemId,
   insertSoupEntity,
