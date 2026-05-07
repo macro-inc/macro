@@ -1,11 +1,11 @@
 import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
-import { rawMarkdownStateToLoroSnapshot } from '@lexical-core/markdown-loro-snapshot';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
   getTextContent,
   initializeEditorWithState,
 } from '@core/component/LexicalMarkdown/utils';
 import { isOk } from '@core/util/maybeResult';
+import { rawMarkdownStateToLoroSnapshot } from '@lexical-core/markdown-loro-snapshot';
 import { storageServiceClient } from '@service-storage/client';
 import { syncServiceClient } from '@service-sync/client';
 import { useQuery } from '@tanstack/solid-query';
