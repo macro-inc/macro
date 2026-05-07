@@ -5,7 +5,6 @@ const THUMB_WIDTH = 2;
 const HIDE_DELAY = 500;
 const GUTTER_WIDTH = 8;
 const THUMB_HEIGHT = 200;
-const THUMB_RADIUS = THUMB_WIDTH * 0.5;
 const THUMB_INSET = (GUTTER_WIDTH - THUMB_WIDTH) * 0.5;
 
 export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
@@ -18,34 +17,31 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   let maxScroll = 0;
   let maxTop = 0;
 
-  function paint() {
+  function update() {
     setTranslateY(THUMB_INSET + (maxScroll > 0 ? (scrollRef.scrollTop / maxScroll) * maxTop : 0));
-  }
-
-  function measure() {
-    const sh = scrollRef.scrollHeight;
-    const ch = scrollRef.clientHeight;
-    maxScroll = Math.max(0, sh - ch);
-    maxTop = Math.max(0, ch - THUMB_HEIGHT - THUMB_INSET * 2);
-    paint();
   }
 
   function reveal() {
     setVisible(true);
-    if (hideTimer) { clearTimeout(hideTimer); }
+    clearTimeout(hideTimer);
     hideTimer = setTimeout(() => setVisible(false), HIDE_DELAY);
   }
 
+  function config() {
+    const ch = scrollRef.clientHeight;
+    maxScroll = Math.max(0, scrollRef.scrollHeight - ch);
+    maxTop = Math.max(0, ch - THUMB_HEIGHT - THUMB_INSET * 2);
+    update();
+  }
+
   function handleScroll() {
-    paint();
+    update();
     reveal();
   }
 
-  function scrollToLocalY(localY: number) {
+  function seek(localY: number) {
     if (maxScroll <= 0 || maxTop <= 0) { return; }
-    const centered = localY - THUMB_HEIGHT / 2 - THUMB_INSET;
-    const clamped = Math.max(0, Math.min(maxTop, centered));
-    scrollRef.scrollTop = (clamped / maxTop) * maxScroll;
+    scrollRef.scrollTop = Math.max(0, Math.min(maxTop, localY - THUMB_HEIGHT / 2 - THUMB_INSET)) / maxTop * maxScroll;
   }
 
   function handlePointerDown(e: PointerEvent) {
@@ -53,25 +49,26 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
     e.preventDefault();
     gutterRef.setPointerCapture(e.pointerId);
     reveal();
-    scrollToLocalY(e.offsetY);
+    seek(e.offsetY);
   }
 
   function handlePointerMove(e: PointerEvent) {
     if (!gutterRef.hasPointerCapture(e.pointerId)) { return; }
     // reveal();
-    scrollToLocalY(e.offsetY);
+    seek(e.offsetY);
   }
 
-  onMount(() => {
-    measure();
-    const ro = new ResizeObserver(measure);
+  function handleOnMount() {
+    const ro = new ResizeObserver(config);
     ro.observe(scrollRef);
     ro.observe(contentRef);
     onCleanup(() => {
       ro.disconnect();
-      if (hideTimer) { clearTimeout(hideTimer); }
+      clearTimeout(hideTimer);
     });
-  });
+  }
+
+  onMount(handleOnMount);
 
   return (
     <div
@@ -113,7 +110,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
           style={{
             'transform': `translateY(${translateY()}px)`,
             'transition': 'opacity 150ms ease-in-out',
-            'border-radius': `${THUMB_RADIUS}px`,
+            'border-radius': `${THUMB_WIDTH * 0.5}px`,
             'background-color': 'var(--c4)',
             'height': `${THUMB_HEIGHT}px`,
             'opacity': visible() ? 1 : 0,
