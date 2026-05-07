@@ -34,9 +34,11 @@ export function Layer(props: LayerProps) {
         '--color-page':            'var(--b0)',
         '--color-menu':            'var(--b0)',
         '--color-dialog':          'var(--b0)',
+
         // TODO (seamus): --color-input could be better handled with fractional layer depth
         '--color-input':           `oklch(calc(var(--b0l) + ${depth() + 0.02}) var(--b0c) var(--b0h))`,
         '--color-button':          'var(--b0)',
+        '--color-shadow':          'oklch(calc(var(--b0l) - 0.005 ) var(--b0c) var(--b0h) / 0.2)',
         // TODO (seamus): --color-message could be better handled with fractional layer depth
         '--color-message':         'color-mix(in oklch, var(--b1) 50%, var(--b2))',
         '--color-active':          'var(--b1)',

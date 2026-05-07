@@ -30,7 +30,9 @@ export function Panel(props: PanelProps) {
           ...local.style,
         }}
         class={cn(
-          'rounded-md overflow-clip min-h-0 h-full w-full',
+          'relative rounded-md overflow-clip min-h-0 h-full w-full',
+          "after:content-[''] after:absolute after:inset-0 after:pointer-events-none after:rounded-[inherit] after:z-10",
+          'after:shadow-[inset_0_0_4px_var(--color-shadow)]',
           local.class,
         )}
         {...rest}
