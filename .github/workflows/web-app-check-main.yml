@@ -34,26 +34,73 @@ jobs:
               - '.github/workflows/web-app-check-main.yml'
             api_changed:
               - 'rust/cloud-storage/**/*.rs'
+              - 'rust/cloud-storage/Cargo.toml'
+              - 'rust/cloud-storage/Cargo.lock'
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'js/app/scripts/generate-api-schema.ts'
+              - 'js/app/scripts/services.ts'
+              - '.github/actions/setup-reqs-web/**'
+              - '.github/workflows/web-app-check-main.yml'
 
   typescript:
     needs: path-check
     # Run the type check if rust code or frontend code has changed.
     if: needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'
     name: Typecheck
-    runs-on: linux-latest-beefy
+    runs-on: linux-extra-beefy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
+      - name: Add Nix to PATH
+        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+      - name: Enter Nix dev shell
+        run: |
+          set -euo pipefail
+          nix print-dev-env --accept-flake-config > /tmp/dev-env
+          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+          source /tmp/dev-env
+          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
-      - name: Setup Biome
-        uses: biomejs/setup-biome@v2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
+        if: needs.path-check.outputs.api_changed == 'true'
         with:
-          version: 2.4.12
+          workspaces: rust/cloud-storage
+          shared-key: cloud-storage-gen-api
+          cache-on-failure: true
+          cache-targets: true
+      - name: Configure sccache S3 backend
+        if: needs.path-check.outputs.api_changed == 'true'
+        env:
+          SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.cache/sccache"
+          {
+            echo "SCCACHE_DIR=$HOME/.cache/sccache"
+            echo "SCCACHE_CACHE_SIZE=5G"
+            echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
+            if [ -n "${SCCACHE_BUCKET:-}" ]; then
+              echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
+              echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
+              echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
+            fi
+          } >> "$GITHUB_ENV"
+          sccache --version
       - name: Generate API Types
         if: needs.path-check.outputs.api_changed == 'true'
         working-directory: js/app
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: bun run gen-api -- --check
+      - name: show sccache stats
+        if: always() && needs.path-check.outputs.api_changed == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: sccache --show-stats || true
       - name: Check Types
         working-directory: js/app
         run: |
@@ -63,16 +110,21 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
-    runs-on: linux-latest-middy
+    runs-on: linux-extra-beefy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Setup Biome
-        uses: biomejs/setup-biome@v2
-        with:
-          version: 2.4.12
+      - name: Add Nix to PATH
+        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+      - name: Enter Nix dev shell
+        run: |
+          set -euo pipefail
+          nix print-dev-env --accept-flake-config > /tmp/dev-env
+          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+          source /tmp/dev-env
+          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: Run Biome
         working-directory: js/app
         run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
@@ -81,12 +133,21 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Theme Hygiene Inspector
-    runs-on: linux-latest-middy
+    runs-on: linux-extra-beefy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: Add Nix to PATH
+        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+      - name: Enter Nix dev shell
+        run: |
+          set -euo pipefail
+          nix print-dev-env --accept-flake-config > /tmp/dev-env
+          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+          source /tmp/dev-env
+          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
       - name: Check Tailwind Classes
@@ -97,10 +158,19 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Test
-    runs-on: linux-latest-middy
+    runs-on: linux-extra-beefy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
+      - name: Add Nix to PATH
+        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+      - name: Enter Nix dev shell
+        run: |
+          set -euo pipefail
+          nix print-dev-env --accept-flake-config > /tmp/dev-env
+          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+          source /tmp/dev-env
+          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
         with:
@@ -113,14 +183,19 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
-    runs-on: linux-latest-middy
+    runs-on: linux-extra-beefy
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - name: Setup Biome
-        uses: biomejs/setup-biome@v2
-        with:
-          version: 2.4.12
+      - name: Add Nix to PATH
+        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+      - name: Enter Nix dev shell
+        run: |
+          set -euo pipefail
+          nix print-dev-env --accept-flake-config > /tmp/dev-env
+          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+          source /tmp/dev-env
+          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: Cycles Import Check
         working-directory: js/app
         run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
@@ -129,10 +204,19 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Build
-    runs-on: linux-latest-middy
+    runs-on: linux-extra-beefy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
+      - name: Add Nix to PATH
+        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+      - name: Enter Nix dev shell
+        run: |
+          set -euo pipefail
+          nix print-dev-env --accept-flake-config > /tmp/dev-env
+          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+          source /tmp/dev-env
+          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
       - name: Build
