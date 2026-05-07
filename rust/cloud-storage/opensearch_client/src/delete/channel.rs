@@ -2,6 +2,7 @@ use models_opensearch::SearchIndex;
 
 use crate::{Result, error::OpensearchClientError};
 
+/// Deletes all channel messages with the specified channel_id
 #[tracing::instrument(skip(client))]
 pub async fn delete_channel_by_id(
     client: &opensearch::OpenSearch,
@@ -55,6 +56,7 @@ pub async fn delete_channel_by_id(
     Ok(())
 }
 
+/// Deletes a particular channel message with the specified channel_id and channel_message_id
 #[tracing::instrument(skip(client))]
 pub async fn delete_channel_message_by_id(
     client: &opensearch::OpenSearch,

@@ -35,6 +35,7 @@ pub struct UpsertDocumentArgs {
     pub sub_type: Option<String>,
 }
 
+/// Process a single chunk of documents
 async fn bulk_upsert_single_chunk(
     client: &opensearch::OpenSearch,
     documents: &[UpsertDocumentArgs],
@@ -75,6 +76,7 @@ async fn bulk_upsert_single_chunk(
     Ok(result)
 }
 
+/// Bulk upsert documents to reduce version conflicts with automatic chunking
 #[tracing::instrument(skip(client, documents))]
 pub(crate) async fn bulk_upsert_documents(
     client: &opensearch::OpenSearch,

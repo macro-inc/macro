@@ -26,6 +26,8 @@ async fn upsert_document(
     upserts: Vec<UpsertDocumentArgs>,
 ) -> anyhow::Result<()> {
     let index_override = search_extractor_message.index_override.as_deref();
+    // Delete existing documents for the document id
+    // This ensures we replace any old nodes with new ones for editable files
     match search_extractor_message.file_type {
         FileType::Md | FileType::Canvas => {
             tracing::debug!("deleting existing search results");
@@ -45,6 +47,7 @@ async fn upsert_document(
     if !results.errors.is_empty() {
         tracing::error!(errors=?results.errors, "bulk upsert failed");
 
+        // delete document that failed to upsert
         opensearch_client
             .delete_document(&search_extractor_message.document_id, index_override)
             .await

@@ -2,6 +2,7 @@ use models_opensearch::SearchIndex;
 
 use crate::{Result, error::OpensearchClientError};
 
+/// Deletes all chat messages with the specified chat_id
 #[tracing::instrument(skip(client))]
 pub async fn delete_chat_by_id(
     client: &opensearch::OpenSearch,
@@ -55,6 +56,7 @@ pub async fn delete_chat_by_id(
     Ok(())
 }
 
+/// Deletes a particular chat message with the specified chat_id and chat_message_id
 #[tracing::instrument(skip(client))]
 pub async fn delete_chat_message_by_id(
     client: &opensearch::OpenSearch,

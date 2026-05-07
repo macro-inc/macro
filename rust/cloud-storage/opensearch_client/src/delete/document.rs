@@ -2,12 +2,14 @@ use models_opensearch::SearchIndex;
 
 use crate::{Result, error::OpensearchClientError};
 
+/// Deletes all document nodes with the specified document_id
 #[tracing::instrument(skip(client))]
 pub async fn delete_document_by_id(
     client: &opensearch::OpenSearch,
     document_id: &str,
     index_override: Option<&str>,
 ) -> Result<()> {
+    // First, search for all documents with the given document_id
     let query = serde_json::json!({
         "query": {
             "term": {
