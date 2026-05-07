@@ -184,6 +184,8 @@ export function Account() {
           <Panel.Header class="px-6">
             <div class="text-sm font-semibold">Account</div>
           </Panel.Header>
+
+
           <Panel.Body class="text-ink">
             <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
               <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>

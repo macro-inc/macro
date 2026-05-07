@@ -129,19 +129,21 @@ function ShortcutsContent() {
         <div class="text-sm font-semibold">Keyboard Shortcuts</div>
       </Panel.Header>
 
-      <Panel.Body scroll class="px-6 py-2 @container">
+      <Panel.Toolbar class="h-full px-6 py-2">
         <Keyboard keys={hoveredCodes()} />
+      </Panel.Toolbar>
 
-        <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
-          {/* Core - left column */}
-          <ShortcutSectionComponent section={shortcutSections[0]} />
+      <Panel.Body scroll>
+        <div class="px-6 py-2 @container">
+          <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
+            {/* Core - left column */}
+            <ShortcutSectionComponent section={shortcutSections[0]} />
 
-          {/* Splits - right column */}
-          <ShortcutSectionComponent section={shortcutSections[1]} />
+            {/* Splits - right column */}
+            <ShortcutSectionComponent section={shortcutSections[1]} />
 
-          {/* Unified List - spans both columns with its own 2-column layout */}
-          <div class="@[600px]:col-span-2">
-            <div class="mb-3">
+            {/* Unified List - spans both columns with its own 2-column layout */}
+            <div class="@[600px]:col-span-2">
               <h3 class="font-medium text-lg mb-2 flex items-center gap-2">
                 {shortcutSections[2].title}
               </h3>

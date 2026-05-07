@@ -142,7 +142,6 @@ export function Keyboard(props: { keys?: string[] }): JSX.Element {
         'box-sizing': 'border-box',
         'stroke-linecap': 'round',
         'stroke-width': '0.0572',
-        'margin-bottom': '12px',
         'display': 'block',
         'width': '100%',
         'fill': 'none',

@@ -774,7 +774,7 @@ function EmptyTeamState() {
         <Panel.Header class="px-6">
           <div class="text-sm font-semibold">Team</div>
         </Panel.Header>
-        <Panel.Body>
+        <Panel.Body scroll>
           <div class="flex flex-col items-center justify-center py-12 text-center px-6">
             <div class="size-12 rounded-full bg-accent/10 flex items-center justify-center mb-4">
               <UsersIcon class="size-6 text-accent" />
