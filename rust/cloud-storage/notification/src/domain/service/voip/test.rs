@@ -270,7 +270,7 @@ async fn dispatches_to_ios_voip_endpoint() {
         .await;
 
     assert_eq!(*calls.lock().unwrap(), vec!["arn:voip-alice"]);
-    assert!(result.contains("macro|alice@example.com"));
+    assert!(result.contains(&user("alice@example.com")));
 }
 
 #[tokio::test]
@@ -322,8 +322,8 @@ async fn sends_to_multiple_recipients() {
     let mut recorded = calls.lock().unwrap().clone();
     recorded.sort();
     assert_eq!(recorded, vec!["arn:voip-alice", "arn:voip-bob"]);
-    assert!(result.contains("macro|alice@example.com"));
-    assert!(result.contains("macro|bob@example.com"));
+    assert!(result.contains(&user("alice@example.com")));
+    assert!(result.contains(&user("bob@example.com")));
 }
 
 #[tokio::test]

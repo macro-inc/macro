@@ -21,6 +21,11 @@ type JoinCallContext = {
 
 const JOIN_TIMEOUT_MS = 15_000;
 
+// Module-level guard: only one leave can be in flight at a time across all
+// useCall() instances. Prevents a user-initiated leave and a concurrent
+// CallKit call-ended event from both proceeding to disconnect+leaveMutation.
+let leaveInFlight = false;
+
 /**
  * Hook that orchestrates joining/leaving calls by combining
  * the API mutations with the LiveKit room connection.
@@ -153,7 +158,6 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     }
   };
 
-  let leaveInFlight = false;
   async function leaveCall(leaveOptions?: { endNativeCall?: boolean }) {
     if (leaveInFlight) return;
     leaveInFlight = true;

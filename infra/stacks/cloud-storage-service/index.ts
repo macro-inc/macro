@@ -187,7 +187,7 @@ const { notificationIngressQueueName, notificationIngressQueueArn } =
   getMacroNotify();
 
 const notificationServiceStack = new pulumi.StackReference(
-  'notification-service-stack-ref',
+  'notification-service-stack',
   { name: `macro-inc/notification-service/${stack}` }
 );
 const snsApnsVoipPlatformArn: pulumi.Output<string> = notificationServiceStack
