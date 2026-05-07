@@ -98,9 +98,9 @@ export function ThemeList() {
                 </>
               )}
             </For>
-        </div>
-      </Panel.Body>
-    </>
+          </div>
+        </Panel.Body>
+      </>
   );
 }
 

@@ -2,6 +2,7 @@ import type { ParentProps } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 import type { SurfaceProps } from './Surface';
 import { cn } from '../utils/classname';
+import { Scroll } from './Scroll';
 import { Surface } from './Surface';
 
 /**
@@ -63,16 +64,21 @@ type BodyProps = ParentProps<{ class?: string; scroll?: boolean }>;
 
 Panel.Body = (props: BodyProps) => (
   <Show when={props.children}>
-    <div
-      class={cn(
-        'relative min-h-0 min-w-0 scrollbar-hidden',
-        props.scroll ? 'overflow-auto' : 'overflow-hidden',
-        props.class,
-      )}
-      style={{ 'grid-area': 'body' }}
+    <Show
+      when={props.scroll}
+      fallback={
+        <div
+          class={cn('relative min-h-0 min-w-0 overflow-hidden', props.class)}
+          style={{ 'grid-area': 'body' }}
+        >
+          {props.children}
+        </div>
+      }
     >
-      {props.children}
-    </div>
+      <Scroll class={props.class} style={{ 'grid-area': 'body' }}>
+        {props.children}
+      </Scroll>
+    </Show>
   </Show>
 );
 
