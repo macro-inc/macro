@@ -2,15 +2,16 @@ import { useToolManager } from '@block-canvas/signal/toolManager';
 import { useRenderState } from '@block-canvas/store/RenderState';
 import { type BlockName, useBlockId } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
-import { HoverCard } from '@core/component/HoverCard';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { EntityIcon, getPreviewItemIconType } from '@core/component/EntityIcon';
+import { HoverCard } from '@core/component/HoverCard';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { type PreviewItemNoAccess, useItemPreview } from '@queries/preview';
 import { matches } from '@core/util/match';
 import LockKey from '@phosphor-icons/core/regular/lock-key.svg';
 import Question from '@phosphor-icons/core/regular/question.svg';
+import { type PreviewItemNoAccess, useItemPreview } from '@queries/preview';
+import { useSplitLayout } from 'app/component/split-layout/layout';
 import {
   createEffect,
   createMemo,
@@ -19,7 +20,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { useSplitLayout } from 'app/component/split-layout/layout';
 import { DRAG_THRESHOLD, type RenderMode, Tools } from '../../constants';
 import type { EntityMentionNode } from '../../model/CanvasModel';
 import { fileWidth } from '../../operation/file';

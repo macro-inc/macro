@@ -1,8 +1,6 @@
 import { useCanvasFileDrop } from '@block-canvas/signal/fileDrop';
-import { cn } from '@ui';
 import { type BlockName, useBlockId, useIsNestedBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import type { EntityDragEvent } from '@entity';
 import { BasicHotkey } from '@core/component/Hotkey';
 import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import {
@@ -22,6 +20,7 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { trackMention } from '@core/signal/mention';
 import { useCanEdit } from '@core/signal/permissions';
+import type { EntityDragEvent } from '@entity';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import Clipboard from '@phosphor-icons/core/regular/clipboard.svg?component-solid';
 import CopySimple from '@phosphor-icons/core/regular/copy-simple.svg?component-solid';
@@ -36,6 +35,7 @@ import StackPlus from '@phosphor-icons/core/regular/stack-plus.svg?component-sol
 import { createCallback } from '@solid-primitives/rootless';
 import { throttle } from '@solid-primitives/scheduled';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
+import { cn } from '@ui';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMethodRegistration } from 'core/orchestrator';
 import { usePinch } from 'solid-gesture';

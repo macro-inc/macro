@@ -4,6 +4,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { UserTooltip } from '@core/component/UserTooltip';
+import { useEmail, useUserId } from '@core/context/user';
 import {
   type CombinedRecipientItem,
   type CombinedRecipientKind,
@@ -12,6 +13,8 @@ import {
   recipientEntityMapper,
   type WithCustomUserInput,
 } from '@core/user';
+import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
+import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { matches } from '@core/util/match';
 import { clamp } from '@core/util/math';
 import { truncateString } from '@core/util/string';
@@ -24,9 +27,8 @@ import {
   type ComboboxTriggerMode,
   useComboboxContext,
 } from '@kobalte/core/combobox';
-import { useEmail, useUserId } from '@core/context/user';
 import { debounce } from '@solid-primitives/scheduled';
-import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
+import { cn } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
   type Accessor,
@@ -41,8 +43,6 @@ import {
   Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
-import { cn } from '@ui';
 
 function RecipientChip(props: {
   icon?: JSX.Element;

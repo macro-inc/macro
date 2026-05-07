@@ -1,4 +1,9 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import type { AnalyticsProvider } from '@app/lib/analytics';
+import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { useEmailLinks } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { RedirectLocation } from '@core/util/authRedirect';
@@ -10,15 +15,10 @@ import IconGoogle from '@macro-icons/macro-google.svg';
 import IconMail from '@macro-icons/macro-mail.svg';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { useLocation } from '@solidjs/router';
 import { invoke } from '@tauri-apps/api/core';
 import { type JSX, Show } from 'solid-js';
 import { Stage } from './Shared';
-import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
-import { useAnalytics } from '@app/component/analytics-context';
-import type { AnalyticsProvider } from '@app/lib/analytics';
-import { useEmailLinks } from '@core/email-link';
 
 function LoginOption(props: {
   icon: JSX.Element;

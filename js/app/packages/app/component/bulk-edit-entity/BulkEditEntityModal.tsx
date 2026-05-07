@@ -1,6 +1,6 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { Dialog, Surface } from '@ui';
 import type { EntityData } from '@entity';
+import { Dialog, Surface } from '@ui';
 import {
   type Accessor,
   createSignal,

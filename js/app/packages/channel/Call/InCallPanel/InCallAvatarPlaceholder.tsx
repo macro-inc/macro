@@ -1,8 +1,8 @@
-import User from '@phosphor-icons/core/regular/user.svg?component-solid';
-import DotsThree from '@icon/regular/dots-three.svg';
-import { Show, type Component } from 'solid-js';
 import type { UserIconProps } from '@core/component/UserIcon';
+import DotsThree from '@icon/regular/dots-three.svg';
+import User from '@phosphor-icons/core/regular/user.svg?component-solid';
 import { cn } from '@ui';
+import { type Component, Show } from 'solid-js';
 
 export function inCallAvatarPlaceholderClasses(size: UserIconProps['size']) {
   const s = size ?? 'sm';

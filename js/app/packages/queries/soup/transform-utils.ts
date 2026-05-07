@@ -5,31 +5,31 @@ import {
 import { useChannelsContext } from '@core/context/channels';
 import { emailToId } from '@core/user';
 import {
-  mergeAdjacentMacroEmTags,
   extractSearchSnippet,
   extractSearchTerms,
+  mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import type {
-  SearchData,
-  ContentHitData,
-  WithSearch,
-  EntityData,
-  DocumentEntity,
-  ChatEntity,
-  ProjectEntity,
-  EmailEntity,
+  CallEntity,
   ChannelEntity,
   ChannelMessageEntity,
-  CallEntity,
+  ChatEntity,
+  ContentHitData,
+  DocumentEntity,
+  EmailEntity,
+  EntityData,
+  ProjectEntity,
+  SearchData,
+  WithSearch,
 } from '@entity';
 import type { ChannelType } from '@service-comms/generated/models';
 import type {
+  CallRecordSearchResult,
+  ChannelSearchResult,
+  ChatMessageSearchResult,
   DocumentSearchResult,
   EmailSearchResult,
-  ChatMessageSearchResult,
-  ChannelSearchResult,
   ProjectSearchResult,
-  CallRecordSearchResult,
   UnifiedSearchResponseItem,
 } from '@service-search/generated/models';
 import type {

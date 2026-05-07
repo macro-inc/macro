@@ -1,9 +1,8 @@
 import ResetIcon from '@icon/regular/arrow-clockwise.svg';
 import HomeIcon from '@icon/regular/house.svg';
 import { logger } from '@observability';
+import { Button, Dialog, Surface } from '@ui';
 import { Show } from 'solid-js';
-import { Dialog, Surface } from '@ui';
-import { Button } from '@ui';
 
 interface FatalErrorProps {
   error?: Error;

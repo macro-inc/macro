@@ -2,7 +2,6 @@ import { UnfurlLink } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
-import { Button } from '@ui';
 import clickOutside from '@core/directive/clickOutside';
 import { useUnfurl } from '@core/signal/unfurl';
 import NewTab from '@icon/regular/arrow-square-out.svg';
@@ -14,6 +13,7 @@ import Pencil from '@icon/regular/pencil-simple.svg';
 import LinkText from '@icon/regular/text-t.svg';
 import { mergeRegister } from '@lexical/utils';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
+import { Button } from '@ui';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,

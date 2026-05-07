@@ -80,8 +80,7 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
-import { Button } from '@ui';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import {
   defaultSelectionData,
   lazyRegister,

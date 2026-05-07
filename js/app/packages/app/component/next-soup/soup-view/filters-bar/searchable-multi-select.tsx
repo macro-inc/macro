@@ -1,5 +1,8 @@
-import { Combobox } from '@kobalte/core/combobox';
+import { useSelectedFirst } from '@core/util/useSelectedFirst';
+import CheckIcon from '@icon/regular/check.svg';
+import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import type { CollectionNode } from '@kobalte/core';
+import { Combobox } from '@kobalte/core/combobox';
 import { cn } from '@ui';
 import {
   type Accessor,
@@ -9,9 +12,6 @@ import {
   Show,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import CheckIcon from '@icon/regular/check.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
-import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import type { SearchableOption } from './search-filter-controls';
 
 const ITEM_HEIGHT = 36;

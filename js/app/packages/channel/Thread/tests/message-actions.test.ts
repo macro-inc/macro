@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import { URL_PARAMS } from '@channel/Channel/link';
+import { describe, expect, it } from 'vitest';
 import {
   buildMessageLink,
   canEditOrDeleteMessage,

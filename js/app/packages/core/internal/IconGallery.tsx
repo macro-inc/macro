@@ -1,6 +1,6 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { createSignal, For, type Component } from 'solid-js';
+import { type Component, createSignal, For } from 'solid-js';
 
 // Theme color swatches - uses CSS variables from the theme
 const THEME_COLORS = [

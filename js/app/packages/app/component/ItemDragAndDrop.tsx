@@ -1,4 +1,5 @@
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
+import type { EntityDragData } from '@entity';
 import {
   DragDropProvider,
   DragDropSensors,
@@ -7,15 +8,14 @@ import {
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
 import { EntityIcon, getEntityIconType } from 'core/component/EntityIcon';
-import type { EntityDragData } from '@entity';
 import {
+  type Accessor,
   createContext,
   createMemo,
   createSignal,
   type JSXElement,
   onCleanup,
   useContext,
-  type Accessor,
 } from 'solid-js';
 
 type DragOperationContextValue = {

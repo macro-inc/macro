@@ -1,17 +1,17 @@
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { DropdownMenuContent, MENU_ITEM_CLASS } from '@core/component/Menu';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Microphone from '@icon/regular/microphone.svg';
 import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
 import Screencast from '@icon/regular/screencast.svg';
-import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
 import Users from '@icon/regular/users.svg';
 import VideoCamera from '@icon/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
 import VideoConference from '@icon/regular/video-conference.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { For, Show } from 'solid-js';
 import { cn } from '@ui';
+import { For, Show } from 'solid-js';
 import { useCallContext } from '../CallContext';
 
 const menuStyles = {

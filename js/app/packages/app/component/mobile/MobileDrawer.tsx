@@ -1,12 +1,11 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
 import Drawer from '@corvu/drawer';
-import { Layer } from '@ui';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import {
+  type ComponentProps,
   onCleanup,
   splitProps,
-  type ComponentProps,
   type ValidComponent,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

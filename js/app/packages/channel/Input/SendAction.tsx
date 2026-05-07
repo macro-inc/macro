@@ -1,9 +1,9 @@
-import { children, Show, splitProps, type JSX } from 'solid-js';
-import { cn } from '@ui';
-import { useInput, useInputCommands } from './context';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import ArrowUpIcon from '@icon/bold/arrow-up-bold.svg';
 import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { cn } from '@ui';
+import { children, type JSX, Show, splitProps } from 'solid-js';
+import { useInput, useInputCommands } from './context';
 import { hasSendableInputContent } from './utils/sendable-content';
 
 export function SendAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {

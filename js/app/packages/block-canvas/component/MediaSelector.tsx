@@ -8,7 +8,6 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { DropdownMenuContent } from '@core/component/Menu';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui';
 import {
   blockAcceptsFileExtension,
   blockNameToFileExtensions,
@@ -26,6 +25,7 @@ import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?compo
 import Image from '@phosphor-icons/core/regular/image.svg?component-solid';
 //import { copiedFile } from "@core/state/clipboard";
 import { useHistoryQuery } from '@queries/history/history';
+import { Button } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { Tools } from '../constants';

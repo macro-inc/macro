@@ -1,7 +1,7 @@
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
-import { FormatButtons } from '@channel/Input/FormatButtons';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
+import { FormatButtons } from '@channel/Input/FormatButtons';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';

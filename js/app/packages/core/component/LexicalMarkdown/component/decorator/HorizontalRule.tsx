@@ -1,6 +1,7 @@
 import Trash from '@icon/regular/x.svg';
 import type { HorizontalRuleDecoratorProps } from '@lexical-core';
 import { debounce } from '@solid-primitives/scheduled';
+import { Button } from '@ui';
 import {
   $createNodeSelection,
   $getNodeByKey,
@@ -8,7 +9,6 @@ import {
   $setSelection,
 } from 'lexical';
 import { createSignal, useContext } from 'solid-js';
-import { Button } from '@ui';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 export function HorizontalRule(props: HorizontalRuleDecoratorProps) {

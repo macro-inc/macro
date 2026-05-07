@@ -8,16 +8,18 @@ import {
   intersectEntityPools,
   nameFuzzySearchFilter,
 } from '@app/component/next-soup/search-utils';
-import { arrayEquals } from '@core/util/compareUtils';
 import { useUserId } from '@core/context/user';
+import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
-import { isChannelEntity, type EntityData } from '@entity';
+import { type EntityData, isChannelEntity } from '@entity';
 import {
   useSearchSoupQuery,
   validateSearchServiceText,
 } from '@queries/soup/search';
-import type { EntityFilters } from '@service-search/generated/models';
-import type { UnifiedSearchRequest } from '@service-search/generated/models';
+import type {
+  EntityFilters,
+  UnifiedSearchRequest,
+} from '@service-search/generated/models';
 import { type Accessor, createMemo, createSignal, on } from 'solid-js';
 
 function filterDataToQueryFilters(data: QueryState): EntityFilters {

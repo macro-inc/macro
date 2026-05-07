@@ -1,9 +1,9 @@
 import type { ApiChannelMessage } from '@service-comms/client';
 import type { ParentProps } from 'solid-js';
 import {
+  type ChannelMessageListMeta,
   DateDivider,
   NewDivider,
-  type ChannelMessageListMeta,
 } from '../Message';
 import { ThreadRail } from './ThreadRail';
 

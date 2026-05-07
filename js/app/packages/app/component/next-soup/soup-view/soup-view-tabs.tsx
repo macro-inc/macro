@@ -1,18 +1,18 @@
 import {
-  VIEW_TAB_PRESETS,
-  type PresetContext,
   getViewPreset,
+  type PresetContext,
+  VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import { type TabItem, Tabs } from '@core/component/Tabs';
 import { useUserContext } from '@core/context/user';
-import { Tabs, type TabItem } from '@core/component/Tabs';
-import { batch, createMemo, For, Match, Switch } from 'solid-js';
+import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Layer } from '@ui';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import { batch, createMemo, For, Match, Switch } from 'solid-js';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<

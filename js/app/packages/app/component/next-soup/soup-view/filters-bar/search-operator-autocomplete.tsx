@@ -1,8 +1,8 @@
-import { cn } from '@ui';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
+import { cn } from '@ui';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import type { ActiveOperator, OperatorType } from './parse-search-operators';
 import { INDEX_OPTIONS as INDEX_OPTIONS_SOURCE } from './search-filter-controls';

@@ -20,7 +20,6 @@ import {
 } from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
 import { useHasPaidAccess } from '@core/auth';
-import { Surface } from '@ui';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
@@ -58,6 +57,7 @@ import {
 import { invalidateSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import { debounce } from '@solid-primitives/scheduled';
+import { Surface } from '@ui';
 
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';

@@ -1,10 +1,10 @@
-import { Show, createMemo } from 'solid-js';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { isEmojiOnly } from '@core/util/string';
 import { cn } from '@ui';
+import { createMemo, Show } from 'solid-js';
 import { useMessage } from './context';
-import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 
 type ContentProps = {
   class?: string;

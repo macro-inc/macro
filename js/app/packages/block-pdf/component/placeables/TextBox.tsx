@@ -1,5 +1,4 @@
 import { Color } from '@block-pdf/model/Color';
-import { cn } from '@ui';
 import { activePlaceableIdSignal } from '@block-pdf/signal/placeables';
 import {
   useDeletePlaceable,
@@ -11,6 +10,7 @@ import {
   PayloadMode,
 } from '@block-pdf/type/placeables';
 import { createCallback } from '@solid-primitives/rootless';
+import { cn } from '@ui';
 import { createEffect, createSignal, type JSX, type Ref } from 'solid-js';
 
 interface TextBoxProps {

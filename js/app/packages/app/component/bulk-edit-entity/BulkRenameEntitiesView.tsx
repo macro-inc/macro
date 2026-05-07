@@ -1,11 +1,10 @@
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
-import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
-import { createBulkRenameDssEntityMutation } from '@macro-entity';
 import { type EntityData, InlineEntity } from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
-import { Button } from '@ui';
-import { cn } from '@ui';
+import { createBulkRenameDssEntityMutation } from '@macro-entity';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import { Button, cn } from '@ui';
+import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 
 type RenameMode = 'total' | 'prepend' | 'append' | 'replace';
 

@@ -1,10 +1,30 @@
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Button, Layer } from '@ui';
-import { cn } from '@ui';
+import type { FilterID } from '@app/component/next-soup/filters';
+import {
+  type FilterContext,
+  NO_ASSIGNEE,
+} from '@app/component/next-soup/filters/configs/';
+import type { PropertyFilter } from '@app/component/next-soup/filters/filter-store';
+import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
-import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { UserIcon } from '@core/component/UserIcon';
+import { useUserId } from '@core/context/user';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import CaretRightIcon from '@icon/regular/caret-right.svg';
+import CheckIcon from '@icon/regular/check.svg';
+import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';
+import { useContacts } from '@queries/contacts/contacts';
+import { Button, cn, Layer } from '@ui';
 import {
   type Accessor,
   batch,
@@ -18,36 +38,16 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';
-import CaretRightIcon from '@icon/regular/caret-right.svg';
-import CheckIcon from '@icon/regular/check.svg';
-import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
-import { SearchableMultiSelectInline } from './searchable-multi-select';
-import { EntityIcon } from '@core/component/EntityIcon';
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
-import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
-
-import { useContacts } from '@queries/contacts/contacts';
-import { useUserId } from '@core/context/user';
-import { UserIcon } from '@core/component/UserIcon';
-import type { FilterID } from '@app/component/next-soup/filters';
-import {
-  NO_ASSIGNEE,
-  type FilterContext,
-} from '@app/component/next-soup/filters/configs/';
-import type { PropertyFilter } from '@app/component/next-soup/filters/filter-store';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import {
   INDEX_OPTIONS,
+  type SearchableOption,
   useCallSearchFilter,
   useChannelSearchFilter,
   useEmailSearchFilter,
   useSearchFilterOptions,
   useSearchIndexController,
-  type SearchableOption,
 } from './search-filter-controls';
+import { SearchableMultiSelectInline } from './searchable-multi-select';
 
 const TypeIndicator = (props: { active: boolean }) => (
   <span

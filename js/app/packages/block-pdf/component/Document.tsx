@@ -1,7 +1,5 @@
 import '../PdfViewer/pdf_viewer.css';
 
-import { cn } from '@ui';
-
 import type { PDFViewer } from '@block-pdf/PdfViewer';
 import { ZOOM_MAX, ZOOM_MIN } from '@block-pdf/PdfViewer/zoom';
 import {
@@ -32,6 +30,7 @@ import { isInDOMRect } from '@core/util/rect';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import { useSearchParams } from '@solidjs/router';
+import { cn } from '@ui';
 import {
   createDeferred,
   createEffect,

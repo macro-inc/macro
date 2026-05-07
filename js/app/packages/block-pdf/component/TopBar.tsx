@@ -4,8 +4,12 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/component/ChatWithAgentButton';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import {
+  ResponsiveBlockToolbar,
+  ResponsivePermissionsBadge,
+} from '@app/component/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -26,8 +30,8 @@ import {
 } from '@core/component/DocumentPropertiesModal';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
-  ReferencesButton,
   REFERENCES_DRAWER_ID,
+  ReferencesButton,
 } from '@core/component/ReferencesModal';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import {
@@ -39,16 +43,16 @@ import {
   ENABLE_PDF_MARKUP,
   ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
-import { blockMetadataSignal } from '@core/signal/load';
 import { isMobile } from '@core/mobile/isMobile';
+import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import DownloadIcon from '@icon/regular/download-simple.svg';
 import Info from '@icon/regular/info.svg';
 import Printer from '@icon/regular/printer.svg';
 import Quotes from '@icon/regular/quotes.svg';
-import IconShared from '@macro-icons/wide/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import {
   blockNameToItemType,
   storageServiceClient,
@@ -61,10 +65,6 @@ import { pdfDocumentProxy } from '../signal/document';
 import { LocationType, useCreateShareUrl } from '../signal/location';
 import { MarkupToolbar } from './MarkupToolbar';
 import { PageNumberInput } from './PageNumberInput';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@app/component/ResponsiveBlockToolbar';
 
 export function TopBar() {
   const analytics = useAnalytics();

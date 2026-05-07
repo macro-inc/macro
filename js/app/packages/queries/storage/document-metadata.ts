@@ -1,6 +1,6 @@
 import { isErr } from '@core/util/maybeResult';
-import type { DocumentMetadata } from '@service-storage/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
+import type { DocumentMetadata } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { entityKeys } from './keys';

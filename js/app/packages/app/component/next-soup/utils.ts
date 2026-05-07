@@ -1,13 +1,15 @@
-import type { BlockOrchestrator } from '@core/orchestrator';
-import type { DateValue } from '@core/util/date';
+import type { SplitHandle } from '@app/component/split-layout/layoutManager';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { getChannelParams } from '@block-channel/utils/link';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
-import type { SplitHandle } from '@app/component/split-layout/layoutManager';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import type { BlockOrchestrator } from '@core/orchestrator';
+import type { DateValue } from '@core/util/date';
+import { throwOnErr } from '@core/util/maybeResult';
 import { waitForFrames } from '@core/util/sleep';
 import {
   type EntityData,
@@ -18,29 +20,27 @@ import {
   type WithSearch,
 } from '@entity';
 import { queryKeys } from '@macro-entity';
-import { queryClient } from '@queries/client';
-import { emailClient } from '@service-email/client';
-import { emailKeys } from '@queries/email/keys';
-import { throwOnErr } from '@core/util/maybeResult';
-import {
-  removeSoupEntities,
-  getSoupEntityById,
-  optimisticUpdateSoupEntity,
-  invalidateSoupEntity,
-} from '@queries/soup/cache';
-import { match } from 'ts-pattern';
-import { isAfter } from 'date-fns';
-import { getChannelParams } from '@block-channel/utils/link';
 import {
   compositeEntity,
   type NotificationSource,
   setDoneOverride,
 } from '@notifications';
+import { queryClient } from '@queries/client';
+import { emailKeys } from '@queries/email/keys';
+import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
   bulkMarkNotificationsAsUndone,
 } from '@queries/notification/user-notifications';
-import { notificationKeys } from '@queries/notification/keys';
+import {
+  getSoupEntityById,
+  invalidateSoupEntity,
+  optimisticUpdateSoupEntity,
+  removeSoupEntities,
+} from '@queries/soup/cache';
+import { emailClient } from '@service-email/client';
+import { isAfter } from 'date-fns';
+import { match } from 'ts-pattern';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,

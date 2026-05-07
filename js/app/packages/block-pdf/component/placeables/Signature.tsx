@@ -2,13 +2,12 @@ import {
   activePlaceableIdSignal,
   newPlaceableSignal,
 } from '@block-pdf/signal/placeables';
-import { Button } from '@ui';
 import { blockElementSignal } from '@core/signal/blockElement';
-import { cn } from '@ui';
 import Dialog from '@corvu/dialog';
 import Check from '@icon/regular/check.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { Button, cn } from '@ui';
 import SignaturePad from 'signature_pad';
 import {
   createMemo,

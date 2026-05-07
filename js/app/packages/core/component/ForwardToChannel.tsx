@@ -1,25 +1,28 @@
-import { cn } from '@ui';
-import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { useAnalytics } from '@app/component/analytics-context';
+import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { useIsAuthenticated } from '@core/auth';
 import {
+  type BlockAlias,
+  type BlockName,
   useMaybeBlockAliasedName,
   useMaybeBlockId,
   useMaybeBlockName,
-  type BlockName,
-  type BlockAlias,
 } from '@core/block';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
+import { isMobile } from '@core/mobile/isMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
+import { getDestinationFromOptions } from '@core/util/destination';
 import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
 import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
+import { Button, cn } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -28,13 +31,9 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { Button } from '@ui';
-import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { getDestinationFromOptions } from '@core/util/destination';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
 import { ScrollIndicators } from './VerticalScrollIndicators';
-import { isMobile } from '@core/mobile/isMobile';
 
 type Recipient = WithCustomUserInput<'user' | 'contact' | 'channel'>;
 

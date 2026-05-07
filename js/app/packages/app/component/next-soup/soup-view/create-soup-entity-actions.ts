@@ -1,6 +1,12 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
+import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { getChannelParams } from '@block-channel/utils/link';
 import { fileTypeToBlockName, itemToBlockName } from '@core/constant/allBlocks';
+import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
 import {
   makeBlockSenderAction,
@@ -17,12 +23,6 @@ import {
   makeShareAction,
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
-import { useUserId } from '@core/context/user';
-import { useAnalytics } from '@app/component/analytics-context';
-import { getChannelParams } from '@block-channel/utils/link';
-import { isMobile } from '@core/mobile/isMobile';
-import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
-import { isListViewID } from '@app/constants/list-views';
 
 const SIGNAL_TABS = new Set<string | undefined>([
   undefined,

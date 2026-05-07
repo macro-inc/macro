@@ -1,10 +1,10 @@
 import { Suspense } from 'solid-js';
+import { ChannelAttachmentEntitySection } from './ChannelAttachmentEntitySection';
+import { ChannelAttachmentMediaSection } from './ChannelAttachmentMediaSection';
 import {
   AttachmentEntityListSkeleton,
   MediaGallerySkeleton,
 } from './Skeletons';
-import { ChannelAttachmentMediaSection } from './ChannelAttachmentMediaSection';
-import { ChannelAttachmentEntitySection } from './ChannelAttachmentEntitySection';
 
 export function ChannelAttachmentsTab(props: { channelId: string }) {
   return (

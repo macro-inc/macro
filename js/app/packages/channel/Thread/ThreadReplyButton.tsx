@@ -1,7 +1,7 @@
 import { focusInput } from '@core/directive/focusInput';
 import IconPlus from '@icon/regular/plus.svg';
 import { cn } from '@ui';
-import { splitProps, type JSX } from 'solid-js';
+import { type JSX, splitProps } from 'solid-js';
 
 type ThreadReplyButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
   getFocusTarget?: () => HTMLElement | null | undefined;

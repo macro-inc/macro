@@ -1,13 +1,17 @@
-import {
-  isCommandItem,
-  isEntityItem,
-  isSearchItem,
-  type CommandMenuItem,
-} from './useCommandItems';
+import { useAnalytics } from '@app/component/analytics-context';
+import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
+import { isListViewID } from '@app/constants/list-views';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { Hotkey } from '@core/component/Hotkey';
+import { Tabs } from '@core/component/Tabs';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
-import { Dialog, Panel } from '@ui';
-import { Tabs } from '@core/component/Tabs';
+import { debouncedDependent } from '@core/util/debounce';
+import { type EntityData, InlineEntity } from '@entity';
+import ArrowLeft from '@icon/regular/arrow-left.svg';
+import Macro from '@macro-icons/macro-logo.svg';
+import { cn, Dialog, Panel } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
@@ -24,22 +28,17 @@ import {
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useSplitLayout } from '../split-layout/layout';
 import { CommandItem } from './CommandItem';
-import { CommandState } from './state';
-import { useCommandItems } from './useCommandItems';
-import { trackCommandUsage } from './recency';
-import type { CategoryFilter } from './types';
-import { itemToBlockName } from '@core/constant/allBlocks';
-import { cn } from '@ui';
-import Macro from '@macro-icons/macro-logo.svg';
-import ArrowLeft from '@icon/regular/arrow-left.svg';
-import { debouncedDependent } from '@core/util/debounce';
-import { Hotkey } from '@core/component/Hotkey';
-import { InlineEntity, type EntityData } from '@entity';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { isListViewID } from '@app/constants/list-views';
-import { useAnalytics } from '@app/component/analytics-context';
 import { getCategorySearchFilters } from './category-search-filters';
-import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
+import { trackCommandUsage } from './recency';
+import { CommandState } from './state';
+import type { CategoryFilter } from './types';
+import {
+  type CommandMenuItem,
+  isCommandItem,
+  isEntityItem,
+  isSearchItem,
+  useCommandItems,
+} from './useCommandItems';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },

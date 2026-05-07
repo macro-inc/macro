@@ -1,10 +1,10 @@
 import { Tooltip } from '@core/component/Tooltip';
-import { Button } from '@ui';
-import { EmailUserTooltip } from './EmailUserTooltip';
+import { useEmail } from '@core/context/user';
+import type { DateValue } from '@core/util/date';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
-import { useEmail } from '@core/context/user';
+import { Button } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -20,8 +20,8 @@ import {
   isMessageFromCurrentUser,
 } from '../util/emailUser';
 import { useEmailContext } from './EmailContext';
+import { EmailUserTooltip } from './EmailUserTooltip';
 import { type EmailMessageAction, MessageActions } from './MessageActions';
-import type { DateValue } from '@core/util/date';
 
 interface EmailMessageTopBarProps {
   message: ApiMessage;

@@ -1,6 +1,6 @@
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
-import type { Query, PropertyFilter } from '../filter-store';
+import type { PropertyFilter, Query } from '../filter-store';
 
 export const NO_ASSIGNEE = 'NO_ASSIGNEE';
 

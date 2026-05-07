@@ -1,8 +1,8 @@
-import { For, Show } from 'solid-js';
-import type { EntityData } from '@entity';
 import type { DateValue } from '@core/util/date';
-import { AttachmentSection, LoadMoreButton } from './SectionHeader';
+import type { EntityData } from '@entity';
+import { For, Show } from 'solid-js';
 import { AttachmentEntityRow } from './AttachmentEntityRow';
+import { AttachmentSection, LoadMoreButton } from './SectionHeader';
 
 export type AttachmentEntityListRow = {
   entity: EntityData;

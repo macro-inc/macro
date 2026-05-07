@@ -29,6 +29,7 @@ const isContainsAction = (a: FilterAction): a is ContainsAction =>
   a === ContainsAction.HAS_ANY ||
   a === ContainsAction.HAS_ALL ||
   a === ContainsAction.DOES_NOT_HAVE;
+
 import { FilterActionSelect } from './FilterAction';
 import { FilterPropertySelect } from './FilterProperty';
 import { FilterValueBoolean } from './FilterValueBoolean';

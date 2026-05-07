@@ -1,7 +1,7 @@
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
-import type { Property, PropertyDefinitionDomain, ValueType } from '../types';
 import { nanoid } from 'nanoid';
+import type { Property, PropertyDefinitionDomain, ValueType } from '../types';
 
 /**
  * Transforms a backend PropertyDefinition (snake_case) to the frontend

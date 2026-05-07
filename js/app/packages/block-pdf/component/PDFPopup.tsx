@@ -1,9 +1,7 @@
 import type { IHighlight } from '@block-pdf/model/Highlight';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
-import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
-import { Button } from '@ui';
 // import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -17,7 +15,9 @@ import ChatIcon from '@phosphor-icons/core/regular/chat-teardrop.svg?component-s
 import PasteIcon from '@phosphor-icons/core/regular/clipboard-text.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
+import { generateTitle } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
+import { Button } from '@ui';
 import {
   createEffect,
   createMemo,

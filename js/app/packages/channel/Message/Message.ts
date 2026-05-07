@@ -1,19 +1,19 @@
-import { Root } from './Root';
-import { Layout } from './Layout';
-import { Slot } from './Slot';
-import { SenderName } from './SenderName';
-import { SenderIcon } from './SenderIcon';
-import { Timestamp } from './Timestamp';
-import { Content } from './Content';
+import { ActionMenu } from './ActionMenu';
 import { Attachments } from './Attachments';
+import { Content } from './Content';
 import { DateDivider } from './DateDivider';
-import { NewDivider } from './NewDivider';
-import { Reactions } from './Reactions';
 import { EditedIndicator } from './EditedIndicator';
 import { HoverActions } from './HoverActions';
-import { MessageFlag } from './MessageFlag';
-import { ActionMenu } from './ActionMenu';
+import { Layout } from './Layout';
 import { MediaPreview } from './MediaPreview';
+import { MessageFlag } from './MessageFlag';
+import { NewDivider } from './NewDivider';
+import { Reactions } from './Reactions';
+import { Root } from './Root';
+import { SenderIcon } from './SenderIcon';
+import { SenderName } from './SenderName';
+import { Slot } from './Slot';
+import { Timestamp } from './Timestamp';
 
 export const Message = {
   Root,

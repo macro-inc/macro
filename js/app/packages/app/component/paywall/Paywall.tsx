@@ -1,8 +1,8 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { onMount } from 'solid-js';
 import { Dialog, Surface } from '@ui';
+import { onMount } from 'solid-js';
 import PaywallComponent from './PaywallComponent';
 
 export function Paywall() {

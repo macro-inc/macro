@@ -1,5 +1,5 @@
-import type { Entity } from '@core/types';
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
+import type { Entity } from '@core/types';
 import {
   optimisticInsertNotification,
   useMarkNotificationsAsDoneMutation,
@@ -22,10 +22,11 @@ import {
   type Accessor,
   createEffect,
   createMemo,
-  createSignal,
   createRoot,
+  createSignal,
 } from 'solid-js';
 import { reconcile } from 'solid-js/store';
+import { fromZodError } from 'zod-validation-error';
 import { createMutedEntitiesQuery } from './queries/muted-entities-query';
 import {
   type CompositeEntity,
@@ -34,7 +35,6 @@ import {
   type UnifiedNotification,
   unifiedNotificationSchema,
 } from './types';
-import { fromZodError } from 'zod-validation-error';
 
 export const CHANNEL_EVENT_TYPES = [
   'channel_mention',

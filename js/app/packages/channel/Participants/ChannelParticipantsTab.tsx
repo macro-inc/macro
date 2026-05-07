@@ -1,17 +1,17 @@
-import { cn } from '@ui';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useUserId } from '@core/context/user';
 import { useChannelType } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
+import { idToEmail } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
+import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
 } from '@queries/channel/participants';
-import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { commsServiceClient } from '@service-comms/client';
 import { ChannelType } from '@service-comms/generated/models/channelType';
+import { cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
-import { idToEmail } from '@core/user';
 import { ParticipantsAddPanel } from './ParticipantsAddPanel';
 import { ParticipantsList } from './ParticipantsList';
 import { ParticipantsSearchInput } from './ParticipantsSearchInput';

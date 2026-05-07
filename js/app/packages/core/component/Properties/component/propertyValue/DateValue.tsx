@@ -1,13 +1,13 @@
+import DeleteIcon from '@icon/bold/x-bold.svg';
+import { cn } from '@ui';
 import type { Component } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 import { formatDate } from '../../utils';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 import {
   EmptyValue,
-  stubSaveHandler,
   type PropertyValueProps,
+  stubSaveHandler,
 } from './ValueComponents';
-import { cn } from '@ui';
 
 /**
  * Display component for date properties

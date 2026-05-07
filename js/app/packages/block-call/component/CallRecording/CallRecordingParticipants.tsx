@@ -1,14 +1,14 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { ParticipantsEmptyState } from '@channel/Participants/ParticipantsEmptyState';
+import { ParticipantsSearchInput } from '@channel/Participants/ParticipantsSearchInput';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
-import { ParticipantsEmptyState } from '@channel/Participants/ParticipantsEmptyState';
-import { ParticipantsSearchInput } from '@channel/Participants/ParticipantsSearchInput';
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
-import { commsServiceClient } from '@service-comms/client';
 import UsersThree from '@phosphor-icons/core/assets/regular/users-three.svg';
+import { commsServiceClient } from '@service-comms/client';
+import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { Accessor } from 'solid-js';
-import { For, Show, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { CallRecordingSectionShell } from './CallRecordingSectionShell';
 import { dedupeCallRecordingParticipants } from './call-recording-utils';
 

@@ -1,13 +1,13 @@
-import { useMutation, useQuery } from '@tanstack/solid-query';
-import { channelKeys } from './keys';
 import { throwOnErr } from '@core/util/maybeResult';
-import { commsServiceClient } from '@service-comms/client';
+import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import { commsServiceClient } from '@service-comms/client';
 import type {
   ActivityType,
   ApiActivity as ChannelsActivity,
 } from '@service-comms/generated/models';
-import { queryClient } from '@queries/client';
+import { useMutation, useQuery } from '@tanstack/solid-query';
+import { channelKeys } from './keys';
 
 export function useChannelsActivityQuery() {
   return useQuery(() => ({

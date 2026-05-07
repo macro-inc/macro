@@ -1,4 +1,4 @@
-import { createSignal, createMemo, type Accessor } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 
 export type CreateSelectionOptions<T> = {
   /** Function to extract ID from item */

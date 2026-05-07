@@ -7,8 +7,6 @@ import {
   type GroupingConfig,
   getDocumentHistory,
 } from '@core/collab/time-travel';
-import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui';
 import {
   createLexicalWrapper,
   type LexicalWrapper,
@@ -22,6 +20,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { initializeEditorWithState } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -31,6 +30,7 @@ import { CommentNode, InlineSearchNode, peerIdPlugin } from '@lexical-core';
 import { storageServiceClient } from '@service-storage/client';
 import type { SyncServiceVersionID } from '@service-storage/generated/schemas/syncServiceVersionID';
 import { syncServiceClient } from '@service-sync/client';
+import { Button } from '@ui';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import type { SerializedEditorState } from 'lexical';
 import { LoroDoc } from 'loro-crdt';

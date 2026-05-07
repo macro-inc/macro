@@ -1,6 +1,6 @@
-import { Button } from '@ui';
 import { INSERT_TABLE_COMMAND } from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
+import { Button } from '@ui';
 import { createSignal, Index, type ParentProps } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { mdStore } from '../signal/markdownBlockData';

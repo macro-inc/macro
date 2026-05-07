@@ -1,7 +1,7 @@
+import { useSoup } from '@app/component/next-soup/soup-context';
 import { lastExecutedCommand } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { createMemo } from 'solid-js';
-import { useSoup } from '@app/component/next-soup/soup-context';
 
 export function useNavigatedFromJK() {
   const soup = useSoup();

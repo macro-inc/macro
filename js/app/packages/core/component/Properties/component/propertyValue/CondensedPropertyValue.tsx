@@ -1,27 +1,27 @@
 import { getSelectValues } from '@core/component/Properties/utils';
-import { PropertyValueIcon } from './PropertyValueIcon';
 import { Tooltip } from '@core/component/Tooltip';
+import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
+import { cn } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import { Show } from 'solid-js';
 import type { Property } from '../../types';
 import {
-  hasValue,
-  isSelectProperty,
-  isEntityProperty,
-  isDateProperty,
-  isStringProperty,
-  isNumberProperty,
-  isBooleanProperty,
-} from '../../utils/typeGuards';
-import {
+  formatBoolean,
   formatDate,
   formatNumber,
-  formatBoolean,
 } from '../../utils/formatting';
+import {
+  hasValue,
+  isBooleanProperty,
+  isDateProperty,
+  isEntityProperty,
+  isNumberProperty,
+  isSelectProperty,
+  isStringProperty,
+} from '../../utils/typeGuards';
 import { PropertyTooltip } from './PropertyTooltip';
-import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
+import { PropertyValueIcon } from './PropertyValueIcon';
 import { UserGroup } from './UserGroup';
-import { cn } from '@ui';
 
 type CondensedPropertyValueProps = {
   property: Property;

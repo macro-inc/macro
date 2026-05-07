@@ -1,5 +1,5 @@
-import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from 'core/component/Toast/Toast';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { blockData } from '../signal/blockData';

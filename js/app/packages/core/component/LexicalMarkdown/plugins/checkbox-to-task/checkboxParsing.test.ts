@@ -6,9 +6,9 @@ vi.mock('../../utils', () => ({
 }));
 
 import {
-  extractUserMentions,
   extractDateMention,
   extractTitleFromMarkdown,
+  extractUserMentions,
 } from './checkboxParsing';
 
 describe('Checkbox Parsing', () => {

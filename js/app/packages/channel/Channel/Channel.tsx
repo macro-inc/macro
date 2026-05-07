@@ -1,12 +1,50 @@
+import { openChatWithInput } from '@app/component/ChatWithAgentButton';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { createActivityTracker } from '@channel/activity-tracker';
+import { DebugSuspense } from '@channel/DebugSuspense';
+import type { ChannelInputProps } from '@channel/Input/ChannelInput';
+import { buildPostMessageRequest } from '@channel/Input/message-payload';
+import {
+  makeAttachmentTrackerPersistenceKey,
+  makeInputValuePersistenceKey,
+} from '@channel/Input/utils/persistence';
+import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
+import { useChannelParticipants } from '@channel/use-channel-participants';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { toast } from '@core/component/Toast/Toast';
+import { useChannelActivity, useChannelName } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
+import type { DateValue } from '@core/util/date';
+import {
+  extractUserMentions,
+  trimEdgeUserMentions,
+} from '@core/util/taskExtraction';
+import { buildMentionMarkdownString, markdownToPlainText } from '@lexical-core';
+import {
+  invalidateChannelsActivity,
+  useUpdateChannelsActivityMutation,
+} from '@queries/channel/activity';
 import {
   type ChannelMessagesData,
-  useChannelMessagesQuery,
   createMessageIndex,
   getChannelMessagesQueryKey,
   isMissingChannelMessageError,
+  useChannelMessagesQuery,
 } from '@queries/channel/channel-messages';
-import { queryClient } from '@queries/client';
 import {
+  useDeleteMessageMutation,
+  usePatchMessageMutation,
+  useSendMessageMutation,
+} from '@queries/channel/message';
+import {
+  useAddReactionMutation,
+  useRemoveReactionMutation,
+} from '@queries/channel/reaction';
+import { usePostTypingUpdateMutation } from '@queries/channel/typing';
+import { queryClient } from '@queries/client';
+import { useBeforeLeave } from '@solidjs/router';
+import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -14,9 +52,32 @@ import {
   onCleanup,
   onMount,
   Show,
-  type Accessor,
 } from 'solid-js';
-import { useBeforeLeave } from '@solidjs/router';
+import {
+  ChannelInput,
+  createInputAttachmentTracker,
+  type InputHandle,
+  type InputSnapshot,
+} from '../Input';
+import { ChannelInputContainer } from '../Input/ChannelInputContainer';
+import { hasSendableInputContent } from '../Input/utils/sendable-content';
+import { ChannelThread } from '../Thread';
+import { ChannelDropZone } from './ChannelDropZone';
+import { createChannelDragState } from './create-channel-drag-state';
+import { createChannelHotkeys } from './create-channel-hotkeys';
+import { createChannelMessageActions } from './create-channel-message-actions';
+import { createInlineInputKeyboardHandler } from './create-inline-input-keyboard-handler';
+import { createMainInputKeyboardHandler } from './create-main-input-keyboard-handler';
+import { createMessageEditor } from './create-message-editor';
+import { createMessageSelection } from './create-message-selection';
+import {
+  clearStaleRestoredChannelData,
+  createTargetMessageController,
+  type TargetMessageController,
+} from './create-target-message-controller';
+import { buildChannelMessageListMeta } from './message-list-meta';
+import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
+import { createStickyScrollEffect } from './sticky-scroll';
 import {
   defaultThreadListTargetFromMessage,
   ThreadList,
@@ -24,69 +85,8 @@ import {
   type ThreadListScrollState,
   type ThreadListScrollTarget,
 } from './ThreadList';
-import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { toast } from '@core/component/Toast/Toast';
 import { createThreadManager } from './thread-manager';
 import { createThreadPaginator } from './thread-paginator';
-import { useUserId } from '@core/context/user';
-import {
-  useDeleteMessageMutation,
-  usePatchMessageMutation,
-  useSendMessageMutation,
-} from '@queries/channel/message';
-import type { DateValue } from '@core/util/date';
-import { buildChannelMessageListMeta } from './message-list-meta';
-import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
-import { ChannelThread } from '../Thread';
-import {
-  ChannelInput,
-  createInputAttachmentTracker,
-  type InputHandle,
-  type InputSnapshot,
-} from '../Input';
-import { hasSendableInputContent } from '../Input/utils/sendable-content';
-import { ChannelInputContainer } from '../Input/ChannelInputContainer';
-import { createChannelMessageActions } from './create-channel-message-actions';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { openChatWithInput } from '@app/component/ChatWithAgentButton';
-import { useChannelName, useChannelActivity } from '@core/context/channels';
-import { buildMentionMarkdownString, markdownToPlainText } from '@lexical-core';
-import {
-  extractUserMentions,
-  trimEdgeUserMentions,
-} from '@core/util/taskExtraction';
-import { createActivityTracker } from '@channel/activity-tracker';
-import {
-  invalidateChannelsActivity,
-  useUpdateChannelsActivityMutation,
-} from '@queries/channel/activity';
-import { createChannelDragState } from './create-channel-drag-state';
-import { ChannelDropZone } from './ChannelDropZone';
-import { buildPostMessageRequest } from '@channel/Input/message-payload';
-import {
-  makeAttachmentTrackerPersistenceKey,
-  makeInputValuePersistenceKey,
-} from '@channel/Input/utils/persistence';
-import { createStickyScrollEffect } from './sticky-scroll';
-import { createMessageEditor } from './create-message-editor';
-import { createMessageSelection } from './create-message-selection';
-import { createChannelHotkeys } from './create-channel-hotkeys';
-import { createInlineInputKeyboardHandler } from './create-inline-input-keyboard-handler';
-import { createMainInputKeyboardHandler } from './create-main-input-keyboard-handler';
-import type { ChannelInputProps } from '@channel/Input/ChannelInput';
-import {
-  clearStaleRestoredChannelData,
-  createTargetMessageController,
-  type TargetMessageController,
-} from './create-target-message-controller';
-import {
-  useAddReactionMutation,
-  useRemoveReactionMutation,
-} from '@queries/channel/reaction';
-import { DebugSuspense } from '@channel/DebugSuspense';
-import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
-import { useChannelParticipants } from '@channel/use-channel-participants';
-import { usePostTypingUpdateMutation } from '@queries/channel/typing';
 
 export type ChannelProps = {
   channelId: string;

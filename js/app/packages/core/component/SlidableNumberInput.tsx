@@ -1,9 +1,9 @@
 import { activeTextEditorSignal } from '@block-canvas/signal/toolManager';
 import { clamp } from '@block-canvas/util/math';
 import { type Vector2, vec2 } from '@block-canvas/util/vector2';
-import { cn } from '@ui';
 import CaretDown from '@icon/regular/caret-down.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { cn } from '@ui';
 import {
   type Component,
   type ComponentProps,

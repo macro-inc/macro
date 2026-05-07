@@ -1,8 +1,8 @@
-import { Entity } from '@entity/entity';
-import type { EntityData } from '@entity';
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
-import { createEffect, For, Show } from 'solid-js';
+import type { EntityData } from '@entity';
+import { Entity } from '@entity/entity';
 import { cn } from '@ui';
+import { createEffect, For, Show } from 'solid-js';
 
 interface OnboardingEntityListProps {
   soup: SoupState;

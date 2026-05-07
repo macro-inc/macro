@@ -1,9 +1,9 @@
 import type { Attachment, Model } from '@core/component/AI/types';
-import { Button } from '@ui';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
+import { Button } from '@ui';
 import type { Accessor, JSXElement } from 'solid-js';
 import { createEffect, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

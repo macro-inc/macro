@@ -1,8 +1,8 @@
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui';
 import CaretUp from '@icon/regular/caret-up.svg';
 import Stats from '@icon/regular/chart-bar.svg';
 import { Popover } from '@kobalte/core/popover';
+import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { Store } from 'solid-js/store';
 import type { WordcountStats } from '../../plugins';

@@ -1,5 +1,5 @@
-import { Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui';
+import { type JSX, Show, splitProps } from 'solid-js';
 import { useInput } from './context';
 
 export function FormatRibbon(props: JSX.HTMLAttributes<HTMLDivElement>) {

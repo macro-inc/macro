@@ -1,7 +1,7 @@
 import { AiChatEmptyState } from '@core/component/AI/component/AIChatEmptyState';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { Show } from 'solid-js';
 import { Dialog, Surface } from '@ui';
+import { Show } from 'solid-js';
 
 const [macroMcpSetupOpen, setMacroMcpSetupOpen] = createControlledOpenSignal(
   false,

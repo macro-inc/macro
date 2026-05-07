@@ -1,10 +1,9 @@
-import { useAiDataConsent } from '@core/context/user';
-import { authServiceClient } from '@service-auth/client';
-import { invalidateUserInfo } from '@queries/auth/user-info';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button, Dialog, Surface } from '@ui';
-
+import { useAiDataConsent } from '@core/context/user';
 import CloseIcon from '@icon/regular/x.svg';
+import { invalidateUserInfo } from '@queries/auth/user-info';
+import { authServiceClient } from '@service-auth/client';
+import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
 
 export function useAiDataConsentGate() {

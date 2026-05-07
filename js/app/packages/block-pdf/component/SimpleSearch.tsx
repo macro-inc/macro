@@ -1,12 +1,11 @@
-import { cn } from '@ui';
 import { searchLocationPendingSignal } from '@block-pdf/signal/location';
-import { Button } from '@ui';
 import { IS_MAC } from '@core/constant/isMac';
 import { blockElementSignal } from '@core/signal/blockElement';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
 import MagnifyingGlass from '@icon/regular/magnifying-glass.svg';
 import X from '@icon/regular/x.svg';
+import { Button, cn } from '@ui';
 import {
   createEffect,
   createSignal,

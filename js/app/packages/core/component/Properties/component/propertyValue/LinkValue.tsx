@@ -1,4 +1,5 @@
 import { useUnfurl } from '@core/signal/unfurl';
+import DeleteIcon from '@icon/bold/x-bold.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { Component } from 'solid-js';
@@ -10,12 +11,11 @@ import {
   isValidUrl,
   normalizeUrl,
 } from '../../utils';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 import {
   AddPropertyValueButton,
   EmptyValue,
-  stubSaveHandler,
   type PropertyValueProps,
+  stubSaveHandler,
 } from './ValueComponents';
 
 export const LinkValue: Component<PropertyValueProps> = (props) => {

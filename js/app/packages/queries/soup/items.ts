@@ -12,9 +12,9 @@ import type { Params } from '@service-storage/generated/schemas/params';
 import type { PostSoupAstRequestAllOf } from '@service-storage/generated/schemas/postSoupAstRequestAllOf';
 import type { PostSoupRequest } from '@service-storage/generated/schemas/postSoupRequest';
 import {
-  useInfiniteQuery,
-  type UseInfiniteQueryResult,
   type StaleTime,
+  type UseInfiniteQueryResult,
+  useInfiniteQuery,
 } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 

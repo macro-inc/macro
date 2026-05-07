@@ -1,6 +1,6 @@
-import { createSignal, type Accessor } from 'solid-js';
-import { createInputAttachmentTracker } from '../Input';
+import { type Accessor, createSignal } from 'solid-js';
 import type { InputAttachmentTracker } from '../Input';
+import { createInputAttachmentTracker } from '../Input';
 import { createEntityDropZone } from './create-entity-drop-zone';
 
 type CreateChannelDragStateOptions = {

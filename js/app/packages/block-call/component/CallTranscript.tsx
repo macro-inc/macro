@@ -1,19 +1,19 @@
-import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
-import type { ApiChannelMessage } from '@service-comms/client';
-import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
 import { Message } from '@channel/Message';
 import { Thread } from '@channel/Thread/Thread';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { formatVideoTimestamp } from '@core/util/duration';
+import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
+import type { ApiChannelMessage } from '@service-comms/client';
+import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
 import {
+  createEffect,
   createMemo,
   createSignal,
-  createEffect,
   For,
   on,
   onCleanup,
   Show,
 } from 'solid-js';
-import { formatVideoTimestamp } from '@core/util/duration';
 import { getSegmentVideoSeconds } from './transcript-playback';
 
 // Match the channel message grouping window (5 minutes).

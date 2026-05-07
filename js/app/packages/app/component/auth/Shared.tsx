@@ -1,5 +1,5 @@
-import { cn } from '@ui';
 import { authServiceClient } from '@service-auth/client';
+import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import { createSignal, onMount, Show } from 'solid-js';
 

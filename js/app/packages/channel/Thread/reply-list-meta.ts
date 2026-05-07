@@ -1,7 +1,7 @@
 import type { ApiThreadReply } from '@service-comms/client';
-import type { ChannelMessageListMeta } from '../Message';
 import { shouldGroupWithPreviousMessage } from '../Channel/message-grouping-meta';
 import type { NewMessageCheckable } from '../Channel/util';
+import type { ChannelMessageListMeta } from '../Message';
 
 export function buildThreadReplyListMeta(
   replies: ApiThreadReply[],

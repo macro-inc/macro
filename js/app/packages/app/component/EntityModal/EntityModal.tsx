@@ -2,6 +2,7 @@ import { getSplitPanelRef } from '@app/component/split-layout/layoutUtils';
 import { isInBlock } from '@core/block';
 import clickOutside from '@core/directive/clickOutside';
 import { blockElementSignal } from '@core/signal/blockElement';
+import type { EntityData } from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
 import { cn } from '@ui';
 import type { ComponentProps } from 'solid-js';
@@ -14,7 +15,6 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import type { EntityData } from '@entity';
 import { MoveToProjectView } from './MoveToProjectView';
 import { RenameView } from './RenameView';
 

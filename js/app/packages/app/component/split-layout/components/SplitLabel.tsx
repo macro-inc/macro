@@ -1,3 +1,4 @@
+import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
 import { isInBlock, useBlockAliasedName, useBlockId } from '@core/block';
 import {
   EntityIcon,
@@ -14,11 +15,10 @@ import {
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { buildEntityData, type BuildEntityDataArgs } from '@entity';
-import { createEffect, type JSX, Show } from 'solid-js';
-import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
-import { useSplitPanelOrThrow } from '../layoutUtils';
+import { type BuildEntityDataArgs, buildEntityData } from '@entity';
 import { cn } from '@ui';
+import { createEffect, type JSX, Show } from 'solid-js';
+import { useSplitPanelOrThrow } from '../layoutUtils';
 
 export function StaticSplitLabel(props: {
   label: string;

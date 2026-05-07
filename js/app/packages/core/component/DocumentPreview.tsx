@@ -3,51 +3,53 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useOpenChatForAttachment } from '@block-chat/client';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
 import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/signal/location';
-import { cn } from '@ui';
 import {
   type BlockAlias,
   type BlockName,
   useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
-import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { Surface } from '@ui';
+import { isBlockNameWithLocation } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { channelTheme } from '@core/component/LexicalMarkdown/theme';
+import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import { useEntityProperties } from '@core/component/Properties/hooks';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  isAccessiblePreviewItem,
-  isChannelPreviewItem,
-  isPreviewItemNoAccess,
-} from '@queries/preview';
-import { blockNameToItemType } from '@service-storage/client';
-import { copyBranchNameToClipboard } from '@core/util/branchName';
+import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
+import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { matches } from '@core/util/match';
+import { isErr } from '@core/util/maybeResult';
 import CollapseInlinePreview from '@icon/regular/arrows-in-line-horizontal.svg';
 import OpenIcon from '@icon/regular/arrows-out.svg';
 import ExpandInlinePreview from '@icon/regular/arrows-out-line-horizontal.svg';
 import MessageIcon from '@icon/regular/chat-circle.svg';
 import ThreadIcon from '@icon/regular/chats-circle.svg';
 import Clipboard from '@icon/regular/clipboard.svg';
-import GitBranchIcon from '@icon/regular/git-branch.svg';
 import ClockIcon from '@icon/regular/clock.svg';
 import ColumnsPlusRight from '@icon/regular/columns-plus-right.svg';
+import GitBranchIcon from '@icon/regular/git-branch.svg';
 import HighlightIcon from '@icon/regular/highlighter-circle.svg';
 import MapPinIcon from '@icon/regular/map-pin-simple.svg';
 import SparkleIcon from '@icon/regular/sparkle.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import MacroEmbed from '@macro-icons/macro-embed.svg';
+import {
+  isAccessiblePreviewItem,
+  isChannelPreviewItem,
+  isPreviewItemNoAccess,
+} from '@queries/preview';
 import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
-import { isBlockNameWithLocation } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
+import { blockNameToItemType } from '@service-storage/client';
+import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
+import { cn, Surface } from '@ui';
 import { globalSplitManager } from 'app/signal/splitLayout';
-import { fetchBinary } from '@service-storage/util/fetchBinary';
-import { isErr } from '@core/util/maybeResult';
 import type { Component, JSX } from 'solid-js';
 import {
   createEffect,
@@ -61,14 +63,11 @@ import {
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { useEntityProperties } from '@core/component/Properties/hooks';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
 import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
-import { Tooltip } from './Tooltip';
 import { useItemPreviewData } from './ItemPreview';
+import { Tooltip } from './Tooltip';
 
 /**
  * Container for displaying mentions with optional collapsing

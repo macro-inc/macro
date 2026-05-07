@@ -1,18 +1,19 @@
 import { MaybeResultError, throwOnErr } from '@core/util/maybeResult';
 import {
-  commsServiceClient,
   type ApiChannelMessage,
   type ApiThreadReply,
   type ChannelMessagesPage,
+  commsServiceClient,
 } from '@service-comms/client';
+import type { ApiCountedReaction } from '@service-storage/generated/schemas';
+import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import {
   type InfiniteData,
   useInfiniteQuery,
   useQuery,
 } from '@tanstack/solid-query';
 import { type Accessor, createEffect, on } from 'solid-js';
-import type { ApiCountedReaction } from '@service-storage/generated/schemas';
-import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import { createStore, reconcile } from 'solid-js/store';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
 import {
@@ -23,7 +24,6 @@ import {
   replaceReplyReactionsInThreadPreview,
   restoreReplyToThreadPreview,
 } from './thread-preview';
-import { createStore, reconcile } from 'solid-js/store';
 
 export type ChannelMessagesData = InfiniteData<
   ChannelMessagesPage,

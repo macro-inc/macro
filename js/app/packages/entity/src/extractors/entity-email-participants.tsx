@@ -1,18 +1,18 @@
-import { useEmail } from '@core/context/user';
-import { emailToMacroId, useDisplayName } from '@core/user';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserTooltip } from '@core/component/UserTooltip';
+import { useEmail } from '@core/context/user';
+import { emailToMacroId, useDisplayName } from '@core/user';
 import {
-  mergeAdjacentMacroEmTags,
   highlightTermsInText,
+  mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import WideCopy from '@macro-icons/wide/copy.svg';
+import { For, Show } from 'solid-js';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
 import { isSearchEntity } from '../types/search';
-import { For, Show } from 'solid-js';
 
 /** Checks if a value is likely an email address */
 export function isLikelyEmail(value?: string): boolean {

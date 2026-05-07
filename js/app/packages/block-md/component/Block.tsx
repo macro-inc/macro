@@ -1,7 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { useBlockId } from '@core/block';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';

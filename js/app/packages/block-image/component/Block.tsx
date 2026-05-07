@@ -1,6 +1,6 @@
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { blockAcceptedFileExtensionToMimeType } from '@core/constant/allBlocks';
 import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
 import { setCopiedItem } from '@core/state/clipboard';

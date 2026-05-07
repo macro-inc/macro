@@ -1,21 +1,20 @@
-import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
-import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { hapticImpact } from '@core/mobile/haptics';
-import { focusInput } from '@core/directive/focusInput';
-import { type Component, createSignal, type JSX, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import { cn } from '@ui';
-import { useSplitLayout } from '../split-layout/layout';
 import type { ListView } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { SearchState } from './mobileSearchState';
+import { focusInput } from '@core/directive/focusInput';
+import { hapticImpact } from '@core/mobile/haptics';
+import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
+import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { useLocation } from '@solidjs/router';
-import { Layer } from '@ui';
+import { cn, Layer } from '@ui';
+import { type Component, createSignal, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { useSplitLayout } from '../split-layout/layout';
+import { SearchState } from './mobileSearchState';
 
 false && focusInput;
 

@@ -1,7 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { cn } from '@ui';
 import ChevronDownIcon from '@icon/bold/caret-down-bold.svg';
 import CheckIcon from '@icon/bold/check-bold.svg';
+import { cn, Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -11,7 +11,6 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { Layer } from '@ui';
 
 export type DropdownOption<T> = {
   value: T;

@@ -1,11 +1,10 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { cn } from '@ui';
 import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
 import CaretRight from '@icon/regular/caret-right.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import {
   type Component,
   createEffect,

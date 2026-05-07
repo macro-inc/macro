@@ -1,14 +1,15 @@
 import {
+  CREATABLE_BLOCKS,
+  type CreatableBlock,
+  LauncherInner,
+} from '@app/component/Launcher';
+import {
   createSoupState,
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
-import {
-  LauncherInner,
-  CREATABLE_BLOCKS,
-  type CreatableBlock,
-} from '@app/component/Launcher';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { Dialog } from '@kobalte/core/dialog';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
 import {
   createEffect,
   createSignal,
@@ -17,20 +18,19 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { useListNavigation } from '../use-list-navigation';
-import { OnboardingEntityList } from '../OnboardingEntityList';
 import { MockAppChrome } from '../components/MockAppChrome';
 import { ClickCallout, HotkeyCallout } from '../components-lib';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import type { LessonContentProps, LessonDefinition } from '../types';
+import { OnboardingEntityList } from '../OnboardingEntityList';
 import {
-  filteredSandboxEntities,
   addSandboxEntity,
   createSandboxEntity,
-  sidebarFilter,
-  setSidebarFilter,
+  filteredSandboxEntities,
   type SandboxEntityType,
+  setSidebarFilter,
+  sidebarFilter,
 } from '../sandbox/sandbox-store';
+import type { LessonContentProps, LessonDefinition } from '../types';
+import { useListNavigation } from '../use-list-navigation';
 
 const BLOCK_TO_SANDBOX: Record<string, SandboxEntityType> = {
   md: 'md',

@@ -1,32 +1,32 @@
-import {
-  For,
-  Show,
-  type JSX,
-  onMount,
-  onCleanup,
-  createSignal,
-} from 'solid-js';
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import { Tooltip } from '@core/component/Tooltip';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
+import type { ValidHotkey } from '@core/hotkey/types';
 import MacroIcon from '@macro-icons/macro-logo.svg';
-import { Dynamic } from 'solid-js/web';
-import { cn } from '@ui';
-import {
-  sidebarFilter,
-  setSidebarFilter,
-  type SandboxSidebarFilter,
-} from '../sandbox/sandbox-store';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
 import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import { registerHotkey, createHotkeyGroup } from '@core/hotkey/hotkeys';
-import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import type { ValidHotkey } from '@core/hotkey/types';
-import { Tooltip } from '@core/component/Tooltip';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import { cn } from '@ui';
+import {
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import {
+  type SandboxSidebarFilter,
+  setSidebarFilter,
+  sidebarFilter,
+} from '../sandbox/sandbox-store';
 
 export const MOCK_SIDEBAR_LINKS = [
   {

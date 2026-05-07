@@ -4,12 +4,12 @@ import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { isMobile } from '@core/mobile/isMobile';
 import type { DateValue } from '@core/util/date';
+import { stackNotifications } from '@notifications';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueueDocumentWakeup,
   isWakeableDocument,
 } from '@queries/preview';
-import { stackNotifications } from '@notifications';
 import {
   getStreamState,
   subscribeToStreamState,
@@ -34,9 +34,9 @@ import {
   isSnippetEntity,
 } from '../extractors-search/snippet-entity';
 import {
+  type EntityData,
   isChannelEntity,
   isEmailEntity,
-  type EntityData,
   type ProjectEntity,
 } from '../types/entity';
 import {
@@ -51,6 +51,8 @@ import {
   filterValidNotifications,
 } from '../utils/notification';
 import { useIsShared } from '../utils/shared';
+import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
+import { NarrowLayout } from './list-entity/narrow-layout';
 import {
   hasSearchContentHits,
   InboxDivider,
@@ -58,8 +60,6 @@ import {
   useCharacterCount,
   useListLayout,
 } from './list-entity/shared';
-import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
-import { NarrowLayout } from './list-entity/narrow-layout';
 import { WideLayout } from './list-entity/wide-layout';
 
 export { ListLayoutProvider } from './list-entity/shared';

@@ -1,5 +1,10 @@
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAttachments } from '@core/component/AI/signal/attachment';
+import {
+  type ChatController,
+  type ChatControllerOptions,
+  createChatController,
+} from '@core/component/AI/state/createChatController';
 import type {
   Attachment,
   Attachments,
@@ -8,11 +13,6 @@ import type {
   UploadQueue,
 } from '@core/component/AI/types';
 import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
-import {
-  createChatController,
-  type ChatController,
-  type ChatControllerOptions,
-} from '@core/component/AI/state/createChatController';
 import type { Accessor, ParentProps } from 'solid-js';
 import { createContext, createSignal, useContext } from 'solid-js';
 

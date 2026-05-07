@@ -1,5 +1,5 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
-import { createSignal, type Accessor } from 'solid-js';
+import { type Accessor, createSignal } from 'solid-js';
 
 type MentionFn = (item: ItemMention) => void;
 export type MentionsTracker = {

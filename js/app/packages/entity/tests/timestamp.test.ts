@@ -1,9 +1,9 @@
+import { applyDurationToDate } from '@core/util/dateSearch/dateParser';
 import { describe, expect, it } from 'vitest';
 import {
-  formatTimestamp,
   formatRelativeTimestamp,
+  formatTimestamp,
 } from '../src/utils/timestamp';
-import { applyDurationToDate } from '@core/util/dateSearch/dateParser';
 
 describe('formatTimestamp', () => {
   describe('Date object handling', () => {

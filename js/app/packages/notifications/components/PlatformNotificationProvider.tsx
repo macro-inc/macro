@@ -13,6 +13,7 @@ import type {
   PlatformNotificationData,
   PlatformNotificationHandle,
 } from '../notification-platform';
+
 type NotGranted = 'not-granted';
 
 /// the context provider value which provides an interface wherein downstream consumers can interact with

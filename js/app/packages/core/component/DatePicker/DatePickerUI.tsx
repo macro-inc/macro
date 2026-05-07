@@ -1,11 +1,11 @@
 import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import CheckIcon from '@icon/regular/check.svg';
-import { createEffect, createSignal, For, on, Show } from 'solid-js';
+import { endOfDay } from 'date-fns/endOfDay';
 import { isAfter } from 'date-fns/isAfter';
 import { isBefore } from 'date-fns/isBefore';
-import { endOfDay } from 'date-fns/endOfDay';
 import { startOfDay } from 'date-fns/startOfDay';
+import { createEffect, createSignal, For, on, Show } from 'solid-js';
 
 export type DatePickerUIProps = {
   value: Date;

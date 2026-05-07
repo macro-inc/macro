@@ -1,16 +1,16 @@
-import { getSplitPanelRef } from '@app/component/split-layout/layoutUtils';
 import {
   EntityModalActionFooter,
   EntityModalTitle,
 } from '@app/component/EntityModal/EntityModal';
+import { getSplitPanelRef } from '@app/component/split-layout/layoutUtils';
 import clickOutside from '@core/directive/clickOutside';
 import { Dialog } from '@kobalte/core/dialog';
 import {
   type Accessor,
-  type Setter,
-  Show,
   createSignal,
   onMount,
+  type Setter,
+  Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 

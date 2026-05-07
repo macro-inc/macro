@@ -1,5 +1,5 @@
-import { getTypingUsersForChannel } from '@queries/channel/typing';
 import { idToDisplayName } from '@core/user';
+import { getTypingUsersForChannel } from '@queries/channel/typing';
 import { createMemo, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 

@@ -1,9 +1,9 @@
 import { useIsNestedBlock } from '@core/block';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { cn } from '@ui';
 import { useCanEdit } from '@core/signal/permissions';
 import Circuitry from '@icon/regular/circuitry.svg';
+import { cn } from '@ui';
 import { nanoid } from 'nanoid';
 import {
   type Accessor,

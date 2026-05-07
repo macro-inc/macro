@@ -1,5 +1,5 @@
-import type { ApiMessage } from '@service-email/generated/schemas';
 import { emailToMacroId } from '@core/user';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import { getFirstName } from './name';
 
 /**

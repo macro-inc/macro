@@ -1,26 +1,24 @@
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
+import { useAnalytics } from '@app/component/analytics-context';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@app/component/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-
-import { useAnalytics } from '@app/component/analytics-context';
+import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
-import { CodeFileTypeChip } from './CodeFileTypeChip';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import {
   DocumentPropertiesButton,
   PROPERTIES_DRAWER_ID,
 } from '@core/component/DocumentPropertiesModal';
 import {
-  ReferencesButton,
   REFERENCES_DRAWER_ID,
+  ReferencesButton,
 } from '@core/component/ReferencesModal';
 import {
   getShareDrawerRecipientInput,
@@ -38,13 +36,14 @@ import { downloadFile } from '@filesystem/download';
 import Download from '@icon/regular/download-simple.svg';
 import Info from '@icon/regular/info.svg';
 import Quotes from '@icon/regular/quotes.svg';
-import IconShared from '@macro-icons/wide/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
+import IconShared from '@macro-icons/wide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { TabbedControl } from '@ui';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import type { CodeBlockMode } from './Block';
-import { TabbedControl } from '@ui';
+import { CodeFileTypeChip } from './CodeFileTypeChip';
 
 export const TopBar: Component<{
   isHtmlFile: boolean;

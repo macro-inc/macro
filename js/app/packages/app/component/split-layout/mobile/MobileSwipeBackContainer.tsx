@@ -9,6 +9,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { SplitPanel } from '../components/SplitPanel';
 import type {
   SplitHandle,
   SplitId,
@@ -16,7 +17,6 @@ import type {
   SplitState,
 } from '../layoutManager';
 import type { MobileSwipeLayout } from './createMobileSwipeLayout';
-import { SplitPanel } from '../components/SplitPanel';
 
 const SWIPE_EDGE_THRESHOLD = 28; // px from left edge to initiate gesture
 const SWIPE_VELOCITY_THRESHOLD = 0.3; // px/ms — fast flick completes swipe

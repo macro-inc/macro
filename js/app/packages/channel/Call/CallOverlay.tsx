@@ -1,10 +1,10 @@
-import { Track, type RemoteParticipant } from 'livekit-client';
-import { For, Show, type JSXElement } from 'solid-js';
-import { cn } from '@ui';
-import { TrackView } from './TrackView';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { cn } from '@ui';
+import { type RemoteParticipant, Track } from 'livekit-client';
+import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
+import { TrackView } from './TrackView';
 
 function VideoTag(props: {
   children: JSXElement;

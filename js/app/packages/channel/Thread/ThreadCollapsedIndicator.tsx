@@ -3,13 +3,13 @@ import { formatRelativeDate } from '@core/util/time';
 import CaretRight from '@icon/regular/caret-right.svg';
 import { cn } from '@ui';
 import {
+  createSignal,
   For,
+  type JSX,
   Match,
   Show,
   Switch,
-  createSignal,
   splitProps,
-  type JSX,
 } from 'solid-js';
 import { getThreadReplyCountLabel } from './utils/thread-reply-indicator-helpers';
 

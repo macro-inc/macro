@@ -1,14 +1,14 @@
-import { Popover } from '@kobalte/core/popover';
-import UserCircle from '@icon/regular/user-circle.svg';
-import { For, Show, createMemo, createSignal } from 'solid-js';
-import { tryMacroId, useDisplayName } from '@core/user';
-import { toast } from '@core/component/Toast/Toast';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { toast } from '@core/component/Toast/Toast';
+import { tryMacroId, useDisplayName } from '@core/user';
+import UserCircle from '@icon/regular/user-circle.svg';
+import { Popover } from '@kobalte/core/popover';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
-import type { InCallPanelMember, UseInCallPanelResult } from './types';
+import { cn } from '@ui';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { InCallParticipantAvatar } from './InCallParticipantAvatar';
 import { profilePictureIdForMember } from './profile-picture-id-for-member';
-import { cn } from '@ui';
+import type { InCallPanelMember, UseInCallPanelResult } from './types';
 
 /** Shared shell for “In this call” (popover content + +N tooltip). */
 export const IN_CALL_ROSTER_CARD_CLASS =

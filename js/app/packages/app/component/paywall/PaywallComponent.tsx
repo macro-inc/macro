@@ -1,5 +1,4 @@
-import { Button } from '@ui';
-import { cn } from '@ui';
+import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
@@ -7,10 +6,10 @@ import { usePermissions } from '@core/context/user';
 import IconX from '@icon/regular/x.svg';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { stripeServiceClient } from '@service-stripe/client';
+import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import { useAnalytics } from '@app/component/analytics-context';
-import { PLANS, PLAN_FEATURES, type PaidPlanTier } from './plans';
+import { type PaidPlanTier, PLAN_FEATURES, PLANS } from './plans';
 import SubscriptionTier from './SubscriptionTier';
 
 // Paid-only plans for the billing paywall — Stripe has no product for the

@@ -5,18 +5,17 @@ import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import MacroBrandLoader from '@macro-icons/macro-brand-loader.svg';
 import MacroGridLoader from '@macro-icons/macro-grid-noise-loader.svg';
 import Acorn from '@phosphor-icons/core/regular/acorn.svg?component-solid';
+import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import Subtract from '@phosphor-icons/core/regular/subtract.svg?component-solid';
 import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
-import { type Component, createSignal, For, Index } from 'solid-js';
+import type { ItemType } from '@service-storage/client';
 import { Button } from '@ui';
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
-
+import { type Component, createSignal, For, Index } from 'solid-js';
 import { ItemPreview } from '../component/ItemPreview';
 import { DropdownMenuContent, MenuItem } from '../component/Menu';
 import { Permissions } from '../component/SharePermissions';
 import { Bar } from '../component/TopBar/Bar';
 import { Center } from '../component/TopBar/Center';
-import type { ItemType } from '@service-storage/client';
 
 const App: Component = () => {
   const Themes = [

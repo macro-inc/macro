@@ -1,9 +1,10 @@
 import { Hotkey } from '@core/component/Hotkey';
-import { cn } from '@ui';
 import { useKeyPressed } from '@core/util/useKeyPressed';
+import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import { cn } from '@ui';
+import type { JSX, ParentComponent } from 'solid-js';
 import {
   type Accessor,
   createEffect,
@@ -14,12 +15,11 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import type { JSX, ParentComponent } from 'solid-js';
 import { useSearchInputFocus } from '../../../utils';
 import { ERROR_MESSAGES } from '../../../utils/errorHandling';
 import { PropertyValueIcon } from '../../propertyValue';
 import { OptionCheckBox } from './OptionCheckBox';
-import type { SelectableOption, OptionSelectorConfig } from './types';
+import type { OptionSelectorConfig, SelectableOption } from './types';
 
 type UseDropdownSearchOptions = {
   itemCount: Accessor<number>;

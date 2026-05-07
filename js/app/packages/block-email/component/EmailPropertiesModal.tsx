@@ -1,10 +1,10 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
-import { Button } from '@ui';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import TagIcon from '@icon/regular/tag.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import { Button } from '@ui';
 import { Suspense } from 'solid-js';
 
 export const PROPERTIES_DRAWER_ID = 'properties';

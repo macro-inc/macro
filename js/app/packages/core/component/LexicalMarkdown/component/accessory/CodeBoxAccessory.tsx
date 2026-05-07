@@ -3,8 +3,6 @@
  * language selector.
  */
 import { isInBlock, useIsNestedBlock } from '@core/block';
-import { cn } from '@ui';
-
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
@@ -30,10 +28,11 @@ import {
   normalizedLanguage,
   type SupportedLanguage,
 } from '@lexical-core';
+import { Button, cn } from '@ui';
 import {
   $getNodeByKey,
-  type LexicalEditor,
   type EditorThemeClasses,
+  type LexicalEditor,
   type NodeKey,
 } from 'lexical';
 import {
@@ -47,7 +46,6 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { glueToElement } from '../../directive/glueToElement';
 import { autoRegister } from '../../plugins/shared/utils';
-import { Button } from '@ui';
 
 false && glueToElement;
 

@@ -1,5 +1,5 @@
-import { For, Show, type JSX } from 'solid-js';
-import { PLANS, PLAN_FEATURES, type Plan, type PlanTier } from './plans';
+import { For, type JSX, Show } from 'solid-js';
+import { PLAN_FEATURES, PLANS, type Plan, type PlanTier } from './plans';
 
 interface PlanGridProps {
   /** The currently highlighted tier — shows accent styling. */

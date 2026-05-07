@@ -1,11 +1,11 @@
-import { TOKENS } from '@core/hotkey/tokens';
-import type { VirtualizerHandle } from 'virtua/solid';
-import { onCleanup, type Accessor } from 'solid-js';
-import type { SoupState } from '../create-soup-state';
-import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import type { SplitHandle } from '@app/component/split-layout/layoutManager';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
+import { type Accessor, onCleanup } from 'solid-js';
+import type { VirtualizerHandle } from 'virtua/solid';
+import type { SoupState } from '../create-soup-state';
 
 type UseSoupNavigationHotkeysOptions = {
   scopeId: string;

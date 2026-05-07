@@ -1,8 +1,8 @@
-import { createSignal, onMount } from 'solid-js';
-import { A } from '@solidjs/router';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
+import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import LogoIcon from '@macro-icons/macro-logo.svg';
+import { A } from '@solidjs/router';
+import { createSignal, onMount } from 'solid-js';
 
 interface MobileWebWelcomeProps {
   onSignUp: (email: string) => void;

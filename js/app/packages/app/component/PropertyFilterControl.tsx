@@ -1,10 +1,10 @@
 import type { PropertyDefinitionDomain } from '@core/component/Properties/types';
-import { cn } from '@ui';
 import {
   isPropertyDefinition,
   toPropertyDefinitionDomain,
 } from '@core/component/Properties/utils';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
+import { cn } from '@ui';
 import type { Accessor, Component } from 'solid-js';
 import { createEffect, createMemo, For, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';

@@ -1,17 +1,17 @@
-import type { Accessor } from 'solid-js';
+import type {
+  NodeTransformType,
+  SelectionData,
+} from '@core/component/LexicalMarkdown/plugins';
 import TextBoldIcon from '@icon/bold/text-b-bold.svg';
 import TextCodeIcon from '@icon/regular/code.svg';
 import ListBulletsIcon from '@icon/regular/list-bullets.svg';
 import ListChecksIcon from '@icon/regular/list-checks.svg';
 import ListNumbersIcon from '@icon/regular/list-numbers.svg';
+import TextQuoteIcon from '@icon/regular/quotes.svg';
 import TextItalicIcon from '@icon/regular/text-italic.svg';
 import TextStrikethroughIcon from '@icon/regular/text-strikethrough.svg';
-import TextQuoteIcon from '@icon/regular/quotes.svg';
-import type {
-  NodeTransformType,
-  SelectionData,
-} from '@core/component/LexicalMarkdown/plugins';
 import type { TextFormatType } from 'lexical';
+import type { Accessor } from 'solid-js';
 import { RibbonButton } from './RibbonButton';
 
 type FormatButtonsProps = {

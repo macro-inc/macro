@@ -1,9 +1,9 @@
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Component, createSignal, type ParentProps, Show } from 'solid-js';
 import { usePropertyEntityDisplay } from '../../hooks';
 import type { Property } from '../../types';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 
 type EntityValueDisplayProps = ParentProps<{
   property: Property;

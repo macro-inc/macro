@@ -1,24 +1,24 @@
-import XIcon from '@icon/regular/x.svg?component-solid';
-import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
-import { cn } from '@ui';
 import { useSoup } from '@app/component/next-soup/soup-context';
-import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { registerSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
+import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Hotkey } from '@core/component/Hotkey';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { batch } from 'solid-js';
+import XIcon from '@icon/regular/x.svg?component-solid';
+import { markdownToPlainText } from '@lexical-core/utils/parsers';
+import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import { cn } from '@ui';
 import {
   $getRoot,
   COMMAND_PRIORITY_HIGH,
   KEY_ARROW_DOWN_COMMAND,
 } from 'lexical';
 import {
-  createSignal,
+  batch,
   createEffect,
+  createSignal,
   on,
   onCleanup,
   onMount,

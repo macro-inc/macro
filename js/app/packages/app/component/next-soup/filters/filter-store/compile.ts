@@ -1,10 +1,10 @@
 import type {
+  EmailView,
   FieldFilters,
   FieldName,
   PropertyFilter,
   Query,
   QueryState,
-  EmailView,
 } from './types';
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';

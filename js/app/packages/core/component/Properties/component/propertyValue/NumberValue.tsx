@@ -4,8 +4,8 @@ import { useInlineEditor } from '../../hooks';
 import { formatNumber } from '../../utils';
 import {
   EmptyValue,
-  stubSaveHandler,
   type PropertyValueProps,
+  stubSaveHandler,
 } from './ValueComponents';
 
 /**

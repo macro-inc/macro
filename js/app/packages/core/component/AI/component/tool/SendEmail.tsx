@@ -1,14 +1,14 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { ItemPreview } from '@core/component/ItemPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { ItemPreview } from '@core/component/ItemPreview';
 import CaretRight from '@icon/regular/caret-right.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
-import { Show, Match, Switch } from 'solid-js';
 import { cn } from '@ui';
+import { Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
-import { createToolRenderer } from './ToolRenderer';
 import { ComposeTool } from './email/ChatCompose';
+import { createToolRenderer } from './ToolRenderer';
 
 type SendEmailResponse = NamedTool<'SendEmail', 'response'>['data'];
 

@@ -1,12 +1,12 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { GOOGLE_GMAIL_IDP } from './email';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { getNativeMobilePlatform } from '@core/util/platform';
-import { invoke } from '@tauri-apps/api/core';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isOk } from '@core/util/maybeResult';
-import { authServiceClient } from '@service-auth/client';
+import { getNativeMobilePlatform } from '@core/util/platform';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
+import { authServiceClient } from '@service-auth/client';
+import { invoke } from '@tauri-apps/api/core';
+import { GOOGLE_GMAIL_IDP } from './email';
 
 export type StartSsoLoginParams = {
   idpName?: string;

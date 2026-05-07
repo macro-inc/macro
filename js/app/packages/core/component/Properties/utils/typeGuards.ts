@@ -1,7 +1,7 @@
-import { match } from 'ts-pattern';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
+import { match } from 'ts-pattern';
 import type {
   BooleanProperty,
   DateProperty,

@@ -1,4 +1,4 @@
-import { Match, Show, Switch, mergeProps, type Accessor } from 'solid-js';
+import { type Accessor, Match, mergeProps, Show, Switch } from 'solid-js';
 import type { CallControlButtonSize } from './CallControlButton';
 import { CallControlsDefaultAndPanelRow } from './CallControlsDefaultAndPanelRow';
 import { CallControlsPanelSmallRow } from './CallControlsPanelSmallRow';

@@ -1,5 +1,5 @@
-import { Show, type Accessor } from 'solid-js';
 import { cn } from '@ui';
+import { type Accessor, Show } from 'solid-js';
 import type { ThreadListScrollState } from './ThreadList';
 
 export function shouldShowScrollToBottomButton(

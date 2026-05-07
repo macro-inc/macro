@@ -1,4 +1,4 @@
-import { Show, children, type JSX, type ParentProps } from 'solid-js';
+import { children, type JSX, type ParentProps, Show } from 'solid-js';
 import { isMobile } from './isMobile';
 
 /**

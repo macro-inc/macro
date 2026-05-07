@@ -1,10 +1,11 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
+import { isSidebarVisible } from '@app/component/sidebarVisibility';
 import { activeElement } from '@app/signal/focus';
 import { Resize } from '@core/component/Resize';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isSidebarVisible } from '@app/component/sidebarVisibility';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import { useNavigate } from '@solidjs/router';
+import { cn } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -30,7 +31,6 @@ import {
   type SplitState,
 } from './layoutManager';
 import { decodePairs } from './layoutUtils';
-import { cn } from '@ui';
 import {
   createMobileSwipeLayout,
   type MobileSwipeLayout,

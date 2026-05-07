@@ -1,9 +1,9 @@
-import { onMount } from 'solid-js';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
-import { getWebOrigin } from '@core/util/webOrigin';
 import { MOBILE_WEB_SIGNUP_LEAD_VALUE } from '@app/lib/analytics/leadValues';
+import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { getWebOrigin } from '@core/util/webOrigin';
+import LogoIcon from '@macro-icons/macro-logo.svg';
+import { onMount } from 'solid-js';
 
 type Props = {
   /** Email submitted on the prior step — used as the Google conversion `transaction_id` for dedup. */

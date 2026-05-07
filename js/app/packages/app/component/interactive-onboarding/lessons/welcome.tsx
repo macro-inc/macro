@@ -1,8 +1,8 @@
-import { onMount } from 'solid-js';
-import { A } from '@solidjs/router';
-import type { LessonContentProps, LessonDefinition } from '../types';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useAnalytics } from '@app/component/analytics-context';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { A } from '@solidjs/router';
+import { onMount } from 'solid-js';
+import type { LessonContentProps, LessonDefinition } from '../types';
 
 function WelcomeContent(props: LessonContentProps) {
   onMount(() => props.onComplete('Get Started'));

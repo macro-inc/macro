@@ -1,13 +1,13 @@
-import { For, Show } from 'solid-js';
-import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
+import { formatCallDuration } from '@block-call/utils';
 import { UserGroup } from '@core/component/Properties/component/propertyValue/UserGroup';
+import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
 import type { EntityReference } from '@core/component/Properties/types';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { matches } from '@core/util/match';
-import { formatCallDuration } from '@block-call/utils';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import { For, Show } from 'solid-js';
 import { AttendanceBadge } from '../../components/Badges';
 import { CallRecordName } from '../../components/CallRecordName';
 import { Entity } from '../../entity';

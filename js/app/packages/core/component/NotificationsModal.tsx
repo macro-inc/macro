@@ -7,8 +7,7 @@ import {
   type NotificationSource,
   useNotificationsForEntity,
 } from '@notifications';
-import { Button } from '@ui';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import { createMemo, Show, Suspense } from 'solid-js';
 import { Notifications } from './Notifications';
 

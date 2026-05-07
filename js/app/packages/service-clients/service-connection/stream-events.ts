@@ -1,9 +1,9 @@
+import type { EntityData } from '@entity';
 import type { Accessor } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { StreamEvent } from './generated/schemas';
 import { isStreamEntity } from './stream';
 import { createConnectionWebsocketEffect, ws } from './websocket';
-import type { EntityData } from '@entity';
 
 const [streamState, setStreamState] = createStore<Record<string, StreamEvent>>(
   {}

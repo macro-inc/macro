@@ -1,10 +1,10 @@
-import { cn } from '@ui';
-import type { UserMentionDecoratorProps } from '@lexical-core';
-import { createMemo, useContext } from 'solid-js';
-import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserTooltip } from '@core/component/UserTooltip';
-import { tryMacroId, macroIdToEmail, useDisplayName } from '@core/user';
+import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
+import type { UserMentionDecoratorProps } from '@lexical-core';
+import { cn } from '@ui';
+import { createMemo, useContext } from 'solid-js';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 export function UserMention(props: UserMentionDecoratorProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);

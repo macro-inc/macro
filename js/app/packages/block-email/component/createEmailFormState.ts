@@ -1,4 +1,5 @@
 import { useEmail } from '@core/context/user';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import type { LexicalEditor } from 'lexical';
 import { createSignal, type Setter } from 'solid-js';
 import { createStore, reconcile, unwrap } from 'solid-js/store';
@@ -12,7 +13,6 @@ import {
 import type { ReplyType } from '../util/replyType';
 import { getSubjectText } from '../util/subjectText';
 import type { EmailRecipient } from './EmailContext';
-import type { ApiMessage } from '@service-email/generated/schemas';
 
 export type EmailFormRecipients = {
   to: EmailRecipient[];

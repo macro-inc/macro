@@ -1,3 +1,5 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
+import type { ComposeTaskSuccess } from '@block-md/component/ComposeTask';
 import CheckSquare from '@icon/regular/check-square.svg';
 import CodeBlock from '@icon/regular/code-block.svg';
 import VideoIcon from '@icon/regular/file-video.svg';
@@ -14,19 +16,10 @@ import TextH1 from '@icon/regular/text-h-one.svg';
 import TextH3 from '@icon/regular/text-h-three.svg';
 import TextH2 from '@icon/regular/text-h-two.svg';
 import TextT from '@icon/regular/text-t.svg';
-import { INSERT_TABLE_COMMAND, TableNode } from '@lexical/table';
-import type { LexicalEditor } from 'lexical';
-import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';
-import {
-  INSERT_AWAIT_NODE_COMMAND,
-  REPLACE_AWAIT_NODE_COMMAND,
-} from '../await';
-import { TRY_INSERT_EQUATION_COMMAND } from '../katex';
-import { TRY_INSERT_LINK_COMMAND } from '../links';
-import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
-import { INSERT_DOCUMENT_MENTION_COMMAND } from '../mentions/mentionsPlugin';
-import { NODE_TRANSFORM } from '../node-transform';
+import { LinkNode } from '@lexical/link';
+import { ListNode } from '@lexical/list';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
+import { INSERT_TABLE_COMMAND, TableNode } from '@lexical/table';
 import {
   $createDocumentMentionNode,
   AwaitNode,
@@ -37,11 +30,18 @@ import {
   ImageNode,
   VideoNode,
 } from '@lexical-core';
+import type { LexicalEditor } from 'lexical';
 import { nanoid } from 'nanoid';
-import { ListNode } from '@lexical/list';
-import { LinkNode } from '@lexical/link';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import type { ComposeTaskSuccess } from '@block-md/component/ComposeTask';
+import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';
+import {
+  INSERT_AWAIT_NODE_COMMAND,
+  REPLACE_AWAIT_NODE_COMMAND,
+} from '../await';
+import { TRY_INSERT_EQUATION_COMMAND } from '../katex';
+import { TRY_INSERT_LINK_COMMAND } from '../links';
+import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
+import { INSERT_DOCUMENT_MENTION_COMMAND } from '../mentions/mentionsPlugin';
+import { NODE_TRANSFORM } from '../node-transform';
 import { type Action, ActionCategory } from './types';
 
 export const ACTIONS: Action[] = [

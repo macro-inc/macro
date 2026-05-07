@@ -1,13 +1,13 @@
+import type { ReplyType } from '@block-email/util/replyType';
+import { useEmail } from '@core/context/user';
 import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@icon/regular/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
-import { useEmail } from '@core/context/user';
+import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
 import { type Setter, Show } from 'solid-js';
 import { getEmailFormRegistry } from './EmailFormContext';
-import type { ReplyType } from '@block-email/util/replyType';
-import { createCallback } from '@solid-primitives/rootless';
 
 const EMAIL_MESSAGE_ACTIONS = ['reply', 'reply-all', 'forward'] as const;
 export type EmailMessageAction = (typeof EMAIL_MESSAGE_ACTIONS)[number];

@@ -1,16 +1,16 @@
-import { onMount } from 'solid-js';
-import type { LessonContentProps, LessonDefinition } from '../types';
+import ArrowUpIcon from '@icon/regular/arrow-up.svg';
+import CalendarBlankIcon from '@icon/regular/calendar-blank.svg';
 
 import CheckIcon from '@icon/regular/check.svg';
-import UsersIcon from '@icon/regular/users.svg';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
-import CalendarBlankIcon from '@icon/regular/calendar-blank.svg';
-import FlagIcon from '@icon/regular/flag.svg';
-import PlusIcon from '@icon/regular/plus.svg';
-import PaperclipIcon from '@icon/regular/paperclip.svg';
-import TextAaIcon from '@icon/regular/text-aa.svg';
 import ClockIcon from '@icon/regular/clock.svg';
-import ArrowUpIcon from '@icon/regular/arrow-up.svg';
+import FlagIcon from '@icon/regular/flag.svg';
+import PaperclipIcon from '@icon/regular/paperclip.svg';
+import PlusIcon from '@icon/regular/plus.svg';
+import TextAaIcon from '@icon/regular/text-aa.svg';
+import UsersIcon from '@icon/regular/users.svg';
+import { onMount } from 'solid-js';
+import type { LessonContentProps, LessonDefinition } from '../types';
 
 function ComposersPreviewContent(props: LessonContentProps) {
   onMount(() => setTimeout(() => props.onComplete('Got it')));

@@ -1,18 +1,18 @@
-import { Dynamic } from 'solid-js/web';
-import type { JSX } from 'solid-js';
-import { match } from 'ts-pattern';
-import type { Notification } from '../types/notification';
-import type { NotificationStack } from '@notifications';
 import type { NotificationType } from '@core/types';
-import ChatIcon from '@icon/regular/chat.svg';
 import ArrowBendUpLeftIcon from '@icon/regular/arrow-bend-up-left.svg';
 import AtIcon from '@icon/regular/at.svg';
-import FilesIcon from '@icon/regular/files.svg';
-import EnvelopeIcon from '@icon/regular/envelope.svg';
-import UserPlusIcon from '@icon/regular/user-plus.svg';
+import ChatIcon from '@icon/regular/chat.svg';
 import CheckIcon from '@icon/regular/check.svg';
+import EnvelopeIcon from '@icon/regular/envelope.svg';
+import FilesIcon from '@icon/regular/files.svg';
+import UserPlusIcon from '@icon/regular/user-plus.svg';
 import PhoneIcon from '@macro-icons/wide/call.svg';
+import type { NotificationStack } from '@notifications';
 import { cn } from '@ui';
+import type { JSX } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { match } from 'ts-pattern';
+import type { Notification } from '../types/notification';
 
 interface NotificationIconProps {
   notification?: Notification;

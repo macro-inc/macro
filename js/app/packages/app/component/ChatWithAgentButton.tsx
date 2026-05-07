@@ -1,8 +1,8 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
 import type { Attachment } from '@core/component/AI/types';
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
+import { toast } from '@core/component/Toast/Toast';
+import { Tooltip } from '@core/component/Tooltip';
 import { createChat } from '@core/util/create';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { ChannelType } from '@service-cognition/generated/schemas/channelType';

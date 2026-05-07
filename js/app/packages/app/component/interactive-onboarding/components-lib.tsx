@@ -1,15 +1,15 @@
+import CheckIcon from '@icon/bold/check-bold.svg';
+import { cn } from '@ui';
 import {
+  type Component,
   createSignal,
   For,
+  type JSX,
   onCleanup,
   onMount,
   Show,
-  type Component,
-  type JSX,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import CheckIcon from '@icon/bold/check-bold.svg';
-import { cn } from '@ui';
 
 interface CalloutShellProps {
   leader: string;

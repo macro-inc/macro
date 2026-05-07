@@ -1,9 +1,12 @@
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
+import { useAnalytics } from '@app/component/analytics-context';
+import type { ListView } from '@app/constants/list-views';
 import { hapticImpact } from '@core/mobile/haptics';
+import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import { Layer } from '@ui';
 import {
   type Component,
   createMemo,
@@ -12,10 +15,7 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import type { ListView } from '@app/constants/list-views';
 import { runCreateAction, setCreateMenuOpen } from '../../Launcher';
-import { useAnalytics } from '@app/component/analytics-context';
-import { Layer } from '@ui';
 
 const ICON_ANIMATION_DURATION_MS = 500;
 

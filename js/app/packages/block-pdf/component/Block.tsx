@@ -1,5 +1,6 @@
 import './block.css';
 
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import {
   type LocationBlockParams,
   locationChangedSignal,
@@ -8,7 +9,6 @@ import {
 import { showTabBarSignal } from '@block-pdf/signal/placeables';
 import { useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { blockHandleSignal, blockMetadataSignal } from '@core/signal/load';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, leading } from '@solid-primitives/scheduled';

@@ -1,20 +1,20 @@
-import { useContext, createEffect, type JSX } from 'solid-js';
-import { reconcile, createStore } from 'solid-js/store';
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import {
-  type NotificationStack,
   getMostRecentNotification,
+  type NotificationStack,
   openNotification,
 } from '@notifications';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import type { WithNotification } from '../types/notification';
-import { isChannelEntity, type EntityData } from '../types/entity';
-import { CollapsibleList } from '../components/CollapsibleList';
-import { isNotificationUnread } from '../utils/notification';
-import { Entity } from '../entity';
-import { UnreadIndicator } from '../components/UnreadIndicator';
-import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { cn } from '@ui';
+import { createEffect, type JSX, useContext } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
+import { CollapsibleList } from '../components/CollapsibleList';
+import { UnreadIndicator } from '../components/UnreadIndicator';
+import { Entity } from '../entity';
+import { type EntityData, isChannelEntity } from '../types/entity';
+import type { WithNotification } from '../types/notification';
+import { isNotificationUnread } from '../utils/notification';
 import { useNotificationStackActions } from './notification-actions';
 import { NotificationContent } from './notification-content';
 import { NotificationTimestamp } from './notification-timestamp';

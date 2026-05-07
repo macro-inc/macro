@@ -1,27 +1,26 @@
+import type { SidebarState } from '@app/component/app-sidebar/sidebar';
+import { useSenderName } from '@app/component/app-sidebar/utils';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import type { UnifiedNotification } from '@notifications/types';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { Tooltip } from '@core/component/Tooltip';
+import { UserIcon } from '@core/component/UserIcon';
+import { compareDateDesc } from '@core/util/date';
+import { ContextMenu } from '@kobalte/core/context-menu';
 import { openNotification } from '@notifications';
+import { isChannelNotification } from '@notifications/notification-helpers';
+import { getChannelNotificationParams } from '@notifications/notification-navigation';
+import type { UnifiedNotification } from '@notifications/types';
+import { Button, cn } from '@ui';
 import {
-  For,
-  Show,
-  createSignal,
-  createMemo,
   createEffect,
+  createMemo,
+  createSignal,
+  For,
   on,
   onMount,
+  Show,
 } from 'solid-js';
-import { UserIcon } from '@core/component/UserIcon';
-import { useSenderName } from '@app/component/app-sidebar/utils';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { compareDateDesc } from '@core/util/date';
-import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-import { ContextMenu } from '@kobalte/core/context-menu';
-import { Tooltip } from '@core/component/Tooltip';
-import { getChannelNotificationParams } from '@notifications/notification-navigation';
-import { isChannelNotification } from '@notifications/notification-helpers';
-import type { SidebarState } from '@app/component/app-sidebar/sidebar';
-import { cn } from '@ui';
-import { Button } from '@ui';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;

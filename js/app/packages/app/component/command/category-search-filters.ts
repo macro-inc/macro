@@ -1,6 +1,6 @@
-import { INDEX_OPTIONS } from '@app/component/next-soup/soup-view/filters-bar/search-filter-controls';
-import type { Query } from '@app/component/next-soup/filters/filter-store/types';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
+import type { Query } from '@app/component/next-soup/filters/filter-store/types';
+import { INDEX_OPTIONS } from '@app/component/next-soup/soup-view/filters-bar/search-filter-controls';
 import type { CategoryFilter } from './types';
 
 export type CategorySearchFilters = {

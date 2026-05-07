@@ -1,15 +1,15 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { getDestinationFromOptions } from '@core/util/destination';
+import { toast } from '@core/component/Toast/Toast';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
+import { getDestinationFromOptions } from '@core/util/destination';
 import { isErr } from '@core/util/maybeResult';
-import { toast } from '@core/component/Toast/Toast';
-import { commsServiceClient } from '@service-comms/client';
-import PhoneCallIcon from '@macro-icons/wide/call.svg';
 import XIcon from '@icon/regular/x.svg';
+import PhoneCallIcon from '@macro-icons/wide/call.svg';
+import { commsServiceClient } from '@service-comms/client';
+import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
-import { Dialog, Button, Surface } from '@ui';
 
 export function NewCallButton() {
   const [isOpen, setIsOpen] = createSignal(false);

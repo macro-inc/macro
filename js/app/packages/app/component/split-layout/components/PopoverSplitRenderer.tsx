@@ -1,3 +1,4 @@
+import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { Dialog, Surface } from '@ui';
@@ -11,7 +12,6 @@ import type {
   SplitId,
   SplitMount,
 } from '../layoutManager';
-import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 
 false && clickOutside;
 

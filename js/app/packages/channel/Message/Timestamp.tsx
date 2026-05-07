@@ -1,8 +1,8 @@
-import { cn } from '@ui';
-import { formatDate, formatTime } from '@core/util/date';
-import { useMessage } from './context';
-import { Match, Switch } from 'solid-js';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { formatDate, formatTime } from '@core/util/date';
+import { cn } from '@ui';
+import { Match, Switch } from 'solid-js';
+import { useMessage } from './context';
 
 type TimestampProps = {
   class?: string;

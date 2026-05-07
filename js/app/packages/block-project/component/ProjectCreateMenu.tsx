@@ -1,28 +1,25 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { cn } from '@ui';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
-import { Button } from '@ui';
-import { toast } from '@core/component/Toast/Toast';
-import { pressedKeys } from '@core/hotkey/state';
-import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
+import { toast } from '@core/component/Toast/Toast';
+import { pressedKeys } from '@core/hotkey/state';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import {
   createCanvasFileFromJsonString,
   createChat,
   createMarkdownFile,
   createTask,
 } from '@core/util/create';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Layer } from '@ui';
 import PlusIcon from '@icon/regular/plus.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { createProject } from '@queries/storage/projects';
+import { Button, cn, Dialog, Layer, Surface } from '@ui';
 import { type Component, createSignal, For } from 'solid-js';
-import { Dialog, Surface } from '@ui';
 
 type MenuItemProps = {
   label: string;

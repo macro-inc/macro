@@ -1,7 +1,10 @@
-import { cn } from '@ui';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ItemType } from '@service-storage/client';
+import { Button, cn } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -10,15 +13,11 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from './split-layout/components/SplitHeader';
+import { SplitPermissionsBadge } from './split-layout/components/SplitLabel';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from './split-layout/components/SplitToolbar';
-import { Button } from '@ui';
-import { Dynamic } from 'solid-js/web';
-import { SplitPermissionsBadge } from './split-layout/components/SplitLabel';
-import { LabelAndHotKey } from '@core/component/Tooltip';
-import type { HotkeyToken } from '@core/hotkey/tokens';
 
 export type BlockTool = {
   label: string | (() => string);

@@ -1,21 +1,21 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   SegmentedControl as KSegmentedControl,
-  useSegmentedControlContext,
   type SegmentedControlRootProps,
+  useSegmentedControlContext,
 } from '@kobalte/core/segmented-control';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { cn } from '@ui';
 import {
-  type JSX,
   batch,
   type ComponentProps,
   createEffect,
   createSignal,
   For,
+  type JSX,
   on,
   splitProps,
 } from 'solid-js';
-import { cn } from '@ui';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export type TabItem = {
   value: string;

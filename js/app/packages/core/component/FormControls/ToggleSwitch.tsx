@@ -2,6 +2,7 @@ import {
   Switch as KSwitch,
   type SwitchRootOptions,
 } from '@kobalte/core/switch';
+import { Button } from '@ui';
 import {
   type Component,
   createEffect,
@@ -9,7 +10,6 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
-import { Button } from '@ui';
 
 type Size = 'SM' | 'Base';
 const sizeClass: Record<Size, string> = {

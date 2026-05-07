@@ -1,11 +1,11 @@
 import type { DateValue } from '@core/util/date';
 import {
+  differenceInHours,
+  differenceInMinutes,
   format,
+  isSameYear,
   isToday,
   isYesterday,
-  isSameYear,
-  differenceInMinutes,
-  differenceInHours,
 } from 'date-fns';
 
 /**

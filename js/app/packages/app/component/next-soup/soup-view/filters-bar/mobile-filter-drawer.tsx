@@ -2,43 +2,42 @@ import {
   MobileDrawer,
   scrollToFocusedInput,
 } from '@app/component/mobile/MobileDrawer';
-import { Accordion } from '@kobalte/core/accordion';
-import { cn } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
-import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
-import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import CheckIcon from '@icon/regular/check.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
-import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
-import { Button } from '@ui';
 import {
-  VIEW_FILTER_CATEGORIES,
-  buildContactLabel,
-  type FilterOption,
-} from './unified-filter-dropdown';
-import { ActiveFilterChips } from './active-filter-chips';
-import { useFilterRefinements } from './use-filter-refinements';
+  type FilterContext,
+  NO_ASSIGNEE,
+} from '@app/component/next-soup/filters';
+import {
+  CHANNEL_SORT_OPTIONS,
+  DEFAULT_SORT_OPTIONS,
+  DOCUMENT_SORT_OPTIONS,
+  EMAIL_SORT_OPTIONS,
+  type SortOption,
+  type SystemSortOption,
+  TASK_SORT_OPTIONS,
+} from '@app/component/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
-import { useContacts } from '@queries/contacts/contacts';
-import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
+import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
+import { useUserId } from '@core/context/user';
+import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import CheckIcon from '@icon/regular/check.svg';
+import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
+import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import { Accordion } from '@kobalte/core/accordion';
+import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';
+import { useContacts } from '@queries/contacts/contacts';
+import { Button, cn } from '@ui';
+import { createMemo, createSignal, For, Show } from 'solid-js';
+import { ActiveFilterChips } from './active-filter-chips';
 import {
-  DEFAULT_SORT_OPTIONS,
-  TASK_SORT_OPTIONS,
-  DOCUMENT_SORT_OPTIONS,
-  EMAIL_SORT_OPTIONS,
-  CHANNEL_SORT_OPTIONS,
-  type SystemSortOption,
-  type SortOption,
-} from '@app/component/next-soup/soup-view/sort-options';
-import {
-  NO_ASSIGNEE,
-  type FilterContext,
-} from '@app/component/next-soup/filters';
+  buildContactLabel,
+  type FilterOption,
+  VIEW_FILTER_CATEGORIES,
+} from './unified-filter-dropdown';
+import { useFilterRefinements } from './use-filter-refinements';
 
 function scrollAccordionItemToTop(
   e: MouseEvent,

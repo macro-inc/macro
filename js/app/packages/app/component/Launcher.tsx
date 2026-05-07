@@ -1,4 +1,5 @@
 import { analytics } from '@app/lib/analytics';
+import { setAutomationComposerOpen } from '@block-automation/component';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
@@ -38,6 +39,7 @@ import WideFolder from '@macro-icons/wide/folder.svg';
 import WideStar from '@macro-icons/wide/star.svg';
 import WideTask from '@macro-icons/wide/task.svg';
 import { createProject } from '@queries/storage/projects';
+import { cn, Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -50,9 +52,6 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
-import { cn } from '@ui';
-import { setAutomationComposerOpen } from '@block-automation/component';
-import { Layer } from '@ui';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;

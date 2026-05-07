@@ -1,5 +1,5 @@
-import { cn } from '@ui';
 import type { GroupMentionDecoratorProps } from '@lexical-core';
+import { cn } from '@ui';
 import { useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 

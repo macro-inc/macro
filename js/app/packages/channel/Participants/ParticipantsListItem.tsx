@@ -1,10 +1,10 @@
-import { Button } from '@ui';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { idToEmail } from '@core/user';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import IconX from '@icon/regular/x.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
+import { Button } from '@ui';
 
 export function ParticipantsListItem(props: {
   participant: ChannelParticipant;

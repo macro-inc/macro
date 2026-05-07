@@ -1,8 +1,6 @@
-import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui';
-
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { DebugSlider } from '@core/component/Slider';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { Bar } from '@core/component/TopBar/Bar';
 import clickOutside from '@core/directive/clickOutside';
 import Rotate from '@icon/regular/arrow-counter-clockwise.svg';
@@ -18,6 +16,7 @@ import Plus from '@icon/regular/plus.svg';
 import Trash from '@icon/regular/trash.svg';
 import X from '@icon/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { Button } from '@ui';
 
 import {
   createEffect,

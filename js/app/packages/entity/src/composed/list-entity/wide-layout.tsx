@@ -1,6 +1,6 @@
-import { Match, Show, Switch } from 'solid-js';
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { cn } from '@ui';
+import { Match, Show, Switch } from 'solid-js';
 import { AttendanceBadge, SharedBadge } from '../../components/Badges';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';

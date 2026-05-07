@@ -60,6 +60,7 @@ import {
   createEffect,
   createSignal,
   type JSX,
+  lazy,
   Match,
   on,
   onCleanup,
@@ -68,29 +69,28 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { currentThemeId } from '../../theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
   systemThemeEffect,
 } from '../../theme/utils/themeUtils';
-import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { Login } from './auth/Login';
-import { Signup } from './auth/Signup';
-import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 import { setCookie } from './auth/Shared';
+import { Signup } from './auth/Signup';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
-import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
+import { SearchProvider } from './next-soup/search-context';
 import { ReactiveFavicon } from './ReactiveFavicon';
-import { lazy } from 'solid-js';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 
 const InteractiveOnboarding = lazy(
   () => import('./interactive-onboarding/InteractiveOnboarding')
 );
-import { QuickAccessProvider } from '@core/context/quickAccess';
+
 import {
   AnalyticsContextProvider,
   useAnalytics,
@@ -98,6 +98,7 @@ import {
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { QuickAccessProvider } from '@core/context/quickAccess';
 import { Button } from '@ui';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */

@@ -1,41 +1,41 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
-  enqueuePreviewWakeup,
-  isAccessiblePreviewItem,
-  useItemPreview,
-  type ItemEntity,
-} from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { truncateString } from '@core/util/string';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import type { NamedSubType } from '@entity';
 import EyeSlash from '@icon/duotone/eye-slash-duotone.svg';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
-import type { NamedSubType } from '@entity';
+import {
+  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
+  enqueuePreviewWakeup,
+  type ItemEntity,
+  isAccessiblePreviewItem,
+  useItemPreview,
+} from '@queries/preview';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
+import { cn } from '@ui';
 import {
-  Match,
-  Switch,
-  Suspense,
-  createEffect,
-  type ComponentProps,
   type Accessor,
+  type ComponentProps,
+  createEffect,
+  Match,
+  Suspense,
+  Switch,
 } from 'solid-js';
-import { PopupPreview } from './DocumentPreview';
-import { HoverCard } from './HoverCard';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
+import { PopupPreview } from './DocumentPreview';
 import {
   EntityIcon,
   type EntityIconProps,
   getPreviewItemIconType,
 } from './EntityIcon';
-import { cn } from '@ui';
+import { HoverCard } from './HoverCard';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   const [item] = useItemPreview(entity);

@@ -1,6 +1,7 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { Popover, type PopoverRootProps } from '@kobalte/core/popover';
 import { createMutationObserver } from '@solid-primitives/mutation-observer';
+import { Button } from '@ui';
 import {
   type ComponentProps,
   createEffect,
@@ -10,7 +11,6 @@ import {
   type ParentComponent,
   Show,
 } from 'solid-js';
-import { Button } from '@ui';
 
 type ShadowTheme = 'Base' | 'AccentSpread';
 

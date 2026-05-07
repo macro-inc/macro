@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
 import { MARKDOWN_LORO_SCHEMA } from '@block-md/definition';
 import { rawStateToLoroSnapshot } from '@core/collab/utils';
@@ -9,30 +10,29 @@ import {
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
+  authKeys,
   invalidateUserQuota,
   type UserInfoData,
-  authKeys,
 } from '@queries/auth';
 import { queryClient } from '@queries/client';
+import { postNewHistoryItem } from '@queries/history/history';
+import { setPreviewOnCreate } from '@queries/preview/preview';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { CreateChatRequest } from '@service-cognition/generated/schemas';
-import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
-import { postNewHistoryItem } from '@queries/history/history';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { syncServiceClient } from '@service-sync/client';
+import { isPaymentError } from './handlePaymentError';
 import { contentHash } from './hash';
 import {
   getExtensionForLanguage,
   isCodeEditorExtensionSupported,
   isCodeEditorLanguageSupported,
 } from './languageQuery';
-import { isPaymentError } from './handlePaymentError';
 import { err, isErr, ok } from './maybeResult';
-import { refetchSoupEntity } from '@queries/soup/cache';
-import { setPreviewOnCreate } from '@queries/preview/preview';
 
 /**
  * Generate a fake sha256 hash

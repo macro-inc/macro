@@ -1,6 +1,6 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import { cn } from '@ui';
 import CaretDown from '@icon/regular/caret-down.svg';
+import { cn } from '@ui';
 import { type Component, type JSX, Show, useContext } from 'solid-js';
 import {
   EditableLabel,

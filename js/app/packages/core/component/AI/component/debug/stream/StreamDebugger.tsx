@@ -1,6 +1,6 @@
-import { Button } from '@ui';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas';
 import type { ChatMessageStream } from '@service-connection/stream';
+import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import {
   ChatInputProvider,

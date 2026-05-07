@@ -1,24 +1,20 @@
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   type PreviewState,
   useBlockOwner,
   useMaybeBlockName,
 } from '@core/block';
+import { useItemPreviewData } from '@core/component/ItemPreview';
 import {
   DropdownMenuContent,
   MenuItem,
   MenuSeparator,
 } from '@core/component/Menu';
-import { useItemPreviewData } from '@core/component/ItemPreview';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
-import {
-  isAccessiblePreviewItem,
-  type AccessiblePreviewItem,
-} from '@queries/preview';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { matches } from '@core/util/match';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
 import Minimize from '@icon/regular/arrows-in.svg';
@@ -39,8 +35,13 @@ import {
   setDocumentCardPreviewComponent,
   unsetDocumentCardPreviewCache,
 } from '@lexical-core';
+import {
+  type AccessiblePreviewItem,
+  isAccessiblePreviewItem,
+} from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { debounce } from '@solid-primitives/scheduled';
+import { Button, cn, Layer } from '@ui';
 import {
   $addUpdateTag,
   $createNodeSelection,
@@ -63,14 +64,13 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { formatDate } from '../../../../util/date';
+import { TaskPropertiesPreview } from '../../../DocumentPreview';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { dispatchInternalLayoutShift } from '../../plugins/shared/utils';
 import { BlockLink } from '../core/BlockLink';
 import { ChannelMessageThreadCard } from './ChannelMessageThreadCard';
-import { TaskPropertiesPreview } from '../../../DocumentPreview';
-import { Button, cn, Layer } from '@ui';
 
 false && floatWithElement;
 

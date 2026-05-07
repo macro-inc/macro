@@ -1,3 +1,4 @@
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { queryReadyGate } from '@queries/gate';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
@@ -8,7 +9,6 @@ import { previewDataLoader } from './dataloader';
 import { defaultNameTransform, fetchMessageContext } from './fetchers';
 import { previewKeys } from './keys';
 import type { AccessiblePreviewItem, ItemEntity, PreviewItem } from './types';
-import { LOCAL_ONLY } from '@core/constant/featureFlags';
 
 // DEBUG VARS
 const SIMULATE_BACKEND_DELAY_MS = 0;

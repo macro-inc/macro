@@ -1,5 +1,7 @@
 import { MediaImage } from '@channel/Media/MediaImage';
 import { MediaVideo } from '@channel/Media/MediaVideo';
+import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
+import type { MediaItem } from '@channel/Media/media-items';
 import { EntityIcon } from '@core/component/EntityIcon';
 import {
   staticFileIdEndpoint,
@@ -19,8 +21,6 @@ import {
   Switch,
   splitProps,
 } from 'solid-js';
-import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
-import type { MediaItem } from '@channel/Media/media-items';
 import { useInput, useInputCommands } from './context';
 import type { InputAttachmentData, InputAttachmentKind } from './types';
 

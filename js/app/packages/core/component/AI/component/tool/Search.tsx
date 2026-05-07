@@ -1,13 +1,13 @@
+import { getEntityClickContent } from '@channel/Attachments/attachment-utils';
+import { ListEntity } from '@entity';
 import CaretRight from '@icon/regular/caret-right.svg?component-solid';
 import MagnifyingGlass from '@phosphor-icons/core/regular/magnifying-glass.svg';
+import { useSearchResponseItemMapper } from '@queries/soup/transform-utils';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { useSplitLayout } from 'app/component/split-layout/layout';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer, type ToolRenderContext } from './ToolRenderer';
-import { ListEntity } from '@entity';
-import { useSearchResponseItemMapper } from '@queries/soup/transform-utils';
-import { getEntityClickContent } from '@channel/Attachments/attachment-utils';
 
 type UnifiedSearchResult = NamedTool<
   'NameSearch',

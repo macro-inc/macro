@@ -1,8 +1,8 @@
+import { throwOnErr } from '@core/util/maybeResult';
 import { useLeaveCallMutation } from '@queries/call/call';
 import { queryClient } from '@queries/client';
-import { useMutation } from '@tanstack/solid-query';
 import { callServiceClient } from '@service-call/client';
-import { throwOnErr } from '@core/util/maybeResult';
+import { useMutation } from '@tanstack/solid-query';
 import { RoomEvent } from 'livekit-client';
 import { createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';

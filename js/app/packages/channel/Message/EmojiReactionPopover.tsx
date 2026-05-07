@@ -1,7 +1,7 @@
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import { Popover } from '@kobalte/core/popover';
 import { Layer } from '@ui';
-import { createSignal, splitProps, type JSX } from 'solid-js';
+import { createSignal, type JSX, splitProps } from 'solid-js';
 
 type EmojiReactionPopoverPlacement = 'top' | 'right' | 'bottom' | 'left';
 

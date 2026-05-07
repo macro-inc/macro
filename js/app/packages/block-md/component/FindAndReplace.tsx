@@ -1,4 +1,3 @@
-import { cn } from '@ui';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import {
@@ -19,6 +18,7 @@ import CaretUp from '@icon/regular/caret-up.svg';
 import MagnifyingGlass from '@icon/regular/magnifying-glass.svg';
 import X from '@icon/regular/x.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 

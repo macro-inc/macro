@@ -1,4 +1,4 @@
-export { Thread } from './Thread';
 export { ChannelThread } from './ChannelThread';
+export { Thread } from './Thread';
 export { ThreadTypingIndicator } from './ThreadTypingIndicator';
-export type { ThreadProps, ThreadState, ThreadActions } from './types';
+export type { ThreadActions, ThreadProps, ThreadState } from './types';

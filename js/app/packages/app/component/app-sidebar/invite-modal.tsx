@@ -1,13 +1,13 @@
-import { createSignal, Show } from 'solid-js';
+import { toast } from '@core/component/Toast/Toast';
 import { useReferralCode } from '@core/context/user';
+import { isOk } from '@core/util/maybeResult';
 import { getWebOrigin } from '@core/util/webOrigin';
+import ClipboardIcon from '@icon/regular/clipboard.svg';
+import CloseIcon from '@icon/regular/x.svg';
 import { authServiceClient } from '@service-auth/client';
 import { contactsClient } from '@service-contacts/client';
-import { isOk } from '@core/util/maybeResult';
-import { Dialog, Button, Panel } from '@ui';
-import { toast } from '@core/component/Toast/Toast';
-import CloseIcon from '@icon/regular/x.svg';
-import ClipboardIcon from '@icon/regular/clipboard.svg';
+import { Button, Dialog, Panel } from '@ui';
+import { createSignal, Show } from 'solid-js';
 
 function parseEmails(raw: string): string[] {
   return raw

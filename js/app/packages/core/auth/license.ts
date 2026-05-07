@@ -1,5 +1,5 @@
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useLicenseStatus } from '@core/context/user';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createMemo } from 'solid-js';
 
 export function useHasPaidAccess() {

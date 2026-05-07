@@ -2,8 +2,8 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
-import { Button } from '@ui';
 import { formatDate } from '@core/util/date';
+import { Button } from '@ui';
 import {
   type Component,
   createEffect,

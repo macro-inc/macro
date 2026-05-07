@@ -1,5 +1,5 @@
 import type { ChannelParticipant } from '@queries/channel/types';
-import { Show, type Accessor } from 'solid-js';
+import { type Accessor, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { ParticipantsEmptyState } from './ParticipantsEmptyState';
 import { ParticipantsListItem } from './ParticipantsListItem';

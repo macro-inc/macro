@@ -1,12 +1,7 @@
-import { cn } from '@ui';
-import { Button } from '@ui';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import {
-  fetchImagesViaPlatform,
-  resolveCidImages,
-} from '../util/resolveEmailImages';
+import { useEmail } from '@core/context/user';
 import {
   parseEmailContent,
   processEmailColors,
@@ -14,7 +9,7 @@ import {
 } from '@core/email';
 import DotsThree from '@icon/light/dots-three-light.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
-import { useEmail } from '@core/context/user';
+import { Button, cn } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -28,6 +23,10 @@ import {
 } from 'solid-js';
 import { themeReactive } from '../../theme/signals/themeReactive';
 import { themeUpdate } from '../../theme/signals/themeSignals';
+import {
+  fetchImagesViaPlatform,
+  resolveCidImages,
+} from '../util/resolveEmailImages';
 
 interface EmailMessageBodyProps {
   message: ApiMessage;

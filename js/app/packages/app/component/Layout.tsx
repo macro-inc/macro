@@ -1,9 +1,20 @@
+import {
+  AppSidebar,
+  type SidebarState,
+} from '@app/component/app-sidebar/sidebar';
+import {
+  isSidebarVisible,
+  SidebarVisibilityContext,
+} from '@app/component/sidebarVisibility';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { mountGlobalFocusListener } from '@app/signal/focus';
+import { AutomationComposer } from '@block-automation/component';
 import { useIsAuthenticated } from '@core/auth';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
+import { makePersisted } from '@solid-primitives/storage';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
@@ -15,35 +26,25 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import Banner from './banner/Banner';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
-import { DevStatusBar } from './DevStatusBar';
+import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
-import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
-import { IosShareSheet } from './ios-share-sheet/IosShareSheet';
-import { MacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
 import { CommandMenu } from './command';
+import { DevStatusBar } from './DevStatusBar';
 import GlobalShortcuts from './GlobalHotkeys';
+import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
 import { ItemDndProvider } from './ItemDragAndDrop';
+import { IosShareSheet } from './ios-share-sheet/IosShareSheet';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
-import { AutomationComposer } from '@block-automation/component';
-import { Paywall } from './paywall/Paywall';
-import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
-import { useAppSquishHandlers } from './useAppSquishHandlers';
-import {
-  AppSidebar,
-  type SidebarState,
-} from '@app/component/app-sidebar/sidebar';
-import { isMobile } from '@core/mobile/isMobile';
+import { MacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
 import { MobileDock } from './mobile/MobileDock';
 import { MobileSearchOuter } from './mobile/MobileSearch';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
-import { makePersisted } from '@solid-primitives/storage';
-import {
-  SidebarVisibilityContext,
-  isSidebarVisible,
-} from '@app/component/sidebarVisibility';
-export { SidebarVisibilityContext, isSidebarVisible };
+import { Paywall } from './paywall/Paywall';
+import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
+import { useAppSquishHandlers } from './useAppSquishHandlers';
+
+export { isSidebarVisible, SidebarVisibilityContext };
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,

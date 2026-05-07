@@ -1,10 +1,10 @@
 import { useBlockId } from '@core/block';
 import { useListKeyBindings } from '@core/util/useListKeyBindings';
-import LoadingSpinner from '@icon/regular/spinner.svg';
 import PlusIcon from '@icon/regular/plus.svg';
-import { useAddEntityPropertyMutation } from '@queries/properties/entity';
+import LoadingSpinner from '@icon/regular/spinner.svg';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
-import { cn } from '@ui';
+import { useAddEntityPropertyMutation } from '@queries/properties/entity';
+import { cn, Dialog, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -25,7 +25,6 @@ import {
   toPropertyDefinitionDomain,
   useSearchInputFocus,
 } from '../../utils';
-import { Dialog, Surface } from '@ui';
 
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();

@@ -1,3 +1,4 @@
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { createNumericParser } from '@block-canvas/util/parse';
 import {
   useBlockId,
@@ -5,7 +6,6 @@ import {
   useIsNestedBlock,
 } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { blockFileSignal, blockHandleSignal } from '@core/signal/load';
 import { isErr } from '@core/util/maybeResult';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';

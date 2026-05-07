@@ -1,9 +1,9 @@
-import { cn } from '@ui';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import BuildingIcon from '@icon/regular/buildings.svg';
 import UserIcon from '@icon/regular/user.svg';
 import type { ContactMentionDecoratorProps } from '@lexical-core';
+import { cn } from '@ui';
 import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';
 import { createSignal, Show, useContext } from 'solid-js';
 import { Portal } from 'solid-js/web';

@@ -9,7 +9,7 @@ import LaptopIcon from '@icon/regular/laptop.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { DocumentMentionInfo } from '@lexical-core';
-import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
+import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
 import fuzzy from 'fuzzy';
 import {
   createMemo,

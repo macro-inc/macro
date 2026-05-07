@@ -1,8 +1,8 @@
-import { Select } from '@kobalte/core/select';
-import type { CollectionNode } from '@kobalte/core';
+import { type PaidPlanTier, PLAN_FEATURES } from '@app/component/paywall/plans';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
-import { PLAN_FEATURES, type PaidPlanTier } from '@app/component/paywall/plans';
+import type { CollectionNode } from '@kobalte/core';
+import { Select } from '@kobalte/core/select';
 import type { ValidComponent } from 'solid-js';
 
 type TierOption = { value: PaidPlanTier; label: string; description: string };

@@ -1,5 +1,4 @@
 import * as stackingContext from '@core/constant/stackingContext';
-import { cn } from '@ui';
 import { isMobile } from '@core/mobile/isMobile';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
@@ -8,6 +7,8 @@ import DownloadIcon from '@icon/regular/download-simple.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Dialog, useDialogContext } from '@kobalte/core/dialog';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import { isIOS } from '@solid-primitives/platform';
+import { Button, cn } from '@ui';
 import {
   type Accessor,
   type Component,
@@ -25,9 +26,7 @@ import {
 } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
 import { LabelAndHotKey } from './Tooltip';
-import { Button } from '@ui';
 import { Zoompinch, type ZoompinchHandle } from './Zoompinch';
-import { isIOS } from '@solid-primitives/platform';
 
 const SpinnerIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (p) => (
   <Spinner {...p} class="animate-spin" />

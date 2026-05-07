@@ -1,13 +1,13 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
-import { triggerFocusInput } from '@core/directive/focusInput';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
+import { triggerFocusInput } from '@core/directive/focusInput';
 import { InlineEntity } from '@entity';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
 import { createSoupEntityActions } from './create-soup-entity-actions';
 import { useSoupEntityActionDrawer } from './soup-entity-action-drawer-context';
 import { useSoupView } from './soup-view-context';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 
 export function SoupEntityActionDrawer() {
   const panel = useSplitPanelOrThrow();
