@@ -1,9 +1,9 @@
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Component, createSignal, type ParentProps, Show } from 'solid-js';
 import { usePropertyEntityDisplay } from '../../hooks';
 import type { Property } from '../../types';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 
 type EntityValueDisplayProps = ParentProps<{
   property: Property;
@@ -58,7 +58,7 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
   return (
     <div
       ref={containerRef}
-      class="relative inline-flex max-w-[140px] shrink-0"
+      class="relative inline-flex max-w-35 shrink-0"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >

@@ -1,7 +1,5 @@
 import '../PdfViewer/pdf_viewer.css';
 
-import { cn } from '@ui';
-
 import type { PDFViewer } from '@block-pdf/PdfViewer';
 import { ZOOM_MAX, ZOOM_MIN } from '@block-pdf/PdfViewer/zoom';
 import {
@@ -32,6 +30,7 @@ import { isInDOMRect } from '@core/util/rect';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import { useSearchParams } from '@solidjs/router';
+import { cn } from '@ui';
 import {
   createDeferred,
   createEffect,
@@ -206,8 +205,8 @@ function InnerDocument() {
 function LoadingDocumentSpinnerEffect() {
   return (
     <Show when={!viewerHasVisiblePagesSignal.get()}>
-      <div class="flex absolute w-full h-full z-viewer-document-loading-spinner">
-        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+      <div class="flex absolute size-full z-viewer-document-loading-spinner">
+        <div class="absolute top-1/2 left-1/2 transform -translate-1/2">
           <LoadingSpinner />
         </div>
       </div>
@@ -665,7 +664,7 @@ export function Document() {
             setInitialized: setInitialized,
           }}
           class={cn(
-            'w-full h-full relative outline-none',
+            'size-full relative outline-none',
             disableClick() && 'noClickParse'
           )}
           ref={(ref) => {

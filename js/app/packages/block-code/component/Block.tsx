@@ -1,5 +1,5 @@
-import { useIsNestedBlock } from '@core/block';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import { useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { blockMetadataSignal } from '@core/signal/load';
 import {

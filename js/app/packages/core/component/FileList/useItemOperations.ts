@@ -1,10 +1,10 @@
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import type { ItemType } from '@service-storage/client';
 import {
   getDeletedItems,
   invalidateDeletedItems,
   setDeletedItems,
 } from '@queries/storage/deleted';
+import type { ItemType } from '@service-storage/client';
 import type { Item } from '@service-storage/generated/schemas/item';
 import {
   createCallback,

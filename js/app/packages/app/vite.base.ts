@@ -1,4 +1,4 @@
-import { execSync, exec } from 'node:child_process';
+import { exec, execSync } from 'node:child_process';
 import { unwatchFile, watchFile } from 'node:fs';
 import { resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
@@ -172,6 +172,7 @@ export const createAppViteConfig = (): UserConfigFn => {
       },
       resolve: {
         dedupe: [
+          'loro-crdt',
           '@codingame/monaco-vscode-api',
           '@codingame/monaco-vscode-*-common',
         ],

@@ -10,16 +10,16 @@ deploy-dev:
 
 # Prepare database
 prepare:
-    DATABASE_URL={{ DATABASE_URL }} cargo sqlx prepare
+    DATABASE_URL={{ DATABASE_URL }} sqlx prepare
 
 # Build lambda for deployment
-build:
+build compiler="":
     #!/usr/bin/env bash
     if [ ! -d "./pdfium-lib/linux" ]; then
         echo "ERROR: pdfium-lib/linux not found. pdfium binary must be available locally"
         exit 1
     fi
-    SQLX_OFFLINE=true cargo lambda build --release --bin {{ lambda_name }} --output-format zip --include ./pdfium-lib/linux
+    SQLX_OFFLINE=true cargo lambda build {{ if compiler == "" { "" } else { "--compiler " + compiler } }} --release --bin {{ lambda_name }} --output-format zip --include ./pdfium-lib/linux
 
 # Run local development server with automatic OS detection
 local:

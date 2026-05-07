@@ -1,10 +1,10 @@
-import { Track, type RemoteParticipant } from 'livekit-client';
-import { For, Show, type JSXElement } from 'solid-js';
-import { cn } from '@ui';
-import { TrackView } from './TrackView';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { cn } from '@ui';
+import { type RemoteParticipant, Track } from 'livekit-client';
+import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
+import { TrackView } from './TrackView';
 
 function VideoTag(props: {
   children: JSXElement;
@@ -31,7 +31,7 @@ function ParticipantTileWrapper(props: {
 }) {
   return (
     <div
-      class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-[120px]"
+      class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-30"
       classList={{
         'ring-inset ring-2 ring-accent-2': props.isSpeaking,
         'animate-pulse': props.isConnecting,
@@ -60,8 +60,8 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
       <Show
         when={cameraTrack()}
         fallback={
-          <div class="flex items-center justify-center w-full h-full p-4 ring-2 ring-accent-2">
-            <div class="w-12 h-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
+          <div class="flex items-center justify-center size-full p-4 ring-2 ring-accent-2">
+            <div class="size-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
               {displayName().charAt(0).toUpperCase()}
             </div>
           </div>
@@ -86,7 +86,7 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
   };
 
   return (
-    <div class="relative w-full h-full flex items-center justify-center rounded-lg overflow-hidden bg-surface-2">
+    <div class="relative size-full flex items-center justify-center rounded-lg overflow-hidden bg-surface-2">
       <TrackView track={screenTrack()} fit="contain" />
 
       <VideoTag variant="truncated">{displayName()}'s screen</VideoTag>
@@ -143,7 +143,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
         <div class="flex-1 min-h-0 pt-2">
           <div class="h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
             <Show when={callCtx.isScreenSharing()}>
-              <div class="relative w-full h-full">
+              <div class="relative size-full">
                 <TrackView track={localScreenTrack()} fit="contain" />
 
                 <VideoTag>Your screen</VideoTag>
@@ -158,7 +158,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
 
       {/* Participants grid */}
       <div
-        class={`${hasAnyScreenShare() ? 'h-[180px] shrink-0' : 'flex-1 min-h-0'} grid ${gridCols()} gap-2 py-2 auto-rows-fr overflow-hidden`}
+        class={`${hasAnyScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} grid ${gridCols()} gap-2 py-2 auto-rows-fr overflow-hidden`}
       >
         {/* Local participant */}
         <ParticipantTileWrapper
@@ -168,8 +168,8 @@ export function CallOverlay(props: { onLeave: () => void }) {
           <Show
             when={!isConnecting() && !callCtx.isVideoMuted()}
             fallback={
-              <div class="flex items-center justify-center w-full h-full p-4">
-                <div class="w-12 h-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
+              <div class="flex items-center justify-center size-full p-4">
+                <div class="size-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
                   You
                 </div>
               </div>

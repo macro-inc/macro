@@ -1,10 +1,9 @@
 import { type EntityData, InlineEntity } from '@entity';
-import { createBulkDeleteDssItemsMutation } from '@macro-entity';
 import { Dialog } from '@kobalte/core/dialog';
-import { Button } from '@ui';
-import { cn } from '@ui';
-import { For, Show } from 'solid-js';
+import { createBulkDeleteDssItemsMutation } from '@macro-entity';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import { Button, cn } from '@ui';
+import { For, Show } from 'solid-js';
 
 export const BulkDeleteView = (props: {
   entities: EntityData[];
@@ -28,7 +27,7 @@ export const BulkDeleteView = (props: {
 
   return (
     <>
-      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-[40px]">
+      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
         <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
           <CloseIcon />
         </Dialog.CloseButton>

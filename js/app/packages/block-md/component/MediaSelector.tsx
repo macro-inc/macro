@@ -1,9 +1,7 @@
-import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui';
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { INSERT_MEDIA_COMMAND } from '@core/component/LexicalMarkdown/plugins';
 import { DropdownMenuContent } from '@core/component/Menu';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import {
   blockAcceptsFileExtension,
   blockNameToFileExtensions,
@@ -14,7 +12,9 @@ import { fileSelector } from '@core/directive/fileSelector';
 import ImageIcon from '@icon/regular/image.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?component-solid';
+import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import { useHistoryQuery } from '@queries/history/history';
+import { Button } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -159,7 +159,7 @@ export function MediaSelector(props: MediaSelectorProps) {
                     },
                   }}
                 >
-                  <UploadSimple class="w-3.5 h-3.5 shrink-0" />
+                  <UploadSimple class="size-3.5 shrink-0" />
                   <span class="text-sm font-medium">Upload file</span>
                 </div>
               </div>

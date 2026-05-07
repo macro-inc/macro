@@ -42,7 +42,7 @@ impl BuildTeamAccess for OwnerRole {
 
 #[derive(Debug)]
 pub struct TeamAccessRoleExtractor<T> {
-    #[expect(dead_code)]
+    #[allow(dead_code)]
     pub role: TeamRole,
     desired: PhantomData<T>,
 }

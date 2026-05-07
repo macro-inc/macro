@@ -1,15 +1,13 @@
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Combobox } from '@kobalte/core/combobox';
-import { Layer } from '@ui';
-import { cn } from '@ui';
-import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
-import XIcon from '@icon/regular/x.svg';
+import { truncateLabel } from '@core/util/string';
 import CheckIcon from '@icon/regular/check.svg';
-import type { FilterOption } from './unified-filter-dropdown';
+import XIcon from '@icon/regular/x.svg';
+import { Combobox } from '@kobalte/core/combobox';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Button, cn, Layer } from '@ui';
+import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import type { SearchableOption } from './search-filter-controls';
 import { SearchableMultiSelect } from './searchable-multi-select';
-import { Button } from '@ui';
-import { truncateLabel } from '@core/util/string';
+import type { FilterOption } from './unified-filter-dropdown';
 
 export type ActiveFilter = {
   categoryLabel: string;
@@ -210,7 +208,7 @@ const FilterChip = (props: {
 
           <DropdownMenu.Portal>
             <Layer depth={2}>
-              <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
+              <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
                 <For each={props.filter.categoryOptions}>
                   {(option) => {
                     const active = () =>

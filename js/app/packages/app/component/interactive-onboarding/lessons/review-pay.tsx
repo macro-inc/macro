@@ -1,29 +1,28 @@
-import InfoIcon from '@icon/regular/info.svg';
-import { createMemo, createSignal, For, Show } from 'solid-js';
-import type { LessonContentProps, LessonDefinition } from '../types';
 import { useAnalytics } from '@app/component/analytics-context';
-import { toast } from '@core/component/Toast/Toast';
-import { useOnboarding } from '../onboarding-context';
 import {
-  PLANS,
-  PLAN_FEATURES,
   type PaidPlanTier,
+  PLAN_FEATURES,
+  PLANS,
 } from '@app/component/paywall/plans';
 import { useIsAuthenticated } from '@core/auth';
-import ArrowRightIcon from '@icon/regular/arrow-right.svg';
-import LockIcon from '@icon/regular/lock.svg';
-import { Button } from '@ui';
-import { cn } from '@ui';
-import {
-  useOnboardingCheckoutMutation,
-  getPendingTeam,
-  clearPendingTeam,
-  savePendingTeam,
-} from '../use-onboarding-checkout';
+import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/maybeResult';
+import ArrowRightIcon from '@icon/regular/arrow-right.svg';
+import InfoIcon from '@icon/regular/info.svg';
+import LockIcon from '@icon/regular/lock.svg';
+import { invalidateUserTeams } from '@queries/team';
 import { authServiceClient } from '@service-auth/client';
 import { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
-import { invalidateUserTeams } from '@queries/team';
+import { Button, cn } from '@ui';
+import { createMemo, createSignal, For, Show } from 'solid-js';
+import { useOnboarding } from '../onboarding-context';
+import type { LessonContentProps, LessonDefinition } from '../types';
+import {
+  clearPendingTeam,
+  getPendingTeam,
+  savePendingTeam,
+  useOnboardingCheckoutMutation,
+} from '../use-onboarding-checkout';
 
 function toTeamUserTier(tier: PaidPlanTier): TeamUserTier {
   const map: Record<PaidPlanTier, TeamUserTier> = {
@@ -33,6 +32,7 @@ function toTeamUserTier(tier: PaidPlanTier): TeamUserTier {
   };
   return map[tier];
 }
+
 import { analytics } from '@app/lib/analytics/analytics';
 import { Tooltip } from '@core/component/Tooltip';
 
@@ -126,7 +126,7 @@ function ReviewPayDemo(props: LessonContentProps) {
   };
 
   return (
-    <div class="h-full w-full flex items-start justify-center p-12 pt-[12%]">
+    <div class="size-full flex items-start justify-center p-12 pt-[12%]">
       <Show
         when={hasTeam()}
         fallback={

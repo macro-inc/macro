@@ -1,12 +1,12 @@
-import type { Accessor } from 'solid-js';
-import { createLazyMemo } from '@solid-primitives/memo';
+import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import type { EntityItem } from '@core/context/quickAccess';
 import { createFreshSearch } from '@core/util/freshSort';
-import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import {
   type SearchSoupQueryArgs,
   useSearchSoupQuery,
 } from '@queries/soup/search';
+import { createLazyMemo } from '@solid-primitives/memo';
+import type { Accessor } from 'solid-js';
 
 export type UseEmailSearchMentionOptions = {
   searchTerm: Accessor<string>;

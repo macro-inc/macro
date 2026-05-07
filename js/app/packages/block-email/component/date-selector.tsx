@@ -1,24 +1,23 @@
-import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
-import { useSearchInputFocus } from '@core/component/Properties/utils';
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
+import { useSearchInputFocus } from '@core/component/Properties/utils';
+import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
-import {
-  createMemo,
-  createSignal,
-  type JSX,
-  Show,
-  type FlowComponent,
-  type Component,
-  createEffect,
-  on,
-} from 'solid-js';
 import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import { format, setHours, setMinutes, startOfDay } from 'date-fns';
-import { Layer } from '@ui';
+import {
+  type Component,
+  createEffect,
+  createMemo,
+  createSignal,
+  type FlowComponent,
+  type JSX,
+  on,
+  Show,
+} from 'solid-js';
 
 type DateSelectorMode = 'search' | 'calendar';
 
@@ -320,7 +319,7 @@ export const DateSelector = (props: DateSelectorProps) => {
               }}
             >
               <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-                <SearchIcon class="h-4 w-4 text-ink-muted" />
+                <SearchIcon class="size-4 text-ink-muted" />
                 <Combobox.Input
                   ref={setSearchInputRef}
                   class="w-full caret-accent"

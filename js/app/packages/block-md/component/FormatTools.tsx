@@ -16,6 +16,7 @@ import {
   MenuItem,
   SubTrigger,
 } from '@core/component/Menu';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import ThreeDots from '@icon/bold/dots-three-bold.svg';
@@ -48,8 +49,8 @@ import TextSuper from '@icon/regular/text-superscript.svg';
 import TextT from '@icon/regular/text-t.svg';
 import TextUnderline from '@icon/regular/text-underline.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Layer } from '@ui';
 import type { ElementName } from '@lexical-core';
+import { Button, Layer } from '@ui';
 import { toast } from 'core/component/Toast/Toast';
 import type { ValidHotkey } from 'core/hotkey/types';
 import {
@@ -71,6 +72,7 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   generatedAndWaitingSignal,
   isGeneratingSignal,
@@ -78,9 +80,6 @@ import {
 import { mdStore } from '../signal/markdownBlockData';
 import { MediaSelector } from './MediaSelector';
 import { TableInsert } from './TableInsert';
-import { Button } from '@ui';
-import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Dynamic } from 'solid-js/web';
 
 function VerticalBar() {
   return <div class="w-px mx-1 h-full bg-edge"></div>;

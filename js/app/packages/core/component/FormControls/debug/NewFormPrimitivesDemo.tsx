@@ -1,6 +1,6 @@
+import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { Button } from '@ui';
 import { LabelAndHotKey } from '../../Tooltip';
 import DropdownMenu from '../DropdownMenu';
 import { SegmentedControl } from '../SegmentControls';

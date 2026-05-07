@@ -1,14 +1,15 @@
+import { internalDrag } from '@core/directive/internalDragState';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { cn } from '@ui';
-import { internalDrag } from '@core/directive/internalDragState';
 import {
-  type ParentProps,
-  type JSX,
-  Show,
   createEffect,
   createSignal,
+  type JSX,
   on,
+  type ParentProps,
+  Show,
 } from 'solid-js';
+
 false && internalDrag;
 const ATTACHMENT_TILE_SIZE = 92;
 
@@ -36,7 +37,7 @@ function ImagePlaceholder(props: {
               }
       }
     >
-      <Spinner class="h-4 w-4 animate-spin" />
+      <Spinner class="size-4 animate-spin" />
     </div>
   );
 }

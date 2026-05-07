@@ -2,7 +2,6 @@ import {
   ComposeLayout,
   EmailComposeToolbar,
 } from '@block-email/component/compose';
-import { cn } from '@ui';
 import {
   type ComposeContextValue,
   ComposeProvider,
@@ -10,17 +9,18 @@ import {
 } from '@block-email/component/compose/ComposeContext';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import type { EmailRecipient } from '@block-email/component/EmailContext';
+import { prepareEmailBody } from '@block-email/util/prepareEmailBody';
 import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
-import { prepareEmailBody } from '@block-email/util/prepareEmailBody';
 import { isErr } from '@core/util/maybeResult';
 import { useChatQuery } from '@queries/chat';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { debounce } from '@solid-primitives/scheduled';
+import { cn } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { createSignal, type JSX, Show } from 'solid-js';
 

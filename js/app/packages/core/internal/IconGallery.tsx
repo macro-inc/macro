@@ -1,6 +1,6 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { createSignal, For, type Component } from 'solid-js';
+import { type Component, createSignal, For } from 'solid-js';
 
 // Theme color swatches - uses CSS variables from the theme
 const THEME_COLORS = [
@@ -204,7 +204,7 @@ export default function IconGallery() {
   };
 
   return (
-    <div class="h-full w-full overflow-auto bg-panel p-8 font-mono">
+    <div class="size-full overflow-auto bg-panel p-8 font-mono">
       <style>{`
         .icon-gallery-slider {
           -webkit-appearance: none;
@@ -255,7 +255,7 @@ export default function IconGallery() {
                 {(color) => (
                   <button
                     onClick={() => setSelectedColor(color)}
-                    class="h-2.5 w-2.5 rounded-[1px] transition-transform hover:scale-125"
+                    class="size-2.5 rounded-[1px] transition-transform hover:scale-125"
                     classList={{
                       'ring-1 ring-ink ring-offset-1':
                         selectedColor().value === color.value,
@@ -270,7 +270,7 @@ export default function IconGallery() {
             <div class="mt-1.5 flex items-center gap-1.5">
               <span class="text-xxs text-muted">Custom</span>
               <label
-                class="relative h-2.5 w-2.5 rounded-[1px] transition-transform hover:scale-125"
+                class="relative size-2.5 rounded-[1px] transition-transform hover:scale-125"
                 classList={{
                   'ring-1 ring-ink ring-offset-1':
                     selectedColor().value === 'custom',
@@ -378,7 +378,7 @@ export default function IconGallery() {
                       <span class="text-[8px] text-muted">animated</span>
                       <button
                         onClick={() => triggerAnimation(pair.name)}
-                        class="flex h-2.5 w-2.5 items-center justify-center rounded-full border border-current text-muted transition-colors hover:bg-ink/10 hover:text-ink"
+                        class="flex size-2.5 items-center justify-center rounded-full border border-current text-muted transition-colors hover:bg-ink/10 hover:text-ink"
                         title="Play animation"
                       >
                         <svg

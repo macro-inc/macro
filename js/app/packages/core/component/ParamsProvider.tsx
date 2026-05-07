@@ -2,12 +2,12 @@ import { blockHandleSignal } from '@core/signal/load';
 import { useSearchParams } from '@solidjs/router';
 import { createMethodRegistration } from 'core/orchestrator';
 import {
+  type Accessor,
   createContext,
   createMemo,
   createSignal,
-  type Accessor,
-  useContext,
   type ParentProps,
+  useContext,
 } from 'solid-js';
 
 type ParamSchema = Record<string, string>;

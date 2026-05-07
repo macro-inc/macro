@@ -6,7 +6,6 @@ import {
 } from '@block-pdf/signal/placeables';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui';
 import {
   useCanComment,
   useCanEdit,
@@ -18,6 +17,7 @@ import Tabs from '@icon/regular/tabs.svg';
 import Textbox from '@icon/regular/textbox.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import Cancel from '@icon/regular/x.svg';
+import { Button } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { placeableIdMap, useDeletePlaceable } from '../store/placeables';

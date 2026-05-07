@@ -27,8 +27,8 @@ export function getMacroNotify(): {
     notificationServiceStack.requireOutput('notificationApnsVoipPlatformArn');
 
   return {
-    notificationIngressQueueName,
-    notificationIngressQueueArn,
-    notificationApnsVoipPlatformArn,
-  };
+  notificationIngressQueueName,
+  notificationIngressQueueArn,
+  notificationApnsVoipPlatformArn,
+};
 }

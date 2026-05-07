@@ -132,6 +132,7 @@ mod tests {
                 document_id: "document_id".to_string(),
                 file_type: FileType::Pdf,
                 document_version_id: None,
+                index_override: None,
             }
         );
 
@@ -150,6 +151,7 @@ mod tests {
                 document_id: "document_id".to_string(),
                 file_type: FileType::Docx,
                 document_version_id: Some("1".to_string()),
+                index_override: None,
             }
         );
 
@@ -177,6 +179,7 @@ mod tests {
                 document_id: "253880fb-77d4-4e6c-856d-9f52c2d9a8b0".to_string(),
                 file_type: FileType::Md,
                 document_version_id: Some("565533".to_string()),
+                index_override: None,
             })
         );
 

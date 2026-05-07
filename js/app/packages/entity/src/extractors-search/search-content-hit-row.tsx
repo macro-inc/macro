@@ -1,3 +1,5 @@
+import { UserIcon } from '@core/component/UserIcon';
+import { cn } from '@ui';
 import { Show } from 'solid-js';
 import {
   type ContentHitData,
@@ -5,12 +7,10 @@ import {
   type SearchLocation,
 } from '../types/search';
 import { SearchContent } from './search-content';
+import { getSenderId } from './search-helpers';
+import { SearchLocation as SearchLoc } from './search-location';
 import { SearchSender } from './search-sender';
 import { SearchTimestamp } from './search-timestamp';
-import { cn } from '@ui';
-import { UserIcon } from '@core/component/UserIcon';
-import { SearchLocation as SearchLoc } from './search-location';
-import { getSenderId } from './search-helpers';
 
 interface SearchContentHitRowProps {
   hit: ContentHitData;

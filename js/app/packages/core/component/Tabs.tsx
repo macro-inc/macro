@@ -1,21 +1,21 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   SegmentedControl as KSegmentedControl,
-  useSegmentedControlContext,
   type SegmentedControlRootProps,
+  useSegmentedControlContext,
 } from '@kobalte/core/segmented-control';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { cn } from '@ui';
 import {
-  type JSX,
   batch,
   type ComponentProps,
   createEffect,
   createSignal,
   For,
+  type JSX,
   on,
   splitProps,
 } from 'solid-js';
-import { cn } from '@ui';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export type TabItem = {
   value: string;
@@ -78,7 +78,7 @@ export const Tabs = (
         <Indicator
           data-indicator
           class={cn(
-            'absolute h-[2px]! bg-accent transition-[transform,width] duration-150 pointer-events-none',
+            'absolute h-0.5! bg-accent transition-[transform,width] duration-150 pointer-events-none',
             (local.indicatorPosition ?? 'bottom') === 'top'
               ? 'top-0'
               : 'bottom-0'

@@ -1,11 +1,10 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { cn } from '@ui';
 import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
 import CaretRight from '@icon/regular/caret-right.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -196,12 +195,12 @@ export function MenuItem(props: MenuItemProps) {
         <div
           class={cn(
             'shrink-0 flex items-center justify-center',
-            isMobile() ? 'w-5 h-5' : 'w-4 h-4'
+            isMobile() ? 'size-5' : 'size-4'
           )}
         >
           <CheckIcon
             class={cn(
-              'w-[14px] h-[14px] shrink-0 rounded-sm p-[2px]',
+              'size-3.5 shrink-0 rounded-sm p-0.5',
               (props as CheckboxMenuItemProps).checked
                 ? 'bg-accent text-[white]'
                 : 'bg-transparent text-transparent border border-edge'
@@ -213,12 +212,12 @@ export function MenuItem(props: MenuItemProps) {
         <div
           class={cn(
             'flex items-center justify-center shrink-0',
-            isMobile() ? 'w-5 h-5' : 'w-4 h-4'
+            isMobile() ? 'size-5' : 'size-4'
           )}
         >
           <div
             class={cn(
-              'w-[14px] h-[14px] shrink-0 rounded-full',
+              'size-3.5 shrink-0 rounded-full',
               (props as RadioMenuItemProps).value ===
                 (props as RadioMenuItemProps).groupValue
                 ? 'bg-accent text-[white]'
@@ -235,7 +234,7 @@ export function MenuItem(props: MenuItemProps) {
             }
             class={cn(
               'shrink-0',
-              isMobile() ? 'w-5 h-5' : 'w-4 h-4',
+              isMobile() ? 'size-5' : 'size-4',
               props.iconClass
             )}
           />
@@ -282,7 +281,7 @@ export function SubTrigger(props: {
             }
             class={cn(
               'shrink-0',
-              isMobile() ? 'w-5 h-5' : 'w-4 h-4',
+              isMobile() ? 'size-5' : 'size-4',
               props.iconClass
             )}
           />
@@ -292,7 +291,7 @@ export function SubTrigger(props: {
         </Show>
       </Show>
       <div class="flex-1 truncate">{props.text}</div>
-      <CaretRight class="w-4 h-4 shrink-0" />
+      <CaretRight class="size-4 shrink-0" />
     </ContextMenu.SubTrigger>
   );
 }

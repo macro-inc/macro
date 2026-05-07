@@ -1,10 +1,9 @@
-import { useAiDataConsent } from '@core/context/user';
-import { authServiceClient } from '@service-auth/client';
-import { invalidateUserInfo } from '@queries/auth/user-info';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button, Dialog, Surface } from '@ui';
-
+import { useAiDataConsent } from '@core/context/user';
 import CloseIcon from '@icon/regular/x.svg';
+import { invalidateUserInfo } from '@queries/auth/user-info';
+import { authServiceClient } from '@service-auth/client';
+import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
 
 export function useAiDataConsentGate() {
@@ -37,11 +36,11 @@ export function useAiDataConsentGate() {
       <Dialog
         open={open()}
         onOpenChange={(isOpen) => !isOpen && denyConsent()}
-        class="w-[480px]"
+        class="w-120"
       >
         <Surface depth={2} active>
           <div class="*:max-h-[75vh]">
-            <div class="flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b border-b-edge-muted">
+            <div class="flex flex-row items-center justify-between px-2 h-10 gap-2 border-b border-b-edge-muted">
               <div class="flex flex-row items-center gap-2">
                 <Dialog.CloseButton>
                   <Button

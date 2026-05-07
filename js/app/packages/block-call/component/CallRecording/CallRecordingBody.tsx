@@ -1,4 +1,5 @@
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import { cn } from '@ui';
 import type { Accessor } from 'solid-js';
 import {
   createEffect,
@@ -8,13 +9,12 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
-import { cn } from '@ui';
+import type { CallTranscriptTarget } from '../CallBlockAdapter';
 import {
   getActiveTranscriptSequenceNum,
   getSegmentVideoSeconds,
   sortTranscriptSegments,
 } from '../transcript-playback';
-import type { CallTranscriptTarget } from '../CallBlockAdapter';
 import {
   CallRecordingMediaColumn,
   type CallRecordingTimeUpdateSource,

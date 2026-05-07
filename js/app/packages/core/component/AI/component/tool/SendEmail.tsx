@@ -1,14 +1,14 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { ItemPreview } from '@core/component/ItemPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { ItemPreview } from '@core/component/ItemPreview';
 import CaretRight from '@icon/regular/caret-right.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
-import { Show, Match, Switch } from 'solid-js';
 import { cn } from '@ui';
+import { Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
-import { createToolRenderer } from './ToolRenderer';
 import { ComposeTool } from './email/ChatCompose';
+import { createToolRenderer } from './ToolRenderer';
 
 type SendEmailResponse = NamedTool<'SendEmail', 'response'>['data'];
 
@@ -107,7 +107,7 @@ function DraftPreviewButton(props: {
         })
       }
     >
-      <div class="flex justify-start items-center w-3.5 h-3.5 mr-2">
+      <div class="flex justify-start items-center size-3.5 mr-2">
         <EntityIcon targetType="email" size="xs" />
       </div>
       <div class="flex-1 text-left leading-5 min-w-0 truncate">
@@ -137,7 +137,7 @@ function SentEmailResponse(props: {
             <span class="shrink-0 text-ink-muted">
               <CaretRight
                 class={cn(
-                  'h-4 w-4 transition-transform',
+                  'size-4 transition-transform',
                   'group-open:rotate-90'
                 )}
               />

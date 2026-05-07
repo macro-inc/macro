@@ -2,6 +2,7 @@ import { observedSize } from '@core/directive/observedSize';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type DateValue, formatDate } from '@core/util/date';
 import IconPlus from '@icon/regular/plus.svg';
+import { Button, cn } from '@ui';
 import {
   type Accessor,
   type Component,
@@ -14,15 +15,12 @@ import {
   splitProps,
   useContext,
 } from 'solid-js';
-
 import {
   CustomEntityIcon,
   EntityIcon,
   type EntityWithValidIcon,
 } from './EntityIcon';
 import { UserIcon } from './UserIcon';
-import { Button } from '@ui';
-import { cn } from '@ui';
 
 false && observedSize;
 
@@ -121,7 +119,7 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
         </div>
         {/* Tag */}
         <Show when={local.tagLabel}>
-          <div class="inline-flex items-center ml-2 px-0.5 text-xs bg-edge text-ink border border-edge max-w-[240px] min-w-0">
+          <div class="inline-flex items-center ml-2 px-0.5 text-xs bg-edge text-ink border border-edge max-w-60 min-w-0">
             <div class="shrink-0 px-0.5">
               <Show when={local.tagIcon}>
                 <CustomEntityIcon icon={local.tagIcon!} size="xs" />
@@ -186,7 +184,7 @@ export const NestedConnectorLines: Component<NestedConnectorLinesProps> = (
   }
 
   return (
-    <div class="absolute left-0 top-0 w-full h-full z-user-highlight pointer-events-none">
+    <div class="absolute left-0 top-0 size-full z-user-highlight pointer-events-none">
       {NestedLines}
     </div>
   );
@@ -388,9 +386,9 @@ const Root: Component<MessageRootProps> = (props) => {
                   <Button
                     onClick={props.onThreadAppend}
                     tabIndex={0}
-                    class="text-ink-muted flex flex-row justify-center items-center relative px-0 py-0 hover:bg-transparent active:border-transparent active:bg-transparent active:text-inherit hover:opacity-100"
+                    class="text-ink-muted flex flex-row justify-center items-center relative p-0 hover:bg-transparent active:border-transparent active:bg-transparent active:text-inherit hover:opacity-100"
                   >
-                    <div class="border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center ml-2 mr-2 mb-2 size-(--user-icon-width) touch:min-h-(--user-icon-width) touch:min-w-(--user-icon-width)">
+                    <div class="border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center mx-2 mb-2 size-(--user-icon-width) touch:min-h-(--user-icon-width) touch:min-w-(--user-icon-width)">
                       <IconPlus class="size-1/2" />
                     </div>
                   </Button>

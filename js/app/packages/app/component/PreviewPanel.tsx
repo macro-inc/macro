@@ -1,13 +1,17 @@
+import { getChannelParams } from '@block-channel/utils/link';
 import type { BlockAliasContext, BlockName } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import type { BlockOrchestrator } from '@core/orchestrator';
+import { throttledDependent } from '@core/util/debounce';
 import type { NonNullableFields } from '@core/util/withRequired';
-import { type EntityData, isTaskEntity, isChannelMessageEntity } from '@entity';
+import { type EntityData, isChannelMessageEntity, isTaskEntity } from '@entity';
+import { createContextProvider } from '@solid-primitives/context';
 import {
   type Component,
   createRenderEffect,
   createSignal,
   Show,
+  Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -15,10 +19,6 @@ import {
   type SplitPanelContextType,
 } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
-import { Suspense } from 'solid-js';
-import { createContextProvider } from '@solid-primitives/context';
-import { throttledDependent } from '@core/util/debounce';
-import { getChannelParams } from '@block-channel/utils/link';
 
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(

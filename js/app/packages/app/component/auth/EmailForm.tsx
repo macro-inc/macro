@@ -1,16 +1,16 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isErr } from '@core/util/maybeResult';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import { authServiceClient } from '@service-auth/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { action, useSearchParams, useSubmission } from '@solidjs/router';
+import { cn } from '@ui';
 import { platformFetch } from 'core/util/platformFetch';
 import { createEffect, createSignal, Show, untrack } from 'solid-js';
 import { ErrorMsg, Input, Stage } from './Shared';
-import { cn } from '@ui';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 // Construct the redirect uri to use for passwordless login.
 // This will send us back to the application after clicking the magic link.
@@ -125,7 +125,7 @@ export function EmailForm(props: { setStage: (next: Stage) => void }) {
       <form action={sendEmailCode} method="post" class="m-0">
         <div
           class={cn(
-            'flex items-center justify-center text-center py-4 px-6 border-t border-b border-edge-muted',
+            'flex items-center justify-center text-center py-4 px-6 border-y border-edge-muted',
             virtualKeyboardVisible() && 'border-t border-edge-muted'
           )}
         >
@@ -164,7 +164,7 @@ export function EmailForm(props: { setStage: (next: Stage) => void }) {
             }}
             type="button"
           >
-            <ArrowLeft class="w-5 h-5" />
+            <ArrowLeft class="size-5" />
             <span>Back</span>
           </button>
 
@@ -184,7 +184,7 @@ export function EmailForm(props: { setStage: (next: Stage) => void }) {
             }}
           >
             <span>Continue</span>
-            <ArrowRight class="w-5 h-5" />
+            <ArrowRight class="size-5" />
           </button>
         </div>
         <ErrorMsg msg={submission.error?.message} />

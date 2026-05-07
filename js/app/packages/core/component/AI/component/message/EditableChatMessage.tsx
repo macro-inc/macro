@@ -1,3 +1,5 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
 import {
@@ -6,9 +8,7 @@ import {
 } from '@core/component/AI/context';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import type { Attachment, Model } from '@core/component/AI/types';
-import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { onMount } from 'solid-js';
-import { useAnalytics } from '@app/component/analytics-context';
 
 function EditableChatMessageInner(props: {
   chatId: string;

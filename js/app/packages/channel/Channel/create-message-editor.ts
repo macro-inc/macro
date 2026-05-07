@@ -1,7 +1,7 @@
-import { toast } from '@core/component/Toast/Toast';
-import { createSignal, type Accessor } from 'solid-js';
 import type { InputSnapshot } from '@channel/Input';
+import { toast } from '@core/component/Toast/Toast';
 import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
+import { type Accessor, createSignal } from 'solid-js';
 import type { MessageData } from '../Message';
 import type { MessageEditState } from '../Thread/types';
 import {

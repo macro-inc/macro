@@ -1,9 +1,9 @@
 import type { Attachment, Model } from '@core/component/AI/types';
-import { Button } from '@ui';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
+import { Button } from '@ui';
 import type { Accessor, JSXElement } from 'solid-js';
 import { createEffect, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -108,8 +108,8 @@ export default function DebugAttachments() {
   };
 
   return (
-    <div class="h-full w-full overflow-auto py-2">
-      <div class="flex flex-1 justify-center w-full ">
+    <div class="size-full overflow-auto py-2">
+      <div class="flex flex-1 justify-center w-full">
         <div class="w-4/5 grid grid-cols-2 border border-accent divide-accent divide-y divide-x">
           <Item>
             <Button variant="active" onClick={sendAll}>
@@ -205,7 +205,7 @@ function RequestDebugger(props: {
   });
 
   return (
-    <Item label={props.label} col class="max-h-[600px] overflow-y-auto">
+    <Item label={props.label} col class="max-h-150 overflow-y-auto">
       <Button
         variant="active"
         onClick={() => {

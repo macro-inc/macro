@@ -1,5 +1,11 @@
-import { useNavigate, useSearchParams, Navigate } from '@solidjs/router';
-import { createMemo, Match, Show, Switch } from 'solid-js';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { LoadingBlock } from '@core/component/LoadingBlock';
+import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
+import EnvelopeIcon from '@icon/regular/envelope.svg';
+import SpinnerIcon from '@icon/regular/spinner.svg';
+import UsersThreeIcon from '@icon/regular/users-three.svg';
+import LogoIcon from '@macro-icons/macro-logo.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   useJoinTeamMutation,
@@ -7,16 +13,9 @@ import {
   useUserInvitesQuery,
 } from '@queries/team/invitations';
 import { useTeamQuery } from '@queries/team/teams';
-import { LoadingBlock } from '@core/component/LoadingBlock';
-import { Surface } from '@ui';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import { Button } from '@ui';
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
-import { ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import UsersThreeIcon from '@icon/regular/users-three.svg';
-import EnvelopeIcon from '@icon/regular/envelope.svg';
-import SpinnerIcon from '@icon/regular/spinner.svg';
+import { Navigate, useNavigate, useSearchParams } from '@solidjs/router';
+import { Button, Surface } from '@ui';
+import { createMemo, Match, Show, Switch } from 'solid-js';
 
 export function TeamInviteAcceptance() {
   return (
@@ -85,7 +84,7 @@ function TeamInviteAcceptanceContent() {
   );
 
   return (
-    <div class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative">
+    <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
       <style>
         {`
           @keyframes invite-fade-up {
@@ -113,7 +112,7 @@ function TeamInviteAcceptanceContent() {
 
       <div class="w-full max-w-105 invite-card">
         <Surface>
-          <div class="flex flex-col gap-6 py-6 px-6">
+          <div class="flex flex-col gap-6 p-6">
             <div class="flex justify-center">
               <LogoIcon class="size-10 text-accent" />
             </div>

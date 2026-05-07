@@ -1,10 +1,10 @@
-import { type Accessor, Show } from 'solid-js';
-import { tryMacroId, type MacroId as MacroIdType } from '@core/user';
-import { UserIcon } from '@core/component/UserIcon';
 import type { UserIconProps } from '@core/component/UserIcon';
-import type { InCallPanelMember, UseInCallPanelResult } from './types';
-import { profilePictureIdForMember } from './profile-picture-id-for-member';
+import { UserIcon } from '@core/component/UserIcon';
+import { type MacroId as MacroIdType, tryMacroId } from '@core/user';
+import { type Accessor, Show } from 'solid-js';
 import { InCallAvatarPlaceholderShell } from './InCallAvatarPlaceholder';
+import { profilePictureIdForMember } from './profile-picture-id-for-member';
+import type { InCallPanelMember, UseInCallPanelResult } from './types';
 
 /**
  * Renders `UserIcon` once LiveKit identity is available; until then shows the

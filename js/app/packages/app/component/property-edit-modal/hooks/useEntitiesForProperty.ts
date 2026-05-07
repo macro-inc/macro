@@ -1,34 +1,33 @@
 import {
   type CombinedEntity,
   createEntitySearchConfig,
-  useQuickAccessEntities,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
   isChannelEntity,
-  threadMapper,
   quickAccessItemToEntity,
-  userToEntity,
   sortEntitiesWithSelfFirst,
+  threadMapper,
+  useQuickAccessEntities,
+  userToEntity,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
-import { useAugmentUserWithDmActivity } from '@core/user';
-import { createFreshSearch } from '@core/util/freshSort';
-import { useEmail, useUserId } from '@core/context/user';
-import { createEmailsInfiniteQuery } from '@macro-entity';
-import type { EmailEntity } from '@entity';
-import { useSearchSoupQuery } from '@queries/soup/search';
-
-import { debounce } from '@solid-primitives/scheduled';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  type Accessor,
-} from 'solid-js';
 import type {
   Property,
   PropertyDefinitionDomain,
 } from '@core/component/Properties/types';
+import { useEmail, useUserId } from '@core/context/user';
+import { useAugmentUserWithDmActivity } from '@core/user';
+import { createFreshSearch } from '@core/util/freshSort';
+import type { EmailEntity } from '@entity';
+import { createEmailsInfiniteQuery } from '@macro-entity';
+import { useSearchSoupQuery } from '@queries/soup/search';
+import { debounce } from '@solid-primitives/scheduled';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+} from 'solid-js';
 
 export function useEntitiesForProperty(
   property: Accessor<Property | PropertyDefinitionDomain | undefined>,

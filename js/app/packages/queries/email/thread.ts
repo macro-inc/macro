@@ -1,9 +1,8 @@
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import { useAnalytics } from '@app/component/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
-import { optimisticUpdateSoupEntity } from '../soup/cache';
-import { invalidateAllSoup } from '../soup/normalized-cache';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,
@@ -20,9 +19,10 @@ import {
 } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
+import { optimisticUpdateSoupEntity } from '../soup/cache';
+import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
-import { useAnalytics } from '@app/component/analytics-context';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
 

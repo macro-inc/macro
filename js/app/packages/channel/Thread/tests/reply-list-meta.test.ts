@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import type { ApiThreadReply } from '@service-comms/client';
+import { describe, expect, it } from 'vitest';
 import { buildThreadReplyListMeta } from '../reply-list-meta';
 
 function createReply(

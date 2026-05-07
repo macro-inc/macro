@@ -1,24 +1,17 @@
+use crate::model::{
+    request::documents::get_user_documents::{GetUserDocumentsParams, GetUserDocumentsQueryParams},
+    response::documents::get::{GetDocumentsResponse, UserDocumentsResponse},
+};
 use axum::{
     Extension,
     extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
-
-use model::response::{GenericErrorResponse, GenericResponse};
-use sqlx::PgPool;
-
-use crate::{
-    api::context::ApiContext,
-    model::{
-        request::documents::get_user_documents::{
-            GetUserDocumentsParams, GetUserDocumentsQueryParams,
-        },
-        response::documents::get::{GetDocumentsResponse, UserDocumentsResponse},
-    },
-};
 use macro_db_client::document::get_user_documents;
+use model::response::{GenericErrorResponse, GenericResponse};
 use model::user::UserContext;
+use sqlx::PgPool;
 
 /// Gets the users documents to populate their recent document list
 #[utoipa::path(
@@ -38,7 +31,7 @@ use model::user::UserContext;
         )
     )]
 #[tracing::instrument(skip(db, user_context, params), fields(user_id=?user_context.user_id))]
-#[axum::debug_handler(state = ApiContext)]
+#[axum::debug_handler(state = crate::api::context::ApiContext)]
 pub async fn get_user_documents_handler(
     State(db): State<PgPool>,
     user_context: Extension<UserContext>,

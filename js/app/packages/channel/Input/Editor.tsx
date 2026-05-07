@@ -1,5 +1,5 @@
-import { children, Show, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui';
+import { children, type JSX, Show, splitProps } from 'solid-js';
 import { useInput } from './context';
 
 export function Editor(props: JSX.HTMLAttributes<HTMLDivElement>) {

@@ -126,8 +126,6 @@ mod tests {
         let jwt = std::env::var("GOOGLE_TEST_JWT")
             .context("GOOGLE_TEST_JWT environment variable not set")?;
 
-        let expected_audience = gmail_client.audience.as_str();
-
         let claims = verify_google_jwt(&gmail_client, &jwt, public_keys.keys)?;
 
         assert_eq!(

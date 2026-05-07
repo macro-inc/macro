@@ -1,7 +1,7 @@
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { mdStore } from '@block-md/signal/markdownBlockData';
-import { cn } from '@ui';
 import { createCallback } from '@solid-primitives/rootless';
+import { cn } from '@ui';
 import { createEffect, For, onCleanup, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { NodekeyOffset } from './findAndReplacePlugin';
@@ -115,7 +115,7 @@ export function FloatingSearchHighlight({
           <div
             style={item.style}
             class={cn(
-              'z-150 m-0 text-transparent h-[18px] absolute top-0 left-0 opacity-50 pointer-events-none',
+              'z-150 m-0 text-transparent h-4.5 absolute top-0 left-0 opacity-50 pointer-events-none',
               item.idx === FindAndReplaceStore.get.currentMatch + 1
                 ? 'bg-[oklch(0.827_0.119_306.383)]'
                 : 'bg-[oklch(0.827_0.119_306.383)]/50'

@@ -1,5 +1,5 @@
-import type { Component, JSX } from 'solid-js';
 import { cn } from '@ui';
+import type { Component, JSX } from 'solid-js';
 
 export function renderIcon(
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | string,

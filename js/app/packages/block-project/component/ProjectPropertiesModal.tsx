@@ -1,11 +1,11 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
-import { Button } from '@ui';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { useCanEdit } from '@core/signal/permissions';
 import TagIcon from '@icon/regular/tag.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import { Button } from '@ui';
 import { Suspense } from 'solid-js';
 
 export const PROPERTIES_DRAWER_ID = 'properties';
@@ -50,7 +50,7 @@ function ProjectPropertiesContent(props: { canEdit: boolean; name?: string }) {
 function LoadingFallback() {
   return (
     <div class="flex justify-center items-center py-8">
-      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-ink-muted"></div>
+      <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted"></div>
     </div>
   );
 }

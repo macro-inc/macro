@@ -1,16 +1,16 @@
-import { createEffect } from 'solid-js';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
+import type { ChannelEntity } from '@entity';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
 import UsersIcon from '@icon/regular/users.svg';
-import type { ChannelEntity } from '@entity';
+import { cn } from '@ui';
+import { createEffect } from 'solid-js';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
 import {
   getBlockNameFromEntity,
   getMentionItemName,
 } from '../utils/entityUtils';
-import { cn } from '@ui';
 
 export function MentionsMenuItem(props: {
   item: MentionItem;

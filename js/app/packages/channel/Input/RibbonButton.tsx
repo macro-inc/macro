@@ -1,5 +1,5 @@
-import type { JSX } from 'solid-js';
 import { cn } from '@ui';
+import type { JSX } from 'solid-js';
 
 type RibbonButtonProps = {
   label: string;
@@ -15,7 +15,7 @@ export function RibbonButton(props: RibbonButtonProps) {
       aria-label={props.label}
       title={props.label}
       class={cn(
-        'flex flex-col items-center justify-center h-[28px] w-[28px] hover:bg-hover hover-transition-bg rounded-md',
+        'flex flex-col items-center justify-center size-7 hover:bg-hover hover-transition-bg rounded-md',
         {
           'bg-active': props.active,
         }

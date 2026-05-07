@@ -1,13 +1,13 @@
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isErr } from '@core/util/maybeResult';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import { authServiceClient } from '@service-auth/client';
 import { action, useAction, useSubmission } from '@solidjs/router';
+import { cn } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { sendEmailCode, useResetEmailCode } from './EmailForm';
 import { ErrorMsg, Input, Stage } from './Shared';
-import { cn } from '@ui';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 
 const verifyCode = action(async (formData: FormData) => {
   const code = formData.get('one-time-code');
@@ -156,7 +156,7 @@ export function VerifyForm(props: { setStage: (next: Stage) => void }) {
             onClick={resetEmailCode}
             type="button"
           >
-            <ArrowLeft class="w-5 h-5" />
+            <ArrowLeft class="size-5" />
             <span>Back</span>
           </button>
 
@@ -166,7 +166,7 @@ export function VerifyForm(props: { setStage: (next: Stage) => void }) {
             disabled={submission.pending}
           >
             <span>Continue</span>
-            <ArrowRight class="w-5 h-5" />
+            <ArrowRight class="size-5" />
           </button>
         </div>
 

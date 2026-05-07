@@ -1,16 +1,16 @@
-import type { ApiChannelMessage } from '@service-comms/client';
-import { createSignal, Show } from 'solid-js';
 import { useUserId } from '@core/context/user';
 import { useDeleteMessageMutation } from '@queries/channel/message';
 import {
   useAddReactionMutation,
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
+import type { ApiChannelMessage } from '@service-comms/client';
+import { createSignal, Show } from 'solid-js';
 import { createChannelMessageActions } from '../Channel/create-channel-message-actions';
-import { Thread } from '../Thread';
 import type { InputSnapshot } from '../Input';
-import { StandaloneThread } from './StandaloneThread';
+import { Thread } from '../Thread';
 import { useStandaloneThread } from './context';
+import { StandaloneThread } from './StandaloneThread';
 
 type EditableThreadProps = {
   channelId: string;

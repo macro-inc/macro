@@ -5,9 +5,13 @@ import {
   isBlockAlias,
   itemToBlockName,
 } from '@core/constant/allBlocks';
-import { match } from 'ts-pattern';
-import { cn } from '@ui';
 import { USE_WIDE_ICONS } from '@core/constant/featureFlags';
+import type {
+  ChannelEntity,
+  DocumentEntity,
+  EmailEntity,
+  EntityData,
+} from '@entity';
 import Building from '@icon/duotone/building-duotone.svg';
 import Chat from '@icon/duotone/chat-duotone.svg';
 import FileCode from '@icon/duotone/code-duotone.svg';
@@ -20,8 +24,8 @@ import FileHtml from '@icon/duotone/file-html-duotone.svg';
 import FileMd from '@icon/duotone/file-md-duotone.svg';
 import FilePdf from '@icon/duotone/file-pdf-duotone.svg';
 import FileVideo from '@icon/duotone/file-video-duotone.svg';
+import GlobeIcon from '@icon/duotone/globe-duotone.svg';
 import FileImage from '@icon/duotone/image-duotone.svg';
-import PhoneCall from '@macro-icons/wide/call.svg';
 import Canvas from '@icon/duotone/pencil-circle-duotone.svg';
 import Robot from '@icon/duotone/robot-duotone.svg';
 import User from '@icon/duotone/user-duotone.svg';
@@ -30,36 +34,32 @@ import Folder from '@icon/fill/folder-simple-fill.svg';
 import FolderUser from '@icon/fill/folder-user-fill.svg';
 import Check from '@icon/regular/check-fat.svg';
 import WideBook from '@macro-icons/wide/book.svg';
+import WideCalendar from '@macro-icons/wide/calendar.svg';
+import PhoneCall from '@macro-icons/wide/call.svg';
 import WideChannel from '@macro-icons/wide/channel.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
 import WideCsv from '@macro-icons/wide/csv.svg';
 import WideDiagram from '@macro-icons/wide/diagram.svg';
 import WideDocx from '@macro-icons/wide/docx.svg';
-import WideCalendar from '@macro-icons/wide/calendar.svg';
-import WideGlobe from '@macro-icons/wide/globe.svg';
 import WideEmail from '@macro-icons/wide/email.svg';
 import WideFileCode from '@macro-icons/wide/file-code.svg';
 import WideFileImage from '@macro-icons/wide/file-image.svg';
 import WideFileMd from '@macro-icons/wide/file-md.svg';
 import WideFolder from '@macro-icons/wide/folder.svg';
+import WideGlobe from '@macro-icons/wide/globe.svg';
 import WideStar from '@macro-icons/wide/star.svg';
 import WideTask from '@macro-icons/wide/task.svg';
 import WideUnknown from '@macro-icons/wide/unknown.svg';
 import WideUser from '@macro-icons/wide/user.svg';
 import WideVideo from '@macro-icons/wide/video.svg';
-import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import { FileTypeMap } from '@service-storage/fileTypeMap';
-import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
-import type {
-  EntityData,
-  ChannelEntity,
-  DocumentEntity,
-  EmailEntity,
-} from '@entity';
 import type { PreviewItem } from '@queries/preview';
+import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
+import { FileTypeMap } from '@service-storage/fileTypeMap';
+import type { FileType } from '@service-storage/generated/schemas/fileType';
+import { cn } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { match } from 'ts-pattern';
 
 type IconConfig = {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;

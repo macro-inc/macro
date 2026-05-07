@@ -1,9 +1,10 @@
 import { Hotkey } from '@core/component/Hotkey';
-import { cn } from '@ui';
 import { useKeyPressed } from '@core/util/useKeyPressed';
+import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import { cn } from '@ui';
+import type { JSX, ParentComponent } from 'solid-js';
 import {
   type Accessor,
   createEffect,
@@ -14,12 +15,11 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import type { JSX, ParentComponent } from 'solid-js';
 import { useSearchInputFocus } from '../../../utils';
 import { ERROR_MESSAGES } from '../../../utils/errorHandling';
 import { PropertyValueIcon } from '../../propertyValue';
 import { OptionCheckBox } from './OptionCheckBox';
-import type { SelectableOption, OptionSelectorConfig } from './types';
+import type { OptionSelectorConfig, SelectableOption } from './types';
 
 type UseDropdownSearchOptions = {
   itemCount: Accessor<number>;
@@ -96,7 +96,7 @@ type DropdownSearchInputProps = {
 const DropdownSearchInput = (props: DropdownSearchInputProps) => {
   return (
     <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-      <SearchIcon class="h-4 w-4 text-ink-muted" />
+      <SearchIcon class="size-4 text-ink-muted" />
       <input
         class="w-full caret-accent"
         ref={props.inputRef}
@@ -312,7 +312,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
       when={!props.isLoading}
       fallback={
         <div class="flex items-center justify-center py-8">
-          <div class="w-5 h-5 animate-spin">
+          <div class="size-5 animate-spin">
             <LoadingSpinner />
           </div>
           <span class="ml-2 text-ink-muted">Loading options...</span>
@@ -357,7 +357,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
             }
           >
             <div class="p-1">
-              <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+              <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
                 <Show
                   when={selectableItems().length > 0}
                   fallback={

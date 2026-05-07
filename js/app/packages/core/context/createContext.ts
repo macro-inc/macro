@@ -1,7 +1,7 @@
 import {
-  createContextProvider,
   type ContextProvider,
   type ContextProviderProps,
+  createContextProvider,
 } from '@solid-primitives/context';
 
 /**

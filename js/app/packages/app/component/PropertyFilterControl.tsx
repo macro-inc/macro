@@ -1,10 +1,10 @@
 import type { PropertyDefinitionDomain } from '@core/component/Properties/types';
-import { cn } from '@ui';
 import {
   isPropertyDefinition,
   toPropertyDefinitionDomain,
 } from '@core/component/Properties/utils';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
+import { cn } from '@ui';
 import type { Accessor, Component } from 'solid-js';
 import { createEffect, createMemo, For, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
@@ -182,7 +182,7 @@ export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
                 onCancel={() => removeFilter(filter.id)}
               />
               <Show when={index() < filters.length - 1}>
-                <span class="text-xxs text-ink-muted font-mono pl-3 pt-0.25 leading-none">
+                <span class="text-xxs text-ink-muted font-mono pl-3 pt-px leading-none">
                   AND
                 </span>
               </Show>

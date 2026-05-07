@@ -1,9 +1,9 @@
 import { useIsNestedBlock } from '@core/block';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { cn } from '@ui';
 import { useCanEdit } from '@core/signal/permissions';
 import Circuitry from '@icon/regular/circuitry.svg';
+import { cn } from '@ui';
 import { nanoid } from 'nanoid';
 import {
   type Accessor,
@@ -95,7 +95,7 @@ function DotPattern(props: {
   const id = `dot-pattern-${nanoid(6)}`;
 
   return (
-    <svg class="absolute inset-0 w-full h-full">
+    <svg class="absolute inset-0 size-full">
       <defs>
         <pattern
           id={id}
@@ -180,7 +180,7 @@ export function CanvasRenderer() {
         lineSelection: lineSelectionLayerRef,
       })}
     >
-      <div class="absolute inset-0 w-full h-full pointer-events-none">
+      <div class="absolute inset-0 size-full pointer-events-none">
         <DotPattern scale={scale} x={canvasX} y={canvasY} />
       </div>
 
@@ -279,8 +279,8 @@ export function CanvasRenderer() {
       />
 
       <Show when={!visibleObjects()}>
-        <div class="w-full h-full absolute top-0 left-0 flex flex-col text-center items-center justify-center gap-4 z-20 pointer-events-none">
-          <Circuitry class="w-12 h-12 text-canvas" />
+        <div class="size-full absolute top-0 left-0 flex flex-col text-center items-center justify-center gap-4 z-20 pointer-events-none">
+          <Circuitry class="size-12 text-canvas" />
           <div class="w-80 h-14 text-ink-extra-muted">
             Create whiteboards, diagrams, mind maps, designs and more.
           </div>

@@ -1,14 +1,14 @@
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 import {
-  type WithNotification,
   type EntityData,
-  isTaskEntity,
-  type TaskEntityWithProperties,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
+  isTaskEntity,
+  type TaskEntityWithProperties,
+  type WithNotification,
 } from '@entity';
 import { getTaskPriorityOptionId } from '@entity/utils/task-properties';
-import { type NotificationSource, compositeEntity } from '@notifications';
+import { compositeEntity, type NotificationSource } from '@notifications';
 
 /**
  * Unread filter - entity has unread content.

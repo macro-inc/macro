@@ -1,5 +1,4 @@
-import CheckIcon from '@icon/bold/check-bold.svg';
-import Spinner from '@icon/regular/spinner.svg';
+import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -9,19 +8,36 @@ import {
   makeMarkDoneAction,
   useEntityActionHotkeys,
 } from '@app/component/next-soup/actions';
+import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
+import type { SoupRow } from '@app/component/next-soup/create-soup-state';
+import type { QueryState } from '@app/component/next-soup/filters/filter-store';
+import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { useSoup } from '@app/component/next-soup/soup-context';
-import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
+import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
+import { MobileFilterDrawer } from '@app/component/next-soup/soup-view/filters-bar/mobile-filter-drawer';
+import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
+import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
+import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { MaybeSoupEntityActionDrawerManager } from '@app/component/next-soup/soup-view/SoupEntityActionDrawerManager';
+import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
+import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
+import {
+  activeSoupViewCounts,
+  soupViewCacheKey,
+} from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import {
   SoupViewContextProvider,
   useSoupView,
 } from '@app/component/next-soup/soup-view/soup-view-context';
+import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
+import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
+import { SoupViewMobileCreateButton } from '@app/component/next-soup/soup-view/soup-view-mobile-create-button';
 import {
-  soupViewCacheKey,
-  activeSoupViewCounts,
-} from '@app/component/next-soup/soup-view/soup-view-cache-key';
-import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
-import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
+  CollapsedSoupViewTabs,
+  MobileSoupViewTabs,
+  SoupViewTabs,
+  useApplyPreset,
+} from '@app/component/next-soup/soup-view/soup-view-tabs';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -30,28 +46,49 @@ import {
   PreviewPanel,
   useMaybePreviewPanel,
 } from '@app/component/PreviewPanel';
+import { SoupChatInput } from '@app/component/SoupChatInput';
+import { SettingsButton } from '@app/component/settings/SettingsButton';
+import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@app/component/split-layout/components/SplitHeader';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
+import { isListViewID, type ListView } from '@app/constants/list-views';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { Resize } from '@core/component/Resize';
-import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isMobile } from '@core/mobile/isMobile';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
   ListEntity,
   ListLayoutProvider,
-  type SearchLocation,
   type ProjectEntity,
+  type SearchLocation,
 } from '@entity';
+import CheckIcon from '@icon/bold/check-bold.svg';
+import Spinner from '@icon/regular/spinner.svg';
+import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import { createEffectOnEntityTypeNotification } from '@notifications';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
-import { createEffectOnEntityTypeNotification } from '@notifications';
+import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
+import {
+  invalidateSoupEntity,
+  refetchSoupEntity,
+} from '@queries/soup/normalized-cache';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import {
   type Accessor,
   batch,
@@ -71,49 +108,10 @@ import {
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
-import { useUserId } from '@core/context/user';
-import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
-import { useHotkeyDOMScope, registerHotkey } from '@core/hotkey/hotkeys';
-import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import type { CacheSnapshot } from 'virtua/unstable_core';
-import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
-import { SoupChatInput } from '@app/component/SoupChatInput';
-import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
-
-import type { QueryState } from '@app/component/next-soup/filters/filter-store';
-import {
-  SoupViewTabs,
-  CollapsedSoupViewTabs,
-  MobileSoupViewTabs,
-  useApplyPreset,
-} from '@app/component/next-soup/soup-view/soup-view-tabs';
-import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
-import { MobileFilterDrawer } from '@app/component/next-soup/soup-view/filters-bar/mobile-filter-drawer';
-import { SettingsButton } from '@app/component/settings/SettingsButton';
-import { isListViewID, type ListView } from '@app/constants/list-views';
-import { SoupViewMobileCreateButton } from '@app/component/next-soup/soup-view/soup-view-mobile-create-button';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@app/component/split-layout/components/SplitHeader';
-import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
-import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
-import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
-import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
-import {
-  invalidateSoupEntity,
-  refetchSoupEntity,
-} from '@queries/soup/normalized-cache';
-import { Button } from '@ui';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
-import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
-import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
-import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
-import type { SoupRow } from '@app/component/next-soup/create-soup-state';
+import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
+import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
+import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -892,7 +890,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       !rows().length
                     }
                   >
-                    <div class="flex items-center gap-2 px-3 py-3 text-xs text-text-muted">
+                    <div class="flex items-center gap-2 p-3 text-xs text-text-muted">
                       <Spinner class="size-3 animate-spin" />
                       Searching...
                     </div>
@@ -1051,7 +1049,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     isSearchServiceLoading()
                                   }
                                 >
-                                  <div class="flex items-center gap-2 px-3 py-3 text-xs text-text-muted">
+                                  <div class="flex items-center gap-2 p-3 text-xs text-text-muted">
                                     <Spinner class="size-3 animate-spin" />
                                     Searching...
                                   </div>

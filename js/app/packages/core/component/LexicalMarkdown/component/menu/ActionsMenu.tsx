@@ -1,8 +1,9 @@
-import { cn, Surface } from '@ui';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { fuzzyFilter } from '@core/util/fuzzy';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import { debounce } from '@solid-primitives/scheduled';
+import { cn, Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
@@ -25,7 +26,6 @@ import {
 import { ACTIONS } from '../../plugins/actions/actions';
 import type { Action } from '../../plugins/actions/types';
 import type { MenuOperations } from '../../shared/inlineMenu';
-import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
 false && clickOutside;

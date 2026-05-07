@@ -23,7 +23,7 @@ function ToggleButton(props: ToggleButtonProps) {
           onClick={props.toggle}
         >
           <ChevronDownIcon
-            class={cn('w-3 h-3 transition-transform duration-100', {
+            class={cn('size-3 transition-transform duration-100', {
               'rotate-180': props.showAll,
             })}
           />

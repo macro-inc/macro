@@ -1,7 +1,7 @@
 import { isPlatform } from '@core/util/platform';
 import { useNotificationSettings } from '@notifications/notification-settings';
 import { useIsAuthenticated } from '@queries/auth';
-import { Dialog, Button, Surface } from '@ui';
+import { Button, Dialog, Surface } from '@ui';
 import { createMemo, Show } from 'solid-js';
 
 const DEBUG_FORCE_OPEN = false;

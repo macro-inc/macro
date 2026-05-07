@@ -1,13 +1,13 @@
+import DeleteIcon from '@icon/bold/x-bold.svg';
+import { cn } from '@ui';
 import type { Component } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 import { formatDate } from '../../utils';
-import DeleteIcon from '@icon/bold/x-bold.svg';
 import {
   EmptyValue,
-  stubSaveHandler,
   type PropertyValueProps,
+  stubSaveHandler,
 } from './ValueComponents';
-import { cn } from '@ui';
 
 /**
  * Display component for date properties
@@ -58,7 +58,7 @@ export const DateValue: Component<PropertyValueProps> = (props) => {
       <button
         onClick={handleClick}
         class={cn(
-          'inline-flex items-center leading-none shrink-0 py-1.5 h-6.5 transition-colors border border-edge-muted px-1.5',
+          'inline-flex items-center leading-none shrink-0 p-1.5 h-6.5 transition-colors border border-edge-muted',
           {
             'hover:border-edge-muted hover:bg-hover': props.canEdit,
           }

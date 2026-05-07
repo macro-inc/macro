@@ -1,3 +1,5 @@
+import { ScopedPortal } from '@core/component/ScopedPortal';
+import Dots from '@icon/bold/dots-six-vertical-bold.svg';
 import { $isListItemNode, $isListNode, type ListItemNode } from '@lexical/list';
 import { $getNearestNodeFromDOMNode } from 'lexical';
 import { Show, useContext } from 'solid-js';
@@ -8,8 +10,6 @@ import {
   DRAG_DATA_FORMAT,
   type DraggableBlockState,
 } from '../../plugins/draggable-block/draggableBlockPlugin';
-import Dots from '@icon/bold/dots-six-vertical-bold.svg';
-import { ScopedPortal } from '@core/component/ScopedPortal';
 
 const HANDLE_SIZE = 20;
 const HANDLE_GAP = 4;

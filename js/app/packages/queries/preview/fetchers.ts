@@ -1,11 +1,11 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
-import { formatDocumentName } from '@service-storage/util/filename';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
+import { formatDocumentName } from '@service-storage/util/filename';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
 async function fetchChannelPreviews(

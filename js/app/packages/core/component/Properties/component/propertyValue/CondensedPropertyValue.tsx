@@ -1,27 +1,27 @@
 import { getSelectValues } from '@core/component/Properties/utils';
-import { PropertyValueIcon } from './PropertyValueIcon';
 import { Tooltip } from '@core/component/Tooltip';
+import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
+import { cn } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import { Show } from 'solid-js';
 import type { Property } from '../../types';
 import {
-  hasValue,
-  isSelectProperty,
-  isEntityProperty,
-  isDateProperty,
-  isStringProperty,
-  isNumberProperty,
-  isBooleanProperty,
-} from '../../utils/typeGuards';
-import {
+  formatBoolean,
   formatDate,
   formatNumber,
-  formatBoolean,
 } from '../../utils/formatting';
+import {
+  hasValue,
+  isBooleanProperty,
+  isDateProperty,
+  isEntityProperty,
+  isNumberProperty,
+  isSelectProperty,
+  isStringProperty,
+} from '../../utils/typeGuards';
 import { PropertyTooltip } from './PropertyTooltip';
-import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
+import { PropertyValueIcon } from './PropertyValueIcon';
 import { UserGroup } from './UserGroup';
-import { cn } from '@ui';
 
 type CondensedPropertyValueProps = {
   property: Property;
@@ -54,7 +54,7 @@ export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
     >
       <div
         class={cn(
-          'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 py-1.5 h-6.5 transition-colors px-1.5',
+          'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 p-1.5 h-6.5 transition-colors',
           {
             'hover:border-edge-muted hover:bg-hover': props.canEdit,
             'opacity-50': !validValue(),
@@ -83,7 +83,7 @@ const CondensedIcon = (props: { property: Property }): JSX.Element => {
       const count = props.property.value?.length ?? 0;
       if (count > 0) {
         return (
-          <span class="truncate max-w-[100px]">
+          <span class="truncate max-w-25">
             {count === 1 ? '1 item' : `${count} items`}
           </span>
         );
@@ -104,7 +104,7 @@ const CondensedIcon = (props: { property: Property }): JSX.Element => {
     if (isDateProperty(props.property)) {
       const value = props.property.value;
       if (value) {
-        return <span class="truncate max-w-[100px]">{formatDate(value)}</span>;
+        return <span class="truncate max-w-25">{formatDate(value)}</span>;
       }
       return null;
     }
@@ -113,7 +113,7 @@ const CondensedIcon = (props: { property: Property }): JSX.Element => {
     if (isStringProperty(props.property)) {
       const value = props.property.value;
       if (value) {
-        return <span class="truncate max-w-[100px]">{value}</span>;
+        return <span class="truncate max-w-25">{value}</span>;
       }
       return null;
     }
@@ -122,9 +122,7 @@ const CondensedIcon = (props: { property: Property }): JSX.Element => {
     if (isNumberProperty(props.property)) {
       const value = props.property.value;
       if (value !== null) {
-        return (
-          <span class="truncate max-w-[100px]">{formatNumber(value)}</span>
-        );
+        return <span class="truncate max-w-25">{formatNumber(value)}</span>;
       }
       return null;
     }
@@ -133,9 +131,7 @@ const CondensedIcon = (props: { property: Property }): JSX.Element => {
     if (isBooleanProperty(props.property)) {
       const value = props.property.value;
       if (value !== null) {
-        return (
-          <span class="truncate max-w-[100px]">{formatBoolean(value)}</span>
-        );
+        return <span class="truncate max-w-25">{formatBoolean(value)}</span>;
       }
       return null;
     }

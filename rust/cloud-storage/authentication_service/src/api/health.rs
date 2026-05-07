@@ -44,7 +44,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = String::from_utf8(
+        let _body = String::from_utf8(
             response
                 .into_body()
                 .collect()

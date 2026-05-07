@@ -3,8 +3,8 @@ import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
 import PencilIcon from '@icon/regular/note-pencil.svg';
 import QuoteIcon from '@phosphor-icons/core/bold/arrow-elbow-down-right-bold.svg?component-solid';
-import { Button } from '@ui';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
+import { Button } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { DEFAULT_MODEL } from '../../constant';
 import { ChatMessageMarkdown } from './ChatMessageMarkdown';
@@ -76,7 +76,7 @@ export function UserMessage(props: {
       <Show when={quote()}>
         <div class="relative w-full text-xs flex flex-row space-x-2 items-start text-ink-muted">
           <div class="flex flex-row items-center space-x-3">
-            <QuoteIcon class="w-3 h-3 shrink-0" />
+            <QuoteIcon class="size-3 shrink-0" />
             <p>"{quote()?.substring(0, 300)}..."</p>
           </div>
         </div>

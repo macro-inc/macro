@@ -9,8 +9,8 @@ vi.mock('@core/constant/allBlocks', () => ({
 }));
 
 import { createInputAttachmentTracker } from '../attachment-tracker';
-import { getAttachmentKindFromFile } from '../utils/file-helpers';
 import { uploadInputAttachments } from '../upload-attachments';
+import { getAttachmentKindFromFile } from '../utils/file-helpers';
 
 const { toastFailureMock } = vi.hoisted(() => {
   return {

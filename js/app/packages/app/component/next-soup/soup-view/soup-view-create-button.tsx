@@ -1,20 +1,20 @@
 import { CREATABLE_BLOCKS, runCreateAction } from '@app/component/Launcher';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
+import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import {
   handleFolderSelect,
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
-import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import type { BlockAlias, BlockName } from '@core/block';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import UploadIcon from '@icon/regular/upload-simple.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { createMemo, For, Show } from 'solid-js';
 import { Button } from '@ui';
+import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
 
 // Which blocks to show as create options per view, in order
@@ -154,7 +154,7 @@ export const SoupViewCreateButton = () => {
               <ChevronDownIcon class="size-3" />
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
-              <DropdownMenuContent class="z-action-menu min-w-[160px]">
+              <DropdownMenuContent class="z-action-menu min-w-40">
                 <For each={options()}>
                   {(item) => (
                     <MenuItem

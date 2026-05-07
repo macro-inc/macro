@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import type { EntityData } from '@entity';
+import { describe, expect, it } from 'vitest';
 import { intersectEntityPools } from './search-utils';
 
 const makeEntity = (id: string, name = id): EntityData =>

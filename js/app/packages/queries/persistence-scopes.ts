@@ -1,6 +1,6 @@
-import { partialMatchKey, type QueryKey } from '@tanstack/query-core';
-import { hasLoginCookie } from '@core/util/cookies';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { hasLoginCookie } from '@core/util/cookies';
+import { partialMatchKey, type QueryKey } from '@tanstack/query-core';
 import { authKeys } from './auth/keys';
 import { channelKeys } from './channel/keys';
 import { createPersistenceKey, type PersistScope } from './persistence';

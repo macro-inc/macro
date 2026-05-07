@@ -36,8 +36,8 @@ vi.mock('@core/component/EntityIcon', () => ({
   getIconConfig: vi.fn(),
 }));
 
-import { createSoupState } from './create-soup-state';
 import type { EntityData } from '../../../entity/src';
+import { createSoupState } from './create-soup-state';
 
 const createTestEntity = (id: string, name?: string): EntityData => ({
   id,

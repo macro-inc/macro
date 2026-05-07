@@ -1,7 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { cn } from '@ui';
 import ChevronDownIcon from '@icon/bold/caret-down-bold.svg';
 import CheckIcon from '@icon/bold/check-bold.svg';
+import { cn, Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -11,7 +11,6 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { Layer } from '@ui';
 
 export type DropdownOption<T> = {
   value: T;
@@ -107,7 +106,7 @@ export const Dropdown = <T extends string | number>(
         </div>
       </div>
       <Show when={isSelected}>
-        <CheckIcon class="w-3 h-3 shrink-0" />
+        <CheckIcon class="size-3 shrink-0" />
       </Show>
     </>
   );
@@ -122,7 +121,7 @@ export const Dropdown = <T extends string | number>(
       >
         {props.renderValue?.(selectedOption()) ??
           defaultRenderValue(selectedOption())}
-        <ChevronDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
+        <ChevronDownIcon class="size-3 text-ink-muted shrink-0" />
       </button>
       <Show when={isOpen()}>
         <ScopedPortal scope="local">

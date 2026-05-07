@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{api::context::ApiContext, service::conn_gateway::update_live_comment_state};
+use crate::service::conn_gateway::update_live_comment_state;
 use axum::{
     Json,
     extract::{Extension, State},
@@ -34,7 +34,7 @@ use super::comment_error_response;
             (status = 500, body=ErrorResponse),
         )
     )]
-#[axum::debug_handler(state = ApiContext)]
+#[axum::debug_handler(state = crate::api::context::ApiContext)]
 pub async fn delete_anchor_handler(
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,

@@ -3,8 +3,8 @@ lambda_name := file_name(justfile_directory())
 test:
     cargo test --all-features
 
-build:
-	SQLX_OFFLINE=true cargo lambda build --release --bin {{lambda_name}} --output-format zip
+build compiler="":
+	SQLX_OFFLINE=true cargo lambda build {{ if compiler == "" { "" } else { "--compiler " + compiler } }} --release --bin {{lambda_name}} --output-format zip
 
 create-localstack:
 	docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs localstack/localstack

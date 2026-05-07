@@ -1,17 +1,16 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import CorvuTooltip, { type FloatingOptions } from '@corvu/tooltip';
 import type { Placement } from '@floating-ui/dom';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import {
+  createSignal,
   For,
   type JSX,
   mergeProps,
   type ParentProps,
   Show,
-  createSignal,
 } from 'solid-js';
 import { Hotkey } from './Hotkey';
-import { Layer } from '@ui';
 
 const TOOLTIP_DELAY = 250;
 

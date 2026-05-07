@@ -5,7 +5,6 @@
  */
 
 import { isMobile } from '@core/mobile/isMobile';
-import { cn } from '@ui';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   autoUpdate,
@@ -16,6 +15,7 @@ import {
   shift,
 } from '@floating-ui/dom';
 import CaretRight from '@phosphor-icons/core/regular/caret-right.svg?component-solid';
+import { cn } from '@ui';
 import {
   type Component,
   createEffect,
@@ -156,12 +156,12 @@ export function OldMenuItem(props: OldMenuItemProps) {
               <div
                 class={cn(
                   'flex justify-center items-center shrink-0',
-                  isMobile() ? 'w-5 h-5' : 'w-4 h-4',
+                  isMobile() ? 'size-5' : 'size-4',
                   selected() && 'text-accent-ink',
                   props.iconClass
                 )}
               >
-                <props.icon class="w-full h-full" />
+                <props.icon class="size-full" />
               </div>
             )}
             <div class="w-full truncate">{props.text}</div>
@@ -177,19 +177,19 @@ export function OldMenuItem(props: OldMenuItemProps) {
           >
             {(SecondaryIcon) => (
               <button
-                class="hidden group-hover:flex flex-none justify-center items-center hover:bg-hover rounded w-5 h-5 text-ink-muted hover:text-ink transition-colors hover:transition-none"
+                class="hidden group-hover:flex flex-none justify-center items-center hover:bg-hover rounded size-5 text-ink-muted hover:text-ink transition-colors hover:transition-none"
                 onmousedown={props.secondaryActionHandler}
                 data-testid="secondary-action-button"
               >
-                <div class="flex justify-center items-center w-4 h-4">
+                <div class="flex justify-center items-center size-4">
                   <SecondaryIcon />
                 </div>
               </button>
             )}
           </Show>
           <Show when={props.submenu || props.chevron}>
-            <div class="flex justify-center items-center w-3.5 h-3.5">
-              <CaretRight class="w-full h-full" />
+            <div class="flex justify-center items-center size-3.5">
+              <CaretRight class="size-full" />
             </div>
           </Show>
         </div>

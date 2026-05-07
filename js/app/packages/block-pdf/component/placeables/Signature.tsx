@@ -2,13 +2,12 @@ import {
   activePlaceableIdSignal,
   newPlaceableSignal,
 } from '@block-pdf/signal/placeables';
-import { Button } from '@ui';
 import { blockElementSignal } from '@core/signal/blockElement';
-import { cn } from '@ui';
 import Dialog from '@corvu/dialog';
 import Check from '@icon/regular/check.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { Button, cn } from '@ui';
 import SignaturePad from 'signature_pad';
 import {
   createMemo,
@@ -183,13 +182,13 @@ function SignatureEditor(props: SignatureEditorProps) {
 export function Signature(props: SignatureProps) {
   return (
     <div
-      class="w-full h-full bg-transparent"
+      class="size-full bg-transparent"
       style={{ outline: props.isActive ? `1px dotted grey` : 'none' }}
     >
       <Show when={props.base64}>
         {(base64) => (
           <img
-            class="w-full h-full"
+            class="size-full"
             alt="signature"
             draggable={false}
             src={base64()}

@@ -1,5 +1,7 @@
 import { MediaImage } from '@channel/Media/MediaImage';
 import { MediaVideo } from '@channel/Media/MediaVideo';
+import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
+import type { MediaItem } from '@channel/Media/media-items';
 import { EntityIcon } from '@core/component/EntityIcon';
 import {
   staticFileIdEndpoint,
@@ -19,8 +21,6 @@ import {
   Switch,
   splitProps,
 } from 'solid-js';
-import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
-import type { MediaItem } from '@channel/Media/media-items';
 import { useInput, useInputCommands } from './context';
 import type { InputAttachmentData, InputAttachmentKind } from './types';
 
@@ -71,14 +71,14 @@ function MediaAttachmentItem(props: {
     <RemoveButton
       attachment={props.attachment}
       onRemove={props.onRemove}
-      class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+      class="absolute -top-2 -right-2 z-10 rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
     />
   );
 
   const pendingOverlay = () => (
     <Show when={isPending()}>
       <div class="absolute inset-0 flex items-center justify-center rounded-2xl">
-        <SpinnerIcon class="w-4 h-4 animate-spin" />
+        <SpinnerIcon class="size-4 animate-spin" />
       </div>
     </Show>
   );
@@ -137,7 +137,7 @@ function DocumentAttachmentItem(props: {
     <div class="ph-no-capture group flex items-center px-2 py-1.5 space-x-1.5 hover:bg-hover hover-transition-bg cursor-default text-sm border border-edge-muted rounded-xs">
       <Show
         when={!props.attachment.pending}
-        fallback={<SpinnerIcon class="w-4 h-4 animate-spin" />}
+        fallback={<SpinnerIcon class="size-4 animate-spin" />}
       >
         <EntityIcon
           targetType={props.attachment.iconType ?? 'unknown'}
@@ -212,7 +212,7 @@ export function Attachments(props: AttachmentsProps) {
     <Show when={visibleAttachments().length > 0}>
       <div
         class={cn(
-          'flex flex-row w-full px-2 py-2 gap-2 flex-wrap',
+          'flex flex-row w-full p-2 gap-2 flex-wrap',
           // On mobile, attachments scroll horizontally
           'mobile:flex-nowrap mobile:*:shrink-0 mobile:overflow-x-auto mobile:scrollbar-hidden',
           local.class

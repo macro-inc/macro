@@ -1,6 +1,6 @@
-import { Button } from '@ui';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas';
 import type { ChatMessageStream } from '@service-connection/stream';
+import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import {
   ChatInputProvider,
@@ -65,7 +65,7 @@ function StreamDebuggerWithControlsInner(props: {
         </Button>
       </div>
       <StreamStatus stream={stream} />
-      <div data-chat-scroll class="min-h-0 max-h-[400px] overflow-y-auto">
+      <div data-chat-scroll class="min-h-0 max-h-100 overflow-y-auto">
         <ChatMessages />
       </div>
     </div>

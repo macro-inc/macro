@@ -1,7 +1,8 @@
-import type { EditorType } from '@lexical-core';
 import type { PortalScope } from '@core/component/ScopedPortal';
+import type { EditorType } from '@lexical-core';
 import type { LexicalEditor, SerializedEditorState } from 'lexical';
 import type { Store } from 'solid-js/store';
+import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
 import type { createLexicalWrapper } from '../context/LexicalWrapperContext';
 import type {
   createAccessoryStore,
@@ -13,7 +14,6 @@ import type {
 } from '../plugins';
 import type { Action } from '../plugins/actions/types';
 import type { createMenuOperations } from '../shared/inlineMenu';
-import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
 
 export interface ActionsOptions {
   useBlockBoundary?: boolean;

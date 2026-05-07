@@ -1,7 +1,7 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
-import { cn } from '@ui';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
+import { cn } from '@ui';
 import {
   type Component,
   type ComponentProps,
@@ -196,7 +196,7 @@ export function DeprecatedIconButton(props: IconButtonProps) {
             class="flex h-full justify-center items-center"
             classList={{ 'text-panel': local.theme === 'reverse' }}
           >
-            <CaretDown class="flex w-3 h-3" />
+            <CaretDown class="flex size-3" />
           </div>
         </Show>
         <Show when={props.showShortcut && primaryHotkeyToken()}>

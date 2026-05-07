@@ -41,6 +41,7 @@ fn documents_to_messages(documents: Vec<SyncDocument>) -> Vec<SearchQueueMessage
                 // change
                 file_type: doc.file_type,
                 document_version_id,
+                index_override: None,
             })
         })
         .collect()

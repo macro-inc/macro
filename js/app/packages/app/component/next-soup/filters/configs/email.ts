@@ -1,11 +1,11 @@
 import {
   emailDraftsFilter as emailDraftsPredicate,
-  noDraftsFilter as noDraftsPredicate,
-  hasCalendarInviteFilter as hasCalendarInvitePredicate,
   hasAttachmentFilter as hasAttachmentPredicate,
-  hasPdfAttachmentFilter as hasPdfAttachmentPredicate,
-  hasImageAttachmentFilter as hasImageAttachmentPredicate,
+  hasCalendarInviteFilter as hasCalendarInvitePredicate,
   hasDocumentAttachmentFilter as hasDocumentAttachmentPredicate,
+  hasImageAttachmentFilter as hasImageAttachmentPredicate,
+  hasPdfAttachmentFilter as hasPdfAttachmentPredicate,
+  noDraftsFilter as noDraftsPredicate,
 } from '../predicates';
 import { config, isEmail } from './base';
 

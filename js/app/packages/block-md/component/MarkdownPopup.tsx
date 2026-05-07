@@ -2,7 +2,6 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import type { Completion } from '@core/client/completion';
-import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 // import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
@@ -50,8 +49,10 @@ import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.sv
 import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
+import { generateTitle } from '@service-cognition/client';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
+import { Button, Layer } from '@ui';
 import {
   $getLocationUrl,
   $getSelectionLocation,
@@ -68,10 +69,8 @@ import {
   untrack,
   useContext,
 } from 'solid-js';
-import { FormatTools } from './FormatTools';
-import { Button } from '@ui';
 import { Dynamic } from 'solid-js/web';
-import { Layer } from '@ui';
+import { FormatTools } from './FormatTools';
 
 const MENU_ID = 'markdown-popup';
 
@@ -546,11 +545,11 @@ export function MarkdownPopup(props: {
                           <Show
                             when={!isLoading() && !isGenerating()}
                             fallback={
-                              <LoadingIcon class="w-3 h-3 animate-spin" />
+                              <LoadingIcon class="size-3 animate-spin" />
                             }
                           >
                             {' '}
-                            <PencilIcon class="w-3 h-3" />{' '}
+                            <PencilIcon class="size-3" />{' '}
                           </Show>{' '}
                           <p>Accept Changes</p>{' '}
                         </button>{' '}
@@ -565,11 +564,9 @@ export function MarkdownPopup(props: {
                       >
                         <Show
                           when={!isLoading() && !isGenerating()}
-                          fallback={
-                            <LoadingIcon class="w-3 h-3 animate-spin" />
-                          }
+                          fallback={<LoadingIcon class="size-3 animate-spin" />}
                         >
-                          <NotesIcon class="w-3 h-3 text-note" />
+                          <NotesIcon class="size-3 text-note" />
                         </Show>
                         <p>Edit in Notes</p>
                       </button>
@@ -581,17 +578,13 @@ export function MarkdownPopup(props: {
                       >
                         <Show
                           when={!isGenerating()}
-                          fallback={
-                            <LoadingIcon class="w-3 h-3 animate-spin" />
-                          }
+                          fallback={<LoadingIcon class="size-3 animate-spin" />}
                         >
                           <Show
                             when={!copied()}
-                            fallback={
-                              <CheckIcon class="w-3 h-3 text-success" />
-                            }
+                            fallback={<CheckIcon class="size-3 text-success" />}
                           >
-                            <ClipboardIcon class="w-3 h-3" />
+                            <ClipboardIcon class="size-3" />
                           </Show>
                         </Show>
                         <p>{copied() ? 'Copied!' : 'Copy'}</p>

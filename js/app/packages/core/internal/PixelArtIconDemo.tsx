@@ -1,8 +1,6 @@
-import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui';
-
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { DebugSlider } from '@core/component/Slider';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { Bar } from '@core/component/TopBar/Bar';
 import clickOutside from '@core/directive/clickOutside';
 import Rotate from '@icon/regular/arrow-counter-clockwise.svg';
@@ -18,6 +16,7 @@ import Plus from '@icon/regular/plus.svg';
 import Trash from '@icon/regular/trash.svg';
 import X from '@icon/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { Button } from '@ui';
 
 import {
   createEffect,
@@ -289,7 +288,7 @@ function EditableLabel(props: EditableLabelProps) {
         fallback={
           <div
             onClick={handleStartEdit}
-            class="hover:bg-edge px-1 py-0.5 w-full h-full flex items-center"
+            class="hover:bg-edge px-1 py-0.5 size-full flex items-center"
             style="min-height: 20px;"
           >
             {props.value}
@@ -497,7 +496,7 @@ function GlyphGrid(props: GlyphGridProps) {
                     'border-edge bg-background hover:bg-edge': !isSelected(),
                   }}
                 >
-                  <div class="w-20 h-20 flex items-center justify-center mx-auto m-2">
+                  <div class="size-20 flex items-center justify-center mx-auto m-2">
                     <Show when={pixels().length > 0}>
                       <PixelIcon
                         pixels={pixels()}
@@ -822,7 +821,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                 >
                   <svg
                     viewBox={`0 0 280 280`}
-                    class="absolute inset-0 w-full h-full cursor-crosshair"
+                    class="absolute inset-0 size-full cursor-crosshair"
                     style="user-select: none;"
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
@@ -878,7 +877,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                   <h3 class="font-mono text-ink-extra-muted text-xs">
                     [ PREVIEW ]
                   </h3>
-                  <div class="w-24 h-24 flex items-center justify-center border border-edge bg-background">
+                  <div class="size-24 flex items-center justify-center border border-edge bg-background">
                     <PixelIcon
                       pixels={pixels()}
                       iconSize={iconSize()}
@@ -1101,7 +1100,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
               }}
               class="font-mono text-ink-muted text-sm text-left w-full ring-1 ring-edge"
             />
-            <div class="w-32 h-32 flex items-center justify-center border border-edge bg-background">
+            <div class="size-32 flex items-center justify-center border border-edge bg-background">
               <Show when={selectedPixels()}>
                 <PixelIcon
                   pixels={selectedPixels()!}
@@ -1392,13 +1391,13 @@ export default function PixelArtIconDemo() {
   };
 
   return (
-    <div class="flex flex-col h-full w-full overflow-hidden">
+    <div class="flex flex-col size-full overflow-hidden">
       <Bar
         left={<div class="p-2 text-sm w-2xl truncate">Icon Editor</div>}
         center={<div></div>}
       />
 
-      <div class="flex h-full w-full">
+      <div class="flex size-full">
         <GlyphGrid
           glyphs={glyphs()}
           onGlyphSelect={handleGlyphSelect}

@@ -1,15 +1,15 @@
+import CheckIcon from '@icon/bold/check-bold.svg';
+import { cn } from '@ui';
 import {
+  type Component,
   createSignal,
   For,
+  type JSX,
   onCleanup,
   onMount,
   Show,
-  type Component,
-  type JSX,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import CheckIcon from '@icon/bold/check-bold.svg';
-import { cn } from '@ui';
 
 interface CalloutShellProps {
   leader: string;
@@ -185,7 +185,7 @@ export function ClickCallout(props: ClickCalloutProps) {
     >
       <span
         class={cn(
-          'inline-grid place-items-center rounded-sm border aspect-square h-[34px]',
+          'inline-grid place-items-center rounded-sm border aspect-square h-8.5',
           props.completed
             ? 'bg-ink/20 border-edge text-ink'
             : 'bg-ink/10 border-edge text-ink'

@@ -1,6 +1,7 @@
 import { internalDrag } from '@core/directive/internalDragState';
+
 false && internalDrag;
-import { cn } from '@ui';
+
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
@@ -8,14 +9,14 @@ import ClipboardIcon from '@icon/regular/clipboard.svg';
 import ThreeDotsIcon from '@icon/regular/dots-three-vertical.svg';
 import DownloadIcon from '@icon/regular/download-simple.svg';
 import TrashIcon from '@icon/regular/trash.svg';
-import { constrainImageDimensions } from '@lexical-core/utils/media';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { constrainImageDimensions } from '@lexical-core/utils/media';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import { Button, cn } from '@ui';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { copyImageToClipboard, downloadImage } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
-import { Button } from '@ui';
 import { Lightbox } from './Lightbox';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 
@@ -69,7 +70,7 @@ function GalleryImagePlaceholder(props: {
             }
       }
     >
-      <Spinner class="w-4 h-4 animate-spin" />
+      <Spinner class="size-4 animate-spin" />
     </div>
   );
 }
@@ -128,9 +129,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
       <div class={props.wrapperClass ?? 'flex flex-row flex-wrap gap-2'}>
         <For each={props.images}>
           {(image, index) => (
-            <div
-              class={props.variant === 'dynamic' ? 'max-w-[200px] w-fit' : ''}
-            >
+            <div class={props.variant === 'dynamic' ? 'max-w-50 w-fit' : ''}>
               <div class="flex group relative">
                 <Show when={props.variant !== 'small'}>
                   <div class="group-hover:visible invisible absolute top-2 right-2 bg-button rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">

@@ -1,8 +1,10 @@
-import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
-import { useSearchInputFocus } from '@core/component/Properties/utils';
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
-import { cn } from '@ui';
+import type { DateProperty } from '@core/component/Properties/types';
+import { useSearchInputFocus } from '@core/component/Properties/utils';
+import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
+import { useKeyPressed } from '@core/util/useKeyPressed';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import { cn } from '@ui';
 import { format } from 'date-fns';
 import {
   createEffect,
@@ -16,8 +18,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import type { DateProperty } from '@core/component/Properties/types';
-import { useKeyPressed } from '@core/util/useKeyPressed';
 
 type DateSelectorMode = 'search' | 'calendar';
 
@@ -144,7 +144,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
   return (
     <div class="relative">
       <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-        <SearchIcon class="h-4 w-4 text-ink-muted" />
+        <SearchIcon class="size-4 text-ink-muted" />
         <input
           class="w-full caret-accent"
           ref={searchInputRef}
@@ -186,7 +186,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
           </Show>
 
           <div class="p-1">
-            <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+            <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
               <Show
                 when={dateOptions().length > 0}
                 fallback={

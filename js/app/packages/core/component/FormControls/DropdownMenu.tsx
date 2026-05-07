@@ -1,6 +1,7 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { Popover, type PopoverRootProps } from '@kobalte/core/popover';
 import { createMutationObserver } from '@solid-primitives/mutation-observer';
+import { Button } from '@ui';
 import {
   type ComponentProps,
   createEffect,
@@ -10,7 +11,6 @@ import {
   type ParentComponent,
   Show,
 } from 'solid-js';
-import { Button } from '@ui';
 
 type ShadowTheme = 'Base' | 'AccentSpread';
 
@@ -110,16 +110,16 @@ const DropdownMenu: ParentComponent<
         <Popover.Content ref={popoverContentEl}>
           <div class="pointer-events-none">
             <Show when={props.shadowTheme === 'AccentSpread'}>
-              <div class="absolute flex inset-[-4px] ">
+              <div class="absolute flex -inset-1">
                 <div class="h-full grow bg-accent/20"></div>
                 <div
-                  class="shrink-0 self-end bottom-0 h-[4px] bg-accent/20"
+                  class="shrink-0 self-end bottom-0 h-1 bg-accent/20"
                   style={{
                     width: `${triggerSize().width}px`,
                   }}
                 ></div>
                 <div
-                  class="self-end w-[4px] bg-accent/20"
+                  class="self-end w-1 bg-accent/20"
                   style={{
                     height: `calc(100% + ${triggerSize().height - 8}px)`,
                   }}
@@ -136,20 +136,20 @@ const DropdownMenu: ParentComponent<
                   '--dropdown-cutout': `${props.dropdownCutout ?? 4}px`,
                 }}
                 classList={{
-                  '-left-(--dropdown-cutout) -right-(--dropdown-cutout) -top-(--dropdown-cutout) -bottom-(--dropdown-cutout)':
+                  '-inset-(--dropdown-cutout)':
                     popoverPosition() === 'top-right',
-                  '-right-(--dropdown-cutout) -top-(--dropdown-cutout) -bottom-(--dropdown-cutout)':
+                  '-right-(--dropdown-cutout) -inset-y-(--dropdown-cutout)':
                     popoverPosition() === 'top-left',
                 }}
               />
               <div
-                class="absolute bg-ink/20 w-full h-full left-[4px] top-[4px]"
+                class="absolute bg-ink/20 size-full left-1 top-1"
                 classList={{
-                  'translate-x-[-8px]': popoverPosition() === 'top-left',
+                  '-translate-x-2': popoverPosition() === 'top-left',
                 }}
               >
                 <div
-                  class="absolute bg-ink/20 left-0 top-0 w-[4px] bottom-0"
+                  class="absolute bg-ink/20 left-0 inset-y-0 w-1"
                   classList={{
                     'left-0': popoverPosition() === 'top-left',
                     'right-0': popoverPosition() === 'top-right',

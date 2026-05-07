@@ -1,32 +1,32 @@
+import { openMacroMcpSetupModal } from '@app/component/macro-mcp-setup-modal/MacroMcpSetupModal';
 import { useBlockId } from '@core/block';
-import { toast } from '@core/component/Toast/Toast';
-import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
-import { isOk } from '@core/util/maybeResult';
+import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
+import { toast } from '@core/component/Toast/Toast';
+import { macroIdToEmail, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { tryMacroId, macroIdToEmail } from '@core/user';
+import { isOk } from '@core/util/maybeResult';
+import CaretDown from '@icon/regular/caret-down.svg';
+import CopyIcon from '@icon/regular/copy.svg';
+import PlugIcon from '@icon/regular/plug.svg';
+import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import ClaudeIcon from '@macro-icons/wide/claude.svg';
+import CodexIcon from '@macro-icons/wide/codex-ide.svg';
+import CursorIcon from '@macro-icons/wide/cursor-ide.svg';
+import ZedIcon from '@macro-icons/wide/zed-ide.svg';
 import { storageServiceClient } from '@service-storage/client';
-import { mdStore } from '../signal/markdownBlockData';
+import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
+import { createCallback } from '@solid-primitives/rootless';
+import { makePersisted } from '@solid-primitives/storage';
+import { Button } from '@ui';
+import { type Component, createSignal, For, type JSX } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   discussionThreads,
   sortComments,
 } from '../comments/discussionResource';
-import { makePersisted } from '@solid-primitives/storage';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Button } from '@ui';
-import { createSignal, For, type Component, type JSX } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import CaretDown from '@icon/regular/caret-down.svg';
-import CopyIcon from '@icon/regular/copy.svg';
-import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
-import ClaudeIcon from '@macro-icons/wide/claude.svg';
-import CursorIcon from '@macro-icons/wide/cursor-ide.svg';
-import ZedIcon from '@macro-icons/wide/zed-ide.svg';
-import CodexIcon from '@macro-icons/wide/codex-ide.svg';
-import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
-import { createCallback } from '@solid-primitives/rootless';
-import { openMacroMcpSetupModal } from '@app/component/macro-mcp-setup-modal/MacroMcpSetupModal';
-import PlugIcon from '@icon/regular/plug.svg';
+import { mdStore } from '../signal/markdownBlockData';
 
 const LAST_USED_KEY = 'dispatch-agent-last-used';
 
@@ -211,7 +211,7 @@ export function DispatchAgentButton() {
           size="icon-sm"
           class="p-1"
         >
-          <CaretDown class="w-3 h-3" />
+          <CaretDown class="size-3" />
         </DropdownMenu.Trigger>
       </div>
       <DropdownMenu.Portal>

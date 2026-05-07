@@ -1,5 +1,5 @@
-import { Button } from '@ui';
 import { LabelAndHotKey } from '@core/component/Tooltip';
+import { Button } from '@ui';
 import type { JSX } from 'solid-js';
 
 export function InputActionButton(props: {

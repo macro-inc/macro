@@ -1,7 +1,8 @@
-import { cn } from '@ui';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { isMobile } from '@core/mobile/isMobile';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { onElementConnect } from '@solid-primitives/lifecycle';
+import { cn } from '@ui';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -17,13 +18,16 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { DecoratorRenderer } from '../component/core/DecoratorRenderer';
+import { NodeAccessoryRenderer } from '../component/core/NodeAccessoryRenderer';
+import { ActionMenu } from '../component/menu/ActionsMenu';
+import { EmojiMenu } from '../component/menu/EmojiMenu';
+import { FloatingLinkMenu } from '../component/menu/FloatingLinkMenu';
+import { MentionsMenu } from '../component/menu/MentionsMenu';
+import { DragInsertIndicator } from '../component/misc/DragInsertIndicator';
 import { FloatingMenuGroup } from '../context/FloatingMenuContext';
 import { LexicalWrapperContext } from '../context/LexicalWrapperContext';
 import { autoRegister, registerCommandEffect } from '../plugins';
-import {
-  createFilesReadyHandler,
-  getDragDropPosition,
-} from '../utils/fileUploadUtils';
 import {
   editorIsEmpty,
   focusEditorWithoutScroll,
@@ -31,14 +35,10 @@ import {
   initializeEditorWithState,
   setEditorStateFromMarkdown,
 } from '../utils';
-import { DecoratorRenderer } from '../component/core/DecoratorRenderer';
-import { DragInsertIndicator } from '../component/misc/DragInsertIndicator';
-import { NodeAccessoryRenderer } from '../component/core/NodeAccessoryRenderer';
-import { EmojiMenu } from '../component/menu/EmojiMenu';
-import { FloatingLinkMenu } from '../component/menu/FloatingLinkMenu';
-import { MentionsMenu } from '../component/menu/MentionsMenu';
-import { ActionMenu } from '../component/menu/ActionsMenu';
-import { isMobile } from '@core/mobile/isMobile';
+import {
+  createFilesReadyHandler,
+  getDragDropPosition,
+} from '../utils/fileUploadUtils';
 import type { EditorBuilder, EditorComponentProps } from './types';
 
 export const MarkdownShell: Component<

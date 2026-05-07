@@ -1,9 +1,9 @@
 import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
 import UsersThree from '@phosphor-icons/core/assets/regular/users-three.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import { cn } from '@ui';
 import type { Accessor } from 'solid-js';
 import { Show } from 'solid-js';
-import { cn } from '@ui';
 import { CallTranscript } from '../CallTranscript';
 import { CallRecordingParticipantsSection } from './CallRecordingParticipants';
 import { CallRecordingSectionShell } from './CallRecordingSectionShell';
@@ -34,7 +34,7 @@ export function CallRecordingTranscriptColumn(props: {
       <Show
         when={props.hasTranscripts()}
         fallback={
-          <div class="flex h-full min-h-0 w-full min-w-0 flex-1 items-center justify-center px-4 py-10 text-center text-sm text-ink-muted">
+          <div class="flex size-full min-h-0 min-w-0 flex-1 items-center justify-center px-4 py-10 text-center text-sm text-ink-muted">
             No transcripts for this call.
           </div>
         }

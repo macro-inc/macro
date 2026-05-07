@@ -7,13 +7,13 @@ export {
   type WithCustomUserInput,
 } from './combinedRecipient';
 export { useContacts } from './contactService';
-export { useAugmentUserWithDmActivity } from './dmActivity';
 export {
   type DisplayNameParts,
   seedMockDisplayNames,
   useDisplayName,
   useDisplayNameParts,
 } from './displayName';
+export { useAugmentUserWithDmActivity } from './dmActivity';
 export {
   emailToMacroId,
   isMacroId,

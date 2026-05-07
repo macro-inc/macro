@@ -1,16 +1,16 @@
-import { createSignal, onMount, Show } from 'solid-js';
-import { useSearchParams } from '@solidjs/router';
-import AppStoreQr from '@macro-icons/app-store.svg';
-import { SegmentedControl } from '@ui';
-import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
-import type { LessonContentProps, LessonDefinition } from '../types';
 import { useAnalytics } from '@app/component/analytics-context';
-import { useUserId } from '@core/context/user';
-import { ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
 import {
   SIGNUP_LEAD_VALUE_BY_TIER,
   SIGNUP_LEAD_VALUE_DEFAULT,
 } from '@app/lib/analytics/leadValues';
+import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
+import { ENABLE_APP_STORE_QR_CODE } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
+import AppStoreQr from '@macro-icons/app-store.svg';
+import { useSearchParams } from '@solidjs/router';
+import { SegmentedControl } from '@ui';
+import { createSignal, onMount, Show } from 'solid-js';
+import type { LessonContentProps, LessonDefinition } from '../types';
 
 function LaunchContent(props: LessonContentProps) {
   const analytics = useAnalytics();
@@ -64,8 +64,8 @@ const LAUNCH_TAB_OPTIONS: Array<{ value: LaunchTab; label: string }> = [
 
 function MobilePanel() {
   return (
-    <div class="h-full w-full flex flex-col items-center justify-center gap-6">
-      <AppStoreQr class="w-[55cqw] h-[55cqw] max-w-[460px] max-h-[460px]" />
+    <div class="size-full flex flex-col items-center justify-center gap-6">
+      <AppStoreQr class="size-[55cqw] max-w-115 max-h-115" />
       <p class="text-ink font-medium text-center">
         Download on the
         <br />
@@ -86,7 +86,7 @@ function LaunchDemo() {
   const [tab, setTab] = createSignal<LaunchTab>('mobile');
 
   return (
-    <div class="h-full w-full flex flex-col items-center px-8 py-8 @container">
+    <div class="size-full flex flex-col items-center p-8 @container">
       <SegmentedControl
         value={tab()}
         options={LAUNCH_TAB_OPTIONS}

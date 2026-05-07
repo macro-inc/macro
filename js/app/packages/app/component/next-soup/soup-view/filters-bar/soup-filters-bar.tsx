@@ -1,16 +1,16 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import { ActiveFilterChips } from '@app/component/next-soup/soup-view/filters-bar/active-filter-chips';
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
+import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { createMemo, createSignal, Show } from 'solid-js';
-import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
-import { ActiveFilterChips } from '@app/component/next-soup/soup-view/filters-bar/active-filter-chips';
-import { isMobile } from '@core/mobile/isMobile';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import { Button } from '@ui';
-import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
-import { useSoup } from '../../soup-context';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { useAnalytics } from '@app/component/analytics-context';
+import { isMobile } from '@core/mobile/isMobile';
+import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
+import { Button } from '@ui';
+import { createMemo, createSignal, Show } from 'solid-js';
+import { useSoup } from '../../soup-context';
 
 export const SoupFiltersBar = () => {
   const {

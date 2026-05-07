@@ -28,13 +28,12 @@ pub struct UpsertChatMessageArgs {
 pub(crate) async fn upsert_chat_message(
     client: &opensearch::OpenSearch,
     args: &UpsertChatMessageArgs,
+    index_override: Option<&str>,
 ) -> Result<()> {
     let id = format!("{}:{}", args.chat_id, args.chat_message_id);
+    let index = index_override.unwrap_or(SearchIndex::Chats.as_ref());
     let response = client
-        .index(opensearch::IndexParts::IndexId(
-            SearchIndex::Chats.as_ref(),
-            &id,
-        ))
+        .index(opensearch::IndexParts::IndexId(index, &id))
         .body(args)
         .send()
         .await

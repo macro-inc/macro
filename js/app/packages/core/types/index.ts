@@ -17,6 +17,7 @@ export type Entity = {
 };
 
 export type { ApiPaginatedThreadCursor as ThreadPreview } from '@service-email/generated/schemas/apiPaginatedThreadCursor';
+
 import type { NotifEvent } from '@service-notification/generated/schemas';
 export type NotificationType = NotifEvent['tag'] | 'call-started';
 

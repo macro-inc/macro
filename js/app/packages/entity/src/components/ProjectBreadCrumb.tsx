@@ -1,10 +1,10 @@
-import { Show, Suspense } from 'solid-js';
 import { Tooltip } from '@core/component/Tooltip';
-import type { ProjectEntity, ProjectContainedEntity } from '../types/entity';
-import { useProjectPreviewQuery } from '@queries/storage/project-preview';
-import { truncatedPath } from '../utils/path';
 import FolderIcon from '@icon/regular/folder-simple.svg';
+import { useProjectPreviewQuery } from '@queries/storage/project-preview';
 import { cn } from '@ui';
+import { Show, Suspense } from 'solid-js';
+import type { ProjectContainedEntity, ProjectEntity } from '../types/entity';
+import { truncatedPath } from '../utils/path';
 
 const MAX_PATH_LENGTH = 30;
 

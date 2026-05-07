@@ -2,9 +2,9 @@
  * @vitest-environment jsdom
  */
 
+import { MaybeResultError } from '@core/util/maybeResult';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MaybeResultError } from '@core/util/maybeResult';
 
 const mocks = vi.hoisted(() => ({
   getChannelMessages: vi.fn(),

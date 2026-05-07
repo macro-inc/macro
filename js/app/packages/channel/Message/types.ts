@@ -1,5 +1,5 @@
-import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
+import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 
 export type MessageData = {
   id: string;

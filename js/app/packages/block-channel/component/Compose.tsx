@@ -5,6 +5,8 @@ import {
 } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import {
+  applyInlineFormat,
+  applyNodeFormat,
   buildPostMessageRequest,
   createConfiguredChannelMarkdownEditor,
   createInputAttachmentTracker,
@@ -12,13 +14,11 @@ import {
   createMentionsTracker,
   FormatButtons,
   Input,
-  applyInlineFormat,
-  applyNodeFormat,
-  uploadInputAttachments,
   type InputSnapshot,
+  uploadInputAttachments,
 } from '@channel/Input';
+import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { getDestinationFromOptions } from '@core/util/destination';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -27,18 +27,18 @@ import {
   useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
+import { useSendMessageToPeople } from '@core/util/channels';
+import { getDestinationFromOptions } from '@core/util/destination';
+import { isErr } from '@core/util/maybeResult';
 import {
   chatRuleset,
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
-import { useSendMessageToPeople } from '@core/util/channels';
-import { isErr } from '@core/util/maybeResult';
-import { commsServiceClient } from '@service-comms/client';
 import InfoIcon from '@icon/regular/info.svg';
-import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
-import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
+import { commsServiceClient } from '@service-comms/client';
 import { Surface } from '@ui';
+import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
 export function ChannelCompose() {
   const [channelName, setChannelName] = createSignal<string>('');
@@ -219,8 +219,8 @@ export function ChannelCompose() {
       <SplitToolbarLeft>
         <div class="h-full items-center flex" p-1></div>
       </SplitToolbarLeft>
-      <div class="relative flex flex-col w-full h-full panel">
-        <div class="pt-2 h-full grow w-full overflow-y-auto @min-[40rem]:px-4">
+      <div class="relative flex flex-col size-full panel">
+        <div class="pt-2 size-full grow overflow-y-auto @min-[40rem]:px-4">
           <div class="macro-message-width macro-message-padding mx-auto pb-1 h-full">
             <input
               type="text"

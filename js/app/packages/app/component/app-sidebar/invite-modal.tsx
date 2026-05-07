@@ -1,13 +1,13 @@
-import { createSignal, Show } from 'solid-js';
+import { toast } from '@core/component/Toast/Toast';
 import { useReferralCode } from '@core/context/user';
+import { isOk } from '@core/util/maybeResult';
 import { getWebOrigin } from '@core/util/webOrigin';
+import ClipboardIcon from '@icon/regular/clipboard.svg';
+import CloseIcon from '@icon/regular/x.svg';
 import { authServiceClient } from '@service-auth/client';
 import { contactsClient } from '@service-contacts/client';
-import { isOk } from '@core/util/maybeResult';
-import { Dialog, Button, Panel } from '@ui';
-import { toast } from '@core/component/Toast/Toast';
-import CloseIcon from '@icon/regular/x.svg';
-import ClipboardIcon from '@icon/regular/clipboard.svg';
+import { Button, Dialog, Panel } from '@ui';
+import { createSignal, Show } from 'solid-js';
 
 function parseEmails(raw: string): string[] {
   return raw
@@ -93,7 +93,7 @@ export const InviteModal = () => {
               value={value()}
               onInput={(e) => setValue(e.currentTarget.value)}
               rows={4}
-              class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none focus:border-accent/50 resize-none leading-relaxed"
+              class="w-full px-3 py-2 text-sm/relaxed border border-edge-muted rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none focus:border-accent/50 resize-none"
             />
           </div>
 
@@ -115,7 +115,7 @@ export const InviteModal = () => {
 
           <Show when={referralUrl()}>
             {(url) => (
-              <div class="flex flex-col gap-1.5 pt-3 ">
+              <div class="flex flex-col gap-1.5 pt-3">
                 <p class="text-xs text-ink/50">
                   Or share your personal referral link:
                 </p>

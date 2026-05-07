@@ -37,10 +37,12 @@ async fn main() -> anyhow::Result<()> {
             ))
         },
         Arc::new(LocalSessionManager::default()),
-        StreamableHttpServerConfig {
-            stateful_mode: false,
-            json_response: true,
-            ..Default::default()
+        {
+            StreamableHttpServerConfig {
+                stateful_mode: false,
+                json_response: true,
+                ..Default::default()
+            }
         },
     );
 

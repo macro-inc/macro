@@ -1,12 +1,11 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
 import Drawer from '@corvu/drawer';
-import { Layer } from '@ui';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import {
+  type ComponentProps,
   onCleanup,
   splitProps,
-  type ComponentProps,
   type ValidComponent,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -63,7 +62,7 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
           scrollToFocusedInput(e);
         }}
         class={cn(
-          'bottom-[var(--virtual-keyboard-height,0)] fixed left-0 right-0 z-modal bg-panel rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
+          'bottom-(--virtual-keyboard-height,0) fixed inset-x-0 z-modal bg-panel rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
           virtualKeyboardVisible()
             ? 'pb-0 max-h-[calc(80vh-var(--virtual-keyboard-height))] overflow-y-auto'
             : 'pb-(--safe-bottom)',

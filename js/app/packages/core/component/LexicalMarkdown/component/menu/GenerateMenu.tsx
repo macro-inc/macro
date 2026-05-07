@@ -2,7 +2,6 @@ import {
   generatedAndWaitingSignal,
   isGeneratingSignal,
 } from '@block-md/signal/generateSignal';
-import { cn } from '@ui';
 import {
   InlineInputDisabled,
   InlineInputLoading,
@@ -11,6 +10,7 @@ import {
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { createCallback } from '@solid-primitives/rootless';
+import { cn } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, JSXElement } from 'solid-js';
 import {

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import { createScrollIntentTracker } from '@core/util/scroll-intent';
+import { describe, expect, it } from 'vitest';
 
 describe('createScrollIntentTracker', () => {
   it('is not interacting by default', () => {

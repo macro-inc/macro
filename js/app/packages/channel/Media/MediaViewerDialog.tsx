@@ -1,14 +1,13 @@
-import * as stackingContext from '@core/constant/stackingContext';
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
-import { Button } from '@ui';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import * as stackingContext from '@core/constant/stackingContext';
 import { isMobile } from '@core/mobile/isMobile';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import { Show, type Accessor, createMemo } from 'solid-js';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
+import { type Accessor, createMemo, Show } from 'solid-js';
 import type { MediaItem } from './media-items';
 
 type MediaViewerDialogProps = {
@@ -105,7 +104,7 @@ function VideoViewerContent(props: {
             disabled={!props.onPrevious}
             aria-label="Previous media"
           >
-            <ChevronLeftIcon class="h-5 w-5 text-ink" />
+            <ChevronLeftIcon class="size-5 text-ink" />
           </button>
 
           <button
@@ -115,11 +114,11 @@ function VideoViewerContent(props: {
             disabled={!props.onNext}
             aria-label="Next media"
           >
-            <ChevronRightIcon class="h-5 w-5 text-ink" />
+            <ChevronRightIcon class="size-5 text-ink" />
           </button>
         </Show>
 
-        <div class="flex h-full w-full items-center justify-center">
+        <div class="flex size-full items-center justify-center">
           <video
             class="max-h-[80vh] max-w-[90vw] rounded-2xl bg-black"
             controls

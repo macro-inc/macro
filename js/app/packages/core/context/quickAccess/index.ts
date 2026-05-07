@@ -1,24 +1,24 @@
 export { QuickAccessProvider, useQuickAccess } from './QuickAccessProvider';
 export type {
   Bucket,
+  BucketEntityMap,
+  BucketItemMap,
   EntityBucket,
-  QuickAccessItem,
   EntityItem,
-  UserItem,
+  ItemForBucket,
+  ItemsForBuckets,
+  QuickAccessContextValue,
+  QuickAccessItem,
   SearchOptions,
   SearchResult,
   SearchWeights,
-  QuickAccessContextValue,
-  BucketEntityMap,
-  BucketItemMap,
-  ItemForBucket,
-  ItemsForBuckets,
+  UserItem,
 } from './types';
 export {
   ALL_BUCKETS,
+  exclude,
   isEntityItem,
-  isUserItem,
   isEntityOfType,
   isFromBucket,
-  exclude,
+  isUserItem,
 } from './types';

@@ -1,5 +1,5 @@
-import { For, Show, type JSX } from 'solid-js';
-import { PLANS, PLAN_FEATURES, type Plan, type PlanTier } from './plans';
+import { For, type JSX, Show } from 'solid-js';
+import { PLAN_FEATURES, PLANS, type Plan, type PlanTier } from './plans';
 
 interface PlanGridProps {
   /** The currently highlighted tier — shows accent styling. */
@@ -14,17 +14,17 @@ export function PlanGrid(props: PlanGridProps) {
 
   return (
     <div class="w-full overflow-x-auto">
-      <table class="w-full min-w-[640px] text-sm border-separate border-spacing-0 table-fixed">
+      <table class="w-full min-w-small text-sm border-separate border-spacing-0 table-fixed">
         <thead>
           <tr>
-            <th class="px-4 py-4 w-40" aria-hidden="true" />
+            <th class="p-4 w-40" aria-hidden="true" />
             <For each={PLANS}>
               {(plan) => (
                 <th
                   scope="col"
-                  class="px-4 py-4 text-left align-top"
+                  class="p-4 text-left align-top"
                   classList={{
-                    'bg-accent/5 border-t border-l border-r border-accent':
+                    'bg-accent/5 border-t border-x border-accent':
                       isHighlighted(plan),
                   }}
                 >
@@ -59,7 +59,7 @@ export function PlanGrid(props: PlanGridProps) {
                     <td
                       class="px-4 py-3 text-ink"
                       classList={{
-                        'bg-accent/5 border-l border-r border-accent':
+                        'bg-accent/5 border-x border-accent':
                           isHighlighted(plan),
                         'border-t border-edge-muted': !isHighlighted(plan),
                       }}
@@ -76,13 +76,13 @@ export function PlanGrid(props: PlanGridProps) {
           {(footerRender) => (
             <tfoot>
               <tr>
-                <td class="px-4 py-4 border-t border-edge-muted" />
+                <td class="p-4 border-t border-edge-muted" />
                 <For each={PLANS}>
                   {(plan) => (
                     <td
-                      class="px-4 py-4 align-bottom"
+                      class="p-4 align-bottom"
                       classList={{
-                        'bg-accent/5 border-l border-r border-b border-accent':
+                        'bg-accent/5 border-x border-b border-accent':
                           isHighlighted(plan),
                         'border-t border-edge-muted': !isHighlighted(plan),
                       }}

@@ -1,5 +1,5 @@
-import type { JSX, ParentProps } from 'solid-js';
 import { cn } from '@ui';
+import type { JSX, ParentProps } from 'solid-js';
 import { ICON_SIZES } from '../EntityIcon';
 
 interface ButtonWrapperProps extends ParentProps {
@@ -17,7 +17,7 @@ export function HoverButtonWrapper(props: ButtonWrapperProps) {
         props.showOnHover ? 'hidden' : 'ring-1 ring-edge bg-button',
         ICON_SIZES[props.size ?? 'sm'],
         'flex flex-none',
-        props.size === 'sm' ? 'p-0.25' : 'p-1.5',
+        props.size === 'sm' ? 'p-px' : 'p-1.5',
         'rounded-full justify-center items-center',
         'text-ink-muted',
         'transition-scale duration-200',

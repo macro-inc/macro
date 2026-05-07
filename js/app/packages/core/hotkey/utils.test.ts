@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { removeCommandsFromTokenMap } from './utils';
-import type { HotkeyCommand } from './types';
 import type { HotkeyToken } from './tokens';
+import type { HotkeyCommand } from './types';
+import { removeCommandsFromTokenMap } from './utils';
 
 const makeCommand = (token: HotkeyToken | undefined): HotkeyCommand =>
   ({

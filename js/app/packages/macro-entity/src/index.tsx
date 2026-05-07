@@ -6,9 +6,9 @@ export {
   createMoveToProjectDssEntityMutation,
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';
+export { createUpdateFileTypeMutation } from './queries/file-type';
 export { queryKeys } from './queries/key';
 export {
   createBulkRenameDssEntityMutation,
   createRenameDssEntityMutation,
 } from './queries/rename';
-export { createUpdateFileTypeMutation } from './queries/file-type';

@@ -1,9 +1,8 @@
 import CaretRight from '@phosphor-icons/core/bold/caret-right-bold.svg?component-solid';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
-import { Button } from '@ui';
+import { Button, cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import { cn } from '@ui';
 import {
   CLI_COMMANDS,
   MACRO_MCP_CONFIG,
@@ -46,7 +45,7 @@ function CollapsibleCard(props: {
             </div>
           </Show>
           <div class="flex items-start justify-between gap-3 px-4 py-3">
-            <pre class="flex-1 min-w-0 overflow-x-auto text-[12px] leading-5 text-ink select-text cursor-text whitespace-pre-wrap break-all">
+            <pre class="flex-1 min-w-0 overflow-x-auto text-[12px]/5 text-ink select-text cursor-text whitespace-pre-wrap break-all">
               <code>{props.copyValue}</code>
             </pre>
             <Button

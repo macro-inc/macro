@@ -62,10 +62,10 @@ import {
   type LexicalNode,
 } from 'lexical';
 import type { Setter } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { $collapseSelection, $traverseNodes, nodeByKey } from '../../utils';
 import { mapRegisterDelete } from '../shared';
-import { match } from 'ts-pattern';
 
 export const INSERT_DOCUMENT_MENTION_COMMAND: LexicalCommand<DocumentMentionInfo> =
   createCommand('INSERT_DOCUMENT_MENTION_COMMAND');

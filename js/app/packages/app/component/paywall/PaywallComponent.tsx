@@ -1,5 +1,4 @@
-import { Button } from '@ui';
-import { cn } from '@ui';
+import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
@@ -7,10 +6,10 @@ import { usePermissions } from '@core/context/user';
 import IconX from '@icon/regular/x.svg';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { stripeServiceClient } from '@service-stripe/client';
+import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import { useAnalytics } from '@app/component/analytics-context';
-import { PLANS, PLAN_FEATURES, type PaidPlanTier } from './plans';
+import { type PaidPlanTier, PLAN_FEATURES, PLANS } from './plans';
 import SubscriptionTier from './SubscriptionTier';
 
 // Paid-only plans for the billing paywall — Stripe has no product for the
@@ -144,7 +143,7 @@ const PaywallComponent = (props: PaywallComponent) => {
           onClick={props.cb}
           class="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 text-ink-extra-muted hover:text-ink transition-colors z-10"
         >
-          <IconX class="w-5 sm:w-6 h-5 sm:h-6" />
+          <IconX class="size-5 sm:size-6" />
         </button>
       </Show>
       <Show when={!hasPaid()}>

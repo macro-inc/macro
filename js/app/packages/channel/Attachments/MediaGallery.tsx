@@ -1,9 +1,9 @@
-import { createSignal, createUniqueId, onCleanup, Show } from 'solid-js';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import { MediaGrid } from '@channel/Media/MediaGrid';
 import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
 import type { MediaItem } from '@channel/Media/media-items';
-import { THUMB_SIZE, itemsPerRow } from './attachment-utils';
+import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import { createSignal, createUniqueId, onCleanup, Show } from 'solid-js';
+import { itemsPerRow, THUMB_SIZE } from './attachment-utils';
 import { AttachmentSection, LoadMoreButton } from './SectionHeader';
 
 export function MediaGallery(props: {
@@ -47,7 +47,7 @@ export function MediaGallery(props: {
             {expanded() ? 'Show less' : 'See all'}
             <ChevronDownIcon
               aria-hidden="true"
-              class="w-3 h-3 transition-transform"
+              class="size-3 transition-transform"
               classList={{ 'rotate-180': expanded() }}
             />
           </button>

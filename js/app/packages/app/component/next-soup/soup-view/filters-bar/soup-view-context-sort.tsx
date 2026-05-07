@@ -1,18 +1,18 @@
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import type { ListView } from '@app/constants/list-views';
 import { SortDropdown } from '@app/component/next-soup/soup-view/filters-bar/sort-dropdown';
 import {
   CHANNEL_SORT_OPTIONS,
   DEFAULT_SORT_OPTIONS,
   DOCUMENT_SORT_OPTIONS,
   EMAIL_SORT_OPTIONS,
-  TASK_SORT_OPTIONS,
   type SortOption,
   type SystemSortOption,
+  TASK_SORT_OPTIONS,
 } from '@app/component/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { createMemo, createSignal, Switch, Match } from 'solid-js';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import type { ListView } from '@app/constants/list-views';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { createMemo, createSignal, Match, Switch } from 'solid-js';
 
 type SortOpenProps = {
   open: boolean;

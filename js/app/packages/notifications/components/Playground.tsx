@@ -2,8 +2,8 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
-import { Button } from '@ui';
 import { formatDate } from '@core/util/date';
+import { Button } from '@ui';
 import {
   type Component,
   createEffect,
@@ -709,19 +709,19 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
       <div class="flex items-start gap-3 p-4">
         {/* Icon with optional badge */}
         <div class="relative shrink-0">
-          <div class="w-10 h-10 rounded-lg overflow-hidden bg-[oklch(0.278_0.033_256.848)] flex items-center justify-center">
+          <div class="size-10 rounded-lg overflow-hidden bg-[oklch(0.278_0.033_256.848)] flex items-center justify-center">
             <Show
               when={props.icon}
               fallback={
-                <div class="w-6 h-6 bg-[oklch(0.446_0.03_256.802)] rounded" />
+                <div class="size-6 bg-[oklch(0.446_0.03_256.802)] rounded" />
               }
             >
-              <img src={props.icon} alt="" class="w-full h-full object-cover" />
+              <img src={props.icon} alt="" class="size-full object-cover" />
             </Show>
           </div>
           <Show when={props.badge}>
-            <div class="absolute -top-1 -left-1 w-5 h-5 bg-failure rounded-full flex items-center justify-center">
-              <img src={props.badge} alt="" class="w-3 h-3" />
+            <div class="absolute -top-1 -left-1 size-5 bg-failure rounded-full flex items-center justify-center">
+              <img src={props.badge} alt="" class="size-3" />
             </div>
           </Show>
         </div>
@@ -741,7 +741,7 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
           onClick={props.onClose}
           class="shrink-0 text-[oklch(0.551_0.027_264.364)] hover:text-[oklch(0.872_0.01_258.338)] transition-colors"
         >
-          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <svg class="size-4" fill="currentColor" viewBox="0 0 20 20">
             <path
               fill-rule="evenodd"
               d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"

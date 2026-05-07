@@ -1,4 +1,6 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
+import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
@@ -6,6 +8,7 @@ import type { ChatData } from '@block-chat/definition';
 import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
@@ -16,15 +19,15 @@ import {
   useChatInputContext,
 } from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
-import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
+import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
+import { deriveChatName } from '@core/component/AI/util/deriveName';
 import {
   getChatInputStoredState,
   type StoredStuff,
   storeChatState,
 } from '@core/component/AI/util/storage';
-import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
@@ -37,17 +40,14 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import { useAnalytics } from '@app/component/analytics-context';
-import { deriveChatName } from '@core/component/AI/util/deriveName';
+import ChatDebugIcon from '@icon/regular/chat-text.svg';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
+import { Button } from '@ui';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { createEffect, createSignal, getOwner, Show, Suspense } from 'solid-js';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
-import { Button } from '@ui';
-import ChatDebugIcon from '@icon/regular/chat-text.svg';
 
 export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);

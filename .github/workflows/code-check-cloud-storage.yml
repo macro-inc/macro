@@ -34,7 +34,8 @@ jobs:
             should_run:
               - 'rust/cloud-storage/**'
               - 'rust/rust-toolchain.toml'
-              - '.github/actions/setup-rust/**'
+              - 'flake.nix'
+              - 'flake.lock'
               - '.github/actions/setup-sccache/**'
               - .github/workflows/code-check-cloud-storage.yml
       - name: compute nextest package filter
@@ -59,7 +60,7 @@ jobs:
           printf '%s\n' "$changed_files" > /tmp/changed-files
 
           # Root cargo/toolchain/CI changes can affect the whole workspace, so run all tests.
-          if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-sccache)/.*|\.github/workflows/code-check-cloud-storage\.yml)$'; then
+          if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|flake\.nix|flake\.lock|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-sccache)/.*|\.github/workflows/code-check-cloud-storage\.yml)$'; then
             echo "Workspace-level change detected; running all tests"
             echo "nextest_filter=" >> "$GITHUB_OUTPUT"
             exit 0
@@ -70,16 +71,16 @@ jobs:
           import glob
           import re
           from pathlib import Path
-          
+
           repo = Path.cwd().resolve()
           workspace = repo / 'rust' / 'cloud-storage'
           changed_files = [line for line in Path('/tmp/changed-files').read_text().splitlines() if line]
-          
+
           def workspace_members(manifest: Path) -> list[str]:
               members = []
               in_workspace = False
               in_members = False
-          
+
               for raw_line in manifest.read_text().splitlines():
                   line = raw_line.split('#', 1)[0].strip()
                   if not line:
@@ -96,7 +97,7 @@ jobs:
                       if ']' in line:
                           in_members = False
               return members
-          
+
           def package_name(manifest: Path) -> str | None:
               in_package = False
               for raw_line in manifest.read_text().splitlines():
@@ -111,7 +112,7 @@ jobs:
                       if match:
                           return match.group(1)
               return None
-          
+
           packages = []
           for member in workspace_members(workspace / 'Cargo.toml'):
               for member_dir in glob.glob(str(workspace / member)):
@@ -121,13 +122,13 @@ jobs:
                   name = package_name(manifest)
                   if name:
                       packages.append((manifest.parent.resolve(), name))
-          
+
           changed_packages = set()
           for changed_file in changed_files:
               path = (repo / changed_file).resolve()
               if path != workspace and workspace not in path.parents:
                   continue
-          
+
               matching_packages = [
                   (manifest_dir, name)
                   for manifest_dir, name in packages
@@ -136,7 +137,7 @@ jobs:
               if matching_packages:
                   _, name = max(matching_packages, key=lambda item: len(item[0].parts))
                   changed_packages.add(name)
-          
+
           def escape_nextest_name(name: str) -> str:
               return (
                   name
@@ -144,7 +145,7 @@ jobs:
                   .replace(')', '\\)')
                   .replace(',', '\\,')
               )
-          
+
           if changed_packages:
               print('|'.join(f'rdeps(={escape_nextest_name(name)})' for name in sorted(changed_packages)))
           PY
@@ -162,34 +163,51 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-extra-beefy
     env:
-      RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=lld"
+      RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=mold"
       RUSTDOCFLAGS: "-Dwarnings"
-      SQLX_OFFLINE: true
     steps:
       - uses: actions/checkout@v6
         with:
           clean: false
-      - uses: ./.github/actions/setup-rust
+      - name: Add Nix to PATH
+        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+      - name: Enter Nix dev shell
+        run: |
+          set -euo pipefail
+          nix print-dev-env --accept-flake-config > /tmp/dev-env
+          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+          source /tmp/dev-env
+          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
+        with:
+          workspaces: rust/cloud-storage
+          shared-key: cloud-storage-check
+          cache-on-failure: true
+          cache-targets: false
+      - name: Configure sccache S3 backend
         env:
           SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-      - name: setup lld
         run: |
-          if ! command -v ld.lld >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y lld
-          fi
-          ld.lld --version
+          set -euo pipefail
+          mkdir -p "$HOME/.cache/sccache"
+          {
+            echo "SCCACHE_DIR=$HOME/.cache/sccache"
+            echo "SCCACHE_CACHE_SIZE=5G"
+            echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
+            if [ -n "${SCCACHE_BUCKET:-}" ]; then
+              echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
+              echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
+              echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
+            fi
+          } >> "$GITHUB_ENV"
+          sccache --version
       - name: fmt
-        run: |
-          cd rust/cloud-storage
-          cargo fmt --check
+        run: cd rust/cloud-storage && cargo fmt --check
       - name: clippy
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          cd rust/cloud-storage
-          cargo clippy --all-features
+        run: cd rust/cloud-storage && cargo clippy --all-features
       - name: show sccache stats
         if: always()
         env:
@@ -204,6 +222,7 @@ jobs:
     env:
       NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
       NEXTEST_TEST_THREADS: '32'
+      RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=mold"
     services:
       postgres:
         image: postgres:16
@@ -224,44 +243,38 @@ jobs:
       - uses: actions/checkout@v6
         with:
           clean: false
-      - uses: ./.github/actions/setup-rust
+      - name: Add Nix to PATH
+        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+      - name: Enter Nix dev shell
+        run: |
+          set -euo pipefail
+          nix print-dev-env --accept-flake-config > /tmp/dev-env
+          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+          source /tmp/dev-env
+          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
+        with:
+          workspaces: rust/cloud-storage
+          shared-key: cloud-storage-test
+          cache-on-failure: true
+          cache-targets: false
+      - name: Configure sccache S3 backend
         env:
           SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-      - name: setup lld
         run: |
-          if ! command -v ld.lld >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y lld
-          fi
-          ld.lld --version
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-      - name: check cargo-nextest
-        id: check-cargo-nextest
-        run: |
-          if command -v cargo-nextest >/dev/null 2>&1; then
-            echo "installed=true" >> "$GITHUB_OUTPUT"
-            cargo nextest --version
-          else
-            echo "installed=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: install cargo-nextest
-        if: steps.check-cargo-nextest.outputs.installed != 'true'
-        uses: taiki-e/install-action@e32179aa3c2a47939bd07439bd80ddf13f99979f
-      - name: install dependencies
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          command -v just || cargo install just --locked
-          command -v sqlx || cargo install sqlx-cli --locked
+          set -euo pipefail
+          mkdir -p "$HOME/.cache/sccache"
+          {
+            echo "SCCACHE_DIR=$HOME/.cache/sccache"
+            echo "SCCACHE_CACHE_SIZE=5G"
+            echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
+            if [ -n "${SCCACHE_BUCKET:-}" ]; then
+              echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
+              echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
+              echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
+            fi
+          } >> "$GITHUB_ENV"
+          sccache --version
       - name: configure postgres for concurrent tests
         run: |
           postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "postgres:16" { print $1; exit }')"
@@ -277,9 +290,7 @@ jobs:
             sleep 1
           done
       - name: prepare tests
-        run: |
-          just rust/cloud-storage/setup_test_envs
-          just rust/cloud-storage/initialize_dbs
+        run: just rust/cloud-storage/setup_test_envs && just rust/cloud-storage/initialize_dbs
       - name: run tests
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
@@ -291,7 +302,6 @@ jobs:
           if [ -n "$NEXTEST_FILTER" ]; then
             args+=(-E "$NEXTEST_FILTER")
           fi
-
           cargo nextest run "${args[@]}"
       - name: show sccache stats
         if: always()

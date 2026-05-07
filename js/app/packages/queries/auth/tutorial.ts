@@ -1,8 +1,8 @@
 import { throwOnErr } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
 import { useMutation } from '@tanstack/solid-query';
-import { type MutationCallbacks, withCallbacks } from '../utils';
 import { queryClient } from '../client';
+import { type MutationCallbacks, withCallbacks } from '../utils';
 import { authKeys } from './keys';
 
 type CompleteTutorialCallbacks = MutationCallbacks<void, Error, void>;

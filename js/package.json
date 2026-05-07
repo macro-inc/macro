@@ -5,6 +5,7 @@
     "app",
     "app/packages/*",
     "app/infra/*",
+    "loro-mirror",
     "lexical-core",
     "lexical-service"
   ],

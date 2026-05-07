@@ -1,12 +1,12 @@
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import SmileyIcon from '@icon/regular/smiley.svg';
 import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { useMessage, useMessageActions } from './context';
+import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { ReactionChip } from './ReactionChip';
 import { renderIcon } from './render-icon';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 type ReactionsProps = {
   class?: string;

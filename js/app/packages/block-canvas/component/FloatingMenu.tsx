@@ -1,6 +1,5 @@
 import { useAlign } from '@block-canvas/signal/align';
 import { clamp } from '@block-canvas/util/math';
-import { cn } from '@ui';
 import { vec2 } from '@block-canvas/util/vector2';
 import {
   type DropdownPreset,
@@ -8,7 +7,6 @@ import {
 } from '@core/component/SlidableNumberInput';
 import { themeColors, themeStyles } from '@core/component/Themes';
 import { Tooltip } from '@core/component/Tooltip';
-import { Button } from '@ui';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import AlignBottom from '@phosphor-icons/core/regular/align-bottom.svg?component-solid';
 import AlignCenterHorizontal from '@phosphor-icons/core/regular/align-center-horizontal.svg?component-solid';
@@ -20,6 +18,7 @@ import Reverse from '@phosphor-icons/core/regular/arrows-horizontal.svg?componen
 import CornersOut from '@phosphor-icons/core/regular/corners-out.svg?component-solid';
 import TextAa from '@phosphor-icons/core/regular/text-aa.svg?component-solid';
 import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
+import { Button, cn } from '@ui';
 import type { JSX } from 'solid-js';
 import {
   batch,
@@ -185,7 +184,7 @@ function ReverseEdgeButton() {
         class={cn(
           themeColors['base'],
           themeStyles['base'],
-          'h-6 w-6 flex border-0 rounded-md justify-center items-center'
+          'size-6 flex border-0 rounded-md justify-center items-center'
         )}
         onClick={() => {
           edges.batchUpdate(

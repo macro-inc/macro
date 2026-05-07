@@ -1,7 +1,21 @@
 /** Mobile Search is based on Command Menu. */
+
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { Tabs } from '@core/component/Tabs';
+import { TailSpinner } from '@core/component/TailSpinner';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { debouncedDependent } from '@core/util/debounce';
+import { windowSearchMatch } from '@core/util/searchHighlight';
+import { Entity, type EntityData, type WithSearch } from '@entity';
+import { SearchContent } from '@entity/extractors-search/search-content';
+import ArrowLeft from '@icon/regular/arrow-left.svg';
 import { Dialog } from '@kobalte/core/dialog';
+import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
+import { useFullTextSearch } from '@queries/soup/useFullTextSearch';
+import { cn, Layer } from '@ui';
 import {
   createSignal,
   Match,
@@ -11,16 +25,7 @@ import {
   Switch,
 } from 'solid-js';
 import { VList } from 'virtua/solid';
-import { useSplitLayout } from '../split-layout/layout';
-import { cn } from '@ui';
-import ArrowLeft from '@icon/regular/arrow-left.svg';
-import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
-import { debouncedDependent } from '@core/util/debounce';
-import { Entity, type WithSearch, type EntityData } from '@entity';
-import { SearchContent } from '@entity/extractors-search/search-content';
-import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { Tabs } from '@core/component/Tabs';
+import { CommandItem } from '../command/CommandItem';
 import type { CategoryFilter } from '../command/types';
 import {
   type CommandMenuItem,
@@ -28,13 +33,8 @@ import {
   isEntityItem,
   useCommandItems,
 } from '../command/useCommandItems';
+import { useSplitLayout } from '../split-layout/layout';
 import { SearchState } from './mobileSearchState';
-import { CommandItem } from '../command/CommandItem';
-import { useFullTextSearch } from '@queries/soup/useFullTextSearch';
-import { windowSearchMatch } from '@core/util/searchHighlight';
-import { TailSpinner } from '@core/component/TailSpinner';
-import { itemToBlockName } from '@core/constant/allBlocks';
-import { Layer } from '@ui';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -357,7 +357,7 @@ function FullTextResultItem(props: {
 
   return (
     <div
-      class="px-2 py-2 text-sm font-semibold"
+      class="p-2 text-sm font-semibold"
       onClick={() => props.onSelect(props.entity)}
     >
       <div class="flex items-center gap-2 min-w-0">
@@ -387,7 +387,7 @@ function CategoryFilterTabs() {
           if (value) SearchState.setCategoryFilter(value as CategoryFilter);
         }}
         indicatorPosition="top"
-        class="w-max **:data-indicator:h-[3px]"
+        class="w-max **:data-indicator:h-0.75"
       />
     </div>
   );

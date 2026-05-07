@@ -1,7 +1,7 @@
 import { createSortState } from '@app/component/next-soup/create-sort-state';
 import {
-  SOUP_FILTERS,
   type FilterID,
+  SOUP_FILTERS,
 } from '@app/component/next-soup/filters/configs/';
 import {
   createPredicatesStore,
@@ -11,7 +11,7 @@ import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import type { EntityData, WithSearch, WithNotification } from '@entity';
+import type { EntityData, WithNotification, WithSearch } from '@entity';
 import { createMemo, createSignal, type JSX } from 'solid-js';
 
 export type SoupEntity = WithNotification<EntityData | WithSearch<EntityData>>;

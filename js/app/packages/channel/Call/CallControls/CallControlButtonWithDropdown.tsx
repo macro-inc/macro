@@ -1,12 +1,12 @@
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { DropdownMenuContent } from '@core/component/Menu';
 import CaretDown from '@icon/regular/caret-down.svg';
-import { createMemo, Show, type JSX } from 'solid-js';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { cn } from '@ui';
+import { createMemo, type JSX, Show } from 'solid-js';
 import {
   CallControlButton,
-  callControlButtonStyles,
   type CallControlButtonSize,
+  callControlButtonStyles,
 } from './CallControlButton';
 
 export function CallControlButtonWithDropdown(props: {
@@ -72,9 +72,7 @@ export function CallControlButtonWithDropdown(props: {
             isMd() && 'h-8'
           )}
         >
-          <CaretDown
-            class={isSm() ? 'w-2.5 h-2.5 shrink-0' : 'w-3 h-3 shrink-0'}
-          />
+          <CaretDown class={isSm() ? 'size-2.5 shrink-0' : 'size-3 shrink-0'} />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenuContent class="mb-2" width="lg">

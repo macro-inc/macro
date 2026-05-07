@@ -1,9 +1,7 @@
 import type { IHighlight } from '@block-pdf/model/Highlight';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
-import { generateTitle } from '@service-cognition/client';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
-import { Button } from '@ui';
 // import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -17,7 +15,9 @@ import ChatIcon from '@phosphor-icons/core/regular/chat-teardrop.svg?component-s
 import PasteIcon from '@phosphor-icons/core/regular/clipboard-text.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
+import { generateTitle } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
+import { Button } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -72,9 +72,7 @@ type PDFPopupProps = {
 
 // SCUFFED styling: how do we want to handle this color?
 function HighlightIcon() {
-  return (
-    <div class="w-4 h-4 bg-[oklch(0.905_0.182_98.111)] rounded-full"></div>
-  );
+  return <div class="size-4 bg-[oklch(0.905_0.182_98.111)] rounded-full"></div>;
 }
 
 function LoadingContent(props: { lines: number }) {
@@ -338,9 +336,9 @@ export function PDFPopup(props: PDFPopupProps) {
                     >
                       <Show
                         when={!isLoading() && !isGenerating()}
-                        fallback={<LoadingIcon class="w-3 h-3 animate-spin" />}
+                        fallback={<LoadingIcon class="size-3 animate-spin" />}
                       >
-                        <NotesIcon class="w-3 h-3 text-note" />
+                        <NotesIcon class="size-3 text-note" />
                       </Show>
                       <p>Edit in Notes</p>
                     </button>
@@ -352,13 +350,13 @@ export function PDFPopup(props: PDFPopupProps) {
                     >
                       <Show
                         when={!isGenerating()}
-                        fallback={<LoadingIcon class="w-3 h-3 animate-spin" />}
+                        fallback={<LoadingIcon class="size-3 animate-spin" />}
                       >
                         <Show
                           when={!copied()}
-                          fallback={<CheckIcon class="w-3 h-3 text-success" />}
+                          fallback={<CheckIcon class="size-3 text-success" />}
                         >
-                          <ClipboardIcon class="w-3 h-3" />
+                          <ClipboardIcon class="size-3" />
                         </Show>
                       </Show>
                       <p>{copied() ? 'Copied!' : 'Copy'}</p>

@@ -1,3 +1,7 @@
+import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
+import { staticFileSizedUrl } from '@core/constant/servers';
+import { internalDrag } from '@core/directive/internalDragState';
+import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import {
   macroIdToEmail,
   tryMacroId,
@@ -7,15 +11,11 @@ import {
 import { isOk } from '@core/util/maybeResult';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
+import { Avatar, type AvatarSize } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { Tooltip } from './Tooltip';
 import { UserTooltip } from './UserTooltip';
-import { Avatar, type AvatarSize } from '@ui';
-import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
-import { staticFileSizedUrl } from '@core/constant/servers';
-import { internalDrag } from '@core/directive/internalDragState';
-import { useProfilePictureUrl } from '@core/signal/profilePicture';
 
 export type UserIconSize = AvatarSize;
 

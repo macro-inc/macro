@@ -1,5 +1,5 @@
-import { splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui';
+import { type JSX, splitProps } from 'solid-js';
 
 export function Footer(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['class', 'children']);

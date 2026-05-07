@@ -1,4 +1,5 @@
 import type { createBlockSignal } from '@core/block';
+import { useUserId } from '@core/context/user';
 import { $wrapNodeInElement, mergeRegister } from '@lexical/utils';
 import type { NodeIdMappings } from '@lexical-core';
 import {
@@ -9,7 +10,6 @@ import {
   $getNodeById,
   $isDiffNode,
 } from '@lexical-core';
-import { useUserId } from '@core/context/user';
 import type { LexicalEditor } from 'lexical';
 import {
   COMMAND_PRIORITY_CRITICAL,

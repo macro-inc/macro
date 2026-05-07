@@ -1,5 +1,5 @@
-import { cn } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
+import { cn } from '@ui';
 import { useMessage } from './context';
 
 type SenderIconProps = {

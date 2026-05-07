@@ -1,8 +1,8 @@
-import User from '@phosphor-icons/core/regular/user.svg?component-solid';
-import DotsThree from '@icon/regular/dots-three.svg';
-import { Show, type Component } from 'solid-js';
 import type { UserIconProps } from '@core/component/UserIcon';
+import DotsThree from '@icon/regular/dots-three.svg';
+import User from '@phosphor-icons/core/regular/user.svg?component-solid';
 import { cn } from '@ui';
+import { type Component, Show } from 'solid-js';
 
 export function inCallAvatarPlaceholderClasses(size: UserIconProps['size']) {
   const s = size ?? 'sm';
@@ -14,10 +14,10 @@ export function inCallAvatarPlaceholderClasses(size: UserIconProps['size']) {
     s === 'fill' && 'size-full'
   );
   const icon = cn(
-    s === 'sm' && 'w-2 h-2',
-    s === 'md' && 'w-3 h-3',
-    s === 'lg' && 'w-5 h-5',
-    s === 'fill' && 'w-4 h-4'
+    s === 'sm' && 'size-2',
+    s === 'md' && 'size-3',
+    s === 'lg' && 'size-5',
+    s === 'fill' && 'size-4'
   );
   return { container, icon };
 }
@@ -41,7 +41,7 @@ export const InCallAvatarPlaceholderShell: Component<{
 
       <Show when={props.variant === 'view-more'}>
         <DotsThree
-          class="block h-6 w-6 bg-transparent text-accent"
+          class="block size-6 bg-transparent text-accent"
           aria-hidden
         />
       </Show>

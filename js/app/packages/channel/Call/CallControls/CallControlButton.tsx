@@ -1,12 +1,12 @@
+import type { OverrideComponentProps } from '@kobalte/core';
+import { cn } from '@ui';
 import {
+  type Component,
   createMemo,
   createSignal,
-  splitProps,
-  type Component,
   type JSX,
+  splitProps,
 } from 'solid-js';
-import { cn } from '@ui';
-import type { OverrideComponentProps } from '@kobalte/core';
 
 export type CallControlButtonSize = 'sm' | 'md';
 export type CallControlButtonVariant = 'default' | 'active' | 'danger';

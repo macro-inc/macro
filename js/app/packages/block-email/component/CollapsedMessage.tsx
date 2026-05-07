@@ -1,8 +1,8 @@
-import { type UserIconProps, UserIcon } from '@core/component/UserIcon';
-import type { ApiMessage } from '@service-email/generated/schemas';
+import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { useEmail } from '@core/context/user';
+import type { ApiMessage } from '@service-email/generated/schemas';
 import { createMemo, createSignal } from 'solid-js';
-import { getSenderMacroId, getSenderDisplayName } from '../util/emailUser';
+import { getSenderDisplayName, getSenderMacroId } from '../util/emailUser';
 import { formatShortDate } from './EmailMessageTopBar';
 import { EmailUserTooltip } from './EmailUserTooltip';
 
@@ -74,7 +74,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
         >
           {/* Rail line - behind avatar */}
           <div
-            class="absolute top-0 bottom-0 border-l border-edge-muted z-0"
+            class="absolute inset-y-0 border-l border-edge-muted z-0"
             style={{
               left: 'var(--left-of-connector)',
             }}

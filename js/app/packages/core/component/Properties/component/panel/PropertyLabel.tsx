@@ -1,11 +1,10 @@
 import { useMaybeBlockAliasedName, useMaybeBlockId } from '@core/block';
-import { cn } from '@ui';
-import { Dialog, Button, Surface } from '@ui';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
 import UnpinIcon from '@icon/regular/push-pin-slash.svg';
 import XIcon from '@icon/regular/x.svg';
 import { useDeleteEntityPropertyMutation } from '@queries/properties/entity';
+import { Button, cn, Dialog, Surface } from '@ui';
 import { type Component, createMemo, createSignal, Show } from 'solid-js';
 import {
   getBuiltinPropertyIds,
@@ -100,7 +99,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         {/* Always reserve space for delete button to prevent layout shift */}
         <Show
           when={canEdit && !props.property.isMetadata}
-          fallback={<div class="w-3 h-3 shrink-0" />}
+          fallback={<div class="size-3 shrink-0" />}
         >
           <Show
             when={

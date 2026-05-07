@@ -1,8 +1,8 @@
 // Email body parsing utilities
 export {
+  type ParsedEmailContent,
   parseEmailContent,
   trimTrailingBrs,
-  type ParsedEmailContent,
 } from './parse-email-html';
 
 // Image proxy utilities

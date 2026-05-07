@@ -20,7 +20,6 @@ import {
 } from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
 import { useHasPaidAccess } from '@core/auth';
-import { Surface } from '@ui';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
@@ -58,6 +57,7 @@ import {
 import { invalidateSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import { debounce } from '@solid-primitives/scheduled';
+import { Surface } from '@ui';
 
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
@@ -648,7 +648,7 @@ export function EmailCompose(props: EmailComposeProps) {
           />
         </SplitHeaderLeft>
       </Show>
-      <div class="relative flex flex-col w-full h-full min-h-0 overflow-hidden text-sm">
+      <div class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm">
         <Show when={hasLinkError()}>
           <EmailPermissionsBanner />
         </Show>
@@ -658,7 +658,7 @@ export function EmailCompose(props: EmailComposeProps) {
           >
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
-              class="w-full h-full p-4 bg-input max-h-full mobile:max-h-none overflow-y-auto flex flex-col min-h-0 mobile:min-h-full"
+              class="size-full p-4 bg-input max-h-full mobile:max-h-none overflow-y-auto flex flex-col min-h-0 mobile:min-h-full"
             />
           </WrapUnlessMobile>
         </div>

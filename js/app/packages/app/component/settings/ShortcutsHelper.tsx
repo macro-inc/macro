@@ -33,7 +33,7 @@ export function ShortcutsHelper() {
           onClick={handleClick}
           class="flex items-center gap-1.5 rounded-xs px-3 py-1.5 bg-panel border border-edge-muted ring-accent text-ink text-sm font-medium shadow hover:bg-panel-secondary hover:border-accent/50 transition-colors"
         >
-          <KeyboardIcon class="w-4 h-4 text-accent" />
+          <KeyboardIcon class="size-4 text-accent" />
           <span>Shortcuts</span>
         </button>
 
@@ -41,10 +41,10 @@ export function ShortcutsHelper() {
         <button
           type="button"
           onClick={handleDismiss}
-          class="absolute -top-1.5 -right-1.5 flex items-center justify-center w-4 h-4 bg-edge rounded-full text-ink-muted hover:text-ink transition-colors opacity-0 group-hover:opacity-100"
+          class="absolute -top-1.5 -right-1.5 flex items-center justify-center size-4 bg-edge rounded-full text-ink-muted hover:text-ink transition-colors opacity-0 group-hover:opacity-100"
           aria-label="Dismiss shortcuts helper"
         >
-          <CloseIcon class="w-2.5 h-2.5" />
+          <CloseIcon class="size-2.5" />
         </button>
       </div>
     </Show>

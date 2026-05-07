@@ -1,27 +1,27 @@
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import Microphone from '@icon/regular/microphone.svg';
-import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
-import Screencast from '@icon/regular/screencast.svg';
-import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
-import VideoCamera from '@icon/regular/video-camera.svg';
-import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
-import Users from '@icon/regular/users.svg';
-import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { For, Show, type Accessor } from 'solid-js';
-import { cn } from '@ui';
 import {
   GroupLabel,
   MenuGroup,
   MenuItem,
   MenuSeparator,
 } from '@core/component/Menu';
+import Microphone from '@icon/regular/microphone.svg';
+import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
+import Screencast from '@icon/regular/screencast.svg';
+import Users from '@icon/regular/users.svg';
+import VideoCamera from '@icon/regular/video-camera.svg';
+import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
+import { useToggleShareWithTeamMutation } from '@queries/call/call';
+import { cn } from '@ui';
+import { type Accessor, For, Show } from 'solid-js';
+import { BACKGROUND_IMAGES, useCallContext } from '../CallContext';
+import { CallDeviceList } from '../CallDeviceList';
 import {
   CallControlButton,
   type CallControlButtonSize,
 } from './CallControlButton';
 import { CallControlButtonWithDropdown } from './CallControlButtonWithDropdown';
-import { CallDeviceList } from '../CallDeviceList';
-import { BACKGROUND_IMAGES, useCallContext } from '../CallContext';
 
 export type CallControlsDefaultAndPanelRowProps = {
   size: Accessor<CallControlButtonSize>;

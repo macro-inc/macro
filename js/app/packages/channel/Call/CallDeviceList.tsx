@@ -1,9 +1,9 @@
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { MENU_ITEM_CLASS } from '@core/component/Menu';
 import CheckIcon from '@icon/bold/check-bold.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { cn } from '@ui';
 import { For, Show } from 'solid-js';
 import type { MediaDeviceInfo } from './CallContext';
-import { cn } from '@ui';
 
 const deviceRadioRowClass =
   'flex min-w-0 items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-[highlighted]:bg-active';
@@ -35,7 +35,7 @@ export function CallDeviceList(props: {
               <div class="min-w-0 flex-1">{device.label}</div>
               <span class="inline-flex w-3 shrink-0 justify-center">
                 <Show when={props.activeDeviceId === device.deviceId}>
-                  <CheckIcon class="h-3 w-3 text-accent" />
+                  <CheckIcon class="size-3 text-accent" />
                 </Show>
               </span>
             </DropdownMenu.RadioItem>

@@ -1,25 +1,25 @@
-import { Hotkey } from '@core/component/Hotkey';
-import { hasValidHotkey } from '@core/hotkey/utils';
-import type { HotkeySequenceStep } from '@core/component/Tooltip';
-import { createEffect, For, Match, Show, Switch } from 'solid-js';
-import {
-  isCommandItem,
-  isEntityItem,
-  isSearchItem,
-  type CommandMenuItem,
-  type SearchItem,
-} from './useCommandItems';
-import { Entity, type EntityData } from '@entity';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { Hotkey } from '@core/component/Hotkey';
+import type { HotkeySequenceStep } from '@core/component/Tooltip';
+import { hasValidHotkey } from '@core/hotkey/utils';
+import { Entity, type EntityData } from '@entity';
+import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueueDocumentWakeup,
   isWakeableDocument,
 } from '@queries/preview';
 import { cn } from '@ui';
-import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
-import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import { createEffect, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import {
+  type CommandMenuItem,
+  isCommandItem,
+  isEntityItem,
+  isSearchItem,
+  type SearchItem,
+} from './useCommandItems';
 
 export interface CommandItemProps {
   item: CommandMenuItem;
@@ -183,7 +183,7 @@ export function CommandItem(props: CommandItemProps) {
     >
       {/* Accent bar indicator */}
       <div
-        class={cn('absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0', {
+        class={cn('absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0', {
           'opacity-100': props.selected,
         })}
       />

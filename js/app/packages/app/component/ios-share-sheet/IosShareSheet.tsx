@@ -1,9 +1,28 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
+import {
+  applyInlineFormat,
+  applyNodeFormat,
+  createConfiguredChannelMarkdownEditor,
+  createInputAttachmentTracker,
+  createInputState,
+  createMentionsTracker,
+  FormatButtons,
+  Input,
+  type InputAttachmentData,
+  type InputAttachmentKind,
+  type InputAttachmentTracker,
+  type InputSnapshot,
+  uploadInputAttachments,
+} from '@channel/Input';
+import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
+import { buildPostMessageRequest } from '@channel/Input/message-payload';
+import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
+import { hasSendableInputContent } from '@channel/Input/utils/sendable-content';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { invalidateContacts } from '@core/user/contactService';
@@ -14,26 +33,6 @@ import {
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
-import { Button } from '@ui';
-import {
-  FormatButtons,
-  Input,
-  applyInlineFormat,
-  applyNodeFormat,
-  createConfiguredChannelMarkdownEditor,
-  createInputAttachmentTracker,
-  createInputState,
-  createMentionsTracker,
-  uploadInputAttachments,
-  type InputAttachmentData,
-  type InputAttachmentKind,
-  type InputAttachmentTracker,
-  type InputSnapshot,
-} from '@channel/Input';
-import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
-import { buildPostMessageRequest } from '@channel/Input/message-payload';
-import { hasSendableInputContent } from '@channel/Input/utils/sendable-content';
-import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import type {
   PendingShareFile,
   UploadPendingShareFileArgs,
@@ -43,13 +42,14 @@ import { invalidateListChannels } from '@queries/channel/channels';
 import { commsServiceClient } from '@service-comms/client';
 import { staticFileClient } from '@service-static-files/client';
 import { isIOS } from '@solid-primitives/platform';
+import { Button } from '@ui';
 import {
-  ErrorBoundary,
+  type Accessor,
   createEffect,
   createSignal,
+  ErrorBoundary,
   on,
   onCleanup,
-  type Accessor,
   Show,
 } from 'solid-js';
 
@@ -383,7 +383,7 @@ function IosShareSheetComposer(props: {
         />
         <MobileDrawer.Label>Recipients</MobileDrawer.Label>
         <MobileDrawer.Section>
-          <div class="shrink-0 px-2 py-2">
+          <div class="shrink-0 p-2">
             <RecipientSelector<'user' | 'contact' | 'channel'>
               placeholder="To: Email or group"
               setSelectedOptions={setSelectedOptions}

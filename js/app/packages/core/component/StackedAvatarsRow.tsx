@@ -1,17 +1,17 @@
 import User from '@phosphor-icons/core/regular/user.svg?component-solid';
+import { cn } from '@ui';
 import {
-  For,
-  Show,
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
-  onCleanup,
-  type Accessor,
+  For,
   type JSX,
+  onCleanup,
+  Show,
 } from 'solid-js';
 import { Tooltip } from './Tooltip';
 import type { UserIconProps } from './UserIcon';
-import { cn } from '@ui';
 
 /** Same keys as {@link UserIconProps} `size` (aligned ring + overlap + overflow chip). */
 export type StackedAvatarsSize = NonNullable<UserIconProps['size']>;
@@ -280,7 +280,7 @@ export function StackedAvatarsRow<T = unknown>(
       !(useFillWidthLayout() && fillStepMarginPx() !== null) && overlap(),
       !(useFillWidthLayout() && fillStepMarginPx() !== null) &&
         lastNoOverflowChip &&
-        '!mr-0'
+        'mr-0!'
     );
 
   const faceWrapperStyle = (

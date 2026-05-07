@@ -1,14 +1,12 @@
 import { useBlockId } from '@core/block';
-import { Button } from '@ui';
-import { SegmentedControl } from '@ui';
-import { Dialog, Surface } from '@ui';
+import { useUserId } from '@core/context/user';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
-import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
-import { useUserId } from '@core/context/user';
+import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDataType } from '@service-properties/generated/schemas/propertyDataType';
+import { Button, Dialog, SegmentedControl, Surface } from '@ui';
 import {
   type Component,
   createMemo,
@@ -585,7 +583,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 when={!createPropertyMutation.isPending}
                 fallback={
                   <div class="flex items-center gap-1.5">
-                    <div class="w-3 h-3 animate-spin">
+                    <div class="size-3 animate-spin">
                       <LoadingSpinner />
                     </div>
                     Creating...

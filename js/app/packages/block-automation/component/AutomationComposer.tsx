@@ -3,8 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useCreateScheduleMutation } from '@queries/agent-schedule/schedules';
 import { debounce } from '@solid-primitives/scheduled';
-import { Dialog, Button, Surface } from '@ui';
-import { cn } from '@ui';
+import { Button, cn, Dialog, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -153,7 +152,7 @@ export function AutomationComposer() {
               </Dialog.CloseButton>
             </div>
 
-            <div class="grid max-h-[70vh] gap-3 overflow-y-auto px-3 py-3">
+            <div class="grid max-h-[70vh] gap-3 overflow-y-auto p-3">
               <div class="grid gap-1.5">
                 <label class="text-xs font-medium text-ink-muted cursor-default">
                   Name

@@ -1,14 +1,14 @@
-import { Popover } from '@kobalte/core/popover';
-import UserCircle from '@icon/regular/user-circle.svg';
-import { For, Show, createMemo, createSignal } from 'solid-js';
-import { tryMacroId, useDisplayName } from '@core/user';
-import { toast } from '@core/component/Toast/Toast';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { toast } from '@core/component/Toast/Toast';
+import { tryMacroId, useDisplayName } from '@core/user';
+import UserCircle from '@icon/regular/user-circle.svg';
+import { Popover } from '@kobalte/core/popover';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
-import type { InCallPanelMember, UseInCallPanelResult } from './types';
+import { cn } from '@ui';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { InCallParticipantAvatar } from './InCallParticipantAvatar';
 import { profilePictureIdForMember } from './profile-picture-id-for-member';
-import { cn } from '@ui';
+import type { InCallPanelMember, UseInCallPanelResult } from './types';
 
 /** Shared shell for “In this call” (popover content + +N tooltip). */
 export const IN_CALL_ROSTER_CARD_CLASS =
@@ -28,9 +28,7 @@ export function InCallRosterListSection(props: {
       <div class="max-h-64 overflow-y-auto p-1">
         <Show
           when={props.members.length > 0}
-          fallback={
-            <div class="px-2 py-2 text-sm text-ink-muted">Connecting…</div>
-          }
+          fallback={<div class="p-2 text-sm text-ink-muted">Connecting…</div>}
         >
           <For each={props.members}>
             {(member) => (
@@ -101,7 +99,7 @@ export function InCallParticipantNameRow(props: {
         isInteractive() ? (e) => e.key === 'Enter' && void openDm() : undefined
       }
       class={cn(
-        'flex min-w-0 items-center gap-2 rounded-xs px-1 py-1',
+        'flex min-w-0 items-center gap-2 rounded-xs p-1',
         isInteractive() ? 'hover:bg-hover' : 'cursor-default'
       )}
     >
@@ -149,14 +147,14 @@ export function InCallParticipantsListPopover(
         as="button"
         type="button"
         class={cn(
-          'inline-flex items-center justify-center rounded-full bg-transparent p-0 transition-colors hover:bg-accent/15  text-accent',
+          'inline-flex items-center justify-center rounded-full bg-transparent p-0 transition-colors hover:bg-accent/15 text-accent',
           props.class
         )}
         aria-haspopup="dialog"
         aria-expanded={open()}
         aria-label="Everyone in call"
       >
-        <UserCircle class="block h-4 w-4" />
+        <UserCircle class="block size-4" />
       </Popover.Trigger>
 
       <Popover.Portal>

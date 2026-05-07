@@ -90,7 +90,7 @@ export const SegmentedControl: ParentComponent<
                   class="relative -ml-px first:ml-0 focus-within:bg-active"
                   disabled={props.disabled}
                 >
-                  <KSegmentedControl.ItemInput class="absolute inset-0 h-full! w-full! pointer-events-none" />
+                  <KSegmentedControl.ItemInput class="absolute inset-0 size-full! pointer-events-none" />
                   <KSegmentedControl.ItemLabel class="flex">
                     {/* <div
                     class="flex justify-center items-center border border-ink p-1 font-bold uppercase font-mono text-[11px]"

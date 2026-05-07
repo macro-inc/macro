@@ -1,6 +1,6 @@
-import { Button } from '@ui';
 import { INSERT_TABLE_COMMAND } from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
+import { Button } from '@ui';
 import { createSignal, Index, type ParentProps } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { mdStore } from '../signal/markdownBlockData';
@@ -44,7 +44,7 @@ const TableGrid = ({
   };
 
   return (
-    <div class="w-fit h-fit flex flex-col items-center rounded">
+    <div class="size-fit flex flex-col items-center rounded">
       <div
         class="relative p-1 my-1"
         onMouseEnter={() => setIsHovering(true)}
@@ -68,7 +68,7 @@ const TableGrid = ({
 
                   return (
                     <div
-                      class="w-4 h-4 border border-edge transition-colors duration-100"
+                      class="size-4 border border-edge transition-colors duration-100"
                       classList={{
                         'bg-hover': isHighlighted(),
                       }}
@@ -133,15 +133,15 @@ export function TableInsert(
   });
 
   return (
-    <div class="w-fit h-fit flex flex-col items-center justify-center rounded select-none border border-edge bg-dialog py-1 text-ink">
-      <div class="w-full h-full mx-2 flex justify-center rounded">
+    <div class="size-fit flex flex-col items-center justify-center rounded select-none border border-edge bg-dialog py-1 text-ink">
+      <div class="size-full mx-2 flex justify-center rounded">
         <TableGrid handleInsertTable={handleInsertTable} />
       </div>
-      <div class="w-full h-full flex px-1.5 items-center justify-between">
+      <div class="size-full flex px-1.5 items-center justify-between">
         <div class="w-18 h-10 p-1.5 text-ink">
           <input
             type="number"
-            class="w-full h-full p-2 border border-edge text-sm rounded"
+            class="size-full p-2 border border-edge text-sm rounded"
             placeholder="rows"
             value={`${rows()}`}
             onInput={(e) => setRows(Number(e.target.value))}
@@ -153,7 +153,7 @@ export function TableInsert(
         <div class="w-18 h-10 p-1.5 text-ink">
           <input
             type="number"
-            class="w-full h-full p-2 border border-edge bg-input text-sm rounded"
+            class="size-full p-2 border border-edge bg-input text-sm rounded"
             placeholder="cols"
             value={`${cols()}`}
             onInput={(e) => setCols(Number(e.target.value))}

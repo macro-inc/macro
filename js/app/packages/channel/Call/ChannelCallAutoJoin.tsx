@@ -1,7 +1,7 @@
-import { type Accessor, createEffect, untrack } from 'solid-js';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
+import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { type Accessor, createEffect, untrack } from 'solid-js';
 import { useCall } from './use-call';
 
 /**

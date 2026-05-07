@@ -1,6 +1,6 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import { cn } from '@ui';
 import CaretDown from '@icon/regular/caret-down.svg';
+import { cn } from '@ui';
 import { type Component, type JSX, Show, useContext } from 'solid-js';
 import {
   EditableLabel,
@@ -170,7 +170,7 @@ export function DeprecatedTextButton(props: TextButtonProps) {
         >
           {props.icon && (
             <div class="flex justify-start items-center h-full">
-              <props.icon class={cn('flex w-4 h-4', props.iconColor)} />
+              <props.icon class={cn('flex size-4', props.iconColor)} />
             </div>
           )}
           <div class="flex flex-1 justify-between items-center gap-2 min-w-0">
@@ -201,7 +201,7 @@ export function DeprecatedTextButton(props: TextButtonProps) {
           {props.showChevron && !hasSecondaryButton() && (
             <div class="flex justify-center items-center h-full">
               <CaretDown
-                class={cn('flex w-3 h-3', props.rotateChevron && 'rotate-180')}
+                class={cn('flex size-3', props.rotateChevron && 'rotate-180')}
               />
             </div>
           )}
@@ -220,12 +220,12 @@ export function DeprecatedTextButton(props: TextButtonProps) {
           <Wrapper tooltip={props.secondaryTooltip}>
             {props.secondaryIcon && (
               <div class="flex justify-start items-center h-full">
-                <props.secondaryIcon class="flex w-4 h-4" />
+                <props.secondaryIcon class="flex size-4" />
               </div>
             )}
             {props.showChevron && (
               <CaretDown
-                class={cn('flex w-3 h-3', props.rotateChevron && 'rotate-180')}
+                class={cn('flex size-3', props.rotateChevron && 'rotate-180')}
               />
             )}
           </Wrapper>
@@ -257,7 +257,7 @@ export function DeprecatedEditingTextButton(
         )}
       >
         {props.icon && (
-          <div class="flex justify-start items-center w-4 h-4">
+          <div class="flex justify-start items-center size-4">
             <props.icon />
           </div>
         )}
@@ -265,7 +265,7 @@ export function DeprecatedEditingTextButton(
           class={cn(
             props.width,
             props.width !== undefined && 'truncate',
-            'font-medium text-sm leading-5 whitespace-nowrap'
+            'font-medium text-sm/5 whitespace-nowrap'
           )}
         >
           <EditableLabel

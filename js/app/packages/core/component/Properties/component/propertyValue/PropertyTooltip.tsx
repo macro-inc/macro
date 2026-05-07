@@ -11,12 +11,13 @@ import {
   isSelectProperty,
   isStringProperty,
   PropertyDataTypeIcon,
+  hasValue as propertyHasValue,
 } from '@core/component/Properties/utils';
 import { UserIcon } from '@core/component/UserIcon';
+import { useUnfurl } from '@core/signal/unfurl';
 import LinkIcon from '@icon/regular/link.svg';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { useUnfurl } from '@core/signal/unfurl';
 import { proxyResource } from '@service-unfurl/client';
 import {
   createSignal,
@@ -28,7 +29,6 @@ import {
   Switch,
 } from 'solid-js';
 import { PropertyValueIcon } from './PropertyValueIcon';
-import { hasValue as propertyHasValue } from '@core/component/Properties/utils';
 
 type PropertyTooltipProps = ParentProps<{
   property: Property;
@@ -110,7 +110,7 @@ const TooltipWrapper = (props: {
 };
 
 const ValueContainer = (props: { children: JSX.Element }) => (
-  <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit">
+  <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted size-fit">
     {props.children}
   </div>
 );
@@ -122,7 +122,7 @@ const StringTooltipContent = (props: {
     <TooltipWrapper property={props.property}>
       <div class="flex items-center gap-1.5 flex-wrap">
         <ValueContainer>
-          <span class="truncate max-w-[150px]">{props.property.value}</span>
+          <span class="truncate max-w-37.5">{props.property.value}</span>
         </ValueContainer>
       </div>
     </TooltipWrapper>
@@ -139,7 +139,7 @@ const NumberTooltipContent = (props: {
     <TooltipWrapper property={props.property}>
       <div class="flex items-center gap-1.5 flex-wrap">
         <ValueContainer>
-          <span class="truncate max-w-[150px]">{displayValue()}</span>
+          <span class="truncate max-w-37.5">{displayValue()}</span>
         </ValueContainer>
       </div>
     </TooltipWrapper>
@@ -173,7 +173,7 @@ const DateTooltipContent = (props: {
     <TooltipWrapper property={props.property}>
       <div class="flex items-center gap-1.5 flex-wrap">
         <ValueContainer>
-          <span class="truncate max-w-[150px]">{displayValue()}</span>
+          <span class="truncate max-w-37.5">{displayValue()}</span>
         </ValueContainer>
       </div>
     </TooltipWrapper>
@@ -191,7 +191,7 @@ const SelectTooltipContent = (props: {
           {(optionId, index) => (
             <ValueContainer>
               <SelectValueIcon property={props.property} valueIndex={index()} />
-              <span class="truncate max-w-[150px]">
+              <span class="truncate max-w-37.5">
                 {formatPropertyValue(props.property, optionId)}
               </span>
             </ValueContainer>
@@ -252,7 +252,7 @@ const EntityValuePill = (props: { entity: EntityReference }) => {
   return (
     <ValueContainer>
       <Show when={icon()}>{icon()}</Show>
-      <span class="truncate max-w-[150px]">{name()}</span>
+      <span class="truncate max-w-37.5">{name()}</span>
     </ValueContainer>
   );
 };
@@ -269,7 +269,7 @@ const UserEntityItem = (props: { entity: EntityReference }) => {
       <div class="size-4 rounded-full overflow-hidden shrink-0">
         <UserIcon id={props.entity.entity_id} isDeleted={false} size="fill" />
       </div>
-      <span class="truncate max-w-[150px]">{name()}</span>
+      <span class="truncate max-w-37.5">{name()}</span>
     </ValueContainer>
   );
 };
@@ -313,7 +313,7 @@ const LinkValuePill = (props: { url: string }) => {
       href={props.url}
       target="_blank"
       rel="noopener noreferrer"
-      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted h-fit w-fit"
+      class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted border border-edge-muted size-fit"
       title={props.url}
     >
       <Show
@@ -328,7 +328,7 @@ const LinkValuePill = (props: { url: string }) => {
           onError={() => setImageError(true)}
         />
       </Show>
-      <span class="truncate max-w-[150px]">{title()}</span>
+      <span class="truncate max-w-37.5">{title()}</span>
     </a>
   );
 };

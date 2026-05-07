@@ -1,8 +1,8 @@
-import { Entity } from '@entity/entity';
-import type { EntityData } from '@entity';
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
-import { createEffect, For, Show } from 'solid-js';
+import type { EntityData } from '@entity';
+import { Entity } from '@entity/entity';
 import { cn } from '@ui';
+import { createEffect, For, Show } from 'solid-js';
 
 interface OnboardingEntityListProps {
   soup: SoupState;
@@ -25,7 +25,7 @@ export function OnboardingEntityList(props: OnboardingEntityListProps) {
         }
       `}</style>
       <div
-        class="flex flex-col w-full h-full scrollbar-hidden overflow-scroll"
+        class="flex flex-col size-full scrollbar-hidden overflow-scroll"
         role="listbox"
       >
         <For each={props.soup.rows()}>
@@ -57,7 +57,7 @@ export function OnboardingEntityList(props: OnboardingEntityListProps) {
               >
                 <div
                   class={cn(
-                    'absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0',
+                    'absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0',
                     { 'opacity-100': isFocused() }
                   )}
                 />

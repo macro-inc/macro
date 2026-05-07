@@ -80,8 +80,7 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
-import { Button } from '@ui';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -1499,7 +1498,7 @@ export function BaseInput(props: {
           placeholder="Subject"
         />
       </div>
-      <div class="w-full h-full flex flex-col">
+      <div class="size-full flex flex-col">
         <Show when={showFormatRibbon()}>
           <div class="flex flex-row w-full gap-2 items-center p-2">
             <FormatButtons
@@ -1650,7 +1649,7 @@ export function BaseInput(props: {
             </For>
           </div>
         </div>
-        <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2">
+        <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2">
           <div class="flex flex-row items-center gap-1">
             <div class="relative">
               <Button

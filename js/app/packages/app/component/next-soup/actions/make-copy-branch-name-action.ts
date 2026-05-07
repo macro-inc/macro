@@ -1,5 +1,5 @@
 import { copyBranchNameToClipboard } from '@core/util/branchName';
-import { isTaskEntity, type EntityData } from '@entity';
+import { type EntityData, isTaskEntity } from '@entity';
 import type { SoupState } from '../create-soup-state';
 
 export const makeCopyBranchNameAction = () => {

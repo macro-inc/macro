@@ -66,11 +66,11 @@ export const ScrollIndicators = (props: {
           'absolute pointer-events-none z-annotation-layer pattern-diagonal-4 pattern-edge',
           isHorizontal()
             ? cn(
-                'top-px bottom-px left-0 w-3 mask-r-from-0%',
+                'inset-y-px left-0 w-3 mask-r-from-0%',
                 !props.noBorderStart && 'border-l border-edge-muted'
               )
             : cn(
-                'left-px right-px top-0 h-3 mask-b-from-0%',
+                'inset-x-px top-0 h-3 mask-b-from-0%',
                 !props.noBorderStart && 'border-t border-edge-muted'
               )
         )}
@@ -82,11 +82,11 @@ export const ScrollIndicators = (props: {
           'absolute pointer-events-none z-annotation-layer pattern-diagonal-4 pattern-edge',
           isHorizontal()
             ? cn(
-                'top-px bottom-px right-0 w-3 mask-l-from-0%',
+                'inset-y-px right-0 w-3 mask-l-from-0%',
                 !props.noBorderEnd && 'border-r border-edge-muted'
               )
             : cn(
-                'left-px right-px bottom-0 h-3 mask-t-from-0%',
+                'inset-x-px bottom-0 h-3 mask-t-from-0%',
                 !props.noBorderEnd && 'border-b border-edge-muted'
               )
         )}

@@ -5,6 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import type { UnifiedNotification } from '@notifications';
 import {
   getChannelNotificationParams,
   getMostRecentNotification,
@@ -12,9 +13,7 @@ import {
   openNotification,
   stackNotifications,
 } from '@notifications';
-import type { UnifiedNotification } from '@notifications';
-import { Button } from '@ui';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import { createEffect, type JSX, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { CollapsibleList } from '../components/CollapsibleList';

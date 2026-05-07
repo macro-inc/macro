@@ -1,8 +1,8 @@
-import { createMemo, type Accessor } from 'solid-js';
-import { useUserInfoQuery, type UserInfoData } from '@queries/auth/user-info';
+import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
+import { type Accessor, createMemo } from 'solid-js';
 import { createAssertedContextProvider } from './createContext';
-import { shouldQueryUserInfo, enableUserInfoQuery } from './user-info-gate';
+import { enableUserInfoQuery, shouldQueryUserInfo } from './user-info-gate';
 
 export { enableUserInfoQuery };
 

@@ -5,11 +5,11 @@ import UserCircleMinus from '@phosphor-icons/core/assets/regular/user-circle-min
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import {
-  Show,
   createEffect,
   createMemo,
   createSignal,
   onCleanup,
+  Show,
 } from 'solid-js';
 
 export function CallRecordingSectionShell(props: {

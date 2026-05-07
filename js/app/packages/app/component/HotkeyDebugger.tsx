@@ -71,7 +71,7 @@ export default function HotkeyDebugger() {
   });
 
   return (
-    <div class="flex h-full w-full flex-col overflow-hidden bg-dialog font-mono text-xs text-ink">
+    <div class="flex size-full flex-col overflow-hidden bg-dialog font-mono text-xs text-ink">
       <SplitHeaderLeft>
         <StaticSplitLabel label="Hotkey Debugger" />
       </SplitHeaderLeft>

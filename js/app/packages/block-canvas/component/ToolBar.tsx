@@ -2,13 +2,12 @@ import {
   type EdgeConnectionStyle,
   EdgeConnectionStyles,
 } from '@block-canvas/model/CanvasModel';
-import { cn } from '@ui';
 import { useCachedStyle } from '@block-canvas/signal/cachedStyle';
 import { useToolManager } from '@block-canvas/signal/toolManager';
+import { useIsNestedBlock } from '@core/block';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { Button } from '@ui';
 import {
   ENABLE_CANVAS_FILES,
   ENABLE_CANVAS_IMAGES,
@@ -17,7 +16,6 @@ import {
 import { IS_MAC } from '@core/constant/isMac';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { useIsNestedBlock } from '@core/block';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { useCanEdit } from '@core/signal/permissions';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
@@ -29,6 +27,7 @@ import PencilSimple from '@icon/regular/pencil-simple.svg';
 import Rectangle from '@icon/regular/rectangle.svg';
 import Text from '@icon/regular/text-t.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Button, cn } from '@ui';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createSignal, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

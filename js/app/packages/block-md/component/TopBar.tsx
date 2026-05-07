@@ -1,17 +1,17 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useAnalytics } from '@app/component/analytics-context';
 import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/component/ChatWithAgentButton';
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   type BlockTool,
-  ToolButton,
-} from '@app/component/ResponsiveBlockToolbar';
-import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
+  ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -21,7 +21,6 @@ import {
   BlockItemSplitLabel,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import {
   setShowCommentsPreference,
   showCommentsPreference,
@@ -29,11 +28,17 @@ import {
 import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
+import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { NotificationsButton } from '@core/component/NotificationsModal';
-import { NOTIFICATIONS_DRAWER_ID } from '@core/component/NotificationsModal';
-import { ReferencesButton } from '@core/component/ReferencesModal';
-import { REFERENCES_DRAWER_ID } from '@core/component/ReferencesModal';
+import {
+  NOTIFICATIONS_DRAWER_ID,
+  NotificationsButton,
+} from '@core/component/NotificationsModal';
+import {
+  REFERENCES_DRAWER_ID,
+  ReferencesButton,
+} from '@core/component/ReferencesModal';
+import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
@@ -44,35 +49,32 @@ import {
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
   ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { useCanEdit } from '@core/signal/permissions';
-import { toast } from '@core/component/Toast/Toast';
 import type { EntityType } from '@core/types';
+import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import Bell from '@icon/regular/bell.svg';
 import ShowComments from '@icon/regular/chat-circle-dots.svg';
 import HideComments from '@icon/regular/chat-circle-slash.svg';
+import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
 import Download from '@icon/regular/download.svg';
 import GitBranch from '@icon/regular/git-branch.svg';
 import Info from '@icon/regular/info.svg';
-import Bell from '@icon/regular/bell.svg';
+import IconLink from '@icon/regular/link.svg';
 import Quotes from '@icon/regular/quotes.svg';
+import TagIcon from '@icon/regular/tag.svg';
 import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
 import IconShared from '@macro-icons/wide/share.svg';
-import IconLink from '@icon/regular/link.svg';
-import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
-import TagIcon from '@icon/regular/tag.svg';
 import { blockNameToItemType } from '@service-storage/client';
-import { copyBranchNameToClipboard } from '@core/util/branchName';
-import { TOKENS } from '@core/hotkey/tokens';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
-import { createEffect, For, on, Show, type JSX } from 'solid-js';
+import { createEffect, For, type JSX, on, Show } from 'solid-js';
 import { DispatchAgentButton } from './DispatchAgentMenu';
 import { HISTORY_DRAWER_ID } from './History';
 import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
-import { useAnalytics } from '@app/component/analytics-context';
 
 export function TopBar() {
   const analytics = useAnalytics();

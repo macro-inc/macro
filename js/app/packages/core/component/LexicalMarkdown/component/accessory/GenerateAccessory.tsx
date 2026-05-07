@@ -103,7 +103,7 @@ export function GenerateAccessory(props: {
             enterClass="opacity-0"
             enterToClass="opacity-100"
           >
-            <div class="my-1.5 flex gap-[5px]">
+            <div class="my-1.5 flex gap-1.25">
               <For each={Array(4).fill(0)}>
                 {(_, index) => (
                   <span

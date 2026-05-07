@@ -1,12 +1,12 @@
-import { formatCallDuration } from '../../utils';
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
 import SubtitlesSlash from '@phosphor-icons/core/assets/regular/subtitles-slash.svg';
 import UserCircle from '@phosphor-icons/core/assets/regular/user-circle.svg';
 import UserCircleMinus from '@phosphor-icons/core/assets/regular/user-circle-minus.svg';
+import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { cn } from '@ui';
 import { format } from 'date-fns';
 import { Show } from 'solid-js';
+import { formatCallDuration } from '../../utils';
 import {
   CALL_META_STRIP_TOGGLE_ACTIVE,
   CALL_META_STRIP_TOGGLE_IDLE,

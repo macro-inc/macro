@@ -65,8 +65,7 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Button } from '@ui';
-import { cn } from '@ui';
+import { Button, cn, Panel } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -84,7 +83,6 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
-import { Panel } from '@ui';
 import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
@@ -198,7 +196,7 @@ function DmRecipientIcon(props: { channelId: string }) {
   return (
     <Show
       when={dmPartnerId()}
-      fallback={<UserCircle class="shrink-0 w-4 h-4" />}
+      fallback={<UserCircle class="shrink-0 size-4" />}
     >
       {(id) => (
         <UserIcon id={id()} size="sm" isDeleted={false} showTooltip={false} />
@@ -410,9 +408,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                         props.navigateToChannel(recipient.channel_id)
                       }
                     >
-                      <Switch
-                        fallback={<WideUsers class="flex-shrink-0 w-4 h-4" />}
-                      >
+                      <Switch fallback={<WideUsers class="shrink-0 size-4" />}>
                         <Match
                           when={
                             props.channelNameMap.get(recipient.channel_id)
@@ -424,7 +420,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                         <Match
                           when={props.channelNameMap.get(recipient.channel_id)}
                         >
-                          <WideUsers class="flex-shrink-0 w-4 h-4" />
+                          <WideUsers class="shrink-0 size-4" />
                         </Match>
                       </Switch>
                       <div class="font-medium truncate">
@@ -1011,7 +1007,7 @@ export function ShareModal(props: ShareModalProps) {
                         class="overflow-y-auto scrollbar-hidden max-h-[calc(27vh-40px)]"
                         ref={setRecipientScrollRef}
                       >
-                        <div class="grid gap-3 text-ink text-sm select-none py-3 px-3">
+                        <div class="grid gap-3 text-ink text-sm select-none p-3">
                           <Show when={props.owner}>
                             <div class="flex justify-between">
                               <div class="flex items-center gap-2 overflow-hidden">
@@ -1042,7 +1038,7 @@ export function ShareModal(props: ShareModalProps) {
                                 >
                                   <Switch
                                     fallback={
-                                      <WideUsers class="shrink-0 w-4 h-4" />
+                                      <WideUsers class="shrink-0 size-4" />
                                     }
                                   >
                                     <Match
@@ -1061,7 +1057,7 @@ export function ShareModal(props: ShareModalProps) {
                                         recipient.channel_id
                                       )}
                                     >
-                                      <WideUsers class="shrink-0 w-4 h-4" />
+                                      <WideUsers class="shrink-0 size-4" />
                                     </Match>
                                   </Switch>
                                   <div class="font-medium truncate">
@@ -1444,14 +1440,14 @@ export function ShareOptions(props: {
                 return (
                   <DropdownMenu.RadioItem
                     value={option.value}
-                    class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-[highlighted]:bg-active"
+                    class="flex items-center gap-2 w-full py-1 px-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-highlighted:bg-active"
                   >
-                    <div class="w-4 h-4 shrink-0">
-                      {Icon && <Icon class="w-full h-full" />}
+                    <div class="size-4 shrink-0">
+                      {Icon && <Icon class="size-full" />}
                     </div>
                     <div class="flex-1 truncate">{option.label}</div>
                     <Show when={currentValue() === option.value}>
-                      <CheckIcon class="w-3 h-3 text-accent" />
+                      <CheckIcon class="size-3 text-accent" />
                     </Show>
                   </DropdownMenu.RadioItem>
                 );
@@ -1461,14 +1457,14 @@ export function ShareOptions(props: {
               <div class="my-1 border-t border-edge-muted w-full" />
               <DropdownMenu.RadioItem
                 value="none"
-                class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-[highlighted]:bg-active"
+                class="flex items-center gap-2 w-full py-1 px-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-highlighted:bg-active"
               >
-                <div class="w-4 h-4 shrink-0">
-                  <IconX class="w-full h-full" />
+                <div class="size-4 shrink-0">
+                  <IconX class="size-full" />
                 </div>
                 <div class="flex-1 truncate">{accessLevelText(null)}</div>
                 <Show when={currentValue() === 'none'}>
-                  <CheckIcon class="w-3 h-3 text-accent" />
+                  <CheckIcon class="size-3 text-accent" />
                 </Show>
               </DropdownMenu.RadioItem>
             </Show>

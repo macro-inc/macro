@@ -3,13 +3,13 @@ import { formatRelativeDate } from '@core/util/time';
 import CaretRight from '@icon/regular/caret-right.svg';
 import { cn } from '@ui';
 import {
+  createSignal,
   For,
+  type JSX,
   Match,
   Show,
   Switch,
-  createSignal,
   splitProps,
-  type JSX,
 } from 'solid-js';
 import { getThreadReplyCountLabel } from './utils/thread-reply-indicator-helpers';
 
@@ -60,7 +60,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
               {(userId, index) => (
                 <div
                   class={cn(
-                    'size-[18px] *:size-full *:rounded-full',
+                    'size-4.5 *:size-full *:rounded-full',
                     index() > 0 ? '-ml-1' : ''
                   )}
                 >
@@ -74,7 +74,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
               )}
             </For>
             <Show when={hiddenParticipants() > 0}>
-              <p class="ml-1 text-[10px] text-ink-muted">
+              <p class="ml-1 text-xxs text-ink-muted">
                 +{hiddenParticipants()}
               </p>
             </Show>

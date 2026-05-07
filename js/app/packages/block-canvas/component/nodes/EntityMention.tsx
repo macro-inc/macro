@@ -2,15 +2,16 @@ import { useToolManager } from '@block-canvas/signal/toolManager';
 import { useRenderState } from '@block-canvas/store/RenderState';
 import { type BlockName, useBlockId } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
-import { HoverCard } from '@core/component/HoverCard';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { EntityIcon, getPreviewItemIconType } from '@core/component/EntityIcon';
+import { HoverCard } from '@core/component/HoverCard';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { type PreviewItemNoAccess, useItemPreview } from '@queries/preview';
 import { matches } from '@core/util/match';
 import LockKey from '@phosphor-icons/core/regular/lock-key.svg';
 import Question from '@phosphor-icons/core/regular/question.svg';
+import { type PreviewItemNoAccess, useItemPreview } from '@queries/preview';
+import { useSplitLayout } from 'app/component/split-layout/layout';
 import {
   createEffect,
   createMemo,
@@ -19,7 +20,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { useSplitLayout } from 'app/component/split-layout/layout';
 import { DRAG_THRESHOLD, type RenderMode, Tools } from '../../constants';
 import type { EntityMentionNode } from '../../model/CanvasModel';
 import { fileWidth } from '../../operation/file';
@@ -33,7 +33,7 @@ function ErrorMessage(props: {
   const { currentScale } = useRenderState();
   return (
     <div
-      class="w-full h-full bg-menu/40 rounded border border-dashed border-edge"
+      class="size-full bg-menu/40 rounded border border-dashed border-edge"
       style={{
         'font-size': 12 * (props.node.width / fileWidth) + 'px',
         'background-size':
@@ -47,7 +47,7 @@ function ErrorMessage(props: {
     >
       <Switch>
         <Match when={props.error === 'UNAUTHORIZED'}>
-          <div class="w-full h-full flex flex-row items-center">
+          <div class="size-full flex flex-row items-center">
             <LockKey
               width={18 * (props.node.width / fileWidth) + 'px'}
               class="mx-1 fill-failure bg-menu rounded-full"
@@ -56,7 +56,7 @@ function ErrorMessage(props: {
           </div>
         </Match>
         <Match when={props.error === 'MISSING'}>
-          <div class="w-full h-full flex flex-row items-center px-2">
+          <div class="size-full flex flex-row items-center px-2">
             <Question
               width={18 * (props.node.width / fileWidth) + 'px'}
               class="mx-1 fill-ink-extra-muted bg-menu rounded-full"
@@ -65,7 +65,7 @@ function ErrorMessage(props: {
           </div>
         </Match>
         <Match when={props.error === 'INVALID'}>
-          <div class="w-full h-full flex flex-row items-center px-2">
+          <div class="size-full flex flex-row items-center px-2">
             <Question
               width={18 * (props.node.width / fileWidth) + 'px'}
               class="mx-1 fill-ink-extra-muted bg-menu rounded-full"
@@ -74,7 +74,7 @@ function ErrorMessage(props: {
           </div>
         </Match>
         <Match when={props.error === 'LOADING'}>
-          <div class="w-full h-full flex items-center justify-center">
+          <div class="size-full flex items-center justify-center">
             <CircleSpinner />
           </div>
         </Match>
@@ -203,7 +203,7 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
                 >
                   <div
                     ref={setFileRef}
-                    class="w-full h-full bg-panel rounded-lg shadow-md flex items-center"
+                    class="size-full bg-panel rounded-lg shadow-md flex items-center"
                   >
                     <div class="flex flex-row p-2 truncate">
                       <div

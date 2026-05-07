@@ -1,7 +1,7 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { cn } from '@ui';
 import { debounce } from '@solid-primitives/scheduled';
+import { cn } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -307,8 +307,8 @@ export default function MarkdownParseTestPage() {
       <SplitHeaderLeft>
         <StaticSplitLabel label="Lexical Parse Playground" />
       </SplitHeaderLeft>
-      <div class="flex flex-col h-full w-full">
-        <div class="w-full h-full flex">
+      <div class="flex flex-col size-full">
+        <div class="size-full flex">
           <div class="w-1/2 h-full p-4 flex flex-col border-r border-edge">
             <div class="flex items-center gap-2 mb-2">
               <h2 class="text-sm">Input</h2>
@@ -334,7 +334,7 @@ export default function MarkdownParseTestPage() {
               </div>
             </div>
             <textarea
-              class="w-full h-full p-4 resize-none border border-edge rounded font-mono text-ink text-sm bg-input"
+              class="size-full p-4 resize-none border border-edge rounded font-mono text-ink text-sm bg-input"
               placeholder={
                 inputType() === 'markdown'
                   ? 'Test markdown here...'

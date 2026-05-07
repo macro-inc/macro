@@ -1,10 +1,10 @@
 import { useBlockId } from '@core/block';
 import { useListKeyBindings } from '@core/util/useListKeyBindings';
-import LoadingSpinner from '@icon/regular/spinner.svg';
 import PlusIcon from '@icon/regular/plus.svg';
-import { useAddEntityPropertyMutation } from '@queries/properties/entity';
+import LoadingSpinner from '@icon/regular/spinner.svg';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
-import { cn } from '@ui';
+import { useAddEntityPropertyMutation } from '@queries/properties/entity';
+import { cn, Dialog, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -25,7 +25,6 @@ import {
   toPropertyDefinitionDomain,
   useSearchInputFocus,
 } from '../../utils';
-import { Dialog, Surface } from '@ui';
 
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
@@ -177,7 +176,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
               when={!listPropertiesQuery.isLoading}
               fallback={
                 <div class="flex items-center justify-center py-8">
-                  <div class="w-5 h-5 animate-spin">
+                  <div class="size-5 animate-spin">
                     <LoadingSpinner />
                   </div>
                   <span class="ml-2 text-ink-muted">Loading properties...</span>

@@ -1,9 +1,9 @@
+import { getChannelParams } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
-import { getChannelParams } from '@block-channel/utils/link';
 
 /**
  * Get the URL type/path segment for an entity

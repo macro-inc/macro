@@ -4,6 +4,8 @@ import { CircleSpinner } from '@core/component/CircleSpinner';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { Hotkey } from '@core/component/Hotkey';
+import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
@@ -28,19 +30,20 @@ import type {
 } from '@core/component/Properties/types';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import CheckIcon from '@icon/bold/check-bold.svg';
 import ArrowSquareOutIcon from '@icon/regular/arrow-square-out.svg';
 import LinkIcon from '@icon/regular/link-simple.svg';
 import SplitIcon from '@icon/regular/square-half.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
-import { refetchSoupEntity } from '@queries/soup/cache';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
-import { useUserId } from '@core/context/user';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { debounce } from '@solid-primitives/scheduled';
@@ -56,9 +59,6 @@ import {
   saveTaskComposerDraft,
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
-import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import CheckIcon from '@icon/bold/check-bold.svg';
 
 // Show these props in the composer.
 const COMPOSER_PROPERTIES = [
@@ -713,7 +713,7 @@ export function ComposeTask(props: ComposeTaskProps) {
 
       <Show when={errorMessage()}>
         <div class="w-full border-b border-edge-muted" />
-        <div class="px-2 py-2">
+        <div class="p-2">
           <div class="text-sm text-failure-ink px-3 py-2">{errorMessage()}</div>
         </div>
       </Show>

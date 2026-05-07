@@ -5,10 +5,10 @@ import {
   parseDocumentMentions,
   parseGroupMentions,
 } from '@lexical-core/utils/parsers';
+import { isValid } from 'date-fns';
 import { $isElementNode, type LexicalNode } from 'lexical';
 import { $elementNodeToMarkdown } from '../../utils';
 import type { ParsedCheckbox } from './types';
-import { isValid } from 'date-fns';
 
 // Patterns for extracting data from mentions (not for replacement)
 const USER_MENTION_PATTERN = /<m-user-mention>(.*?)<\/m-user-mention>/;

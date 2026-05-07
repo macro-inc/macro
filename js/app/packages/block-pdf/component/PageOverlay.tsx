@@ -1,4 +1,4 @@
-import { cn } from '@ui';
+import { useAnalytics } from '@app/component/analytics-context';
 import { PDFPopup } from '@block-pdf/component/PDFPopup';
 import {
   disableOverlayClickSignal,
@@ -32,6 +32,7 @@ import type { Completion } from '@core/client/completion';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
+import { cn } from '@ui';
 import { detect } from 'detect-browser';
 import type { PageViewport } from 'pdfjs-dist';
 import type { PDFPageView } from 'pdfjs-dist/web/pdf_viewer';
@@ -79,7 +80,6 @@ import {
   UserHighlight,
   useResetUserHighlights,
 } from './UserHighlight';
-import { useAnalytics } from '@app/component/analytics-context';
 
 export interface IPageOverlayProps {
   pageIndex: number;

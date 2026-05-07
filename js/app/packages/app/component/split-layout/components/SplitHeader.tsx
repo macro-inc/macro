@@ -1,3 +1,4 @@
+import { isListViewID } from '@app/constants/list-views';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import {
   ENABLE_PREVIEW,
@@ -12,7 +13,7 @@ import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import SplitIcon from '@icon/regular/square-half.svg';
 import CloseIcon from '@icon/regular/x.svg';
-import { Button } from '@ui';
+import { Button, cn } from '@ui';
 import {
   createMemo,
   type ParentProps,
@@ -23,8 +24,6 @@ import {
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
-import { cn } from '@ui';
-import { isListViewID } from '@app/constants/list-views';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -116,7 +115,7 @@ function SplitCloseButton() {
         }
         onClick={context.handle.close}
       >
-        <CloseIcon class="w-4 h-4" />
+        <CloseIcon class="size-4" />
       </Button>
     </Show>
   );

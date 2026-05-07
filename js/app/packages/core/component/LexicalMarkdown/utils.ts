@@ -1,5 +1,4 @@
 import { ENABLE_MARKDOWN_SEARCH_TEXT } from '@core/constant/featureFlags';
-import { SKIP_SCROLL_INTO_VIEW_TAG } from '@lexical-core/constants';
 import { $isCodeNode } from '@lexical/code';
 import { $generateNodesFromDOM } from '@lexical/html';
 import {
@@ -30,6 +29,11 @@ import {
   INITIALIZE_LOCAL_STATUS,
   INTERNAL_TRANSFORMERS,
 } from '@lexical-core';
+import { SKIP_SCROLL_INTO_VIEW_TAG } from '@lexical-core/constants';
+import {
+  $getId,
+  INITIALIZE_DOCUMENT_IDS,
+} from '@lexical-core/plugins/nodeIdPlugin';
 import {
   $addUpdateTag,
   $createParagraphNode,
@@ -70,10 +74,6 @@ import {
   type TextNode,
 } from 'lexical';
 import type { Setter } from 'solid-js';
-import {
-  $getId,
-  INITIALIZE_DOCUMENT_IDS,
-} from '@lexical-core/plugins/nodeIdPlugin';
 import { MarkdownEditorErrors } from './constants';
 import {
   $applyDocumentMetadataFromSerialized,

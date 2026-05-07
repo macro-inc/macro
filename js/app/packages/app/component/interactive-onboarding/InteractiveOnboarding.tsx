@@ -1,9 +1,29 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import { CommandState } from '@app/component/command';
+import { PLANS } from '@app/component/paywall/plans';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useIsAuthenticated } from '@core/auth';
+import { useHasPaidAccess } from '@core/auth/license';
 import MacroLogo from '@core/component/MacroLogo';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
+import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { toast } from '@core/component/Toast/Toast';
+import { Tooltip } from '@core/component/Tooltip';
+import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
+import { useTutorialCompleted } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fetchToken } from '@core/util/fetchWithToken';
+import { isOk } from '@core/util/maybeResult';
+import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
+import InfoIcon from '@icon/regular/info.svg';
+import LogoIcon from '@macro-icons/macro-logo.svg';
+import { useSendMobileWelcomeEmail } from '@queries/auth';
+import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
+import { useUserTeamsQuery } from '@queries/team';
 import { useLocation, useNavigate } from '@solidjs/router';
+import { Button, cn, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -15,36 +35,15 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
-import { useTutorialCompleted } from '@core/context/user';
-import { CommandState } from '@app/component/command';
-import { resetSandbox } from './sandbox/sandbox-store';
-import { commandKOpen, setCommandKOpen } from './lessons/command-k';
+import { ContinueButton } from './components-lib';
 import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
-import { ContinueButton } from './components-lib';
-import { OnboardingProgress } from './OnboardingProgress';
-import { Surface, Button } from '@ui';
-import { cn } from '@ui';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import { useAnalytics } from '@app/component/analytics-context';
-import { useHasPaidAccess } from '@core/auth/license';
-import { useUserTeamsQuery } from '@queries/team';
-import { useIsAuthenticated } from '@core/auth';
-import { fetchToken } from '@core/util/fetchWithToken';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import MobileWebWelcome from './MobileWebWelcome';
+import { commandKOpen, setCommandKOpen } from './lessons/command-k';
 import MobileWebSignupSent from './MobileWebSignupSent';
-import { useSendMobileWelcomeEmail } from '@queries/auth';
-import { isOk } from '@core/util/maybeResult';
-import { toast } from '@core/component/Toast/Toast';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
+import MobileWebWelcome from './MobileWebWelcome';
+import { OnboardingProgress } from './OnboardingProgress';
 import { OnboardingProvider, useOnboarding } from './onboarding-context';
-import { PLANS } from '@app/component/paywall/plans';
-import { Tooltip } from '@core/component/Tooltip';
-import InfoIcon from '@icon/regular/info.svg';
+import { resetSandbox } from './sandbox/sandbox-store';
 
 export default function InteractiveOnboarding() {
   const isAuthenticated = useIsAuthenticated();
@@ -591,7 +590,7 @@ function InteractiveOnboardingInner() {
   return (
     <div
       ref={shellRef}
-      class="flex items-center justify-center h-full w-full p-6 sm:p-8 overflow-hidden relative"
+      class="flex items-center justify-center size-full p-6 sm:p-8 overflow-hidden relative"
       tabIndex={-1}
     >
       {/* Scoped keyframes */}
@@ -841,7 +840,7 @@ function InteractiveOnboardingInner() {
 
                   {/* Right panel — demo (~2/3) */}
                   <div class="flex-1 min-w-0 flex items-center justify-center bg-surface-secondary/30 overflow-hidden">
-                    <div style={bodyStyle()} class="w-full h-full">
+                    <div style={bodyStyle()} class="size-full">
                       <Show
                         when={lesson().definition.demo}
                         fallback={

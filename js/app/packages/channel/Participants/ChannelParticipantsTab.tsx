@@ -1,17 +1,17 @@
-import { cn } from '@ui';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useUserId } from '@core/context/user';
 import { useChannelType } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
+import { idToEmail } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
+import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
 } from '@queries/channel/participants';
-import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { commsServiceClient } from '@service-comms/client';
 import { ChannelType } from '@service-comms/generated/models/channelType';
+import { cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
-import { idToEmail } from '@core/user';
 import { ParticipantsAddPanel } from './ParticipantsAddPanel';
 import { ParticipantsList } from './ParticipantsList';
 import { ParticipantsSearchInput } from './ParticipantsSearchInput';
@@ -97,7 +97,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
 
   return (
     <div class="relative flex-1 min-h-0 overflow-hidden">
-      <div class="macro-message-width macro-message-padding mx-auto flex h-full min-h-0 w-full flex-col gap-6 py-4">
+      <div class="macro-message-width macro-message-padding mx-auto flex size-full min-h-0 flex-col gap-6 py-4">
         <Show when={canAddParticipants()}>
           <ParticipantsSection title="Add participants">
             <ParticipantsAddPanel

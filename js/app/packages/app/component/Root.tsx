@@ -60,6 +60,7 @@ import {
   createEffect,
   createSignal,
   type JSX,
+  lazy,
   Match,
   on,
   onCleanup,
@@ -68,29 +69,28 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { currentThemeId } from '../../theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
   systemThemeEffect,
 } from '../../theme/utils/themeUtils';
-import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { Login } from './auth/Login';
-import { Signup } from './auth/Signup';
-import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 import { setCookie } from './auth/Shared';
+import { Signup } from './auth/Signup';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
-import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
+import { SearchProvider } from './next-soup/search-context';
 import { ReactiveFavicon } from './ReactiveFavicon';
-import { lazy } from 'solid-js';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 
 const InteractiveOnboarding = lazy(
   () => import('./interactive-onboarding/InteractiveOnboarding')
 );
-import { QuickAccessProvider } from '@core/context/quickAccess';
+
 import {
   AnalyticsContextProvider,
   useAnalytics,
@@ -98,6 +98,7 @@ import {
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { QuickAccessProvider } from '@core/context/quickAccess';
 import { Button } from '@ui';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
@@ -166,7 +167,7 @@ function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
   };
 
   return (
-    <div class="flex flex-col items-center justify-center gap-4 h-full w-full text-ink-muted">
+    <div class="flex flex-col items-center justify-center gap-4 size-full text-ink-muted">
       <p class="text-sm">Unable to connect. Please check your network.</p>
       <Button
         class="mt-2"
@@ -342,7 +343,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/welcome',
     component: () => (
-      <div class="flex *:flex-1 w-full h-full overflow-y-hidden">
+      <div class="flex *:flex-1 size-full overflow-y-hidden">
         <InteractiveOnboarding />
       </div>
     ),
