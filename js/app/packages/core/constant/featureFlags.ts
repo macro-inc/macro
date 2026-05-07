@@ -342,3 +342,5 @@ export const ENABLE_AUTO_UPDATE_UI = resolveFeatureFlag(
   'ENABLE_AUTO_UPDATE_UI',
   false
 );
+
+export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', false);
