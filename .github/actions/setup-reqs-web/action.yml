@@ -9,19 +9,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-
-    - name: Setup Rust
-      uses: ./.github/actions/setup-rust
-
-    - name: Install wasm-pack
-      shell: bash
-      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-
-    - name: Install just
-      uses: extractions/setup-just@v2
-
     - name: Setup bunfig.toml
       working-directory: js
       shell: bash
