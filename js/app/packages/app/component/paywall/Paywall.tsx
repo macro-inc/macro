@@ -59,7 +59,7 @@ export function Paywall() {
       open={paywallOpen()}
       onOpenChange={(open) => !open && hidePaywall()}
       position="center"
-      class="w-[900px]"
+      class="w-225"
     >
       <Panel active depth={2}>
         <div
