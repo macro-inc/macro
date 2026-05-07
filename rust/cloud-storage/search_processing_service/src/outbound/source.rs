@@ -52,6 +52,7 @@ impl BackfillSource for PgBackfillSource {
                 .map(|id| {
                     SearchQueueMessage::CallRecord(CallRecordMessage {
                         call_id: id.clone(),
+                        index_override: req.index_override.clone(),
                     })
                 })
                 .collect();
@@ -76,6 +77,7 @@ impl BackfillSource for PgBackfillSource {
             .map(|r| {
                 SearchQueueMessage::CallRecord(CallRecordMessage {
                     call_id: r.call_id.to_string(),
+                    index_override: req.index_override.clone(),
                 })
             })
             .collect();

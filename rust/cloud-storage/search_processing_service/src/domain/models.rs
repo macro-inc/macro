@@ -63,6 +63,8 @@ impl DeletionFilter {
 #[serde(default)]
 pub struct CallBackfillRequest {
     pub call_ids: Vec<String>,
+    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
+    pub index_override: Option<String>,
 }
 
 /// Chat-message backfill filter. Empty vectors mean "all messages for every
