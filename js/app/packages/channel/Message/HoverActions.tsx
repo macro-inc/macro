@@ -12,7 +12,7 @@ export function HoverActions(props: HoverActionsProps) {
   return (
     <div
       class={cn(
-        'absolute right-0 top-0 -translate-y-1/2 z-10',
+        'absolute right-4 top-0 -translate-y-1/2 z-10',
         props.persistentVisible ? '' : 'hidden group-hover/message:block',
         isTouchDevice() && 'hidden',
         props.class

@@ -80,6 +80,7 @@ export function ReactionChip(props: ReactionChipProps) {
           <Button
             data-message-reaction-chip
             data-emoji={props.emoji}
+            noTouchResize
             ref={(el) =>
               touchHandler(el, () => ({
                 onLongPress: () => {
@@ -93,11 +94,11 @@ export function ReactionChip(props: ReactionChipProps) {
             class={cn(
               'flex flex-row items-center h-7 min-w-7 gap-2 rounded-sm',
               {
-                'text-accent-ink border-accent': props.selected,
-                'ring-edge-muted hover:bg-hover hover:scale-105 transition-none hover:transition':
+                'border-edge-muted hover:bg-hover hover:scale-105':
                   props.interactive,
-                'ring-edge-muted': !props.selected && !props.interactive,
-                'cursor-default': !props.interactive,
+                'border-edge-muted': !props.selected && !props.interactive,
+                'text-accent border-accent hover:bg-accent-hover':
+                  props.selected,
                 'pointer-events-auto': !props.interactive,
               }
             )}

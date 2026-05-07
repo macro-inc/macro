@@ -1,5 +1,4 @@
 import { useUserId } from '@core/context/user';
-import SmileyIcon from '@icon/regular/smiley.svg';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, Show } from 'solid-js';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
@@ -7,6 +6,7 @@ import { useMessage, useMessageActions } from './context';
 import { ReactionChip } from './ReactionChip';
 import { renderIcon } from './render-icon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import AddEmojiIcon from '@macro-icons/square/add-emoji.svg';
 
 type ReactionsProps = {
   class?: string;
@@ -24,7 +24,7 @@ export function Reactions(props: ReactionsProps) {
     <Show when={message().reactions.length > 0}>
       <div
         class={cn(
-          'flex flex-row flex-wrap items-center gap-2 mt-0.5 mb-1',
+          'flex flex-row flex-wrap items-center gap-1 mt-0.5 mb-1',
           props.class
         )}
         data-message-reactions-row
@@ -65,12 +65,13 @@ export function Reactions(props: ReactionsProps) {
                 emoji,
               });
             }}
-            trigger={renderIcon(SmileyIcon)}
+            trigger={renderIcon(AddEmojiIcon, 'size-4')}
             triggerProps={{
+              variant: 'base',
+              size: 'icon-sm',
               'aria-label': 'Add reaction',
-              'data-message-reaction-add': '',
               class:
-                'h-8 w-8 border border-edge-muted bg-menu flex items-center justify-center text-ink-muted hover:bg-hover hover-transition-bg',
+                'border border-edge-muted flex items-center justify-center text-ink-muted hover:bg-hover',
               onClick: (e: MouseEvent) => e.stopPropagation(),
             }}
           />
