@@ -6,7 +6,7 @@ import {
 } from './useCommandItems';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
-import { Dialog, Window } from '@ui';
+import { Dialog, Panel } from '@ui';
 import { Tabs } from '@core/component/Tabs';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -102,9 +102,9 @@ export function CommandMenuInner(props: {
   items?: () => CommandMenuItem[];
   /** Called when the user selects an item from the menu */
   onSelect?: (item: CommandMenuItem) => void;
-  /** Optional class merged onto the Window wrapper. */
+  /** Optional class merged onto the Panel wrapper. */
   class?: string;
-  /** Optional depth for the Window wrapper. */
+  /** Optional depth for the Panel wrapper. */
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
 }) {
   const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
@@ -452,13 +452,13 @@ export function CommandMenuInner(props: {
   }));
 
   return (
-    <Window
+    <Panel
       class={cn('max-h-[75vh]', props.class)}
       ref={setCommandMenuRef}
       depth={props.depth}
       active
     >
-      <Window.Header class="gap-2 px-2 bg-panel">
+      <Panel.Header class="gap-2 px-2 bg-panel">
         <Show
           when={isInCommandScope()}
           fallback={
@@ -483,10 +483,10 @@ export function CommandMenuInner(props: {
           onInput={(e) => CommandState.setQuery(e.currentTarget.value)}
           autofocus
         />
-      </Window.Header>
+      </Panel.Header>
 
       <Show when={isEntityActionMode() || !isInCommandScope()}>
-        <Window.Toolbar
+        <Panel.Toolbar
           class={cn('bg-panel', isEntityActionMode() ? 'px-3 gap-2' : 'px-1.5')}
         >
           <Show
@@ -507,10 +507,10 @@ export function CommandMenuInner(props: {
               entities={CommandState.entityActionEntities()}
             />
           </Show>
-        </Window.Toolbar>
+        </Panel.Toolbar>
       </Show>
 
-      <Window.Body>
+      <Panel.Body>
         <div
           class="bg-panel overflow-hidden transition-[height] duration-60 ease-out"
           style={{ height: `${resultsHeight()}px` }}
@@ -533,9 +533,9 @@ export function CommandMenuInner(props: {
             />
           </Show>
         </div>
-      </Window.Body>
+      </Panel.Body>
 
-      <Window.Footer class="gap-4 px-4 bg-panel text-xs text-ink-extra-muted/80">
+      <Panel.Footer class="gap-4 px-4 bg-panel text-xs text-ink-extra-muted/80">
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
@@ -579,8 +579,8 @@ export function CommandMenuInner(props: {
         >
           <HotkeyHint shortcut="escape" label="Back" />
         </Show>
-      </Window.Footer>
-    </Window>
+      </Panel.Footer>
+    </Panel>
   );
 }
 

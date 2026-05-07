@@ -4,7 +4,7 @@ import { getWebOrigin } from '@core/util/webOrigin';
 import { authServiceClient } from '@service-auth/client';
 import { contactsClient } from '@service-contacts/client';
 import { isOk } from '@core/util/maybeResult';
-import { Dialog, Button, Window } from '@ui';
+import { Dialog, Button, Panel } from '@ui';
 import { toast } from '@core/component/Toast/Toast';
 import CloseIcon from '@icon/regular/x.svg';
 import ClipboardIcon from '@icon/regular/clipboard.svg';
@@ -67,17 +67,17 @@ export const InviteModal = () => {
 
   return (
     <Dialog open={inviteModalOpen()} onOpenChange={(o) => !o && handleClose()}>
-      <Window depth={2} active class="max-h-[75vh] text-ink">
-        <Window.Header class="px-2 gap-1">
+      <Panel depth={2} active class="max-h-[75vh] text-ink">
+        <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
             <CloseIcon />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             Invite
           </Dialog.Title>
-        </Window.Header>
+        </Panel.Header>
 
-        <Window.Body scroll class="p-3 flex flex-col gap-3">
+        <Panel.Body scroll class="p-3 flex flex-col gap-3">
           <p>
             Invite friends and teammates to Macro. You'll get $100 in credits
             for each person who signs up.
@@ -141,8 +141,8 @@ export const InviteModal = () => {
               </div>
             )}
           </Show>
-        </Window.Body>
-      </Window>
+        </Panel.Body>
+      </Panel>
     </Dialog>
   );
 };

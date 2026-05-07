@@ -6,18 +6,18 @@ import { Surface } from './Surface';
 
 /**
  * ```tsx
- * <Window>
- *   <Window.Header>Title</Window.Header>
- *   <Window.Toolbar>...</Window.Toolbar>
- *   <Window.Body>...</Window.Body>
- *   <Window.Footer>...</Window.Footer>
- * </Window>
+ * <Panel>
+ *   <Panel.Header>Title</Panel.Header>
+ *   <Panel.Toolbar>...</Panel.Toolbar>
+ *   <Panel.Body>...</Panel.Body>
+ *   <Panel.Footer>...</Panel.Footer>
+ * </Panel>
  * ```
  */
 
-export type WindowProps = SurfaceProps;
+export type PanelProps = SurfaceProps;
 
-export function Window(props: WindowProps) {
+export function Panel(props: PanelProps) {
   const [local, surfaceProps] = splitProps(props, ['children', 'class']);
 
   return (
@@ -37,7 +37,7 @@ export function Window(props: WindowProps) {
 
 type SlotProps = ParentProps<{ class?: string }>;
 
-Window.Header = (props: SlotProps) => (
+Panel.Header = (props: SlotProps) => (
   <Show when={props.children}>
     <div
       class={cn('flex h-10 items-center gap-1 border-b border-edge-muted px-5', props.class)}
@@ -48,7 +48,7 @@ Window.Header = (props: SlotProps) => (
   </Show>
 );
 
-Window.Toolbar = (props: SlotProps) => (
+Panel.Toolbar = (props: SlotProps) => (
   <Show when={props.children}>
     <div
       class={cn('flex h-10 items-center gap-1 border-b border-edge-muted px-5', props.class)}
@@ -61,7 +61,7 @@ Window.Toolbar = (props: SlotProps) => (
 
 type BodyProps = ParentProps<{ class?: string; scroll?: boolean }>;
 
-Window.Body = (props: BodyProps) => (
+Panel.Body = (props: BodyProps) => (
   <Show when={props.children}>
     <div
       class={cn(
@@ -76,7 +76,7 @@ Window.Body = (props: BodyProps) => (
   </Show>
 );
 
-Window.Footer = (props: SlotProps) => (
+Panel.Footer = (props: SlotProps) => (
   <Show when={props.children}>
     <div
       class={cn('flex h-10 items-center gap-1 border-t border-edge-muted px-5', props.class)}

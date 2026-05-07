@@ -12,7 +12,7 @@ import CheckIcon from '@icon/regular/check.svg';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { Button } from '@ui/components/Button';
-import { Dialog, Window } from '@ui';
+import { Dialog, Panel } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { Select } from '@kobalte/core/select';
 import { useUserId } from '@core/context/user';
@@ -570,10 +570,10 @@ function TeamInvites() {
 
   return (
       <>
-        <Window.Header class="px-6">
+        <Panel.Header class="px-6">
           <div class="text-sm font-semibold">Team</div>
-        </Window.Header>
-        <Window.Body>
+        </Panel.Header>
+        <Panel.Body>
           <Show when={invites().length > 0}>
             <section class="px-6 py-4">
               <header class="mb-2">
@@ -598,7 +598,7 @@ function TeamInvites() {
               </div>
             </section>
           </Show>
-        </Window.Body>
+        </Panel.Body>
       </>
     );
 }
@@ -685,16 +685,16 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
         teamNameInputRef?.focus();
       }}
     >
-      <Window depth={2} active class="max-h-[75vh] text-ink">
-        <Window.Header class="px-2 gap-1">
+      <Panel depth={2} active class="max-h-[75vh] text-ink">
+        <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
             <XIcon />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             Create Team
           </Dialog.Title>
-        </Window.Header>
-        <Window.Body scroll class="p-3 flex flex-col gap-3">
+        </Panel.Header>
+        <Panel.Body scroll class="p-3 flex flex-col gap-3">
               <div class="flex flex-col gap-1">
                 <div class="flex items-center justify-between">
                   <label class="text-sm text-ink-muted">Team name</label>
@@ -758,8 +758,8 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
                   </Show>
                 </Button>
               </div>
-        </Window.Body>
-      </Window>
+        </Panel.Body>
+      </Panel>
     </Dialog>
   );
 }
@@ -771,10 +771,10 @@ function EmptyTeamState() {
 
   return (
       <>
-        <Window.Header class="px-6">
+        <Panel.Header class="px-6">
           <div class="text-sm font-semibold">Team</div>
-        </Window.Header>
-        <Window.Body>
+        </Panel.Header>
+        <Panel.Body>
           <div class="flex flex-col items-center justify-center py-12 text-center px-6">
             <div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mb-4">
               <UsersIcon class="size-6 text-accent" />
@@ -811,7 +811,7 @@ function EmptyTeamState() {
               </Button>
             </Show>
           </div>
-        </Window.Body>
+        </Panel.Body>
 
         <Show when={showCreateModal()}>
           <CreateTeamDialog
@@ -983,7 +983,7 @@ function TeamManagement(props: {
 
   return (
       <>
-        <Window.Header class="justify-between px-6">
+        <Panel.Header class="justify-between px-6">
           <div class="text-sm font-semibold">Team</div>
           <Show when={isOwner()}>
             <div class="flex items-center gap-2">
@@ -1007,9 +1007,9 @@ function TeamManagement(props: {
               </Button>
             </div>
           </Show>
-        </Window.Header>
+        </Panel.Header>
 
-        <Window.Body class="flex flex-col h-full overflow-hidden">
+        <Panel.Body class="flex flex-col h-full overflow-hidden">
 
       <div class="flex items-center px-2 h-15.25 border-b border-edge-muted shrink-0">
         <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2">
@@ -1133,14 +1133,14 @@ function TeamManagement(props: {
           </section>
         </Show>
       </div>
-      </Window.Body>
+      </Panel.Body>
 
       <Dialog
         open={showDeleteTeamModal()}
         onOpenChange={handleDeleteTeamModalClose}
       >
-        <Window depth={2} active class="max-h-[75vh] text-ink">
-          <Window.Header class="px-2 gap-1">
+        <Panel depth={2} active class="max-h-[75vh] text-ink">
+          <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton
               as={Button}
               variant="ghost"
@@ -1151,8 +1151,8 @@ function TeamManagement(props: {
             <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
               Delete Team
             </Dialog.Title>
-          </Window.Header>
-          <Window.Body scroll class="p-3 flex flex-col gap-3">
+          </Panel.Header>
+          <Panel.Body scroll class="p-3 flex flex-col gap-3">
                 <p>
                   Are you sure you want to delete{' '}
                   <span class="font-medium">{props.teamName}</span>? This action
@@ -1195,16 +1195,16 @@ function TeamManagement(props: {
                     </Show>
                   </Button>
                 </div>
-          </Window.Body>
-        </Window>
+          </Panel.Body>
+        </Panel>
       </Dialog>
 
       <Dialog
         open={!!showRemoveModal()}
         onOpenChange={() => setShowRemoveModal(null)}
       >
-        <Window depth={2} active class="max-h-[75vh] text-ink">
-          <Window.Header class="px-2 gap-1">
+        <Panel depth={2} active class="max-h-[75vh] text-ink">
+          <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton
               as={Button}
               variant="ghost"
@@ -1215,8 +1215,8 @@ function TeamManagement(props: {
             <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
               Remove Member
             </Dialog.Title>
-          </Window.Header>
-          <Window.Body scroll class="p-3 flex flex-col gap-3">
+          </Panel.Header>
+          <Panel.Body scroll class="p-3 flex flex-col gap-3">
                 <p>
                   Are you sure you want to remove{' '}
                   <Show when={showRemoveModal()}>
@@ -1244,16 +1244,16 @@ function TeamManagement(props: {
                     </Show>
                   </Button>
                 </div>
-          </Window.Body>
-        </Window>
+          </Panel.Body>
+        </Panel>
       </Dialog>
 
       <Dialog
         open={!!showCancelInviteModal()}
         onOpenChange={() => setShowCancelInviteModal(null)}
       >
-        <Window depth={2} active class="max-h-[75vh] text-ink">
-          <Window.Header class="px-2 gap-1">
+        <Panel depth={2} active class="max-h-[75vh] text-ink">
+          <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton
               as={Button}
               variant="ghost"
@@ -1264,8 +1264,8 @@ function TeamManagement(props: {
             <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
               Cancel Invitation
             </Dialog.Title>
-          </Window.Header>
-          <Window.Body scroll class="p-3 flex flex-col gap-3">
+          </Panel.Header>
+          <Panel.Body scroll class="p-3 flex flex-col gap-3">
                 <p>
                   Are you sure you want to cancel the invitation for{' '}
                   <span class="font-medium">
@@ -1296,16 +1296,16 @@ function TeamManagement(props: {
                     </Show>
                   </Button>
                 </div>
-          </Window.Body>
-        </Window>
+          </Panel.Body>
+        </Panel>
       </Dialog>
 
       <Dialog
         open={showInviteModal()}
         onOpenChange={handleInviteModalClose}
       >
-        <Window depth={2} active class="max-h-[75vh] text-ink">
-          <Window.Header class="px-2 gap-1">
+        <Panel depth={2} active class="max-h-[75vh] text-ink">
+          <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton
               as={Button}
               variant="ghost"
@@ -1316,8 +1316,8 @@ function TeamManagement(props: {
             <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
               Invite to Team
             </Dialog.Title>
-          </Window.Header>
-          <Window.Body scroll class="p-3 flex flex-col gap-3">
+          </Panel.Header>
+          <Panel.Body scroll class="p-3 flex flex-col gap-3">
                 <InviteEmailsInput
                   invites={invites()}
                   onChange={setInvites}
@@ -1353,8 +1353,8 @@ function TeamManagement(props: {
                     </Show>
                   </Button>
                 </div>
-          </Window.Body>
-        </Window>
+          </Panel.Body>
+        </Panel>
       </Dialog>
     </>
   );
@@ -1399,11 +1399,11 @@ export function Team() {
       class="h-full overflow-hidden flex justify-center p-2"
     >
       <div class="max-w-200 w-full h-full">
-        <Window depth={2} class="h-full overflow-hidden text-ink">
+        <Panel depth={2} class="h-full overflow-hidden text-ink">
                   <Suspense fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />}>
                     <TeamContent />
                   </Suspense>
-                </Window>
+                </Panel>
       </div>
     </div>
   );

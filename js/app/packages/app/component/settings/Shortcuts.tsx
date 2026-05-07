@@ -1,6 +1,6 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { Hotkey } from '@core/component/Hotkey';
-import { Keyboard, Window } from '@ui';
+import { Keyboard, Panel } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createSignal, For, Index, type JSX } from 'solid-js';
 
@@ -125,11 +125,11 @@ function ShortcutSectionComponent(props: { section: ShortcutSection }) {
 function ShortcutsContent() {
   return (
     <>
-      <Window.Header class="px-6">
+      <Panel.Header class="px-6">
         <div class="text-sm font-semibold">Keyboard Shortcuts</div>
-      </Window.Header>
+      </Panel.Header>
 
-      <Window.Body scroll class="px-6 py-2 @container">
+      <Panel.Body scroll class="px-6 py-2 @container">
         <Keyboard keys={hoveredCodes()} />
 
         <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
@@ -153,7 +153,7 @@ function ShortcutsContent() {
             </div>
           </div>
         </div>
-      </Window.Body>
+      </Panel.Body>
     </>
   );
 }
@@ -162,9 +162,9 @@ export function Shortcuts() {
   return (
     <div class="h-full overflow-hidden flex justify-center p-2">
       <div class="max-w-200 w-full h-full">
-        <Window depth={2} class="h-full overflow-hidden text-ink">
+        <Panel depth={2} class="h-full overflow-hidden text-ink">
                   <ShortcutsContent />
-                </Window>
+                </Panel>
       </div>
     </div>
   );
