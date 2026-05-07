@@ -1144,9 +1144,7 @@ export function ShareModal(props: ShareModalProps) {
                               : 'text-ink-extra-muted'
                           )}
                         >
-                          {publicAccessLevel() != null
-                            ? 'ENABLED'
-                            : 'DISABLED'}
+                          {publicAccessLevel() != null ? 'ENABLED' : 'DISABLED'}
                         </span>
                       </div>
                     </div>

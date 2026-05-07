@@ -79,8 +79,8 @@ export const InviteModal = () => {
 
         <Window.Body scroll class="p-3 flex flex-col gap-3">
           <p>
-            Invite friends and teammates to Macro. You'll get $100 in
-            credits for each person who signs up.
+            Invite friends and teammates to Macro. You'll get $100 in credits
+            for each person who signs up.
           </p>
           <div class="flex flex-col gap-2">
             <textarea
@@ -98,19 +98,13 @@ export const InviteModal = () => {
           </div>
 
           <div class="flex justify-end gap-1 pt-2">
-            <Button
-              variant="ghost"
-              class="rounded-xs"
-              onClick={handleClose}
-            >
+            <Button variant="ghost" class="rounded-xs" onClick={handleClose}>
               Cancel
             </Button>
             <Button
               onClick={handleSend}
               variant={
-                sending() || !parseEmails(value()).length
-                  ? 'ghost'
-                  : 'active'
+                sending() || !parseEmails(value()).length ? 'ghost' : 'active'
               }
               disabled={sending() || !parseEmails(value()).length}
               class="rounded-xs font-semibold"

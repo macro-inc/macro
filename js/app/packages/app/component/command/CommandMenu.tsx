@@ -487,10 +487,7 @@ export function CommandMenuInner(props: {
 
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <Window.Toolbar
-          class={cn(
-            'bg-panel',
-            isEntityActionMode() ? 'px-3 gap-2' : 'px-1.5'
-          )}
+          class={cn('bg-panel', isEntityActionMode() ? 'px-3 gap-2' : 'px-1.5')}
         >
           <Show
             when={isEntityActionMode()}
@@ -677,4 +674,3 @@ function HotkeyHint(props: { shortcut: string; label: string }) {
     </span>
   );
 }
-
