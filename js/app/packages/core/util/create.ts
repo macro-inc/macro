@@ -1,6 +1,5 @@
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
-import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import { rawStateToLoroSnapshot } from '@core/collab/utils';
 import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
 import {
@@ -9,6 +8,7 @@ import {
 } from '@core/component/Properties/constants';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import {
   authKeys,
   invalidateUserQuota,
