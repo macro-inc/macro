@@ -8,9 +8,9 @@ const THUMB_RADIUS = THUMB_WIDTH * 0.5;
 const THUMB_INSET = (GUTTER_WIDTH - THUMB_WIDTH) * 0.5;
 
 export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children']);
   const [isScrolling, setIsScrolling] = createSignal(false);
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
+  const [local, rest] = splitProps(props, ['children']);
   const [thumbTop, setThumbTop] = createSignal(0);
   let contentRef!: HTMLDivElement;
   let gutterRef!: HTMLDivElement;
@@ -87,10 +87,8 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
       <div
         style={{
           'scrollbar-width': 'none',
-          'position': 'relative',
           'overflow-y': 'auto',
           'height': '100%',
-          'width': '100%',
         }}
         onScroll={handleScroll}
         ref={scrollRef}
@@ -125,7 +123,6 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
             'width': `${THUMB_WIDTH}px`,
             'pointer-events': 'none',
             'position': 'absolute',
-            'top': '0',
           }}
         />
       </div>
