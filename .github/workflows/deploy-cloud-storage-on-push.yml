@@ -1,6 +1,28 @@
 name: Deploy Cloud Storage Services on Push
 
 on:
+  workflow_dispatch:
+    inputs:
+      service:
+        type: choice
+        required: true
+        default: static-file-service
+        description: Service to deploy to dev for end-to-end testing
+        options:
+          - agent-schedule-service
+          - authentication-service
+          - connection-gateway
+          - contacts-service
+          - convert-service
+          - document-cognition-service
+          - document-storage-service
+          - email-service
+          - image-proxy-service
+          - mcp-server
+          - notification-service
+          - search-processing-service
+          - static-file-service
+          - unfurl-service
   push:
     branches: [ 'main' ]
     paths:
@@ -36,6 +58,14 @@ jobs:
       - name: Detect changed services
         id: detect
         run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            SERVICES=$(jq -cn --arg service "${{ inputs.service }}" '[$service]')
+            echo "services=$SERVICES" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Manually selected service: $SERVICES"
+            exit 0
+          fi
+
           # Make the script executable
           chmod +x .github/scripts/detect-affected-services.sh
 
