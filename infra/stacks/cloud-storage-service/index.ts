@@ -183,16 +183,11 @@ const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
   .getOutput('contactsQueueArn')
   .apply((arn) => arn as string);
 
-const { notificationIngressQueueName, notificationIngressQueueArn } =
-  getMacroNotify();
-
-const notificationServiceStack = new pulumi.StackReference(
-  'notification-service-stack',
-  { name: `macro-inc/notification-service/${stack}` }
-);
-const snsApnsVoipPlatformArn: pulumi.Output<string> = notificationServiceStack
-  .getOutput('notificationApnsVoipPlatformArn')
-  .apply((arn) => arn as string);
+const {
+  notificationIngressQueueName,
+  notificationIngressQueueArn,
+  notificationApnsVoipPlatformArn: snsApnsVoipPlatformArn,
+} = getMacroNotify();
 
 const appleBundleId = config.require('apple_bundle_id');
 const APPLE_BUNDLE_ID = aws.secretsmanager
