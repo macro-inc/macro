@@ -3,6 +3,7 @@ import { useAnalytics } from 'app/component/analytics-context';
 import { applyTheme } from '../utils/themeUtils';
 import { ColorSwatch } from './ColorSwatch';
 import { ThemeCrud } from './ThemeCrud';
+import { Window } from '@ui';
 
 import { For } from 'solid-js';
 
@@ -10,67 +11,26 @@ export function ThemeList() {
   const analytics = useAnalytics()
 
   return (
-    <>
-      <style>{`
-        .theme-list-item-name.current-theme{
-          transition: none !important;
-          color: var(--a0) !important;
-        }
-
-        @media(hover){
-          .theme-list-item-name:hover{
+      <>
+        <style>{`
+          .theme-list-item-name.current-theme{
             transition: none !important;
             color: var(--a0) !important;
           }
-        }
-      `}</style>
 
-      <div
-        style="
-          font-family: var(--font-sans);
-          background-color: var(--b0);
-          scrollbar-width: none;
-          position: relative;
-          overflow: hidden;
-          font-size: 14px;
-          display: block;
-          height: 100%;
-        "
-      >
-        <div
-          style="
-            overscroll-behavior: none;
-            box-sizing: border-box;
-            scrollbar-width: none;
-            overflow-y: scroll;
-            height: 100%;
-            width: 100%;
-          "
-        >
-          <div
-            style="
-              border-bottom: 1px solid var(--b3);
-              background-color: var(--b0);
-              align-items: center;
-              position: absolute;
-              padding: 0 20px;
-              display: flex;
-              height: 42px;
-              width: 100%;
-              z-index: 1;
-              top: 0;
-              left: 0;
-            "
-          >
-            <div
-              style={{
-                'font-size': '0.875rem',
-                'font-weight': '600'
-              }}
-            >
-              Theme List
-            </div>
-          </div>
+          @media(hover){
+            .theme-list-item-name:hover{
+              transition: none !important;
+              color: var(--a0) !important;
+            }
+          }
+        `}</style>
+
+        <Window.Header class="px-5">
+          <div class="text-sm font-semibold">Theme List</div>
+        </Window.Header>
+
+        <Window.Body scroll>
           <div
             style="
               grid-template-columns: min-content 1fr min-content;
@@ -78,7 +38,6 @@ export function ThemeList() {
               box-sizing: border-box;
               grid-auto-rows: 40px;
               overflow-x: hidden;
-              padding-top: 40px;
               display: grid;
               gap: 1px;
             "
@@ -138,9 +97,8 @@ export function ThemeList() {
                 </>
               )}
             </For>
-          </div>
         </div>
-      </div>
+      </Window.Body>
     </>
   );
 }

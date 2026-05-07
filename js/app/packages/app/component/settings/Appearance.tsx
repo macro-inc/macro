@@ -60,10 +60,8 @@ export function Appearance() {
         </Window>
 
         <Window depth={2}>
-          <Window.Body>
-            <ThemeList />
-          </Window.Body>
-        </Window>
+                  <ThemeList />
+                </Window>
       </div>
     </div>
   );

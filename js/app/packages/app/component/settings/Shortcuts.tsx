@@ -163,8 +163,8 @@ export function Shortcuts() {
     <div class="h-full overflow-hidden flex justify-center p-2">
       <div class="max-w-200 w-full h-full">
         <Window depth={2} class="h-full overflow-hidden text-ink">
-          <ShortcutsContent />
-        </Window>
+                  <ShortcutsContent />
+                </Window>
       </div>
     </div>
   );

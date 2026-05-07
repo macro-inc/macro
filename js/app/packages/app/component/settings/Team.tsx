@@ -569,31 +569,38 @@ function TeamInvites() {
     rejectMutation.variables?.teamInviteId === inviteId;
 
   return (
-    <Show when={invites().length > 0}>
-      <section class="px-6 py-4">
-        <header class="mb-2">
-          <h3 class="text-sm font-medium">You've been invited to join a team</h3>
-        </header>
-        <div class="border border-edge rounded-sm px-3">
-          <For each={invites()}>
-            {(invite) => (
-              <UserInviteRow
-                invite={invite}
-                onAccept={() =>
-                  joinTeamMutation.mutate({ teamInviteId: invite.id })
-                }
-                onDecline={() =>
-                  rejectMutation.mutate({ teamInviteId: invite.id })
-                }
-                isAccepting={isAccepting(invite.id)}
-                isDeclining={isDeclining(invite.id)}
-              />
-            )}
-          </For>
-        </div>
-      </section>
-    </Show>
-  );
+      <>
+        <Window.Header class="px-6">
+          <div class="text-sm font-semibold">Team</div>
+        </Window.Header>
+        <Window.Body>
+          <Show when={invites().length > 0}>
+            <section class="px-6 py-4">
+              <header class="mb-2">
+                <h3 class="text-sm font-medium">You've been invited to join a team</h3>
+              </header>
+              <div class="border border-edge rounded-sm px-3">
+                <For each={invites()}>
+                  {(invite) => (
+                    <UserInviteRow
+                      invite={invite}
+                      onAccept={() =>
+                        joinTeamMutation.mutate({ teamInviteId: invite.id })
+                      }
+                      onDecline={() =>
+                        rejectMutation.mutate({ teamInviteId: invite.id })
+                      }
+                      isAccepting={isAccepting(invite.id)}
+                      isDeclining={isDeclining(invite.id)}
+                    />
+                  )}
+                </For>
+              </div>
+            </section>
+          </Show>
+        </Window.Body>
+      </>
+    );
 }
 
 const TEAM_NAME_MAX_LENGTH = 50;
@@ -763,52 +770,57 @@ function EmptyTeamState() {
   const { showPaywall } = usePaywallState();
 
   return (
-    <>
-      <div class="flex flex-col items-center justify-center py-12 text-center px-6">
-        <div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mb-4">
-          <UsersIcon class="size-6 text-accent" />
-        </div>
-        <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
-        <Show
-          when={hasPaidAccess()}
-          fallback={
-            <>
+      <>
+        <Window.Header class="px-6">
+          <div class="text-sm font-semibold">Team</div>
+        </Window.Header>
+        <Window.Body>
+          <div class="flex flex-col items-center justify-center py-12 text-center px-6">
+            <div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mb-4">
+              <UsersIcon class="size-6 text-accent" />
+            </div>
+            <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
+            <Show
+              when={hasPaidAccess()}
+              fallback={
+                <>
+                  <p class="text-xs text-ink-muted max-w-xs mb-4">
+                    Teams are available on paid plans. Upgrade to create and manage
+                    teams.
+                  </p>
+                  <Button
+                    variant="active"
+                    class="rounded-xs"
+                    onClick={() => showPaywall()}
+                  >
+                    Upgrade
+                  </Button>
+                </>
+              }
+            >
               <p class="text-xs text-ink-muted max-w-xs mb-4">
-                Teams are available on paid plans. Upgrade to create and manage
-                teams.
+                Create a team to collaborate with others and manage access together.
               </p>
               <Button
                 variant="active"
                 class="rounded-xs"
-                onClick={() => showPaywall()}
+                onClick={() => setShowCreateModal(true)}
               >
-                Upgrade
+                <PlusIcon class="size-4" />
+                Create Team
               </Button>
-            </>
-          }
-        >
-          <p class="text-xs text-ink-muted max-w-xs mb-4">
-            Create a team to collaborate with others and manage access together.
-          </p>
-          <Button
-            variant="active"
-            class="rounded-xs"
-            onClick={() => setShowCreateModal(true)}
-          >
-            <PlusIcon class="size-4" />
-            Create Team
-          </Button>
-        </Show>
-      </div>
+            </Show>
+          </div>
+        </Window.Body>
 
-      <Show when={showCreateModal()}>
-        <CreateTeamDialog
-          open={showCreateModal()}
-          onClose={() => setShowCreateModal(false)}
-        />
-      </Show>
-    </>
-  );
+        <Show when={showCreateModal()}>
+          <CreateTeamDialog
+            open={showCreateModal()}
+            onClose={() => setShowCreateModal(false)}
+          />
+        </Show>
+      </>
+    );
 }
 
 function TeamManagement(props: {
@@ -970,32 +982,34 @@ function TeamManagement(props: {
   };
 
   return (
-    <div class="flex flex-col h-full overflow-hidden">
-      <div class="relative flex items-center justify-between h-10 px-6 shrink-0 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
-        <div class="text-sm font-semibold">Team</div>
-        <Show when={isOwner()}>
-          <div class="flex items-center gap-2">
-            <Button
-              variant="base"
-              size="sm"
-              class="rounded-xs"
-              onClick={() => setShowInviteModal(true)}
-            >
-              <PlusIcon class="size-4" />
-              Invite
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              class="rounded-xs"
-              onClick={() => setShowDeleteTeamModal(true)}
-            >
-              <TrashIcon class="size-4" />
-              Delete Team
-            </Button>
-          </div>
-        </Show>
-      </div>
+      <>
+        <Window.Header class="justify-between px-6">
+          <div class="text-sm font-semibold">Team</div>
+          <Show when={isOwner()}>
+            <div class="flex items-center gap-2">
+              <Button
+                variant="base"
+                size="sm"
+                class="rounded-xs"
+                onClick={() => setShowInviteModal(true)}
+              >
+                <PlusIcon class="size-4" />
+                Invite
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                class="rounded-xs"
+                onClick={() => setShowDeleteTeamModal(true)}
+              >
+                <TrashIcon class="size-4" />
+                Delete Team
+              </Button>
+            </div>
+          </Show>
+        </Window.Header>
+
+        <Window.Body class="flex flex-col h-full overflow-hidden">
 
       <div class="flex items-center px-2 h-15.25 border-b border-edge-muted shrink-0">
         <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2">
@@ -1119,6 +1133,7 @@ function TeamManagement(props: {
           </section>
         </Show>
       </div>
+      </Window.Body>
 
       <Dialog
         open={showDeleteTeamModal()}
@@ -1341,7 +1356,7 @@ function TeamManagement(props: {
           </Window.Body>
         </Window>
       </Dialog>
-    </div>
+    </>
   );
 }
 
@@ -1385,12 +1400,10 @@ export function Team() {
     >
       <div class="max-w-200 w-full h-full">
         <Window depth={2} class="h-full overflow-hidden text-ink">
-          <Window.Body class="h-full">
-            <Suspense fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />}>
-              <TeamContent />
-            </Suspense>
-          </Window.Body>
-        </Window>
+                  <Suspense fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />}>
+                    <TeamContent />
+                  </Suspense>
+                </Window>
       </div>
     </div>
   );
