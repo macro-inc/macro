@@ -171,10 +171,8 @@ const PaywallComponent = (props: PaywallComponent) => {
               <button
                 onClick={() => setUserSelectedTier(plan.tier)}
                 class={cn(
+                  selectedTier() === plan.tier ? 'border-accent-ink bg-active' : 'border-edge hover:border-edge',
                   'p-4 sm:p-5 border flex flex-col transition-all relative text-left rounded-sm',
-                  selectedTier() === plan.tier
-                    ? 'border-accent-ink bg-active'
-                    : 'border-edge hover:border-edge'
                 )}
               >
                 <div class="flex flex-col gap-3 w-full">
