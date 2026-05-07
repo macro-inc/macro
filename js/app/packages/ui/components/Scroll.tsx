@@ -15,48 +15,49 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   let contentRef!: HTMLDivElement;
   let gutterRef!: HTMLDivElement;
   let scrollRef!: HTMLDivElement;
-  let rafId: number | undefined;
   let clientHeight = 0;
   let scrollHeight = 0;
-
-  function update() {
-    const scrollTop = scrollRef.scrollTop;
-    const maxScroll = Math.max(0, scrollHeight - clientHeight);
-    const maxTop = Math.max(0, clientHeight - THUMB_HEIGHT - THUMB_INSET * 2);
-    const offset = maxScroll > 0 ? (scrollTop / maxScroll) * maxTop : 0;
-    setThumbTop(THUMB_INSET + offset);
-  }
+  let maxScroll = 0;
+  let maxTop = 0;
+  let ratio = 0;
 
   function config() {
     scrollHeight = scrollRef.scrollHeight;
     clientHeight = scrollRef.clientHeight;
-    update();
+    maxScroll = Math.max(0, scrollHeight - clientHeight);
+    maxTop = Math.max(0, clientHeight - THUMB_HEIGHT - THUMB_INSET * 2);
+    ratio = maxScroll > 0 ? maxTop / maxScroll : 0;
+    setThumbTop(THUMB_INSET + scrollRef.scrollTop * ratio);
   }
 
-  function scheduleUpdate() {
-    if (rafId !== undefined) { return; }
-    rafId = requestAnimationFrame(() => {
-      rafId = undefined;
-      update();
-    });
+  const HIDE_DELAY = 500;
+  let lastActivity = 0;
+
+  function onHideTick() {
+    const remaining = HIDE_DELAY - (performance.now() - lastActivity);
+    if (remaining > 0) {
+      hideTimer = setTimeout(onHideTick, remaining);
+      return;
+    }
+    hideTimer = undefined;
+    setIsScrolling(false);
   }
 
   function showThumb() {
-    setIsScrolling(true);
-    if (hideTimer) { clearTimeout(hideTimer); }
-    hideTimer = setTimeout(() => setIsScrolling(false), 500);
+    lastActivity = performance.now();
+    if (!isScrolling()) { setIsScrolling(true); }
+    if (hideTimer === undefined) {
+      hideTimer = setTimeout(onHideTick, HIDE_DELAY);
+    }
   }
 
   function handleScroll() {
-    scheduleUpdate();
+    setThumbTop(THUMB_INSET + scrollRef.scrollTop * ratio);
     showThumb();
   }
 
   function scrollToLocalY(localY: number) {
-    const maxScroll = Math.max(0, scrollHeight - clientHeight);
-    if (maxScroll <= 0) { return; }
-    const maxTop = Math.max(0, clientHeight - THUMB_HEIGHT - THUMB_INSET * 2);
-    if (maxTop <= 0) { return; }
+    if (maxScroll <= 0 || maxTop <= 0) { return; }
     const centered = localY - THUMB_HEIGHT / 2 - THUMB_INSET;
     const clamped = Math.max(0, Math.min(maxTop, centered));
     scrollRef.scrollTop = (clamped / maxTop) * maxScroll;
@@ -86,7 +87,6 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
     onCleanup(() => {
       ro.disconnect();
       if (hideTimer) { clearTimeout(hideTimer); }
-      if (rafId !== undefined) { cancelAnimationFrame(rafId); }
     });
   });
 
