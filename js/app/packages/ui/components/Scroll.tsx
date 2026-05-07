@@ -5,6 +5,7 @@ export type ScrollProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
 };
 
 const THUMB_HEIGHT = 200;
+const THUMB_INSET = 3;
 
 export function Scroll(props: ScrollProps) {
   const [local, rest] = splitProps(props, ['children', 'style']);
@@ -19,8 +20,9 @@ export function Scroll(props: ScrollProps) {
     if (!el) return;
     const { scrollTop, scrollHeight, clientHeight } = el;
     const maxScroll = Math.max(0, scrollHeight - clientHeight);
-    const maxTop = Math.max(0, clientHeight - THUMB_HEIGHT);
-    setThumbTop(maxScroll > 0 ? (scrollTop / maxScroll) * maxTop : 0);
+    const maxTop = Math.max(0, clientHeight - THUMB_HEIGHT - THUMB_INSET * 2);
+    const offset = maxScroll > 0 ? (scrollTop / maxScroll) * maxTop : 0;
+    setThumbTop(THUMB_INSET + offset);
   };
 
   function handleScroll() {
