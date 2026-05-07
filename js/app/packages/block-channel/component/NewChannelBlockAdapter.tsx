@@ -1,4 +1,3 @@
-
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';

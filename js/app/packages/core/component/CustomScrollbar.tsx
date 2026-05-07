@@ -163,9 +163,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
       <div
         class={cn(
           'absolute pointer-events-auto',
-          horiz()
-            ? 'bottom-0 inset-x-0'
-            : 'right-0 inset-y-0',
+          horiz() ? 'bottom-0 inset-x-0' : 'right-0 inset-y-0',
           props.class
         )}
         style={
