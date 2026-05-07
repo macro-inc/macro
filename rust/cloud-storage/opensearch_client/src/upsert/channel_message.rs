@@ -22,14 +22,13 @@ pub struct UpsertChannelMessageArgs {
 pub(crate) async fn upsert_channel_message(
     client: &opensearch::OpenSearch,
     args: &UpsertChannelMessageArgs,
+    index_override: Option<&str>,
 ) -> Result<()> {
     let id = format!("{}:{}", args.channel_id, args.message_id);
+    let index = index_override.unwrap_or(SearchIndex::Channels.as_ref());
 
     let response = client
-        .index(opensearch::IndexParts::IndexId(
-            SearchIndex::Channels.as_ref(),
-            &id,
-        ))
+        .index(opensearch::IndexParts::IndexId(index, &id))
         .body(args)
         .send()
         .await

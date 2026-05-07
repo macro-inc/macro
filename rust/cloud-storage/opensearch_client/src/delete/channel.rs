@@ -2,9 +2,12 @@ use models_opensearch::SearchIndex;
 
 use crate::{Result, error::OpensearchClientError};
 
-/// Deletes all channel messages with the specified channel_id
 #[tracing::instrument(skip(client))]
-pub async fn delete_channel_by_id(client: &opensearch::OpenSearch, channel_id: &str) -> Result<()> {
+pub async fn delete_channel_by_id(
+    client: &opensearch::OpenSearch,
+    channel_id: &str,
+    index_override: Option<&str>,
+) -> Result<()> {
     let query = serde_json::json!({
         "query": {
             "term": {
@@ -13,10 +16,9 @@ pub async fn delete_channel_by_id(client: &opensearch::OpenSearch, channel_id: &
         },
     });
 
+    let index = index_override.unwrap_or(SearchIndex::Channels.as_ref());
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
-            SearchIndex::Channels.as_ref(),
-        ]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
@@ -53,12 +55,12 @@ pub async fn delete_channel_by_id(client: &opensearch::OpenSearch, channel_id: &
     Ok(())
 }
 
-/// Deletes a particular channel message with the specified channel_id and channel_message_id
 #[tracing::instrument(skip(client))]
 pub async fn delete_channel_message_by_id(
     client: &opensearch::OpenSearch,
     channel_id: &str,
     channel_message_id: &str,
+    index_override: Option<&str>,
 ) -> Result<()> {
     let query = serde_json::json!({
         "query": {
@@ -79,10 +81,9 @@ pub async fn delete_channel_message_by_id(
         }
     });
 
+    let index = index_override.unwrap_or(SearchIndex::Channels.as_ref());
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
-            SearchIndex::Channels.as_ref(),
-        ]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()

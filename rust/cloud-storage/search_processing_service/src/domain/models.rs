@@ -81,6 +81,8 @@ pub struct ChatBackfillRequest {
 #[serde(default)]
 pub struct ChannelBackfillRequest {
     pub deletion_filter: DeletionFilter,
+    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
+    pub index_override: Option<String>,
 }
 
 /// Document backfill filter. Every field is additive — all `None` means "every

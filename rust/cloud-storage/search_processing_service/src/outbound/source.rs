@@ -146,6 +146,7 @@ impl BackfillSource for PgBackfillSource {
                 SearchQueueMessage::ChannelMessageUpdate(ChannelMessageUpdate {
                     channel_id: channel_id.to_string(),
                     message_id: message_id.to_string(),
+                    index_override: req.index_override.clone(),
                 })
             })
             .collect();
