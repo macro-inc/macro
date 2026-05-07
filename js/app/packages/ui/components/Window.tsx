@@ -65,7 +65,7 @@ Window.Body = (props: BodyProps) => (
   <Show when={props.children}>
     <div
       class={cn(
-        'relative min-h-0 min-w-0',
+        'relative min-h-0 min-w-0 scrollbar-hidden',
         props.scroll ? 'overflow-auto' : 'overflow-hidden',
         props.class,
       )}

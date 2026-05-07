@@ -38,6 +38,7 @@ export function ThemeList() {
               box-sizing: border-box;
               grid-auto-rows: 40px;
               overflow-x: hidden;
+              font-size: 14px;
               display: grid;
               gap: 1px;
             "
