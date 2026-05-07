@@ -183,6 +183,7 @@ jobs:
           workspaces: rust/cloud-storage
           shared-key: cloud-storage-check
           cache-on-failure: true
+          cache-targets: false
       - name: Configure sccache S3 backend
         env:
           SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
@@ -256,6 +257,7 @@ jobs:
           workspaces: rust/cloud-storage
           shared-key: cloud-storage-test
           cache-on-failure: true
+          cache-targets: false
       - name: Configure sccache S3 backend
         env:
           SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
