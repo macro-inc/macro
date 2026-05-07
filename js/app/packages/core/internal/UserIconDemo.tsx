@@ -1,9 +1,9 @@
-import { For } from 'solid-js';
-import { UserIcon } from '@core/component/UserIcon';
 import { UserGroup } from '@core/component/UserGroup';
+import { UserIcon } from '@core/component/UserIcon';
 import { seedMockDisplayNames } from '@core/user/displayName';
-import { Avatar } from '@ui';
 import User from '@phosphor-icons/core/regular/user.svg?component-solid';
+import { Avatar } from '@ui';
+import { For } from 'solid-js';
 
 // Mock macro user IDs (format: macro|email@domain.com)
 const MOCK_USERS = [

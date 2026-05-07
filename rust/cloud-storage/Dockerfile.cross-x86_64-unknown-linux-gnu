@@ -1,0 +1,10 @@
+FROM ghcr.io/cross-rs/x86_64-unknown-linux-gnu:edge
+
+ARG CROSS_DEB_ARCH
+
+RUN dpkg --add-architecture "$CROSS_DEB_ARCH" \
+    && apt-get update \
+    && apt-get -y upgrade \
+    && apt-get --assume-yes install libssl-dev:"$CROSS_DEB_ARCH" gcc-10 g++-10 \
+    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 60 \
+    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 60

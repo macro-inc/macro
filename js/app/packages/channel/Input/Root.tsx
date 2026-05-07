@@ -1,5 +1,5 @@
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { type JSX, splitProps } from 'solid-js';
 import { InputProvider } from './context';
 import { type InputCommands, type InputData, isReplyInput } from './types';

@@ -1,3 +1,4 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import { useGetRootViewer } from '@block-pdf/signal/pdfViewer';
 import { commentsStore } from '@block-pdf/store/comments/commentStore';
 import type { PdfRootLayout } from '@block-pdf/type/comments';
@@ -22,7 +23,6 @@ import {
 import { highlightsUuidMap } from '../highlight';
 import { newThreadPlaceable, useDeleteNewFreeComment } from './freeComments';
 import { useDeleteNewHighlightComment } from './highlightComments';
-import { useAnalytics } from '@app/component/analytics-context';
 
 export function useCreateComment() {
   const analytics = useAnalytics();

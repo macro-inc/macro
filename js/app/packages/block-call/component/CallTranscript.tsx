@@ -1,19 +1,19 @@
-import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
-import type { ApiChannelMessage } from '@service-comms/client';
-import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
 import { Message } from '@channel/Message';
 import { Thread } from '@channel/Thread/Thread';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { formatVideoTimestamp } from '@core/util/duration';
+import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
+import type { ApiChannelMessage } from '@service-comms/client';
+import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
 import {
+  createEffect,
   createMemo,
   createSignal,
-  createEffect,
   For,
   on,
   onCleanup,
   Show,
 } from 'solid-js';
-import { formatVideoTimestamp } from '@core/util/duration';
 import { getSegmentVideoSeconds } from './transcript-playback';
 
 // Match the channel message grouping window (5 minutes).
@@ -372,7 +372,7 @@ export function CallTranscript(props: {
         }
       >
         <div
-          class="absolute bottom-0 right-px left-px px-2 pb-2 flex justify-center pointer-events-none z-20"
+          class="absolute bottom-0 inset-x-px px-2 pb-2 flex justify-center pointer-events-none z-20"
           style={{
             'background-image':
               'linear-gradient(transparent, var(--color-panel) 85%)',
@@ -380,14 +380,14 @@ export function CallTranscript(props: {
         >
           <button
             type="button"
-            class="pointer-events-auto isolate overflow-hidden relative bg-panel border border-accent/30 flex h-8 px-2 items-center justify-center text-xs font-mono uppercase font-medium leading-5 whitespace-nowrap text-accent before:absolute before:inset-0 before:bg-accent/10 hover:before:bg-accent/20 before:content-[''] before:transition-colors"
+            class="pointer-events-auto isolate overflow-hidden relative bg-panel border border-accent/30 flex h-8 px-2 items-center justify-center text-xs/5 font-mono uppercase font-medium  whitespace-nowrap text-accent before:absolute before:inset-0 before:bg-accent/10 hover:before:bg-accent/20 before:content-[''] before:transition-colors"
             onClick={() => {
               setSyncToVideoTime(true);
               scrollActiveIntoView('smooth');
               setIsActiveRowInView(true);
             }}
           >
-            <span class="relative z-1">Sync to video time</span>
+            <span class="relative z-user-highlight">Sync to video time</span>
           </button>
         </div>
       </Show>

@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 
 type MessageFlagProps = {
   text: string;

@@ -278,7 +278,7 @@ export default function ResizeDemo() {
   };
 
   return (
-    <div class="h-full w-full flex-flex-col">
+    <div class="size-full flex-flex-col">
       <Bar
         left={
           <div class="p-2 text-sm w-2xl truncate">

@@ -17,9 +17,7 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button } from '@ui';
-import { Panel } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { Button, cn, Surface } from '@ui';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
@@ -202,7 +200,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   return (
-    <Panel depth={2}>
+    <Surface depth={2}>
       <div id="chat-input" ref={containerRef} class="relative flex flex-col">
         <Show when={hasAttachments()}>
           <div class="px-2 pt-2 w-full">
@@ -237,9 +235,9 @@ export function ChatInput(props: ChatInputComponentProps) {
             class={cn('text-sm sm:text-sm text-ink')}
             classList={{
               'pl-12': !isMultiline(),
-              'pr-[48px]': !isMultiline() && isTouchDevice(),
-              'pr-[130px]': !isMultiline() && !isTouchDevice(),
-              'pl-0 pr-0 pb-8': isMultiline(),
+              'pr-12': !isMultiline() && isTouchDevice(),
+              'pr-32.5': !isMultiline() && !isTouchDevice(),
+              'px-0  pb-8': isMultiline(),
             }}
             ref={mdRef}
           >
@@ -277,6 +275,6 @@ export function ChatInput(props: ChatInputComponentProps) {
         </div>
         <ConsentDialog />
       </div>
-    </Panel>
+    </Surface>
   );
 }

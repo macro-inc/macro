@@ -24,10 +24,10 @@
  * const { undo, redo, canUndo, canRedo } = useMutationUndoContext();
  */
 
-import { type MutationOptions, useMutation } from '@tanstack/solid-query';
-import { createSignal } from 'solid-js';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { HotkeyGroup } from '@core/hotkey/types';
+import { type MutationOptions, useMutation } from '@tanstack/solid-query';
+import { createSignal } from 'solid-js';
 
 type UndoHandler<TVariables, TContext> = (
   variables: TVariables,

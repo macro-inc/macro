@@ -1,13 +1,13 @@
-import { ThreadRow } from './ThreadRow';
-import { ThreadReplyRailDecorations } from './ThreadReplyRailDecorations';
-import { ThreadRepliesContainer } from './ThreadRepliesContainer';
-import { ThreadReplyButton } from './ThreadReplyButton';
-import { ThreadReplyList } from './ThreadReplyList';
-import { ThreadCollapsedIndicator } from './ThreadCollapsedIndicator';
-import { ThreadReplyInputConnector } from './ThreadReplyInputConnector';
-import { ThreadReplyAuthor } from './ThreadReplyAuthor';
-import { ThreadReplyInput } from './ThreadReplyInput';
 import { ThreadActionsFooter } from './ThreadActionsFooter';
+import { ThreadCollapsedIndicator } from './ThreadCollapsedIndicator';
+import { ThreadRepliesContainer } from './ThreadRepliesContainer';
+import { ThreadReplyAuthor } from './ThreadReplyAuthor';
+import { ThreadReplyButton } from './ThreadReplyButton';
+import { ThreadReplyInput } from './ThreadReplyInput';
+import { ThreadReplyInputConnector } from './ThreadReplyInputConnector';
+import { ThreadReplyList } from './ThreadReplyList';
+import { ThreadReplyRailDecorations } from './ThreadReplyRailDecorations';
+import { ThreadRow } from './ThreadRow';
 
 export const Thread = {
   Row: ThreadRow,

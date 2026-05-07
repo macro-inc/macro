@@ -26,6 +26,7 @@ impl CallSearchIndexer for SqsCallSearchIndexer {
         self.sqs
             .send_message_to_search_event_queue(SearchQueueMessage::CallRecord(CallRecordMessage {
                 call_id: call_id.to_string(),
+                index_override: None,
             }))
             .await?;
         Ok(())
@@ -37,6 +38,7 @@ impl CallSearchIndexer for SqsCallSearchIndexer {
                 RemoveCallRecord {
                     channel_id: channel_id.to_string(),
                     call_id: Some(call_id.to_string()),
+                    index_override: None,
                 },
             ))
             .await?;

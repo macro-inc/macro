@@ -1,5 +1,5 @@
-import { isMobileWidth } from './mobileWidth';
 import { isTouchDevice } from './isTouchDevice';
+import { isMobileWidth } from './mobileWidth';
 
 /**
  * Returns true if the device is likely in a mobile context.

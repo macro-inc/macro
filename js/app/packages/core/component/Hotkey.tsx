@@ -194,9 +194,9 @@ export function BasicHotkey(
         classList={{
           'font-mono inline-flex items-center': true,
           [hotkeyStyles[props.theme || 'base'].hotkey]: true,
-          'text-[11px]/[8px] px-1 py-1 space-x-1':
+          'text-[11px]/[8px] p-1 space-x-1':
             props.size === 'base' || !props.size,
-          'text-[16px]/[24px] px-[9px] space-x-2': props.size === 'lg',
+          'text-[16px]/[24px] px-2.25 space-x-2': props.size === 'lg',
         }}
       >
         <Hotkey {...props} class="flex gap-[1ch]" />

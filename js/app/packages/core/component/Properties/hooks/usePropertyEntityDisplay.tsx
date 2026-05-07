@@ -1,14 +1,14 @@
-import { useChannelName } from '@core/context/channels';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
+import { useChannelName } from '@core/context/channels';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
-import { entityTypeToItemType } from '../utils';
 import { match } from 'ts-pattern';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { entityTypeToItemType } from '../utils';
 
 const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
   'DOCUMENT',

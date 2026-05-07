@@ -85,12 +85,12 @@ export function ZoomWidget() {
           <Tooltip.Content>
             <div
               class="flex items-center justify-center 
-                      bg-ink p-[6px] text-panel text-sm
+                      bg-ink p-1.5 text-panel text-sm
                       rounded-md shadow-xs"
             >
               Reset zoom
             </div>
-            <Tooltip.Arrow class="text-ink text-xs w-1 h-1" />
+            <Tooltip.Arrow class="text-ink text-xs size-1" />
           </Tooltip.Content>
         </Tooltip.Portal>
       </Tooltip>

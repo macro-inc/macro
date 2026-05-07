@@ -1,12 +1,12 @@
-import Caution from '@icon/regular/warning.svg';
-import { Button } from '@ui/components/Button';
 import { useLogout } from '@core/auth/logout';
+import Caution from '@icon/regular/warning.svg';
+import { Button } from '@ui';
 
 export function EmailPermissionsBanner() {
   const logout = useLogout();
 
   return (
-    <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
+    <div class="w-full bg-alert-bg border-y border-alert/20 text-alert-ink p-2">
       <div class="flex items-center justify-between gap-2">
         <Caution class="size-4" />
         <span class="text-sm">

@@ -1,8 +1,8 @@
 import { createMemo, For, Show } from 'solid-js';
 import { Message, type MessageActions, type MessageData } from '../Message';
 import { Thread } from '../Thread';
-import { ThreadRail } from '../Thread/ThreadRail';
 import { buildThreadReplyListMeta } from '../Thread/reply-list-meta';
+import { ThreadRail } from '../Thread/ThreadRail';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,

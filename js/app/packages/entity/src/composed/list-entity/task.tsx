@@ -1,6 +1,6 @@
-import { Show } from 'solid-js';
-import { DisplayName } from '@entity/components/DisplayName';
 import type { NotificationType } from '@core/types';
+import { DisplayName } from '@entity/components/DisplayName';
+import { Show } from 'solid-js';
 import { Entity } from '../../entity';
 import { getActionVerb } from '../../extractors-notification/notification-description-helpers';
 import type { EntityData } from '../../types/entity';

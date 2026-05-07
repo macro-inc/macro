@@ -2,8 +2,8 @@
  * @vitest-environment jsdom
  */
 
-import userEvent from '@testing-library/user-event';
 import { render, screen } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
@@ -136,10 +136,10 @@ vi.mock('../FormatButtons', () => ({
   FormatButtons: () => <div data-testid="format-buttons" />,
 }));
 
-import { ChannelInput } from '../ChannelInput';
-import { Root } from '../Root';
-import { DropOverlay } from '../DropOverlay';
 import { createInputAttachmentTracker } from '../attachment-tracker';
+import { ChannelInput } from '../ChannelInput';
+import { DropOverlay } from '../DropOverlay';
+import { Root } from '../Root';
 import type { InputData } from '../types';
 
 const baseInput: InputData = {

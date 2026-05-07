@@ -1,14 +1,14 @@
-import { type Component, For, Show } from 'solid-js';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import CheckIcon from '@icon/regular/check.svg';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
-import SortIcon from '@macro-icons/wide/sort.svg';
 import type {
   SortOption,
   SystemSortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
-import { Button, Layer } from '@ui';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import CheckIcon from '@icon/regular/check.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import SortIcon from '@macro-icons/wide/sort.svg';
+import { Button, Layer } from '@ui';
+import { type Component, For, Show } from 'solid-js';
 
 export interface SortDropdownProps {
   /** Current sort value */
@@ -46,7 +46,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       </Tooltip>
       <DropdownMenu.Portal>
         <Layer depth={2}>
-          <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-sm min-w-[140px] p-1">
+          <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-sm min-w-35 p-1">
             <For each={options()}>
               {(option) => (
                 <DropdownMenu.Item

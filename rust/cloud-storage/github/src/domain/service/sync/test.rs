@@ -120,11 +120,11 @@ impl DocumentService for StubDocumentService {
     }
     async fn get_project_children(
         &self,
-        project_id: &str,
+        _project_id: &str,
     ) -> Result<Vec<Entity<'static>>, DocumentError> {
         unimplemented!()
     }
-    async fn get_project_name(&self, project_id: &str) -> Result<String, DocumentError> {
+    async fn get_project_name(&self, _project_id: &str) -> Result<String, DocumentError> {
         unimplemented!()
     }
     async fn get_document(

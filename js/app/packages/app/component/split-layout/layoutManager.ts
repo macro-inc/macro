@@ -1,17 +1,17 @@
+import { LIST_VIEW_ID } from '@app/constants/list-views';
 import type {
   BlockAlias,
   BlockAliasContext,
   BlockComponentProps,
   BlockName,
 } from '@core/block';
-import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
-
+import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import {
   type Accessor,
   createMemo,
@@ -25,7 +25,6 @@ import {
   resolveComponent,
 } from './componentRegistry';
 import { createHistory, type History } from './history';
-import { LIST_VIEW_ID } from '@app/constants/list-views';
 
 const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = false;
 

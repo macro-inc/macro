@@ -5,11 +5,11 @@ import {
   commsServiceClient,
   type MessageResponse,
 } from '@service-comms/client';
-import type { ChannelParticipant } from './types';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { softInvalidateChannelParticipants } from './channel-participants';
 import { channelKeys } from './keys';
+import type { ChannelParticipant } from './types';
 
 type WithChannelId<T> = T & { channelId: string };
 

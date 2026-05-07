@@ -1,6 +1,6 @@
 import type { AddPropertyOptionAsyncMutation } from '@queries/properties/options';
-import { createSignal } from 'solid-js';
 import type { Accessor } from 'solid-js';
+import { createSignal } from 'solid-js';
 import type { Property, PropertyOption } from '../types';
 
 type LocalState = {

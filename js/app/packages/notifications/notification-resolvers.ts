@@ -1,8 +1,8 @@
 import type { BlockName } from '@core/block';
 import { itemToResolvedBlockName } from '@core/constant/allBlocks';
-import { getItemPreview, isAccessiblePreviewItem } from '@queries/preview';
 import type { EntityType } from '@core/types';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
+import { getItemPreview, isAccessiblePreviewItem } from '@queries/preview';
 import type { ItemType } from '@service-storage/client';
 import { raceTimeout, until } from '@solid-primitives/promise';
 

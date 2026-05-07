@@ -1,11 +1,12 @@
+import { throwOnErr } from '@core/util/maybeResult';
 import { useLeaveCallMutation } from '@queries/call/call';
 import { queryClient } from '@queries/client';
-import { useMutation } from '@tanstack/solid-query';
 import { callServiceClient } from '@service-call/client';
-import { throwOnErr } from '@core/util/maybeResult';
+import { useMutation } from '@tanstack/solid-query';
 import { RoomEvent } from 'livekit-client';
-import { createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { endCallKitCall, registerCallKitCallEndedHandler } from './use-callkit';
 
 type UseCallOptions = {
   /** Called after successfully joining a call. */
@@ -19,6 +20,11 @@ type JoinCallContext = {
 };
 
 const JOIN_TIMEOUT_MS = 15_000;
+
+// Module-level guard: only one leave can be in flight at a time across all
+// useCall() instances. Prevents a user-initiated leave and a concurrent
+// CallKit call-ended event from both proceeding to disconnect+leaveMutation.
+let leaveInFlight = false;
 
 /**
  * Hook that orchestrates joining/leaving calls by combining
@@ -55,6 +61,19 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
   }
 
   onCleanup(() => cleanupDisconnectListener?.());
+
+  createEffect(() => {
+    if (!callCtx.isInCall() || callCtx.activeChannelId() !== channelId())
+      return;
+
+    const unregister = registerCallKitCallEndedHandler(() =>
+      leaveCall({ endNativeCall: false }).catch((e) =>
+        console.error('callkit: failed to leave ended call', e)
+      )
+    );
+
+    onCleanup(unregister);
+  });
 
   /** Cleared in `joinCall` `finally` + safety timer so Try again never stays disabled if TanStack pending glitches. */
   const [joinUiPending, setJoinUiPending] = createSignal(false);
@@ -139,17 +158,34 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     }
   };
 
-  async function leaveCall() {
+  async function leaveCall(leaveOptions?: { endNativeCall?: boolean }) {
+    if (leaveInFlight) return;
+    leaveInFlight = true;
     const id = channelId();
     // Detach before disconnect so the RoomEvent.Disconnected handler
     // doesn't double-fire onLeave.
     cleanupDisconnectListener?.();
     cleanupDisconnectListener = null;
+    // Dismiss the native CallKit call sheet if the user left from within the app.
+    // When the leave is initiated by CXEndCallAction, the native sheet is already
+    // ending, so avoid sending a second native end request back to CallKit.
+    // Isolated try/catch so a CallKit dismissal failure never skips disconnect.
     try {
-      await callCtx.disconnect();
-      options?.onLeave?.();
+      if (leaveOptions?.endNativeCall !== false) {
+        try {
+          await endCallKitCall();
+        } catch (e) {
+          console.error('callkit: failed to dismiss call sheet', e);
+        }
+      }
+      try {
+        await callCtx.disconnect();
+        options?.onLeave?.();
+      } finally {
+        await leaveMutation.mutateAsync(id);
+      }
     } finally {
-      await leaveMutation.mutateAsync(id);
+      leaveInFlight = false;
     }
   }
 

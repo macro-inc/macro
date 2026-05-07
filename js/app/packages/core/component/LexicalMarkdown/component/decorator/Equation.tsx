@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { NodeKey } from 'lexical';
 import { createEffect, createSignal, onMount, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';

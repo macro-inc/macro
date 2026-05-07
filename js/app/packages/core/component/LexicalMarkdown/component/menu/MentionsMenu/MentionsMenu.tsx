@@ -1,13 +1,21 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import type { BlockName } from '@core/block';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
-import { useQuickAccess, type EntityItem } from '@core/context/quickAccess';
+import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
+import { isMobile } from '@core/mobile/isMobile';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
+import { debouncedDependent } from '@core/util/debounce';
+import { createFreshSearch } from '@core/util/freshSort';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
+import type { HistoryItem as Item } from '@queries/history/history';
+import { createLazyMemo } from '@solid-primitives/memo';
+import { createVirtualizer } from '@tanstack/solid-virtual';
+import { Surface } from '@ui';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -21,35 +29,27 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
-import { createLazyMemo } from '@solid-primitives/memo';
-import { createVirtualizer } from '@tanstack/solid-virtual';
 import { floatWithElement } from '../../../directive/floatWithElement';
 import { floatWithSelection } from '../../../directive/floatWithSelection';
 import { CLOSE_INLINE_SEARCH_COMMAND } from '../../../plugins';
 import type { MenuOperations } from '../../../shared/inlineMenu';
 import type {
   DateMentionItem,
+  MentionItem,
   UserMentionRecord,
 } from '../../../utils/mentionsUtils';
-import type { HistoryItem as Item } from '@queries/history/history';
-import { Panel } from '@ui';
-import { debouncedDependent } from '@core/util/debounce';
-import type { BucketConfig, MentionBucketId } from './MentionsMenuController';
-import { useMentionsMenuController } from './MentionsMenuController';
-import type { MentionItem } from '../../../utils/mentionsUtils';
+import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
 import { ItemBin } from './components/ItemBin';
 import { MentionsMenuItem } from './components/MentionsMenuItem';
-import { createItemHandler } from './utils/mentionHandlers';
-import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
-import { useUsersMention } from './hooks/useUsersMention';
+import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import {
   useEntityMention,
   useEntityMentionFromList,
 } from './hooks/useEntityMention';
-import { useEmailSearchMention } from './hooks/useEmailSearchMention';
-import { isMobile } from '@core/mobile/isMobile';
-import { useAnalytics } from '@app/component/analytics-context';
-import { createFreshSearch } from '@core/util/freshSort';
+import { useUsersMention } from './hooks/useUsersMention';
+import type { BucketConfig, MentionBucketId } from './MentionsMenuController';
+import { useMentionsMenuController } from './MentionsMenuController';
+import { createItemHandler } from './utils/mentionHandlers';
 
 const mobileAllSearch = createFreshSearch<MentionItem>({
   config: {
@@ -71,7 +71,7 @@ const mobileAllSearch = createFreshSearch<MentionItem>({
 
 const MAX_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
-// Height consumed by Panel's p-px border (2px) + py-2 padding (16px)
+// Height consumed by Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
 
 export type MentionsMenuProps = {
@@ -489,7 +489,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     number | undefined
   >(undefined);
 
-  // Height available for scrollable content after subtracting Panel decorations.
+  // Height available for scrollable content after subtracting Surface decorations.
   // Capped at 256px (16rem) to preserve desktop behavior, and floored at 0.
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
@@ -527,7 +527,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             clickOutside(el, () => clickOutsideHandler);
           }}
         >
-          <Panel depth={2} active class="py-2">
+          <Surface depth={2} active class="py-2">
             <Show
               when={controller.combinedItems().length > 0}
               fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
@@ -611,7 +611,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 />
               </Show>
             </Show>
-          </Panel>
+          </Surface>
         </div>
       </ScopedPortal>
     </Show>

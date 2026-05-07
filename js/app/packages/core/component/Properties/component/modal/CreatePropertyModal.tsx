@@ -1,14 +1,12 @@
 import { useBlockId } from '@core/block';
-import { Button } from '@ui/components/Button';
-import { SegmentedControl } from '@ui/components/SegmentedControl';
-import { Dialog, Panel } from '@ui';
+import { useUserId } from '@core/context/user';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
-import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
-import { useUserId } from '@core/context/user';
+import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDataType } from '@service-properties/generated/schemas/propertyDataType';
+import { Button, Dialog, SegmentedControl, Surface } from '@ui';
 import {
   type Component,
   createMemo,
@@ -412,7 +410,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
         if (!open) props.onClose();
       }}
     >
-      <Panel depth={2} class="*:max-h-[75vh]">
+      <Surface depth={2} class="*:max-h-[75vh]">
         <div class="flex flex-col text-sm">
           <div class="flex items-center justify-between gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
             <Dialog.Title class="pl-2 text-sm font-medium">
@@ -585,7 +583,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 when={!createPropertyMutation.isPending}
                 fallback={
                   <div class="flex items-center gap-1.5">
-                    <div class="w-3 h-3 animate-spin">
+                    <div class="size-3 animate-spin">
                       <LoadingSpinner />
                     </div>
                     Creating...
@@ -597,7 +595,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
             </Button>
           </div>
         </div>
-      </Panel>
+      </Surface>
     </Dialog>
   );
 };

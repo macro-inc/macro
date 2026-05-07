@@ -1,20 +1,29 @@
-import { Panel } from '@ui/components/Panel';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
-import { isIOS } from '@solid-primitives/platform';
-import { Input } from './Input';
-import { FormatButtons } from './FormatButtons';
-import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
-import { createInputAttachmentTracker } from './attachment-tracker';
-import { createInputState } from './create-input-state';
-import { createMentionsTracker } from './mentions-tracker';
-import { createTypingTracker } from './create-typing-tracker';
+import type { IUser } from '@core/user/types';
 import {
   chatRuleset,
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
-import { uploadInputAttachments } from './upload-attachments';
+import { isIOS } from '@solid-primitives/platform';
+import { Surface } from '@ui';
+import {
+  type Accessor,
+  createSignal,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
+import { createInputAttachmentTracker } from './attachment-tracker';
+import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
+import { createInputState } from './create-input-state';
+import { createTypingTracker } from './create-typing-tracker';
+import { FormatButtons } from './FormatButtons';
+import { Input } from './Input';
+import { createMentionsTracker } from './mentions-tracker';
 import type {
   InputAttachmentTracker,
   InputCallbacks,
@@ -22,18 +31,9 @@ import type {
   InputHandle,
   InputPersistenceKey,
 } from './types';
-import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
-import {
-  Match,
-  Show,
-  Switch,
-  createSignal,
-  type Accessor,
-  type JSX,
-} from 'solid-js';
 import { isReplyInput } from './types';
-import type { IUser } from '@core/user/types';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { uploadInputAttachments } from './upload-attachments';
+import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
@@ -181,7 +181,7 @@ export function ChannelInput(props: ChannelInputProps) {
 
   return (
     <Input.Root input={inputState.view()} commands={inputState.commands}>
-      <Panel depth={2}>
+      <Surface depth={2}>
         <Input.DropZone
           onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
           onDragEnd={() => inputState.setIsDraggedOver(false)}
@@ -231,7 +231,7 @@ export function ChannelInput(props: ChannelInputProps) {
             </Input.Footer>
           </Input.Layout>
         </Input.DropZone>
-      </Panel>
+      </Surface>
     </Input.Root>
   );
 }

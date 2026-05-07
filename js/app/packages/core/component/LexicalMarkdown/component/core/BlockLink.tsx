@@ -1,6 +1,6 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useMaybeBlockId, type BlockName, type BlockAlias } from '@core/block';
+import { type BlockAlias, type BlockName, useMaybeBlockId } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { createCallback } from '@solid-primitives/rootless';

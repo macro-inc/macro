@@ -6,8 +6,8 @@ import { EntityIcon } from './EntityIcon';
 import {
   AddPropertyValueButton,
   EmptyValue,
-  stubSaveHandler,
   type PropertyValueProps,
+  stubSaveHandler,
 } from './ValueComponents';
 
 /**

@@ -1,12 +1,11 @@
 import { useMaybeBlockId } from '@core/block';
-import { HoverCard } from '@core/component/HoverCard';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import {
   EntityIcon,
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
+import { HoverCard } from '@core/component/HoverCard';
 import { verifyBlockName } from '@core/constant/allBlocks';
-import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -14,6 +13,7 @@ import EyeSlashDuo from '@icon/duotone/eye-slash-duotone.svg';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import { $isSnapshotNode, type SnapshotDecoratorProps } from '@lexical-core';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import {
@@ -170,7 +170,7 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
       trigger={
         <span class="relative">
           <span
-            class="w-full h-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
+            class="size-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
             classList={{
               'bg-active text-ink': isSelectedAsNode(),
             }}

@@ -4,6 +4,7 @@ import { stack } from '../../shared';
 export function getMacroNotify(): {
   notificationIngressQueueName: pulumi.Output<string>;
   notificationIngressQueueArn: pulumi.Output<string>;
+  notificationApnsVoipPlatformArn: pulumi.Output<string>;
 } {
   const notificationServiceStack = new pulumi.StackReference(
     'notification-service-stack',
@@ -22,8 +23,14 @@ export function getMacroNotify(): {
       .getOutput('notificationIngressQueueName')
       .apply((name) => name as string);
 
+  const notificationApnsVoipPlatformArn: pulumi.Output<string> =
+    notificationServiceStack
+      .getOutput('notificationApnsVoipPlatformArn')
+      .apply((arn) => arn as string);
+
   return {
     notificationIngressQueueName,
     notificationIngressQueueArn,
+    notificationApnsVoipPlatformArn,
   };
 }

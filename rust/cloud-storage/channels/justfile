@@ -1,2 +1,2 @@
 prepare:
-    cargo sqlx prepare -- --all-features
+    sqlx prepare -- --all-features

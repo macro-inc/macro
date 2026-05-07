@@ -1,4 +1,3 @@
-import { MARKDOWN_LORO_SCHEMA } from '@block-md/definition';
 import { rawStateToLoroSnapshot } from '@core/collab/utils';
 import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
@@ -7,6 +6,7 @@ import {
   initializeEditorWithState,
 } from '@core/component/LexicalMarkdown/utils';
 import { isOk } from '@core/util/maybeResult';
+import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import { storageServiceClient } from '@service-storage/client';
 import { syncServiceClient } from '@service-sync/client';
 import { useQuery } from '@tanstack/solid-query';

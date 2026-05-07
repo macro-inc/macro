@@ -1,23 +1,23 @@
+import {
+  type Bucket,
+  type EntityItem,
+  type QuickAccessItem,
+  type UserItem,
+  useQuickAccess,
+} from '@core/context/quickAccess';
 import type { IUser } from '@core/user';
+import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
 import type {
-  EntityData,
   ChannelEntity,
   ChatEntity,
   DocumentEntity,
-  TaskEntity,
   EmailEntity,
+  EntityData,
   ProjectEntity,
+  TaskEntity,
 } from '@entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Accessor } from 'solid-js';
-import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
-import {
-  useQuickAccess,
-  type QuickAccessItem,
-  type EntityItem,
-  type UserItem,
-  type Bucket,
-} from '@core/context/quickAccess';
 import { match } from 'ts-pattern';
 
 export type EntityTypeItemMap = {

@@ -1,7 +1,7 @@
-import { createSignal } from 'solid-js';
 import { MediaGrid } from '@channel/Media/MediaGrid';
 import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
 import type { MediaItem } from '@channel/Media/media-items';
+import { createSignal } from 'solid-js';
 
 type MediaPreviewProps = {
   items: MediaItem[];

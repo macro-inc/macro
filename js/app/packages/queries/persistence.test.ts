@@ -2,11 +2,11 @@ import { partialMatchKey } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
 import { channelKeys } from './channel/keys';
+import { type PersistScope, setupQueryPersistence } from './persistence';
 import type {
   PerQueryPersistence,
   PersistedQueryEntry,
 } from './persistence/per-query-idb';
-import { setupQueryPersistence, type PersistScope } from './persistence';
 import { shouldPersistChannelQuery } from './persistence-scopes';
 
 function createMockStore(): PerQueryPersistence & {

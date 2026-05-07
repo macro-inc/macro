@@ -146,6 +146,7 @@ pub async fn main() -> anyhow::Result<()> {
     let platform_config = ::notification::domain::service::PlatformArnConfig {
         apns_platform_arn: config.sns_apns_platform_arn.clone(),
         fcm_platform_arn: config.sns_fcm_platform_arn.clone(),
+        apns_voip_platform_arn: config.sns_apns_voip_platform_arn.clone(),
     };
     let reader_service = ::notification::domain::service::NotificationReaderService::new(
         notification_repository,
@@ -169,10 +170,11 @@ pub async fn main() -> anyhow::Result<()> {
         vars.connection_gateway_url.as_ref().to_string(),
     ));
 
-    let mobile_adapter = MobilePushAdapter::new(
-        aws_sdk_sns::Client::new(&aws_config),
-        vars.apple_bundle_id.as_ref().to_string(),
-    );
+    let mobile_adapter = MobilePushAdapter {
+        push_service: aws_sdk_sns::Client::new(&aws_config),
+        apns_bundle_id: vars.apple_bundle_id.as_ref().to_string(),
+        voip_bundle_id: None,
+    };
 
     let ses_client = aws_sdk_sesv2::Client::new(&aws_config);
     let email_adapter = EmailAdapter::new(ses_client, crate::env::SENDER_ADDRESS.clone());

@@ -52,7 +52,7 @@ function ErrorMessage(props: {
 
   return (
     <div
-      class="flex flex-col w-full h-full text-center bg-menu/40 rounded border border-dashed border-edge items-center justify-center"
+      class="flex flex-col size-full text-center bg-menu/40 rounded border border-dashed border-edge items-center justify-center"
       style={{
         'border-radius': getBorderRadius(props.node),
         'font-size': TOOLTIP_FONTSIZE / currentScale() + 'px',
@@ -312,7 +312,7 @@ export function DSSMedia(props: { node: MediaNode; mode: RenderMode }) {
       );
       return (
         <div
-          class="relative w-full h-full pointer-events-auto"
+          class="relative size-full pointer-events-auto"
           style={{
             width: props.node.width + 'px',
             height: props.node.height + 'px',
@@ -327,7 +327,7 @@ export function DSSMedia(props: { node: MediaNode; mode: RenderMode }) {
           {
             // TODO: pull out as renderPlayControls()
             (hoveringOverVideo() || !videoIsPlaying()) && (
-              <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex pointer-events-auto cursor-auto">
+              <div class="absolute top-1/2 left-1/2 -translate-1/2 z-10 flex pointer-events-auto cursor-auto">
                 <div
                   onPointerDown={handleVideoRewind}
                   class="text-panel bg-edge rounded-full flex items-center justify-center"
@@ -380,7 +380,7 @@ export function DSSMedia(props: { node: MediaNode; mode: RenderMode }) {
       useSimpleSelectionBox={false}
     >
       <div
-        class="w-full h-full overflow-hidden"
+        class="size-full overflow-hidden"
         style={{
           'border-radius': getBorderRadius(props.node),
           'border-color':

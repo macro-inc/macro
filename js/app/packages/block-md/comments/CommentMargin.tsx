@@ -14,9 +14,9 @@ import {
   type CommentsContextType,
   Thread,
 } from '@core/comments/Thread';
+import { useUserId } from '@core/context/user';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
 import { autoUpdate, computePosition } from '@floating-ui/dom';
-import { useUserId } from '@core/context/user';
 import {
   createEffect,
   createMemo,

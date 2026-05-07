@@ -1,4 +1,7 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { Layer, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -11,9 +14,6 @@ import { useSplitPanelOrThrow } from '../layoutUtils';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
-import { Layer, Panel } from '@ui';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { isMobile } from '@core/mobile/isMobile';
 
 export function SplitContainer(
   props: ParentProps<{
@@ -95,7 +95,7 @@ export function SplitContainer(
             </Layer>
           }
         >
-          <Panel
+          <Surface
             active={
               panel.isPanelActive() &&
               multipleSplits() &&
@@ -110,7 +110,7 @@ export function SplitContainer(
                 {props.children}
               </div>
             </div>
-          </Panel>
+          </Surface>
         </Show>
       </div>
     </SplitDrawerGroup>

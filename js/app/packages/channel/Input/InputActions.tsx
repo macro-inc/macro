@@ -2,9 +2,9 @@ import FormatIcon from '@icon/regular/text-aa.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import type { JSX } from 'solid-js';
-import { useInput, useInputCommands } from './context';
-import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { InputActionButton } from './ActionButton';
+import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
+import { useInput, useInputCommands } from './context';
 
 export function AttachFilesAction() {
   const commands = useInputCommands();

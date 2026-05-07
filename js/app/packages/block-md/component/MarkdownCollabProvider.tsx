@@ -21,6 +21,7 @@ import {
   loroSyncState,
 } from '@core/component/LexicalMarkdown/utils';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import { useUserId } from '@core/context/user';
 import {
   blockLoroManagerSignal,
   blockSourceSignal,
@@ -45,7 +46,6 @@ import {
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@lexical-core';
-import { useUserId } from '@core/context/user';
 import type { NodeKey, UpdateListenerPayload } from 'lexical';
 import {
   $addUpdateTag,
@@ -493,7 +493,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
         highlightLayer={props.highlighLayerRef}
       />
       <ScopedPortal scope="block">
-        <div class="absolute bottom-4 right-4 w-fit h-fit">
+        <div class="absolute bottom-4 right-4 size-fit">
           <CollabStatus />
         </div>
       </ScopedPortal>

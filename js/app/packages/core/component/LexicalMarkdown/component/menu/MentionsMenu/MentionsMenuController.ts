@@ -1,6 +1,6 @@
+import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor, Signal } from 'solid-js';
 import { createSignal } from 'solid-js';
-import { createLazyMemo } from '@solid-primitives/memo';
 import type { MentionItem } from '../../../utils/mentionsUtils';
 
 export type MentionBucketId =

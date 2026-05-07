@@ -1,6 +1,6 @@
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { For } from 'solid-js';
 import { CLI_COMMANDS, MACRO_MCP_CONFIG } from './mcpConstants';
 import { useClipboardCopy } from './useClipboardCopy';
@@ -16,8 +16,8 @@ export function AiChatEmptyState() {
             <div class="mb-2 inline-flex items-center rounded-xs border border-accent/20 bg-accent/10 px-2 py-1 text-xs text-accent">
               Macro MCP
             </div>
-            <h2 class="text-xl leading-tight">Connect AI to Macro</h2>
-            <p class="mt-2 max-w-[56ch] text-sm leading-6 text-ink-muted">
+            <h2 class="text-xl/tight">Connect AI to Macro</h2>
+            <p class="mt-2 max-w-[56ch] text-sm/6 text-ink-muted">
               Use macro with your favorite AI chat client or code editor
             </p>
           </div>
@@ -48,7 +48,7 @@ export function AiChatEmptyState() {
                     )}
                   </Button>
                 </div>
-                <pre class="overflow-x-auto px-4 py-3 text-[12px] leading-5 text-ink select-text cursor-text whitespace-pre-wrap break-all">
+                <pre class="overflow-x-auto px-4 py-3 text-[12px]/5 text-ink select-text cursor-text whitespace-pre-wrap break-all">
                   <code>{item.command}</code>
                 </pre>
               </div>
@@ -85,7 +85,7 @@ export function AiChatEmptyState() {
               </Button>
             </div>
           </div>
-          <pre class="overflow-x-auto px-4 py-4 text-[12px] leading-5 text-ink select-text cursor-text">
+          <pre class="overflow-x-auto p-4 text-[12px]/5 text-ink select-text cursor-text">
             <code>{MACRO_MCP_CONFIG}</code>
           </pre>
         </div>

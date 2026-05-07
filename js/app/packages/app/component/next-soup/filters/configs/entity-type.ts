@@ -1,12 +1,12 @@
 import {
-  documentFilter as documentPredicate,
-  taskFilter as taskPredicate,
-  emailFilter as emailPredicate,
-  peopleFilter as peoplePredicate,
-  teamsFilter as teamsPredicate,
   agentFilter as agentPredicate,
   automationFilter as automationPredicate,
+  documentFilter as documentPredicate,
+  emailFilter as emailPredicate,
   fileFilter as filePredicate,
+  peopleFilter as peoplePredicate,
+  taskFilter as taskPredicate,
+  teamsFilter as teamsPredicate,
 } from '../predicates';
 import { config, isAgent, isEmail, isTask } from './base';
 

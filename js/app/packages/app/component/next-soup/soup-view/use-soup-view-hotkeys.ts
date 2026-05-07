@@ -1,8 +1,13 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 import { CommandState } from '@app/component/command/state';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
+import { isListViewID, type ListView } from '@app/constants/list-views';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
+import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
   getHotkeyCommand,
@@ -11,21 +16,16 @@ import {
   runCommand,
 } from '@core/hotkey/utils';
 import {
-  isSearchEntity,
-  isWithNotification,
   filterNotDoneNotifications,
   filterValidNotifications,
+  isSearchEntity,
+  isWithNotification,
 } from '@entity';
 import { openSingleStackNotification } from '@notifications';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { onCleanup, type Accessor } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
-import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
-import { isListViewID, type ListView } from '@app/constants/list-views';
-import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
-import { VIEW_TAB_LISTS, type TabbedListView } from './soup-view-tabs';
-import { useAnalytics } from '@app/component/analytics-context';
+import { type TabbedListView, VIEW_TAB_LISTS } from './soup-view-tabs';
 
 type UseSoupViewHotkeysOptions = {
   splitId: string;

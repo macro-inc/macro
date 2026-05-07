@@ -1,5 +1,5 @@
 import { debounce } from '@solid-primitives/scheduled';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 
 interface CustomScrollbarProps {
@@ -213,9 +213,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
       <div
         class={cn(
           'absolute pointer-events-auto overflow-visible bg-transparent',
-          horiz()
-            ? 'bottom-0 left-0 right-0 h-px'
-            : 'right-0 top-0 bottom-0 w-px',
+          horiz() ? 'bottom-0 inset-x-0 h-px' : 'right-0 inset-y-0 w-px',
           props.class
         )}
         onMouseEnter={() => setIsHovering(true)}

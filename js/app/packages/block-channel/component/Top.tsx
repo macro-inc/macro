@@ -1,22 +1,22 @@
+import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
+import type { ChannelTabId } from '@channel/Channel/channel-tabs';
 import { useBlockId } from '@core/block';
-import { useChannelName } from '@core/context/channels';
+import { type TabItem, Tabs } from '@core/component/Tabs';
 import { UserIcon } from '@core/component/UserIcon';
-import HashIcon from '@icon/regular/hash.svg';
+import { useChannelName } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import ChatTextIcon from '@icon/regular/chat-text.svg';
+import HashIcon from '@icon/regular/hash.svg';
 import PaperclipIcon from '@icon/regular/paperclip.svg';
 import UsersIcon from '@icon/regular/users.svg';
 import PhoneIcon from '@macro-icons/wide/call.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
-import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { ChannelTypeEnum } from '@service-comms/client';
-import { useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
-import { type JSX, Show, type Component } from 'solid-js';
-import { Tabs, type TabItem } from '@core/component/Tabs';
-import type { ChannelTabId } from '@channel/Channel/channel-tabs';
+import type { ChannelType } from '@service-comms/generated/models/channelType';
+import { type Component, type JSX, Show } from 'solid-js';
 
 const CHANNEL_TAB_ICONS: Record<
   string,
@@ -42,7 +42,7 @@ function TopIcon(props: TopIconProps) {
   return (
     <Show
       when={props.channelType === ChannelTypeEnum.DirectMessage && recipient()}
-      fallback={<HashIcon class="w-4 h-4 shrink-0" />}
+      fallback={<HashIcon class="size-4 shrink-0" />}
     >
       {(recipient) => {
         return (

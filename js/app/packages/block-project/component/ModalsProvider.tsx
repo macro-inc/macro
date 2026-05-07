@@ -1,3 +1,4 @@
+import { getIsSpecialProject } from '@block-project/isSpecial';
 import { useBlockId } from '@core/block';
 import { DetailsDrawer } from '@core/component/DetailsDrawer';
 import {
@@ -5,8 +6,7 @@ import {
   ShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
-import { getIsSpecialProject } from '@block-project/isSpecial';
-import { createSignal, Show, type ParentProps } from 'solid-js';
+import { createSignal, type ParentProps, Show } from 'solid-js';
 import { projectBlockDataSignal } from '../signal/projectBlockData';
 import { ProjectPropertiesDrawer } from './ProjectPropertiesModal';
 

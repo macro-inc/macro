@@ -1,6 +1,6 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { Dialog, Panel } from '@ui';
 import type { EntityData } from '@entity';
+import { Dialog, Surface } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -43,7 +43,7 @@ const BulkEditEntityModalContent = (props: {
         props.setIsOpen(open);
       }}
     >
-      <Panel depth={2} active>
+      <Surface depth={2} active>
         <div class="*:max-h-[75vh]">
           <div class="flex flex-col text-ink">
             <Show when={props.view === 'rename'}>
@@ -71,7 +71,7 @@ const BulkEditEntityModalContent = (props: {
             </Show>
           </div>
         </div>
-      </Panel>
+      </Surface>
     </Dialog>
   );
 };

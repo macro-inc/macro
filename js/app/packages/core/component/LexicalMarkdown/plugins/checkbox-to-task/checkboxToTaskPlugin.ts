@@ -1,5 +1,5 @@
-import { $createDocumentMentionNode } from '@lexical-core';
 import { $isListItemNode } from '@lexical/list';
+import { $createDocumentMentionNode } from '@lexical-core';
 import {
   $createParagraphNode,
   $getNodeByKey,
@@ -12,14 +12,14 @@ import {
 } from 'lexical';
 import { err, ok } from 'neverthrow';
 import { createTaskFromData } from '../../../../util/taskCreation';
+import { $getSelectedCheckboxes } from './checkboxDetection';
+import { $parseCheckboxNodes } from './checkboxParsing';
 import type {
   ConvertCheckboxesOptions,
   ConvertCheckboxesPluginOptions,
   ParsedCheckbox,
   TaskCreationResult,
 } from './types';
-import { $getSelectedCheckboxes } from './checkboxDetection';
-import { $parseCheckboxNodes } from './checkboxParsing';
 
 /**
  * Command to convert selected checkboxes to tasks

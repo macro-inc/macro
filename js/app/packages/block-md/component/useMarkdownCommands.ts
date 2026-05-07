@@ -1,7 +1,7 @@
 import { ACTIONS } from '@core/component/LexicalMarkdown/plugins/actions/actions';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import TextBold from '@icon/bold/text-b-bold.svg';
 import TextCode from '@icon/regular/code.svg';

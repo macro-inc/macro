@@ -11,9 +11,9 @@ import {
   type SoupTransaction,
 } from '@queries/soup/cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import type { CallRecord } from '@service-call/client';
 import { ChannelTypeEnum } from '@service-comms/client';
 import type { ApiChannelWithLatest } from '@service-comms/generated/models';
-import type { CallRecord } from '@service-call/client';
 import type { ItemType } from '@service-storage/client';
 import { useMutation } from '@tanstack/solid-query';
 

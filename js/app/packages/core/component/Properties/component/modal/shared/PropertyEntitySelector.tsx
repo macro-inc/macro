@@ -1,19 +1,21 @@
-import { Entity, type EntityData } from '@entity';
 import { UserIcon } from '@core/component/UserIcon';
+import { useEmail, useUserId } from '@core/context/user';
 import { useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
+import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
+import type { EmailEntity } from '@entity';
+import { Entity, type EntityData } from '@entity';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { createEmailsInfiniteQuery } from '@macro-entity';
-import type { EmailEntity } from '@entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
-import { useEmail, useUserId } from '@core/context/user';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
 import {
-  For,
   createEffect,
   createMemo,
   createSignal,
+  For,
   onCleanup,
   onMount,
   Show,
@@ -22,20 +24,18 @@ import { useSearchInputFocus } from '../../../utils';
 import {
   type CombinedEntity,
   createEntitySearchConfig,
-  useQuickAccessEntities,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
   isChannelEntity,
-  threadMapper,
   quickAccessItemToEntity,
-  userToEntity,
   sortEntitiesWithSelfFirst,
+  threadMapper,
+  useQuickAccessEntities,
+  userToEntity,
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
-import { useKeyPressed } from '@core/util/useKeyPressed';
 import type { EntitySelectorConfig, PinnedOption } from './types';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 
 type EntityInputProps = {
   config: EntitySelectorConfig;
@@ -392,7 +392,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     <div>
       <div class="relative">
         <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-          <SearchIcon class="h-4 w-4 text-ink-muted" />
+          <SearchIcon class="size-4 text-ink-muted" />
           <input
             class="w-full caret-accent"
             ref={searchInputRef}

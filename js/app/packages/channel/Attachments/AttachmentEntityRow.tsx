@@ -1,7 +1,7 @@
-import { Show } from 'solid-js';
-import { type EntityData, Entity } from '@entity';
 import { UserIcon } from '@core/component/UserIcon';
 import type { DateValue } from '@core/util/date';
+import { Entity, type EntityData } from '@entity';
+import { Show } from 'solid-js';
 
 export function AttachmentEntityRow(props: {
   entity: EntityData;

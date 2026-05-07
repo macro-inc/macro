@@ -41,11 +41,12 @@ export {
   getNotificationTargetName,
   shouldShowNotificationTarget,
 } from './notification-metadata';
-export { getChannelNotificationParams } from './notification-navigation';
-export { openNotificationFromId } from './notification-navigation';
-export { openNotification } from './notification-navigation';
-export { openSingleStackNotification } from './notification-navigation';
-export { CHANNEL_EVENT_TYPES } from './notification-source';
+export {
+  getChannelNotificationParams,
+  openNotification,
+  openNotificationFromId,
+  openSingleStackNotification,
+} from './notification-navigation';
 export type {
   PlatformNotificationData,
   PlatformNotificationHandle,
@@ -69,6 +70,7 @@ export type {
 export { useNotificationSettings } from './notification-settings';
 export type { NotificationSource } from './notification-source';
 export {
+  CHANNEL_EVENT_TYPES,
   createNotificationSource,
   setDoneOverride,
 } from './notification-source';

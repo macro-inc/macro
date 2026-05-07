@@ -1,10 +1,10 @@
-import { Show } from 'solid-js';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   searchContentHitMarkdownTheme,
   singleLineMarkdownTheme,
   twoLineClampMarkdownTheme,
 } from '@core/component/LexicalMarkdown/theme';
+import { Show } from 'solid-js';
 import type { ContentHitData } from '../types/search';
 
 interface SearchContentProps {

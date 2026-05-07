@@ -63,6 +63,8 @@ impl DeletionFilter {
 #[serde(default)]
 pub struct CallBackfillRequest {
     pub call_ids: Vec<String>,
+    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
+    pub index_override: Option<String>,
 }
 
 /// Chat-message backfill filter. Empty vectors mean "all messages for every
@@ -73,6 +75,8 @@ pub struct ChatBackfillRequest {
     pub chat_ids: Vec<String>,
     pub user_ids: Vec<String>,
     pub deletion_filter: DeletionFilter,
+    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
+    pub index_override: Option<String>,
 }
 
 /// Channel-message backfill filter. No scoping knobs yet — reserved so adding
@@ -81,6 +85,8 @@ pub struct ChatBackfillRequest {
 #[serde(default)]
 pub struct ChannelBackfillRequest {
     pub deletion_filter: DeletionFilter,
+    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
+    pub index_override: Option<String>,
 }
 
 /// Document backfill filter. Every field is additive — all `None` means "every
@@ -93,6 +99,8 @@ pub struct DocumentBackfillRequest {
     pub created_after: Option<DateTime<Utc>>,
     pub created_before: Option<DateTime<Utc>>,
     pub deletion_filter: DeletionFilter,
+    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
+    pub index_override: Option<String>,
 }
 
 /// Email-thread backfill filter.
@@ -101,7 +109,6 @@ pub struct DocumentBackfillRequest {
 pub struct EmailBackfillRequest {
     /// Only backfill threads updated at or after this instant.
     pub since: Option<DateTime<Utc>>,
-    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
     pub index_override: Option<String>,
     /// Number of thread ids grouped into each SQS batch message. `None` uses
     /// the adapter's default.

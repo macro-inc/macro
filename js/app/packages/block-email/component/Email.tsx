@@ -484,7 +484,7 @@ function EmailContent(props: EmailViewProps) {
                 onRecipientsChange: context.onRecipientsChange,
               }}
             >
-              <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
+              <div class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
                 <TopBar
                   id={props.threadId()}
                   title={props.title}

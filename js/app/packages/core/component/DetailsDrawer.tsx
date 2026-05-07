@@ -3,7 +3,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { formatDate, type DateValue } from '@core/util/date';
+import { type DateValue, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { useChatDataQuery } from '@queries/cognition/chat-data';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
@@ -41,7 +41,7 @@ export function DetailsDrawer(props: DetailsTarget) {
 function DetailsLoading() {
   return (
     <div class="flex justify-center items-center py-8">
-      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-ink-muted" />
+      <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted" />
     </div>
   );
 }

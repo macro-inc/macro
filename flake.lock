@@ -1,5 +1,20 @@
 {
   "nodes": {
+    "crane": {
+      "locked": {
+        "lastModified": 1777335812,
+        "narHash": "sha256-bEg5xoAxAwsyfnGhkEX7RJViTIBIYPd8ISg4O1c0HFc=",
+        "owner": "ipetkov",
+        "repo": "crane",
+        "rev": "5e0fb2f64edff2822249f21293b8304dedaaf676",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ipetkov",
+        "repo": "crane",
+        "type": "github"
+      }
+    },
     "fenix": {
       "inputs": {
         "nixpkgs": [
@@ -57,9 +72,28 @@
     },
     "root": {
       "inputs": {
+        "crane": "crane",
         "fenix": "fenix",
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "rs-libreoffice-bindings": "rs-libreoffice-bindings"
+      }
+    },
+    "rs-libreoffice-bindings": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1777577693,
+        "narHash": "sha256-lx/AuxPpCarxdDzogkGudCbE4B2OEt5un4s4gIFt1ek=",
+        "owner": "macro-inc",
+        "repo": "rs-libreoffice-bindings",
+        "rev": "056a40ddfac1d9650be30b9f0b4b934e9266c7dc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "macro-inc",
+        "ref": "dev",
+        "repo": "rs-libreoffice-bindings",
+        "type": "github"
       }
     },
     "rust-analyzer-src": {

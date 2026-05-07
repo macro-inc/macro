@@ -4,7 +4,11 @@ use crate::{Result, error::OpensearchClientError};
 
 /// Deletes all chat messages with the specified chat_id
 #[tracing::instrument(skip(client))]
-pub async fn delete_chat_by_id(client: &opensearch::OpenSearch, chat_id: &str) -> Result<()> {
+pub async fn delete_chat_by_id(
+    client: &opensearch::OpenSearch,
+    chat_id: &str,
+    index_override: Option<&str>,
+) -> Result<()> {
     let query = serde_json::json!({
         "query": {
             "term": {
@@ -13,10 +17,9 @@ pub async fn delete_chat_by_id(client: &opensearch::OpenSearch, chat_id: &str) -
         },
     });
 
+    let index = index_override.unwrap_or(SearchIndex::Chats.as_ref());
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
-            SearchIndex::Chats.as_ref()
-        ]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
@@ -59,6 +62,7 @@ pub async fn delete_chat_message_by_id(
     client: &opensearch::OpenSearch,
     chat_id: &str,
     chat_message_id: &str,
+    index_override: Option<&str>,
 ) -> Result<()> {
     let query = serde_json::json!({
         "query": {
@@ -79,10 +83,9 @@ pub async fn delete_chat_message_by_id(
         }
     });
 
+    let index = index_override.unwrap_or(SearchIndex::Chats.as_ref());
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
-            SearchIndex::Chats.as_ref()
-        ]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()

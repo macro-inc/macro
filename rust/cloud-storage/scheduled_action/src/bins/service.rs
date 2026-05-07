@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 use std::sync::Arc;
 
 use ai_tools::build_tool_service_context_from_env;

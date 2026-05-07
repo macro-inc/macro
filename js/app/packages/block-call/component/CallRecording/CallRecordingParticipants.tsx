@@ -1,14 +1,14 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { ParticipantsEmptyState } from '@channel/Participants/ParticipantsEmptyState';
+import { ParticipantsSearchInput } from '@channel/Participants/ParticipantsSearchInput';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
-import { ParticipantsEmptyState } from '@channel/Participants/ParticipantsEmptyState';
-import { ParticipantsSearchInput } from '@channel/Participants/ParticipantsSearchInput';
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
-import { commsServiceClient } from '@service-comms/client';
 import UsersThree from '@phosphor-icons/core/assets/regular/users-three.svg';
+import { commsServiceClient } from '@service-comms/client';
+import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { Accessor } from 'solid-js';
-import { For, Show, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { CallRecordingSectionShell } from './CallRecordingSectionShell';
 import { dedupeCallRecordingParticipants } from './call-recording-utils';
 
@@ -63,7 +63,7 @@ export function CallRecordingParticipantsSection(props: {
               {(participant) => (
                 <button
                   type="button"
-                  class="flex items-center gap-2 min-h-10 px-2 py-2 text-sm w-full border-b border-edge-muted/50 last:border-b-0 hover:bg-hover text-left "
+                  class="flex items-center gap-2 min-h-10 p-2 text-sm w-full border-b border-edge-muted/50 last:border-b-0 hover:bg-hover text-left"
                   onClick={() => openDirectMessage(participant.userId)}
                 >
                   <div class="shrink-0">

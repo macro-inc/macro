@@ -25,13 +25,14 @@ async fn upsert_document(
     search_extractor_message: &SearchExtractorMessage,
     upserts: Vec<UpsertDocumentArgs>,
 ) -> anyhow::Result<()> {
+    let index_override = search_extractor_message.index_override.as_deref();
     // Delete existing documents for the document id
     // This ensures we replace any old nodes with new ones for editable files
     match search_extractor_message.file_type {
         FileType::Md | FileType::Canvas => {
             tracing::debug!("deleting existing search results");
             opensearch_client
-                .delete_document(&search_extractor_message.document_id)
+                .delete_document(&search_extractor_message.document_id, index_override)
                 .await
                 .context("unable to delete existing search results")?;
         }
@@ -39,7 +40,7 @@ async fn upsert_document(
     }
 
     let results = opensearch_client
-        .bulk_upsert_documents(&upserts)
+        .bulk_upsert_documents(&upserts, index_override)
         .await
         .context("unable to bulk upsert documents in opensearch")?;
 
@@ -48,7 +49,7 @@ async fn upsert_document(
 
         // delete document that failed to upsert
         opensearch_client
-            .delete_document(&search_extractor_message.document_id)
+            .delete_document(&search_extractor_message.document_id, index_override)
             .await
             .context("failed to delete document for failed bulk upsert")?;
 
@@ -84,7 +85,10 @@ pub async fn update_search_with_raw_document(
         DocumentInfo::Removable => {
             tracing::trace!("document is deleted or missing, removing from search index");
             opensearch_client
-                .delete_document(&search_extractor_message.document_id)
+                .delete_document(
+                    &search_extractor_message.document_id,
+                    search_extractor_message.index_override.as_deref(),
+                )
                 .await
                 .context("failed to delete document from search index")?;
             return Ok(());
@@ -302,7 +306,10 @@ pub async fn update_search_with_sync_document(
         DocumentInfo::Removable => {
             tracing::trace!("document is deleted or missing, removing from search index");
             opensearch_client
-                .delete_document(&search_extractor_message.document_id)
+                .delete_document(
+                    &search_extractor_message.document_id,
+                    search_extractor_message.index_override.as_deref(),
+                )
                 .await
                 .context("failed to delete document from search index")?;
             return Ok(());

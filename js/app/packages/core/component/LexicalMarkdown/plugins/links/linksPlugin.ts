@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   $createAutoLinkNode,
   $createLinkNode,
@@ -32,7 +33,6 @@ import {
 import linkify, { type Match } from 'linkify-it';
 import { createSignal } from 'solid-js';
 import { editorFocusSignal } from '../../utils';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 const strictLinkifier = new linkify(undefined, {
   fuzzyLink: false,

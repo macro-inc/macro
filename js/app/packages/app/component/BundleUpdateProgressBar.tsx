@@ -1,5 +1,5 @@
 import { useTauri } from '@macro/tauri';
-import { Show, createMemo } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 
 export function BundleUpdateProgressBar() {
   const tauri = useTauri();

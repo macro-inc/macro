@@ -1,16 +1,15 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { Panel } from '@ui';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { isOk } from '@core/util/maybeResult';
 import IconCheck from '@icon/regular/check.svg';
-import WideCopy from '@macro-icons/wide/copy.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
+import WideCopy from '@macro-icons/wide/copy.svg';
 import WideTask from '@macro-icons/wide/task.svg';
 import { commsServiceClient } from '@service-comms/client';
-import { useUserId } from '@core/context/user';
-import { Button } from '@ui/components/Button';
-import { createSignal, Show } from 'solid-js';
 import { debounce } from '@solid-primitives/scheduled';
+import { Button, Surface } from '@ui';
+import { createSignal, Show } from 'solid-js';
 import { UserIcon } from './UserIcon';
 
 export type UserTooltipProps = {
@@ -91,7 +90,7 @@ export function UserTooltip(props: UserTooltipProps) {
   };
 
   return (
-    <Panel depth={2} active>
+    <Surface depth={2} active>
       <div class="bg-panel text-ink box-border border-accent overflow-hidden max-w-lg">
         <div class="flex items-center gap-2 p-2">
           <UserIcon
@@ -117,9 +116,9 @@ export function UserTooltip(props: UserTooltipProps) {
             <Show when={props.email}>
               <Button onClick={handleCopyEmail} class={buttonStyle}>
                 {copied() ? (
-                  <IconCheck class="w-3.5 h-3.5" />
+                  <IconCheck class="size-3.5" />
                 ) : (
-                  <WideCopy class="w-3.5 h-3.5" />
+                  <WideCopy class="size-3.5" />
                 )}
                 Copy email
               </Button>
@@ -130,19 +129,19 @@ export function UserTooltip(props: UserTooltipProps) {
               }
             >
               <Button onClick={openDM} class={buttonStyle}>
-                <WideChat class="w-3.5 h-3.5" />
+                <WideChat class="size-3.5" />
                 DM
               </Button>
             </Show>
             <Show when={props.id && !props.isDeleted}>
               <Button onClick={openTaskComposer} class={buttonStyle}>
-                <WideTask class="w-3.5 h-3.5" />
+                <WideTask class="size-3.5" />
                 Assign task
               </Button>
             </Show>
           </div>
         </Show>
       </div>
-    </Panel>
+    </Surface>
   );
 }

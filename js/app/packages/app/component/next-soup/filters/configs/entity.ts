@@ -1,13 +1,13 @@
 import { getEntityProjectId } from '@entity';
+import { defineQueryFilters } from '../filter-store/compile';
 import {
+  activeAgentFilter as activeAgentPredicate,
+  callsFilter as callsPredicate,
   channelsFilter as channelsPredicate,
   filesAndFolderFilter as filesAndFolderPredicate,
   projectFilter as projectPredicate,
-  activeAgentFilter as activeAgentPredicate,
   taskFilter as taskPredicate,
-  callsFilter as callsPredicate,
 } from '../predicates';
-import { defineQueryFilters } from '../filter-store/compile';
 import { config, isAgent, isNotTask, NIL_UUID } from './base';
 
 export const channelsFilter = config({

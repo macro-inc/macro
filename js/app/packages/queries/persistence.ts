@@ -1,3 +1,7 @@
+import {
+  type ParsedDuration,
+  parsedDurationToMilliseconds,
+} from '@core/util/dateSearch/dateParser';
 import type {
   Query,
   QueryCacheNotifyEvent,
@@ -7,10 +11,6 @@ import type {
   PerQueryPersistence,
   PersistedQueryEntry,
 } from './persistence/per-query-idb';
-import {
-  type ParsedDuration,
-  parsedDurationToMilliseconds,
-} from '@core/util/dateSearch/dateParser';
 
 export type PersistenceKey = `${string}-persist-v${number}`;
 

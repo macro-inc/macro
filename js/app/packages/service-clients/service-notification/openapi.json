@@ -1388,7 +1388,7 @@
       },
       "DeviceType": {
         "type": "string",
-        "enum": ["ios", "android"]
+        "enum": ["ios", "android", "iosvoip"]
       },
       "DocumentMentionMetadata": {
         "type": "object",

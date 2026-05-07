@@ -79,10 +79,64 @@ jobs:
           sudo install -m 0755 "$tmp_dir/$basename/sccache" /usr/local/bin/sccache
           sccache --version
 
+      - name: Install Nix
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+            sh -s -- install linux --no-confirm --init systemd \
+            --extra-conf "experimental-features = nix-command flakes" \
+            --extra-conf "trusted-users = root runner"
+          # Daemon socket may be active but not reachable in this shell; ensure it.
+          sudo systemctl enable --now nix-daemon.socket nix-daemon.service
+          # Make nix discoverable in non-login shells (GHA default).
+          echo 'PATH="/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' \
+            | sudo tee /etc/environment >/dev/null
+
+      - name: Configure cachix substituter
+        shell: bash
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          export NIX_REMOTE=daemon
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          nix profile add nixpkgs#cachix
+          cachix authtoken "$CACHIX_AUTH_TOKEN"
+          cachix use macro-inc
+
+      - name: Materialize dev shell into /nix/store
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NIX_REMOTE=daemon
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          sudo mkdir -p /var/cache/nix
+          sudo chown runner:runner /var/cache/nix
+          nix develop --profile /var/cache/nix/dev-shell --command true
+
+      - name: Write image markers
+        shell: bash
+        env:
+          BUILD_RUN_ID: ${{ github.run_id }}
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          marker="run_id=${BUILD_RUN_ID} sha=${BUILD_SHA} ts=$(date -u +%FT%TZ)"
+          # Write to multiple locations to learn which the snapshot preserves.
+          echo "$marker" | sudo tee /opt/macro-ami-marker.txt >/dev/null
+          echo "$marker" | sudo tee /etc/macro-ami-marker.txt >/dev/null
+          echo "$marker" | sudo tee /usr/local/share/macro-ami-marker.txt >/dev/null
+          echo "$marker" > /home/runner/macro-ami-marker.txt
+          # Also drop a sentinel inside /nix so we can tell if the whole tree was wiped.
+          echo "$marker" | sudo tee /nix/macro-ami-marker.txt >/dev/null
+
       - name: Verify image contents
         shell: bash
         run: |
           set -euo pipefail
+          export NIX_REMOTE=daemon
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
           rustc --version
           cargo --version
           cargo clippy --version
@@ -92,3 +146,5 @@ jobs:
           sqlx --version
           sccache --version
           ld.lld --version
+          nix --version
+          test -L /var/cache/nix/dev-shell

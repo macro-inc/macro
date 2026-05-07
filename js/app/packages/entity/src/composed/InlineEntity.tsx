@@ -1,6 +1,6 @@
-import type { EntityData } from '../types/entity';
 import { EntityIcon } from '../extractors/entity-icon';
 import { EntityTitle } from '../extractors/entity-title';
+import type { EntityData } from '../types/entity';
 
 export function InlineEntity(props: { entity: EntityData }) {
   return (

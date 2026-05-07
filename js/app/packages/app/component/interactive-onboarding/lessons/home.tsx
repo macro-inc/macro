@@ -1,8 +1,8 @@
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
-import { filteredSandboxEntities } from '../sandbox/sandbox-store';
 import { createEffect, onMount } from 'solid-js';
-import { OnboardingEntityList } from '../OnboardingEntityList';
 import { MockAppChrome } from '../components/MockAppChrome';
+import { OnboardingEntityList } from '../OnboardingEntityList';
+import { filteredSandboxEntities } from '../sandbox/sandbox-store';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 function HomeContent(props: LessonContentProps) {

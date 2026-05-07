@@ -1,44 +1,88 @@
-import { splitProps, type JSX } from 'solid-js';
+import type { ParentProps } from 'solid-js';
+import { Show, splitProps } from 'solid-js';
+import type { SurfaceProps } from './Surface';
 import { cn } from '../utils/classname';
-import { Layer } from './Layer';
+import { Surface } from './Surface';
 
-export type PanelProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
-  style?: JSX.CSSProperties;
-  highlightColor?: string;
-  active?: boolean;
-};
+/**
+ * ```tsx
+ * <Panel>
+ *   <Panel.Header>Title</Panel.Header>
+ *   <Panel.Toolbar>...</Panel.Toolbar>
+ *   <Panel.Body>...</Panel.Body>
+ *   <Panel.Footer>...</Panel.Footer>
+ * </Panel>
+ * ```
+ */
+
+export type PanelProps = SurfaceProps;
 
 export function Panel(props: PanelProps) {
-  const [local, rest] = splitProps(props, [
-    'highlightColor',
-    'children',
-    'active',
-    'depth',
-    'class',
-    'style',
-  ]);
+  const [local, surfaceProps] = splitProps(props, ['children', 'class']);
 
   return (
-    <Layer depth={local.depth ?? 0}>
-      <div
-        style={{
-          'background-image': local.active ? `linear-gradient(var(--b0), var(--b0)), linear-gradient(${local.highlightColor || 'var(--a0)'}, var(--b4) 80%)` : 'linear-gradient(var(--b0), var(--b0)), linear-gradient(var(--b4), var(--b4))',
-          'background-origin': 'padding-box, border-box',
-          'background-clip': 'padding-box, border-box',
-          'border': '1px solid #0000',
-          ...local.style,
-        }}
-        class={cn(
-          'relative rounded-md overflow-clip min-h-0 h-full w-full',
-          "after:content-[''] after:absolute after:inset-0 after:pointer-events-none after:rounded-[inherit] after:z-10",
-          'after:shadow-[inset_0_0_4px_var(--color-shadow)]',
-          local.class,
-        )}
-        {...rest}
-      >
-        {local.children}
-      </div>
-    </Layer>
+    <Surface
+      style={{
+        'grid-template-areas': '"header" "toolbar" "body" "footer"',
+        'grid-template-rows': 'auto auto minmax(0, 1fr) auto',
+        'grid-template-columns': 'minmax(0, 1fr)',
+      }}
+      class={cn('grid min-h-0 min-w-0', local.class)}
+      {...surfaceProps}
+    >
+      {local.children}
+    </Surface>
   );
 }
+
+type SlotProps = ParentProps<{ class?: string }>;
+
+Panel.Header = (props: SlotProps) => (
+  <Show when={props.children}>
+    <div
+      class={cn('flex h-10 items-center gap-1 border-b border-edge-muted px-5', props.class)}
+      style={{ 'grid-area': 'header' }}
+    >
+      {props.children}
+    </div>
+  </Show>
+);
+
+Panel.Toolbar = (props: SlotProps) => (
+  <Show when={props.children}>
+    <div
+      class={cn('flex h-10 items-center gap-1 border-b border-edge-muted px-5', props.class)}
+      style={{ 'grid-area': 'toolbar' }}
+    >
+      {props.children}
+    </div>
+  </Show>
+);
+
+type BodyProps = ParentProps<{ class?: string; scroll?: boolean }>;
+
+Panel.Body = (props: BodyProps) => (
+  <Show when={props.children}>
+    <div
+      class={cn(
+        'relative min-h-0 min-w-0 scrollbar-hidden',
+        props.scroll ? 'overflow-auto' : 'overflow-hidden',
+        props.class,
+      )}
+      style={{ 'grid-area': 'body' }}
+    >
+      {props.children}
+    </div>
+  </Show>
+);
+
+Panel.Footer = (props: SlotProps) => (
+  <Show when={props.children}>
+    <div
+      class={cn('flex h-10 items-center gap-1 border-t border-edge-muted px-5', props.class)}
+      style={{ 'grid-area': 'footer' }}
+    >
+      {props.children}
+    </div>
+  </Show>
+);

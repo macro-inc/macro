@@ -1,13 +1,13 @@
 import {
-  unreadFilter as unreadPredicate,
+  explicitNoiseFilter,
+  noiseFilter,
+  signalFilter,
+} from '../inbox-filters';
+import {
   notDoneFilter as notDonePredicate,
   sharedEntity as sharedEntityPredicate,
+  unreadFilter as unreadPredicate,
 } from '../predicates';
-import {
-  signalFilter,
-  noiseFilter,
-  explicitNoiseFilter,
-} from '../inbox-filters';
 import { config, NIL_UUID } from './base';
 
 export const inboxFilter = config({

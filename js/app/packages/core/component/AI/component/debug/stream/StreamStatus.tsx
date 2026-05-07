@@ -1,5 +1,5 @@
 import type { ChatMessageStream } from '@service-connection/stream';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { Match, Switch } from 'solid-js';
 
 type Props = {
@@ -37,7 +37,7 @@ function Dot(props: { active: boolean }) {
   return (
     <div
       class={cn(
-        'w-3 h-3 rounded-full border border-edge',
+        'size-3 rounded-full border border-edge',
         props.active && 'bg-accent'
       )}
     />

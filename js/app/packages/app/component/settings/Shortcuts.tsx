@@ -1,7 +1,7 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { Hotkey } from '@core/component/Hotkey';
-import { Keyboard, Window } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { Keyboard, Panel } from '@ui';
+import { cn } from '@ui';
 import { createSignal, For, Index, type JSX } from 'solid-js';
 
 const cmdOrCtrl = IS_MAC ? 'cmd' : 'ctrl';
@@ -76,7 +76,7 @@ function Kbd(props: { shortcut: string; class?: string }) {
         props.class
       )}
     >
-      <Hotkey shortcut={props.shortcut} class="flex gap-[2px]" lowercase />
+      <Hotkey shortcut={props.shortcut} class="flex gap-0.5" lowercase />
     </span>
   );
 }
@@ -125,11 +125,11 @@ function ShortcutSectionComponent(props: { section: ShortcutSection }) {
 function ShortcutsContent() {
   return (
     <>
-      <Window.Header class="px-6">
+      <Panel.Header class="px-6">
         <div class="text-sm font-semibold">Keyboard Shortcuts</div>
-      </Window.Header>
+      </Panel.Header>
 
-      <Window.Body scroll class="px-6 py-2 @container">
+      <Panel.Body scroll class="px-6 py-2 @container">
         <Keyboard keys={hoveredCodes()} />
 
         <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
@@ -153,7 +153,7 @@ function ShortcutsContent() {
             </div>
           </div>
         </div>
-      </Window.Body>
+      </Panel.Body>
     </>
   );
 }
@@ -161,10 +161,10 @@ function ShortcutsContent() {
 export function Shortcuts() {
   return (
     <div class="h-full overflow-hidden flex justify-center p-2">
-      <div class="max-w-200 w-full h-full">
-        <Window depth={2} class="h-full overflow-hidden text-ink">
+      <div class="max-w-200 size-full">
+        <Panel depth={2} class="h-full overflow-hidden text-ink">
                   <ShortcutsContent />
-                </Window>
+                </Panel>
       </div>
     </div>
   );

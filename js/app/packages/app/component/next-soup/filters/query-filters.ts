@@ -1,4 +1,4 @@
-import type { SoupItemsQueryFilters, SoupBody } from '@queries/soup/items';
+import type { SoupBody, SoupItemsQueryFilters } from '@queries/soup/items';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
 

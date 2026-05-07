@@ -8,5 +8,5 @@ deploy-dev:
 test:
     cargo test --all-features
 
-build:
-    SQLX_OFFLINE=true cargo lambda build --release --bin {{lambda_name}} --output-format zip
+build compiler="":
+    SQLX_OFFLINE=true cargo lambda build {{ if compiler == "" { "" } else { "--compiler " + compiler } }} --release --bin {{lambda_name}} --output-format zip

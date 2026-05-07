@@ -1,12 +1,10 @@
-import { CommandMenuInner, CommandState } from '@app/component/command';
 import type { CategoryFilter } from '@app/component/command';
+import { CommandMenuInner, CommandState } from '@app/component/command';
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
+import { IS_MAC } from '@core/constant/isMac';
 import { createFreshSearch } from '@core/util/freshSort';
 import { Dialog } from '@kobalte/core/dialog';
-import {
-  filteredSandboxEntities,
-  sandboxToCommandItems,
-} from '../sandbox/sandbox-store';
+import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
 import {
   createEffect,
   createMemo,
@@ -14,11 +12,13 @@ import {
   onCleanup,
   onMount,
 } from 'solid-js';
-import { ClickCallout, HotkeyCallout } from '../components-lib';
 import { MockAppChrome } from '../components/MockAppChrome';
-import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
-import { IS_MAC } from '@core/constant/isMac';
+import { ClickCallout, HotkeyCallout } from '../components-lib';
 import { OnboardingEntityList } from '../OnboardingEntityList';
+import {
+  filteredSandboxEntities,
+  sandboxToCommandItems,
+} from '../sandbox/sandbox-store';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 /** Module-level signal toggled by the onboarding shell's cmd+k handler. */

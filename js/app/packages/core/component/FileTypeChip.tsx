@@ -1,6 +1,6 @@
 import { useBlockAliasedName } from '@core/block';
 import { blockMetadataSignal } from '@core/signal/load';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { ENTITY_ICON_CONFIGS, type EntityWithValidIcon } from './EntityIcon';
 

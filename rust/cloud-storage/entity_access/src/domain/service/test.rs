@@ -1,5 +1,6 @@
 //! Unit tests for the EntityAccessService.
 
+#[allow(unused_imports)]
 use super::*;
 use crate::domain::models::{
     AdminParticipantRole, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
@@ -67,6 +68,7 @@ impl MockRepo {
         self
     }
 
+    #[allow(dead_code)]
     fn with_call_access(mut self, level: AccessLevel) -> Self {
         self.call_access = Arc::new(Mutex::new(Some(level)));
         self
