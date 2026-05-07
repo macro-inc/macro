@@ -109,7 +109,6 @@ pub struct DocumentBackfillRequest {
 pub struct EmailBackfillRequest {
     /// Only backfill threads updated at or after this instant.
     pub since: Option<DateTime<Utc>>,
-    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
     pub index_override: Option<String>,
     /// Number of thread ids grouped into each SQS batch message. `None` uses
     /// the adapter's default.
