@@ -77,7 +77,7 @@ function MessageActionsSlot(props: { messageEditor?: MessageEditor }) {
   );
 }
 
-function GroupedMeta(props: { messageEditor?: MessageEditor }) {
+function _GroupedMeta(props: { messageEditor?: MessageEditor }) {
   const message = useMessage();
 
   return (
