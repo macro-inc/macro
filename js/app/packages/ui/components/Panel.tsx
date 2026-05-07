@@ -2,33 +2,40 @@ import { splitProps, type JSX } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
 
-export type PanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
+export type PanelProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  style?: JSX.CSSProperties;
   highlightColor?: string;
   active?: boolean;
-  hidden?: boolean;
 };
 
 export function Panel(props: PanelProps) {
-  const [local, rest] = splitProps(props, ['highlightColor', 'active', 'depth', 'class', 'children', 'hidden']);
+  const [local, rest] = splitProps(props, [
+    'highlightColor',
+    'children',
+    'active',
+    'depth',
+    'class',
+    'style',
+  ]);
+
   return (
     <Layer depth={local.depth ?? 0}>
       <div
         style={{
-          'background-image': `linear-gradient(${local.active ? `${local.highlightColor || 'var(--color-accent)'}, var(--color-edge) 80%` : 'var(--color-edge)'})`,
-          'display': local.hidden ? 'none' : 'block'
+          'background-image': local.active ? `linear-gradient(var(--b0), var(--b0)), linear-gradient(${local.highlightColor || 'var(--a0)'}, var(--b4) 80%)` : 'linear-gradient(var(--b0), var(--b0)), linear-gradient(var(--b4), var(--b4))',
+          'background-origin': 'padding-box, border-box',
+          'background-clip': 'padding-box, border-box',
+          'border': '1px solid #0000',
+          ...local.style,
         }}
-        class={cn("p-px h-full w-full box-border rounded-md overflow-clip min-h-0")}
+        class={cn(
+          'rounded-md overflow-clip min-h-0 h-full w-full',
+          local.class,
+        )}
+        {...rest}
       >
-        <div
-          class={cn(
-            'h-full w-full box-border bg-panel rounded-[5px] overflow-clip',
-            local.class
-          )}
-          {...rest}
-        >
-          {local.children}
-        </div>
+        {local.children}
       </div>
     </Layer>
   );

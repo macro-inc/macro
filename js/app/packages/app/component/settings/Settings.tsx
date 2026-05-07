@@ -181,7 +181,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
       tabIndex={0}
       ref={settingsContainerRef}
     >
-
       <SplitHeaderLeft>
         <div class="h-full flex gap-3 items-center">
           <h1 class="font-semibold text-ink select-none text-sm shrink-0">
