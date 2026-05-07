@@ -28,3 +28,4 @@ config:
   cloud-storage-service:meta_pixel_id: "639142540393286"
   cloud-storage-service:meta_access_token: meta-access-token
   cloud-storage-service:anthropic_api_key: anthropic-api-key
+  cloud-storage-service:apple_bundle_id: apple-bundle-id-prod
