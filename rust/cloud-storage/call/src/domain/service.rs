@@ -463,6 +463,7 @@ impl<
                             let recipient_vec: Vec<MacroUserIdStr<'_>> =
                                 recipient_ids.iter().cloned().collect();
                             let voip_payload = VoipPushPayload {
+                                aps: Default::default(),
                                 call_id: call.id.to_string(),
                                 channel_id: channel_id_str.clone(),
                                 channel_name: channel_name.clone().unwrap_or_default(),

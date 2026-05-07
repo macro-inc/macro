@@ -21,6 +21,7 @@ fn user(email: &'static str) -> MacroUserIdStr<'static> {
 
 fn payload() -> VoipPushPayload {
     VoipPushPayload {
+        aps: Default::default(),
         call_id: "11111111-1111-1111-1111-111111111111".to_string(),
         channel_id: "ch-1".to_string(),
         channel_name: "general".to_string(),

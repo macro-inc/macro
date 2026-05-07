@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-get-voip-token"
+description = "Enables the get_voip_token command without any pre-configured scope."
+commands.allow = ["get_voip_token"]
+
+[[permission]]
+identifier = "deny-get-voip-token"
+description = "Denies the get_voip_token command without any pre-configured scope."
+commands.deny = ["get_voip_token"]
