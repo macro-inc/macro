@@ -26,11 +26,11 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
 
   return (
     <div class="w-full flex flex-row items-center justify-start gap-2 pt-3">
-      <Button variant="base" size="sm" onClick={open('reply')}>
+      <Button variant="base" size="md" onClick={open('reply')}>
         <ArrowBendUpLeft class="h-4 w-4" />
         <span>Reply</span>
       </Button>
-      <Button variant="base" size="sm" onClick={open('forward')}>
+      <Button variant="base" size="md" onClick={open('forward')}>
         <ArrowBendUpRight class="h-4 w-4" />
         <span>Forward</span>
       </Button>

@@ -11,7 +11,7 @@ export function MessageFlag(props: MessageFlagProps) {
   return (
     <div
       class={cn(
-        'flex flex-row items-stretch justify-start ml-(--left-of-connector)',
+        'flex flex-row items-stretch h-20 justify-start ml-(--left-of-connector)',
         props.class
       )}
     >
@@ -29,21 +29,27 @@ export function MessageFlag(props: MessageFlagProps) {
           )}
         />
       </div>
-      <div class="flex flex-col items-center justify-center">
+      <div class="flex items-center flex-1 py-2">
         <div
           class={cn(
-            'w-7 border-b border-rail',
+            'border-b border-rail w-5',
             props.highlightBelow && 'border-accent'
           )}
         />
-      </div>
-      <div
-        class={cn(
-          'text-xs text-panel uppercase font-mono p-1 my-6 mt bg-edge',
-          props.highlightBelow && 'bg-accent'
-        )}
-      >
-        {props.text}
+        <span
+          class={cn(
+            'text-xs px-2',
+            props.highlightBelow ? 'text-accent' : 'text-ink-extra-muted'
+          )}
+        >
+          {props.text}
+        </span>
+        <div
+          class={cn(
+            'flex-1 border-b border-rail',
+            props.highlightBelow && 'border-accent'
+          )}
+        />
       </div>
     </div>
   );
