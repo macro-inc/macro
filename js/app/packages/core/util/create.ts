@@ -1,14 +1,13 @@
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
-import { rawStateToLoroSnapshot } from '@core/collab/utils';
 import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
+import { rawMarkdownStateToLoroSnapshot } from '@lexical-core/markdown-loro-snapshot';
 import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import {
   authKeys,
   invalidateUserQuota,
@@ -62,8 +61,7 @@ export async function createMarkdownFile(
   const emptyMarkdownState = await createMarkdownStateFromContent(
     args?.content
   );
-  const snapshot = await rawStateToLoroSnapshot(
-    MARKDOWN_LORO_SCHEMA,
+  const snapshot = await rawMarkdownStateToLoroSnapshot(
     emptyMarkdownState as any
   );
   const fakeSha = fakeSha256();
@@ -118,10 +116,7 @@ export async function createTask(
 ): Promise<string | undefined> {
   // Convert content to loro snapshot for sync service
   const markdownState = await createMarkdownStateFromContent(args?.content);
-  const snapshot = await rawStateToLoroSnapshot(
-    MARKDOWN_LORO_SCHEMA,
-    markdownState as any
-  );
+  const snapshot = await rawMarkdownStateToLoroSnapshot(markdownState as any);
 
   if (!snapshot) return;
 

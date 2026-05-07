@@ -5,7 +5,7 @@ import {
   loadResult,
 } from '@core/block';
 import { createLoroManager } from '@core/collab/manager';
-import { rawStateToLoroSnapshot } from '@core/collab/utils';
+import { rawMarkdownStateToLoroSnapshot } from '@lexical-core/markdown-loro-snapshot';
 import { serializedStateFromBlob } from '@core/component/LexicalMarkdown/collaboration/utils';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
 import { isErr, ok } from '@core/util/maybeResult';
@@ -87,10 +87,7 @@ const migrateToSyncService = async (documentId: string) => {
     return LoadErrors.INVALID;
   }
 
-  const snapshot = await rawStateToLoroSnapshot(
-    MARKDOWN_LORO_SCHEMA,
-    state as any
-  );
+  const snapshot = await rawMarkdownStateToLoroSnapshot(state as any);
 
   if (!snapshot) {
     console.error('Failed to create snapshot from blob');
