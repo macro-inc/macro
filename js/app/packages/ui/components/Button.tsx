@@ -21,7 +21,7 @@ type ButtonVariant = 'ghost' | 'base' | 'active' | 'danger';
 
 const variantStyles: Record<ButtonVariant, string> = {
   danger:      'bg-transparent text-failure    border border-failure/50     not-disabled:hover:bg-failure/10   not-disabled:active:bg-failure/20   disabled:opacity-50 ',
-  base:        'bg-transparent text-ink        border border-edge           not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12       disabled:opacity-30 ',
+  base:        'bg-transparent text-ink        border border-edge-muted     not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12       disabled:opacity-30 ',
   active:      'bg-accent-bg   text-accent     border border-accent-ink                                                                                                ',
   ghost:       'bg-transparent text-ink-muted  not-disabled:hover:text-ink  not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12       disabled:opacity-30 ',
 };
