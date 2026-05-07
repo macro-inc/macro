@@ -1,0 +1,39 @@
+FROM ubuntu:noble AS base
+ARG SERVICE_NAME=convert_service
+WORKDIR /app
+
+# Accept the Microsoft core fonts license
+RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections
+
+RUN : \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+  curl \
+  tar \
+  libreoffice \
+  libreofficekit-dev \
+  ca-certificates \
+  openssl \
+  dumb-init \
+  libkrb5-3 \
+  ttf-mscorefonts-installer \
+  wget xfonts-utils \
+  cabextract \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN fc-cache -f -v
+
+RUN curl -L -O https://github.com/CollaboraOnline/online/releases/download/for-code-assets/core-co-25.04-assets.tar.gz \
+  && tar -xvf core-co-25.04-assets.tar.gz \
+  && mkdir -p /app/lok \
+  && mv instdir /app/lok/instdir \
+  && mv include /app/lok/include \
+  && rm core-co-25.04-assets.tar.gz
+
+COPY ./prebuilt/${SERVICE_NAME} /app/svc
+RUN chmod +x /app/svc
+
+ENV PORT=8080
+EXPOSE ${PORT}
+ENTRYPOINT ["dumb-init", "./svc"]

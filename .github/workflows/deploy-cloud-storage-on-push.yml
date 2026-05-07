@@ -7,7 +7,10 @@ on:
       - 'rust/cloud-storage/**'
       - 'infra/**'
       - '.github/workflows/deploy-cloud-storage-on-push.yml'
+      - '.github/actions/deploy-cloud-storage-pulumi/**'
       - '.github/services-config.json'
+      - 'flake.nix'
+      - 'flake.lock'
 
 concurrency:
   group: deploy-cloud-storage-${{ github.ref }}
@@ -66,9 +69,50 @@ jobs:
         with:
           environment: dev
 
+  build-service-binaries:
+    name: Build ${{ matrix.service }} binaries
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.has_changes == 'true' }}
+    runs-on: linux-extra-beefy
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          clean: false
+
+      - name: Add Nix to PATH
+        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+
+      - name: Build prebuilt binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p prebuilt
+
+          binaries=$(jq -r --arg service "${{ matrix.service }}" '.services[$service].deploy_binaries // [] | @tsv' .github/services-config.json)
+          if [[ -n "$binaries" ]]; then
+            nix build --accept-flake-config ".#deploy-service-binaries-${{ matrix.service }}"
+            cp -r result/bin/* prebuilt/
+          else
+            echo "No deploy binaries configured for ${{ matrix.service }}; uploading an empty artifact"
+          fi
+
+          touch prebuilt/.keep
+
+      - name: Upload prebuilt binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-storage-service-binaries-${{ matrix.service }}-${{ github.sha }}
+          path: prebuilt/
+          retention-days: 7
+
   deploy-services:
     name: Deploy ${{ matrix.service }}
-    needs: [detect-changes, migrate-db]
+    needs: [detect-changes, migrate-db, build-service-binaries]
     if: ${{ needs.detect-changes.outputs.has_changes == 'true' }}
     runs-on:
       [
@@ -101,13 +145,14 @@ jobs:
           aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
+          prebuilt-binaries-artifact: cloud-storage-service-binaries-${{ matrix.service }}-${{ github.sha }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}
 
   deployment-summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
-    needs: [detect-changes, migrate-db, deploy-services]
+    needs: [detect-changes, migrate-db, build-service-binaries, deploy-services]
     if: always()
     steps:
       - name: Check deployment results
@@ -116,6 +161,9 @@ jobs:
             echo "ℹ️ No cloud-storage services were affected by the changes"
           elif [[ "${{ needs.migrate-db.result }}" == "failure" ]]; then
             echo "❌ Database migrations failed"
+            exit 1
+          elif [[ "${{ needs.build-service-binaries.result }}" == "failure" ]]; then
+            echo "❌ One or more service binary builds failed"
             exit 1
           elif [[ "${{ needs.deploy-services.result }}" == "failure" ]]; then
             echo "❌ One or more service deployments failed"
