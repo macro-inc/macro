@@ -1,7 +1,7 @@
 import { CommandMenuInner, CommandState } from '@app/component/command';
 import type { CategoryFilter } from '@app/component/command';
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
-import { Panel } from '@ui';
+import { Window } from '@ui';
 import { createFreshSearch } from '@core/util/freshSort';
 import { Dialog } from '@kobalte/core/dialog';
 import {
@@ -161,8 +161,8 @@ function CommandKDemo(props: LessonContentProps) {
               class="max-w-[calc(100vw-16px)] overflow-hidden portal-scope"
               style={{ width: '800px' }}
             >
-              <Panel active>
-                <div class="*:max-h-[75vh]" ref={setCommandMenuRef}>
+              <Window active class="max-h-[75vh]">
+                <Window.Body ref={setCommandMenuRef}>
                   <CommandMenuInner
                     commandMenuRef={commandMenuRef}
                     items={filteredItems}
@@ -171,8 +171,8 @@ function CommandKDemo(props: LessonContentProps) {
                       props.onComplete();
                     }}
                   />
-                </div>
-              </Panel>
+                </Window.Body>
+              </Window>
             </Dialog.Content>
           </div>
         </Dialog.Portal>

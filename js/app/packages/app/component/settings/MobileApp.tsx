@@ -1,5 +1,5 @@
 import AppStoreQr from '@macro-icons/app-store.svg';
-import { Panel } from '@ui';
+import { Window } from '@ui';
 
 export function MobileApp() {
   return (
@@ -7,12 +7,11 @@ export function MobileApp() {
       class="h-full overflow-hidden flex justify-center p-2"
     >
       <div class="max-w-200 w-full h-full">
-        <Panel depth={2} class="h-full overflow-hidden">
-          <div class="text-ink h-full flex flex-col">
-            <div class="flex items-center justify-between h-10 px-6 border-b border-edge-muted">
-              <div class="text-sm font-semibold">Mobile App</div>
-            </div>
-            <div class="flex-1 flex flex-col items-center justify-center gap-6 py-8">
+        <Window depth={2} class="h-full overflow-hidden text-ink">
+          <Window.Header class="px-6">
+            <div class="text-sm font-semibold">Mobile App</div>
+          </Window.Header>
+          <Window.Body class="flex flex-col items-center justify-center gap-6 py-8">
               <AppStoreQr style="display: block; max-width: 300px;" />
               <p class="text-sm text-ink text-center">
                 Download on the<br/>
@@ -25,9 +24,8 @@ export function MobileApp() {
                   App Store
                 </a>
               </p>
-            </div>
-          </div>
-        </Panel>
+          </Window.Body>
+        </Window>
       </div>
     </div>
   );
