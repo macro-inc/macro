@@ -822,12 +822,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
           <Show when={props.hotkeyVisible}>
             <div
               class={cn(
-                'text-xs size-4 outline-1 outline-accent/50 rounded-xs bg-page text-ink flex items-center justify-center overflow-hidden',
+                'text-xs size-4 rounded-xs flex items-center justify-center overflow-hidden bg-accent/10 border border-accent/30 text-accent',
                 props.sidebarState === 'slim' && 'absolute -bottom-1 -right-1',
                 props.sidebarState !== 'slim' && 'relative p-1 ml-auto'
               )}
             >
-              <div class="absolute inset-0 size-full bg-accent/20" />
               <Hotkey shortcut={props.hotkey} />
             </div>
           </Show>
