@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "callkit_plugin",
   "input_accessory_plugin",
   "logger",
   "macro_bundle_updater_plugin",

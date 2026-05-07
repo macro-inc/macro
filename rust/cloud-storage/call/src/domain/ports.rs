@@ -171,6 +171,13 @@ pub trait CallRepository: Send + Sync + 'static {
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 
+    /// Get the display name (first + last) for a user. Returns `None` if neither
+    /// field is set or both are the sentinel "N/A".
+    fn get_user_display_name<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
     /// Fetch a full [`CallRecord`] by call id. Looks in both the active
     /// `calls` table and the archived `call_records` table; returns `None`
     /// if neither has a matching row. The returned record includes the

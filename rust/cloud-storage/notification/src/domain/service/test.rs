@@ -698,6 +698,7 @@ fn test_platform_config() -> PlatformArnConfig {
     PlatformArnConfig {
         apns_platform_arn: "arn:aws:sns:us-east-1:000:app/APNS/test".to_string(),
         fcm_platform_arn: "arn:aws:sns:us-east-1:000:app/GCM/test".to_string(),
+        apns_voip_platform_arn: "arn:aws:sns:us-east-1:000:app/APNS_VOIP/test".to_string(),
     }
 }
 

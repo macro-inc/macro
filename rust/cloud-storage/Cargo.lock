@@ -3194,6 +3194,7 @@ dependencies = [
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
+ "aws-sdk-sns",
  "aws-sdk-sqs",
  "axum",
  "axum-extra",

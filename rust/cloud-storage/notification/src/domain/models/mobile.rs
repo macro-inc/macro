@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 
 use crate::domain::models::{
     android::FCMMessage,
-    apple::{APNSPushNotification, Alert},
+    apple::{APNSPushNotification, Alert, VoipPushPayload},
 };
 
 /// SNS target platform for push notifications.
@@ -13,6 +13,8 @@ use crate::domain::models::{
 pub enum SnsTarget<'a, T> {
     /// iOS target via APNS.
     Ios(&'a APNSPushNotification<T>),
+    /// iOS VoIP target via APNS_VOIP.
+    Voip(&'a VoipPushPayload),
     /// Android target via FCM.
     Android(&'a FCMMessage<T>),
 }
@@ -31,6 +33,17 @@ pub(crate) enum SnsPayload<'a, T> {
         /// Sandbox APNS payload.
         #[serde(rename = "APNS_SANDBOX", serialize_with = "stringified_json")]
         apns_sandbox: &'a APNSPushNotification<T>,
+    },
+    /// iOS VoIP payload with APNS_VOIP and APNS_VOIP_SANDBOX keys.
+    Voip {
+        /// Default message text.
+        default: String,
+        /// Production APNS VoIP payload.
+        #[serde(rename = "APNS_VOIP", serialize_with = "stringified_json")]
+        apns_voip: &'a VoipPushPayload,
+        /// Sandbox APNS VoIP payload.
+        #[serde(rename = "APNS_VOIP_SANDBOX", serialize_with = "stringified_json")]
+        apns_voip_sandbox: &'a VoipPushPayload,
     },
     /// Android payload with GCM key.
     Android {
@@ -72,6 +85,7 @@ impl<T> SnsTarget<'_, T> {
                     Alert::Dictionary(alert_dictionary) => alert_dictionary.title.clone(),
                 })
                 .unwrap_or(String::new()),
+            SnsTarget::Voip(payload) => format!("Incoming call in {}", payload.channel_name),
             SnsTarget::Android(fcmmessage) => fcmmessage.android.notification.clone(),
         }
     }
@@ -82,6 +96,11 @@ impl<T> SnsTarget<'_, T> {
                 default: self.default_string(),
                 apns: apnspush_notification,
                 apns_sandbox: apnspush_notification,
+            },
+            SnsTarget::Voip(payload) => SnsPayload::Voip {
+                default: self.default_string(),
+                apns_voip: payload,
+                apns_voip_sandbox: payload,
             },
             SnsTarget::Android(fcmmessage) => SnsPayload::Android {
                 default: self.default_string(),
@@ -172,4 +191,6 @@ pub enum DeviceEndpoint {
     Android(String),
     /// iOS device endpoint (APNS).
     Ios(String),
+    /// iOS VoIP device endpoint (APNS_VOIP / PushKit).
+    IosVoip(String),
 }

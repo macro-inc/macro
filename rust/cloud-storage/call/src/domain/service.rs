@@ -10,15 +10,18 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use notification::domain::models::apple::VoipPushPayload;
 use notification::domain::models::apple::{
     APNSPushNotification, Alert, AlertDictionary, Aps, PushNotificationData,
 };
 use notification::domain::models::{
     NotifCollapseKey, Notification, NotificationExtIos, SendNotificationRequestBuilder,
 };
+use notification::domain::ports::VoipPushSender;
 use notification::domain::service::NotificationIngress;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+
 use uuid::Uuid;
 
 use crate::domain::models::{EditCallRecordRequest, EditCallTranscriptRequest};
@@ -44,6 +47,7 @@ pub struct CallServiceImpl<
     S: RecordingStorage,
     Sm: CallSummarizer = NoopCallSummarizer,
     I: CallSearchIndexer = NoOpCallSearchIndexer,
+    V: VoipPushSender = (),
 > {
     repo: R,
     rtc_client: C,
@@ -56,6 +60,7 @@ pub struct CallServiceImpl<
     egress_s3_config: Option<EgressS3Config>,
     internal_call_secret: Option<String>,
     summarizer: Option<Sm>,
+    voip_push_sender: V,
 }
 
 impl<
@@ -66,7 +71,7 @@ impl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, NoOpCallSearchIndexer>
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, NoOpCallSearchIndexer, ()>
 {
     /// Create a new call service.
     pub fn new(
@@ -90,6 +95,7 @@ impl<
             egress_s3_config: None,
             internal_call_secret: None,
             summarizer: None,
+            voip_push_sender: (),
         }
     }
 }
@@ -103,7 +109,8 @@ impl<
     S: RecordingStorage,
     Sm: CallSummarizer,
     I: CallSearchIndexer,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, I>
+    V: VoipPushSender,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V>
 {
     /// Enable auto-recording with the given S3 configuration.
     pub fn with_egress(mut self, s3_config: EgressS3Config) -> Self {
@@ -124,11 +131,33 @@ impl<
         self
     }
 
+    /// Attach a VoIP push sender so incoming-call PushKit notifications are
+    /// delivered when a new call is created.
+    pub fn with_voip_push_sender<V2: VoipPushSender>(
+        self,
+        sender: V2,
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V2> {
+        CallServiceImpl {
+            repo: self.repo,
+            rtc_client: self.rtc_client,
+            connection_service: self.connection_service,
+            entity_access_service: self.entity_access_service,
+            notification_ingress: self.notification_ingress,
+            recording_storage: self.recording_storage,
+            search_indexer: self.search_indexer,
+            server_url: self.server_url,
+            egress_s3_config: self.egress_s3_config,
+            internal_call_secret: self.internal_call_secret,
+            summarizer: self.summarizer,
+            voip_push_sender: sender,
+        }
+    }
+
     /// Swap the search indexer.
     pub fn with_search_indexer<I2: CallSearchIndexer>(
         self,
         indexer: I2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I2> {
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I2, V> {
         CallServiceImpl {
             repo: self.repo,
             rtc_client: self.rtc_client,
@@ -141,6 +170,7 @@ impl<
             egress_s3_config: self.egress_s3_config,
             internal_call_secret: self.internal_call_secret,
             summarizer: self.summarizer,
+            voip_push_sender: self.voip_push_sender,
         }
     }
 
@@ -222,6 +252,20 @@ impl<
     }
 }
 
+fn exclude_voip_recipients<'a>(
+    recipient_ids: HashSet<MacroUserIdStr<'a>>,
+    voip_recipient_ids: &HashSet<MacroUserIdStr<'static>>,
+) -> HashSet<MacroUserIdStr<'a>> {
+    recipient_ids
+        .into_iter()
+        .filter(|recipient_id| {
+            !voip_recipient_ids
+                .iter()
+                .any(|voip_recipient_id| voip_recipient_id.as_ref() == recipient_id.as_ref())
+        })
+        .collect()
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 struct CallStartedNotification {
     sender_profile_picture_url: Option<String>,
@@ -280,7 +324,8 @@ impl<
     S: RecordingStorage,
     Sm: CallSummarizer + Clone,
     I: CallSearchIndexer,
-> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I>
+    V: VoipPushSender,
+> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
@@ -380,7 +425,7 @@ impl<
                         )
                         .await;
 
-                        // Send push notification to channel members (best-effort).
+                        // Send push notification and VoIP push to channel members (best-effort).
                         let _: Result<(), anyhow::Error> = async {
                             let channel_name = self
                                 .repo
@@ -404,23 +449,52 @@ impl<
                                 .ok()
                                 .flatten();
 
-                            let req = SendNotificationRequestBuilder {
-                                notification_entity: EntityType::Channel
-                                    .with_entity_string(channel_id_str),
-                                notification: CallStartedNotification {
-                                    sender_profile_picture_url,
-                                    channel_name,
-                                },
-                                sender_id: Some(user_id.copied()),
-                                recipient_ids,
-                            }
-                            .into_request()
-                            .with_apns();
-
-                            self.notification_ingress
-                                .send_notification(req)
+                            let caller_name = self
+                                .repo
+                                .get_user_display_name(user_id.copied())
                                 .await
-                                .map_err(|e| anyhow::anyhow!(e))?;
+                                .ok()
+                                .flatten()
+                                .unwrap_or_else(|| user_id.email_str().to_string());
+
+                            // Send VoIP push for the native iOS incoming-call sheet first.
+                            // Recipients with successful VoIP delivery do not need the regular
+                            // APNS alert banner as well.
+                            let recipient_vec: Vec<MacroUserIdStr<'_>> =
+                                recipient_ids.iter().cloned().collect();
+                            let voip_payload = VoipPushPayload {
+                                call_id: call.id.to_string(),
+                                channel_id: channel_id_str.clone(),
+                                channel_name: channel_name.clone().unwrap_or_default(),
+                                caller_name,
+                            };
+                            let voip_recipient_ids = self
+                                .voip_push_sender
+                                .send_voip_push(&recipient_vec, &voip_payload)
+                                .await;
+
+                            let apns_recipient_ids =
+                                exclude_voip_recipients(recipient_ids, &voip_recipient_ids);
+
+                            if !apns_recipient_ids.is_empty() {
+                                let req = SendNotificationRequestBuilder {
+                                    notification_entity: EntityType::Channel
+                                        .with_entity_string(channel_id_str.clone()),
+                                    notification: CallStartedNotification {
+                                        sender_profile_picture_url,
+                                        channel_name: channel_name.clone(),
+                                    },
+                                    sender_id: Some(user_id.copied()),
+                                    recipient_ids: apns_recipient_ids,
+                                }
+                                .into_request()
+                                .with_apns();
+
+                                self.notification_ingress
+                                    .send_notification(req)
+                                    .await
+                                    .map_err(|e| anyhow::anyhow!(e))?;
+                            }
 
                             Ok(())
                         }
@@ -1090,7 +1164,8 @@ impl<
     S: RecordingStorage,
     Sm: CallSummarizer + Clone,
     I: CallSearchIndexer,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, I>
+    V: VoipPushSender,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V>
 {
     /// Fire-and-forget spawn of [`CallService::summarize_call`] for `call_id`.
     ///

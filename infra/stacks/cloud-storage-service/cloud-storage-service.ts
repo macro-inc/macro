@@ -38,6 +38,7 @@ type CreateCloudStorageServiceServiceArgs = {
   secretKeyArns: (pulumi.Output<string> | string)[];
   queueArns: (pulumi.Output<string> | string)[];
   callRecordingCrudPolicyArn: pulumi.Output<string> | string;
+  snsPlatformArns: (pulumi.Output<string> | string)[];
   tags: { [key: string]: string };
 };
 
@@ -70,6 +71,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
       secretKeyArns,
       queueArns,
       callRecordingCrudPolicyArn,
+      snsPlatformArns,
       tags,
     }: CreateCloudStorageServiceServiceArgs,
     opts?: pulumi.ComponentResourceOptions
@@ -155,6 +157,31 @@ export class CloudStorageService extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const snsPolicy = new aws.iam.Policy(
+      `${BASE_NAME}-sns-policy`,
+      {
+        name: `${BASE_NAME}-sns-policy-${stack}`,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: [
+                'sns:CreatePlatformEndpoint',
+                'sns:DeleteEndpoint',
+                'sns:GetEndpointAttributes',
+                'sns:SetEndpointAttributes',
+                'sns:Publish',
+              ],
+              Resource: snsPlatformArns,
+              Effect: 'Allow',
+            },
+          ],
+        },
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
     this.role = new aws.iam.Role(
       `${BASE_NAME}-role`,
       {
@@ -217,6 +244,15 @@ export class CloudStorageService extends pulumi.ComponentResource {
         role: this.role,
         policyArn: pulumi.interpolate`${callRecordingCrudPolicyArn}`,
       }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      `${BASE_NAME}-role-sns-att-${stack}`,
+      {
+        role: this.role,
+        policyArn: snsPolicy.arn,
+      },
+      { parent: this, dependsOn: [snsPolicy, this.role] }
     );
 
     // ecr image
