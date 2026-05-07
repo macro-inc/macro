@@ -172,6 +172,7 @@ export const createAppViteConfig = (): UserConfigFn => {
       },
       resolve: {
         dedupe: [
+          'loro-crdt',
           '@codingame/monaco-vscode-api',
           '@codingame/monaco-vscode-*-common',
         ],
