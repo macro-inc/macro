@@ -2,9 +2,8 @@ import { Tooltip } from '@core/component/Tooltip';
 import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
 import { Popover } from '@kobalte/core/popover';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
-import { Button } from '@ui';
 
 type ReactionChipProps = {
   emoji: string;
