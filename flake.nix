@@ -190,6 +190,7 @@
             cargo-info
             cargo-udeps
             cargo-lambda
+            cargo-cross
             cargo-deny
             cargo-nextest
             cargo-expand
