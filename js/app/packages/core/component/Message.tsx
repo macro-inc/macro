@@ -53,6 +53,8 @@ export type MessageRootProps = {
   children: JSX.Element;
   setMessageBodyRef?: Setter<HTMLDivElement | undefined>;
   isTarget?: boolean;
+  /** When true, shows the rail and connector to the reply input below the last message */
+  hasReplyInputBelow?: boolean;
 };
 
 type MessageContextValue = {
@@ -176,7 +178,7 @@ export const NestedConnectorLines: Component<NestedConnectorLinesProps> = (
         class="absolute h-full border-l"
         classList={{
           'border-accent': props.isParentNewMessage,
-          'border-edge-muted': !props.isParentNewMessage,
+          'border-rail': !props.isParentNewMessage,
         }}
         style={{
           left: `calc(${i} * var(--thread-shift) + var(--left-of-connector))`,
@@ -218,9 +220,11 @@ const Root: Component<MessageRootProps> = (props) => {
   return (
     <MessageContext.Provider value={ctx}>
       <div
-        class="relative flex flex-row items-stretch w-full transition-colors duration-1000 ease"
+        class="relative flex flex-row items-stretch w-full"
         classList={{
           'bg-accent': props.isTarget,
+          'bg-active': props.focused,
+          'bg-hover': hover(),
         }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
@@ -254,14 +258,16 @@ const Root: Component<MessageRootProps> = (props) => {
             <div
               class={cn(
                 'relative flex flex-col pl-[calc(var(--user-icon-width)/2+var(--message-padding-x))] ml-(--left-of-connector)',
-                !props.hideConnectors && !props.isLastMessage && 'border-l',
-                props.isNewMessage ? 'border-accent' : 'border-edge-muted',
+                !props.hideConnectors &&
+                  (!props.isLastMessage || props.hasReplyInputBelow) &&
+                  'border-l',
+                props.isNewMessage ? 'border-accent' : 'border-rail',
                 !(
                   props.isConsecutive ||
                   props.isFirstMessage ||
                   props.isFirstInThread
                 ) && 'pt-2',
-                props.isLastMessage && 'pb-4',
+                props.isLastMessage && !props.hasReplyInputBelow && 'pb-4',
                 props.hasThreadChildren && 'pb-4'
               )}
             >
@@ -273,7 +279,7 @@ const Root: Component<MessageRootProps> = (props) => {
                       {/* Slanted Line Connector */}
                       <div
                         class={cn(
-                          'absolute text-edge-muted -z-1',
+                          'absolute text-rail -z-1',
                           props.isNewMessage && 'text-accent'
                         )}
                         style={{
@@ -409,7 +415,7 @@ const Root: Component<MessageRootProps> = (props) => {
                 ref={(el) => props.setThreadAppendMountTarget?.(el)}
               >
                 <div
-                  class="absolute border-l border-edge-muted"
+                  class="absolute border-l border-rail"
                   style={{
                     left: `calc((var(--user-icon-width) / 2) * -1)`,
                     height:
@@ -418,7 +424,7 @@ const Root: Component<MessageRootProps> = (props) => {
                 />
 
                 <div
-                  class="absolute text-edge-muted -z-1"
+                  class="absolute text-rail -z-1"
                   style={{
                     left: `calc((var(--user-icon-width) / 2) * -1)`,
                     bottom: '50%',

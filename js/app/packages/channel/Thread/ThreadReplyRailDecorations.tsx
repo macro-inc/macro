@@ -8,12 +8,16 @@ type ThreadReplyRailProps = {
 };
 
 export function ThreadReplyRailDecorations(props: ThreadReplyRailProps) {
+  console.log('WHAT THE GUCK');
   return (
     <>
-      <div class="pointer-events-none absolute" style={threadConnectorStyle}>
+      <div
+        class="pointer-events-none absolute bg-[red]"
+        style={threadConnectorStyle}
+      >
         <div
           class={cn(
-            'absolute text-edge-muted -z-1 w-full h-full',
+            'absolute text-rail -z-1 w-full h-full',
             props.firstThreadReplyNewMessage && 'text-accent'
           )}
         >

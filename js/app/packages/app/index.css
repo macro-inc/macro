@@ -97,6 +97,7 @@
   --color-overlay:         oklch(var(--b2) / 0.5); /* overlay, e.g. modal background */
   --color-edge-muted:      var(--b3); /* muted edge */
   --color-edge:            var(--b4); /* edge (border) */
+  --color-rail:            color-mix(in oklch, var(--b4) 90%, var(--b0));
 
   --color-ink:             var(--c0);
   --color-ink-muted:       var(--c1);

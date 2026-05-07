@@ -22,6 +22,8 @@ import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
+import { replyInputOffsetX } from '@channel/Thread/utils';
 
 interface MessageContainerProps {
   message: ApiMessage;
@@ -216,6 +218,10 @@ export function MessageContainer(props: MessageContainerProps) {
             senderId={senderMacroId()}
             isNewMessage={isNewMessage()}
             isTarget={props.isTarget}
+            hasReplyInputBelow={true}
+            hasThreadChildren={
+              !props.isLastMessage && (showReply() || !!draftChild())
+            }
           >
             <Message.TopBar>
               <EmailMessageTopBar
@@ -339,11 +345,14 @@ export function MessageContainer(props: MessageContainerProps) {
             </Message>
             <Show when={context.permissions().isOwner}>
               <Portal mount={threadAppendMountTarget()}>
-                <EmailInput
-                  replyingTo={() => props.message}
-                  setShowReply={setShowReply}
-                  draft={draftChild()}
-                />
+                <div class="relative isolate">
+                  <ThreadReplyInputConnector />
+                  <EmailInput
+                    replyingTo={() => props.message}
+                    setShowReply={setShowReply}
+                    draft={draftChild()}
+                  />
+                </div>
               </Portal>
             </Show>
           </Show>

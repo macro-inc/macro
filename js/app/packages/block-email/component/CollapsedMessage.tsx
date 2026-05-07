@@ -5,6 +5,7 @@ import { createMemo, createSignal } from 'solid-js';
 import { getSenderMacroId, getSenderDisplayName } from '../util/emailUser';
 import { formatShortDate } from './EmailMessageTopBar';
 import { EmailUserTooltip } from './EmailUserTooltip';
+import { cn } from '@ui/utils/classname';
 
 interface CollapsedMessageProps {
   message: ApiMessage;
@@ -56,12 +57,16 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       {/* These pl/pr below are needed to align with expanded messages at mobile width. */}
       <div class="macro-message-width macro-message-margin w-full pl-2 pr-4 sm:px-0">
         <div
-          class="relative flex flex-row items-center w-full pb-2 transition-all"
-          classList={{
-            'pt-2': !props.isFirstMessage,
-            'opacity-80': hasMouseLeft() && !hover(),
-            'opacity-100': !hasMouseLeft() || hover(),
-          }}
+          class={cn(
+            'relative flex flex-row items-center w-full pb-2 transition-all',
+            {
+              'bg-active': props.isFocused,
+              'bg-hover': hover(),
+              'pt-2': !props.isFirstMessage,
+              'opacity-80': hasMouseLeft() && !hover(),
+              'opacity-100': !hasMouseLeft() || hover(),
+            }
+          )}
           data-message-body-id={props.message.db_id}
           tabIndex={0}
           onClick={props.onClick}
@@ -74,7 +79,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
         >
           {/* Rail line - behind avatar */}
           <div
-            class="absolute top-0 bottom-0 border-l border-edge-muted z-0"
+            class="absolute top-0 bottom-0 border-l border-rail z-0"
             style={{
               left: 'var(--left-of-connector)',
             }}

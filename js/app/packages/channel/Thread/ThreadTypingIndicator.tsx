@@ -51,11 +51,11 @@ function ThreadTypingIndicatorConnector() {
   return (
     <>
       <div class="flex flex-col items-center justify-center">
-        <div class="border-l border-edge-muted min-h-1/2" />
-        <div class="border-l border-edge-muted min-h-1/2" />
+        <div class="border-l border-rail min-h-1/2" />
+        <div class="border-l border-rail min-h-1/2" />
       </div>
       <div class="flex flex-col items-center justify-center">
-        <div class="w-7 border-b border-edge-muted" />
+        <div class="w-7 border-b border-rail" />
       </div>
     </>
   );
