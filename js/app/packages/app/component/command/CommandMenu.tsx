@@ -6,7 +6,7 @@ import {
 } from './useCommandItems';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
-import { Dialog, Panel } from '@ui';
+import { Dialog, Window } from '@ui';
 import { Tabs } from '@core/component/Tabs';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -84,24 +84,22 @@ export function CommandMenu() {
 
   return (
     <Dialog
-      open={CommandState.isOpen()}
       onOpenChange={CommandState.setIsOpen}
-      contentRef={setCommandMenuRef}
-      onCloseAutoFocus={(event) => {
+      onCloseAutoFocus={(e) => {
         if (suppressCloseAutoFocus) {
-          event.preventDefault();
+          e.preventDefault();
           suppressCloseAutoFocus = false;
         }
       }}
+      contentRef={setCommandMenuRef}
+      open={CommandState.isOpen()}
     >
-      <Panel depth={2} active>
-        <div class="*:max-h-[75vh]">
-          <CommandMenuInner
-            commandMenuRef={commandMenuRef}
-            onSelect={handleSelect}
-          />
-        </div>
-      </Panel>
+      <Window depth={2} active class="*:max-h-[75vh]">
+        <CommandMenuInner
+          commandMenuRef={commandMenuRef}
+          onSelect={handleSelect}
+        />
+      </Window>
     </Dialog>
   );
 }

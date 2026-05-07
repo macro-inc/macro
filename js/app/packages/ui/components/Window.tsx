@@ -1,8 +1,8 @@
 import type { ParentProps } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 import type { PanelProps } from './Panel';
-import { Panel } from './Panel';
 import { cn } from '../utils/classname';
+import { Panel } from './Panel';
 
 /**
  * ```tsx

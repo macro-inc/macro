@@ -84,7 +84,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
-import { Panel } from '@ui';
+import { Window } from '@ui/components/Window';
 import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
@@ -954,21 +954,19 @@ export function ShareModal(props: ShareModalProps) {
               style={{ width: '800px' }}
             >
               {/* Card 1: Share form — gradient border */}
-              <Panel active>
-                <div class="text-ink flex flex-col">
-                  <div class="shrink-0 flex flex-row items-center justify-between px-3 h-10 gap-2 border-b border-edge-muted">
-                    <div class="flex-1 flex flex-row items-center gap-2 min-w-0">
-                      <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
-                        <span class="shrink-0">Share:</span>
-                        <EntityIcon
-                          targetType={props.blockAlias}
-                          size="sm"
-                          class="shrink-0"
-                        />
-                        <span class="truncate">{props.name}</span>
-                      </Dialog.Title>
-                    </div>
-                  </div>
+              <Window active>
+                <Window.Header class="px-3">
+                  <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
+                    <span class="shrink-0">Share:</span>
+                    <EntityIcon
+                      targetType={props.blockAlias}
+                      size="sm"
+                      class="shrink-0"
+                    />
+                    <span class="truncate">{props.name}</span>
+                  </Dialog.Title>
+                </Window.Header>
+                <Window.Body>
                   <ForwardToChannel
                     submitPermissionInfo={{
                       setChannelPermissions: (id, accessLevel) =>
@@ -987,19 +985,21 @@ export function ShareModal(props: ShareModalProps) {
                     blockId={props.id}
                     blockName={props.blockAlias}
                   />
-                </div>
-              </Panel>
+                </Window.Body>
+              </Window>
 
               {/* Card 2: Recipients — plain border */}
               <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
-                <Panel>
-                  <div class="text-ink flex flex-col">
-                    <div class="shrink-0 h-10 flex items-center px-3 border-b border-edge-muted text-sm font-medium">
+                <Window>
+                  <Window.Header class="px-3">
+                    <span class="text-sm font-medium">
                       People with access to this{' '}
                       {props.itemType === 'email'
                         ? 'email thread'
                         : props.itemType}
-                    </div>
+                    </span>
+                  </Window.Header>
+                  <Window.Body class="text-ink">
                     <div class="relative">
                       <ScrollIndicators
                         scrollRef={recipientScrollRef}
@@ -1113,8 +1113,8 @@ export function ShareModal(props: ShareModalProps) {
                         </div>
                       </div>
                     </div>
-                  </div>
-                </Panel>
+                  </Window.Body>
+                </Window>
               </Show>
 
               {/* Card 3: Public link — plain border */}
@@ -1124,49 +1124,43 @@ export function ShareModal(props: ShareModalProps) {
                   props.itemType !== 'email'
                 }
               >
-                <Panel>
-                  <div class="text-ink flex flex-col">
-                    <div
-                      class={cn(
-                        'h-10 flex items-center justify-between px-3 text-sm font-medium',
-                        publicAccessLevel() != null &&
-                          'border-b border-edge-muted'
-                      )}
-                    >
-                      <div class="flex items-center gap-2">
-                        Public link
-                        <div
+                <Window>
+                  <Window.Header class="justify-between px-3">
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm font-medium">Public link</span>
+                      <div
+                        class={cn(
+                          'px-2 rounded-xl border py-0.5 flex justify-center items-center',
+                          publicAccessLevel() != null
+                            ? 'border-accent/30 bg-accent/10'
+                            : 'border-edge-muted bg-edge-muted'
+                        )}
+                      >
+                        <span
                           class={cn(
-                            'px-2 rounded-xl border py-0.5 flex justify-center items-center',
+                            'text-xs font-medium whitespace-nowrap',
                             publicAccessLevel() != null
-                              ? 'border-accent/30 bg-accent/10'
-                              : 'border-edge-muted bg-edge-muted'
+                              ? 'text-accent-ink'
+                              : 'text-ink-extra-muted'
                           )}
                         >
-                          <span
-                            class={cn(
-                              'text-xs font-medium whitespace-nowrap',
-                              publicAccessLevel() != null
-                                ? 'text-accent-ink'
-                                : 'text-ink-extra-muted'
-                            )}
-                          >
-                            {publicAccessLevel() != null
-                              ? 'ENABLED'
-                              : 'DISABLED'}
-                          </span>
-                        </div>
+                          {publicAccessLevel() != null
+                            ? 'ENABLED'
+                            : 'DISABLED'}
+                        </span>
                       </div>
-                      <MiniToggleSwitch
-                        size="Base"
-                        label="Enable public link"
-                        checked={publicAccessLevel() != null}
-                        onChange={(on) =>
-                          setPublicPermissions(on ? 'view' : null)
-                        }
-                      />
                     </div>
-                    <Show when={publicAccessLevel() != null}>
+                    <MiniToggleSwitch
+                      size="Base"
+                      label="Enable public link"
+                      checked={publicAccessLevel() != null}
+                      onChange={(on) =>
+                        setPublicPermissions(on ? 'view' : null)
+                      }
+                    />
+                  </Window.Header>
+                  <Show when={publicAccessLevel() != null}>
+                    <Window.Body class="text-ink">
                       <div class="flex items-center p-3 justify-between">
                         <Button
                           variant="base"
@@ -1189,9 +1183,9 @@ export function ShareModal(props: ShareModalProps) {
                           />
                         </span>
                       </div>
-                    </Show>
-                  </div>
-                </Panel>
+                    </Window.Body>
+                  </Show>
+                </Window>
               </Show>
             </Dialog.Content>
           </div>
