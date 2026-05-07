@@ -270,6 +270,7 @@ pub async fn permanently_delete_project_handler(
                                 SearchQueueMessage::RemoveChatMessage(RemoveChatMessage {
                                     chat_id: id.to_string(),
                                     message_id: None,
+                                    index_override: None,
                                 })
                             })
                             .collect(),

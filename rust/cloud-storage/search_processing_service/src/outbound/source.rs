@@ -115,6 +115,7 @@ impl BackfillSource for PgBackfillSource {
                     user_id: chat.user_id,
                     created_at: chat.created_at,
                     updated_at: chat.updated_at,
+                    index_override: req.index_override.clone(),
                 })
             })
             .collect();

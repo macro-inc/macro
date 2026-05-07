@@ -73,6 +73,8 @@ pub struct ChatBackfillRequest {
     pub chat_ids: Vec<String>,
     pub user_ids: Vec<String>,
     pub deletion_filter: DeletionFilter,
+    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
+    pub index_override: Option<String>,
 }
 
 /// Channel-message backfill filter. No scoping knobs yet — reserved so adding
