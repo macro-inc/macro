@@ -49,7 +49,7 @@ concurrency:
 
 jobs:
   build-deploy:
-    runs-on: linux-latest-beefy
+    runs-on: linux-extra-beefy
     env:
       CI: "true"
     steps:

@@ -9,6 +9,19 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Add Nix to PATH
+      shell: bash
+      run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+
+    - name: Enter Nix dev shell
+      shell: bash
+      run: |
+        set -euo pipefail
+        nix print-dev-env --accept-flake-config > /tmp/dev-env
+        echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+        source /tmp/dev-env
+        printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
+
     - name: Setup bunfig.toml
       working-directory: js
       shell: bash
