@@ -1,21 +1,20 @@
 import { createSignal, onCleanup, onMount, splitProps, type JSX } from 'solid-js';
-import { cn } from '../utils/classname';
 
 export type ScrollProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
   style?: JSX.CSSProperties;
 };
 
-const THUMB_HEIGHT = 120;
+const THUMB_HEIGHT = 200;
 
 export function Scroll(props: ScrollProps) {
-  const [local, rest] = splitProps(props, ['class', 'style', 'children']);
+  const [local, rest] = splitProps(props, ['children', 'style']);
 
   let scrollRef!: HTMLDivElement;
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
   const [thumbTop, setThumbTop] = createSignal(0);
   const [isScrolling, setIsScrolling] = createSignal(false);
 
-  const update = () => {
+  function update() {
     const el = scrollRef;
     if (!el) return;
     const { scrollTop, scrollHeight, clientHeight } = el;
@@ -24,7 +23,7 @@ export function Scroll(props: ScrollProps) {
     setThumbTop(maxScroll > 0 ? (scrollTop / maxScroll) * maxTop : 0);
   };
 
-  const handleScroll = () => {
+  function handleScroll() {
     update();
     setIsScrolling(true);
     if (hideTimer) clearTimeout(hideTimer);
@@ -40,10 +39,10 @@ export function Scroll(props: ScrollProps) {
     // Catch content size changes (e.g. children added/removed/resized).
     const mo = new MutationObserver(update);
     mo.observe(scrollRef, {
-      childList: true,
-      subtree: true,
       characterData: true,
       attributes: true,
+      childList: true,
+      subtree: true,
     });
 
     onCleanup(() => {
@@ -54,26 +53,44 @@ export function Scroll(props: ScrollProps) {
   });
 
   return (
-    <div class="relative size-full min-h-0 min-w-0" style={local.style}>
+    <div
+      {...rest}
+      style={{
+        'position': 'relative',
+        'min-height': '0',
+        'height': '100%',
+        'min-width': '0',
+        'width': '100%',
+        ...local.style,
+      }}
+    >
       <div
-        ref={scrollRef}
-        class={cn(
-          'scrollbar-hidden relative size-full overflow-y-auto',
-          local.class,
-        )}
+        style={{
+          'scrollbar-width': 'none',
+          'position': 'relative',
+          'overflow-y': 'auto',
+          'height': '100%',
+          'width': '100%',
+        }}
         onScroll={handleScroll}
-        {...rest}
+        ref={scrollRef}
       >
         {local.children}
       </div>
       <div
         aria-hidden="true"
-        class="pointer-events-none absolute right-0 top-0 w-0.5 transition-opacity duration-200 ease-out"
         style={{
+          'transform': `translateY(${thumbTop()}px)`,
+          'transition': 'opacity 200ms ease-out',
+          'opacity': isScrolling() ? 1 : 0,
           'background-color': 'var(--a0)',
-          transform: `translateY(${thumbTop()}px)`,
-          height: `${THUMB_HEIGHT}px`,
-          opacity: isScrolling() ? 1 : 0,
+          'height': `${THUMB_HEIGHT}px`,
+          'pointer-events': 'none',
+          'border-radius': '1px',
+          'position': 'absolute',
+          'width': '2px',
+          'right': '3px',
+          'top': '0',
         }}
       />
     </div>
