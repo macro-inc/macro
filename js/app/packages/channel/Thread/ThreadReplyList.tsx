@@ -33,12 +33,6 @@ export function ThreadReplyList(props: {
   onReady?: (handle: ThreadReplyListHandle) => void;
   selectedReplyId?: Accessor<string | undefined>;
   isThreadFocused?: Accessor<boolean>;
-  /**
-   * Controller's active target reply id (find-bar / URL-deeplink). When this
-   * matches a reply, that reply renders the orange bar regardless of whether
-   * `selectedReplyId` / `isThreadFocused` resolved.
-   */
-  activeTargetReplyId?: Accessor<string | undefined>;
   onSelectReply?: (replyId: string) => void;
 }) {
   const listMetaByReplyId = createMemo(() =>
@@ -68,9 +62,7 @@ export function ThreadReplyList(props: {
         });
 
         const isReplySelected = () =>
-          (!!props.isThreadFocused?.() &&
-            props.selectedReplyId?.() === reply.id) ||
-          props.activeTargetReplyId?.() === reply.id;
+          !!props.isThreadFocused?.() && props.selectedReplyId?.() === reply.id;
 
         return (
           <div

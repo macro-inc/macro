@@ -33,15 +33,7 @@ export function ChannelThread(props: ThreadProps) {
   const fetchRepliesEnabled = () =>
     !!props.targetReplyId || debouncedFetchRepliesEnabled();
 
-  // "Selected" for highlight purposes: either a click/keyboard selection
-  // matches this message, *or* the controller is targeting it (e.g. find-bar
-  // search hit). The controller branch makes the highlight resilient to
-  // selection auto-clear / scroll races during the load-around fetch — once
-  // the message renders, the orange bar resolves from the controller state
-  // even if `selection.selectedId` never settled.
-  const isSelected = () =>
-    props.selectedMessageId?.() === props.data().id ||
-    props.activeTargetMessageId === props.data().id;
+  const isSelected = () => props.selectedMessageId?.() === props.data().id;
 
   const repliesQuery = useThreadRepliesQuery(
     props.channelId,
@@ -96,16 +88,7 @@ export function ChannelThread(props: ThreadProps) {
     )
   );
 
-  // True if any reply in this thread is the focus — either a click-selected
-  // reply, or the controller's active target reply (find-bar / URL-deeplink).
-  // Used to suppress the parent's orange bar so the reply alone is highlighted.
-  const targetReplyIsInThisThread = () => {
-    const target = props.targetReplyId;
-    if (!target) return false;
-    return activeReplies().some((r) => r.id === target);
-  };
-  const isThreadFocused = () =>
-    !!replySelection.selectedId() || targetReplyIsInThisThread();
+  const isThreadFocused = () => !!replySelection.selectedId();
   const selectThreadMessage = () => {
     if (isSelected() && !isThreadFocused()) {
       props.onClearSelection?.();
@@ -296,7 +279,6 @@ export function ChannelThread(props: ThreadProps) {
                       onReady={setReplyListHandle}
                       selectedReplyId={replySelection.selectedId}
                       isThreadFocused={isThreadFocused}
-                      activeTargetReplyId={() => props.targetReplyId}
                       onSelectReply={selectReply}
                     />
                   </DebugSuspense>
