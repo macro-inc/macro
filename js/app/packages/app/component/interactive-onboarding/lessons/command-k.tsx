@@ -1,7 +1,6 @@
 import { CommandMenuInner, CommandState } from '@app/component/command';
 import type { CategoryFilter } from '@app/component/command';
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
-import { Window } from '@ui';
 import { createFreshSearch } from '@core/util/freshSort';
 import { Dialog } from '@kobalte/core/dialog';
 import {
@@ -71,8 +70,6 @@ function CommandKContent(_props: LessonContentProps) {
 }
 
 function CommandKDemo(props: LessonContentProps) {
-  const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
-
   const [hasOpened, setHasOpened] = createSignal(false);
 
   onMount(() => {
@@ -161,18 +158,13 @@ function CommandKDemo(props: LessonContentProps) {
               class="max-w-[calc(100vw-16px)] overflow-hidden portal-scope"
               style={{ width: '800px' }}
             >
-              <Window active class="max-h-[75vh]">
-                <Window.Body ref={setCommandMenuRef}>
-                  <CommandMenuInner
-                    commandMenuRef={commandMenuRef}
-                    items={filteredItems}
-                    onSelect={() => {
-                      setCompleted(true);
-                      props.onComplete();
-                    }}
-                  />
-                </Window.Body>
-              </Window>
+              <CommandMenuInner
+                items={filteredItems}
+                onSelect={() => {
+                  setCompleted(true);
+                  props.onComplete();
+                }}
+              />
             </Dialog.Content>
           </div>
         </Dialog.Portal>

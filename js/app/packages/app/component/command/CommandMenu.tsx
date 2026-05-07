@@ -57,7 +57,6 @@ const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8;
 const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5;
 
 export function CommandMenu() {
-  const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
   const splitManager = globalSplitManager();
   const isListMode = splitManager
     ? () => isListViewID(splitManager.activeSplit()?.content().id)
@@ -91,26 +90,25 @@ export function CommandMenu() {
           suppressCloseAutoFocus = false;
         }
       }}
-      contentRef={setCommandMenuRef}
       open={CommandState.isOpen()}
     >
-      <Window depth={2} active class="*:max-h-[75vh]">
-        <CommandMenuInner
-          commandMenuRef={commandMenuRef}
-          onSelect={handleSelect}
-        />
-      </Window>
+      <CommandMenuInner depth={2} onSelect={handleSelect} />
     </Dialog>
   );
 }
 
 export function CommandMenuInner(props: {
-  commandMenuRef: () => HTMLDivElement | undefined;
   /** Override items source with custom data (e.g. sandbox entities for tutorial) */
   items?: () => CommandMenuItem[];
   /** Called when the user selects an item from the menu */
   onSelect?: (item: CommandMenuItem) => void;
+  /** Optional class merged onto the Window wrapper. */
+  class?: string;
+  /** Optional depth for the Window wrapper. */
+  depth?: 0 | 1 | 2 | 3 | 4 | 5;
 }) {
+  const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
+
   const analytics = useAnalytics();
 
   const { openWithSplit } = useSplitLayout();
@@ -147,6 +145,19 @@ export function CommandMenuInner(props: {
     const items = filteredItems();
     const index = CommandState.selectedIndex();
     return items[index];
+  };
+
+  const selectedIsCommand = () => {
+    const item = selectedItem();
+    return item && isCommandItem(item);
+  };
+  const selectedIsEntity = () => {
+    const item = selectedItem();
+    return item && isEntityItem(item);
+  };
+  const selectedIsSearch = () => {
+    const item = selectedItem();
+    return item && isSearchItem(item);
   };
 
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
@@ -387,7 +398,7 @@ export function CommandMenuInner(props: {
   });
 
   onMount(() => {
-    const element = props.commandMenuRef();
+    const element = commandMenuRef();
     if (element) {
       attachHotkeys(element);
     }
@@ -422,26 +433,34 @@ export function CommandMenuInner(props: {
     CommandState.isEntityActionMode()
   );
 
-  const handleBackFromCommandScope = () => {
+  // Back is only available in command scope (entity action mode just closes).
+  const handleBack = () => {
+    if (!isInCommandScope()) return;
     CommandState.clearCommandScopeCommands();
     CommandState.setSelectedIndex(0);
   };
 
-  // Show back button only in command scope (entity action mode just closes)
-  const showBackButton = () => isInCommandScope();
-
-  const handleBack = () => {
-    if (isInCommandScope()) {
-      handleBackFromCommandScope();
-    }
+  const resultsHeight = () => {
+    const count = filteredItems().length;
+    if (count === 0) return EMPTY_STATE_HEIGHT;
+    return Math.min(MAX_LIST_HEIGHT, count * VIRTUAL_ITEM_HEIGHT);
   };
 
+  const categoryTabs = CATEGORIES.map((c) => ({
+    value: c.id,
+    label: c.label,
+  }));
+
   return (
-    <div class="flex flex-col">
-      {/* Search Input */}
-      <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted">
+    <Window
+      class={cn('max-h-[75vh]', props.class)}
+      ref={setCommandMenuRef}
+      depth={props.depth}
+      active
+    >
+      <Window.Header class="gap-2 px-2 bg-panel">
         <Show
-          when={showBackButton()}
+          when={isInCommandScope()}
           fallback={
             <span class="pl-2 text-accent">
               <Macro class="size-3" />
@@ -464,33 +483,107 @@ export function CommandMenuInner(props: {
           onInput={(e) => CommandState.setQuery(e.currentTarget.value)}
           autofocus
         />
-      </div>
+      </Window.Header>
 
-      {/* Entity Action Preview Row */}
-      <Show when={isEntityActionMode()}>
-        <EntityActionPreview entities={CommandState.entityActionEntities()} />
+      <Show when={isEntityActionMode() || !isInCommandScope()}>
+        <Window.Toolbar
+          class={cn(
+            'bg-panel',
+            isEntityActionMode() ? 'px-3 gap-2' : 'px-1.5'
+          )}
+        >
+          <Show
+            when={isEntityActionMode()}
+            fallback={
+              <Tabs
+                list={categoryTabs}
+                value={CommandState.categoryFilter()}
+                onChange={(value) => {
+                  if (value) {
+                    CommandState.setCategoryFilter(value as CategoryFilter);
+                  }
+                }}
+              />
+            }
+          >
+            <EntityActionPreview
+              entities={CommandState.entityActionEntities()}
+            />
+          </Show>
+        </Window.Toolbar>
       </Show>
 
-      <Show when={!isInCommandScope() && !isEntityActionMode()}>
-        <CategoryFilterTabs />
-      </Show>
+      <Window.Body>
+        <div
+          class="bg-panel overflow-hidden transition-[height] duration-60 ease-out"
+          style={{ height: `${resultsHeight()}px` }}
+        >
+          <Show
+            when={filteredItems().length > 0}
+            fallback={
+              <div class="px-4 py-4 text-center text-ink-muted">
+                No results found
+              </div>
+            }
+          >
+            <VirtualizedCommandList
+              items={filteredItems()}
+              selectedIndex={CommandState.selectedIndex()}
+              onSelect={(item, openInNewSplit) =>
+                handleItemAction(item, openInNewSplit)
+              }
+              onMouseEnter={handleMouseEnter}
+            />
+          </Show>
+        </div>
+      </Window.Body>
 
-      <ResultsContainer
-        items={filteredItems()}
-        selectedIndex={CommandState.selectedIndex()}
-        onSelect={(item, openInNewSplit) =>
-          handleItemAction(item, openInNewSplit)
-        }
-        onMouseEnter={handleMouseEnter}
-      />
+      <Window.Footer class="gap-4 px-4 bg-panel text-xs text-ink-extra-muted/80">
+        <span class="flex items-center gap-1">
+          <div class="flex gap-1">
+            <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
+              <Hotkey shortcut="arrowup" class="space-x-1" />
+            </div>
+            <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
+              <Hotkey shortcut="arrowdown" class="space-x-1" />
+            </div>
+          </div>
+          Navigate
+        </span>
 
-      <CommandMenuFooter
-        selectedItem={selectedItem()}
-        isInCommandScope={isInCommandScope()}
-        isEntityActionMode={isEntityActionMode()}
-        canOpenInNewSplit={canOpenInNewSplit()}
-      />
-    </div>
+        <Switch>
+          <Match when={isInCommandScope()}>
+            <HotkeyHint shortcut="enter" label="Run action" />
+            <HotkeyHint shortcut="escape" label="Back" />
+          </Match>
+          <Match when={selectedIsCommand() || isEntityActionMode()}>
+            <HotkeyHint shortcut="enter" label="Run action" />
+          </Match>
+          <Match when={selectedIsSearch()}>
+            <HotkeyHint shortcut="enter" label="Search" />
+            <Show when={canOpenInNewSplit()}>
+              <HotkeyHint shortcut="shift+enter" label="Search in new split" />
+            </Show>
+          </Match>
+          <Match when={selectedIsEntity()}>
+            <HotkeyHint shortcut="enter" label="Open" />
+            <Show when={canOpenInNewSplit()}>
+              <HotkeyHint shortcut="shift+enter" label="Open in new split" />
+            </Show>
+          </Match>
+        </Switch>
+
+        <Show when={!isInCommandScope() && !isEntityActionMode()}>
+          <HotkeyHint shortcut="tab" label="Category" />
+        </Show>
+        <Show
+          when={isInCommandScope()}
+          fallback={<HotkeyHint shortcut="escape" label="Close" />}
+        >
+          <HotkeyHint shortcut="escape" label="Back" />
+        </Show>
+      </Window.Footer>
+    </Window>
   );
 }
 
@@ -500,7 +593,7 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
   const remainingCount = () => Math.max(0, props.entities.length - 2);
 
   return (
-    <div class="flex items-center gap-2 px-3 py-2 bg-panel border-b border-edge-muted">
+    <>
       <For each={displayEntities()}>
         {(entity) => {
           return (
@@ -519,44 +612,7 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
           +{remainingCount()} more
         </div>
       </Show>
-    </div>
-  );
-}
-
-function ResultsContainer(props: {
-  items: CommandMenuItem[];
-  selectedIndex: number;
-  onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
-  onMouseEnter: (index: number) => void;
-}) {
-  const containerHeight = () => {
-    const count = props.items.length;
-    if (count === 0) return EMPTY_STATE_HEIGHT;
-    const totalHeight = count * VIRTUAL_ITEM_HEIGHT;
-    return Math.min(MAX_LIST_HEIGHT, totalHeight);
-  };
-
-  return (
-    <div
-      class="bg-panel overflow-hidden transition-[height] duration-60 ease-out"
-      style={{ height: `${containerHeight()}px` }}
-    >
-      <Show
-        when={props.items.length > 0}
-        fallback={
-          <div class="px-4 py-4 text-center text-ink-muted">
-            No results found
-          </div>
-        }
-      >
-        <VirtualizedCommandList
-          items={props.items}
-          selectedIndex={props.selectedIndex}
-          onSelect={props.onSelect}
-          onMouseEnter={props.onMouseEnter}
-        />
-      </Show>
-    </div>
+    </>
   );
 }
 
@@ -622,80 +678,3 @@ function HotkeyHint(props: { shortcut: string; label: string }) {
   );
 }
 
-function CommandMenuFooter(props: {
-  selectedItem: CommandMenuItem | undefined;
-  isInCommandScope: boolean;
-  isEntityActionMode?: boolean;
-  canOpenInNewSplit: boolean;
-}) {
-  const isCommand = () =>
-    props.selectedItem && isCommandItem(props.selectedItem);
-  const isEntity = () => props.selectedItem && isEntityItem(props.selectedItem);
-  const isSearch = () => props.selectedItem && isSearchItem(props.selectedItem);
-
-  return (
-    <div class="flex items-center gap-4 px-4 py-2 bg-panel border-t border-edge-muted text-xs text-ink-extra-muted/80">
-      <span class="flex items-center gap-1">
-        <div class="flex gap-1">
-          <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
-            <Hotkey shortcut="arrowup" class="space-x-1" />
-          </div>
-          <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-0.25 font-normal">
-            <Hotkey shortcut="arrowdown" class="space-x-1" />
-          </div>
-        </div>
-        Navigate
-      </span>
-
-      <Switch>
-        <Match when={props.isInCommandScope}>
-          <HotkeyHint shortcut="enter" label="Run action" />
-          <HotkeyHint shortcut="escape" label="Back" />
-        </Match>
-        <Match when={isCommand() || props.isEntityActionMode}>
-          <HotkeyHint shortcut="enter" label="Run action" />
-        </Match>
-        <Match when={isSearch()}>
-          <HotkeyHint shortcut="enter" label="Search" />
-          <Show when={props.canOpenInNewSplit}>
-            <HotkeyHint shortcut="shift+enter" label="Search in new split" />
-          </Show>
-        </Match>
-        <Match when={isEntity()}>
-          <HotkeyHint shortcut="enter" label="Open" />
-          <Show when={props.canOpenInNewSplit}>
-            <HotkeyHint shortcut="shift+enter" label="Open in new split" />
-          </Show>
-        </Match>
-      </Switch>
-
-      <Show when={!props.isInCommandScope && !props.isEntityActionMode}>
-        <HotkeyHint shortcut="tab" label="Category" />
-      </Show>
-      <Show
-        when={props.isInCommandScope}
-        fallback={<HotkeyHint shortcut="escape" label="Close" />}
-      >
-        <HotkeyHint shortcut="escape" label="Back" />
-      </Show>
-    </div>
-  );
-}
-
-function CategoryFilterTabs() {
-  const list = CATEGORIES.map((c) => ({ value: c.id, label: c.label }));
-
-  return (
-    <div class="px-1.5 h-10 border-b border-edge-muted">
-      <Tabs
-        list={list}
-        value={CommandState.categoryFilter()}
-        onChange={(value) => {
-          if (value) {
-            CommandState.setCategoryFilter(value as CategoryFilter);
-          }
-        }}
-      />
-    </div>
-  );
-}
