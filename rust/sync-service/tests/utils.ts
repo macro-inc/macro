@@ -35,6 +35,7 @@ export async function setupMiniflare() {
     scriptPath: "./build/worker/shim.mjs",
     modules: true,
     modulesRules: [
+      { type: "ESModule", include: ["**/build/index.js"] },
       { type: "CompiledWasm", include: ["**/*.wasm"], fallthrough: true },
     ],
     durableObjects: {
