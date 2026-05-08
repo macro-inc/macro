@@ -85,6 +85,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p prebuilt
+          cachix watch-store macro-inc &
+          cachix_pid=$!
+          trap 'kill "$cachix_pid" || true' EXIT
+
           nix build ".#deploy-service-binaries-${SERVICE}"
           cp -r result/bin/* prebuilt/
           mkdir -p prebuilt/nix-store
