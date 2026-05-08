@@ -255,17 +255,29 @@ export const storageServiceClient = {
   },
 
   async getSoupAstItems(args: {
-    params: { cursor?: string | null };
+    params: {
+      cursor?: string | null;
+      group_by?: unknown;
+      group_key?: string | null;
+    };
     body: PostSoupAstRequest;
   }) {
-    const searchParams = args.params.cursor
-      ? `?cursor=${args.params.cursor}`
-      : '';
+    const params = new URLSearchParams();
+    if (args.params.cursor) params.set('cursor', args.params.cursor);
+    const searchParams = params.toString() ? `?${params.toString()}` : '';
 
-    return await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
-      method: 'POST',
-      body: JSON.stringify(args.body),
-    });
+    // group_by and group_key go in the body, not query params
+    let body: Record<string, unknown> = { ...args.body };
+    if (args.params.group_by) body.group_by = args.params.group_by;
+    if (args.params.group_key) body.group_key = args.params.group_key;
+
+    return await dssFetch<SoupPage & { groups?: unknown[] }>(
+      `/items/soup/ast${searchParams}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    );
   },
 
   permissionsTokens: {
