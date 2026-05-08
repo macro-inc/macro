@@ -1,8 +1,8 @@
 import { truncateLabel } from '@core/util/string';
 import CheckIcon from '@icon/regular/check.svg';
-import XIcon from '@icon/regular/x.svg';
 import { Combobox } from '@kobalte/core/combobox';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import XIcon from '@icon/regular/x.svg';
 import { Button, cn, Layer } from '@ui';
 import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import type { SearchableOption } from './search-filter-controls';
@@ -349,12 +349,11 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
               <span class="inline-flex items-center gap-1.5">
                 {renderChip(filter)}
                 <Button
-                  class="rounded-xs whitespace-nowrap"
-                  size="sm"
-                  variant="ghost"
                   onClick={() => props.onClearAll()}
+                  variant="base"
+                  size="sm"
                 >
-                  Clear
+                  <XIcon class="size-3!" />Clear
                 </Button>
               </span>
             </Show>

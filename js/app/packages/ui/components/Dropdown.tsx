@@ -1,6 +1,6 @@
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
-import { type ComponentProps } from 'solid-js';
 import { Button, type ButtonProps } from './Button';
+import type { ComponentProps } from 'solid-js';
 
 /*
 <Dropdown>
@@ -19,13 +19,12 @@ function DropdownTrigger(props: DropdownTriggerProps) {
   return (
     <KobalteDropdownMenu.Trigger
       variant="base"
-      size="sm"
       as={Button}
       {...props}
+      size="sm"
     />
   );
 }
-
 
 export const Dropdown = Object.assign((props: ComponentProps<typeof KobalteDropdownMenu>) => (<KobalteDropdownMenu {...props} />), {
   ItemDescription: KobalteDropdownMenu.ItemDescription, /* todo */
