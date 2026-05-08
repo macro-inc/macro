@@ -58,7 +58,7 @@ impl ResolvedFilters {
 
 /// Walks the AST collecting every Complete email address (lowercased,
 /// deduplicated) so they can be resolved in one DB round trip.
-fn collect_complete_emails(ast: &Expr<EmailLiteral>) -> Vec<String> {
+pub(super) fn collect_complete_emails(ast: &Expr<EmailLiteral>) -> Vec<String> {
     fn walk(e: &Expr<EmailLiteral>, out: &mut Vec<String>) {
         match e {
             Expr::And(a, b) | Expr::Or(a, b) => {
@@ -89,7 +89,10 @@ fn collect_complete_emails(ast: &Expr<EmailLiteral>) -> Vec<String> {
 /// substitution, `None` otherwise. A `Some(false)` result means no thread
 /// can match — the caller can short-circuit to an empty page without
 /// running the main query.
-fn fold_unresolved(ast: &Expr<EmailLiteral>, resolved: &ResolvedFilters) -> Option<bool> {
+pub(super) fn fold_unresolved(
+    ast: &Expr<EmailLiteral>,
+    resolved: &ResolvedFilters,
+) -> Option<bool> {
     fn lit_value(literal: &EmailLiteral, resolved: &ResolvedFilters) -> Option<bool> {
         let email = match literal {
             EmailLiteral::Sender(e)
@@ -136,6 +139,7 @@ pub(super) fn can_short_circuit(ast: &Expr<EmailLiteral>, resolved: &ResolvedFil
 
 /// Resolves all Complete emails in the AST to `contact_id`s and looks up
 /// the TRASH label id for the link in one (or two) DB round trip(s).
+#[tracing::instrument(skip(pool, ast), err)]
 pub(super) async fn resolve_filters(
     pool: &PgPool,
     link_id: Uuid,
@@ -178,85 +182,4 @@ pub(super) async fn resolve_filters(
         contact_ids,
         trash_label_id,
     })
-}
-
-#[cfg(test)]
-mod fold_tests {
-    use super::*;
-    use item_filters::ast::email::Email;
-    use macro_user_id::cowlike::CowLike;
-    use macro_user_id::email::EmailStr;
-
-    fn complete(s: &str) -> Email {
-        Email::Complete(EmailStr::parse_from_str(s).unwrap().into_owned())
-    }
-
-    fn resolved_with(emails: &[&str]) -> ResolvedFilters {
-        let mut r = ResolvedFilters::empty();
-        for e in emails {
-            r = r.with_contact(e.to_lowercase(), Uuid::new_v4());
-        }
-        r
-    }
-
-    #[test]
-    fn unresolved_sender_short_circuits() {
-        let expr = Expr::Literal(EmailLiteral::Sender(complete("missing@x.com")));
-        let r = resolved_with(&[]);
-        assert!(can_short_circuit(&expr, &r));
-    }
-
-    #[test]
-    fn resolved_sender_does_not_short_circuit() {
-        let expr = Expr::Literal(EmailLiteral::Sender(complete("known@x.com")));
-        let r = resolved_with(&["known@x.com"]);
-        assert!(!can_short_circuit(&expr, &r));
-    }
-
-    #[test]
-    fn unresolved_under_not_does_not_short_circuit() {
-        let expr = Expr::is_not(Expr::Literal(EmailLiteral::Sender(complete(
-            "missing@x.com",
-        ))));
-        let r = resolved_with(&[]);
-        assert!(!can_short_circuit(&expr, &r));
-    }
-
-    #[test]
-    fn or_with_one_unresolved_does_not_short_circuit() {
-        let expr = Expr::or(
-            Expr::Literal(EmailLiteral::Sender(complete("missing@x.com"))),
-            Expr::Literal(EmailLiteral::Sender(complete("known@x.com"))),
-        );
-        let r = resolved_with(&["known@x.com"]);
-        assert!(!can_short_circuit(&expr, &r));
-    }
-
-    #[test]
-    fn and_with_one_unresolved_short_circuits() {
-        let expr = Expr::and(
-            Expr::Literal(EmailLiteral::Sender(complete("missing@x.com"))),
-            Expr::Literal(EmailLiteral::Sender(complete("known@x.com"))),
-        );
-        let r = resolved_with(&["known@x.com"]);
-        assert!(can_short_circuit(&expr, &r));
-    }
-
-    #[test]
-    fn collect_dedups_case_insensitively() {
-        let expr = Expr::or(
-            Expr::Literal(EmailLiteral::Sender(complete("Foo@X.com"))),
-            Expr::Literal(EmailLiteral::Recipient(complete("foo@x.com"))),
-        );
-        let collected = collect_complete_emails(&expr);
-        assert_eq!(collected, vec!["foo@x.com"]);
-    }
-
-    #[test]
-    fn partial_emails_are_never_constant() {
-        let expr = Expr::Literal(EmailLiteral::Sender(Email::Partial("foo".to_string())));
-        let r = ResolvedFilters::empty();
-        assert!(!can_short_circuit(&expr, &r));
-        assert_eq!(fold_unresolved(&expr, &r), None);
-    }
 }

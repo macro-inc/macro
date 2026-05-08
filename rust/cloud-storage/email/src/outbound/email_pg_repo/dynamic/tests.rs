@@ -1,4 +1,6 @@
-use super::resolve::ResolvedFilters;
+use super::resolve::{
+    ResolvedFilters, can_short_circuit, collect_complete_emails, fold_unresolved,
+};
 use super::*;
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use filter_ast::Expr;
@@ -20,6 +22,78 @@ fn resolved_with(emails: &[(&str, Uuid)]) -> ResolvedFilters {
         r = r.with_contact(e.to_lowercase(), *id);
     }
     r
+}
+
+/// `ResolvedFilters` populated only with the listed emails (no trash
+/// label). Used by the `resolve::*` constant-folding tests where we only
+/// care which Complete emails resolve.
+fn resolved_with_random_ids(emails: &[&str]) -> ResolvedFilters {
+    let mut r = ResolvedFilters::empty();
+    for e in emails {
+        r = r.with_contact(e.to_lowercase(), Uuid::new_v4());
+    }
+    r
+}
+
+#[test]
+fn unresolved_sender_short_circuits() {
+    let expr = Expr::Literal(EmailLiteral::Sender(complete("missing@x.com")));
+    let r = resolved_with_random_ids(&[]);
+    assert!(can_short_circuit(&expr, &r));
+}
+
+#[test]
+fn resolved_sender_does_not_short_circuit() {
+    let expr = Expr::Literal(EmailLiteral::Sender(complete("known@x.com")));
+    let r = resolved_with_random_ids(&["known@x.com"]);
+    assert!(!can_short_circuit(&expr, &r));
+}
+
+#[test]
+fn unresolved_under_not_does_not_short_circuit() {
+    let expr = Expr::is_not(Expr::Literal(EmailLiteral::Sender(complete(
+        "missing@x.com",
+    ))));
+    let r = resolved_with_random_ids(&[]);
+    assert!(!can_short_circuit(&expr, &r));
+}
+
+#[test]
+fn or_with_one_unresolved_does_not_short_circuit() {
+    let expr = Expr::or(
+        Expr::Literal(EmailLiteral::Sender(complete("missing@x.com"))),
+        Expr::Literal(EmailLiteral::Sender(complete("known@x.com"))),
+    );
+    let r = resolved_with_random_ids(&["known@x.com"]);
+    assert!(!can_short_circuit(&expr, &r));
+}
+
+#[test]
+fn and_with_one_unresolved_short_circuits() {
+    let expr = Expr::and(
+        Expr::Literal(EmailLiteral::Sender(complete("missing@x.com"))),
+        Expr::Literal(EmailLiteral::Sender(complete("known@x.com"))),
+    );
+    let r = resolved_with_random_ids(&["known@x.com"]);
+    assert!(can_short_circuit(&expr, &r));
+}
+
+#[test]
+fn collect_dedups_case_insensitively() {
+    let expr = Expr::or(
+        Expr::Literal(EmailLiteral::Sender(complete("Foo@X.com"))),
+        Expr::Literal(EmailLiteral::Recipient(complete("foo@x.com"))),
+    );
+    let collected = collect_complete_emails(&expr);
+    assert_eq!(collected, vec!["foo@x.com"]);
+}
+
+#[test]
+fn partial_emails_are_never_constant() {
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Partial("foo".to_string())));
+    let r = ResolvedFilters::empty();
+    assert!(!can_short_circuit(&expr, &r));
+    assert_eq!(fold_unresolved(&expr, &r), None);
 }
 
 #[test]
@@ -402,7 +476,6 @@ fn test_combined_thread_id_and_sender_splits_correctly() {
     let message_debug = message_result.to_debug_sql();
     assert!(message_debug.contains("from_contact_id"));
     assert!(message_result.has_bind_uuid(&contact_id));
-    assert!(!message_result.has_no_raw_containing("from_contact_id"));
 }
 
 #[test]

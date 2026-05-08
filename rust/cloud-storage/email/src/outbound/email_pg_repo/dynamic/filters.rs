@@ -355,9 +355,10 @@ fn build_address_message_predicate(
 
 /// Builds the `NOT EXISTS (… TRASH …)` fragment used inside the candidate
 /// subquery. Uses a direct `ml.label_id = $trash_label_id` probe (full PK
-/// match on `email_message_labels`) when the trash label is resolved. Falls
-/// back to the legacy name+link_id join only as a safety net for callers
-/// that don't pre-resolve. Returns `TRUE` if the link has no TRASH label.
+/// match on `email_message_labels`) when the trash label is resolved.
+/// Returns `TRUE` (no exclusion) when the link has no TRASH label —
+/// callers must always pre-resolve via `resolve_filters`, and a missing
+/// TRASH label means no message can be trashed in the first place.
 fn build_trash_check(resolved: &ResolvedFilters) -> SqlFragment {
     match resolved.trash_label_id() {
         Some(id) => {
@@ -714,8 +715,10 @@ pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
 }
 
 /// Builds the LATERAL's TRASH-exclusion fragment using the resolved label id
-/// when available, falling back to a name-join otherwise. Anchored on `m.id`
-/// inside the LATERAL, so callers shouldn't add their own AND prefix.
+/// when available. Returns `TRUE` (no exclusion) when the link has no TRASH
+/// label — same rationale as `build_trash_check`: a missing TRASH label
+/// means no message can be trashed. Anchored on `m.id` inside the LATERAL,
+/// so callers shouldn't add their own AND prefix.
 pub(super) fn build_lateral_trash_exclusion(resolved: &ResolvedFilters) -> SqlFragment {
     match resolved.trash_label_id() {
         Some(id) => {
