@@ -44,12 +44,6 @@ export function MessageFlag(props: MessageFlagProps) {
         >
           {props.text}
         </span>
-        {/*<div
-          class={cn(
-            'flex-1 border-b border-rail',
-            props.highlightBelow && 'border-accent'
-          )}
-        />*/}
       </div>
     </div>
   );
