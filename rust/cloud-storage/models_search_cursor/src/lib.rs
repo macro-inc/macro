@@ -37,7 +37,7 @@ pub enum SearchMethodCursor {
     /// Sort: `[thread_id desc, message_id desc]`. Used by channel content
     /// search in thread-grouped mode.
     Thread {
-        /// Primary sort key (uuidv7, lex == chronological).
+        /// Primary sort key.
         thread_id: uuid::Uuid,
         /// Tiebreaker for replies within the same thread.
         message_id: uuid::Uuid,

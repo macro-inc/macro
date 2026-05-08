@@ -47,11 +47,10 @@ macro_rules! delegate_methods {
 /// Sort mode for unified search. Defaults to [`ChannelSortMode::Message`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ChannelSortMode {
-    /// Sort by sent_at_seconds/updated_at_seconds with entity_id as tiebreaker.
+    /// Sort by sent_at_seconds/updated_at_seconds, entity_id as tiebreaker.
     #[default]
     Message,
-    /// Sort by ms timestamp extracted from thread_id (or message_id when null),
-    /// with message_id as tiebreaker. Both keys are uuidv7 (ms-precise).
+    /// Sort by thread_id, message_id as tiebreaker.
     Thread,
 }
 
@@ -85,12 +84,8 @@ pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
 }
 
 /// Sort vec for channel content with thread-grouped ordering.
-///
-/// `thread_id` is always populated (threadless messages are indexed with
-/// `thread_id == message_id`) and is uuidv7 keyword-typed, so lex order =
-/// chronological order. `message_id` breaks ties for replies in the same
-/// thread. `unmapped_type` lets the same sort apply to non-channel indices
-/// in mixed unified search.
+/// `unmapped_type` lets the same sort apply to non-channel indices in mixed
+/// unified search.
 pub(crate) fn thread_sort<'a>() -> Vec<SortType<'a>> {
     vec![
         SortType::Field(FieldSort::new("thread_id", SortOrder::Desc).unmapped_type("keyword")),

@@ -306,8 +306,6 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     .unwrap_or_default(),
                 goto: Some(SearchGotoContent::Channels(SearchGotoChannel {
                     channel_message_id: a.message_id,
-                    // index always populates thread_id; expose None at the API
-                    // surface when the message is its own one-message thread.
                     thread_id: (a.thread_id != a.message_id).then_some(a.thread_id),
                     sender_id: a.sender_id,
                     created_at: DateTime::from_timestamp(a.created_at_seconds, 0)
@@ -630,8 +628,6 @@ fn build_cursor_for_mode(last: &SearchHit, mode: ChannelSortMode) -> Option<Sear
         }),
         ChannelSortMode::Thread => match &last.goto {
             Some(SearchGotoContent::Channels(ch)) => Some(SearchMethodCursor::Thread {
-                // API surface exposes None when threadless; the index always
-                // stores `thread_id == message_id` for those, so fall back.
                 thread_id: ch.thread_id.unwrap_or(ch.channel_message_id),
                 message_id: ch.channel_message_id,
             }),

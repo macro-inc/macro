@@ -118,8 +118,6 @@ pub fn construct_search_result(
     let result: Vec<ChannelSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
         .filter_map(|(entity_id, mut hits)| {
-            // message_id is uuidv7 so it provides a deterministic tiebreaker
-            // when the primary key (created_at or thread_id) ties.
             match sort_timestamp {
                 ChannelSortTimestamp::Message => {
                     hits.sort_by(|a, b| {
@@ -129,9 +127,6 @@ pub fn construct_search_result(
                     });
                 }
                 ChannelSortTimestamp::Thread => {
-                    // For threadless hits, fall back to message_id as the primary
-                    // key so they interleave with threaded hits chronologically
-                    // (both are uuidv7 and globally comparable at ms precision).
                     hits.sort_by(|a, b| {
                         let a_key = a.thread_id.or(a.message_id);
                         let b_key = b.thread_id.or(b.message_id);
