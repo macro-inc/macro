@@ -57,8 +57,6 @@ pub async fn handler(
         models_search::SearchOn::Content => None,
     };
 
-    let channel_sort_timestamp = req.channel_sort_timestamp;
-
     let (results, next_cursor) =
         perform_unified_search(&ctx, &user_context, query_params, req).await?;
 
@@ -89,7 +87,6 @@ pub async fn handler(
             document,
             models_opensearch::SearchEntityType::Documents,
             document_name_term.as_deref(),
-            channel_sort_timestamp,
         ),
         enrich_search_response(
             &ctx,
@@ -97,7 +94,6 @@ pub async fn handler(
             chat,
             models_opensearch::SearchEntityType::Chats,
             None,
-            channel_sort_timestamp,
         ),
         enrich_search_response(
             &ctx,
@@ -105,7 +101,6 @@ pub async fn handler(
             channel_message,
             models_opensearch::SearchEntityType::Channels,
             None,
-            channel_sort_timestamp,
         ),
         enrich_search_response(
             &ctx,
@@ -113,7 +108,6 @@ pub async fn handler(
             project,
             models_opensearch::SearchEntityType::Projects,
             None,
-            channel_sort_timestamp,
         ),
         enrich_search_response(
             &ctx,
@@ -121,7 +115,6 @@ pub async fn handler(
             email,
             models_opensearch::SearchEntityType::Emails,
             None,
-            channel_sort_timestamp,
         ),
         enrich_search_response(
             &ctx,
@@ -129,7 +122,6 @@ pub async fn handler(
             call_record,
             models_opensearch::SearchEntityType::CallRecords,
             None,
-            channel_sort_timestamp,
         ),
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;

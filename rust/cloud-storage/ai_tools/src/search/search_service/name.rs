@@ -62,7 +62,6 @@ impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
             filters: entity_filters_from_include(self.entity_types.clone(), base_filters),
             search_on: models_search::SearchOn::Name,
             collapse: Some(true),
-            channel_sort_timestamp: Default::default(),
         };
 
         let response = search_client

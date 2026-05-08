@@ -1,10 +1,10 @@
+pub use crate::search::builder::ChannelSortMode;
+
 use crate::{
     Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{
-            ChannelSortMode, SearchQueryBuilder, SearchQueryConfig, thread_sort, updated_at_sort,
-        },
+        builder::{SearchQueryBuilder, SearchQueryConfig, thread_sort, updated_at_sort},
         model::{
             DefaultSearchResponse, Hit, MacroEm, SearchGotoChannel, SearchGotoContent, SearchHit,
             exclude_source_content, inject_fragment_size, parse_highlight_hit,

@@ -455,7 +455,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             entity_id,
             updated_at: time,
         })),
-        channel_sort_mode: ChannelSortMode::default(),
     };
 
     let result = build_unified_search_request(&unified_search_args)?;
@@ -842,7 +841,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             entity_id,
             updated_at: time,
         })),
-        channel_sort_mode: ChannelSortMode::default(),
     };
 
     let result = build_unified_search_request(&unified_search_args)?;
@@ -974,26 +972,4 @@ fn test_thread_sort_is_thread_id_then_message_id_field_sorts() {
     assert_eq!(json[0]["thread_id"]["unmapped_type"], "keyword");
     assert_eq!(json[1]["message_id"]["order"], "desc");
     assert_eq!(json[1]["message_id"]["unmapped_type"], "keyword");
-}
-
-#[test]
-fn test_unified_sort_thread_mode_matches_thread_sort() {
-    use crate::search::builder::{ChannelSortMode, thread_sort, unified_sort};
-    let from_unified: Vec<_> = unified_sort(ChannelSortMode::Thread)
-        .iter()
-        .map(|s| s.to_json())
-        .collect();
-    let from_thread: Vec<_> = thread_sort().iter().map(|s| s.to_json()).collect();
-    assert_eq!(from_unified, from_thread);
-}
-
-#[test]
-fn test_unified_sort_message_mode_matches_updated_at_sort() {
-    use crate::search::builder::{ChannelSortMode, unified_sort};
-    let from_unified: Vec<_> = unified_sort(ChannelSortMode::Message)
-        .iter()
-        .map(|s| s.to_json())
-        .collect();
-    let from_updated: Vec<_> = updated_at_sort().iter().map(|s| s.to_json()).collect();
-    assert_eq!(from_unified, from_updated);
 }

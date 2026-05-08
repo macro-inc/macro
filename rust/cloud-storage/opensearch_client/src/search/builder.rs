@@ -44,7 +44,7 @@ macro_rules! delegate_methods {
     };
 }
 
-/// Sort mode for unified search. Defaults to [`ChannelSortMode::Message`].
+/// Sort mode for the channel content endpoint.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ChannelSortMode {
     /// Sort by sent_at_seconds/updated_at_seconds, entity_id as tiebreaker.
@@ -52,14 +52,6 @@ pub enum ChannelSortMode {
     Message,
     /// Sort by thread_id, message_id as tiebreaker.
     Thread,
-}
-
-/// Builds the OpenSearch sort vec for unified search.
-pub(crate) fn unified_sort<'a>(mode: ChannelSortMode) -> Vec<SortType<'a>> {
-    match mode {
-        ChannelSortMode::Message => updated_at_sort(),
-        ChannelSortMode::Thread => thread_sort(),
-    }
 }
 
 /// Creates sort vec to sort by sent_at_seconds (preferred) or updated_at_seconds (fallback)

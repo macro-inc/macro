@@ -5,6 +5,9 @@ use models_search::channel::ChannelSortTimestamp;
 use models_search::unified::UnifiedSearchResponseItem;
 use opensearch_client::search::model::SearchHit;
 
+// Unified search always re-sorts channel results by created_at app-side (Message mode).
+const UNIFIED_CHANNEL_SORT: ChannelSortTimestamp = ChannelSortTimestamp::Message;
+
 use crate::api::{
     context::SearchHandlerState,
     search::{
@@ -22,7 +25,6 @@ pub async fn enrich_search_response(
     results: Vec<SearchHit>,
     entity_type: SearchEntityType,
     search_term: Option<&str>,
-    channel_sort_timestamp: ChannelSortTimestamp,
 ) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
     match entity_type {
         SearchEntityType::Documents => {
@@ -40,7 +42,7 @@ pub async fn enrich_search_response(
                 .collect())
         }
         SearchEntityType::Channels => {
-            let response = enrich_channels(ctx, user_id, results, channel_sort_timestamp).await?;
+            let response = enrich_channels(ctx, user_id, results, UNIFIED_CHANNEL_SORT).await?;
             Ok(response
                 .into_iter()
                 .map(UnifiedSearchResponseItem::Channel)

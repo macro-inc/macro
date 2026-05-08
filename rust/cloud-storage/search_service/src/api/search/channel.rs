@@ -19,9 +19,8 @@ use models_search::channel::{
     ChannelSearchResponseItemWithMetadata, ChannelSearchResult, ChannelSortTimestamp,
 };
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
-use opensearch_client::search::channels::ChannelSearchArgs;
+use opensearch_client::search::channels::{ChannelSearchArgs, ChannelSortMode};
 use opensearch_client::search::model::SearchGotoContent;
-use opensearch_client::search::unified::ChannelSortMode;
 use sqlx::types::Uuid;
 
 /// Enriches channel message search results with metadata

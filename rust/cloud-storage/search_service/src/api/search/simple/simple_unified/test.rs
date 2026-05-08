@@ -104,7 +104,6 @@ fn test_compute_next_cursor_search_is_done_returns_done() {
             SearchSource::DocumentName,
         )),
         &SearchCursorOption::NotDone(None),
-        ChannelSortMode::Message,
     );
 
     assert!(result.is_done());
@@ -124,7 +123,6 @@ fn test_compute_next_cursor_excluded_results_with_included_generates_cursor() {
         5,                                  // original_count (more results were fetched)
         Some(&last_hit),
         &SearchCursorOption::NotDone(None),
-        ChannelSortMode::Message,
     );
 
     match result {
@@ -154,7 +152,6 @@ fn test_compute_next_cursor_search_has_more_with_included_generates_cursor() {
         5, // original_count (all included)
         Some(&last_hit),
         &SearchCursorOption::NotDone(None),
-        ChannelSortMode::Message,
     );
 
     match result {
@@ -184,7 +181,6 @@ fn test_compute_next_cursor_excluded_results_no_included_carries_forward() {
         5,                                  // original_count (had results)
         None,                               // no last hit
         &original_cursor,
-        ChannelSortMode::Message,
     );
 
     match result {
@@ -211,7 +207,6 @@ fn test_compute_next_cursor_all_included_search_done_returns_done() {
             SearchSource::Content,
         )),
         &SearchCursorOption::NotDone(None),
-        ChannelSortMode::Message,
     );
 
     assert!(result.is_done());
@@ -231,7 +226,6 @@ fn test_compute_next_cursor_all_included_but_search_not_done_continues() {
         5,                                  // original_count (all fetched were included)
         Some(&last_hit),
         &SearchCursorOption::NotDone(None),
-        ChannelSortMode::Message,
     );
 
     // Since search says not done, we should continue pagination
@@ -257,7 +251,6 @@ fn test_compute_next_cursor_hit_without_timestamp_returns_none_cursor() {
         5,
         Some(&last_hit),
         &SearchCursorOption::NotDone(None),
-        ChannelSortMode::Message,
     );
 
     match result {
@@ -315,7 +308,7 @@ fn test_cursor_from_tagged_with_timestamp() {
     let timestamp = ts(1000);
     let hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::DocumentName);
 
-    let cursor = cursor_from_tagged(&hit, ChannelSortMode::Message);
+    let cursor = cursor_from_tagged(&hit);
     assert!(cursor.is_some());
     let (id, ts) = cursor
         .unwrap()
@@ -330,7 +323,7 @@ fn test_cursor_from_tagged_without_timestamp() {
     let entity_id = Uuid::new_v4();
     let hit = make_tagged_hit(entity_id, None, SearchSource::ChatName);
 
-    let cursor = cursor_from_tagged(&hit, ChannelSortMode::Message);
+    let cursor = cursor_from_tagged(&hit);
     assert!(cursor.is_none());
 }
 
@@ -372,7 +365,6 @@ fn test_cursor_logic_pagination_scenario() {
         doc_name_count,
         find_last_of_source(&final_tagged, SearchSource::DocumentName),
         &SearchCursorOption::NotDone(None),
-        ChannelSortMode::Message,
     );
 
     // Should generate cursor from last included doc (doc_ids[7])
@@ -410,7 +402,6 @@ fn test_cursor_logic_source_exhausted_scenario() {
         3, // all returned
         find_last_of_source(&final_tagged, SearchSource::DocumentName),
         &SearchCursorOption::NotDone(None),
-        ChannelSortMode::Message,
     );
 
     assert!(new_doc_cursor.is_done());

@@ -1,12 +1,10 @@
 use std::collections::HashSet;
 
-pub use crate::search::builder::ChannelSortMode;
-
 use crate::{
     Result,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryConfig, unified_sort},
+        builder::{SearchQueryConfig, updated_at_sort},
         call_records::{
             CallRecordIndex, CallRecordQueryBuilder, CallRecordSearchArgs, CallRecordSearchConfig,
         },
@@ -65,9 +63,6 @@ pub struct UnifiedSearchArgs {
     pub chat_search_args: UnifiedChatSearchArgs,
     /// The call record search args. If None, we do not search call records
     pub call_record_search_args: UnifiedCallRecordSearchArgs,
-    /// Sort mode. Use [`ChannelSortMode::Thread`] when scoping to channel
-    /// content where pagination should follow thread order.
-    pub channel_sort_mode: ChannelSortMode,
 }
 
 impl From<UnifiedSearchArgs> for DocumentSearchArgs {
@@ -508,10 +503,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         search_request_builder.collapse(Collapse::new("entity_id"));
     }
 
-    // Build sort
-    let sort = unified_sort(args.channel_sort_mode);
-
-    for sort in sort {
+    for sort in updated_at_sort() {
         search_request_builder.add_sort(sort);
     }
 
@@ -608,32 +600,15 @@ pub(crate) async fn search_unified(
     }
 
     let cursor = if has_more {
-        let last_cursor = results
-            .last()
-            .and_then(|last| build_cursor_for_mode(last, args.channel_sort_mode));
-        SearchCursorOption::NotDone(last_cursor)
+        SearchCursorOption::NotDone(results.last().map(|last| SearchMethodCursor::UpdatedAt {
+            entity_id: last.entity_id,
+            updated_at: last.updated_at.unwrap_or_else(Utc::now),
+        }))
     } else {
         SearchCursorOption::Done
     };
 
     Ok((results, cursor))
-}
-
-/// Builds the cursor used as `search_after` for the next page.
-fn build_cursor_for_mode(last: &SearchHit, mode: ChannelSortMode) -> Option<SearchMethodCursor> {
-    match mode {
-        ChannelSortMode::Message => Some(SearchMethodCursor::UpdatedAt {
-            entity_id: last.entity_id,
-            updated_at: last.updated_at.unwrap_or_else(Utc::now),
-        }),
-        ChannelSortMode::Thread => match &last.goto {
-            Some(SearchGotoContent::Channels(ch)) => Some(SearchMethodCursor::Thread {
-                thread_id: ch.thread_id.unwrap_or(ch.channel_message_id),
-                message_id: ch.channel_message_id,
-            }),
-            _ => None,
-        },
-    }
 }
 
 #[cfg(test)]

@@ -12,15 +12,14 @@ use axum::{
 };
 use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
-use models_search::channel::ChannelSortTimestamp;
 use models_search::unified::SearchEntityFilters;
 use models_search::{
     SearchOn, SimpleSearchResponse,
     unified::{SimpleUnifiedSearchResponse, UnifiedSearchRequest},
 };
 use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
-use opensearch_client::search::model::{SearchGotoContent, SearchHit};
-use opensearch_client::search::unified::{ChannelSortMode, UnifiedSearchArgs};
+use opensearch_client::search::model::SearchHit;
+use opensearch_client::search::unified::UnifiedSearchArgs;
 
 /// Identifies the source of a search result for cursor regeneration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,23 +45,7 @@ fn find_last_of_source(
 }
 
 /// Generate a cursor from a TaggedSearchHit.
-///
-/// Content hits in [`ChannelSortMode::Thread`] produce a `Thread` cursor;
-/// everything else (name searches and Message-mode content) produces an
-/// `UpdatedAt` cursor.
-fn cursor_from_tagged(
-    tagged: &TaggedSearchHit,
-    content_mode: ChannelSortMode,
-) -> Option<SearchMethodCursor> {
-    if tagged.source == SearchSource::Content && content_mode == ChannelSortMode::Thread {
-        return match &tagged.hit.goto {
-            Some(SearchGotoContent::Channels(ch)) => Some(SearchMethodCursor::Thread {
-                thread_id: ch.thread_id.unwrap_or(ch.channel_message_id),
-                message_id: ch.channel_message_id,
-            }),
-            _ => None,
-        };
-    }
+fn cursor_from_tagged(tagged: &TaggedSearchHit) -> Option<SearchMethodCursor> {
     tagged
         .hit
         .updated_at
@@ -79,15 +62,12 @@ fn compute_next_cursor(
     original_count: usize,
     last_included_hit: Option<&TaggedSearchHit>,
     original_cursor: &SearchCursorOption,
-    content_mode: ChannelSortMode,
 ) -> SearchCursorOption {
     if next_cursor_from_search.is_done() {
         SearchCursorOption::Done
     } else if included_count < original_count || next_cursor_from_search.has_more() {
         if included_count > 0 {
-            SearchCursorOption::NotDone(
-                last_included_hit.and_then(|t| cursor_from_tagged(t, content_mode)),
-            )
+            SearchCursorOption::NotDone(last_included_hit.and_then(cursor_from_tagged))
         } else {
             original_cursor.clone()
         }
@@ -279,11 +259,6 @@ pub(in crate::api::search) async fn perform_unified_search(
     let project_cursor_for_search = project_cursor.clone();
     let content_cursor_for_search = content_cursor.clone();
 
-    let channel_sort_mode = match req.channel_sort_timestamp {
-        ChannelSortTimestamp::Message => ChannelSortMode::Message,
-        ChannelSortTimestamp::Thread => ChannelSortMode::Thread,
-    };
-
     let unified_search_args = UnifiedSearchArgs {
         user_id: user_id.as_ref().to_string(),
         page: 0, // With cursor-based pagination, we always start from "page 0" relative to cursor
@@ -291,7 +266,6 @@ pub(in crate::api::search) async fn perform_unified_search(
         cursor: content_cursor_for_search,
         match_type: match_type.to_string(),
         collapse,
-        channel_sort_mode,
         search_indices: {
             let mut indices = std::collections::HashSet::new();
             if should_include_documents
@@ -508,7 +482,6 @@ pub(in crate::api::search) async fn perform_unified_search(
             doc_name_count,
             find_last_of_source(&final_tagged, SearchSource::DocumentName),
             &document_cursor,
-            channel_sort_mode,
         );
 
         let new_chat_cursor = compute_next_cursor(
@@ -517,7 +490,6 @@ pub(in crate::api::search) async fn perform_unified_search(
             chat_name_count,
             find_last_of_source(&final_tagged, SearchSource::ChatName),
             &chat_cursor,
-            channel_sort_mode,
         );
 
         let new_project_cursor = compute_next_cursor(
@@ -526,7 +498,6 @@ pub(in crate::api::search) async fn perform_unified_search(
             project_name_count,
             find_last_of_source(&final_tagged, SearchSource::ProjectName),
             &project_cursor,
-            channel_sort_mode,
         );
 
         let new_content_cursor = compute_next_cursor(
@@ -535,7 +506,6 @@ pub(in crate::api::search) async fn perform_unified_search(
             content_count,
             find_last_of_source(&final_tagged, SearchSource::Content),
             &content_cursor,
-            channel_sort_mode,
         );
 
         // Build next cursor if any source has more results
