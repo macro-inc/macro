@@ -30,7 +30,7 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
 
   const content = (
     <div class="flex items-center gap-2">
-      <div class="shrink-0">{icon()}</div>
+      <div class="shrink-0 flex items-center">{icon()}</div>
       <span class="truncate">{name()}</span>
     </div>
   );
