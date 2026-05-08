@@ -1,17 +1,17 @@
-import ReplyIcon from '@macro-icons/square/reply.svg';
-import LinkIcon from '@macro-icons/square/link.svg';
-import EditIcon from '@macro-icons/square/edit.svg';
 import AddEmojiIcon from '@macro-icons/square/add-emoji.svg';
+import EditIcon from '@macro-icons/square/edit.svg';
+import LinkIcon from '@macro-icons/square/link.svg';
+import ReplyIcon from '@macro-icons/square/reply.svg';
 import TrashIcon from '@macro-icons/square/trash.svg';
 import StarIcon from '@macro-icons/wide/star.svg';
 import TaskIcon from '@macro-icons/wide/task.svg';
-import { createSignal, For, Show, type Component, type JSX } from 'solid-js';
+import { Button, Layer } from '@ui';
+import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { useMessage, useMessageActions } from './context';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { HoverActions } from './HoverActions';
 import { renderIcon } from './render-icon';
 import type { MessageActionEvent, MessageActionHandler } from './types';
-import { Button, Layer } from '@ui';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '😂'] as const;
 

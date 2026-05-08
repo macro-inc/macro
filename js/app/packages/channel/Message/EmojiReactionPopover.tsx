@@ -33,7 +33,7 @@ export function EmojiReactionPopover(props: EmojiReactionPopoverProps) {
       overflowPadding={8}
       slide={true}
     >
-      <Popover.Trigger as={Button} {...local.triggerProps}>
+      <Popover.Trigger as={Button} type="button" {...local.triggerProps}>
         {local.trigger}
       </Popover.Trigger>
       <Popover.Portal>
