@@ -76,6 +76,9 @@ pub enum ExpandErr {
     /// invalid entity reference id
     #[error(transparent)]
     EntityRefId(#[from] properties::EntityRefIdError),
+    /// invalid API AST expansion
+    #[error("invalid API AST expansion: {0}")]
+    ApiAst(String),
 }
 
 /// type alias for a maybe empty, cheaply cloneable ast literal tree

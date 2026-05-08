@@ -32,6 +32,7 @@ use crate::{
         },
         ports::{SoupOutput, SoupService},
     },
+    inbound::axum_router::ApiEntityFilterAst,
     inbound::axum_router::{SoupRouterState, soup_router},
 };
 
@@ -83,12 +84,15 @@ impl SoupService for MockSoup {
                 MockCursorKind::FrecencyCursor
             }
         };
-        let filter = serde_json::to_value(req.cursor.filter()).unwrap();
+        let soup_type = req.soup_type;
+        let email_preview_view = req.email_preview_view.clone();
+        let link_id = req.link_id;
+        let filter = serde_json::to_value(req.into_ast()?.cursor.filter()).unwrap();
         let mut guard = self.called.lock().unwrap();
         guard.push(MockSoupCall {
-            soup_type: req.soup_type,
-            email_preview_view: req.email_preview_view,
-            link_id: req.link_id,
+            soup_type,
+            email_preview_view,
+            link_id,
             cursor_kind,
             filter,
         });
@@ -1203,14 +1207,14 @@ async fn it_can_expand_assoc_ast() {
 
     let _res = router.oneshot(request).await.unwrap();
 
-    let arg = {
+    {
         let mut guard = inner_counter.lock().unwrap();
         guard
             .pop()
-            .expect("SoupService::handle should have been called")
-    };
+            .expect("SoupService::handle should have been called");
+    }
 
-    let filter: EntityFilterAst = serde_json::from_value(arg.filter).unwrap();
+    let filter: ApiEntityFilterAst = serde_json::from_value(js.clone()).unwrap();
 
     #[derive(Serialize)]
     struct Data(chrono::DateTime<Utc>, Uuid);
