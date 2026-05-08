@@ -15,6 +15,7 @@ export { Layer } from './components/Layer';
 export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
 export type { DialogProps } from './components/Dialog';
 export type { DropdownTriggerProps } from './components/Dropdown';
+export type { ButtonProps } from './components/Button';
 
 /* utils */
 export { cn } from './utils/classname';
