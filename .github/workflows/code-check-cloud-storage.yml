@@ -305,92 +305,12 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: sccache --show-stats || true
 
-  detect-changed-lambdas:
-    needs: path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    outputs:
-      lambdas: ${{ steps.lambdas.outputs.lambdas }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          clean: false
-          fetch-depth: 0
-
-      - name: Determine changed lambdas
-        id: lambdas
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
-          compare_rev=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
-          changed_files=$(git diff --name-only "$compare_rev" HEAD)
-
-          all_lambdas=$(jq -r '[.services[].deploy_lambdas[]?] | unique | .[]' .github/services-config.json)
-          changed_lambdas=()
-
-          if printf '%s\n' "$changed_files" | grep -qxF ".github/services-config.json"; then
-            if [[ -n "$all_lambdas" ]]; then
-              mapfile -t changed_lambdas <<< "$all_lambdas"
-            fi
-          else
-            while IFS= read -r lambda; do
-              [[ -n "$lambda" ]] || continue
-              if printf '%s\n' "$changed_files" | grep -qE "^(rust/cloud-storage/${lambda}/|rust/cloud-storage/Cargo\\.(toml|lock)|rust/rust-toolchain\\.toml|flake\\.nix|flake\\.lock|\\.github/scripts/build-cloud-storage-lambdas\\.sh|\\.github/workflows/code-check-cloud-storage\\.yml)"; then
-                changed_lambdas+=("$lambda")
-              fi
-            done <<< "$all_lambdas"
-          fi
-
-          if [[ ${#changed_lambdas[@]} -eq 0 ]]; then
-            lambdas='[]'
-          else
-            lambdas=$(printf '%s\n' "${changed_lambdas[@]}" | jq -R . | jq -s -c .)
-          fi
-          echo "lambdas=$lambdas" >> "$GITHUB_OUTPUT"
-          echo "Changed lambdas: $lambdas"
-
-  build-lambdas:
-    name: Build ${{ matrix.lambda }} Lambda artifact
-    needs: detect-changed-lambdas
-    if: needs.detect-changed-lambdas.result == 'success' && needs.detect-changed-lambdas.outputs.lambdas != '[]'
-    runs-on: linux-extra-beefy
-    strategy:
-      fail-fast: false
-      max-parallel: 8
-      matrix:
-        lambda: ${{ fromJson(needs.detect-changed-lambdas.outputs.lambdas || '[]') }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          clean: false
-
-      - name: Configure Cachix
-        uses: ./.github/actions/setup-cachix
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-
-      - name: Build Lambda artifact
-        shell: bash
-        env:
-          LAMBDA: ${{ matrix.lambda }}
-        run: |
-          set -euo pipefail
-          nix develop .# -c bash -lc '
-            set -euo pipefail
-            cd rust/cloud-storage
-            echo "::group::Build $LAMBDA"
-            ulimit -n 10240
-            just "$LAMBDA/build"
-            test -f "target/lambda/$LAMBDA/bootstrap.zip"
-            echo "::endgroup::"
-          '
 
   # Collector job that always runs - use this as the required status check
   status-check:
     name: Cloud Storage Status Check
     if: always()
-    needs: [path-check, check, test, detect-changed-lambdas, build-lambdas]
+    needs: [path-check, check, test]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
@@ -398,15 +318,11 @@ jobs:
           echo "path-check: ${{ needs.path-check.result }}"
           echo "check: ${{ needs.check.result }}"
           echo "test: ${{ needs.test.result }}"
-          echo "detect-changed-lambdas: ${{ needs.detect-changed-lambdas.result }}"
-          echo "build-lambdas: ${{ needs.build-lambdas.result }}"
 
           # Fail if any job failed (skipped and success are both OK)
           if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
              [[ "${{ needs.check.result }}" == "failure" ]] || \
-             [[ "${{ needs.test.result }}" == "failure" ]] || \
-             [[ "${{ needs.detect-changed-lambdas.result }}" == "failure" ]] || \
-             [[ "${{ needs.build-lambdas.result }}" == "failure" ]]; then
+             [[ "${{ needs.test.result }}" == "failure" ]]; then
             echo "❌ One or more jobs failed"
             exit 1
           fi
