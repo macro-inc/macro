@@ -21,19 +21,19 @@ type ButtonSize = 'sm' | 'icon-sm' | 'md' | 'icon-md' | 'lg' | 'icon-lg';
 type ButtonVariant = 'ghost' | 'base' | 'active' | 'danger';
 
 const variantStyles: Record<ButtonVariant, string> = {
-  danger: 'bg-transparent text-failure    border border-failure/50     not-disabled:hover:bg-failure/10   not-disabled:active:bg-failure/20   disabled:opacity-50 ',
-  base:   'bg-transparent text-ink        border border-edge-muted     not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12       disabled:opacity-30 ',
-  active: 'bg-accent-bg   text-accent     border border-accent-ink                                                                                                ',
-  ghost:  'bg-transparent text-ink-muted  not-disabled:hover:text-ink  not-disabled:hover:bg-ink/10       not-disabled:active:bg-ink/12       disabled:opacity-30 ',
+  danger: 'bg-transparent text-failure    border border-failure/50 not-disabled:hover:bg-failure/10 not-disabled:active:bg-failure/20                   disabled:opacity-30 ',
+  base:   'bg-transparent text-ink-muted  border border-edge-muted not-disabled:hover:bg-hover      not-disabled:hover:text-ink        active:bg-active disabled:opacity-30 ',
+  active: 'bg-accent-bg   text-accent     border border-accent-ink                                                                                      disabled:opacity-30 ',
+  ghost:  'bg-transparent text-ink-muted                           not-disabled:hover:bg-hover      not-disabled:hover:text-ink        active:bg-active disabled:opacity-30 ',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  'icon-lg': 'p-2   size-11 [&_svg]:size-7', /* not used anywhere */
-  'icon-md': 'p-1.5 size-9  [&_svg]:size-6',
-  'icon-sm': 'p-1   size-7  [&_svg]:size-5',
-  'lg': 'p-2.5 text-base gap-2  ',
-  'md': 'p-2   text-sm   gap-1.5',
-  'sm': 'p-1   text-xs   gap-1  ',
+  'icon-lg': 'size-11   p-2    [&_svg]:size-7                  ', /* not used anywhere */
+  'icon-md': 'size-9    p-1.5  [&_svg]:size-6                  ',
+  'icon-sm': 'size-6    p-1    [&_svg]:size-4                  ',
+  'lg':      '          p-2.5  [&_svg]:size-5 gap-2   text-base',
+  'md':      '          p-2    [&_svg]:size-5 gap-1.5 text-sm  ',
+  'sm':      'h-6 px-2         [&_svg]:size-4 gap-1   text-xs  ',
 };
 
 // const sizeStyles: Record<ButtonSize, string> = {

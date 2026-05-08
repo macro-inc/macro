@@ -102,23 +102,14 @@ const ChipContent = (props: {
   );
 };
 
-const CHIP_WRAPPER_CLASS = cn(
-  'flex text-xs rounded-xs',
-  'bg-ink/10 text-ink-muted border border-edge-muted',
-  'group transition-colors'
-);
 
-const CHIP_TRIGGER_CLASS = cn(
-  'inline-flex items-center gap-1.5 pl-2 pr-1 py-1',
-  'hover:text-ink hover:bg-edge-muted'
-);
 
 const ChipRemoveButton = (props: { onRemove: () => void }) => (
   <button
     type="button"
     class={cn(
-      'px-1 min-h-full',
-      'hover:bg-edge-muted hover:text-ink transition-colors'
+      'inline-flex items-center justify-center px-1',
+      'not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12'
     )}
     onClick={(e) => {
       e.stopPropagation();
@@ -149,7 +140,14 @@ const SearchableFilterChip = (props: {
     `Search ${props.filter.categoryLabel.toLowerCase()}...`;
 
   return (
-    <div class={cn(CHIP_WRAPPER_CLASS, props.chipClass)}>
+    <Layer depth={0}>
+    <div
+      class={cn(
+        'h-6 inline-flex items-stretch overflow-hidden text-xs font-medium leading-none whitespace-nowrap rounded-sm',
+        'bg-transparent text-ink border border-edge-muted',
+        props.chipClass
+      )}
+    >
       <SearchableMultiSelect
         options={options}
         activeIds={activeIds}
@@ -159,7 +157,7 @@ const SearchableFilterChip = (props: {
         open={props.filter.isPopupOpen}
         onOpenChange={(v) => props.filter.setPopupOpen?.(v)}
       >
-        <Combobox.Trigger class={CHIP_TRIGGER_CLASS}>
+        <Combobox.Trigger class="inline-flex items-center gap-1.5 px-2 leading-none not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12">
           <ChipContent
             filter={props.filter}
             hideCategoryLabel={props.hideCategoryLabel}
@@ -169,6 +167,7 @@ const SearchableFilterChip = (props: {
 
       <ChipRemoveButton onRemove={props.onRemove} />
     </div>
+    </Layer>
   );
 };
 
@@ -186,11 +185,18 @@ const FilterChip = (props: {
     props.filter.categoryOptions && props.filter.categoryOptions.length > 0;
 
   return (
-    <div class={cn(CHIP_WRAPPER_CLASS, props.chipClass)}>
+    <Layer depth={0}>
+    <div
+      class={cn(
+        'h-6 inline-flex items-stretch overflow-hidden text-xs font-medium leading-none whitespace-nowrap rounded-sm',
+        'bg-transparent text-ink border border-edge-muted',
+        props.chipClass
+      )}
+    >
       <Show
         when={hasOptions()}
         fallback={
-          <span class="inline-flex items-center gap-1.5 pl-2 pr-1 py-1">
+          <span class="inline-flex items-center gap-1.5 pxl-2 pr-1 py-1">
             <ChipContent
               filter={props.filter}
               hideCategoryLabel={props.hideCategoryLabel}
@@ -199,7 +205,7 @@ const FilterChip = (props: {
         }
       >
         <DropdownMenu open={open()} onOpenChange={setOpen} gutter={4}>
-          <DropdownMenu.Trigger class={CHIP_TRIGGER_CLASS}>
+          <DropdownMenu.Trigger class="inline-flex items-center gap-1.5 px-2 leading-none not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12">
             <ChipContent
               filter={props.filter}
               hideCategoryLabel={props.hideCategoryLabel}
@@ -288,6 +294,7 @@ const FilterChip = (props: {
 
       <ChipRemoveButton onRemove={props.onRemove} />
     </div>
+    </Layer>
   );
 };
 
@@ -331,7 +338,7 @@ export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
 
   return (
     <Show when={props.filters.length > 0}>
-      <div class="flex items-center gap-1.5 flex-wrap px-2">
+      <div class="flex items-center gap-2 flex-wrap">
         <For each={props.filters}>
           {(filter, index) => (
             // To make sure that the Clear all button never wraps to a new line on its own, we wrap it with the last FilterChip

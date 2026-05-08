@@ -798,6 +798,7 @@ export const UnifiedFilterDropdown = () => {
         <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="F" />}>
           <Dropdown.Trigger>
             <SlidersHorizontalIcon />
+            <span>Filter</span>
           </Dropdown.Trigger>
         </Tooltip>
 
