@@ -181,7 +181,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
 
   return (
     <div
-      class="isolate relative w-full h-10 touch:h-11 overflow-clip text-ink shrink-0 border-b border-edge-muted"
+      class="isolate relative w-full min-h-10.25 touch:min-h-11.25 overflow-clip text-ink shrink-0 border-b border-edge-muted"
       data-split-header
       ref={props.ref}
     >

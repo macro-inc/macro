@@ -33,7 +33,7 @@ const sizeStyles: Record<ButtonSize, string> = {
   'icon-sm': 'size-6    p-1    [&_svg]:size-4                  ',
   'lg':      '          p-2.5  [&_svg]:size-5 gap-2   text-base',
   'md':      '          p-2    [&_svg]:size-5 gap-1.5 text-sm  ',
-  'sm':      'h-6 px-2         [&_svg]:size-4 gap-1   text-xs  ',
+  'sm':      'h-6       px-2   [&_svg]:size-4 gap-1   text-xs  ',
 };
 
 // const sizeStyles: Record<ButtonSize, string> = {
