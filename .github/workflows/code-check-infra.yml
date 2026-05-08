@@ -23,6 +23,8 @@ jobs:
               - 'infra/**'
               - 'flake.nix'
               - 'flake.lock'
+              - '.github/actions/setup-cachix/**'
+              - '.github/actions/setup-nix-dev-shell/**'
               - .github/workflows/code-check-infra.yml
 
   biome-check:
@@ -35,17 +37,10 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Configure Cachix
-        uses: ./.github/actions/setup-cachix
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-nix-dev-shell
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Enter Nix dev shell
-        run: |
-          set -euo pipefail
-          nix print-dev-env --accept-flake-config > /tmp/dev-env
-          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
-          source /tmp/dev-env
-          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: Run Biome
         working-directory: infra
         run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
@@ -56,17 +51,10 @@ jobs:
     runs-on: temp-middy
     steps:
       - uses: actions/checkout@v6
-      - name: Configure Cachix
-        uses: ./.github/actions/setup-cachix
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-nix-dev-shell
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Enter Nix dev shell
-        run: |
-          set -euo pipefail
-          nix print-dev-env --accept-flake-config > /tmp/dev-env
-          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
-          source /tmp/dev-env
-          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: install
         working-directory: infra
         run: bun install --frozen-lockfile
