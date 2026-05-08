@@ -23,7 +23,7 @@ jobs:
       should_run: ${{ steps.filter.outputs.should_run }}
       nextest_filter: ${{ steps.package-filter.outputs.nextest_filter }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           clean: false
           fetch-depth: 0
@@ -169,7 +169,7 @@ jobs:
       RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=mold"
       RUSTDOCFLAGS: "-Dwarnings"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           clean: false
       - name: Setup Nix dev shell
@@ -239,7 +239,7 @@ jobs:
           - 6379:6379
         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           clean: false
       - name: Setup Nix dev shell
