@@ -9,9 +9,8 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Add Nix to PATH
-      shell: bash
-      run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+    - name: Configure Cachix
+      uses: ./.github/actions/setup-cachix
 
     - name: Enter Nix dev shell
       shell: bash
