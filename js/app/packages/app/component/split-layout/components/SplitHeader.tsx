@@ -196,7 +196,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           </Show>
         </div>
         <div
-          class="relative min-w-0 h-full grow shrink pl-2 flex items-center gap-0.5"
+          class="relative min-w-0 h-full shrink pl-2 flex items-center gap-0.5"
           ref={(ref) => {
             panel.layoutRefs.headerLeft = ref;
           }}
@@ -213,7 +213,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         </Show>
 
         <div
-          class="min-w-4 h-full shrink-0 flex items-center gap-0.5 pl-2 pr-2"
+          class="min-w-4 h-full grow shrink flex items-center justify-end gap-0.5 pl-2 pr-2"
           ref={(ref) => {
             panel.layoutRefs.headerRight = ref;
           }}

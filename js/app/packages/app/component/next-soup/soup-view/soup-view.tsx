@@ -332,7 +332,7 @@ export const SoupView = (props: SoupViewProps) => {
               <Show
                 when={!isComponentListView('search')}
                 fallback={
-                  <div class="w-60">
+                  <div class="grow ml-2">
                     <SoupSearchbar
                       variant="secondary"
                       placeholder="Search, @mention contacts"
