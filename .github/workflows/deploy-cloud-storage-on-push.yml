@@ -117,20 +117,10 @@ jobs:
       - name: Add Nix to PATH
         run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
 
-      - name: Configure cachix substituter
-        shell: bash
-        env:
-          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        run: |
-          set -euo pipefail
-          export NIX_REMOTE=daemon
-          export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
-          if ! command -v cachix >/dev/null 2>&1; then
-            nix profile add nixpkgs#cachix
-          fi
-          export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
-          cachix authtoken "$CACHIX_AUTH_TOKEN"
-          cachix use macro-inc
+      - name: Configure Cachix
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build prebuilt binaries
         shell: bash
@@ -142,7 +132,7 @@ jobs:
 
           binaries=$(jq -r --arg service "$SERVICE" '.services[$service].deploy_binaries // [] | @tsv' .github/services-config.json)
           if [[ -n "$binaries" ]]; then
-            cachix watch-store macro-inc &
+            cachix watch-store "$CACHIX_CACHE_NAME" &
             cachix_pid=$!
             trap 'kill "$cachix_pid" || true' EXIT
 
