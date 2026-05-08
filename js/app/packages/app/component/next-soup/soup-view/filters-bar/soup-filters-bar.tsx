@@ -69,11 +69,7 @@ export const SoupFiltersBar = () => {
         />
         <div class="flex-1" />
         <Tooltip tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={togglePreview}
-          >
+          <Button variant="ghost" size="icon-sm" onClick={togglePreview}>
             <EyeIcon />
           </Button>
         </Tooltip>
