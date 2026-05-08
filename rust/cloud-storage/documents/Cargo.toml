@@ -21,6 +21,7 @@ ai_tools = [
   "dep:reqwest",
   "dep:schemars",
   "dep:sha2",
+  "document_create",
   "outbound",
   "ports",
 ]
@@ -33,6 +34,14 @@ axum = [
   "entity_access/axum",
 ]
 default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
+document_create = [
+  "dep:base64",
+  "dep:lexical_client",
+  "dep:reqwest",
+  "dep:sha2",
+  "markdown_init",
+  "ports",
+]
 inbound = ["axum", "ports"]
 markdown_init = ["dep:lexical_client"]
 outbound = [

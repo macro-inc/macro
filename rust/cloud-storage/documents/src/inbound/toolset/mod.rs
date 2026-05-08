@@ -17,6 +17,7 @@ use ai::tool::AsyncToolSet;
 use entity_access::domain::ports::EntityAccessService;
 use lexical_client::LexicalClient;
 use std::sync::Arc;
+use sync_service_client::SyncServiceClient;
 
 /// Service context for document AI tools
 pub struct DocumentToolContext<DSvc: DocumentService, ESvc: EntityAccessService> {
@@ -27,6 +28,9 @@ pub struct DocumentToolContext<DSvc: DocumentService, ESvc: EntityAccessService>
 
     /// The lexical client
     pub lexical_client: Arc<LexicalClient>,
+
+    /// The sync-service client
+    pub sync_service_client: Arc<SyncServiceClient>,
 }
 
 impl<DSvc: DocumentService, ESvc: EntityAccessService> Clone for DocumentToolContext<DSvc, ESvc> {
@@ -35,17 +39,24 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> Clone for DocumentToolCon
             service: self.service.clone(),
             entity_access_service: self.entity_access_service.clone(),
             lexical_client: self.lexical_client.clone(),
+            sync_service_client: self.sync_service_client.clone(),
         }
     }
 }
 
 impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentToolContext<DSvc, ESvc> {
     /// Create a new document tool context
-    pub fn new(service: DSvc, entity_access_service: ESvc, lexical_client: LexicalClient) -> Self {
+    pub fn new(
+        service: DSvc,
+        entity_access_service: ESvc,
+        lexical_client: LexicalClient,
+        sync_service_client: SyncServiceClient,
+    ) -> Self {
         Self {
             service: Arc::new(service),
             entity_access_service: Arc::new(entity_access_service),
             lexical_client: Arc::new(lexical_client),
+            sync_service_client: Arc::new(sync_service_client),
         }
     }
 }

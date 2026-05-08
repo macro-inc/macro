@@ -244,6 +244,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         document_service,
         (*entity_access_service).clone(),
         test_lexical_client,
+        sync_service_client.as_ref().clone(),
     );
 
     let search_service_client = Arc::new(search_service_client);

@@ -575,34 +575,15 @@ impl DocumentSyncSession {
         Ok(())
     }
 
-    /// Check if provided document_id exists.
-    /// 1. is self.document_id set
-    /// 2. is document_id  it do::kv
-    /// 3. does snapshot exist with document_id?
+    /// Check if the provided document_id has an initialized snapshot.
+    ///
+    /// Keep this read-only: callers use `/exists` to decide whether initialization
+    /// is needed, so it must not set document_id/session_storage as a side effect.
     async fn exists(&self, document_id: &str) -> Result<bool> {
-        if self.document_id_is_some() {
-            return Ok(true);
-        }
-        // This gets document_id via dokv if it exists
-        if self.document_id().await.is_ok() {
-            return Ok(true);
-        }
-        // self.session_storage would not be set because it requires self.document_id be set
         let snapshot_storage =
             get_snapshot_storage(&self.env, &self.state, document_id.to_string())?;
 
-        if snapshot_storage.has_snapshot().await? {
-            self.maybe_set_document_id(document_id).await?;
-            // set up session storage
-            let dkv_storage = DurableKVStorage::new(self.state.storage());
-            let session_storage = Rc::new(SessionStorage::new(snapshot_storage, dkv_storage));
-            *self
-                .session_storage
-                .lock("DocumentSyncSession::session_storage set within exists") =
-                Some(session_storage);
-            return Ok(true);
-        }
-        Ok(false)
+        snapshot_storage.has_snapshot().await
     }
 
     fn document_id_is_some(&self) -> bool {

@@ -262,6 +262,7 @@ async fn main() -> anyhow::Result<()> {
         document_service,
         (*entity_access_service).clone(),
         lexical_client_for_tools,
+        sync_service_client.clone(),
     );
 
     tracing::info!("initialized document tool context");

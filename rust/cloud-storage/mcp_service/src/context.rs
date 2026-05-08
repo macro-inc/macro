@@ -220,6 +220,7 @@ async fn build_tool_context(
         document_service,
         entity_access_service,
         lexical_client_for_tools,
+        sync_service_client.clone(),
     );
 
     let properties_service = properties::PropertiesServiceImpl::new(

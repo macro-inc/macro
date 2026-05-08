@@ -206,6 +206,7 @@ pub async fn build_tool_service_context_from_env(
         document_service,
         (*entity_access_service).clone(),
         lexical_client,
+        sync_client.as_ref().clone(),
     );
 
     let properties_service = properties::PropertiesServiceImpl::new(

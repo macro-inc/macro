@@ -126,6 +126,7 @@ pub async fn build_tool_service_context(
         document_service,
         (*entity_access_service).clone(),
         lexical_client,
+        sync_client.as_ref().clone(),
     );
 
     // Properties tool context

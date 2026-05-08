@@ -12,6 +12,7 @@ use lambda_runtime::{
     Error, LambdaEvent, run, service_fn,
     tracing::{self},
 };
+use lexical_client::LexicalClient;
 use macro_entrypoint::MacroEntrypoint;
 use model::{
     document::{FileType, FileTypeExt},
@@ -24,6 +25,7 @@ use sqs_client::upload_extractor::UploadExtractQueueMessage;
 use std::path::Path;
 use std::{fs, str::FromStr};
 use std::{path::PathBuf, sync::Arc};
+use sync_service_client::SyncServiceClient;
 use tempfile::tempdir;
 use tokio::fs::File;
 use tokio_stream::StreamExt;
@@ -42,6 +44,8 @@ async fn handler(
     dss_client: Arc<DocumentStorageServiceClient>,
     dynamodb_client: Arc<DynamodbClient>,
     conn_gateway_client: Arc<ConnectionGatewayClient>,
+    lexical_client: Arc<LexicalClient>,
+    sync_service_client: Arc<SyncServiceClient>,
     upload_bucket_name: &str,
     event: LambdaEvent<SqsEvent>,
 ) -> Result<(), Error> {
@@ -69,6 +73,8 @@ async fn handler(
             &s3_client,
             &dss_client,
             &dynamodb_client,
+            lexical_client.as_ref(),
+            sync_service_client.as_ref(),
             upload_request.key(),
             upload_bucket_name,
             request_id,
@@ -183,6 +189,8 @@ async fn process_zipped_s3_object(
     s3_client: &S3Client,
     dss_client: &DocumentStorageServiceClient,
     dynamodb_client: &DynamodbClient,
+    lexical_client: &LexicalClient,
+    sync_service_client: &SyncServiceClient,
     object_key: &str,
     staging_bucket: &str,
     request_id: &str,
@@ -266,6 +274,8 @@ async fn process_zipped_s3_object(
     let request_status = move_files_to_cloud_storage_bucket(
         s3_client,
         dynamodb_client,
+        lexical_client,
+        sync_service_client,
         request_id,
         &extract_dir,
         &file_system,
@@ -281,6 +291,8 @@ async fn process_zipped_s3_object(
 async fn move_files_to_cloud_storage_bucket(
     s3_client: &S3Client,
     dynamodb_client: &DynamodbClient,
+    lexical_client: &LexicalClient,
+    sync_service_client: &SyncServiceClient,
     request_id: &str,
     extract_dir: &Path,
     file_system: &FileSystemNodeWithIds,
@@ -316,6 +328,8 @@ async fn move_files_to_cloud_storage_bucket(
         };
 
         let s3_client = s3_client.clone();
+        let lexical_client = lexical_client.clone();
+        let sync_service_client = sync_service_client.clone();
         let extract_dir = extract_dir.to_path_buf();
 
         let fut = async move {
@@ -334,6 +348,23 @@ async fn move_files_to_cloud_storage_bucket(
                         let error_message = format!("Not a file: {}", path.display());
                         return (document_id, false, Some(error_message));
                     }
+
+                    let markdown = if item.file_type == Some(FileType::Md) {
+                        match tokio::fs::read_to_string(&path).await {
+                            Ok(markdown) => Some(markdown),
+                            Err(e) => {
+                                let error_message = format!(
+                                    "Failed to read markdown for sync initialization: {:?} {} {:?}",
+                                    e,
+                                    document_id,
+                                    path.display()
+                                );
+                                return (document_id, false, Some(error_message));
+                            }
+                        }
+                    } else {
+                        None
+                    };
 
                     let byte_stream = match ByteStream::from_path(&path).await {
                         Ok(bs) => bs,
@@ -358,7 +389,27 @@ async fn move_files_to_cloud_storage_bucket(
                         .send()
                         .await
                     {
-                        Ok(_) => (document_id, true, None),
+                        Ok(_) => {
+                            if let Some(markdown) = markdown {
+                                let markdown_initializer =
+                                    documents::domain::create::MarkdownInitializer::new(
+                                        &lexical_client,
+                                        &sync_service_client,
+                                    );
+                                if let Err(e) = markdown_initializer
+                                    .initialize_existing_markdown(&document_id, &markdown)
+                                    .await
+                                {
+                                    let error_message = format!(
+                                        "Failed to initialize markdown document {}: {:?}",
+                                        document_id, e
+                                    );
+                                    return (document_id, false, Some(error_message));
+                                }
+                            }
+
+                            (document_id, true, None)
+                        }
                         Err(e) => {
                             let error_message =
                                 format!("Failed to upload {}: {:?}", document_id, e);
@@ -578,11 +629,17 @@ async fn main() -> Result<(), Error> {
     let internal_api_secret_key = std::env::var("INTERNAL_API_SECRET_KEY")
         .context("INTERNAL_API_SECRET_KEY must be set")
         .unwrap();
+    let sync_service_auth_key =
+        std::env::var("SYNC_SERVICE_AUTH_KEY").context("SYNC_SERVICE_AUTH_KEY must be set")?;
     let dss_url = std::env::var("DSS_URL").context("DSS_URL must be set")?;
     let dynamo_table_name =
         std::env::var("DYNAMODB_TABLE").context("DYNAMODB_TABLE must be set")?;
     let connection_gateway_url =
         std::env::var("CONNECTION_GATEWAY_URL").context("CONNECTION_GATEWAY_URL must be set")?;
+    let lexical_service_url =
+        std::env::var("LEXICAL_SERVICE_URL").context("LEXICAL_SERVICE_URL must be set")?;
+    let sync_service_url =
+        std::env::var("SYNC_SERVICE_URL").context("SYNC_SERVICE_URL must be set")?;
 
     let config = macro_aws_config::get_macro_aws_config().await;
     let s3_client = S3Client::new(&config);
@@ -591,6 +648,8 @@ async fn main() -> Result<(), Error> {
 
     let dynamodb_client = DynamodbClient::new(&config, Some(dynamo_table_name.clone()));
 
+    let lexical_client = LexicalClient::new(sync_service_auth_key.clone(), lexical_service_url);
+    let sync_service_client = SyncServiceClient::new(sync_service_auth_key, sync_service_url);
     let conn_gateway_client =
         ConnectionGatewayClient::new(internal_api_secret_key, connection_gateway_url);
 
@@ -598,6 +657,8 @@ async fn main() -> Result<(), Error> {
     let shared_dss_client = Arc::new(dss_client);
     let shared_dynamodb_client = Arc::new(dynamodb_client);
     let shared_conn_gateway_client = Arc::new(conn_gateway_client);
+    let shared_lexical_client = Arc::new(lexical_client);
+    let shared_sync_service_client = Arc::new(sync_service_client);
     let upload_staging_bucket_str = upload_staging_bucket.as_str();
 
     let func = service_fn(move |event: LambdaEvent<SqsEvent>| {
@@ -606,6 +667,8 @@ async fn main() -> Result<(), Error> {
             shared_dss_client.clone(),
             shared_dynamodb_client.clone(),
             shared_conn_gateway_client.clone(),
+            shared_lexical_client.clone(),
+            shared_sync_service_client.clone(),
             upload_staging_bucket_str,
             event,
         )
