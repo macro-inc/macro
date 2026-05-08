@@ -45,7 +45,8 @@ pub async fn process_channel_message_update(
         thread_id: channel_message_info
             .channel_message
             .thread_id
-            .map(|id| id.to_string()),
+            .unwrap_or(channel_message_info.channel_message.message_id)
+            .to_string(),
         sender_id: channel_message_info.channel_message.sender_id,
         mentions: channel_message_info.channel_message.mentions,
         content: transformed_content.0.trim().to_string(),
