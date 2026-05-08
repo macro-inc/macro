@@ -22,8 +22,16 @@ runs:
 
     - name: Enter Nix dev shell
       shell: bash
+      env:
+        CACHIX_AUTH_TOKEN: ${{ inputs.cachix-auth-token }}
+        CACHIX_CACHE_NAME: ${{ inputs.cache-name }}
       run: |
         set -euo pipefail
+        if [ -n "$CACHIX_AUTH_TOKEN" ]; then
+          cachix watch-store "$CACHIX_CACHE_NAME" &
+          cachix_pid=$!
+          trap 'kill "$cachix_pid" || true' EXIT
+        fi
         nix print-dev-env --accept-flake-config > /tmp/dev-env
         echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
         source /tmp/dev-env

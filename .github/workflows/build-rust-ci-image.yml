@@ -53,6 +53,9 @@ jobs:
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
           sudo mkdir -p /var/cache/nix
           sudo chown runner:runner /var/cache/nix
+          cachix watch-store "$CACHIX_CACHE_NAME" &
+          cachix_pid=$!
+          trap 'kill "$cachix_pid" || true' EXIT
           nix develop --profile /var/cache/nix/dev-shell --command true
 
       - name: Write image markers
@@ -77,6 +80,9 @@ jobs:
           set -euo pipefail
           export NIX_REMOTE=daemon
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          cachix watch-store "$CACHIX_CACHE_NAME" &
+          cachix_pid=$!
+          trap 'kill "$cachix_pid" || true' EXIT
           nix --version
           test -L /var/cache/nix/dev-shell
           nix develop --profile /var/cache/nix/dev-shell --command bash -lc '
