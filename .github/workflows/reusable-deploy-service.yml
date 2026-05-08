@@ -70,14 +70,19 @@ jobs:
           mkdir -p prebuilt
           nix build ".#deploy-service-binaries-${SERVICE}"
           cp -r result/bin/* prebuilt/
+          mkdir -p prebuilt/nix-store
+          while IFS= read -r store_path; do
+            cp -a "$store_path" prebuilt/nix-store/
+          done < <(nix-store -qR result)
           touch prebuilt/.keep
+          tar -C prebuilt -czf prebuilt-binaries.tar.gz .
 
       - name: Upload prebuilt binaries
         if: ${{ steps.check-binaries.outputs.has_binaries == 'true' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: cloud-storage-service-binaries-${{ inputs.service-name }}-${{ github.sha }}
-          path: prebuilt/
+          path: prebuilt-binaries.tar.gz
           retention-days: 7
 
   deploy:

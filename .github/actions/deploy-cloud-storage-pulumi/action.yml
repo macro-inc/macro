@@ -58,7 +58,15 @@ runs:
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
         name: ${{ inputs.prebuilt-binaries-artifact }}
-        path: rust/cloud-storage/prebuilt
+        path: rust/cloud-storage/prebuilt-artifact
+
+    - name: Extract prebuilt service binaries
+      if: ${{ inputs.prebuilt-binaries-artifact != '' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p rust/cloud-storage/prebuilt
+        tar -xzf rust/cloud-storage/prebuilt-artifact/prebuilt-binaries.tar.gz -C rust/cloud-storage/prebuilt
 
     # setup docker
     - uses: docker/setup-buildx-action@v3

@@ -34,6 +34,7 @@ RUN curl --fail --show-error -L -o core-co-25.04-assets.tar.gz https://github.co
   && mv include /app/lok/include \
   && rm core-co-25.04-assets.tar.gz
 
+COPY ./prebuilt/nix-store/ /nix/store/
 COPY ./prebuilt/${SERVICE_NAME} /app/svc
 RUN chmod +x /app/svc
 
