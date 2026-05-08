@@ -456,6 +456,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
     return groupRow.group;
   };
 
+  const shouldShowLoadMore = (groupKey: string | undefined, index: number) => {
+    if (!groupKey) return false;
+    if (!hasMoreForGroup(groupKey)) return false;
+    const groupInfo = getGroupAtIndex(index);
+    if (!groupInfo || groupInfo.isCollapsed) return false;
+    return groupInfo.indexInGroup === getGroupLoadedCount(groupKey) - 1;
+  };
+
   const { isKeypressActive } = useIsKeyPressActive();
 
   const [virtualizerHandle, setVirtualizerHandle] =
@@ -1119,53 +1127,39 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
                                     {/* Load more button for groups */}
                                     <Show
-                                      when={
-                                        r().parentGroupId &&
-                                        hasMoreForGroup(r().parentGroupId!) &&
-                                        !getGroupAtIndex(i())?.isCollapsed
-                                      }
+                                      when={shouldShowLoadMore(
+                                        r().parentGroupId,
+                                        i()
+                                      )}
                                     >
-                                      {(_) => {
-                                        const groupKey = r().parentGroupId!;
-                                        const groupInfo = getGroupAtIndex(i());
-                                        const isLastInGroup =
-                                          groupInfo &&
-                                          groupInfo.indexInGroup ===
-                                            getGroupLoadedCount(groupKey) - 1;
-
-                                        return (
-                                          <Show when={isLastInGroup}>
-                                            <div class="flex justify-center py-2">
-                                              <Button
-                                                variant="base"
-                                                size="sm"
-                                                onClick={() =>
-                                                  loadMoreForGroup(groupKey)
-                                                }
-                                                disabled={isGroupLoadingMore(
-                                                  groupKey
-                                                )}
-                                              >
-                                                <Show
-                                                  when={
-                                                    !isGroupLoadingMore(
-                                                      groupKey
-                                                    )
-                                                  }
-                                                  fallback={
-                                                    <>
-                                                      <Spinner class="size-3 animate-spin" />
-                                                      Loading...
-                                                    </>
-                                                  }
-                                                >
-                                                  Load more
-                                                </Show>
-                                              </Button>
-                                            </div>
+                                      <div class="flex justify-center py-2">
+                                        <Button
+                                          variant="base"
+                                          size="sm"
+                                          onClick={() =>
+                                            loadMoreForGroup(r().parentGroupId!)
+                                          }
+                                          disabled={isGroupLoadingMore(
+                                            r().parentGroupId!
+                                          )}
+                                        >
+                                          <Show
+                                            when={
+                                              !isGroupLoadingMore(
+                                                r().parentGroupId!
+                                              )
+                                            }
+                                            fallback={
+                                              <>
+                                                <Spinner class="size-3 animate-spin" />
+                                                Loading...
+                                              </>
+                                            }
+                                          >
+                                            Load more
                                           </Show>
-                                        );
-                                      }}
+                                        </Button>
+                                      </div>
                                     </Show>
                                     <Show
                                       when={
