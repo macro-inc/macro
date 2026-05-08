@@ -3,6 +3,7 @@
 
 mod filters;
 mod query;
+mod resolve;
 
 #[cfg(test)]
 mod tests;
