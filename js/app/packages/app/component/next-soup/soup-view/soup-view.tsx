@@ -283,56 +283,43 @@ export const SoupView = (props: SoupViewProps) => {
             <SplitHeaderLeft>
               <div
                 class={cn('h-full flex gap-3 items-center', {
-                  'shrink-0':
-                    !narrowSearchExpanded() && !isComponentListView('search'),
-                  'flex-1 min-w-0':
-                    narrowSearchExpanded() || isComponentListView('search'),
+                  'shrink-0': !narrowSearchExpanded(),
+                  'flex-1 min-w-0': narrowSearchExpanded(),
                 })}
               >
+                <Show when={!isMobile()}>
+                  <h1 class="font-semibold text-ink select-none text-sm shrink-0">
+                    {props.viewName}
+                  </h1>
+                </Show>
                 <Show
-                  when={isComponentListView('search')}
-                  fallback={
-                    <>
-                      <Show when={!isMobile()}>
-                        <h1 class="font-semibold text-ink select-none text-sm shrink-0">
-                          {props.viewName}
-                        </h1>
-                      </Show>
-                      <Show when={!narrowSearchExpanded()}>
-                        <Show when={!isMobile()}>
-                          <CollapsibleHeaderItem
-                            id="tabs"
-                            priority={1}
-                            expanded={() => <SoupViewTabs />}
-                            collapsed={() => <CollapsedSoupViewTabs />}
-                            containerClass="h-full"
-                          />
-                        </Show>
-                        <Show when={!isMobile()}>
-                          <SoupViewCreateButton />
-                        </Show>
-                        <Show when={isMobile()}>
-                          <MobileFilterDrawer />
-                        </Show>
-                      </Show>
-                      <Show when={narrowSearchExpanded()}>
-                        <div class="flex-1 min-w-0">
-                          <SoupSearchbar
-                            variant="secondary"
-                            autoFocus
-                            initialValue={props.initialSearchText}
-                            onDismiss={() => setNarrowSearchExpanded(false)}
-                          />
-                        </div>
-                      </Show>
-                    </>
+                  when={
+                    !narrowSearchExpanded() && !isComponentListView('search')
                   }
                 >
+                  <Show when={!isMobile()}>
+                    <CollapsibleHeaderItem
+                      id="tabs"
+                      priority={1}
+                      expanded={() => <SoupViewTabs />}
+                      collapsed={() => <CollapsedSoupViewTabs />}
+                      containerClass="h-full"
+                    />
+                  </Show>
+                  <Show when={!isMobile()}>
+                    <SoupViewCreateButton />
+                  </Show>
+                  <Show when={isMobile()}>
+                    <MobileFilterDrawer />
+                  </Show>
+                </Show>
+                <Show when={narrowSearchExpanded()}>
                   <div class="flex-1 min-w-0">
                     <SoupSearchbar
                       variant="secondary"
-                      placeholder="Search, @mention contacts"
+                      autoFocus
                       initialValue={props.initialSearchText}
+                      onDismiss={() => setNarrowSearchExpanded(false)}
                     />
                   </div>
                 </Show>
@@ -342,7 +329,18 @@ export const SoupView = (props: SoupViewProps) => {
               <Show when={isMobile() && !narrowSearchExpanded()}>
                 <SettingsButton />
               </Show>
-              <Show when={!isComponentListView('search')}>
+              <Show
+                when={!isComponentListView('search')}
+                fallback={
+                  <div class="w-60">
+                    <SoupSearchbar
+                      variant="secondary"
+                      placeholder="Search, @mention contacts"
+                      initialValue={props.initialSearchText}
+                    />
+                  </div>
+                }
+              >
                 <CollapsibleHeaderItem
                   id="search"
                   priority={0}
@@ -351,7 +349,7 @@ export const SoupView = (props: SoupViewProps) => {
                     if (!isCollapsed) setNarrowSearchExpanded(false);
                   }}
                   expanded={() => (
-                    <div class="w-52">
+                    <div class="w-60">
                       <SoupSearchbar
                         variant="secondary"
                         initialValue={props.initialSearchText}

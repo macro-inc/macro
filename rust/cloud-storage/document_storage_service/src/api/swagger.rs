@@ -147,6 +147,7 @@ use utoipa::OpenApi;
         documents::pre_save::presave_document_handler,
         documents_hex::inbound::axum_router::edit_document_handler,
         documents_hex::inbound::axum_router::delete_document_handler,
+        documents_hex::inbound::axum_router::finalize_upload_handler,
         documents::delete_document::permanently_delete_document_handler,
         documents::get_document_list::get_document_list_handler,
         documents::get_document_permissions::get_document_permissions_handler_v2,

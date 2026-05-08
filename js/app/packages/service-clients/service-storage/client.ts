@@ -360,6 +360,18 @@ export const storageServiceClient = {
     );
   },
 
+  async finalizeUpload(params: { documentId: string }) {
+    return mapOk(
+      await dssFetch<SuccessResponse>(
+        `/documents/${params.documentId}/finalize_upload`,
+        {
+          method: 'POST',
+        }
+      ),
+      (result) => result.data
+    );
+  },
+
   async getPins(params?: { limit?: number; offset?: number }) {
     return mapOk(
       await dssFetch<{ data: UserPins }>(

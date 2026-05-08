@@ -77,14 +77,14 @@ function MessageActionsSlot(props: { messageEditor?: MessageEditor }) {
   );
 }
 
-function GroupedMeta(props: { messageEditor?: MessageEditor }) {
+function _GroupedMeta(props: { messageEditor?: MessageEditor }) {
   const message = useMessage();
 
   return (
     <Show when={!isEditingMessage(props.messageEditor, message().id)}>
       <div
         class={cn(
-          'absolute right-1 -top-9 z-10',
+          'absolute right-4 -top-9 z-10',
           'items-center gap-2 shrink-0 bg-panel p-1',
           'hidden group-hover/message:flex',
           isTouchDevice() && 'hidden'
@@ -161,7 +161,8 @@ function GroupedMessageLayout(props: {
             channelId={props.channelId}
             messageEditor={props.messageEditor}
           />
-          <GroupedMeta messageEditor={props.messageEditor} />
+          {/* TODO (seamus): hiding the grouped meta for now */}
+          {/*<GroupedMeta messageEditor={props.messageEditor} />*/}
         </div>
       </Message.Slot>
       <Message.Slot

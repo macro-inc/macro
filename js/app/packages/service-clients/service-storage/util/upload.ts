@@ -5,13 +5,11 @@ import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { contentHash } from '@core/util/hash';
 import { isErr, type ResultError } from '@core/util/maybeResult';
 import { toaster } from '@kobalte/core/toast';
-import { markdownToLoroSnapshot } from '@lexical-core/markdown-loro-snapshot';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import { storageServiceClient } from '@service-storage/client';
 import { filenameWithoutExtension } from '@service-storage/util/filename';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { storageWS } from '@service-storage/websocket';
-import { syncServiceClient } from '@service-sync/client';
 import { createUploadToast, toast } from 'core/component/Toast/Toast';
 import { FileTypeMap } from '../fileTypeMap';
 import { uploadDocx } from './uploadDocx';
@@ -30,20 +28,10 @@ const uploadWithPresignedUrl = async (params: {
   return !isErr(uploadResult);
 };
 
-const initializeMarkdownDocument = async (
-  documentId: string,
-  buffer: ArrayBuffer
+const finalizeUploadedDocument = async (
+  documentId: string
 ): Promise<boolean> => {
-  const markdown = new TextDecoder().decode(buffer);
-  const snapshot = await markdownToLoroSnapshot(markdown);
-
-  if (!snapshot) return false;
-
-  const result = await syncServiceClient.initializeFromSnapshot({
-    documentId,
-    snapshot,
-  });
-
+  const result = await storageServiceClient.finalizeUpload({ documentId });
   return !isErr(result);
 };
 
@@ -249,13 +237,10 @@ export async function upload(
     return handleUploadError('Failed to upload file', toastId);
   }
 
-  if (
-    fileType === 'md' &&
-    !(await initializeMarkdownDocument(documentId, buffer))
-  ) {
-    console.error('failed to initialize markdown document', documentId);
+  if (!(await finalizeUploadedDocument(documentId))) {
+    console.error('failed to finalize upload', documentId);
     await storageServiceClient.deleteDocument({ documentId });
-    return handleUploadError('Failed to initialize markdown file', toastId);
+    return handleUploadError('Failed to finalize file upload', toastId);
   }
 
   if (docxProcessingPromise) {

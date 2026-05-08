@@ -69,6 +69,7 @@ http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../last_online_tracker" }
 lazy_static = { workspace = true }
+lexical_client = { path = "../lexical_client" }
 macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_axum_utils = { path = "../macro_axum_utils" }

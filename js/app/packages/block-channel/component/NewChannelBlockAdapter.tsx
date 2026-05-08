@@ -1,7 +1,3 @@
-import {
-  ChatWithAgentButton,
-  toChatChannelType,
-} from '@app/component/ChatWithAgentButton';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
@@ -85,7 +81,6 @@ function NewTop(props: { channelId: string }) {
   const { activeTab, setActiveTab } = useChannelTab();
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
-  const chatChannelType = () => toChatChannelType(channelType());
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const call = useCall(() => props.channelId);
   const participants = () =>
@@ -118,24 +113,10 @@ function NewTop(props: { channelId: string }) {
         activeTab={activeTab()}
         onTabChange={setActiveTab}
       />
-      <Show when={chatChannelType() || ENABLE_CALLS()}>
+      <Show when={ENABLE_CALLS()}>
         <SplitHeaderRight>
           <div class="flex items-center gap-1.5">
-            <Show when={chatChannelType()}>
-              {(type) => (
-                <ChatWithAgentButton
-                  entity={{
-                    type: 'channel',
-                    id: props.channelId,
-                    name: channelName() ?? 'Channel',
-                    channelType: type(),
-                  }}
-                />
-              )}
-            </Show>
-            <Show when={ENABLE_CALLS()}>
-              <ChannelCallButton channelId={props.channelId} />
-            </Show>
+            <ChannelCallButton channelId={props.channelId} />
           </div>
         </SplitHeaderRight>
       </Show>

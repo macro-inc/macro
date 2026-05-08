@@ -6,6 +6,7 @@
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + git branch name (when the document is a task)
 //! - `GET /{document_id}/short_id` — get document short ID
+//! - `POST /{document_id}/finalize_upload` — finalize caller-managed upload bytes
 //! - `DELETE /{document_id}` — soft-delete a document
 
 #[cfg(test)]
@@ -16,6 +17,8 @@ mod create_document;
 mod create_task;
 mod delete_document;
 mod edit_document;
+#[cfg(feature = "document_create")]
+mod finalize_upload;
 mod get_branch_name;
 mod get_document;
 mod get_location;
@@ -45,6 +48,8 @@ pub use create_document::*;
 pub use create_task::*;
 pub use delete_document::*;
 pub use edit_document::*;
+#[cfg(feature = "document_create")]
+pub use finalize_upload::*;
 pub use get_branch_name::*;
 pub use get_document::*;
 pub use get_location::*;
@@ -84,6 +89,12 @@ pub struct DocumentRouterState<T, Svc> {
     pub access_service: Arc<Svc>,
     /// The database pool (used by middleware for document lookups).
     pub pool: PgPool,
+    /// Lexical-service client for markdown upload finalization.
+    #[cfg(feature = "document_create")]
+    pub lexical_client: Arc<lexical_client::LexicalClient>,
+    /// Sync-service client for markdown upload finalization.
+    #[cfg(feature = "document_create")]
+    pub sync_service_client: Arc<sync_service_client::SyncServiceClient>,
 }
 
 // Manual Clone impl so T and Svc don't need to be Clone (they're behind Arc).
@@ -93,6 +104,10 @@ impl<T, Svc> Clone for DocumentRouterState<T, Svc> {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
             pool: self.pool.clone(),
+            #[cfg(feature = "document_create")]
+            lexical_client: self.lexical_client.clone(),
+            #[cfg(feature = "document_create")]
+            sync_service_client: self.sync_service_client.clone(),
         }
     }
 }
@@ -139,11 +154,18 @@ where
         .route(
             "/{document_id}/copy",
             axum::routing::post(copy_document_handler::<T, Svc>),
-        )
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            ensure_document_exists,
-        ));
+        );
+
+    #[cfg(feature = "document_create")]
+    let document_id_routes = document_id_routes.route(
+        "/{document_id}/finalize_upload",
+        axum::routing::post(finalize_upload_handler::<T, Svc>),
+    );
+
+    let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
+        state.clone(),
+        ensure_document_exists,
+    ));
 
     Router::new()
         .merge(document_id_routes)

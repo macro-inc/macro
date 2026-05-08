@@ -1,3 +1,4 @@
+import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
 import { isPlatform, isTauri } from '@core/util/platform';
 import { notificationServiceClient } from '@service-notification/client';
 import type { DeviceType } from '@service-notification/generated/schemas/deviceType';
@@ -28,6 +29,7 @@ const callEndedHandlers: CallEndedHandler[] = [];
 export function registerCallKitCallEndedHandler(
   handler: CallEndedHandler
 ): () => void {
+  if (!ENABLE_CALLKIT) return () => {};
   callEndedHandlers.push(handler);
   return () => {
     const index = callEndedHandlers.lastIndexOf(handler);
@@ -50,7 +52,7 @@ function getActiveCallEndedHandler(): CallEndedHandler | undefined {
  */
 export function useCallKitSetup() {
   onMount(() => {
-    if (!isTauri() || !isPlatform('ios')) return;
+    if (!ENABLE_CALLKIT || !isTauri() || !isPlatform('ios')) return;
 
     let cleaned = false;
     const unlistens: Array<() => void> = [];
@@ -123,7 +125,7 @@ export function useCallKitSetup() {
  * the user leaves from within the app rather than from the CallKit sheet.
  */
 export async function endCallKitCall(): Promise<void> {
-  if (!isTauri() || !isPlatform('ios')) return;
+  if (!ENABLE_CALLKIT || !isTauri() || !isPlatform('ios')) return;
   await invoke('plugin:call-kit|end_active_call').catch((err) =>
     console.error('callkit: failed to end active call', err)
   );

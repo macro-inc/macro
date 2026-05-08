@@ -1,6 +1,7 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
+import { Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import {
   type Accessor,
@@ -197,120 +198,122 @@ export function Thread(props: {
           forceWidth={props.width}
           transition={false}
         >
-          <div
-            // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
-            // pointer-events: none vs. all inside the .pdfOverlayInner div.
-            class="shrink-0 bg-panel p-2 ring-1 ring-edge-muted rounded-sm portal-scope pointer-events-auto pdf-pointer-event-reset"
-            classList={{
-              'transition-transform duration-100': true,
-              '-translate-x-8': props.isActive,
-            }}
-            style={{
-              width: props.width ? `${props.width}px` : 'auto',
-            }}
-            ref={props.ref}
-          >
-            <Show
-              when={!props.comment.isNew}
-              fallback={
-                <EditInput
-                  textValue={''}
-                  handleCancel={() => {}}
-                  onSend={(content: string) => {
-                    if (content.trim() === '') return;
-                    // NOTE: we need the server to return the thread id first
-                    commentOperations.createComment({
-                      threadId: props.comment.threadId,
-                      text: content,
-                      mentions: getAndClearCommentMentions(mentionsSignal),
-                    });
-                  }}
-                  isNewThread
-                />
-              }
+          <Layer depth={2}>
+            <div
+              // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
+              // pointer-events: none vs. all inside the .pdfOverlayInner div.
+              class="shrink-0 bg-panel p-2 ring ring-edge shadow-md rounded-sm shadow-drop-shadow portal-scope pointer-events-auto pdf-pointer-event-reset"
+              classList={{
+                'transition-transform duration-100': true,
+                '-translate-x-8': props.isActive,
+              }}
+              style={{
+                width: props.width ? `${props.width}px` : 'auto',
+              }}
+              ref={props.ref}
             >
-              <div
-                on:click={() => {
-                  dispatch({ action: 'soft', editing: false });
-                }}
-              >
-                <Comment
-                  comment={props.comment}
-                  isOwned={ownedComment(props.comment.id)}
-                  isActive={props.isActive}
-                  isThreaded={replyIds().length > 0}
-                >
-                  <Show when={replyIds().length > 0 && lastReplyId()}>
-                    <Show when={collapsedCount() > 0}>
-                      <button
-                        class="text-xs text-ink-extra-muted font-mono hover:bg-hover hover-transition-bg text-left ml-5 p-1 mb-2"
-                        on:click={() => {
-                          batch(() => {
-                            setActiveThread(props.comment.threadId);
-                            setAllRepliesVisible(true);
-                          });
-                        }}
-                      >
-                        {`Show [ ${collapsedCount()} ] ${collapsedCount() > 1 ? 'replies' : 'reply'}`}
-                      </button>
-                    </Show>
-                  </Show>
-                </Comment>
-                {
-                  <For each={replyIds()}>
-                    {(replyId) => {
-                      const hide = () =>
-                        collapseRepliesList() && replyId !== lastReplyId();
-                      return (
-                        <CommentReply
-                          hide={hide()}
-                          replyId={replyId}
-                          isOwned={ownedComment(replyId)}
-                          isActive={props.isActive}
-                          threadId={props.comment.threadId}
-                          isThreaded={replyId !== lastReplyId()}
-                          deleteReply={() =>
-                            commentOperations.deleteComment({
-                              commentId: replyId,
-                            })
-                          }
-                          updateReply={(content) => {
-                            Promise.all([
-                              commentOperations.updateComment(replyId, {
-                                text: content,
-                                threadId: props.comment.threadId,
-                                mentions:
-                                  getAndClearCommentMentions(mentionsSignal),
-                              }),
-                            ]);
-                          }}
-                        />
-                      );
+              <Show
+                when={!props.comment.isNew}
+                fallback={
+                  <EditInput
+                    textValue={''}
+                    handleCancel={() => {}}
+                    onSend={(content: string) => {
+                      if (content.trim() === '') return;
+                      // NOTE: we need the server to return the thread id first
+                      commentOperations.createComment({
+                        threadId: props.comment.threadId,
+                        text: content,
+                        mentions: getAndClearCommentMentions(mentionsSignal),
+                      });
                     }}
-                  </For>
+                    isNewThread
+                  />
                 }
-              </div>
-              <Show when={showNewReplyInput()}>
-                <NewReplyInput
-                  textValue={textValue()}
-                  setTextValue={(val) => dispatch({ action: 'text', val })}
-                  createReply={(content) => {
-                    if (content.trim() === '') return;
-                    dispatch({ action: 'hard', editing: false });
-                    commentOperations.createComment({
-                      threadId: props.comment.threadId,
-                      text: content,
-                      mentions: getAndClearCommentMentions(mentionsSignal),
-                    });
+              >
+                <div
+                  on:click={() => {
+                    dispatch({ action: 'soft', editing: false });
                   }}
-                  isEditing={isEditingNewReply()}
-                  setEditing={(editing) =>
-                    dispatch({ action: 'hard', editing })
+                >
+                  <Comment
+                    comment={props.comment}
+                    isOwned={ownedComment(props.comment.id)}
+                    isActive={props.isActive}
+                    isThreaded={replyIds().length > 0}
+                  >
+                    <Show when={replyIds().length > 0 && lastReplyId()}>
+                      <Show when={collapsedCount() > 0}>
+                        <button
+                          class="text-xs text-ink-extra-muted hover:bg-hover hover:ring hover:ring-edge-muted text-left ml-5 rounded p-1 px-2 mb-2"
+                          on:click={() => {
+                            batch(() => {
+                              setActiveThread(props.comment.threadId);
+                              setAllRepliesVisible(true);
+                            });
+                          }}
+                        >
+                          {`Show ${collapsedCount()} ${collapsedCount() > 1 ? 'replies' : 'reply'}`}
+                        </button>
+                      </Show>
+                    </Show>
+                  </Comment>
+                  {
+                    <For each={replyIds()}>
+                      {(replyId) => {
+                        const hide = () =>
+                          collapseRepliesList() && replyId !== lastReplyId();
+                        return (
+                          <CommentReply
+                            hide={hide()}
+                            replyId={replyId}
+                            isOwned={ownedComment(replyId)}
+                            isActive={props.isActive}
+                            threadId={props.comment.threadId}
+                            isThreaded={replyId !== lastReplyId()}
+                            deleteReply={() =>
+                              commentOperations.deleteComment({
+                                commentId: replyId,
+                              })
+                            }
+                            updateReply={(content) => {
+                              Promise.all([
+                                commentOperations.updateComment(replyId, {
+                                  text: content,
+                                  threadId: props.comment.threadId,
+                                  mentions:
+                                    getAndClearCommentMentions(mentionsSignal),
+                                }),
+                              ]);
+                            }}
+                          />
+                        );
+                      }}
+                    </For>
                   }
-                />
+                </div>
+                <Show when={showNewReplyInput()}>
+                  <NewReplyInput
+                    textValue={textValue()}
+                    setTextValue={(val) => dispatch({ action: 'text', val })}
+                    createReply={(content) => {
+                      if (content.trim() === '') return;
+                      dispatch({ action: 'hard', editing: false });
+                      commentOperations.createComment({
+                        threadId: props.comment.threadId,
+                        text: content,
+                        mentions: getAndClearCommentMentions(mentionsSignal),
+                      });
+                    }}
+                    isEditing={isEditingNewReply()}
+                    setEditing={(editing) =>
+                      dispatch({ action: 'hard', editing })
+                    }
+                  />
+                </Show>
               </Show>
-            </Show>
-          </div>
+            </div>
+          </Layer>
         </MeasureContainer>
       </StaticMarkdownContext>
     </ThreadContext.Provider>

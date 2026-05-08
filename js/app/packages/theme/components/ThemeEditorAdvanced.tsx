@@ -4,6 +4,7 @@ import type { ThemeReactiveColor } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { ColorSwatch } from './ColorSwatch';
 import { isMobile } from '@core/mobile/isMobile';
+import { Scroll } from '@ui';
 
 const displayType = () => 'hex';
 
@@ -43,23 +44,13 @@ export function ThemeEditorAdvanced(){
         style={{
           'height': isMobile() ? '280px' : '390px', /* match themeEditorBasic height */
           'font-size': 'var(--text-xs)',
-          'scrollbar-width': 'none',
           'position': 'relative',
           'overflow': 'hidden',
           'font-weight': 300,
           'display': 'block',
         }}
       >
-        <div
-          style="
-            overscroll-behavior: none;
-            box-sizing: border-box;
-            scrollbar-width: none;
-            overflow-y: auto;
-            height: 100%;
-            width: 100%;
-          "
-        >
+        <Scroll style={{ 'overscroll-behavior': 'none' }}>
           <div
             style="
               background-color: var(--b3);
@@ -188,7 +179,7 @@ export function ThemeEditorAdvanced(){
               }}
             </For>
           </div>
-        </div>
+        </Scroll>
       </div>
     </>
   );

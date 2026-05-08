@@ -549,6 +549,10 @@ const cloudStorageService = new CloudStorageService(
         value: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
       },
       {
+        name: ServiceUrl.LEXICAL_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
+      },
+      {
         name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
         value: pulumi.interpolate`${AUTHENTICATION_SERVICE_SECRET_KEY}`,
       },

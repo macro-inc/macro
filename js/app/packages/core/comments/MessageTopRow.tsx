@@ -70,7 +70,7 @@ export function MessageRowUI(
   };
   return (
     <div
-      class="flex w-full items-start justify-between group relative font-mono"
+      class="flex w-full items-start justify-between group relative text-ink-extra-muted"
       classList={{
         'mb-3': !props.hideBottomMargin,
       }}
@@ -85,14 +85,12 @@ export function MessageRowUI(
           <div
             class={`size-4 relative flex items-center justify-center shrink-0 rounded-xs`}
           >
-            <div class="absolute">
-              <UserIcon
-                size="sm"
-                suppressClick={true}
-                id={props.authorId}
-                isDeleted={false}
-              />
-            </div>
+            <UserIcon
+              size="sm"
+              suppressClick={true}
+              id={props.authorId}
+              isDeleted={false}
+            />
           </div>
         )}
         <div class="text-xs text-ink truncate grow">{displayName()}</div>

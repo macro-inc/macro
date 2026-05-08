@@ -37,28 +37,17 @@ function ThreadTypingIndicatorContent(
   props: ThreadTypingIndicatorContentProps
 ) {
   return (
-    <>
+    <div class="flex items-center">
       <ThreadTypingIndicatorConnector />
-      <div class="text-xs text-panel uppercase font-mono px-1 py-0.5 my-1 bg-edge flex items-center gap-1">
-        <ThreadTypingIndicatorDots />
-        <span>{props.text}</span>
-      </div>
-    </>
+      <div class="size-0 bg-rail rounded-sm" />
+      <span class="text-xs text-ink-extra-muted ml-2">{props.text}</span>
+      <ThreadTypingIndicatorDots />
+    </div>
   );
 }
 
 function ThreadTypingIndicatorConnector() {
-  return (
-    <>
-      <div class="flex flex-col items-center justify-center">
-        <div class="border-l border-edge-muted min-h-1/2" />
-        <div class="border-l border-edge-muted min-h-1/2" />
-      </div>
-      <div class="flex flex-col items-center justify-center">
-        <div class="w-7 border-b border-edge-muted" />
-      </div>
-    </>
-  );
+  return <div class="w-7 border-b border-rail" />;
 }
 
 function ThreadTypingIndicatorDots() {

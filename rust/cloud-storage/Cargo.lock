@@ -3229,6 +3229,7 @@ dependencies = [
  "jsonwebtoken 10.3.0 (git+https://github.com/whutchinson98/jsonwebtoken)",
  "last_online_tracker",
  "lazy_static",
+ "lexical_client",
  "macro_auth",
  "macro_aws_config",
  "macro_axum_utils",

@@ -24,7 +24,7 @@ export function Reactions(props: ReactionsProps) {
     <Show when={message().reactions.length > 0}>
       <div
         class={cn(
-          'flex flex-row flex-wrap items-center gap-2 mt-0.5 mb-1',
+          'flex flex-row flex-wrap items-center gap-1 mt-0.5 mb-1',
           props.class
         )}
         data-message-reactions-row
@@ -67,10 +67,10 @@ export function Reactions(props: ReactionsProps) {
             }}
             trigger={renderIcon(SmileyIcon)}
             triggerProps={{
+              size: 'icon-sm',
+              tooltip: 'Add reaction',
+              variant: 'base',
               'aria-label': 'Add reaction',
-              'data-message-reaction-add': '',
-              class:
-                'h-8 w-8 border border-edge-muted bg-menu flex items-center justify-center text-ink-muted hover:bg-hover hover-transition-bg',
               onClick: (e: MouseEvent) => e.stopPropagation(),
             }}
           />
