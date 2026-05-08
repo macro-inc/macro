@@ -1,11 +1,11 @@
-import { type UserIconProps, UserIcon } from '@core/component/UserIcon';
-import type { ApiMessage } from '@service-email/generated/schemas';
+import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { useEmail } from '@core/context/user';
+import type { ApiMessage } from '@service-email/generated/schemas';
+import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal } from 'solid-js';
-import { getSenderMacroId, getSenderDisplayName } from '../util/emailUser';
+import { getSenderDisplayName, getSenderMacroId } from '../util/emailUser';
 import { formatShortDate } from './EmailMessageTopBar';
 import { EmailUserTooltip } from './EmailUserTooltip';
-import { cn } from '@ui/utils/classname';
 
 interface CollapsedMessageProps {
   message: ApiMessage;
