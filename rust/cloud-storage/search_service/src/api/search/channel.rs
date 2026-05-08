@@ -120,19 +120,13 @@ pub fn construct_search_result(
         .filter_map(|(entity_id, mut hits)| {
             match sort_timestamp {
                 ChannelSortTimestamp::Message => {
-                    // App-layer sort by created_at (vs OpenSearch's updated_at)
-                    // so edited messages stay in send-time order, with message_id
-                    // as a deterministic tiebreaker for sub-second ties.
                     hits.sort_by(|a, b| {
                         b.created_at
                             .cmp(&a.created_at)
                             .then_with(|| b.message_id.cmp(&a.message_id))
                     });
                 }
-                ChannelSortTimestamp::Thread => {
-                    // OpenSearch already sorted globally by [thread_id, message_id];
-                    // IndexMap preserves that order through the entity_id grouping.
-                }
+                ChannelSortTimestamp::Thread => {}
             }
 
             if let Some(info) = channel_histories.get(&entity_id) {
