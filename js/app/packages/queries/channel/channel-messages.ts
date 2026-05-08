@@ -86,10 +86,6 @@ export function channelMessagesQueryOptions(
               previous_cursor: pageParam?.previous_cursor ?? null,
               load_around_message_id: !pageParam ? loadAroundMessageId : null,
             },
-            // Forward TanStack's AbortSignal so an in-flight load-around
-            // request gets cancelled when the queryKey changes (e.g. the
-            // find-bar advances to a different result before the previous
-            // around-fetch completes).
             { signal }
           )
       );
