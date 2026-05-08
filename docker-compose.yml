@@ -137,8 +137,6 @@ services:
       - redis
       - connection_gateway
       - authentication-service
-      - sync_service
-      - lexical_service
     networks:
       databases:
       services:
