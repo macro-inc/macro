@@ -72,7 +72,7 @@ export const SoupFiltersBar = () => {
         <div class="flex-1" />
         <Tooltip tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}>
           <Button
-            variant={soup.previewEntity() ? 'base' : 'ghost'}
+            variant={soup.previewEntity() ? 'active' : 'ghost'}
             size="sm"
             class="rounded-xs [&_svg]:size-4 px-1 border border-transparent"
             onClick={togglePreview}
