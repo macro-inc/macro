@@ -1,5 +1,5 @@
 import type { DateValue } from '@core/util/date';
-import { createMemo, createSignal, type Accessor } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import {
   isNewMessage as isNewMessagePure,
   type NewMessageCheckable,

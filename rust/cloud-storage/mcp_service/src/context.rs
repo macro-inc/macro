@@ -273,6 +273,7 @@ async fn build_tool_context(
         PlatformArnConfig {
             apns_platform_arn: String::new(),
             fcm_platform_arn: String::new(),
+            apns_voip_platform_arn: String::new(),
         },
     );
     let notification_tool_context =

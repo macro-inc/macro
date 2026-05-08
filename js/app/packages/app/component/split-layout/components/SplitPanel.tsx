@@ -1,17 +1,17 @@
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
+import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { createSignal, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { SplitContainer } from './SplitContainer';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
-import { createHeaderCollapser } from '../utils/createHeaderCollapser';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
-import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
-import { isMobile } from '@core/mobile/isMobile';
+import { createHeaderCollapser } from '../utils/createHeaderCollapser';
+import { SplitContainer } from './SplitContainer';
 
 export type SplitPanelProps = {
   split: SplitState;

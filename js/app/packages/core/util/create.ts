@@ -1,6 +1,5 @@
+import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
-import { MARKDOWN_LORO_SCHEMA } from '@block-md/definition';
-import { rawStateToLoroSnapshot } from '@core/collab/utils';
 import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
 import {
   PROPERTY_OPTION_IDS,
@@ -8,31 +7,31 @@ import {
 } from '@core/component/Properties/constants';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { rawMarkdownStateToLoroSnapshot } from '@lexical-core/markdown-loro-snapshot';
 import {
+  authKeys,
   invalidateUserQuota,
   type UserInfoData,
-  authKeys,
 } from '@queries/auth';
 import { queryClient } from '@queries/client';
+import { postNewHistoryItem } from '@queries/history/history';
+import { setPreviewOnCreate } from '@queries/preview/preview';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { CreateChatRequest } from '@service-cognition/generated/schemas';
-import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
-import { postNewHistoryItem } from '@queries/history/history';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { syncServiceClient } from '@service-sync/client';
+import { isPaymentError } from './handlePaymentError';
 import { contentHash } from './hash';
 import {
   getExtensionForLanguage,
   isCodeEditorExtensionSupported,
   isCodeEditorLanguageSupported,
 } from './languageQuery';
-import { isPaymentError } from './handlePaymentError';
 import { err, isErr, ok } from './maybeResult';
-import { refetchSoupEntity } from '@queries/soup/cache';
-import { setPreviewOnCreate } from '@queries/preview/preview';
 
 /**
  * Generate a fake sha256 hash
@@ -62,8 +61,7 @@ export async function createMarkdownFile(
   const emptyMarkdownState = await createMarkdownStateFromContent(
     args?.content
   );
-  const snapshot = await rawStateToLoroSnapshot(
-    MARKDOWN_LORO_SCHEMA,
+  const snapshot = await rawMarkdownStateToLoroSnapshot(
     emptyMarkdownState as any
   );
   const fakeSha = fakeSha256();
@@ -118,10 +116,7 @@ export async function createTask(
 ): Promise<string | undefined> {
   // Convert content to loro snapshot for sync service
   const markdownState = await createMarkdownStateFromContent(args?.content);
-  const snapshot = await rawStateToLoroSnapshot(
-    MARKDOWN_LORO_SCHEMA,
-    markdownState as any
-  );
+  const snapshot = await rawMarkdownStateToLoroSnapshot(markdownState as any);
 
   if (!snapshot) return;
 

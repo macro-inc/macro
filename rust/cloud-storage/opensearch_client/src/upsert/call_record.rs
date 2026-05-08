@@ -24,13 +24,12 @@ pub struct UpsertCallRecordSegmentArgs {
 pub(crate) async fn upsert_call_record_segment(
     client: &opensearch::OpenSearch,
     args: &UpsertCallRecordSegmentArgs,
+    index_override: Option<&str>,
 ) -> Result<()> {
     let id = &args.transcript_id;
+    let index = index_override.unwrap_or(SearchIndex::CallRecords.as_ref());
     let response = client
-        .index(opensearch::IndexParts::IndexId(
-            SearchIndex::CallRecords.as_ref(),
-            id,
-        ))
+        .index(opensearch::IndexParts::IndexId(index, id))
         .body(args)
         .send()
         .await
@@ -66,6 +65,7 @@ pub(crate) async fn upsert_call_record_segment(
 pub(crate) async fn bulk_upsert_call_record_segments(
     client: &opensearch::OpenSearch,
     segments: &[UpsertCallRecordSegmentArgs],
+    index_override: Option<&str>,
 ) -> Result<BulkUpsertResult> {
     if segments.is_empty() {
         return Ok(BulkUpsertResult::default());
@@ -84,11 +84,6 @@ pub(crate) async fn bulk_upsert_call_record_segments(
         })?);
     }
 
-    super::bulk_upsert_to_index(
-        client,
-        SearchIndex::CallRecords.as_ref(),
-        bulk_body,
-        "bulk_upsert_call_record_segments",
-    )
-    .await
+    let index = index_override.unwrap_or(SearchIndex::CallRecords.as_ref());
+    super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_call_record_segments").await
 }

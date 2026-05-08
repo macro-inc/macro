@@ -1,12 +1,12 @@
 import { toast } from '@core/component/Toast/Toast';
 import { getImageDimensions, getVideoDimensions } from '@core/util/media';
+import type { InputAttachmentTracker } from './types';
 import {
+  buildUploadedAttachment,
   getAttachmentKindFromFile,
   iconTypeFromFilename,
-  buildUploadedAttachment,
   type UploadResult,
 } from './utils/file-helpers';
-import type { InputAttachmentTracker } from './types';
 
 export { getAttachmentKindFromFile } from './utils/file-helpers';
 

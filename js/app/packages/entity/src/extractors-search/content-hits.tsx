@@ -1,8 +1,8 @@
 import { Show } from 'solid-js';
+import { CollapsibleList } from '../components/CollapsibleList';
 import type { EntityData } from '../types/entity';
 import type { SearchLocation } from '../types/search';
 import { isSearchEntity } from '../types/search';
-import { CollapsibleList } from '../components/CollapsibleList';
 import { SearchContentHitRow } from './search-content-hit-row';
 
 interface ExtractorContentHitsProps {

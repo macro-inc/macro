@@ -1,6 +1,6 @@
+import { analytics } from '@app/lib/analytics';
 import shortUUID from 'short-uuid';
 import ZipWorker from '../../workers/folder-upload/zip-worker?worker';
-import { analytics } from '@app/lib/analytics';
 
 const MAX_FOLDER_FILE_COUNT = 1000;
 // NOTE: you can expect a 30-40% decrease in folder size when zipped

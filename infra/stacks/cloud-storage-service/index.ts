@@ -183,8 +183,16 @@ const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
   .getOutput('contactsQueueArn')
   .apply((arn) => arn as string);
 
-const { notificationIngressQueueName, notificationIngressQueueArn } =
-  getMacroNotify();
+const {
+  notificationIngressQueueName,
+  notificationIngressQueueArn,
+  notificationApnsVoipPlatformArn: snsApnsVoipPlatformArn,
+} = getMacroNotify();
+
+const appleBundleId = config.require('apple_bundle_id');
+const APPLE_BUNDLE_ID = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: appleBundleId })
+  .apply((secret) => secret.secretString);
 
 // To re-use this secret name after a destroy, you will need to delete the secret without recovery to prevent conflict:
 // aws secretsmanager delete-secret --secret-id ${CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME} --force-delete-without-recovery
@@ -379,6 +387,7 @@ const cloudStorageService = new CloudStorageService(
       calEventTypeContentNamesKeyArn,
     ],
     callRecordingCrudPolicyArn,
+    snsPlatformArns: [snsApnsVoipPlatformArn],
     containerEnvVars: [
       {
         name: 'CALL_RECORDING_S3_BUCKET',
@@ -595,6 +604,14 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'META_ACCESS_TOKEN',
         value: pulumi.interpolate`${META_ACCESS_TOKEN}`,
+      },
+      {
+        name: 'APPLE_BUNDLE_ID',
+        value: pulumi.interpolate`${APPLE_BUNDLE_ID}`,
+      },
+      {
+        name: 'SNS_APNS_VOIP_PLATFORM_ARN',
+        value: pulumi.interpolate`${snsApnsVoipPlatformArn}`,
       },
       // OpenTelemetry / Datadog tracing configuration
       {

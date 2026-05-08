@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use super::*;
 use crate::user::get_user_name::get_user_names_with_email;
 use macro_user_id::cowlike::CowLike;

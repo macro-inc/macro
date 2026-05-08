@@ -3,7 +3,7 @@ import { useAnalytics } from 'app/component/analytics-context';
 import { applyTheme } from '../utils/themeUtils';
 import { ColorSwatch } from './ColorSwatch';
 import { ThemeCrud } from './ThemeCrud';
-import { Window } from '@ui';
+import { Panel } from '@ui';
 
 import { For } from 'solid-js';
 
@@ -26,11 +26,11 @@ export function ThemeList() {
           }
         `}</style>
 
-        <Window.Header class="px-5">
+        <Panel.Header class="px-5">
           <div class="text-sm font-semibold">Theme List</div>
-        </Window.Header>
+        </Panel.Header>
 
-        <Window.Body scroll>
+        <Panel.Body scroll>
           <div
             style="
               grid-template-columns: min-content 1fr min-content;
@@ -38,6 +38,7 @@ export function ThemeList() {
               box-sizing: border-box;
               grid-auto-rows: 40px;
               overflow-x: hidden;
+              font-size: 14px;
               display: grid;
               gap: 1px;
             "
@@ -97,9 +98,9 @@ export function ThemeList() {
                 </>
               )}
             </For>
-        </div>
-      </Window.Body>
-    </>
+          </div>
+        </Panel.Body>
+      </>
   );
 }
 

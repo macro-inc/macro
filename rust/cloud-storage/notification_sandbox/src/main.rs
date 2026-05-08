@@ -138,10 +138,11 @@ async fn main() -> Result<(), Report> {
         SnsMode::Real {
             sns_client,
             endpoint_arn: _,
-        } => SandboxMobileSender::Real(MobilePushAdapter::new(
-            sns_client.clone(),
-            "com.macro.app.prod".to_string(),
-        )),
+        } => SandboxMobileSender::Real(MobilePushAdapter {
+            push_service: sns_client.clone(),
+            apns_bundle_id: "com.macro.app.prod".to_string(),
+            voip_bundle_id: None,
+        }),
     };
     let email_adapter = EmailAdapter::new(
         aws_sdk_sesv2::Client::new(&aws_config),

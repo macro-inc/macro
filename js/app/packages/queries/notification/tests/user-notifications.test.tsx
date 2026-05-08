@@ -32,8 +32,8 @@ vi.mock('@queries/soup/normalized-cache', () => ({
   optimisticUpdateSoupItemUpdatedAt: vi.fn(),
 }));
 
-import { notificationServiceClient } from '@service-notification/client';
 import { optimisticUpdateSoupItemUpdatedAt } from '@queries/soup/normalized-cache';
+import { notificationServiceClient } from '@service-notification/client';
 
 const mockBulkMarkNotificationAsSeen = vi.mocked(
   notificationServiceClient.bulkMarkNotificationAsSeen

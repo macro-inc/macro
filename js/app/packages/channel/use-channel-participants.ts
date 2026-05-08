@@ -1,7 +1,7 @@
-import { createMemo, type Accessor } from 'solid-js';
-import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
-import { channelParticipantInfo } from '@core/user/util';
 import type { IUser } from '@core/user/types';
+import { channelParticipantInfo } from '@core/user/util';
+import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+import { type Accessor, createMemo } from 'solid-js';
 
 export type ChannelParticipantsData = {
   users: Accessor<IUser[]>;

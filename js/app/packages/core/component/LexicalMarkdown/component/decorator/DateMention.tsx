@@ -113,7 +113,7 @@ export function DateMention(props: DateMentionDecoratorProps) {
     <>
       <span
         ref={mentionRef}
-        class="relative py-0.5 px-0.5 rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink cursor-default"
+        class="relative p-0.5 rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink cursor-default"
         classList={{
           'bg-active': isSelectedAsNode(),
         }}
@@ -122,7 +122,7 @@ export function DateMention(props: DateMentionDecoratorProps) {
         onMouseLeave={() => setHovered(false)}
       >
         <span class="relative top-[0.125em] size-[1em] inline-flex mx-0.5">
-          <ClockIcon class="w-full h-full" />
+          <ClockIcon class="size-full" />
         </span>
         <span
           data-date={props.date}

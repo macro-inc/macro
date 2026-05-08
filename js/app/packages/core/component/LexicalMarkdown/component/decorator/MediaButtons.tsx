@@ -11,7 +11,7 @@ import ThreeDotsIcon from '@icon/regular/dots-three.svg';
 import Trash from '@icon/regular/trash.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 false && clickOutside;

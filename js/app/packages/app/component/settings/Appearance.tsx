@@ -3,7 +3,7 @@ import { ThemeEditorBasic } from '@theme/components/ThemeEditorBasic';
 import ThemeTools from '@theme/components/ThemeTools';
 import ThemeList from '@theme/components/ThemeList';
 
-import { Window } from '@ui';
+import { Panel } from '@ui';
 import { Tabs } from '@core/component/Tabs';
 import { createSignal, Show } from 'solid-js';
 import { isMobile } from '@core/mobile/isMobile';
@@ -21,7 +21,7 @@ export function Appearance() {
   return (
     <div class="h-full overflow-hidden flex justify-center p-2">
       <div
-        class="max-w-200 w-full h-full"
+        class="max-w-200 size-full"
         style={{
           'grid-template-rows': 'min-content 1fr',
           'grid-template-columns': '1fr',
@@ -30,8 +30,8 @@ export function Appearance() {
           'gap': '8px',
         }}
       >
-        <Window depth={2}>
-          <Window.Header>
+        <Panel depth={2}>
+          <Panel.Header>
             <Tabs
               list={tabList}
               value={activeTab()}
@@ -41,27 +41,27 @@ export function Appearance() {
             <Show when={!isMobile()}>
               <ThemeTools class="flex-1 min-w-0" />
             </Show>
-          </Window.Header>
+          </Panel.Header>
 
           <Show when={isMobile()}>
-            <Window.Toolbar>
+            <Panel.Toolbar>
               <ThemeTools class="flex-1 min-w-0" />
-            </Window.Toolbar>
+            </Panel.Toolbar>
           </Show>
 
-          <Window.Body scroll>
+          <Panel.Body scroll>
             <Show when={activeTab() === 'basic'}>
               <ThemeEditorBasic />
             </Show>
             <Show when={activeTab() === 'advanced'}>
               <ThemeEditorAdvanced />
             </Show>
-          </Window.Body>
-        </Window>
+          </Panel.Body>
+        </Panel>
 
-        <Window depth={2}>
+        <Panel depth={2}>
                   <ThemeList />
-                </Window>
+                </Panel>
       </div>
     </div>
   );

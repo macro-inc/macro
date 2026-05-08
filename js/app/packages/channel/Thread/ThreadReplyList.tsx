@@ -1,15 +1,15 @@
-import { For, createMemo, onMount, type Accessor } from 'solid-js';
+import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
+import type { ApiThreadReply } from '@service-comms/client';
+import { type Accessor, createMemo, For, onMount } from 'solid-js';
+import type { MessageEditor } from '../Channel/create-message-editor';
+import type { NewMessageCheckable } from '../Channel/util';
 import {
   ChannelMessage,
   type MessageActions,
   type MessageData,
 } from '../Message';
-import type { ApiThreadReply } from '@service-comms/client';
-import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { buildThreadReplyListMeta } from './reply-list-meta';
 import { ThreadRail } from './ThreadRail';
-import type { MessageEditor } from '../Channel/create-message-editor';
-import type { NewMessageCheckable } from '../Channel/util';
 
 export type ThreadReplyListHandle = {
   scrollToIndex: (index: number) => boolean;

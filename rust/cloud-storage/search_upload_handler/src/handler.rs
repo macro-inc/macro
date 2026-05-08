@@ -62,6 +62,7 @@ pub async fn handler(
         document_id: document_id.to_string(),
         document_version_id: document_key.version_id_string(),
         file_type,
+        index_override: None,
     };
 
     // All other file types are to be sent to the search text extractor queue

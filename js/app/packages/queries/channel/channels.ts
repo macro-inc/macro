@@ -1,8 +1,8 @@
+import { throwOnErr } from '@core/util/maybeResult';
+import { queryClient } from '@queries/client';
+import { commsServiceClient } from '@service-comms/client';
 import { useQuery } from '@tanstack/solid-query';
 import { channelKeys } from './keys';
-import { throwOnErr } from '@core/util/maybeResult';
-import { commsServiceClient } from '@service-comms/client';
-import { queryClient } from '@queries/client';
 
 export function useListChannelsQuery() {
   return useQuery(() => ({

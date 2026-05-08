@@ -85,7 +85,7 @@ export function ReferencesDrawer(props: {
       <Suspense
         fallback={
           <div class="flex justify-center py-8">
-            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-ink-muted"></div>
+            <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted"></div>
           </div>
         }
       >
@@ -163,7 +163,7 @@ export function ReferencesModal(props: ReferencesModalProps) {
         <Suspense
           fallback={
             <div class="flex justify-center py-8">
-              <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-ink-muted"></div>
+              <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted"></div>
             </div>
           }
         >

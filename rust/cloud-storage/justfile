@@ -29,24 +29,24 @@ build_dev_service_images:
   docker build -f Dockerfile.search_processing_service.dev --target search_processing_service -t macro-local-search-processing-service:dev .
 
 # Build all lambda functions
-build_lambdas:
-    ulimit -n 10240 && just docx_unzip_handler/build
-    ulimit -n 10240 && just delete_chat_handler/build
-    ulimit -n 10240 && just organization_retention_handler/build
-    ulimit -n 10240 && just organization_retention_trigger/build
-    ulimit -n 10240 && just upload_extractor_lambda_trigger/build
-    ulimit -n 10240 && just upload_extractor_lambda_handler/build
-    ulimit -n 10240 && just worker_trigger/build
-    ulimit -n 10240 && just dataloss_prevention_handler/build
-    ulimit -n 10240 && just search_upload_handler/build
-    ulimit -n 10240 && just document_text_extractor/build
-    ulimit -n 10240 && just email_suppression_handler/build
-    ulimit -n 10240 && just deleted_item_poller/build
-    ulimit -n 10240 && just email_refresh_handler/build
-    ulimit -n 10240 && just user_link_cleanup_handler/build
-    ulimit -n 10240 && just email_scheduled_handler/build
-    ulimit -n 10240 && just email_sfs_delete_handler/build
-    ulimit -n 10240 && just image_optimizer/build
+build_lambdas compiler="":
+    ulimit -n 10240 && just docx_unzip_handler/build {{compiler}}
+    ulimit -n 10240 && just delete_chat_handler/build {{compiler}}
+    ulimit -n 10240 && just organization_retention_handler/build {{compiler}}
+    ulimit -n 10240 && just organization_retention_trigger/build {{compiler}}
+    ulimit -n 10240 && just upload_extractor_lambda_trigger/build {{compiler}}
+    ulimit -n 10240 && just upload_extractor_lambda_handler/build {{compiler}}
+    ulimit -n 10240 && just worker_trigger/build {{compiler}}
+    ulimit -n 10240 && just dataloss_prevention_handler/build {{compiler}}
+    ulimit -n 10240 && just search_upload_handler/build {{compiler}}
+    ulimit -n 10240 && just document_text_extractor/build {{compiler}}
+    ulimit -n 10240 && just email_suppression_handler/build {{compiler}}
+    ulimit -n 10240 && just deleted_item_poller/build {{compiler}}
+    ulimit -n 10240 && just email_refresh_handler/build {{compiler}}
+    ulimit -n 10240 && just user_link_cleanup_handler/build {{compiler}}
+    ulimit -n 10240 && just email_scheduled_handler/build {{compiler}}
+    ulimit -n 10240 && just email_sfs_delete_handler/build {{compiler}}
+    ulimit -n 10240 && just image_optimizer/build {{compiler}}
 
 # TESTING
 

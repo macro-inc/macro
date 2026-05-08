@@ -1,6 +1,6 @@
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
 import { virtualKeyboardHeight } from '@core/mobile/virtualKeyboard';
-import { size, type Placement } from '@floating-ui/dom';
+import { type Placement, size } from '@floating-ui/dom';
 import { isIOS } from '@solid-primitives/platform';
 
 /**

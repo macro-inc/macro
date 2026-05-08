@@ -1,7 +1,7 @@
 import type { FilterID } from '@app/component/next-soup/filters';
 import {
-  NIL_UUID,
   defineQueryFilters,
+  NIL_UUID,
   type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';

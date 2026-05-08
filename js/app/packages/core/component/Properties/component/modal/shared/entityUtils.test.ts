@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
-import { createSignal } from 'solid-js';
 import type { EntityData } from '@entity';
+import { createSignal } from 'solid-js';
+import { describe, expect, it, vi } from 'vitest';
 
 // Mock @core/context/quickAccess to break the import chain that pulls in
 // LexicalMarkdown plugins -> themeSignals -> window.matchMedia
@@ -19,12 +19,12 @@ vi.mock('@core/context/quickAccess', () => ({
   exclude: () => () => true,
 }));
 
+import type { IUser } from '@core/user';
+import type { CombinedEntity } from './entityUtils';
 import {
   createEntitySearchConfig,
   sortEntitiesWithSelfFirst,
 } from './entityUtils';
-import type { CombinedEntity } from './entityUtils';
-import type { IUser } from '@core/user';
 
 describe('createEntitySearchConfig', () => {
   it('should return correct search config with same weights as MentionsMenu', () => {

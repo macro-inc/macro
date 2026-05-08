@@ -1,4 +1,4 @@
-import { createEffect, createSignal, on, type Accessor } from 'solid-js';
+import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 
 type CreateMessageSelectionOptions = {
   keys: Accessor<string[]>;

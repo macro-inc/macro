@@ -5,7 +5,7 @@ import CorvuTooltip from '@corvu/tooltip';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
 
-type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
+export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
   tooltipPlacement?: Placement;
   variant?: ButtonVariant;
@@ -13,6 +13,7 @@ type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
   tooltip?: JSX.Element;
   size?: ButtonSize;
   class?: string;
+  noTouchResize?: boolean;
 };
 
 type ButtonSize = 'sm' | 'icon-sm' | 'md' | 'icon-md' | 'lg' | 'icon-lg';
@@ -58,7 +59,7 @@ export const Button = (props: ButtonProps) => {
   const cls = () =>
     cn(
       'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-sm whitespace-nowrap',
-      'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
+      { 'touch:min-h-9 touch:min-w-9 touch:[&_svg]:size-6': !(props.noTouchResize) },
       'outline-none focus-visible:bg-active',
       'data-disabled:cursor-not-allowed',
       variantStyles[local.variant ?? 'ghost'],

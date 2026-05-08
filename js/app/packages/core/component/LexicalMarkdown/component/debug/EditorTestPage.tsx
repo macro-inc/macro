@@ -122,11 +122,11 @@ export default function EditorTestPage() {
   };
 
   return (
-    <div class="flex flex-col h-full w-full">
+    <div class="flex flex-col size-full">
       <SplitHeaderLeft>
         <StaticSplitLabel label="Markdown Test Page" />
       </SplitHeaderLeft>
-      <div class="w-full h-full p-8 flex-1 flex flex-row flex-wrap gap-4 overflow-y-auto items-start justify-center content-start">
+      <div class="size-full p-8 flex-1 flex flex-row flex-wrap gap-4 overflow-y-auto items-start justify-center content-start">
         <Container label="With Suspense">
           <Suspense
             fallback={

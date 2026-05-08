@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use crate::api::context::AppState;
 use crate::api::extractors::{ChannelId, ChannelMember};
 use axum::http::StatusCode;

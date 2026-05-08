@@ -1,16 +1,27 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   createSoupState,
-  type SoupState,
-  type SoupRow,
   type SoupEntity,
+  type SoupRow,
+  type SoupState,
 } from '@app/component/next-soup/create-soup-state';
+import type { FilterContext } from '@app/component/next-soup/filters/configs/';
+import {
+  createQueryStore,
+  type Query,
+  type QueryStore,
+} from '@app/component/next-soup/filters/filter-store/query-store';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
-import { isWithNotification, type EntityData } from '@entity';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
+import { type EntityData, isWithNotification } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
+import { useQueryClient } from '@queries/client';
 import { type SoupParams, useSoupAstItemsQuery } from '@queries/soup/items';
+import { soupKeys } from '@queries/soup/keys';
+import type { SoupPage } from '@service-storage/generated/schemas';
+import type { InfiniteData } from '@tanstack/solid-query';
 import {
   type Accessor,
   createContext,
@@ -24,17 +35,6 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
-import type { FilterContext } from '@app/component/next-soup/filters/configs/';
-import {
-  createQueryStore,
-  type Query,
-  type QueryStore,
-} from '@app/component/next-soup/filters/filter-store/query-store';
-import { useUserId } from '@core/context/user';
-import { useQueryClient } from '@queries/client';
-import { soupKeys } from '@queries/soup/keys';
-import type { InfiniteData } from '@tanstack/solid-query';
-import type { SoupPage } from '@service-storage/generated/schemas';
 
 type DataSource<T> = {
   data: Accessor<T[]>;

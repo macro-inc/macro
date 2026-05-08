@@ -1,4 +1,5 @@
 use super::*;
+use macro_user_id::cowlike::CowLike;
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",

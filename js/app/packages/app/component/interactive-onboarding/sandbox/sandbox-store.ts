@@ -1,10 +1,10 @@
-import type { EntityData } from '@entity';
 import type { IUser } from '@core/user/types';
+import type { EntityData } from '@entity';
+import { createSignal } from 'solid-js';
 import {
   MOCK_DOCUMENT_BASIC,
   MOCK_PROJECT_1,
 } from '../../../../entity/mocks/mockEntityData';
-import { createSignal } from 'solid-js';
 
 const now = new Date();
 
@@ -226,7 +226,7 @@ export type SandboxSidebarFilter =
 const [sidebarFilter, setSidebarFilter] =
   createSignal<SandboxSidebarFilter>('empty');
 
-export { sidebarFilter, setSidebarFilter };
+export { setSidebarFilter, sidebarFilter };
 
 function matchesFilter(
   entity: EntityData,

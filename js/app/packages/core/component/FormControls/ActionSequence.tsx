@@ -98,7 +98,7 @@ function Step(props: ButtonProps) {
   return (
     <button
       type="button"
-      class="relative flex items-stretch bg-accent text-dialog font-mono border-2 border-accent font-medium uppercase leading-none translate-y-[2px] transition py-1 px-2 disabled:cursor-not-allowed"
+      class="relative flex items-stretch bg-accent text-dialog font-mono border-2 border-accent font-medium uppercase leading-none translate-y-0.5 transition py-1 px-2 disabled:cursor-not-allowed"
       disabled={props.disabled || props.completed}
       onClick={props.onClick}
       classList={{

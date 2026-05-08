@@ -1,6 +1,6 @@
-import { URL_PARAMS } from '@block-channel/constants';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import type { SplitManager } from '@app/component/split-layout/layoutManager';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { URL_PARAMS } from '@block-channel/constants';
 import type { BlockOrchestrator } from '@core/orchestrator';
 
 export function getChannelParams(

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-end-active-call"
+description = "Enables the end_active_call command without any pre-configured scope."
+commands.allow = ["end_active_call"]
+
+[[permission]]
+identifier = "deny-end-active-call"
+description = "Denies the end_active_call command without any pre-configured scope."
+commands.deny = ["end_active_call"]

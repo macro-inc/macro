@@ -1,5 +1,5 @@
-import { createSoupState, type SoupState } from './create-soup-state';
 import { createContext, type FlowComponent, useContext } from 'solid-js';
+import { createSoupState, type SoupState } from './create-soup-state';
 
 const SoupContext = createContext<SoupState>();
 

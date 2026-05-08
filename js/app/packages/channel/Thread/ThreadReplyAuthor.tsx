@@ -7,7 +7,7 @@ type ThreadReplyAuthorProps = {
 
 export function ThreadReplyAuthor(props: ThreadReplyAuthorProps) {
   return (
-    <div class="flex items-start gap-2 pt-2 pl-2 pr-2">
+    <div class="flex items-start gap-2 pt-2 px-2">
       <div class="shrink-0 size-(--user-icon-width)">
         <UserIcon id={props.userId} size="fill" />
       </div>

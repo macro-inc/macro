@@ -3117,7 +3117,7 @@ async fn test_exhaustive_paginate_all_sort_methods(pool: Pool<Postgres>) -> anyh
     ] {
         let mut all_ids: Vec<Uuid> = Vec::new();
         let mut current_query: Query<Uuid, SimpleSortMethod, ()> = Query::Sort(sort, ());
-        let mut page_count = 0;
+        let mut _page_count = 0;
 
         loop {
             let result =
@@ -3128,7 +3128,7 @@ async fn test_exhaustive_paginate_all_sort_methods(pool: Pool<Postgres>) -> anyh
                     .into_page();
 
             all_ids.extend(result.items.iter().map(|i| i.id()));
-            page_count += 1;
+            _page_count += 1;
 
             match result.next_cursor {
                 Some(cursor) => {

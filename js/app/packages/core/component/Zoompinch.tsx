@@ -151,9 +151,7 @@ export function Zoompinch(props: ZoompinchProps) {
       class={props.class}
       style={{ ...props.style, 'touch-action': 'none' }}
     >
-      <div class="canvas w-full h-full will-change-transform">
-        {props.children}
-      </div>
+      <div class="canvas size-full will-change-transform">{props.children}</div>
     </div>
   );
 }

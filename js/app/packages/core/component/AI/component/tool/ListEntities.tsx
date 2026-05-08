@@ -91,7 +91,7 @@ const ListEntitiesToolResponse = (props: {
   };
 
   return (
-    <div class="max-h-[480px] overflow-hidden">
+    <div class="max-h-120 overflow-hidden">
       <VList
         data={results()}
         bufferSize={5 * 32}
@@ -200,7 +200,7 @@ const handler = createToolRenderer({
                 }}
               >
                 <CaretRight
-                  class="h-4 w-4 transition-transform"
+                  class="size-4 transition-transform"
                   classList={{
                     'rotate-90': isExpanded(),
                   }}

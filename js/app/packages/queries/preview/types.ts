@@ -1,5 +1,5 @@
-import type { SubType } from '@entity';
 import type { DateValue } from '@core/util/date';
+import type { SubType } from '@entity';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { Message } from '@service-comms/generated/models';
 import type { ItemType } from '@service-storage/client';

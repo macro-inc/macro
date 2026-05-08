@@ -215,7 +215,7 @@ sha2 = "0.10.8"
 sqlx = { version = "0.8.6", features = [
   "chrono",
   "postgres",
-  "runtime-tokio-native-tls",
+  "runtime-tokio-rustls",
   "uuid",
 ] }
 sqlx-core = { version = "0.8.6" }

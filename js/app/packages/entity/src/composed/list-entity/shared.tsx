@@ -1,3 +1,4 @@
+import type { StreamEvent } from '@service-connection/generated/schemas';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -8,11 +9,10 @@ import {
   onCleanup,
   useContext,
 } from 'solid-js';
-import type { StreamEvent } from '@service-connection/generated/schemas';
-import type { ContentHitData } from '../../types/search';
-import { isSearchEntity } from '../../types/search';
 import type { EntityData, ProjectEntity } from '../../types/entity';
 import type { WithNotification } from '../../types/notification';
+import type { ContentHitData } from '../../types/search';
+import { isSearchEntity } from '../../types/search';
 
 export const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 

@@ -190,6 +190,14 @@ pub(crate) type DssChannelsState =
 pub(crate) type CallConnectionService =
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>;
 
+/// Type alias for the VoIP push sender (optional at runtime via `Option`).
+pub(crate) type DssVoipPushSender = Option<
+    notification::domain::service::VoipPushServiceImpl<
+        notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
+        aws_sdk_sns::Client,
+    >,
+>;
+
 /// Type alias for the call service.
 pub(crate) type DssCallService = CallServiceImpl<
     PgCallRepo,
@@ -200,6 +208,7 @@ pub(crate) type DssCallService = CallServiceImpl<
     Option<call::outbound::s3_recording_storage::S3RecordingStorage>,
     call::outbound::ai_call_summarizer::AiCallSummarizer,
     crate::service::call_search_indexer::SqsCallSearchIndexer,
+    DssVoipPushSender,
 >;
 
 /// Type alias for the call router state.

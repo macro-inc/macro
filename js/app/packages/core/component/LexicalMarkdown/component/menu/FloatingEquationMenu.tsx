@@ -263,7 +263,7 @@ export function FloatingEquationMenu() {
               <label class="flex items-center gap-2 text-sm text-ink">
                 <input
                   type="checkbox"
-                  class="w-4 h-4 rounded"
+                  class="size-4 rounded"
                   checked={inline()}
                   onChange={toggleInlineMode}
                 />
@@ -276,7 +276,7 @@ export function FloatingEquationMenu() {
                 disabled={!equation()}
                 class="px-3 py-1.5 bg-accent/80 text-menu rounded-md hover:bg-accent transition disabled:bg-edge disabled:cursor-not-allowed flex items-center gap-1.5 text-sm font-medium"
               >
-                <Check class="w-4 h-4" />
+                <Check class="size-4" />
                 {isNewEquation() ? 'Insert' : 'Update'}
               </button>
             </Tooltip>

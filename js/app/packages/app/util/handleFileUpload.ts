@@ -1,8 +1,8 @@
+import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { type UploadInput, uploadFiles } from '@core/util/upload';
-import { useSplitLayout } from '../component/split-layout/layout';
 import { refetchSoupEntity } from '@queries/soup/cache';
-import { toast } from '@core/component/Toast/Toast';
+import { useSplitLayout } from '../component/split-layout/layout';
 
 export function useHandleFileUpload({
   projectId,

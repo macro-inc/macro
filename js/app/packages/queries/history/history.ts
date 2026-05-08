@@ -1,13 +1,13 @@
-import { isOk, throwOnErr, catchToResult } from '@core/util/maybeResult';
+import { catchToResult, isOk, throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { CloudStorageItemType } from '@service-storage/generated/schemas/cloudStorageItemType';
 import {
+  type QueryClient,
+  queryOptions,
+  type Updater,
   useMutation,
   useQuery,
-  queryOptions,
-  type QueryClient,
-  type Updater,
 } from '@tanstack/solid-query';
 import type { Accessor, Setter } from 'solid-js';
 import { queryClient } from '../client';

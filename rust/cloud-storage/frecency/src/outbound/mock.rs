@@ -5,13 +5,6 @@ use mockall::mock;
 use model_entity::Entity;
 use std::convert::Infallible;
 
-const _NOT_PROD: () = const {
-    assert!(
-        cfg!(debug_assertions),
-        "You are trying to include mock code in a production build please run `cargo tree -i frecency -e features -p <FAILING_PACKAGE>` to see how the mock feature is being included in [dependencies]"
-    );
-};
-
 mock! {
     pub FrecencyStorage {}
     impl AggregateFrecencyStorage for FrecencyStorage {

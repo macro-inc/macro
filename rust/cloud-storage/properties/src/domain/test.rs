@@ -539,7 +539,7 @@ async fn check_notifications(test_case: NotificationTestCase) {
     // Mock: send notifications
     if test_case.notification_service_available && test_case.expected_notification_count > 0 {
         let expected_count = test_case.expected_notification_count;
-        let expected_recipients = test_case.expected_recipient_ids.clone();
+        let _expected_recipients = test_case.expected_recipient_ids.clone();
         notif_service
             .expect_send_notification()
             .times(expected_count)

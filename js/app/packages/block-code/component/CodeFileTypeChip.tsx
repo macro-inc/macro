@@ -3,9 +3,9 @@ import { FileTypeChip } from '@core/component/FileTypeChip';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { Popover } from '@kobalte/core/popover';
-import { createSignal, For, Show, createMemo } from 'solid-js';
-import { FileType } from '@service-storage/generated/schemas/fileType';
 import { createUpdateFileTypeMutation } from '@macro-entity';
+import { FileType } from '@service-storage/generated/schemas/fileType';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 
 // NOTE: this attempts to match codemirror supported file types, see @block-code/util/languageSupport.ts
 const DROPDOWN_FILE_TYPES: FileType[] = [

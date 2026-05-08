@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  getUniqueSenderIds,
   getActionVerb,
   getTypeNoun,
+  getUniqueSenderIds,
 } from '../src/extractors-notification/notification-description-helpers';
 import type { Notification } from '../src/types/notification';
 

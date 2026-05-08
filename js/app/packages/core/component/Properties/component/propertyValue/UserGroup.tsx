@@ -1,7 +1,7 @@
-import { createMemo, For, Show } from 'solid-js';
-import { AvatarGroup } from '@ui';
-import type { EntityReference } from '../../types';
 import { UserIcon } from '@core/component/UserIcon';
+import { AvatarGroup } from '@ui';
+import { createMemo, For, Show } from 'solid-js';
+import type { EntityReference } from '../../types';
 
 type UserEntityGroupProps = {
   entities: EntityReference[];

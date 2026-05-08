@@ -183,7 +183,7 @@ export const FilterValueSelectMulti: Component<FilterValueSelectMultiProps> = (
           />
           <div
             ref={dropdownRef}
-            class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-[160px] max-h-48 overflow-y-auto z-user-highlight"
+            class="absolute left-0 top-full mt-1 border border-edge bg-menu shadow-lg font-mono min-w-40 max-h-48 overflow-y-auto z-user-highlight"
           >
             <Show
               when={availableOptions().length > 0}

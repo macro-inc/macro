@@ -1,7 +1,7 @@
+import type { InputSnapshot } from '@channel/Input';
+import { batch, createSignal, type Setter } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ThreadState } from '../Thread';
-import { batch, createSignal, type Setter } from 'solid-js';
-import type { InputSnapshot } from '@channel/Input';
 
 type ThreadStore = Record<string, ThreadState>;
 export function createThreadManager() {

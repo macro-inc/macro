@@ -7,6 +7,7 @@ use crate::{Result, error::OpensearchClientError};
 pub async fn delete_document_by_id(
     client: &opensearch::OpenSearch,
     document_id: &str,
+    index_override: Option<&str>,
 ) -> Result<()> {
     // First, search for all documents with the given document_id
     let query = serde_json::json!({
@@ -17,10 +18,9 @@ pub async fn delete_document_by_id(
         },
     });
 
+    let index = index_override.unwrap_or(SearchIndex::Documents.as_ref());
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
-            SearchIndex::Documents.as_ref(),
-        ]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()

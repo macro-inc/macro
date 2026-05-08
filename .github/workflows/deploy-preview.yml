@@ -23,7 +23,7 @@ env:
 
 jobs:
   deploy:
-    runs-on: linux-latest-beefy
+    runs-on: linux-extra-beefy
     permissions:
       contents: read
       pull-requests: write

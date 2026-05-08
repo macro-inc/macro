@@ -49,14 +49,13 @@ async fn main() {
     let mut tool_json = String::new();
 
     while let Some(part) = stream.next().await {
-        writeln!(out, "{:#?}", part);
+        let _ = writeln!(out, "{:#?}", part);
         if part.is_err() {
             writeln!(out, "{:?}", part).expect("io");
             break;
         }
         let part = part.unwrap();
         match part {
-            StreamEvent::ContentBlockStart { content_block, .. } => {}
             StreamEvent::ContentBlockDelta { delta, .. } => match delta {
                 ContentDeltaEvent::InputJsonDelta { partial_json } => {
                     tool_json.push_str(&partial_json);
@@ -67,9 +66,7 @@ async fn main() {
                 }
                 other => writeln!(out, "{:?}", other).expect("io"),
             },
-            StreamEvent::ContentBlockStop { .. } | StreamEvent::ContentBlockStart { .. } => {
-                writeln!(out).expect("io")
-            }
+            StreamEvent::ContentBlockStop { .. } => writeln!(out).expect("io"),
             event => writeln!(out, "{:?}", event).expect("io"),
         }
     }

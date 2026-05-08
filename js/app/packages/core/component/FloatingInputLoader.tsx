@@ -1,6 +1,6 @@
 import CheckCircle from '@icon/regular/check-circle.svg';
 import Spinner from '@icon/regular/spinner.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   type Accessor,
   createEffect,

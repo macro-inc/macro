@@ -1,5 +1,6 @@
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import type { Model } from '@core/component/AI/types';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { MaybeResultError } from '@core/util/maybeResult';
 import type {
   AgentTask,
@@ -8,7 +9,6 @@ import type {
   UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import type { ScheduleDraft, ScheduleFrequency } from './types';
-import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 
 export const INPUT_CLASS =
   'w-full border border-edge-muted rounded-sm bg-input px-2 py-1.5 text-sm text-ink outline-none placeholder:text-ink/30 focus:border-accent/20 cursor-default';

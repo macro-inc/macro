@@ -1,3 +1,4 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { useBlockId } from '@core/block';
 import type { DeleteCommentInfo } from '@core/comments/commentType';
@@ -27,7 +28,6 @@ import {
   useDeleteCommentResource,
   useEditCommentResource,
 } from './commentsResource';
-import { useAnalytics } from '@app/component/analytics-context';
 
 export function useCreateComment() {
   const analytics = useAnalytics();

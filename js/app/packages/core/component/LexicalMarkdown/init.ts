@@ -6,11 +6,11 @@ import {
   DocumentCardNode,
   DocumentMentionNode,
   EquationNode,
-  SnapshotNode,
   GroupMentionNode,
   HorizontalRuleNode,
   HtmlRenderNode,
   ImageNode,
+  SnapshotNode,
   ThemeMentionNode,
   UnknownMentionNode,
   UserMentionNode,
@@ -25,15 +25,15 @@ import { DiffInsert } from './component/decorator/DiffInsert';
 import { DocumentCard } from './component/decorator/DocumentCard';
 import { DocumentMention } from './component/decorator/DocumentMention';
 import { Equation } from './component/decorator/Equation';
-import { Snapshot } from './component/decorator/Snapshot';
 import { GroupMention } from './component/decorator/GroupMention';
 import { HorizontalRule } from './component/decorator/HorizontalRule';
 import { HtmlRender } from './component/decorator/HtmlRender';
 import { MarkdownImage } from './component/decorator/MarkdownImage';
 import { MarkdownVideo } from './component/decorator/MarkdownVideo';
-import { UserMention } from './component/decorator/UserMention';
+import { Snapshot } from './component/decorator/Snapshot';
 import { ThemeMention } from './component/decorator/ThemeMention';
 import { UnknownMention } from './component/decorator/UnknownMention';
+import { UserMention } from './component/decorator/UserMention';
 import { Watermark } from './component/decorator/Watermark';
 import { registerDiffNodeFactory } from './component/dom-factory/diff-factory';
 

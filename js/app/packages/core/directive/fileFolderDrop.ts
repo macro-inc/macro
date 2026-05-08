@@ -1,5 +1,5 @@
-import { extractFileSystemEntries } from '@core/util/dataTransfer';
 import { internalDragExceedsThreshold } from '@core/directive/internalDragState';
+import { extractFileSystemEntries } from '@core/util/dataTransfer';
 import { type Accessor, onCleanup } from 'solid-js';
 
 interface FileFolderDropDirectiveOptions {

@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import {
   addDays,
   addHours,
@@ -8,14 +7,15 @@ import {
   addWeeks,
   addYears,
 } from 'date-fns';
+import { describe, expect, it } from 'vitest';
 import {
   applyDurationToDate,
   couldBeDurationString,
   formatDuration,
+  type ParsedDuration,
   parseDateFromDuration,
   parseDurationString,
   parsedDurationToMilliseconds,
-  type ParsedDuration,
 } from './dateParser';
 
 describe('parseDurationString', () => {

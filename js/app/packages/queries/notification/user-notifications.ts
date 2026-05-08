@@ -1,5 +1,10 @@
 import type { Maybe } from '@core/types';
 import { type MaybeResult, throwOnErr } from '@core/util/maybeResult';
+import type { UnifiedNotification } from '@notifications/types';
+import {
+  optimisticUpdateSoupItemUpdatedAt,
+  type SoupEntityTag,
+} from '@queries/soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { notificationServiceClient } from '@service-notification/client';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
@@ -10,14 +15,9 @@ import {
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
-import { P, match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import { queryClient } from '../client';
 import { notificationKeys } from './keys';
-import type { UnifiedNotification } from '@notifications/types';
-import {
-  type SoupEntityTag,
-  optimisticUpdateSoupItemUpdatedAt,
-} from '@queries/soup/normalized-cache';
 
 function stripOwnerId({
   owner_id: _,

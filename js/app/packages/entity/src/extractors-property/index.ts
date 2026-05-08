@@ -4,10 +4,10 @@ export {
 } from './entity-key-properties';
 
 export {
-  soupPropertyToProperty,
-  soupPropertiesToProperties,
-  sortProperties,
   filterKeyProperties,
   getSortedKeyProperties,
   PROPERTY_SORT_ORDER,
+  sortProperties,
+  soupPropertiesToProperties,
+  soupPropertyToProperty,
 } from './property-helpers';

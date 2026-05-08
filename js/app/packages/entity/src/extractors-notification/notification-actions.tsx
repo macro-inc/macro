@@ -1,4 +1,6 @@
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useMaybeSoup } from '@app/component/next-soup/soup-context';
+import { restoreSoupFocus } from '@app/component/next-soup/utils';
 import { toast } from '@core/component/Toast/Toast';
 import type { NotificationStack, UnifiedNotification } from '@notifications';
 import {
@@ -6,10 +8,8 @@ import {
   executeMarkNotificationsUndone,
   getAllNotificationsFromGroup,
 } from '@notifications';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useUndoableMutation } from '@queries/undo';
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { useMaybeSoup } from '@app/component/next-soup/soup-context';
-import { restoreSoupFocus } from '@app/component/next-soup/utils';
 
 interface NotificationActionsProps {
   stack: NotificationStack;

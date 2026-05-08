@@ -44,8 +44,8 @@ function UploadingAttachment(props: AttachmentPreview) {
   return (
     <Switch>
       <Match when={isImageAttachment(props)}>
-        <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge rounded-md bg-menu">
-          <Spinner class="w-4 h-4 animate-spin" />
+        <div class="flex flex-col items-center justify-center gap-2 size-15 border border-edge rounded-md bg-menu">
+          <Spinner class="size-4 animate-spin" />
         </div>
       </Match>
       <Match when={isDssImage(props) && props.metadata}>
@@ -74,7 +74,7 @@ function ImageAttachment(props: {
     >
       <Show when={hover()}>
         <XIcon
-          class="w-6 h-6 text-ink absolute -top-2 -right-2 rounded-full bg-menu  p-1 border border-edge z-10"
+          class="size-6 text-ink absolute -top-2 -right-2 rounded-full bg-menu p-1 border border-edge z-10"
           onClick={() => props.onRemove()}
         />
       </Show>

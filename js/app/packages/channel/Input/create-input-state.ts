@@ -1,7 +1,7 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import type { Accessor } from 'solid-js';
-import { createInputView } from './create-input-view';
 import { createInputCommands } from './create-input-commands';
+import { createInputView } from './create-input-view';
 import type {
   InputAttachmentTracker,
   InputCallbacks,

@@ -32,6 +32,7 @@ pub async fn get_instructions_document(
 mod tests {
     use super::*;
     use crate::instructions::create::create_instructions_document;
+    #[allow(unused_imports)]
     use macro_user_id::cowlike::CowLike;
     use sqlx::{Pool, Postgres};
 

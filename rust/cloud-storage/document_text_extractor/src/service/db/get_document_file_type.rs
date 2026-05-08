@@ -3,6 +3,7 @@ use model::document::FileType;
 use sqlx::{Pool, Postgres};
 use std::str::FromStr;
 
+#[cfg_attr(test, allow(dead_code))]
 #[tracing::instrument(skip(db))]
 pub async fn get_document_file_type(
     db: &Pool<Postgres>,

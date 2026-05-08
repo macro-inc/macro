@@ -1,10 +1,18 @@
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import {
+  createSoupState,
+  type SoupState,
+} from '@app/component/next-soup/create-soup-state';
+import { defineQueryFilters } from '@app/component/next-soup/filters/filter-store';
+import { SoupContextProvider } from '@app/component/next-soup/soup-context';
+import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
+import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { ENABLE_PROJECT_VIEW_PREVIEW } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -22,14 +30,6 @@ import { toast } from 'core/component/Toast/Toast';
 import { type Component, createSignal, Show } from 'solid-js';
 import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
-import { SoupContextProvider } from '@app/component/next-soup/soup-context';
-import {
-  createSoupState,
-  type SoupState,
-} from '@app/component/next-soup/create-soup-state';
-import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
-import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
-import { defineQueryFilters } from '@app/component/next-soup/filters/filter-store';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
@@ -127,7 +127,7 @@ const Block: Component = () => {
     <DocumentBlockContainer>
       <div
         ref={attachHotkeys}
-        class="w-full h-full bg-panel flex flex-col relative"
+        class="size-full bg-panel flex flex-col relative"
         use:fileFolderDrop={{
           onDragStart: () => setIsDragging(true),
           onDragEnd: () => setIsDragging(false),

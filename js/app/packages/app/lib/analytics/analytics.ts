@@ -1,4 +1,4 @@
-import type { AppEvents, AppEventNames } from '@app/lib/analytics/app-events';
+import type { AppEventNames, AppEvents } from '@app/lib/analytics/app-events';
 import {
   type GoogleConversionAction,
   googleConversionSendTo,
@@ -7,11 +7,11 @@ import {
   initializeGoogleAnalytics,
   initializeMetaPixel,
 } from '@app/lib/analytics/providers';
+import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { getPlatform } from '@core/util/platform';
 import { PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
-import { getPlatform } from '@core/util/platform';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
 
 /**
  * Resolves the user's device context for analytics enrichment.

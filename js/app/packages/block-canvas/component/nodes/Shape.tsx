@@ -89,7 +89,7 @@ function Label(props: {
 
   return (
     <div
-      class="absolute top-0 left-0 w-full h-full flex items-center justify-center overflow-clip"
+      class="absolute top-0 left-0 size-full flex items-center justify-center overflow-clip"
       classList={{
         'user-select-none': !hasFocus(),
         'pointer-events-auto': hasFocus(),
@@ -196,7 +196,7 @@ export function Shape(props: { node: ShapeNode; mode: RenderMode }) {
       useSimpleSelectionBox={false}
     >
       <div
-        class="w-full h-full"
+        class="size-full"
         classList={{
           'pointer-events-auto': !labelHasFocus(),
         }}

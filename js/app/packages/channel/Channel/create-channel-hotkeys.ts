@@ -1,10 +1,10 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { Accessor } from 'solid-js';
-import type { ThreadListNavigation } from './ThreadList';
-import type { MessageSelection } from './create-message-selection';
 import type { ApiChannelMessage } from '@service-comms/client';
+import type { Accessor } from 'solid-js';
 import type { MessageActions, MessageData } from '../Message';
+import type { MessageSelection } from './create-message-selection';
+import type { ThreadListNavigation } from './ThreadList';
 
 type CreateChannelHotkeysOptions = {
   selection: MessageSelection;

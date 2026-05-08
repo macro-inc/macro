@@ -110,6 +110,8 @@ services:
       - document_storage_service
       - email_service
       - static_file_service
+      - sync_service
+      - lexical_service
     networks:
       databases:
       services:
@@ -338,6 +340,7 @@ services:
       - "8787:8787"
     environment:
       - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
+      - DOCUMENT_PERMISSIONS_SECRET=${DOCUMENT_PERMISSION_JWT_SECRET_KEY}
     networks:
       services:
         aliases:
@@ -356,8 +359,8 @@ services:
   lexical_service:
     <<: *common-env
     build:
-      context: ./js/lexical-service
-      dockerfile: Dockerfile
+      context: ./js
+      dockerfile: lexical-service/Dockerfile
       args:
         GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN}
     ports:

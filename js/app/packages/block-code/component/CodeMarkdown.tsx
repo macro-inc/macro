@@ -48,8 +48,8 @@ export function CodeMarkdown() {
 
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
-      <div class="w-full h-full">
-        <div class="w-full h-full" ref={mountRef} contentEditable={false} />
+      <div class="size-full">
+        <div class="size-full" ref={mountRef} contentEditable={false} />
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessories} />
       </div>

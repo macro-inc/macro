@@ -1,8 +1,8 @@
 import {
-  createContext,
-  useContext,
   type Accessor,
+  createContext,
   type ParentProps,
+  useContext,
 } from 'solid-js';
 import type { ChannelTabId } from './channel-tabs';
 

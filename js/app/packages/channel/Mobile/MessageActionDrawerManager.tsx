@@ -1,11 +1,11 @@
-import { createSignal, type JSX } from 'solid-js';
 import { isMobile } from '@core/mobile/isMobile';
+import { createSignal, type JSX } from 'solid-js';
+import type { MessageActions, MessageData } from '../Message/types';
+import { ActionDrawer } from './ActionDrawer';
 import {
   MessageActionDrawerContextProvider,
   type MessageActionDrawerState,
 } from './message-action-drawer-context';
-import { ActionDrawer } from './ActionDrawer';
-import type { MessageActions, MessageData } from '../Message/types';
 
 /**
  * On mobile: provides drawer context and renders the ActionDrawer (opened via

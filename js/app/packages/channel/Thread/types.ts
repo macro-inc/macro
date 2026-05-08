@@ -1,13 +1,13 @@
+import type { MessageEditor } from '@channel/Channel/create-message-editor';
+import type { NewMessageCheckable } from '@channel/Channel/util';
+import type { InputSnapshot } from '@channel/Input';
 import type { ApiChannelMessage } from '@service-comms/client';
+import type { Accessor, Setter } from 'solid-js';
 import type {
   ChannelMessageListMeta,
   MessageActions,
   MessageData,
 } from '../Message';
-import type { Accessor, Setter } from 'solid-js';
-import type { InputSnapshot } from '@channel/Input';
-import type { MessageEditor } from '@channel/Channel/create-message-editor';
-import type { NewMessageCheckable } from '@channel/Channel/util';
 
 export type ThreadActions = {
   onDismissNewMessages?: () => void;

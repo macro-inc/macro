@@ -236,23 +236,6 @@
         "typedoc": "^0.22.18",
       },
     },
-    "app/packages/loro-mirror": {
-      "name": "loro-mirror-monorepo",
-      "version": "0.1.0",
-      "devDependencies": {
-        "@rollup/plugin-commonjs": "^28.0.2",
-        "@rollup/plugin-node-resolve": "^16.0.0",
-        "@types/node": "^18.0.0",
-        "@typescript-eslint/eslint-plugin": "^5.0.0",
-        "@typescript-eslint/parser": "^5.0.0",
-        "eslint": "^9.26.0",
-        "rollup": "^4.34.8",
-        "rollup-plugin-typescript2": "^0.36.0",
-        "typescript": "^4.7.0",
-        "vite": "^6.4.2",
-        "vitest": "^3.0.7",
-      },
-    },
     "app/packages/macro-entity": {
       "name": "macro-entity",
       "version": "1.0.0",
@@ -305,6 +288,7 @@
       "version": "0.2.2",
       "dependencies": {
         "@lexical/code": "0.32.1",
+        "@lexical/headless": "0.32.1",
         "@lexical/link": "0.32.1",
         "@lexical/list": "0.32.1",
         "@lexical/mark": "0.32.1",
@@ -313,6 +297,7 @@
         "@lexical/table": "0.32.1",
         "@lexical/utils": "0.32.1",
         "lexical": "0.32.1",
+        "loro-crdt": "1.5.9",
         "nanoid": "^5.1.5",
       },
     },
@@ -335,7 +320,9 @@
         "@lexical/utils": "0.32.1",
         "chanfana": "^3.3.0",
         "hono": "^4.6.20",
+        "immer": "^10.0.3",
         "lexical": "0.32.1",
+        "loro-crdt": "1.5.9",
         "nanoid": "^5.1.5",
         "zod": "^4.3.6",
       },
@@ -345,6 +332,23 @@
         "@types/service-worker-mock": "^2.0.4",
         "tsx": "^4.20.3",
         "wrangler": "^4.25.1",
+      },
+    },
+    "loro-mirror": {
+      "name": "loro-mirror-monorepo",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@rollup/plugin-commonjs": "^28.0.2",
+        "@rollup/plugin-node-resolve": "^16.0.0",
+        "@types/node": "^18.0.0",
+        "@typescript-eslint/eslint-plugin": "^5.0.0",
+        "@typescript-eslint/parser": "^5.0.0",
+        "eslint": "^9.26.0",
+        "rollup": "^4.34.8",
+        "rollup-plugin-typescript2": "^0.36.0",
+        "typescript": "^4.7.0",
+        "vite": "^6.4.2",
+        "vitest": "^3.0.7",
       },
     },
   },
@@ -836,7 +840,7 @@
 
     "@img/sharp-win32-x64": ["@img/sharp-win32-x64@0.34.5", "", { "os": "win32", "cpu": "x64" }, "sha512-+29YMsqY2/9eFEiW93eqWnuLcWcufowXewwSNIT6UwZdUUCrM3oFjMWH/Z6/TMmb4hlFenmfAVbpWeup2jryCw=="],
 
-    "@inkibra/tauri-plugins": ["@inkibra/tauri-plugins@github:macro-inc/tauri-plugins#6152009", { "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }, "macro-inc-tauri-plugins-6152009", "sha512-XLN+niDA9BkzrxiZqBjYf+DL4TLoMIcI80ypCowacVfrfAjWt0qLwLkzWVUXjD7k3v0DB/G+BP4OLJNkGygHIw=="],
+    "@inkibra/tauri-plugins": ["@inkibra/tauri-plugins@github:macro-inc/tauri-plugins#6152009", { "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }, "macro-inc-tauri-plugins-6152009"],
 
     "@inquirer/external-editor": ["@inquirer/external-editor@1.0.3", "", { "dependencies": { "chardet": "^2.1.1", "iconv-lite": "^0.7.0" }, "peerDependencies": { "@types/node": ">=18" }, "optionalPeers": ["@types/node"] }, "sha512-RWbSrDiYmO4LbejWY7ttpxczuwQyZLBUyygsA9Nsv95hpzUWwnNTVQmAq3xuh7vNwCp07UTmE5i11XAEExx4RA=="],
 
@@ -2156,7 +2160,7 @@
 
     "immediate": ["immediate@3.0.6", "", {}, "sha512-XXOFtyqDjNDAQxVfYxuF7g9Il/IbWmmlQg2MYKOH8ExIT1qg6xc4zyS3HaEEATgs1btfzxq15ciUiY7gjSXRGQ=="],
 
-    "immer": ["immer@9.0.21", "", {}, "sha512-bc4NBHqOqSfRW7POMkHd51LvClaeMXpm8dx0e8oE2GORbq5aRK7Bxl4FyzVLdGtLmvLKL7BTDBG5ACQm4HWjTA=="],
+    "immer": ["immer@10.2.0", "", {}, "sha512-d/+XTN3zfODyjr89gM3mPq1WNX2B8pYsu7eORitdwyA2sBubnTl3laYlBk4sXY5FUa5qTZGBDPJICVbvqzjlbw=="],
 
     "import-fresh": ["import-fresh@3.3.1", "", { "dependencies": { "parent-module": "^1.0.0", "resolve-from": "^4.0.0" } }, "sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ=="],
 
@@ -2428,7 +2432,7 @@
 
     "loro-crdt": ["loro-crdt@1.5.9", "", {}, "sha512-edkfCYh5W42O7EmNVCx6iPrI0yTAhn0DRbEAk6tmiKaL42IpUoqyDREvtFDmdVVgofxKNgceDBQx8fIIjMdr2Q=="],
 
-    "loro-mirror-monorepo": ["loro-mirror-monorepo@workspace:app/packages/loro-mirror"],
+    "loro-mirror-monorepo": ["loro-mirror-monorepo@workspace:loro-mirror"],
 
     "loupe": ["loupe@3.2.1", "", {}, "sha512-CdzqowRJCeLU72bHvWqwRBBlLcMEtIvGrlvef74kMnV2AolS9Y8xUv1I0U/MNAWMhBlKIoyuEgoJ0t/bbwHbLQ=="],
 
@@ -2624,7 +2628,7 @@
 
     "pathval": ["pathval@2.0.1", "", {}, "sha512-//nshmD55c46FuFw26xV/xFAaB5HF9Xdap7HJBBnrKdAd6/GxDBaNA1870O79+9ueg61cZLSVc+OaFlfmObYVQ=="],
 
-    "pdfjs-dist": ["pdfjs-dist@github:macro-inc/pdf.js#f9b2ce6", { "dependencies": { "dommatrix": "^1.0.3", "web-streams-polyfill": "^3.2.1" }, "peerDependencies": { "worker-loader": "^3.0.8" }, "optionalPeers": ["worker-loader"] }, "macro-inc-pdf.js-f9b2ce6", "sha512-HDFaPbCxLG2GHpf1smUG97nku5aPGBGaCcIbK05dGdp07TBLUlDcXsM4WcE82mO5W4RBPIBVYobX5N/6M6NFrA=="],
+    "pdfjs-dist": ["pdfjs-dist@github:macro-inc/pdf.js#f9b2ce6", { "dependencies": { "dommatrix": "^1.0.3", "web-streams-polyfill": "^3.2.1" }, "peerDependencies": { "worker-loader": "^3.0.8" }, "optionalPeers": ["worker-loader"] }, "macro-inc-pdf.js-f9b2ce6"],
 
     "performance-now": ["performance-now@2.1.0", "", {}, "sha512-7EAHlyLHI56VEIdK57uwHdHKIaAGbnXPiw0yWbarQZOKaKpvUIgW0jWRVLiatnM+XXlSwsanIBH/hzGMJulMow=="],
 
@@ -3381,6 +3385,8 @@
     "@stoplight/json/jsonc-parser": ["jsonc-parser@2.2.1", "", {}, "sha512-o6/yDBYccGvTz1+QFevz6l6OBZ2+fMVu2JZ9CIhzsYRX4mjaK5IyX9eldUdCmga16zlgQxyrj5pt9kzuj2C02w=="],
 
     "@stoplight/json-ref-readers/tslib": ["tslib@1.14.1", "", {}, "sha512-Xni35NKzjgMrwevysHTCArtLDpPvye8zV/0E4EyYn43P7/7qvQwPh9BGkHewbMulVntbigmcT7rdX3BNo9wRJg=="],
+
+    "@stoplight/json-ref-resolver/immer": ["immer@9.0.21", "", {}, "sha512-bc4NBHqOqSfRW7POMkHd51LvClaeMXpm8dx0e8oE2GORbq5aRK7Bxl4FyzVLdGtLmvLKL7BTDBG5ACQm4HWjTA=="],
 
     "@stoplight/spectral-parsers/@stoplight/types": ["@stoplight/types@14.1.1", "", { "dependencies": { "@types/json-schema": "^7.0.4", "utility-types": "^3.10.0" } }, "sha512-/kjtr+0t0tjKr+heVfviO9FrU/uGLc+QNX3fHJc19xsCNYqU7lVhaXxDmEID9BZTjG+/r9pK9xP/xU02XGg65g=="],
 

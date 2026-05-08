@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createRoot, createSignal } from 'solid-js';
 import { addDays } from 'date-fns';
+import { createRoot, createSignal } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  useDateSearch,
-  parseNaturalDate,
   formatDateWithContext,
+  parseNaturalDate,
   parseTime,
+  useDateSearch,
 } from './useDateSearch';
 
 describe('parseNaturalDate', () => {

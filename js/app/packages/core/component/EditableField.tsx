@@ -1,5 +1,5 @@
 import PencilSimpleLine from '@icon/regular/pencil-simple-line.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { DeprecatedEditingTextButton } from './DeprecatedTextButton';
 
@@ -42,9 +42,9 @@ const EditableField = (props: EditableFieldProps) => {
               onClick={() => setIsEditing(true)}
               aria-label={`Edit ${props.label || 'field'}`}
             >
-              <PencilSimpleLine class="w-4 h-4" />
+              <PencilSimpleLine class="size-4" />
             </button>
-            <span class="text-ink-placeholder text-xs leading-5">
+            <span class="text-ink-placeholder text-xs/5">
               {props.value || props.placeholder || 'Click to edit'}
             </span>
           </div>

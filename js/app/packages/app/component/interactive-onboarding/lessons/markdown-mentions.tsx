@@ -1,10 +1,14 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { sandboxToCommandItems, SANDBOX_USERS } from '../sandbox/sandbox-store';
 import { createSignal, onCleanup } from 'solid-js';
-import { sidebarFilter, setSidebarFilter } from '../sandbox/sandbox-store';
-import { HotkeyCallout } from '../components-lib';
 import { MockAppChrome } from '../components/MockAppChrome';
+import { HotkeyCallout } from '../components-lib';
+import {
+  SANDBOX_USERS,
+  sandboxToCommandItems,
+  setSidebarFilter,
+  sidebarFilter,
+} from '../sandbox/sandbox-store';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 /** Shared completion state between content and demo panels. */

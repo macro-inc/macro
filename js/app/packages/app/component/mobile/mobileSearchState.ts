@@ -1,6 +1,6 @@
-import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { createSignal, type Accessor, type Setter } from 'solid-js';
 import type { CommandWithInfo } from '@core/hotkey/getCommands';
+import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
+import { type Accessor, createSignal, type Setter } from 'solid-js';
 import type { CategoryFilter } from '../command/types';
 
 /** timestamp threshold for resetting state after menu close */

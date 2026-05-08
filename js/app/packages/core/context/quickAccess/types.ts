@@ -1,15 +1,15 @@
-import type { Accessor } from 'solid-js';
+import type { IUser } from '@core/user/types';
+import type { DateValue } from '@core/util/date';
 import type {
-  EntityData,
   ChannelEntity,
   ChatEntity,
   DocumentEntity,
-  TaskEntity,
   EmailEntity,
+  EntityData,
   ProjectEntity,
+  TaskEntity,
 } from '@entity';
-import type { IUser } from '@core/user/types';
-import type { DateValue } from '@core/util/date';
+import type { Accessor } from 'solid-js';
 
 // Note (seamus) : Ideally history would return ownerId or we would get actual
 //     soup entities for quick access

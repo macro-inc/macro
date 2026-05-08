@@ -10,6 +10,7 @@ pub use MockS3Client as S3;
 #[cfg(not(test))]
 pub use S3Client as S3;
 
+#[cfg_attr(test, allow(dead_code))]
 #[derive(Clone, Debug)]
 pub struct S3Client {
     /// Inner S3 client
@@ -17,6 +18,7 @@ pub struct S3Client {
 }
 
 #[cfg_attr(test, automock)]
+#[cfg_attr(test, allow(dead_code))]
 impl S3Client {
     pub fn new(inner: s3::Client) -> Self {
         Self { inner }

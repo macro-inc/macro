@@ -1,8 +1,8 @@
-import { AsyncBatcher } from '@tanstack/pacer';
 import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
-import type { ItemEntity, PreviewItem } from './types';
+import { AsyncBatcher } from '@tanstack/pacer';
 import { fetchPreviewBatch } from './fetchers';
 import { previewKeys } from './keys';
+import type { ItemEntity, PreviewItem } from './types';
 
 type PendingRequest = {
   item: ItemEntity;

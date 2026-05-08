@@ -9,7 +9,9 @@
   "dependencies": {
     "nanoid": "^5.1.5",
     "lexical": "0.32.1",
+    "loro-crdt": "1.5.9",
     "@lexical/code": "0.32.1",
+    "@lexical/headless": "0.32.1",
     "@lexical/link": "0.32.1",
     "@lexical/list": "0.32.1",
     "@lexical/mark": "0.32.1",

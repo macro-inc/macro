@@ -1,2 +1,2 @@
 // Re-export from TanStack Query-based implementation
-export { useContacts, invalidateContacts } from '@queries/contacts/contacts';
+export { invalidateContacts, useContacts } from '@queries/contacts/contacts';

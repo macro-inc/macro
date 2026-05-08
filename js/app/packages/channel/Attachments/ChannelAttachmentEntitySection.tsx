@@ -1,21 +1,21 @@
-import { createMemo } from 'solid-js';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { EntityData } from '@entity';
-import type { ApiChannelAttachment } from '@service-comms/client';
-import { useSoupItemsQuery } from '@queries/soup/items';
 import {
+  type ChannelAttachmentsData,
   flattenAttachments,
   useChannelDocumentAttachmentsQuery,
-  type ChannelAttachmentsData,
 } from '@queries/channel/channel-attachments';
-import {
-  buildAttachmentEntityFilters,
-  getEntityClickContent,
-} from './attachment-utils';
+import { useSoupItemsQuery } from '@queries/soup/items';
+import type { ApiChannelAttachment } from '@service-comms/client';
+import { createMemo } from 'solid-js';
 import {
   AttachmentEntityList,
   type AttachmentEntityListRow,
 } from './AttachmentEntityList';
+import {
+  buildAttachmentEntityFilters,
+  getEntityClickContent,
+} from './attachment-utils';
 
 export function ChannelAttachmentEntitySection(props: { channelId: string }) {
   const attachmentsQuery = useChannelDocumentAttachmentsQuery(

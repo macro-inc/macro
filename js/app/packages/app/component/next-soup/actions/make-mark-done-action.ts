@@ -1,8 +1,3 @@
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import { toast } from '@core/component/Toast/Toast';
-import type { EntityData } from '@entity';
-import type { NotificationSource } from '@notifications';
-import { useUndoableMutation } from '@queries/undo';
 import {
   applyEntitiesDoneOptimistic,
   executeMarkEntitiesDone,
@@ -12,9 +7,14 @@ import {
   restoreSoupFocus,
 } from '@app/component/next-soup/utils';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
-import type { SoupState } from '../create-soup-state';
 import type { ListView } from '@app/constants/list-views';
+import { toast } from '@core/component/Toast/Toast';
 import type { HotkeyGroup } from '@core/hotkey/types';
+import type { EntityData } from '@entity';
+import type { NotificationSource } from '@notifications';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import { useUndoableMutation } from '@queries/undo';
+import type { SoupState } from '../create-soup-state';
 
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [

@@ -9,18 +9,18 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-
-    - name: Setup Rust
-      uses: ./.github/actions/setup-rust
-
-    - name: Install wasm-pack
+    - name: Add Nix to PATH
       shell: bash
-      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
 
-    - name: Install just
-      uses: extractions/setup-just@v2
+    - name: Enter Nix dev shell
+      shell: bash
+      run: |
+        set -euo pipefail
+        nix print-dev-env --accept-flake-config > /tmp/dev-env
+        echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+        source /tmp/dev-env
+        printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
 
     - name: Setup bunfig.toml
       working-directory: js

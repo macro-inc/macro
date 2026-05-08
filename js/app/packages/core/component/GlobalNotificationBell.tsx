@@ -50,7 +50,7 @@ export function GlobalNotificationBell(props: GlobalNotificationBellProps) {
     <Show when={unreadCount() > 0}>
       <button class="flex items-center group" onClick={handleNotificationClick}>
         <div class="relative shrink-0 border border-ink-muted group-hover:border-accent flex items-center justify-center text-xs bg-ink-muted group-hover:bg-accent text-page p-1">
-          <Bell class="w-4 h-4 text-page" />
+          <Bell class="size-4 text-page" />
           <Show when={unreadCount() > 0}>
             <p>{unreadCount() > 99 ? '99+' : unreadCount()}</p>
           </Show>

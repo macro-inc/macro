@@ -1,9 +1,9 @@
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@app/component/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
@@ -13,8 +13,8 @@ import { useBlockId } from '@core/block';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import { FileTypeChip } from '@core/component/FileTypeChip';
 import {
-  ReferencesButton,
   REFERENCES_DRAWER_ID,
+  ReferencesButton,
 } from '@core/component/ReferencesModal';
 import {
   getShareDrawerRecipientInput,

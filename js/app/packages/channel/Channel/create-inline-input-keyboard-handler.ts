@@ -1,18 +1,18 @@
-import {
-  createEffect,
-  on,
-  onCleanup,
-  type Accessor,
-  type Setter,
-} from 'solid-js';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   virtualKeyboardHeight,
   virtualKeyboardVisible,
 } from '@core/mobile/virtualKeyboard';
-import { scrollElementAboveKeyboard } from '../scroll-utils';
 import { isPlatform } from '@core/util/platform';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import {
+  type Accessor,
+  createEffect,
+  on,
+  onCleanup,
+  type Setter,
+} from 'solid-js';
+import { scrollElementAboveKeyboard } from '../scroll-utils';
 
 const INPUT_CONTAINER_SELECTOR = '[data-inline-input-container-id]';
 

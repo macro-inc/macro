@@ -5,8 +5,8 @@ import { Item } from './util';
 
 export default function DebugTools() {
   return (
-    <div class="h-full w-full overflow-auto py-2">
-      <div class="flex flex-1 justify-center w-full ">
+    <div class="size-full overflow-auto py-2">
+      <div class="flex flex-1 justify-center w-full">
         <div class="w-4/5 grid grid-cols-2 border border-accent divide-accent divide-y divide-x">
           <ToolCall />
           <ToolResponse />

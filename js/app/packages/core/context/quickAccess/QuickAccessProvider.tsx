@@ -1,32 +1,32 @@
-import type { Accessor } from 'solid-js';
-import { createEffect, createSignal } from 'solid-js';
-import { createLazyMemo } from '@solid-primitives/memo';
+import { itemToSafeName } from '@core/constant/allBlocks';
 import { useChannelsContext } from '@core/context/channels';
 import {
   type IUser,
   useAugmentUserWithDmActivity,
   useContacts,
 } from '@core/user';
-import type { ApiChannelWithLatest } from '@service-comms/generated/models';
+import type { DateValue } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
-import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
-import { formatDocumentName } from '@service-storage/util/filename';
+import { queryReadyGate } from '@queries/gate';
+import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import { queryReadyGate } from '@queries/gate';
-import type { DateValue } from '@core/util/date';
+import type { ApiChannelWithLatest } from '@service-comms/generated/models';
+import { formatDocumentName } from '@service-storage/util/filename';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
+import type { Accessor } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 import { createAssertedContextProvider } from '../createContext';
 import type {
   Bucket,
   BucketCombination,
   EntityBucket,
-  QuickAccessItem,
   QuickAccessContextValue,
   QuickAccessEntity,
+  QuickAccessItem,
 } from './types';
 import { BUCKET_COMBINATIONS } from './types';
-import { itemToSafeName } from '@core/constant/allBlocks';
 
 /**
  * index entry for sorted lists.

@@ -1,5 +1,3 @@
-import { MARKDOWN_LORO_SCHEMA } from '@block-md/definition';
-import { rawStateToLoroSnapshot } from '@core/collab/utils';
 import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
@@ -7,6 +5,7 @@ import {
   initializeEditorWithState,
 } from '@core/component/LexicalMarkdown/utils';
 import { isOk } from '@core/util/maybeResult';
+import { rawMarkdownStateToLoroSnapshot } from '@lexical-core/markdown-loro-snapshot';
 import { storageServiceClient } from '@service-storage/client';
 import { syncServiceClient } from '@service-sync/client';
 import { useQuery } from '@tanstack/solid-query';
@@ -104,8 +103,7 @@ export function useCreateInstructionsMd() {
   return async () => {
     const emptyMarkdownState = await createMarkdownStateFromContent(undefined);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const snapshot = await rawStateToLoroSnapshot(
-      MARKDOWN_LORO_SCHEMA,
+    const snapshot = await rawMarkdownStateToLoroSnapshot(
       emptyMarkdownState as any
     );
     if (!snapshot) return;

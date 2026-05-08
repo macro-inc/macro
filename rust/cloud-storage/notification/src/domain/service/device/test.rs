@@ -332,6 +332,7 @@ fn test_config() -> PlatformArnConfig {
     PlatformArnConfig {
         apns_platform_arn: "arn:apns".to_string(),
         fcm_platform_arn: "arn:fcm".to_string(),
+        apns_voip_platform_arn: "arn:apns-voip".to_string(),
     }
 }
 

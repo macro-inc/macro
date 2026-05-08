@@ -1,10 +1,10 @@
-import { type Accessor, type JSX, createSignal } from 'solid-js';
-import { type VirtualizerHandle, Virtualizer } from 'virtua/solid';
-import type { ScrollToIndexOpts } from 'virtua/unstable_core';
 import {
   createScrollIntentTracker,
   type ScrollDirection,
 } from '@core/util/scroll-intent';
+import { type Accessor, createSignal, type JSX } from 'solid-js';
+import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import type { ScrollToIndexOpts } from 'virtua/unstable_core';
 import { NEAR_BOTTOM_THRESHOLD } from './constants';
 
 const BASE_ITEM_SIZE: number = 64;

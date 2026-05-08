@@ -1,24 +1,20 @@
 /* components */
-export {
-  Avatar,
-  AvatarGroup,
-  type AvatarSize,
-  type AvatarProps,
-  type AvatarGroupSize,
-  type AvatarGroupProps,
-} from './components/Avatar';
 export { SegmentedControl } from './components/SegmentedControl';
 export { TabbedControl } from './components/TabbedControl';
+export { Avatar, AvatarGroup } from './components/Avatar';
 export { Keyboard } from './components/Keyboard';
+export { Surface } from './components/Surface';
 export { Dialog  } from './components/Dialog';
-export { Window  } from './components/Window';
 export { Button } from './components/Button';
+export { Scroll } from './components/Scroll';
+export { Panel  } from './components/Panel';
 export { Layer } from './components/Layer';
-export { Panel } from './components/Panel';
 
 /* types */
+export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
 export type { DialogProps } from './components/Dialog';
-export type { WindowProps } from './components/Window';
+export type { PanelProps } from './components/Panel';
+export type { ButtonProps } from './components/Button';
 
 /* utils */
 export { cn } from './utils/classname';

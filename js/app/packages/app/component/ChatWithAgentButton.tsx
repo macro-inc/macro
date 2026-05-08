@@ -1,8 +1,8 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
 import type { Attachment } from '@core/component/AI/types';
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
+import { toast } from '@core/component/Toast/Toast';
+import { Tooltip } from '@core/component/Tooltip';
 import { createChat } from '@core/util/create';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { ChannelType } from '@service-cognition/generated/schemas/channelType';
@@ -89,7 +89,7 @@ export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
 
   return (
     <Tooltip tooltip="Chat with Agent">
-      <div class="border-1 border-edge-muted flex ml-1 items-stretch rounded-xs">
+      <div class="border border-edge-muted flex ml-1 items-stretch rounded-xs">
         <button
           class="h-7 px-2 flex items-center gap-1 text-xs hover:bg-hover hover-transition-bg"
           onMouseEnter={() => setHovering(true)}

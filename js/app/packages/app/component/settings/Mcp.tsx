@@ -1,4 +1,4 @@
-import { Panel } from '@ui';
+import { Surface } from '@ui';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 
 export function Mcp() {
@@ -8,7 +8,7 @@ export function Mcp() {
       style="scrollbar-width: none;"
     >
       <div class="max-w-2xl w-full mx-auto">
-        <Panel depth={2}>
+        <Surface depth={2}>
           <div class="flex flex-col gap-4 p-6 text-ink">
             <p class="text-sm text-ink-muted">
               Use Macro with your favorite AI chat client or code editor via
@@ -16,7 +16,7 @@ export function Mcp() {
             </p>
             <McpSetupCards class="max-w-none" />
           </div>
-        </Panel>
+        </Surface>
       </div>
     </div>
   );

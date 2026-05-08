@@ -1,15 +1,15 @@
-import { createEffect, createSignal } from 'solid-js';
-import UsersIcon from '@icon/regular/users.svg';
-import UserIcon from '@icon/regular/user.svg';
-import ArrowRightIcon from '@icon/regular/arrow-right.svg';
-import SpinnerIcon from '@icon/regular/spinner.svg';
-import type { LessonContentProps, LessonDefinition } from '../types';
-import { useOnboarding } from '../onboarding-context';
-import { useOnboardingCheckoutMutation } from '../use-onboarding-checkout';
 import { useAnalytics } from '@app/component/analytics-context';
+import type { PaidPlanTier } from '@app/component/paywall/plans';
 import { useIsAuthenticated } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
-import type { PaidPlanTier } from '@app/component/paywall/plans';
+import ArrowRightIcon from '@icon/regular/arrow-right.svg';
+import SpinnerIcon from '@icon/regular/spinner.svg';
+import UserIcon from '@icon/regular/user.svg';
+import UsersIcon from '@icon/regular/users.svg';
+import { createEffect, createSignal } from 'solid-js';
+import { useOnboarding } from '../onboarding-context';
+import type { LessonContentProps, LessonDefinition } from '../types';
+import { useOnboardingCheckoutMutation } from '../use-onboarding-checkout';
 
 function TeamChoiceContent() {
   return (
@@ -74,7 +74,7 @@ function TeamChoiceDemo(props: LessonContentProps) {
   };
 
   return (
-    <div class="h-full w-full flex items-center justify-center p-12">
+    <div class="size-full flex items-center justify-center p-12">
       <div class="flex flex-col gap-4 w-full max-w-md">
         <button
           type="button"

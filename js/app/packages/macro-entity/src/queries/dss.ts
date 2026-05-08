@@ -3,23 +3,23 @@ import {
   deleteItem,
   moveToFolder,
 } from '@core/component/FileList/itemOperations';
-import { throwOnErr } from '@core/util/maybeResult';
 import { toast } from '@core/component/Toast/Toast';
-import { useMutation } from '@tanstack/solid-query';
+import { throwOnErr } from '@core/util/maybeResult';
 import type { EntityData } from '@entity';
+import { scheduledActionKeys } from '@queries/agent-schedule/keys';
+import { queryClient } from '@queries/client';
+import {
+  getSoupEntityById,
+  invalidateSoupEntity,
+  optimisticUpdateSoupEntity,
+  removeSearchEntities,
+  removeSoupEntities,
+} from '@queries/soup/cache';
+import { soupKeys } from '@queries/soup/keys';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
-import { scheduledActionKeys } from '@queries/agent-schedule/keys';
 import type { ItemType } from '@service-storage/client';
-import { queryClient } from '@queries/client';
-import { soupKeys } from '@queries/soup/keys';
-import {
-  removeSoupEntities,
-  removeSearchEntities,
-  getSoupEntityById,
-  optimisticUpdateSoupEntity,
-  invalidateSoupEntity,
-} from '@queries/soup/cache';
+import { useMutation } from '@tanstack/solid-query';
 
 export function createBulkDeleteDssItemsMutation() {
   const isDeletable = (entity: EntityData) => {

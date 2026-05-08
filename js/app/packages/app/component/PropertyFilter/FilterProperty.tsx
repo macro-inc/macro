@@ -109,12 +109,12 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
         }}
         onFocus={() => setIsDropdownOpen(true)}
         placeholder="Search Properties..."
-        class="w-full h-full pl-6 pr-2 font-mono text-xxs text-ink placeholder-ink-muted bg-transparent border border-edge focus:ring-2 focus:ring-accent/50 focus:border-accent"
+        class="size-full pl-6 pr-2 font-mono text-xxs text-ink placeholder-ink-muted bg-transparent border border-edge focus:ring-2 focus:ring-accent/50 focus:border-accent"
       />
       <Show when={isDropdownOpen()}>
         <div
           ref={dropdownRef}
-          class="absolute left-0 right-0 top-full mt-1 border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono z-user-highlight"
+          class="absolute inset-x-0 top-full mt-1 border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono z-user-highlight"
         >
           <Show
             when={filteredProperties().length > 0}

@@ -1,9 +1,8 @@
 import ResetIcon from '@icon/regular/arrow-clockwise.svg';
 import HomeIcon from '@icon/regular/house.svg';
 import { logger } from '@observability';
+import { Button, Dialog, Surface } from '@ui';
 import { Show } from 'solid-js';
-import { Dialog, Panel } from '@ui';
-import { Button } from '@ui/components/Button';
 
 interface FatalErrorProps {
   error?: Error;
@@ -16,11 +15,11 @@ export function FatalError(props: FatalErrorProps) {
   });
 
   return (
-    <Dialog open position="center" class="w-[480px]">
-      <Panel active depth={2}>
+    <Dialog open position="center" class="w-120">
+      <Surface active depth={2}>
         <div class="p-6 sm:p-8 font-sans">
           <div class="text-center">
-            <h1 class="text-ink text-lg font-semibold leading-7 mb-4">
+            <h1 class="text-ink text-lg/7 font-semibold mb-4">
               Something went terribly wrong
             </h1>
 
@@ -54,7 +53,7 @@ export function FatalError(props: FatalErrorProps) {
             </div>
           </div>
         </div>
-      </Panel>
+      </Surface>
     </Dialog>
   );
 }

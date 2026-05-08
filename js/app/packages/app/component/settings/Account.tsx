@@ -7,7 +7,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { toast } from '@core/component/Toast/Toast';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { createStaticFile } from '@core/util/create';
-import { Dialog, Button, Window } from '@ui';
+import { Dialog, Button, Panel } from '@ui';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
@@ -180,11 +180,11 @@ export function Account() {
       style="scrollbar-width: none;"
     >
       <div class="max-w-200 w-full mx-auto">
-        <Window depth={2}>
-          <Window.Header class="px-6">
+        <Panel depth={2}>
+          <Panel.Header class="px-6">
             <div class="text-sm font-semibold">Account</div>
-          </Window.Header>
-          <Window.Body class="text-ink">
+          </Panel.Header>
+          <Panel.Body class="text-ink">
             <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
               <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
                 <div class="bg-panel px-6 py-2">
@@ -240,7 +240,7 @@ export function Account() {
 
               <Row label="First Name">
                 <EditableField
-                  class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
+                  class="ph-no-capture [&_span]:text-sm/normal [&_span]:text-ink-muted"
                   value={firstName()}
                   onSave={(newValue: string) => {
                     setUpdatedFirstName(newValue);
@@ -253,7 +253,7 @@ export function Account() {
 
               <Row label="Last Name">
                 <EditableField
-                  class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
+                  class="ph-no-capture [&_span]:text-sm/normal [&_span]:text-ink-muted"
                   value={lastName()}
                   onSave={(newValue: string) => {
                     setUpdatedLastName(newValue);
@@ -438,14 +438,14 @@ export function Account() {
                   position="center"
                   class="w-120"
                 >
-                  <Window active depth={2}>
-                                      <Window.Header class="px-6">
+                  <Panel active depth={2}>
+                                      <Panel.Header class="px-6">
                                         <Dialog.Title class="text-ink text-sm font-semibold">
                                           Delete Account
                                         </Dialog.Title>
-                                      </Window.Header>
-                                      <Window.Body class="p-6 font-sans flex flex-col gap-3">
-                                        <Dialog.Description class="text-ink-muted text-sm font-normal leading-tight">
+                                      </Panel.Header>
+                                      <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+                                        <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
                                           Are you sure you want to delete your account? This action is
                                           permanent and cannot be undone.
                                         </Dialog.Description>
@@ -460,8 +460,8 @@ export function Account() {
                                             Delete
                                           </Button>
                                         </div>
-                                      </Window.Body>
-                                    </Window>
+                                      </Panel.Body>
+                                    </Panel>
                 </Dialog>
                 <Dialog
                   open={showDeleteConfirmModal()}
@@ -469,14 +469,14 @@ export function Account() {
                   position="center"
                   class="w-120"
                 >
-                  <Window active depth={2}>
-                                      <Window.Header class="px-6">
+                  <Panel active depth={2}>
+                                      <Panel.Header class="px-6">
                                         <Dialog.Title class="text-ink text-sm font-semibold">
                                           Are you absolutely sure?
                                         </Dialog.Title>
-                                      </Window.Header>
-                                      <Window.Body class="p-6 font-sans flex flex-col gap-3">
-                                        <Dialog.Description class="text-ink-muted text-sm font-normal leading-tight">
+                                      </Panel.Header>
+                                      <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+                                        <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
                                           This will permanently delete your account and all associated
                                           data. This cannot be undone.
                                         </Dialog.Description>
@@ -488,13 +488,13 @@ export function Account() {
                                             Delete My Account
                                           </Button>
                                         </div>
-                                      </Window.Body>
-                                    </Window>
+                                      </Panel.Body>
+                                    </Panel>
                 </Dialog>
               </div>
             </Show>
-          </Window.Body>
-        </Window>
+          </Panel.Body>
+        </Panel>
       </div>
     </div>
   );

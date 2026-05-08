@@ -1,10 +1,10 @@
-import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { ShareModal } from '@core/component/TopBar/ShareButton';
-import { Permissions } from '@core/component/SharePermissions';
-import { itemToBlockName } from '@core/constant/allBlocks';
 import type { BlockAlias, BlockName } from '@core/block';
-import type { ItemType } from '@service-storage/client';
+import { Permissions } from '@core/component/SharePermissions';
+import { ShareModal } from '@core/component/TopBar/ShareButton';
+import { itemToBlockName } from '@core/constant/allBlocks';
+import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
+import type { ItemType } from '@service-storage/client';
 import { createSignal, Show } from 'solid-js';
 
 type ShareableEntityType = 'document' | 'chat' | 'project';

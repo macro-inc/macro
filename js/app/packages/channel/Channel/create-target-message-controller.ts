@@ -1,11 +1,11 @@
-import { createEffect, on, type Accessor } from 'solid-js';
 import {
-  getChannelMessagesQueryKey,
   type ChannelMessagesData,
+  getChannelMessagesQueryKey,
 } from '@queries/channel/channel-messages';
 import { queryClient } from '@queries/client';
-import type { ThreadListNavigation } from './ThreadList';
+import { type Accessor, createEffect, on } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import type { ThreadListNavigation } from './ThreadList';
 
 type CreateTargetMessageControllerOptions = {
   channelId: Accessor<string>;

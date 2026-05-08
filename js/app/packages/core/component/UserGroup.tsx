@@ -1,5 +1,5 @@
-import { createMemo, For, Show } from 'solid-js';
 import { AvatarGroup, type AvatarGroupSize } from '@ui';
+import { createMemo, For, Show } from 'solid-js';
 import { UserIcon } from './UserIcon';
 
 export type UserGroupSize = AvatarGroupSize;

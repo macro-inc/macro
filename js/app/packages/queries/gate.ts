@@ -1,6 +1,6 @@
 import type {
-  UseQueryResult,
   UseInfiniteQueryResult,
+  UseQueryResult,
 } from '@tanstack/solid-query';
 
 export function queryReadyGate<T>(

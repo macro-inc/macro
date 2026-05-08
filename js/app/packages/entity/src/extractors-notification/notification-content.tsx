@@ -10,7 +10,7 @@ import {
   openNotification,
   type UnifiedNotification,
 } from '@notifications';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { Notification } from '../types/notification';
 import { extractMessageContent } from '../utils/notification';
