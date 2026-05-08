@@ -57,6 +57,7 @@ function createSyncServiceSocket(documentId: string, initialToken: string) {
   const connectUrl = (token: string) =>
     `${SYNC_SERVICE_WS_URL}/${documentId}/connect?token=${token}`;
   let initialUrl: string | undefined = connectUrl(initialToken);
+  let fallbackUrl = initialUrl;
 
   /**
    * Uses the already-fetched token for the initial connect, then refetches on reconnect.
@@ -75,10 +76,12 @@ function createSyncServiceSocket(documentId: string, initialToken: string) {
 
     if (isChaseError(response)) {
       console.error('failed to fetch permission token', response);
-      return connectUrl(initialToken);
+      return fallbackUrl;
     }
 
-    return connectUrl(response[1].token);
+    const refreshedUrl = connectUrl(response[1].token);
+    fallbackUrl = refreshedUrl;
+    return refreshedUrl;
   };
 
   return new WebsocketBuilder(getUrl)
