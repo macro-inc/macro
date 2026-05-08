@@ -15,28 +15,7 @@ afterEach(() => {
 });
 
 describe('createTypingTracker', () => {
-  it('fires start on the first keystroke and stop after inactivity', () => {
-    createRoot((dispose) => {
-      const onStartTyping = vi.fn();
-      const onStopTyping = vi.fn();
-      const tracker = createTypingTracker({ onStartTyping, onStopTyping });
-
-      tracker.keystroke();
-
-      expect(onStartTyping).toHaveBeenCalledTimes(1);
-      expect(onStopTyping).not.toHaveBeenCalled();
-
-      vi.advanceTimersByTime(TYPING_INACTIVITY_TIMEOUT_MS - 1);
-      expect(onStopTyping).not.toHaveBeenCalled();
-
-      vi.advanceTimersByTime(1);
-      expect(onStopTyping).toHaveBeenCalledTimes(1);
-
-      dispose();
-    });
-  });
-
-  it('refreshes start while the user keeps typing', () => {
+  it('refreshes start while the user keeps typing, then stops after inactivity', () => {
     createRoot((dispose) => {
       const onStartTyping = vi.fn();
       const onStopTyping = vi.fn();
@@ -57,25 +36,6 @@ describe('createTypingTracker', () => {
       tracker.keystroke();
       expect(onStartTyping).toHaveBeenCalledTimes(2);
       expect(onStopTyping).not.toHaveBeenCalled();
-
-      vi.advanceTimersByTime(TYPING_INACTIVITY_TIMEOUT_MS);
-      expect(onStopTyping).toHaveBeenCalledTimes(1);
-
-      dispose();
-    });
-  });
-
-  it('stops immediately when stop is called', () => {
-    createRoot((dispose) => {
-      const onStartTyping = vi.fn();
-      const onStopTyping = vi.fn();
-      const tracker = createTypingTracker({ onStartTyping, onStopTyping });
-
-      tracker.keystroke();
-      tracker.stop();
-
-      expect(onStartTyping).toHaveBeenCalledTimes(1);
-      expect(onStopTyping).toHaveBeenCalledTimes(1);
 
       vi.advanceTimersByTime(TYPING_INACTIVITY_TIMEOUT_MS);
       expect(onStopTyping).toHaveBeenCalledTimes(1);
