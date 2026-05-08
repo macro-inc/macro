@@ -185,7 +185,7 @@
           commonArgs
           // {
             pname = "cloud-storage-deploy-deps";
-            cargoExtraArgs = "--locked --release";
+            cargoExtraArgs = "--locked";
             CARGO_PROFILE = "release";
           }
         );
@@ -198,7 +198,7 @@
               cargoArtifacts = deployCargoArtifacts;
               pname = "cloud-storage-${serviceName}-binaries";
               doCheck = false;
-              cargoExtraArgs = "--locked --release " + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries;
+              cargoExtraArgs = "--locked " + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries;
               CARGO_PROFILE = "release";
               installPhaseCommand = ''
                 mkdir -p $out/bin
