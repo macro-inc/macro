@@ -32,9 +32,7 @@ runs:
     - name: Install Dependencies
       shell: bash
       working-directory: js
-      run: |
-        bun install --frozen-lockfile
-        bun add -g npm
+      run: bun install --frozen-lockfile
 
     - name: Get Playwright version (for caching)
       if: inputs.playwright == 'true'
