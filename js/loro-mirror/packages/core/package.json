@@ -12,7 +12,7 @@
         "build": "rollup -c",
         "test": "vitest run",
         "test:watch": "vitest",
-        "lint": "eslint src --ext .ts,.tsx",
+        "lint": "eslint src --ext .ts",
         "typecheck": "tsc --noEmit"
     },
     "keywords": [

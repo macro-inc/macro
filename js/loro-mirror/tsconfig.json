@@ -13,7 +13,6 @@
         "outDir": "./dist",
         "rootDir": ".",
         "composite": true,
-        "jsx": "react",
         "lib": [
             "DOM",
             "DOM.Iterable",
@@ -28,15 +27,11 @@
         "node_modules",
         "dist",
         "**/dist",
-        "**/*.test.ts",
-        "**/*.test.tsx"
+        "**/*.test.ts"
     ],
     "references": [
         {
             "path": "./packages/core"
-        },
-        {
-            "path": "./packages/react"
         }
     ]
 }

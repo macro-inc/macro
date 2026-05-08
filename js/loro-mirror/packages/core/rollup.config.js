@@ -31,7 +31,7 @@ module.exports = {
           declaration: true,
           declarationDir: 'dist',
         },
-        exclude: ['**/*.test.ts', '**/*.test.tsx', 'tests'],
+        exclude: ['**/*.test.ts', 'tests'],
       },
     }),
   ],
