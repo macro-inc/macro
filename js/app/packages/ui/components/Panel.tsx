@@ -42,7 +42,7 @@ function PanelHeader(props: SlotProps) {
   return (
     <Show when={props.children}>
       <div
-        class={cn('flex h-10 items-center gap-1 border-b border-edge-muted px-5', props.class)}
+        class={cn('flex flex-none items-center min-h-10 px-2 overflow-x-hidden border-b border-edge-muted', props.class)}
         style={{ 'grid-area': 'header' }}
       >
         {props.children}
@@ -55,7 +55,7 @@ function PanelToolbar(props: SlotProps) {
   return (
     <Show when={props.children}>
       <div
-        class={cn('flex h-10 items-center gap-1 border-b border-edge-muted px-5', props.class)}
+        class={cn('flex flex-none items-center min-h-10 px-2 overflow-x-hidden border-b border-edge-muted', props.class)}
         style={{ 'grid-area': 'toolbar' }}
       >
         {props.children}
@@ -90,7 +90,7 @@ function PanelFooter(props: SlotProps) {
   return (
     <Show when={props.children}>
       <div
-        class={cn('flex h-10 items-center gap-1 border-t border-edge-muted px-5', props.class)}
+        class={cn('flex flex-none items-center min-h-10 px-2 overflow-x-hidden border-t border-edge-muted', props.class)}
         style={{ 'grid-area': 'footer' }}
       >
         {props.children}
@@ -100,8 +100,8 @@ function PanelFooter(props: SlotProps) {
 }
 
 export const Panel = Object.assign(PanelRoot, {
-  Header: PanelHeader,
   Toolbar: PanelToolbar,
-  Body: PanelBody,
+  Header: PanelHeader,
   Footer: PanelFooter,
+  Body: PanelBody,
 });
