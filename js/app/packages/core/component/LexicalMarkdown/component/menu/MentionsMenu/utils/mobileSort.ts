@@ -10,32 +10,29 @@ function getMentionName(item: MentionItem): string {
 function getMentionTimestamps(item: MentionItem) {
   if (item.kind === 'date' || item.kind === 'group') return {};
   if (item.kind === 'user') {
+    // For users, rank by actual interaction history (mentions/DMs) rather
+    // than viewedAt — workspace test users tend to share fresh viewedAt
+    // timestamps but have never been interacted with.
     const last = item.timestamps.lastInteraction;
-    if (last) return { viewedAt: last, updatedAt: last, lastInteraction: last };
-    // Workspace users typically have empty timestamps. Real teammates have
-    // a display name distinct from their email; treat them as freshly-active
-    // so they don't lose purely on time to recently-viewed group DMs that
-    // contain their name. Users without a display name (test/onboarding
-    // accounts) get no time signal and rank only on match quality.
-    const hasDisplayName =
-      !!item.data.name && item.data.name !== item.data.email;
-    if (hasDisplayName) {
-      const now = new Date();
-      return { viewedAt: now, updatedAt: now, lastInteraction: now };
-    }
-    return {};
+    return { viewedAt: last, updatedAt: last, lastInteraction: last };
   }
   return item.timestamps;
 }
 
+function isDmItem(item: MentionItem): boolean {
+  return item.kind === 'entity' && item.bucket === 'dm';
+}
+
 /**
- * Per-kind boost. Groups (@here etc.) get a small nudge; users compete on
- * equal terms with entities — synthetic-fresh time for real users (see
- * getMentionTimestamps) is enough to surface them without an extra boost,
- * which over-weighted them on broad queries like @test.
+ * Per-kind boost. With a query, the user is usually targeting a specific
+ * person, so users beat group DMs/channels that merely contain that name —
+ * the command menu sidesteps this by excluding persons from its "all" view,
+ * but the mention menu must include them. Without a query we keep the boost
+ * small so freshness dominates.
  */
 function mentionBoost(hasQuery: boolean) {
   return (item: MentionItem): number => {
+    if (item.kind === 'user') return hasQuery ? 0.4 : 0.2;
     if (item.kind === 'group') return hasQuery ? 0.2 : 0.1;
     return 0;
   };
@@ -50,8 +47,10 @@ function createMobileSearchConfig(
     timeWeight: hasQuery ? 0.4 : 0.9,
     brevityWeight: hasQuery ? 0.1 : 0,
     minFuzzyThreshold: hasQuery ? 0.1 : 0,
+    dmBoost: hasQuery ? 1.4 : 1.2,
     commaSeparatedChannelMatch: true,
     gapPenaltyWeight: hasQuery ? 0.4 : 0,
+    startBonusDecay: hasQuery ? 0.4 : 0,
     boostFn: mentionBoost(hasQuery),
   };
 }
@@ -64,6 +63,7 @@ export function sortMobileMentions(
   const search = createFreshSearch<MentionItem>({
     config: createMobileSearchConfig(hasQuery),
     getName: getMentionName,
+    isDmItem,
     getTimestamp: getMentionTimestamps,
   });
   return search(items, query).map(({ item }) => item);

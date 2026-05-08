@@ -52,6 +52,26 @@ function docItem(
   } as MentionItem;
 }
 
+function channelItem(
+  id: string,
+  name: string,
+  viewedAt: Date = new Date()
+): MentionItem {
+  return {
+    kind: 'entity',
+    bucket: 'channel',
+    id,
+    searchText: name,
+    sortTimestamp: viewedAt.getTime(),
+    timestamps: { viewedAt, updatedAt: viewedAt },
+    data: {
+      id,
+      name,
+      type: 'channel',
+    } as MentionItem extends { kind: 'entity'; data: infer D } ? D : never,
+  } as MentionItem;
+}
+
 function dmItem(
   id: string,
   name: string,
@@ -94,6 +114,16 @@ function dateItem(id: string, displayText: string): DateMentionItem {
 }
 
 describe('sortMobileMentions', () => {
+  test('boosts users above an equally-fresh doc when no query is present', () => {
+    const now = new Date();
+    const user = userItem('u1', 'Alice', now);
+    const doc = docItem('d1', 'Recent Doc', now);
+
+    const result = sortMobileMentions([doc, user], '');
+
+    expect(result[0].id).toBe('u1');
+  });
+
   test('does not pin stale users above much fresher docs', () => {
     const now = new Date();
     const veryStaleUser = userItem(
@@ -120,6 +150,16 @@ describe('sortMobileMentions', () => {
     const result = sortMobileMentions([olderUser, newerUser], '');
 
     expect(result.indexOf(newerUser)).toBeLessThan(result.indexOf(olderUser));
+  });
+
+  test('boosts DMs over similarly-fresh channels', () => {
+    const now = new Date();
+    const dm = dmItem('dm1', 'alice-bob', now);
+    const channel = channelItem('c1', 'general', now);
+
+    const result = sortMobileMentions([channel, dm], '');
+
+    expect(result[0].id).toBe('dm1');
   });
 
   test('with a query, fuzzy match drives ordering across kinds', () => {
