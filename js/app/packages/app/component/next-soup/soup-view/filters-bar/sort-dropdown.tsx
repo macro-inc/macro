@@ -6,7 +6,7 @@ import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import SortIcon from '@macro-icons/wide/sort.svg';
+import SortIcon from '@phosphor-icons/core/regular/funnel-simple.svg?component-solid';
 import { Button, Layer } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 

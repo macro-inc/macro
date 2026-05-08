@@ -13,7 +13,6 @@ export { Layer } from './components/Layer';
 /* types */
 export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
 export type { DialogProps } from './components/Dialog';
-export type { ButtonProps } from './components/Button';
 
 /* utils */
 export { cn } from './utils/classname';

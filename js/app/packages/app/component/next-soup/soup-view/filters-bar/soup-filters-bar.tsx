@@ -7,9 +7,9 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
-import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
+import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
 import { Button } from '@ui';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import { useSoup } from '../../soup-context';
 
 export const SoupFiltersBar = () => {
@@ -22,8 +22,6 @@ export const SoupFiltersBar = () => {
   } = useFilterRefinements();
 
   const analytics = useAnalytics();
-
-  const [previewBtnHovering, setPreviewBtnHovering] = createSignal(false);
 
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
@@ -72,14 +70,11 @@ export const SoupFiltersBar = () => {
         <div class="flex-1" />
         <Tooltip tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}>
           <Button
-            variant={soup.previewEntity() ? 'base' : 'ghost'}
-            size="sm"
-            class="rounded-xs [&_svg]:size-4 px-1 border border-transparent"
+            variant="ghost"
+            size="icon-sm"
             onClick={togglePreview}
-            onMouseEnter={() => setPreviewBtnHovering(true)}
-            onMouseLeave={() => setPreviewBtnHovering(false)}
           >
-            <AnimatedPreviewIcon triggerAnimation={previewBtnHovering()} />
+            <EyeIcon />
           </Button>
         </Tooltip>
         <Show when={!isSearchView()}>

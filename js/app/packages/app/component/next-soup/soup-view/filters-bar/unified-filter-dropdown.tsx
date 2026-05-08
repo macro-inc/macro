@@ -22,7 +22,7 @@ import CaretRightIcon from '@icon/regular/caret-right.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';
+import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useContacts } from '@queries/contacts/contacts';
 import { Button, cn, Layer } from '@ui';
 import {
