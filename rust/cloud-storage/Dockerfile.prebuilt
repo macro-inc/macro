@@ -1,5 +1,5 @@
 FROM debian:trixie-slim AS runner
-ARG SERVICE_NAME
+ARG SERVICE_NAME=__MISSING_SERVICE_NAME__
 WORKDIR /app
 
 RUN apt-get update \

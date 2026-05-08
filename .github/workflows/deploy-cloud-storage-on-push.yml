@@ -119,22 +119,24 @@ jobs:
 
       - name: Build prebuilt binaries
         shell: bash
+        env:
+          SERVICE: ${{ matrix.service }}
         run: |
           set -euo pipefail
           mkdir -p prebuilt
 
-          binaries=$(jq -r --arg service "${{ matrix.service }}" '.services[$service].deploy_binaries // [] | @tsv' .github/services-config.json)
+          binaries=$(jq -r --arg service "$SERVICE" '.services[$service].deploy_binaries // [] | @tsv' .github/services-config.json)
           if [[ -n "$binaries" ]]; then
-            nix build --accept-flake-config ".#deploy-service-binaries-${{ matrix.service }}"
+            nix build ".#deploy-service-binaries-${SERVICE}"
             cp -r result/bin/* prebuilt/
           else
-            echo "No deploy binaries configured for ${{ matrix.service }}; uploading an empty artifact"
+            echo "No deploy binaries configured for $SERVICE; uploading an empty artifact"
           fi
 
           touch prebuilt/.keep
 
       - name: Upload prebuilt binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: cloud-storage-service-binaries-${{ matrix.service }}-${{ github.sha }}
           path: prebuilt/
@@ -167,6 +169,14 @@ jobs:
         with:
           service-name: ${{ matrix.service }}
 
+      - name: Check prebuilt binaries config
+        id: check-binaries
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' .github/services-config.json)
+          echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
+
       - name: Deploy ${{ matrix.service }}
         uses: ./.github/actions/deploy-cloud-storage-pulumi
         with:
@@ -175,7 +185,7 @@ jobs:
           aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
-          prebuilt-binaries-artifact: cloud-storage-service-binaries-${{ matrix.service }}-${{ github.sha }}
+          prebuilt-binaries-artifact: ${{ steps.check-binaries.outputs.has_binaries == 'true' && format('cloud-storage-service-binaries-{0}-{1}', matrix.service, github.sha) || '' }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}
 
