@@ -7,7 +7,7 @@ import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import SortIcon from '@phosphor-icons/core/regular/funnel-simple.svg?component-solid';
-import { Button, Layer } from '@ui';
+import { DropdownTrigger, Layer } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 
 export interface SortDropdownProps {
@@ -34,15 +34,10 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       gutter={4}
     >
       <Tooltip tooltip={<LabelAndHotKey label="Sort" shortcut="S" />}>
-        <DropdownMenu.Trigger
-          as={Button}
-          variant="base"
-          size="sm"
-          class="whitespace-nowrap rounded-xs [&_svg]:size-4"
-        >
+        <DropdownTrigger>
           <SortIcon />
           <ChevronDownIcon class="size-4" />
-        </DropdownMenu.Trigger>
+        </DropdownTrigger>
       </Tooltip>
       <DropdownMenu.Portal>
         <Layer depth={2}>

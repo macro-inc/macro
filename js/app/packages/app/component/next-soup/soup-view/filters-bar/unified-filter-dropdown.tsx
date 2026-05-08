@@ -24,7 +24,7 @@ import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useContacts } from '@queries/contacts/contacts';
-import { Button, cn, Layer } from '@ui';
+import { cn, DropdownTrigger, Layer } from '@ui';
 import {
   type Accessor,
   batch,
@@ -797,15 +797,10 @@ export const UnifiedFilterDropdown = () => {
     <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
       <DropdownMenu open={open()} onOpenChange={setOpen}>
         <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="F" />}>
-          <DropdownMenu.Trigger
-            as={Button}
-            variant="base"
-            size="sm"
-            class="rounded-xs [&_svg]:size-4"
-          >
+          <DropdownTrigger>
             <SlidersHorizontalIcon />
-            <span class="font-medium">Filter</span>
-          </DropdownMenu.Trigger>
+            <span>Filter</span>
+          </DropdownTrigger>
         </Tooltip>
 
         <DropdownMenu.Portal>
