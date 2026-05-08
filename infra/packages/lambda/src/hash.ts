@@ -9,6 +9,8 @@ const IGNORE_PATHS = [
   'migrations',
   'fixtures',
   '.sqlx',
+  'prebuilt',
+  'prebuilt-artifact',
 ];
 
 function processDirectory(hash: Hash, directoryPath: string) {
