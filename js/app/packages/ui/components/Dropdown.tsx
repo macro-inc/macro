@@ -39,26 +39,16 @@ function DropdownTrigger(props: DropdownTriggerProps) {
 };
 
 
-export const Dropdown = Object.assign(
-  (props: ComponentProps<typeof KobalteDropdownMenu>) => (
-    <KobalteDropdownMenu {...props} />
-  ),
-  {
-    ItemDescription: KobalteDropdownMenu.ItemDescription,
-    ItemIndicator: KobalteDropdownMenu.ItemIndicator,
-    CheckboxItem: KobalteDropdownMenu.CheckboxItem,
-    RadioGroup: KobalteDropdownMenu.RadioGroup,
-    GroupLabel: KobalteDropdownMenu.GroupLabel,
-    SubContent: KobalteDropdownMenu.SubContent,
-    SubTrigger: KobalteDropdownMenu.SubTrigger,
-    ItemLabel: KobalteDropdownMenu.ItemLabel,
-    RadioItem: KobalteDropdownMenu.RadioItem,
-    Content: KobalteDropdownMenu.Content,
-    Portal: KobalteDropdownMenu.Portal,
-    Group: KobalteDropdownMenu.Group,
-    Item: KobalteDropdownMenu.Item,
-    Icon: KobalteDropdownMenu.Icon,
-    Sub: KobalteDropdownMenu.Sub,
-    Trigger: DropdownTrigger,
-  }
-);
+export const Dropdown = Object.assign((props: ComponentProps<typeof KobalteDropdownMenu>) => (<KobalteDropdownMenu {...props} />), {
+  RadioGroup: KobalteDropdownMenu.RadioGroup, /* todo */
+  GroupLabel: KobalteDropdownMenu.GroupLabel, /* todo */
+  SubContent: KobalteDropdownMenu.SubContent, /* todo */
+  SubTrigger: KobalteDropdownMenu.SubTrigger, /* todo */
+  RadioItem: KobalteDropdownMenu.RadioItem,   /* todo */
+  Content: KobalteDropdownMenu.Content,       /* todo */
+  Portal: KobalteDropdownMenu.Portal,         /* todo */
+  Group: KobalteDropdownMenu.Group,           /* todo */
+  Item: KobalteDropdownMenu.Item,             /* todo */
+  Sub: KobalteDropdownMenu.Sub,               /* todo */
+  Trigger: DropdownTrigger,                   /* todo */
+});
