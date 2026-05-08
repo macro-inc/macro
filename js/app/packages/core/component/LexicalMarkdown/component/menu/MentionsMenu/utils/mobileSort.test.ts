@@ -179,6 +179,25 @@ describe('sortMobileMentions', () => {
     expect(result[0].id).toBe('u1');
   });
 
+  test('typing a name surfaces the user above group DMs that merely contain that name', () => {
+    const now = new Date();
+    const platyUser = userItem('u1', 'Platymantis lawtoni', now);
+    const groupDmA = dmItem(
+      'dm1',
+      'Platymantis lawtoni, test me name, Gabriel Birman',
+      now
+    );
+    const groupDmB = dmItem(
+      'dm2',
+      'Platymantis lawtoni, Gabriel Birman, teo+12312312',
+      now
+    );
+
+    const result = sortMobileMentions([groupDmA, groupDmB, platyUser], 'platy');
+
+    expect(result[0].id).toBe('u1');
+  });
+
   test('groups appear when matched by query but stay below users with stronger boost', () => {
     const now = new Date();
     const here = groupItem('here');
