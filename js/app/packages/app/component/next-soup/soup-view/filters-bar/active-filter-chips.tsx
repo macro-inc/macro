@@ -157,7 +157,7 @@ const SearchableFilterChip = (props: {
         open={props.filter.isPopupOpen}
         onOpenChange={(v) => props.filter.setPopupOpen?.(v)}
       >
-        <Combobox.Trigger class="inline-flex items-center gap-1.5 px-2 leading-none not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12">
+        <Combobox.Trigger class="inline-flex h-full items-center gap-1.5 px-2 leading-none not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12">
           <ChipContent
             filter={props.filter}
             hideCategoryLabel={props.hideCategoryLabel}
