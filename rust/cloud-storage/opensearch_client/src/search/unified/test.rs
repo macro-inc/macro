@@ -451,7 +451,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             ids_only: false,
         },
         call_record_search_args: UnifiedCallRecordSearchArgs::default(),
-        cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor {
+        cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id,
             updated_at: time,
         })),
@@ -838,7 +838,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             ids_only: false,
         },
         call_record_search_args: UnifiedCallRecordSearchArgs::default(),
-        cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor {
+        cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id,
             updated_at: time,
         })),
@@ -965,34 +965,15 @@ fn test_build_unified_search_request_empty_indices() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_thread_sort_emits_thread_id_or_message_id_script_and_message_id_tiebreaker() {
+fn test_thread_sort_is_thread_id_then_message_id_field_sorts() {
     use crate::search::builder::thread_sort;
-    let sort = thread_sort();
-    let json: Vec<serde_json::Value> = sort.iter().map(|s| s.to_json()).collect();
+    let json: Vec<serde_json::Value> = thread_sort().iter().map(|s| s.to_json()).collect();
 
-    assert_eq!(sort.len(), 2);
-
-    let primary = &json[0];
-    let script_source = primary["_script"]["script"]["source"]
-        .as_str()
-        .expect("primary sort should be a _script");
-    assert!(
-        script_source.contains("doc['thread_id']"),
-        "thread_id branch missing: {script_source}"
-    );
-    assert!(
-        script_source.contains("doc['message_id']"),
-        "message_id fallback missing: {script_source}"
-    );
-    assert!(
-        script_source.contains("Long.parseLong(hex, 16)"),
-        "should parse the uuidv7 ms prefix: {script_source}"
-    );
-    assert_eq!(primary["_script"]["order"], "desc");
-
-    let tiebreaker = &json[1];
-    assert_eq!(tiebreaker["message_id"]["order"], "desc");
-    assert_eq!(tiebreaker["message_id"]["unmapped_type"], "keyword");
+    assert_eq!(json.len(), 2);
+    assert_eq!(json[0]["thread_id"]["order"], "desc");
+    assert_eq!(json[0]["thread_id"]["unmapped_type"], "keyword");
+    assert_eq!(json[1]["message_id"]["order"], "desc");
+    assert_eq!(json[1]["message_id"]["unmapped_type"], "keyword");
 }
 
 #[test]

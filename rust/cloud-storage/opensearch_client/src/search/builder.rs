@@ -5,7 +5,6 @@ use crate::error::OpensearchClientError;
 use crate::search::query::QueryKey;
 use crate::search::query::generate_terms_must_query;
 use models_opensearch::OpenSearchEntityType;
-use models_search_cursor::SearchMethodCursor;
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, Script, ScriptSort, ScriptSortType, SortOrder, SortType,
 };
@@ -87,40 +86,15 @@ pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
 
 /// Sort vec for channel content with thread-grouped ordering.
 ///
-/// Primary key is the ms timestamp extracted from thread_id (or message_id when
-/// thread_id is missing). Both fields are uuidv7 strings whose first 12 hex
-/// digits encode unix-ms — Long.parseLong on that prefix gives the timestamp.
-/// Tiebreaker is message_id keyword DESC so multiple replies in the same
-/// thread paginate deterministically.
+/// `thread_id` is always populated (threadless messages are indexed with
+/// `thread_id == message_id`) and is uuidv7 keyword-typed, so lex order =
+/// chronological order. `message_id` breaks ties for replies in the same
+/// thread. `unmapped_type` lets the same sort apply to non-channel indices
+/// in mixed unified search.
 pub(crate) fn thread_sort<'a>() -> Vec<SortType<'a>> {
     vec![
-        SortType::ScriptSort(ScriptSort::new(
-            Script::new(
-                r#"if (doc.containsKey('thread_id') && doc['thread_id'].size() > 0) {
-                    String hex = doc['thread_id'].value.replace('-', '').substring(0, 12);
-                    return Long.parseLong(hex, 16);
-                } else if (doc.containsKey('message_id') && doc['message_id'].size() > 0 && doc['message_id'].value.length() >= 18) {
-                    String hex = doc['message_id'].value.replace('-', '').substring(0, 12);
-                    return Long.parseLong(hex, 16);
-                } else if (doc.containsKey('sent_at_seconds') && doc['sent_at_seconds'].size() > 0) {
-                    return doc['sent_at_seconds'].value.toInstant().toEpochMilli();
-                } else if (doc.containsKey('updated_at_seconds') && doc['updated_at_seconds'].size() > 0) {
-                    return doc['updated_at_seconds'].value.toInstant().toEpochMilli();
-                } else {
-                    return 0L;
-                }"#,
-            ),
-            ScriptSortType::Number,
-            SortOrder::Desc,
-        )),
+        SortType::Field(FieldSort::new("thread_id", SortOrder::Desc).unmapped_type("keyword")),
         SortType::Field(FieldSort::new("message_id", SortOrder::Desc).unmapped_type("keyword")),
-    ]
-}
-
-pub(crate) fn search_after(cursor: SearchMethodCursor) -> Vec<serde_json::Value> {
-    vec![
-        serde_json::json!(cursor.updated_at.timestamp_millis()),
-        serde_json::json!(cursor.entity_id.to_string()),
     ]
 }
 

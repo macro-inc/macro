@@ -12,7 +12,9 @@ pub(crate) struct ChannelMessageIndex {
     pub channel_type: String,
     pub org_id: Option<i64>,
     pub message_id: uuid::Uuid,
-    pub thread_id: Option<uuid::Uuid>,
+    /// Always populated. Threadless messages are indexed with
+    /// `thread_id == message_id`.
+    pub thread_id: uuid::Uuid,
     pub sender_id: String,
     pub mentions: Vec<String>,
     pub created_at_seconds: i64,

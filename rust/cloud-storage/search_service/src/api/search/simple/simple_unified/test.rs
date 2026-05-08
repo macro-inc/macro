@@ -104,6 +104,7 @@ fn test_compute_next_cursor_search_is_done_returns_done() {
             SearchSource::DocumentName,
         )),
         &SearchCursorOption::NotDone(None),
+        ChannelSortMode::Message,
     );
 
     assert!(result.is_done());
@@ -123,12 +124,14 @@ fn test_compute_next_cursor_excluded_results_with_included_generates_cursor() {
         5,                                  // original_count (more results were fetched)
         Some(&last_hit),
         &SearchCursorOption::NotDone(None),
+        ChannelSortMode::Message,
     );
 
     match result {
         SearchCursorOption::NotDone(Some(cursor)) => {
-            assert_eq!(cursor.entity_id, entity_id);
-            assert_eq!(cursor.updated_at, timestamp);
+            let (id, ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, entity_id);
+            assert_eq!(ts, timestamp);
         }
         _ => panic!("Expected NotDone with cursor, got {:?}", result),
     }
@@ -143,7 +146,7 @@ fn test_compute_next_cursor_search_has_more_with_included_generates_cursor() {
     let last_hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::ChatName);
 
     let result = compute_next_cursor(
-        &SearchCursorOption::NotDone(Some(SearchMethodCursor {
+        &SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id: Uuid::new_v4(),
             updated_at: ts(500),
         })), // search has more
@@ -151,12 +154,14 @@ fn test_compute_next_cursor_search_has_more_with_included_generates_cursor() {
         5, // original_count (all included)
         Some(&last_hit),
         &SearchCursorOption::NotDone(None),
+        ChannelSortMode::Message,
     );
 
     match result {
         SearchCursorOption::NotDone(Some(cursor)) => {
-            assert_eq!(cursor.entity_id, entity_id);
-            assert_eq!(cursor.updated_at, timestamp);
+            let (id, ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, entity_id);
+            assert_eq!(ts, timestamp);
         }
         _ => panic!("Expected NotDone with cursor, got {:?}", result),
     }
@@ -168,7 +173,7 @@ fn test_compute_next_cursor_excluded_results_no_included_carries_forward() {
     // carry forward the original cursor
     let original_entity_id = Uuid::new_v4();
     let original_timestamp = ts(500);
-    let original_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor {
+    let original_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
         entity_id: original_entity_id,
         updated_at: original_timestamp,
     }));
@@ -179,12 +184,14 @@ fn test_compute_next_cursor_excluded_results_no_included_carries_forward() {
         5,                                  // original_count (had results)
         None,                               // no last hit
         &original_cursor,
+        ChannelSortMode::Message,
     );
 
     match result {
         SearchCursorOption::NotDone(Some(cursor)) => {
-            assert_eq!(cursor.entity_id, original_entity_id);
-            assert_eq!(cursor.updated_at, original_timestamp);
+            let (id, ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, original_entity_id);
+            assert_eq!(ts, original_timestamp);
         }
         _ => panic!("Expected original cursor carried forward, got {:?}", result),
     }
@@ -204,6 +211,7 @@ fn test_compute_next_cursor_all_included_search_done_returns_done() {
             SearchSource::Content,
         )),
         &SearchCursorOption::NotDone(None),
+        ChannelSortMode::Message,
     );
 
     assert!(result.is_done());
@@ -223,13 +231,15 @@ fn test_compute_next_cursor_all_included_but_search_not_done_continues() {
         5,                                  // original_count (all fetched were included)
         Some(&last_hit),
         &SearchCursorOption::NotDone(None),
+        ChannelSortMode::Message,
     );
 
     // Since search says not done, we should continue pagination
     match result {
         SearchCursorOption::NotDone(Some(cursor)) => {
-            assert_eq!(cursor.entity_id, entity_id);
-            assert_eq!(cursor.updated_at, timestamp);
+            let (id, ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, entity_id);
+            assert_eq!(ts, timestamp);
         }
         _ => panic!("Expected NotDone with cursor, got {:?}", result),
     }
@@ -247,6 +257,7 @@ fn test_compute_next_cursor_hit_without_timestamp_returns_none_cursor() {
         5,
         Some(&last_hit),
         &SearchCursorOption::NotDone(None),
+        ChannelSortMode::Message,
     );
 
     match result {
@@ -304,11 +315,14 @@ fn test_cursor_from_tagged_with_timestamp() {
     let timestamp = ts(1000);
     let hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::DocumentName);
 
-    let cursor = cursor_from_tagged(&hit);
+    let cursor = cursor_from_tagged(&hit, ChannelSortMode::Message);
     assert!(cursor.is_some());
-    let cursor = cursor.unwrap();
-    assert_eq!(cursor.entity_id, entity_id);
-    assert_eq!(cursor.updated_at, timestamp);
+    let (id, ts) = cursor
+        .unwrap()
+        .as_updated_at()
+        .expect("expected UpdatedAt cursor");
+    assert_eq!(id, entity_id);
+    assert_eq!(ts, timestamp);
 }
 
 #[test]
@@ -316,7 +330,7 @@ fn test_cursor_from_tagged_without_timestamp() {
     let entity_id = Uuid::new_v4();
     let hit = make_tagged_hit(entity_id, None, SearchSource::ChatName);
 
-    let cursor = cursor_from_tagged(&hit);
+    let cursor = cursor_from_tagged(&hit, ChannelSortMode::Message);
     assert!(cursor.is_none());
 }
 
@@ -341,7 +355,7 @@ fn test_cursor_logic_pagination_scenario() {
         make_tagged_hit(doc_ids[7], Some(timestamps[7]), SearchSource::DocumentName),
     ];
 
-    let doc_next_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor {
+    let doc_next_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
         entity_id: doc_ids[6],
         updated_at: timestamps[6],
     }));
@@ -358,13 +372,15 @@ fn test_cursor_logic_pagination_scenario() {
         doc_name_count,
         find_last_of_source(&final_tagged, SearchSource::DocumentName),
         &SearchCursorOption::NotDone(None),
+        ChannelSortMode::Message,
     );
 
     // Should generate cursor from last included doc (doc_ids[7])
     match new_doc_cursor {
         SearchCursorOption::NotDone(Some(cursor)) => {
-            assert_eq!(cursor.entity_id, doc_ids[7]);
-            assert_eq!(cursor.updated_at, timestamps[7]);
+            let (id, ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, doc_ids[7]);
+            assert_eq!(ts, timestamps[7]);
         }
         _ => panic!(
             "Expected cursor from last included doc, got {:?}",
@@ -394,6 +410,7 @@ fn test_cursor_logic_source_exhausted_scenario() {
         3, // all returned
         find_last_of_source(&final_tagged, SearchSource::DocumentName),
         &SearchCursorOption::NotDone(None),
+        ChannelSortMode::Message,
     );
 
     assert!(new_doc_cursor.is_done());

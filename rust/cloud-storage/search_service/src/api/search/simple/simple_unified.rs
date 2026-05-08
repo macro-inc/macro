@@ -19,7 +19,7 @@ use models_search::{
     unified::{SimpleUnifiedSearchResponse, UnifiedSearchRequest},
 };
 use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
-use opensearch_client::search::model::SearchHit;
+use opensearch_client::search::model::{SearchGotoContent, SearchHit};
 use opensearch_client::search::unified::{ChannelSortMode, UnifiedSearchArgs};
 
 /// Identifies the source of a search result for cursor regeneration
@@ -45,34 +45,49 @@ fn find_last_of_source(
     results.iter().rev().find(|h| h.source == source)
 }
 
-/// Generate a cursor from a TaggedSearchHit
-fn cursor_from_tagged(tagged: &TaggedSearchHit) -> Option<SearchMethodCursor> {
-    tagged.hit.updated_at.map(|ts| SearchMethodCursor {
-        entity_id: tagged.hit.entity_id,
-        updated_at: ts,
-    })
+/// Generate a cursor from a TaggedSearchHit.
+///
+/// Content hits in [`ChannelSortMode::Thread`] produce a `Thread` cursor;
+/// everything else (name searches and Message-mode content) produces an
+/// `UpdatedAt` cursor.
+fn cursor_from_tagged(
+    tagged: &TaggedSearchHit,
+    content_mode: ChannelSortMode,
+) -> Option<SearchMethodCursor> {
+    if tagged.source == SearchSource::Content && content_mode == ChannelSortMode::Thread {
+        return match &tagged.hit.goto {
+            Some(SearchGotoContent::Channels(ch)) => Some(SearchMethodCursor::Thread {
+                thread_id: ch.thread_id.unwrap_or(ch.channel_message_id),
+                message_id: ch.channel_message_id,
+            }),
+            _ => None,
+        };
+    }
+    tagged
+        .hit
+        .updated_at
+        .map(|ts| SearchMethodCursor::UpdatedAt {
+            entity_id: tagged.hit.entity_id,
+            updated_at: ts,
+        })
 }
 
-/// Computes the next cursor for a search source based on pagination state
-///
-/// # Arguments
-/// * `next_cursor_from_search` - The cursor returned by the search operation
-/// * `included_count` - Number of results from this source included in final page
-/// * `original_count` - Total number of results returned by search for this source
-/// * `last_included_hit` - The last result of this source type included in final page
-/// * `original_cursor` - The cursor passed into the search (to carry forward if no results included)
+/// Computes the next cursor for a search source based on pagination state.
 fn compute_next_cursor(
     next_cursor_from_search: &SearchCursorOption,
     included_count: usize,
     original_count: usize,
     last_included_hit: Option<&TaggedSearchHit>,
     original_cursor: &SearchCursorOption,
+    content_mode: ChannelSortMode,
 ) -> SearchCursorOption {
     if next_cursor_from_search.is_done() {
         SearchCursorOption::Done
     } else if included_count < original_count || next_cursor_from_search.has_more() {
         if included_count > 0 {
-            SearchCursorOption::NotDone(last_included_hit.and_then(cursor_from_tagged))
+            SearchCursorOption::NotDone(
+                last_included_hit.and_then(|t| cursor_from_tagged(t, content_mode)),
+            )
         } else {
             original_cursor.clone()
         }
@@ -493,6 +508,7 @@ pub(in crate::api::search) async fn perform_unified_search(
             doc_name_count,
             find_last_of_source(&final_tagged, SearchSource::DocumentName),
             &document_cursor,
+            channel_sort_mode,
         );
 
         let new_chat_cursor = compute_next_cursor(
@@ -501,6 +517,7 @@ pub(in crate::api::search) async fn perform_unified_search(
             chat_name_count,
             find_last_of_source(&final_tagged, SearchSource::ChatName),
             &chat_cursor,
+            channel_sort_mode,
         );
 
         let new_project_cursor = compute_next_cursor(
@@ -509,6 +526,7 @@ pub(in crate::api::search) async fn perform_unified_search(
             project_name_count,
             find_last_of_source(&final_tagged, SearchSource::ProjectName),
             &project_cursor,
+            channel_sort_mode,
         );
 
         let new_content_cursor = compute_next_cursor(
@@ -517,6 +535,7 @@ pub(in crate::api::search) async fn perform_unified_search(
             content_count,
             find_last_of_source(&final_tagged, SearchSource::Content),
             &content_cursor,
+            channel_sort_mode,
         );
 
         // Build next cursor if any source has more results
