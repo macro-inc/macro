@@ -10,7 +10,6 @@
     "./packages/core/**/*.spec.ts",
     "./packages/block-code/scripts/**/*",
     "./packages/service-clients/service-sync/scripts/**/*",
-    "../loro-mirror/packages/react/**/*",
     "../lexical-core/tests/**/*"
   ],
   "compilerOptions": {

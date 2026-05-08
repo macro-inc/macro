@@ -5,7 +5,7 @@ import ReplyIcon from '@macro-icons/square/reply.svg';
 import TrashIcon from '@macro-icons/square/trash.svg';
 import StarIcon from '@macro-icons/wide/star.svg';
 import TaskIcon from '@macro-icons/wide/task.svg';
-import { cn } from '@ui';
+import { Button, Layer } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { useMessage, useMessageActions } from './context';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
@@ -41,21 +41,17 @@ function ActionButton(props: {
   onClick: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>;
 }) {
   return (
-    <button
-      type="button"
-      title={props.action.label}
+    <Button
       aria-label={props.action.label}
       data-message-action={props.action.id}
-      class={cn(
-        'h-8 px-2 flex items-center justify-center text-ink hover:bg-hover hover-transition-bg',
-        props.action.class
-      )}
       onClick={props.onClick}
+      tooltip={props.action.label}
+      size="icon-sm"
+      variant="ghost"
+      class={props.action.class}
     >
-      <span class="block size-5">
-        {renderIcon(props.action.icon, 'w-full h-full')}
-      </span>
-    </button>
+      {renderIcon(props.action.icon, props.action.class)}
+    </Button>
   );
 }
 
@@ -94,21 +90,18 @@ export function ActionMenu(props: ActionMenuProps) {
       label: 'Reply',
       icon: ReplyIcon,
       onClick: actions?.onReply,
-      class: 'px-1.5',
     },
     {
       id: 'copy-link',
       label: 'Copy Link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
-      class: 'px-1.5',
     },
     {
       id: 'edit',
       label: 'Edit',
       icon: EditIcon,
       onClick: actions?.onEdit,
-      class: 'px-1.5',
     },
     {
       id: 'delete',
@@ -116,7 +109,7 @@ export function ActionMenu(props: ActionMenuProps) {
       icon: TrashIcon,
       onClick: actions?.onDelete,
       destructive: true,
-      class: 'px-1.5 text-failure-ink',
+      class: 'text-failure-ink',
     },
   ];
 
@@ -127,74 +120,76 @@ export function ActionMenu(props: ActionMenuProps) {
   return (
     <Show when={hasReactAction() || visibleActions.length > 0}>
       <HoverActions class={props.class} persistentVisible={emojiMenuOpen()}>
-        <div
-          class="flex flex-row bg-menu border border-edge-muted items-center -space-x-1"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Show when={hasReactAction()}>
-            <For each={QUICK_REACTION_EMOJIS}>
-              {(emoji) => (
-                <button
-                  type="button"
-                  title={`React ${emoji}`}
-                  aria-label={`React ${emoji}`}
-                  data-message-action="react-quick"
-                  data-emoji={emoji}
-                  class="size-8 flex items-center justify-center hover:bg-hover hover-transition-bg text-lg/none"
+        <Layer depth={2}>
+          <div
+            class="flex flex-row bg-panel ring ring-edge p-1 shadow items-center rounded-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Show when={hasReactAction()}>
+              <For each={QUICK_REACTION_EMOJIS}>
+                {(emoji) => (
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={(event) => {
+                      handleReaction(emoji, event);
+                    }}
+                    tooltip={`React ${emoji}`}
+                    aria-label={`React ${emoji}`}
+                    data-message-action="react-quick"
+                    data-emoji={emoji}
+                  >
+                    <span class="text-md my-0">{emoji}</span>
+                  </Button>
+                )}
+              </For>
+
+              <EmojiReactionPopover
+                placement="left"
+                open={emojiMenuOpen()}
+                onOpenChange={setEmojiMenuOpen}
+                onEmojiSelect={(emoji) => {
+                  handleReaction(emoji);
+                }}
+                trigger={renderIcon(AddEmojiIcon, 'size-3')}
+                triggerProps={{
+                  title: 'More reactions',
+                  'aria-label': 'More reactions',
+                  tooltip: 'More reactions',
+                  variant: 'ghost',
+                  size: 'icon-sm',
+                }}
+              />
+              <Show when={visibleActions.length > 0}>
+                <div class="w-px self-stretch bg-edge-muted mx-1" />
+              </Show>
+            </Show>
+
+            <For each={visibleCompose}>
+              {(action) => (
+                <ActionButton
+                  action={action}
                   onClick={(event) => {
-                    handleReaction(emoji, event);
+                    void action.onClick?.({ message: message(), event });
                   }}
-                >
-                  {emoji}
-                </button>
+                />
               )}
             </For>
-
-            <EmojiReactionPopover
-              placement="left"
-              open={emojiMenuOpen()}
-              onOpenChange={setEmojiMenuOpen}
-              onEmojiSelect={(emoji) => {
-                handleReaction(emoji);
-              }}
-              trigger={renderIcon(AddEmojiIcon)}
-              triggerProps={{
-                title: 'More reactions',
-                'aria-label': 'More reactions',
-                'data-message-action': 'react-open-menu',
-                class:
-                  'size-8 flex items-center justify-center text-ink-muted hover:bg-hover hover-transition-bg',
-              }}
-            />
-            <Show when={visibleActions.length > 0}>
+            <Show when={visibleCompose.length > 0 && visibleOther.length > 0}>
               <div class="w-px self-stretch bg-edge-muted mx-1" />
             </Show>
-          </Show>
-
-          <For each={visibleCompose}>
-            {(action) => (
-              <ActionButton
-                action={action}
-                onClick={(event) => {
-                  void action.onClick?.({ message: message(), event });
-                }}
-              />
-            )}
-          </For>
-          <Show when={visibleCompose.length > 0 && visibleOther.length > 0}>
-            <div class="w-px self-stretch bg-edge-muted mx-1" />
-          </Show>
-          <For each={visibleOther}>
-            {(action) => (
-              <ActionButton
-                action={action}
-                onClick={(event) => {
-                  void action.onClick?.({ message: message(), event });
-                }}
-              />
-            )}
-          </For>
-        </div>
+            <For each={visibleOther}>
+              {(action) => (
+                <ActionButton
+                  action={action}
+                  onClick={(event) => {
+                    void action.onClick?.({ message: message(), event });
+                  }}
+                />
+              )}
+            </For>
+          </div>
+        </Layer>
       </HoverActions>
     </Show>
   );

@@ -6,6 +6,7 @@ import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
 import { getSenderMacroId } from '@block-email/util/emailUser';
+import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { Message } from '@core/component/Message';
 import { toast } from '@core/component/Toast/Toast';
@@ -216,6 +217,10 @@ export function MessageContainer(props: MessageContainerProps) {
             senderId={senderMacroId()}
             isNewMessage={isNewMessage()}
             isTarget={props.isTarget}
+            hasReplyInputBelow={true}
+            hasThreadChildren={
+              !props.isLastMessage && (showReply() || !!draftChild())
+            }
           >
             <Message.TopBar>
               <EmailMessageTopBar
@@ -339,11 +344,14 @@ export function MessageContainer(props: MessageContainerProps) {
             </Message>
             <Show when={context.permissions().isOwner}>
               <Portal mount={threadAppendMountTarget()}>
-                <EmailInput
-                  replyingTo={() => props.message}
-                  setShowReply={setShowReply}
-                  draft={draftChild()}
-                />
+                <div class="relative isolate">
+                  <ThreadReplyInputConnector />
+                  <EmailInput
+                    replyingTo={() => props.message}
+                    setShowReply={setShowReply}
+                    draft={draftChild()}
+                  />
+                </div>
               </Portal>
             </Show>
           </Show>
