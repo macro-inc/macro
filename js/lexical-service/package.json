@@ -32,6 +32,7 @@
 		"@lexical/utils": "0.32.1",
 		"chanfana": "^3.3.0",
 		"hono": "^4.6.20",
+		"immer": "^10.0.3",
 		"lexical": "0.32.1",
 		"loro-crdt": "1.5.9",
 		"nanoid": "^5.1.5",
