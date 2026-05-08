@@ -1,7 +1,7 @@
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { isMobile } from '@core/mobile/isMobile';
 import { Accordion } from '@kobalte/core/accordion';
-import CaretDown from '@icon/regular/caret-down.svg';
+import CaretRight from '@icon/fill/caret-right-fill.svg';
 import { Panel } from '@ui';
 import {
   type Accessor,
@@ -13,6 +13,7 @@ import {
   onCleanup,
   onMount,
   type ParentProps,
+  Suspense,
   useContext,
 } from 'solid-js';
 import {
@@ -68,23 +69,25 @@ function Layout(props: ParentProps) {
     <SidePanelContext.Provider value={ctx}>
       <Resize.Zone direction="horizontal" gutter={2}>
         <SidePanelLayoutInner
-          mainContent={props.children}
           sections={sections}
           openIds={openIds}
           setOpenIds={setOpenIds}
-        />
+        >
+          {props.children}
+        </SidePanelLayoutInner>
       </Resize.Zone>
     </SidePanelContext.Provider>
   );
 }
 
-function SidePanelLayoutInner(props: {
-  mainContent: JSX.Element;
-  sections: Accessor<SidePanelSectionEntry[]>;
-  openIds: Accessor<string[]>;
-  setOpenIds: (ids: string[]) => void;
-}) {
-  const resolved = children(() => props.mainContent);
+function SidePanelLayoutInner(
+  props: ParentProps<{
+    sections: Accessor<SidePanelSectionEntry[]>;
+    openIds: Accessor<string[]>;
+    setOpenIds: (ids: string[]) => void;
+  }>
+) {
+  const resolved = children(() => props.children);
   const zoneCtx = useContext(ResizeZoneContext);
   if (!zoneCtx) {
     throw new Error('SidePanelLayoutInner must be rendered inside Resize.Zone');
@@ -128,25 +131,9 @@ function SidePanelOutlet(props: {
         collapsible
         value={props.openIds()}
         onChange={(value) => props.setOpenIds(value as string[])}
-        class="flex flex-col gap-2 overflow-y-auto scrollbar-hidden min-h-0"
+        class="flex flex-col gap-2 min-h-0"
       >
-        <For each={props.sections()}>
-          {(section) => (
-            <Accordion.Item value={section.id}>
-              <Panel depth={2} style={{ height: 'auto' }} class="shadow-sm">
-                <Accordion.Header>
-                  <Accordion.Trigger class="group flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-ink hover:bg-hover transition-colors outline-none">
-                    <span>{section.title}</span>
-                    <CaretDown class="size-3 text-ink-muted transition-transform duration-200 group-data-expanded:rotate-180" />
-                  </Accordion.Trigger>
-                </Accordion.Header>
-                <Accordion.Content>
-                  <div class="px-4 py-3 text-sm">{section.render()}</div>
-                </Accordion.Content>
-              </Panel>
-            </Accordion.Item>
-          )}
-        </For>
+        <For each={props.sections()}>{(section) => section.component()}</For>
       </Accordion>
     </div>
   );
@@ -178,11 +165,26 @@ function Section(
       id: props.id,
       title: props.title,
       defaultOpen: props.defaultOpen ?? false,
-      render: () => props.children,
+      component: () => (
+        <Accordion.Item value={props.id}>
+          <Panel depth={2} style={{ height: 'auto' }} class="rounded-lg shadow-md shadow-drop-shadow">
+            <Accordion.Header class="group">
+                <Accordion.Trigger class="px-2 py-3 flex w-full items-center gap-2 text-xs text-medium hover:underline">
+                  <span>{props.title}</span>
+                  <CaretRight class="size-2.5 text-ink-extra-muted transition-transform duration-90 group-data-expanded:rotate-90" />
+                </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Content>
+              <Suspense fallback={<div class="h-4"/>}>
+                <div class="px-2 py-3 text-sm">{props.children}</div>
+              </Suspense>
+            </Accordion.Content>
+          </Panel>
+        </Accordion.Item>
+      ),
     });
     onCleanup(() => ctx.unregister(props.id));
   });
-
   return null;
 }
 

@@ -299,6 +299,10 @@ registerComponent(
 
 if (LOCAL_ONLY) {
   registerComponent(
+    'ring-shootout',
+    lazy(() => import('@core/internal/RingShootoutDemo'))
+  );
+  registerComponent(
     'core',
     lazy(() => import('@core/internal/App'))
   );

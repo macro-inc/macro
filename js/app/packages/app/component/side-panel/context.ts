@@ -4,7 +4,7 @@ export type SidePanelSectionEntry = {
   id: string;
   title: string;
   defaultOpen: boolean;
-  render: () => JSX.Element;
+  component: () => JSX.Element;
 };
 
 export type SidePanelContextType = {

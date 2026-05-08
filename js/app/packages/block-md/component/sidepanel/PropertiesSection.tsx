@@ -167,9 +167,7 @@ export function PropertiesSection(props: PropertiesSectionProps) {
 
   const saveOne = (property: Property, apiValues: PropertyApiValues) =>
     saveMutation.mutateAsync({
-      properties: [
-        { entityId: blockId, entityType, property, apiValues },
-      ],
+      properties: [{ entityId: blockId, entityType, property, apiValues }],
     });
 
   const saveHandler: PropertySaveHandler = {
