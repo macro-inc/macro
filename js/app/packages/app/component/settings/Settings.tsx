@@ -18,7 +18,6 @@ import { CollapsibleHeaderItem } from '../split-layout/components/CollapsibleHea
 import { SettingsButton } from './SettingsButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dropdown, Layer } from '@ui';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
 
 export function SettingsPanelComponentWrapper() {
   return (
@@ -261,7 +260,6 @@ function CollapsedSettingsTabs(props: CollapsedSettingsTabsProps) {
     <Dropdown placement="bottom-start" gutter={4}>
       <Dropdown.Trigger>
         <span class="truncate">{activeLabel()}</span>
-        <ChevronDownIcon class="size-3 shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Layer depth={2}>

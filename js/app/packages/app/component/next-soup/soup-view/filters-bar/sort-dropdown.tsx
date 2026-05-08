@@ -3,7 +3,6 @@ import type {
   SystemSortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import SortIcon from '@phosphor-icons/core/regular/funnel-simple.svg?component-solid';
 import { Dropdown, Layer } from '@ui';
@@ -35,7 +34,6 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       <Tooltip tooltip={<LabelAndHotKey label="Sort" shortcut="S" />}>
         <Dropdown.Trigger>
           <SortIcon />
-          <ChevronDownIcon class="size-4" />
         </Dropdown.Trigger>
       </Tooltip>
       <Dropdown.Portal>

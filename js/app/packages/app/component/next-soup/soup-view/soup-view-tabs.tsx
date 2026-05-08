@@ -9,7 +9,6 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { type TabItem, Tabs } from '@core/component/Tabs';
 import { useUserContext } from '@core/context/user';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import { Dropdown, Layer } from '@ui';
 import { batch, createMemo, For, Match, Switch } from 'solid-js';
 
@@ -163,7 +162,6 @@ export const CollapsedSoupViewTabs = () => {
     <Dropdown placement="bottom-start" gutter={4}>
       <Dropdown.Trigger>
         <span class="truncate">{activeLabel()}</span>
-        <ChevronDownIcon class="size-3 shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Layer depth={2}>
