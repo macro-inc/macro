@@ -48,7 +48,7 @@ jobs:
     # Run the type check if rust code or frontend code has changed.
     if: needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'
     name: Typecheck
-    runs-on: linux-extra-beefy
+    runs-on: temp-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -101,7 +101,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
-    runs-on: linux-latest-middy
+    runs-on: temp-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -124,7 +124,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Theme Hygiene Inspector
-    runs-on: linux-latest-middy
+    runs-on: temp-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -140,7 +140,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Test
-    runs-on: linux-latest-middy
+    runs-on: temp-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -156,7 +156,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
-    runs-on: linux-latest-middy
+    runs-on: temp-middy
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -177,7 +177,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Build
-    runs-on: linux-latest-middy
+    runs-on: temp-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
