@@ -68,6 +68,26 @@ function channelItem(
   } as MentionItem;
 }
 
+function dmItem(
+  id: string,
+  name: string,
+  viewedAt: Date = new Date()
+): MentionItem {
+  return {
+    kind: 'entity',
+    bucket: 'dm',
+    id,
+    searchText: name,
+    sortTimestamp: viewedAt.getTime(),
+    timestamps: { viewedAt, updatedAt: viewedAt },
+    data: {
+      id,
+      name,
+      type: 'channel',
+    } as MentionItem extends { kind: 'entity'; data: infer D } ? D : never,
+  } as MentionItem;
+}
+
 function groupItem(alias: string): GroupMentionItem {
   return {
     kind: 'group',
@@ -90,99 +110,93 @@ function dateItem(id: string, displayText: string): DateMentionItem {
 }
 
 describe('sortMobileMentions', () => {
-  test('places users and groups before other sources with no query', () => {
+  test('boosts users above an equally-fresh doc when no query is present', () => {
     const now = new Date();
-    const stale = new Date(now.getTime() - 24 * HOUR);
+    const user = userItem('u1', 'Alice', now);
+    const doc = docItem('d1', 'Recent Doc', now);
 
-    const alice = userItem('u1', 'Alice', stale);
-    const here = groupItem('here');
-    const recentDoc = docItem('d1', 'Recent Doc', now);
-    const recentChannel = channelItem('c1', 'general', now);
+    const result = sortMobileMentions([doc, user], '');
 
-    const result = sortMobileMentions(
-      [alice, here],
-      [recentDoc, recentChannel],
-      ''
-    );
-
-    const ids = result.map((item) => item.id);
-    expect(ids.indexOf('u1')).toBeLessThan(ids.indexOf('d1'));
-    expect(ids.indexOf('here')).toBeLessThan(ids.indexOf('d1'));
-    expect(ids.indexOf('u1')).toBeLessThan(ids.indexOf('c1'));
-    expect(ids).toHaveLength(4);
+    expect(result[0].id).toBe('u1');
   });
 
-  test('keeps users above fresher non-people items even when docs are more recently viewed', () => {
+  test('does not pin stale users above much fresher docs', () => {
     const now = new Date();
-    const veryStale = new Date(now.getTime() - 7 * 24 * HOUR);
-
-    const oldUser = userItem('u1', 'Old User', veryStale);
+    const veryStaleUser = userItem(
+      'u1',
+      'Old User',
+      new Date(now.getTime() - 14 * 24 * HOUR)
+    );
     const freshDoc = docItem('d1', 'Just Viewed', now);
-    const freshChannel = channelItem('c1', 'just-active', now);
 
-    const result = sortMobileMentions([oldUser], [freshDoc, freshChannel], '');
+    const result = sortMobileMentions([veryStaleUser, freshDoc], '');
 
-    expect(result[0].id).toBe('u1');
+    expect(result[0].id).toBe('d1');
   });
 
-  test('with a query, users matching the query rank above doc/channel matches', () => {
-    const now = new Date();
-    const olderUser = new Date(now.getTime() - 6 * HOUR);
-
-    const matchingUser = userItem('u1', 'project', olderUser);
-    const matchingDoc = docItem('d1', 'project', now);
-    const matchingChannel = channelItem('c1', 'project', now);
-
-    const result = sortMobileMentions(
-      [matchingUser],
-      [matchingDoc, matchingChannel],
-      'project'
-    );
-
-    expect(result[0].id).toBe('u1');
-  });
-
-  test('returns only others when there are no users/groups', () => {
-    const doc = docItem('d1', 'Doc');
-    const channel = channelItem('c1', 'channel');
-
-    const result = sortMobileMentions([], [doc, channel], '');
-
-    expect(result).toHaveLength(2);
-    expect(result.map((i) => i.id).sort()).toEqual(['c1', 'd1']);
-  });
-
-  test('returns only users/groups when there are no other items', () => {
-    const alice = userItem('u1', 'Alice');
-    const here = groupItem('here');
-
-    const result = sortMobileMentions([alice, here], [], '');
-
-    expect(result.map((i) => i.id).sort()).toEqual(['here', 'u1']);
-  });
-
-  test('orders multiple users by freshness within the people bucket', () => {
+  test('orders users by freshness within the user kind', () => {
     const now = new Date();
     const olderUser = userItem(
       'u-old',
       'OldUser',
-      new Date(now.getTime() - 2 * HOUR)
+      new Date(now.getTime() - 6 * HOUR)
     );
     const newerUser = userItem('u-new', 'NewUser', now);
 
-    const result = sortMobileMentions([olderUser, newerUser], [], '');
+    const result = sortMobileMentions([olderUser, newerUser], '');
 
-    expect(result[0].id).toBe('u-new');
-    expect(result[1].id).toBe('u-old');
+    expect(result.indexOf(newerUser)).toBeLessThan(result.indexOf(olderUser));
   });
 
-  test('groups and dates are still pushed below users/groups when present', () => {
-    const alice = userItem('u1', 'Alice');
+  test('boosts DMs over similarly-fresh channels', () => {
+    const now = new Date();
+    const dm = dmItem('dm1', 'alice-bob', now);
+    const channel = channelItem('c1', 'general', now);
+
+    const result = sortMobileMentions([channel, dm], '');
+
+    expect(result[0].id).toBe('dm1');
+  });
+
+  test('with a query, fuzzy match drives ordering across kinds', () => {
+    const now = new Date();
+    const matchingDoc = docItem('d1', 'project alpha', now);
+    const unrelatedUser = userItem('u1', 'Bob', now);
+
+    const result = sortMobileMentions([unrelatedUser, matchingDoc], 'project');
+
+    expect(result[0].id).toBe('d1');
+    expect(result.find((i) => i.id === 'u1')).toBeUndefined();
+  });
+
+  test('with a query, a matching user still beats a matching doc on equal freshness', () => {
+    const now = new Date();
+    const matchingUser = userItem('u1', 'project lead', now);
+    const matchingDoc = docItem('d1', 'project plan', now);
+
+    const result = sortMobileMentions([matchingDoc, matchingUser], 'project');
+
+    expect(result[0].id).toBe('u1');
+  });
+
+  test('groups appear when matched by query but stay below users with stronger boost', () => {
+    const now = new Date();
+    const here = groupItem('here');
+    const user = userItem('u1', 'here-user', now);
+
+    const result = sortMobileMentions([here, user], 'here');
+
+    expect(result.indexOf(user)).toBeLessThan(result.indexOf(here));
+  });
+
+  test('items with no timestamp (groups, dates) sink without a query', () => {
+    const now = new Date();
     const tomorrow = dateItem('tomorrow', 'tomorrow');
+    const here = groupItem('here');
+    const doc = docItem('d1', 'Doc', now);
 
-    const result = sortMobileMentions([alice], [tomorrow], '');
+    const result = sortMobileMentions([tomorrow, here, doc], '');
 
-    const ids = result.map((i) => i.id);
-    expect(ids.indexOf('u1')).toBeLessThan(ids.indexOf('date-tomorrow'));
+    expect(result[0].id).toBe('d1');
   });
 });

@@ -210,13 +210,14 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
-    const others: MentionItem[] = [
+    const combined: MentionItem[] = [
+      ...(usersAndGroups() ?? []),
       ...(docs() ?? []),
       ...(channels() ?? []),
       ...(emails() ?? []),
       ...(dates() ?? []),
     ];
-    return sortMobileMentions(usersAndGroups() ?? [], others, searchTerm());
+    return sortMobileMentions(combined, searchTerm());
   });
 
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {
