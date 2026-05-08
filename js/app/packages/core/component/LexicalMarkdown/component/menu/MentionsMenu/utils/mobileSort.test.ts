@@ -11,15 +11,19 @@ const HOUR = 60 * 60 * 1000;
 function userItem(
   id: string,
   name: string,
-  viewedAt: Date = new Date()
+  interactedAt: Date = new Date()
 ): MentionItem {
   return {
     kind: 'user',
     bucket: 'person',
     id,
     searchText: name,
-    sortTimestamp: viewedAt.getTime(),
-    timestamps: { viewedAt, updatedAt: viewedAt },
+    sortTimestamp: interactedAt.getTime(),
+    timestamps: {
+      viewedAt: interactedAt,
+      updatedAt: interactedAt,
+      lastInteraction: interactedAt,
+    },
     data: {
       id,
       name,
@@ -206,6 +210,40 @@ describe('sortMobileMentions', () => {
     const result = sortMobileMentions([lateMatchUser, startMatchDoc], 'test');
 
     expect(result[0].id).toBe('d1');
+  });
+
+  test('users with prior interaction beat test users with no interaction history', () => {
+    const now = new Date();
+    const interactedUser: MentionItem = {
+      kind: 'user',
+      bucket: 'person',
+      id: 'u-known',
+      searchText: 'peter',
+      sortTimestamp: now.getTime(),
+      timestamps: {
+        viewedAt: now,
+        updatedAt: now,
+        lastInteraction: now,
+      },
+      data: { id: 'u-known', name: 'Peter', email: 'peter@example.com' },
+    } as MentionItem;
+    const testUser: MentionItem = {
+      kind: 'user',
+      bucket: 'person',
+      id: 'u-test',
+      searchText: 'peter+blank',
+      sortTimestamp: now.getTime(),
+      timestamps: { viewedAt: now, updatedAt: now, lastInteraction: null },
+      data: {
+        id: 'u-test',
+        name: 'peter+blank',
+        email: 'peter+blank@example.com',
+      },
+    } as MentionItem;
+
+    const result = sortMobileMentions([testUser, interactedUser], 'peter');
+
+    expect(result[0].id).toBe('u-known');
   });
 
   test('groups appear when matched by query but stay below users with stronger boost', () => {
