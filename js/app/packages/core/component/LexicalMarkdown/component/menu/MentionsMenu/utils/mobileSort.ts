@@ -25,8 +25,8 @@ function isDmItem(item: MentionItem): boolean {
  */
 function mentionBoost(hasQuery: boolean) {
   return (item: MentionItem): number => {
-    if (item.kind === 'user') return hasQuery ? 1.0 : 0.2;
-    if (item.kind === 'group') return hasQuery ? 0.5 : 0.1;
+    if (item.kind === 'user') return hasQuery ? 0.4 : 0.2;
+    if (item.kind === 'group') return hasQuery ? 0.2 : 0.1;
     return 0;
   };
 }
@@ -36,12 +36,14 @@ function createMobileSearchConfig(
 ): FreshSortConfig<MentionItem> {
   return {
     useViewedAt: true,
-    fuzzyWeight: hasQuery ? 0.7 : 0,
-    timeWeight: hasQuery ? 0.7 : 0.9,
-    brevityWeight: 0,
+    fuzzyWeight: hasQuery ? 0.5 : 0,
+    timeWeight: hasQuery ? 0.4 : 0.9,
+    brevityWeight: hasQuery ? 0.1 : 0,
     minFuzzyThreshold: hasQuery ? 0.1 : 0,
-    dmBoost: hasQuery ? 1.8 : 1.2,
+    dmBoost: hasQuery ? 1.4 : 1.2,
     commaSeparatedChannelMatch: true,
+    gapPenaltyWeight: hasQuery ? 0.4 : 0,
+    startBonusDecay: hasQuery ? 0.4 : 0,
     boostFn: mentionBoost(hasQuery),
   };
 }

@@ -198,6 +198,16 @@ describe('sortMobileMentions', () => {
     expect(result[0].id).toBe('u1');
   });
 
+  test('penalizes users whose match starts mid-string vs docs that match at start', () => {
+    const now = new Date();
+    const lateMatchUser = userItem('u1', 'apple.testing@macro.com', now);
+    const startMatchDoc = docItem('d1', 'test lexical api', now);
+
+    const result = sortMobileMentions([lateMatchUser, startMatchDoc], 'test');
+
+    expect(result[0].id).toBe('d1');
+  });
+
   test('groups appear when matched by query but stay below users with stronger boost', () => {
     const now = new Date();
     const here = groupItem('here');
