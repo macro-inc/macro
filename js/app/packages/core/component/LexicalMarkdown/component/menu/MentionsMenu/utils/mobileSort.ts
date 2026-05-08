@@ -9,13 +9,6 @@ function getMentionName(item: MentionItem): string {
 
 function getMentionTimestamps(item: MentionItem) {
   if (item.kind === 'date' || item.kind === 'group') return {};
-  if (item.kind === 'user') {
-    // For users, rank by actual interaction history (mentions/DMs) rather
-    // than viewedAt — workspace test users tend to share fresh viewedAt
-    // timestamps but have never been interacted with.
-    const last = item.timestamps.lastInteraction;
-    return { viewedAt: last, updatedAt: last, lastInteraction: last };
-  }
   return item.timestamps;
 }
 
