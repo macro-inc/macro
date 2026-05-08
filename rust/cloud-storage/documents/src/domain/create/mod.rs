@@ -23,21 +23,34 @@ use crate::domain::ports::DocumentService;
 /// Common metadata for a document that has not been created yet.
 #[derive(Debug, Clone)]
 pub struct NewDocumentMetadata {
-    /// Optional caller-provided document id.
-    pub id: Option<uuid::Uuid>,
-    /// Document name without extension.
-    pub document_name: String,
-    /// Project to associate the document with.
-    pub project_id: Option<uuid::Uuid>,
-    /// Email attachment to link for internal attachment flows.
-    pub email_attachment_id: Option<uuid::Uuid>,
-    /// Custom creation timestamp.
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// Whether to skip adding the document to user history.
-    pub skip_history: bool,
+    id: Option<uuid::Uuid>,
+    document_name: String,
+    project_id: Option<uuid::Uuid>,
+    email_attachment_id: Option<uuid::Uuid>,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
+    skip_history: bool,
 }
 
 impl NewDocumentMetadata {
+    /// Construct metadata with default optional fields.
+    pub fn new(document_name: impl Into<String>) -> Self {
+        Self::builder(document_name).build()
+    }
+
+    /// Build document metadata with optional fields.
+    pub fn builder(document_name: impl Into<String>) -> NewDocumentMetadataBuilder {
+        NewDocumentMetadataBuilder {
+            metadata: Self {
+                id: None,
+                document_name: document_name.into(),
+                project_id: None,
+                email_attachment_id: None,
+                created_at: None,
+                skip_history: false,
+            },
+        }
+    }
+
     fn into_repo_args(
         self,
         user_id: MacroUserIdStr<'static>,
@@ -55,6 +68,49 @@ impl NewDocumentMetadata {
             is_task: kind.subtype.is_task(),
             skip_history: self.skip_history,
         }
+    }
+}
+
+/// Builder for [`NewDocumentMetadata`].
+#[derive(Debug, Clone)]
+pub struct NewDocumentMetadataBuilder {
+    metadata: NewDocumentMetadata,
+}
+
+impl NewDocumentMetadataBuilder {
+    /// Set a caller-provided document id.
+    pub fn id(mut self, id: uuid::Uuid) -> Self {
+        self.metadata.id = Some(id);
+        self
+    }
+
+    /// Set the project to associate with the document.
+    pub fn project_id(mut self, project_id: uuid::Uuid) -> Self {
+        self.metadata.project_id = Some(project_id);
+        self
+    }
+
+    /// Set an email attachment to link to this document.
+    pub fn email_attachment_id(mut self, email_attachment_id: uuid::Uuid) -> Self {
+        self.metadata.email_attachment_id = Some(email_attachment_id);
+        self
+    }
+
+    /// Set a custom creation timestamp.
+    pub fn created_at(mut self, created_at: chrono::DateTime<chrono::Utc>) -> Self {
+        self.metadata.created_at = Some(created_at);
+        self
+    }
+
+    /// Skip adding this document to user history.
+    pub fn skip_history(mut self) -> Self {
+        self.metadata.skip_history = true;
+        self
+    }
+
+    /// Build the metadata value.
+    pub fn build(self) -> NewDocumentMetadata {
+        self.metadata
     }
 }
 
@@ -143,7 +199,36 @@ enum PlainTextDocumentKind {
     Text(NonMarkdownFileType),
 }
 
+/// Marker for a plaintext document builder missing a file type.
+#[derive(Debug, Clone)]
+pub struct MissingPlainTextFileType;
+
+/// Marker for a plaintext document builder missing text content.
+#[derive(Debug, Clone)]
+pub struct MissingPlainTextContent;
+
+/// Builder for [`NewPlainTextDocument`].
+#[derive(Debug, Clone)]
+pub struct NewPlainTextDocumentBuilder<FileTypeState, TextState> {
+    metadata: NewDocumentMetadata,
+    file_type: FileTypeState,
+    text: TextState,
+    markdown_subtype: MarkdownSubtype,
+}
+
 impl NewPlainTextDocument {
+    /// Start building a plaintext document.
+    pub fn builder(
+        metadata: NewDocumentMetadata,
+    ) -> NewPlainTextDocumentBuilder<MissingPlainTextFileType, MissingPlainTextContent> {
+        NewPlainTextDocumentBuilder {
+            metadata,
+            file_type: MissingPlainTextFileType,
+            text: MissingPlainTextContent,
+            markdown_subtype: MarkdownSubtype::Note,
+        }
+    }
+
     /// Construct a plaintext document from a file type, rejecting impossible
     /// combinations like task documents with non-markdown file types.
     pub fn new(
@@ -152,20 +237,74 @@ impl NewPlainTextDocument {
         text: String,
         markdown_subtype: MarkdownSubtype,
     ) -> Result<Self, DocumentError> {
-        let kind = if file_type == FileType::Md {
-            PlainTextDocumentKind::Markdown(markdown_subtype)
+        Self::builder(metadata)
+            .file_type(file_type)
+            .text(text)
+            .markdown_subtype(markdown_subtype)
+            .build()
+    }
+}
+
+impl<TextState> NewPlainTextDocumentBuilder<MissingPlainTextFileType, TextState> {
+    /// Set the document file type.
+    pub fn file_type(
+        self,
+        file_type: FileType,
+    ) -> NewPlainTextDocumentBuilder<FileType, TextState> {
+        NewPlainTextDocumentBuilder {
+            metadata: self.metadata,
+            file_type,
+            text: self.text,
+            markdown_subtype: self.markdown_subtype,
+        }
+    }
+}
+
+impl<FileTypeState> NewPlainTextDocumentBuilder<FileTypeState, MissingPlainTextContent> {
+    /// Set the text content.
+    pub fn text(
+        self,
+        text: impl Into<String>,
+    ) -> NewPlainTextDocumentBuilder<FileTypeState, String> {
+        NewPlainTextDocumentBuilder {
+            metadata: self.metadata,
+            file_type: self.file_type,
+            text: text.into(),
+            markdown_subtype: self.markdown_subtype,
+        }
+    }
+}
+
+impl<FileTypeState, TextState> NewPlainTextDocumentBuilder<FileTypeState, TextState> {
+    /// Set the markdown subtype used when `file_type` is markdown.
+    pub fn markdown_subtype(mut self, markdown_subtype: MarkdownSubtype) -> Self {
+        self.markdown_subtype = markdown_subtype;
+        self
+    }
+
+    /// Set the markdown subtype from a simple task flag.
+    pub fn task_flag(self, is_task: bool) -> Self {
+        self.markdown_subtype(MarkdownSubtype::from_task_flag(is_task))
+    }
+}
+
+impl NewPlainTextDocumentBuilder<FileType, String> {
+    /// Build the document description.
+    pub fn build(self) -> Result<NewPlainTextDocument, DocumentError> {
+        let kind = if self.file_type == FileType::Md {
+            PlainTextDocumentKind::Markdown(self.markdown_subtype)
         } else {
-            if matches!(markdown_subtype, MarkdownSubtype::Task { .. }) {
+            if matches!(self.markdown_subtype, MarkdownSubtype::Task { .. }) {
                 return Err(DocumentError::BadRequest(
                     "tasks must be markdown documents".to_string(),
                 ));
             }
-            PlainTextDocumentKind::Text(NonMarkdownFileType::new(file_type)?)
+            PlainTextDocumentKind::Text(NonMarkdownFileType::new(self.file_type)?)
         };
 
-        Ok(Self {
-            metadata,
-            text,
+        Ok(NewPlainTextDocument {
+            metadata: self.metadata,
+            text: self.text,
             kind,
         })
     }
@@ -593,25 +732,17 @@ mod tests {
     use model::document::FileType;
 
     fn metadata() -> NewDocumentMetadata {
-        NewDocumentMetadata {
-            id: None,
-            document_name: "test".to_string(),
-            project_id: None,
-            email_attachment_id: None,
-            created_at: None,
-            skip_history: false,
-        }
+        NewDocumentMetadata::new("test")
     }
 
     #[test]
     fn new_plain_text_rejects_non_markdown_task() {
-        let err = NewPlainTextDocument::new(
-            metadata(),
-            FileType::Txt,
-            "hello".to_string(),
-            MarkdownSubtype::from_task_flag(true),
-        )
-        .unwrap_err();
+        let err = NewPlainTextDocument::builder(metadata())
+            .file_type(FileType::Txt)
+            .text("hello")
+            .markdown_subtype(MarkdownSubtype::from_task_flag(true))
+            .build()
+            .unwrap_err();
 
         assert_eq!(
             err.to_string(),
@@ -621,13 +752,12 @@ mod tests {
 
     #[test]
     fn new_plain_text_accepts_markdown_task() {
-        NewPlainTextDocument::new(
-            metadata(),
-            FileType::Md,
-            "# hello".to_string(),
-            MarkdownSubtype::from_task_flag(true),
-        )
-        .unwrap();
+        NewPlainTextDocument::builder(metadata())
+            .file_type(FileType::Md)
+            .text("# hello")
+            .task_flag(true)
+            .build()
+            .unwrap();
     }
 
     #[test]

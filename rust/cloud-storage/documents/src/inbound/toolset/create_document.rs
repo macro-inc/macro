@@ -2,9 +2,7 @@
 
 use std::str::FromStr;
 
-use crate::domain::create::{
-    DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewPlainTextDocument,
-};
+use crate::domain::create::{DocumentCreator, NewDocumentMetadata, NewPlainTextDocument};
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -84,22 +82,14 @@ where
             service_context.sync_service_client.as_ref(),
         );
 
-        let metadata = NewDocumentMetadata {
-            id: None,
-            document_name: self.document_name.clone(),
-            project_id: None,
-            email_attachment_id: None,
-            created_at: None,
-            skip_history: false,
-        };
+        let metadata = NewDocumentMetadata::new(self.document_name.clone());
 
-        let document = NewPlainTextDocument::new(
-            metadata,
-            parsed_file_type,
-            self.file_content.clone(),
-            MarkdownSubtype::from_task_flag(self.is_task),
-        )
-        .map_err(failed_to_create_document)?;
+        let document = NewPlainTextDocument::builder(metadata)
+            .file_type(parsed_file_type)
+            .text(self.file_content.clone())
+            .task_flag(self.is_task)
+            .build()
+            .map_err(failed_to_create_document)?;
 
         let response = creator
             .create_plain_text(user_id, document)
