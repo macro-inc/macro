@@ -105,7 +105,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
-    runs-on: temp-middy
+    runs-on: linux-latest-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -124,7 +124,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Theme Hygiene Inspector
-    runs-on: temp-middy
+    runs-on: linux-latest-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -142,7 +142,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Test
-    runs-on: temp-middy
+    runs-on: linux-latest-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -159,7 +159,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
-    runs-on: temp-middy
+    runs-on: linux-latest-middy
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -176,7 +176,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Build
-    runs-on: temp-middy
+    runs-on: linux-latest-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6

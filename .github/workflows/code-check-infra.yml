@@ -30,7 +30,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     name: Biome Check
-    runs-on: temp-middy
+    runs-on: linux-latest-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -48,7 +48,7 @@ jobs:
   check:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: temp-middy
+    runs-on: linux-latest-middy
     steps:
       - uses: actions/checkout@v6
       - name: Setup Nix dev shell
