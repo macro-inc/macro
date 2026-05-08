@@ -6,7 +6,7 @@ export { Keyboard } from './components/Keyboard';
 export { Surface } from './components/Surface';
 export { Dialog  } from './components/Dialog';
 export { Button } from './components/Button';
-export { DropdownTrigger } from './components/DropdownTrigger';
+export { Dropdown } from './components/Dropdown';
 export { Scroll } from './components/Scroll';
 export { Panel  } from './components/Panel';
 export { Layer } from './components/Layer';
@@ -14,7 +14,7 @@ export { Layer } from './components/Layer';
 /* types */
 export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
 export type { DialogProps } from './components/Dialog';
-export type { DropdownTriggerProps } from './components/DropdownTrigger';
+export type { DropdownTriggerProps } from './components/Dropdown';
 
 /* utils */
 export { cn } from './utils/classname';
