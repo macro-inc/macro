@@ -23,7 +23,7 @@ export function Appearance() {
       <div
         class="max-w-200 size-full"
         style={{
-          'grid-template-rows': 'min-content 1fr',
+          'grid-template-rows': `${isMobile() ? '322.5px' : '432.5px'} 1fr`,
           'grid-template-columns': '1fr',
           'overflow': 'hidden',
           'display': 'grid',
@@ -60,8 +60,8 @@ export function Appearance() {
         </Panel>
 
         <Panel depth={2}>
-                  <ThemeList />
-                </Panel>
+          <ThemeList />
+        </Panel>
       </div>
     </div>
   );

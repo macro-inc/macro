@@ -53,13 +53,22 @@ function mapToSyncStatus(status: WebsocketConnectionState): SyncSourceStatus {
   }
 }
 
-function createSyncServiceSocket(documentId: string, token: string) {
-  const URL = `${SYNC_SERVICE_WS_URL}/${documentId}/connect?token=${token}`;
+function createSyncServiceSocket(documentId: string, initialToken: string) {
+  const connectUrl = (token: string) =>
+    `${SYNC_SERVICE_WS_URL}/${documentId}/connect?token=${token}`;
+  let initialUrl: string | undefined = connectUrl(initialToken);
+  let fallbackUrl = initialUrl;
 
   /**
-   * Refetches the token if it is expired
+   * Uses the already-fetched token for the initial connect, then refetches on reconnect.
    */
   const getUrl: UrlResolver = async () => {
+    if (initialUrl) {
+      const url = initialUrl;
+      initialUrl = undefined;
+      return url;
+    }
+
     const response =
       await storageServiceClient.permissionsTokens.createPermissionToken({
         document_id: documentId,
@@ -67,12 +76,12 @@ function createSyncServiceSocket(documentId: string, token: string) {
 
     if (isChaseError(response)) {
       console.error('failed to fetch permission token', response);
-      return URL;
+      return fallbackUrl;
     }
 
-    let token = response[1].token;
-
-    return `${SYNC_SERVICE_WS_URL}/${documentId}/connect?token=${token}`;
+    const refreshedUrl = connectUrl(response[1].token);
+    fallbackUrl = refreshedUrl;
+    return refreshedUrl;
   };
 
   return new WebsocketBuilder(getUrl)

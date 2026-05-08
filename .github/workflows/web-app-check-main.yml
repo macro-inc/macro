@@ -48,19 +48,10 @@ jobs:
     # Run the type check if rust code or frontend code has changed.
     if: needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'
     name: Typecheck
-    runs-on: linux-extra-beefy
+    runs-on: temp-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
-      - name: Add Nix to PATH
-        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
-      - name: Enter Nix dev shell
-        run: |
-          set -euo pipefail
-          nix print-dev-env --accept-flake-config > /tmp/dev-env
-          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
-          source /tmp/dev-env
-          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
@@ -110,7 +101,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
-    runs-on: linux-extra-beefy
+    runs-on: temp-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -133,21 +124,12 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Theme Hygiene Inspector
-    runs-on: linux-extra-beefy
+    runs-on: temp-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Add Nix to PATH
-        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
-      - name: Enter Nix dev shell
-        run: |
-          set -euo pipefail
-          nix print-dev-env --accept-flake-config > /tmp/dev-env
-          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
-          source /tmp/dev-env
-          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
       - name: Check Tailwind Classes
@@ -158,19 +140,10 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Test
-    runs-on: linux-extra-beefy
+    runs-on: temp-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
-      - name: Add Nix to PATH
-        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
-      - name: Enter Nix dev shell
-        run: |
-          set -euo pipefail
-          nix print-dev-env --accept-flake-config > /tmp/dev-env
-          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
-          source /tmp/dev-env
-          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
         with:
@@ -183,7 +156,7 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
-    runs-on: linux-extra-beefy
+    runs-on: temp-middy
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -204,19 +177,10 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Build
-    runs-on: linux-extra-beefy
+    runs-on: temp-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
-      - name: Add Nix to PATH
-        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
-      - name: Enter Nix dev shell
-        run: |
-          set -euo pipefail
-          nix print-dev-env --accept-flake-config > /tmp/dev-env
-          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
-          source /tmp/dev-env
-          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
       - name: Build

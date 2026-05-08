@@ -21,22 +21,29 @@ jobs:
           filters: |
             should_run:
               - 'infra/**'
+              - 'flake.nix'
+              - 'flake.lock'
               - .github/workflows/code-check-infra.yml
 
   biome-check:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     name: Biome Check
-    runs-on: linux-latest-middy
+    runs-on: temp-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Setup Biome
-        uses: biomejs/setup-biome@v2
-        with:
-          version: 2.4.12
+      - name: Add Nix to PATH
+        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+      - name: Enter Nix dev shell
+        run: |
+          set -euo pipefail
+          nix print-dev-env --accept-flake-config > /tmp/dev-env
+          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+          source /tmp/dev-env
+          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: Run Biome
         working-directory: infra
         run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
@@ -44,10 +51,18 @@ jobs:
   check:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: linux-latest-middy
+    runs-on: temp-middy
     steps:
       - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
+      - name: Add Nix to PATH
+        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+      - name: Enter Nix dev shell
+        run: |
+          set -euo pipefail
+          nix print-dev-env --accept-flake-config > /tmp/dev-env
+          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
+          source /tmp/dev-env
+          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
       - name: install
         working-directory: infra
         run: bun install --frozen-lockfile
@@ -59,17 +74,19 @@ jobs:
   status-check:
     name: Infra Status Check
     if: always()
-    needs: [path-check, biome-check]
+    needs: [path-check, biome-check, check]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
         run: |
           echo "path-check: ${{ needs.path-check.result }}"
           echo "biome-check: ${{ needs.biome-check.result }}"
+          echo "check: ${{ needs.check.result }}"
 
           # Fail if any job failed (skipped and success are both OK)
           if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-             [[ "${{ needs.biome-check.result }}" == "failure" ]]; then
+             [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
+             [[ "${{ needs.check.result }}" == "failure" ]]; then
             echo "❌ One or more jobs failed"
             exit 1
           fi

@@ -24,42 +24,42 @@ const shortcutSections: ShortcutSection[] = [
   {
     title: 'Core',
     items: [
-      { keys: ['c']             , codes: ['KeyC']                   , description: 'Open the create menu'   },
       { keys: [`${cmdOrCtrl}+k`], codes: [CmdOrCtrl, 'KeyK']        , description: 'Open the command menu'  },
-      { keys: ['g']             , codes: ['KeyG']                   , description: 'Go to a view'           },
-      { keys: ['/']             , codes: ['Slash']                  , description: 'Go to search view'      },
       { keys: [`${cmdOrCtrl}+f`], codes: [CmdOrCtrl, 'KeyF']        , description: 'Search in current view' },
-      { keys: [`${cmdOrCtrl}+j`], codes: [CmdOrCtrl, 'KeyJ']        , description: 'Focus AI chat'          },
+      { keys: ['c']             , codes: ['KeyC']                   , description: 'Open the create menu'   },
       { keys: [`${cmdOrCtrl}+;`], codes: [CmdOrCtrl, 'Semicolon']   , description: 'Open settings panel'    },
+      { keys: ['/']             , codes: ['Slash']                  , description: 'Go to search view'      },
+      { keys: [`${cmdOrCtrl}+j`], codes: [CmdOrCtrl, 'KeyJ']        , description: 'Focus AI chat'          },
+      { keys: ['g']             , codes: ['KeyG']                   , description: 'Go to a view'           },
     ],
   },
   {
     title: 'Splits',
     items: [
-      { keys: ['\\']              , codes: ['Backslash']                  , description: 'Create a split'              },
-      { keys: ['cmd+escape']      , codes: ['MetaLeft', 'Escape']         , description: 'Go home / close split'       },
-      { keys: ['shift+escape']    , codes: ['ShiftLeft', 'Escape']        , description: 'Spotlight split'             },
-      { keys: ['shift+arrowleft'] , codes: ['ShiftLeft', 'ArrowLeft']     , description: 'Focus split to the left'     },
-      { keys: ['shift+arrowright'], codes: ['ShiftLeft', 'ArrowRight']    , description: 'Focus split to the right'    },
-      { keys: ['opt+[']           , codes: ['AltLeft', 'BracketLeft']     , description: 'Go back in current split'    },
       { keys: ['opt+]']           , codes: ['AltLeft', 'BracketRight']    , description: 'Go forward in current split' },
+      { keys: ['cmd+escape']      , codes: ['MetaLeft', 'Escape']         , description: 'Go home / close split'       },
+      { keys: ['opt+[']           , codes: ['AltLeft', 'BracketLeft']     , description: 'Go back in current split'    },
+      { keys: ['shift+arrowright'], codes: ['ShiftLeft', 'ArrowRight']    , description: 'Focus split to the right'    },
+      { keys: ['shift+arrowleft'] , codes: ['ShiftLeft', 'ArrowLeft']     , description: 'Focus split to the left'     },
+      { keys: ['shift+escape']    , codes: ['ShiftLeft', 'Escape']        , description: 'Spotlight split'             },
+      { keys: ['\\']              , codes: ['Backslash']                  , description: 'Create a split'              },
     ],
   },
   {
     title: 'Unified List',
     items: [
-      { keys: ['arrowdown']      , codes: ['ArrowDown']               , description: 'Move down'                  },
-      { keys: ['arrowup']        , codes: ['ArrowUp']                 , description: 'Move up'                    },
-      { keys: ['shift+arrowdown'], codes: ['ShiftLeft', 'ArrowDown']  , description: 'Select down'                },
-      { keys: ['shift+arrowup']  , codes: ['ShiftLeft', 'ArrowUp']    , description: 'Select up'                  },
-      { keys: ['e']              , codes: ['KeyE']                    , description: 'Mark done'                  },
-      { keys: ['x']              , codes: ['KeyX']                    , description: 'Select items'               },
-      { keys: ['f']              , codes: ['KeyF']                    , description: 'Open filter menu'           },
-      { keys: ['arrowleft']      , codes: ['ArrowLeft']               , description: 'Collapse item'              },
-      { keys: ['arrowright']     , codes: ['ArrowRight']              , description: 'Expand item'                },
-      { keys: ['space']          , codes: ['Space']                   , description: 'Preview item'               },
       { keys: ['enter']          , codes: ['Enter']                   , description: 'Open item in current split' },
       { keys: ['shift+enter']    , codes: ['ShiftLeft', 'Enter']      , description: 'Open item in a new split'   },
+      { keys: ['space']          , codes: ['Space']                   , description: 'Preview item'               },
+      { keys: ['shift+arrowdown'], codes: ['ShiftLeft', 'ArrowDown']  , description: 'Select down'                },
+      { keys: ['f']              , codes: ['KeyF']                    , description: 'Open filter menu'           },
+      { keys: ['x']              , codes: ['KeyX']                    , description: 'Select items'               },
+      { keys: ['arrowleft']      , codes: ['ArrowLeft']               , description: 'Collapse item'              },
+      { keys: ['arrowdown']      , codes: ['ArrowDown']               , description: 'Move down'                  },
+      { keys: ['e']              , codes: ['KeyE']                    , description: 'Mark done'                  },
+      { keys: ['arrowup']        , codes: ['ArrowUp']                 , description: 'Move up'                    },
+      { keys: ['shift+arrowup']  , codes: ['ShiftLeft', 'ArrowUp']    , description: 'Select up'                  },
+      { keys: ['arrowright']     , codes: ['ArrowRight']              , description: 'Expand item'                },
     ],
   },
 ];
@@ -129,19 +129,21 @@ function ShortcutsContent() {
         <div class="text-sm font-semibold">Keyboard Shortcuts</div>
       </Panel.Header>
 
-      <Panel.Body scroll class="px-6 py-2 @container">
+      <Panel.Toolbar class="h-full px-6 py-2">
         <Keyboard keys={hoveredCodes()} />
+      </Panel.Toolbar>
 
-        <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
-          {/* Core - left column */}
-          <ShortcutSectionComponent section={shortcutSections[0]} />
+      <Panel.Body scroll>
+        <div class="px-6 py-2 @container">
+          <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
+            {/* Core - left column */}
+            <ShortcutSectionComponent section={shortcutSections[0]} />
 
-          {/* Splits - right column */}
-          <ShortcutSectionComponent section={shortcutSections[1]} />
+            {/* Splits - right column */}
+            <ShortcutSectionComponent section={shortcutSections[1]} />
 
-          {/* Unified List - spans both columns with its own 2-column layout */}
-          <div class="@[600px]:col-span-2">
-            <div class="mb-3">
+            {/* Unified List - spans both columns with its own 2-column layout */}
+            <div class="@[600px]:col-span-2">
               <h3 class="font-medium text-lg mb-2 flex items-center gap-2">
                 {shortcutSections[2].title}
               </h3>

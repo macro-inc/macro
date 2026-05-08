@@ -35,9 +35,69 @@ on:
         required: true
       DD_API_KEY:
         required: true
+      CACHIX_AUTH_TOKEN:
+        required: true
 
 jobs:
+  build-service-binaries:
+    name: Build ${{ inputs.service-name }} binaries
+    runs-on: linux-extra-beefy
+    outputs:
+      has_binaries: ${{ steps.check-binaries.outputs.has_binaries }}
+    steps:
+      # Pinned actions/checkout v6: https://github.com/actions/checkout/commit/de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.ref_name }}
+          clean: false
+
+      - name: Add Nix to PATH
+        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+
+      - name: Configure Cachix
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Check prebuilt binaries config
+        id: check-binaries
+        env:
+          SERVICE: ${{ inputs.service-name }}
+        run: |
+          has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' .github/services-config.json)
+          echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
+
+      - name: Build prebuilt binaries
+        if: ${{ steps.check-binaries.outputs.has_binaries == 'true' }}
+        shell: bash
+        env:
+          SERVICE: ${{ inputs.service-name }}
+        run: |
+          set -euo pipefail
+          mkdir -p prebuilt
+          cachix watch-store "$CACHIX_CACHE_NAME" &
+          cachix_pid=$!
+          trap 'kill "$cachix_pid" || true' EXIT
+
+          nix build ".#deploy-service-binaries-${SERVICE}"
+          cp -r result/bin/* prebuilt/
+          mkdir -p prebuilt/nix-store
+          while IFS= read -r store_path; do
+            cp -a "$store_path" prebuilt/nix-store/
+          done < <(nix-store -qR result)
+          touch prebuilt/.keep
+          tar -C prebuilt -czf prebuilt-binaries.tar.gz .
+
+      - name: Upload prebuilt binaries
+        if: ${{ steps.check-binaries.outputs.has_binaries == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cloud-storage-service-binaries-${{ inputs.service-name }}-${{ github.sha }}
+          path: prebuilt-binaries.tar.gz
+          retention-days: 7
+
   deploy:
+    needs: build-service-binaries
     runs-on:
       [
         runs-on,
@@ -65,6 +125,7 @@ jobs:
           aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ inputs.pulumi-stack-name || steps.project-name.outputs.project-name }}
+          prebuilt-binaries-artifact: ${{ needs.build-service-binaries.outputs.has_binaries == 'true' && format('cloud-storage-service-binaries-{0}-{1}', inputs.service-name, github.sha) || '' }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}
           use-docker: ${{ inputs.use-docker }}

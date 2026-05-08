@@ -72,7 +72,7 @@ function SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 rounded-xs"
+        class="p-1 rounded-xs hidden"
         tooltip={
           <LabelAndHotKey
             label={
@@ -196,31 +196,28 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           </Show>
         </div>
         <div
-          class="relative min-w-0 h-full grow shrink pl-2 flex items-center gap-0.5"
+          class="relative min-w-0 h-full shrink pl-2 flex items-center gap-0.5"
           ref={(ref) => {
             panel.layoutRefs.headerLeft = ref;
-          }}
-        />
-
-        <div
-          class={cn(
-            'min-w-4 h-full shrink-0 flex items-center gap-0.5 pl-2',
-            !shouldShowRightmost() && 'pr-2'
-          )}
-          ref={(ref) => {
-            panel.layoutRefs.headerRight = ref;
           }}
         />
 
         <Show when={shouldShowRightmost()}>
           <div
             class={
-              'pl-0.5 pr-2 z-annotation-layer relative flex items-center gap-0.5 h-full order-last'
+              'pl-2 z-annotation-layer relative flex items-center gap-0.5 h-full'
             }
           >
             <SplitSpotlightButton />
           </div>
         </Show>
+
+        <div
+          class="min-w-4 h-full grow shrink flex items-center justify-end gap-0.5 pl-2 pr-2"
+          ref={(ref) => {
+            panel.layoutRefs.headerRight = ref;
+          }}
+        />
       </div>
     </div>
   );

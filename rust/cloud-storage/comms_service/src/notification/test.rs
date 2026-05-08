@@ -144,6 +144,7 @@ async fn mentioned_users_get_mention_not_message_send() {
         participants: &participants,
         thread_participants: &[],
         thread_parent_sender_id: None,
+        has_attachments: false,
         sender_profile_picture_url: None,
         existing_user_ids: HashSet::new(),
     }
@@ -201,6 +202,7 @@ async fn thread_reply_excludes_sender_and_mentions() {
         participants: &participants,
         thread_participants: &thread_participants,
         thread_parent_sender_id: Some(uid("macro|thread_parent_sender@test.com")),
+        has_attachments: false,
         sender_profile_picture_url: None,
         existing_user_ids: HashSet::new(),
     }
@@ -251,6 +253,7 @@ async fn first_message_sends_email_invite_to_non_existing_users() {
         participants: &participants,
         thread_participants: &[],
         thread_parent_sender_id: None,
+        has_attachments: false,
         sender_profile_picture_url: None,
         existing_user_ids,
     }

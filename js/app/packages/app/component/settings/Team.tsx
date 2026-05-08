@@ -694,70 +694,70 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
             Create Team
           </Dialog.Title>
         </Panel.Header>
-        <Panel.Body scroll class="p-3 flex flex-col gap-3">
-              <div class="flex flex-col gap-1">
-                <div class="flex items-center justify-between">
-                  <label class="text-sm text-ink-muted">Team name</label>
-                  <span class={cn('text-xs', charCountColor())}>
-                    {teamName().length}/{TEAM_NAME_MAX_LENGTH}
-                  </span>
-                </div>
-                <input
-                  ref={teamNameInputRef}
-                  type="text"
-                  value={teamName()}
-                  onInput={(e) => handleTeamNameChange(e.currentTarget.value)}
-                  onBlur={() => validateTeamName()}
-                  placeholder="My Team"
-                  class={cn(
-                    'w-full px-3 py-2 text-sm border rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none',
-                    teamNameError()
-                      ? 'border-failure focus:border-failure'
-                      : 'border-edge-muted focus:border-accent/50'
-                  )}
-                />
-                <Show when={teamNameError()}>
-                  <p class="text-xs text-failure-ink">{teamNameError()}</p>
-                </Show>
-              </div>
-              <div class="flex flex-col gap-1">
-                <label class="text-sm text-ink-muted">
-                  Invite members (optional)
-                </label>
-                <InviteEmailsInput
-                  invites={invites()}
-                  onChange={setInvites}
-                  errors={inviteErrors()}
-                  onErrorsChange={setInviteErrors}
-                />
-              </div>
-              <div class="flex justify-end gap-1 pt-2">
-                <Button
-                  variant="ghost"
-                  class="rounded-xs"
-                  disabled={createTeamMutation.isPending}
-                  onClick={props.onClose}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="active"
-                  class="rounded-xs"
-                  disabled={
-                    createTeamMutation.isPending ||
-                    !!teamNameError() ||
-                    inviteErrors().some((e) => e !== undefined)
-                  }
-                  onClick={handleCreate}
-                >
-                  <Show
-                    when={createTeamMutation.isPending}
-                    fallback="Create Team"
-                  >
-                    <SpinnerIcon class="size-4 animate-spin" />
-                  </Show>
-                </Button>
-              </div>
+        <Panel.Body class="p-3 flex flex-col gap-3">
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center justify-between">
+              <label class="text-sm text-ink-muted">Team name</label>
+              <span class={cn('text-xs', charCountColor())}>
+                {teamName().length}/{TEAM_NAME_MAX_LENGTH}
+              </span>
+            </div>
+            <input
+            ref={teamNameInputRef}
+            type="text"
+            value={teamName()}
+            onInput={(e) => handleTeamNameChange(e.currentTarget.value)}
+            onBlur={() => validateTeamName()}
+            placeholder="My Team"
+            class={cn(
+              'w-full px-3 py-2 text-sm border rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none',
+              teamNameError()
+              ? 'border-failure focus:border-failure'
+              : 'border-edge-muted focus:border-accent/50'
+            )}
+            />
+            <Show when={teamNameError()}>
+              <p class="text-xs text-failure-ink">{teamNameError()}</p>
+            </Show>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-sm text-ink-muted">
+              Invite members (optional)
+            </label>
+            <InviteEmailsInput
+            invites={invites()}
+            onChange={setInvites}
+            errors={inviteErrors()}
+            onErrorsChange={setInviteErrors}
+            />
+          </div>
+          <div class="flex justify-end gap-1 pt-2">
+            <Button
+              variant="ghost"
+              class="rounded-xs"
+              disabled={createTeamMutation.isPending}
+              onClick={props.onClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="active"
+              class="rounded-xs"
+              disabled={
+                createTeamMutation.isPending ||
+                !!teamNameError() ||
+                inviteErrors().some((e) => e !== undefined)
+              }
+              onClick={handleCreate}
+            >
+              <Show
+                when={createTeamMutation.isPending}
+                fallback="Create Team"
+              >
+                <SpinnerIcon class="size-4 animate-spin" />
+              </Show>
+            </Button>
+          </div>
         </Panel.Body>
       </Panel>
     </Dialog>
@@ -1009,130 +1009,129 @@ function TeamManagement(props: {
           </Show>
         </Panel.Header>
 
-        <Panel.Body class="flex flex-col h-full overflow-hidden">
-
-      <div class="flex items-center px-2 h-15.25 border-b border-edge-muted shrink-0">
-        <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2">
-          <span class="text-sm text-ink-muted">Name</span>
-          <Show
-            when={isOwner()}
-            fallback={<span class="text-sm text-ink">{props.teamName}</span>}
-          >
-            <div class="flex items-center gap-2">
-              <input
-                type="text"
-                value={teamNameValue()}
-                onInput={(e) => setEditingTeamName(e.currentTarget.value)}
-                placeholder="Enter team name"
-                class="text-sm bg-input border-none outline-none text-ink text-right w-48"
-              />
-              <Show when={hasTeamNameChanged()}>
-                <div class="flex items-center gap-1 shrink-0">
-                  <Tooltip tooltip="Save">
-                    <Button
-                      variant="active"
-                      size="icon-sm"
-                      class="rounded-xs"
-                      disabled={
-                        patchTeamMutation.isPending ||
-                        !editingTeamName()?.trim()
-                      }
-                      onClick={handleSaveTeamName}
-                    >
-                      <Show
-                        when={patchTeamMutation.isPending}
-                        fallback={<CheckIcon class="size-4" />}
-                      >
-                        <SpinnerIcon class="size-4 animate-spin" />
-                      </Show>
-                    </Button>
-                  </Tooltip>
-                  <Tooltip tooltip="Cancel">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      class="rounded-xs"
-                      disabled={patchTeamMutation.isPending}
-                      onClick={handleCancelTeamNameEdit}
-                    >
-                      <XIcon class="size-4" />
-                    </Button>
-                  </Tooltip>
+        <Panel.Body scroll>
+          <div class="flex items-center px-2 h-15.25 border-b border-edge-muted shrink-0">
+            <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2">
+              <span class="text-sm text-ink-muted">Name</span>
+              <Show
+                when={isOwner()}
+                fallback={<span class="text-sm text-ink">{props.teamName}</span>}
+              >
+                <div class="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={teamNameValue()}
+                    onInput={(e) => setEditingTeamName(e.currentTarget.value)}
+                    placeholder="Enter team name"
+                    class="text-sm bg-input border-none outline-none text-ink text-right w-48"
+                  />
+                  <Show when={hasTeamNameChanged()}>
+                    <div class="flex items-center gap-1 shrink-0">
+                      <Tooltip tooltip="Save">
+                        <Button
+                          variant="active"
+                          size="icon-sm"
+                          class="rounded-xs"
+                          disabled={
+                            patchTeamMutation.isPending ||
+                            !editingTeamName()?.trim()
+                          }
+                          onClick={handleSaveTeamName}
+                        >
+                          <Show
+                            when={patchTeamMutation.isPending}
+                            fallback={<CheckIcon class="size-4" />}
+                          >
+                            <SpinnerIcon class="size-4 animate-spin" />
+                          </Show>
+                        </Button>
+                      </Tooltip>
+                      <Tooltip tooltip="Cancel">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          class="rounded-xs"
+                          disabled={patchTeamMutation.isPending}
+                          onClick={handleCancelTeamNameEdit}
+                        >
+                          <XIcon class="size-4" />
+                        </Button>
+                      </Tooltip>
+                    </div>
+                  </Show>
                 </div>
               </Show>
             </div>
-          </Show>
-        </div>
-      </div>
+          </div>
 
-      <div class="flex flex-col flex-1 overflow-hidden">
-        <section class="flex flex-col min-h-0 flex-1">
-          <Show
-            when={!teamQuery.isLoading}
-            fallback={
-              <div class="animate-pulse bg-ink-extra-muted rounded h-16" />
-            }
-          >
-            <div class="overflow-y-auto min-h-0" style="scrollbar-width: none;">
-              <For each={members()}>
-                {(member) => (
-                  <MemberRow
-                    member={member}
-                    isOwner={isOwner()}
-                    isCurrentUser={member.user_id === userId()}
-                    onRemove={() => setShowRemoveModal(member)}
-                    onTierChange={(newTier) => {
-                      if (!props.teamId) return;
-                      void toast.promise(
-                        patchTierMutation.mutateAsync({
+        <div class="flex flex-col">
+          <section class="flex flex-col">
+            <Show
+              when={!teamQuery.isLoading}
+              fallback={
+                <div class="animate-pulse bg-ink-extra-muted rounded h-16" />
+              }
+            >
+              <div>
+                <For each={members()}>
+                  {(member) => (
+                    <MemberRow
+                      member={member}
+                      isOwner={isOwner()}
+                      isCurrentUser={member.user_id === userId()}
+                      onRemove={() => setShowRemoveModal(member)}
+                      onTierChange={(newTier) => {
+                        if (!props.teamId) return;
+                        void toast.promise(
+                          patchTierMutation.mutateAsync({
+                            teamId: props.teamId,
+                            request: {
+                              team_user_id: member.user_id,
+                              new_tier: newTier,
+                            },
+                          }),
+                          {
+                            loading: 'Updating member tier...',
+                            success: 'Member tier updated',
+                            error: 'Failed to update member tier',
+                          }
+                        );
+                      }}
+                      onRoleChange={(newRole) => {
+                        if (!props.teamId) return;
+                        patchTeamMutation.mutate({
                           teamId: props.teamId,
                           request: {
-                            team_user_id: member.user_id,
-                            new_tier: newTier,
+                            user_role_updates: [
+                              { team_user_id: member.user_id, role: newRole },
+                            ],
                           },
-                        }),
-                        {
-                          loading: 'Updating member tier...',
-                          success: 'Member tier updated',
-                          error: 'Failed to update member tier',
-                        }
-                      );
-                    }}
-                    onRoleChange={(newRole) => {
-                      if (!props.teamId) return;
-                      patchTeamMutation.mutate({
-                        teamId: props.teamId,
-                        request: {
-                          user_role_updates: [
-                            { team_user_id: member.user_id, role: newRole },
-                          ],
-                        },
-                      });
-                    }}
-                  />
-                )}
-              </For>
-            </div>
-          </Show>
-        </section>
-
-        <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
-          <section class="px-6 py-4 shrink-0 border-t border-edge-muted">
-            <h3 class="text-sm font-medium mb-2">Pending Invites</h3>
-            <div class="border border-edge rounded-sm px-3">
-              <For each={invitesQuery.data?.invites ?? []}>
-                {(invite) => (
-                  <InviteRow
-                    invite={invite}
-                    isOwner={isOwner()}
-                    onCancel={() => setShowCancelInviteModal(invite)}
-                  />
-                )}
-              </For>
-            </div>
+                        });
+                      }}
+                    />
+                  )}
+                </For>
+              </div>
+            </Show>
           </section>
-        </Show>
-      </div>
+
+          <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
+            <section class="px-6 py-4 border-t border-edge-muted">
+              <h3 class="text-sm font-medium mb-2">Pending Invites</h3>
+              <div class="border border-edge rounded-sm px-3">
+                <For each={invitesQuery.data?.invites ?? []}>
+                  {(invite) => (
+                    <InviteRow
+                      invite={invite}
+                      isOwner={isOwner()}
+                      onCancel={() => setShowCancelInviteModal(invite)}
+                    />
+                  )}
+                </For>
+              </div>
+            </section>
+          </Show>
+        </div>
       </Panel.Body>
 
       <Dialog
@@ -1152,49 +1151,49 @@ function TeamManagement(props: {
               Delete Team
             </Dialog.Title>
           </Panel.Header>
-          <Panel.Body scroll class="p-3 flex flex-col gap-3">
-                <p>
-                  Are you sure you want to delete{' '}
-                  <span class="font-medium">{props.teamName}</span>? This action
-                  cannot be undone and all team members will lose access.
-                </p>
-                <p class="text-sm text-ink-muted">
-                  Type{' '}
-                  <span class="font-medium text-ink">
-                    {deleteConfirmationPhrase()}
-                  </span>{' '}
-                  to confirm.
-                </p>
-                <input
-                  type="text"
-                  value={deleteConfirmation()}
-                  onInput={(e) => setDeleteConfirmation(e.currentTarget.value)}
-                  placeholder={deleteConfirmationPhrase()}
-                  class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
-                />
-                <div class="flex justify-end gap-1 pt-2">
-                  <Button
-                    variant="ghost"
-                    class="rounded-xs"
-                    disabled={deleteTeamMutation.isPending}
-                    onClick={() => handleDeleteTeamModalClose(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="danger"
-                    class="rounded-xs"
-                    disabled={!canDeleteTeam() || deleteTeamMutation.isPending}
-                    onClick={handleDeleteTeam}
-                  >
-                    <Show
-                      when={deleteTeamMutation.isPending}
-                      fallback="Delete Team"
-                    >
-                      <SpinnerIcon class="size-4 animate-spin" />
-                    </Show>
-                  </Button>
-                </div>
+          <Panel.Body class="p-3 flex flex-col gap-3">
+            <p>
+              Are you sure you want to delete{' '}
+              <span class="font-medium">{props.teamName}</span>? This action
+              cannot be undone and all team members will lose access.
+            </p>
+            <p class="text-sm text-ink-muted">
+              Type{' '}
+              <span class="font-medium text-ink">
+                {deleteConfirmationPhrase()}
+              </span>{' '}
+              to confirm.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmation()}
+              onInput={(e) => setDeleteConfirmation(e.currentTarget.value)}
+              placeholder={deleteConfirmationPhrase()}
+              class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+            />
+            <div class="flex justify-end gap-1 pt-2">
+              <Button
+                variant="ghost"
+                class="rounded-xs"
+                disabled={deleteTeamMutation.isPending}
+                onClick={() => handleDeleteTeamModalClose(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                class="rounded-xs"
+                disabled={!canDeleteTeam() || deleteTeamMutation.isPending}
+                onClick={handleDeleteTeam}
+              >
+                <Show
+                  when={deleteTeamMutation.isPending}
+                  fallback="Delete Team"
+                >
+                  <SpinnerIcon class="size-4 animate-spin" />
+                </Show>
+              </Button>
+            </div>
           </Panel.Body>
         </Panel>
       </Dialog>
@@ -1216,34 +1215,34 @@ function TeamManagement(props: {
               Remove Member
             </Dialog.Title>
           </Panel.Header>
-          <Panel.Body scroll class="p-3 flex flex-col gap-3">
-                <p>
-                  Are you sure you want to remove{' '}
-                  <Show when={showRemoveModal()}>
-                    {(member) => <MemberName memberId={member().user_id} />}
-                  </Show>{' '}
-                  from the team?
-                </p>
-                <div class="flex justify-end gap-1 pt-2">
-                  <Button
-                    variant="ghost"
-                    class="rounded-xs"
-                    disabled={removeUserMutation.isPending}
-                    onClick={() => setShowRemoveModal(null)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="danger"
-                    class="rounded-xs"
-                    disabled={removeUserMutation.isPending}
-                    onClick={handleRemoveMember}
-                  >
-                    <Show when={removeUserMutation.isPending} fallback="Remove">
-                      <SpinnerIcon class="size-4 animate-spin" />
-                    </Show>
-                  </Button>
-                </div>
+          <Panel.Body class="p-3 flex flex-col gap-3">
+            <p>
+              Are you sure you want to remove{' '}
+              <Show when={showRemoveModal()}>
+                {(member) => <MemberName memberId={member().user_id} />}
+              </Show>{' '}
+              from the team?
+            </p>
+            <div class="flex justify-end gap-1 pt-2">
+              <Button
+                variant="ghost"
+                class="rounded-xs"
+                disabled={removeUserMutation.isPending}
+                onClick={() => setShowRemoveModal(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                class="rounded-xs"
+                disabled={removeUserMutation.isPending}
+                onClick={handleRemoveMember}
+              >
+                <Show when={removeUserMutation.isPending} fallback="Remove">
+                  <SpinnerIcon class="size-4 animate-spin" />
+                </Show>
+              </Button>
+            </div>
           </Panel.Body>
         </Panel>
       </Dialog>
@@ -1265,7 +1264,7 @@ function TeamManagement(props: {
               Cancel Invitation
             </Dialog.Title>
           </Panel.Header>
-          <Panel.Body scroll class="p-3 flex flex-col gap-3">
+          <Panel.Body class="p-3 flex flex-col gap-3">
                 <p>
                   Are you sure you want to cancel the invitation for{' '}
                   <span class="font-medium">
@@ -1317,42 +1316,43 @@ function TeamManagement(props: {
               Invite to Team
             </Dialog.Title>
           </Panel.Header>
-          <Panel.Body scroll class="p-3 flex flex-col gap-3">
-                <InviteEmailsInput
-                  invites={invites()}
-                  onChange={setInvites}
-                  errors={inviteErrors()}
-                  onErrorsChange={setInviteErrors}
-                />
-                <div class="flex justify-end gap-1 pt-2">
-                  <Button
-                    variant="ghost"
-                    class="rounded-xs"
-                    disabled={inviteToTeamMutation.isPending}
-                    onClick={() => handleInviteModalClose(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant={hasValidInvites() ? 'active' : 'ghost'}
-                    class="rounded-xs"
-                    disabled={
-                      !hasValidInvites() || inviteToTeamMutation.isPending
-                    }
-                    onClick={handleInvite}
-                  >
-                    <Show
-                      when={inviteToTeamMutation.isPending}
-                      fallback={
-                        invites().length > 1
-                          ? `Send ${invites().length} Invites`
-                          : 'Send Invite'
-                      }
-                    >
-                      <SpinnerIcon class="size-4 animate-spin" />
-                    </Show>
-                  </Button>
-                </div>
+
+          <Panel.Body class="p-3 flex flex-col gap-3">
+            <InviteEmailsInput
+              invites={invites()}
+              onChange={setInvites}
+              errors={inviteErrors()}
+              onErrorsChange={setInviteErrors}
+            />
+            <div class="flex justify-end gap-1 pt-2">
+              <Button
+                variant="ghost"
+                class="rounded-xs"
+                disabled={inviteToTeamMutation.isPending}
+                onClick={() => handleInviteModalClose(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant={hasValidInvites() ? 'active' : 'ghost'}
+                class="rounded-xs"
+                disabled={
+                  !hasValidInvites() || inviteToTeamMutation.isPending
+                }
+                onClick={handleInvite}
+              >
+                <Show
+                  when={inviteToTeamMutation.isPending}
+                  fallback={
+                    invites().length > 1
+                      ? `Send ${invites().length} Invites`
+                      : 'Send Invite'
+                  }
+                >
+                  <SpinnerIcon class="size-4 animate-spin" />
+                </Show>
+              </Button>
+            </div>
           </Panel.Body>
         </Panel>
       </Dialog>
@@ -1395,15 +1395,13 @@ function TeamContent() {
 
 export function Team() {
   return (
-    <div
-      class="h-full overflow-hidden flex justify-center p-2"
-    >
+    <div class="h-full overflow-hidden flex justify-center p-2">
       <div class="max-w-200 size-full">
         <Panel depth={2} class="h-full overflow-hidden text-ink">
-                  <Suspense fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />}>
-                    <TeamContent />
-                  </Suspense>
-                </Panel>
+            <Suspense fallback={<div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />}>
+              <TeamContent />
+            </Suspense>
+          </Panel>
       </div>
     </div>
   );

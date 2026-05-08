@@ -8,8 +8,9 @@ const THUMB_HEIGHT = 200;
 const THUMB_INSET = (GUTTER_WIDTH - THUMB_WIDTH) * 0.5;
 
 export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [visible, setVisible] = createSignal(false);
   const [translateY, setTranslateY] = createSignal(THUMB_INSET);
+  const [visible, setVisible] = createSignal(false);
+
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
   let contentRef!: HTMLDivElement;
   let gutterRef!: HTMLDivElement;
@@ -22,6 +23,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   }
 
   function reveal() {
+    if (scrollRef.scrollHeight <= scrollRef.clientHeight) { return; }
     setVisible(true);
     clearTimeout(hideTimer);
     hideTimer = setTimeout(() => setVisible(false), HIDE_DELAY);

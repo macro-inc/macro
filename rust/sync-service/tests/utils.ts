@@ -16,9 +16,15 @@ export const sleep = (millis) => new Promise(resolve => setTimeout(resolve, mill
 
 async function migrateDatabase(mf: Miniflare) {
   const db = await mf.getD1Database("USER_PEER_MAPPING");
-  let migration = fs.readFileSync("database/user-peer-mapping/migrations/0001_add_users.sql").toString();
-  const stmt = db.prepare(migration);
-  await stmt.all();
+  const migration = fs.readFileSync("database/user-peer-mapping/migrations/0001_add_users.sql", "utf8");
+  const statements = migration
+    .split(";")
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.length > 0);
+
+  for (const statement of statements) {
+    await db.prepare(statement).run();
+  }
 }
 
 export async function setupMiniflare() {
@@ -55,8 +61,7 @@ export async function setupMiniflare() {
     compatibilityDate: '2025-03-05'
   });
 
-  migrateDatabase(mf);
-
+  await migrateDatabase(mf);
 
   return mf;
 }
