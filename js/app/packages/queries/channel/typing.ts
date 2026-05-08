@@ -1,8 +1,6 @@
 import { commsServiceClient } from '@service-comms/client';
 import { useMutation } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
-import { createMutationNonce } from '../nonce';
-import { ChannelNonceKeys } from './keys';
 
 export const TYPING_INDICATOR_TIMEOUT_MS = 8_000;
 
@@ -118,6 +116,12 @@ function setTypingTimeout(
   removeTypingTimeout(channelId, userId, threadId);
 
   const timeout = setTimeout(() => {
+    const currentTimeout = typingTimeouts
+      .get(channelId)
+      ?.get(threadId)
+      ?.get(userId);
+    if (currentTimeout !== timeout) return;
+
     removeTypingTimeout(channelId, userId, threadId);
     removeTypingUser(channelId, userId, threadId);
   }, TYPING_INDICATOR_TIMEOUT_MS);
@@ -213,11 +217,6 @@ type PostTypingUpdateVars = {
   threadId?: string;
 };
 
-const typingNonce = createMutationNonce<PostTypingUpdateVars>(
-  ChannelNonceKeys.TYPING,
-  (v) => `${v.channelId}:${v.action}:${v.threadId ?? 'main'}`
-);
-
 export function usePostTypingUpdateMutation() {
   return useMutation(() => ({
     gcTime: 0,
@@ -226,18 +225,7 @@ export function usePostTypingUpdateMutation() {
         channel_id: vars.channelId,
         action: vars.action,
         thread_id: vars.threadId,
-        nonce: typingNonce.use(vars),
       });
-    },
-    onMutate: (vars: PostTypingUpdateVars) => {
-      typingNonce.prepare(vars);
-    },
-    onSettled: (
-      _data: unknown,
-      _error: Error | null,
-      vars: PostTypingUpdateVars
-    ) => {
-      typingNonce.cleanup(vars);
     },
     onError: (error: Error) => {
       console.error('failed to post typing update', error);
