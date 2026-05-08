@@ -12,6 +12,7 @@ use axum::{
 };
 use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
+use models_search::channel::ChannelSortTimestamp;
 use models_search::unified::SearchEntityFilters;
 use models_search::{
     SearchOn, SimpleSearchResponse,
@@ -19,7 +20,7 @@ use models_search::{
 };
 use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
 use opensearch_client::search::model::SearchHit;
-use opensearch_client::search::unified::UnifiedSearchArgs;
+use opensearch_client::search::unified::{ChannelSortMode, UnifiedSearchArgs};
 
 /// Identifies the source of a search result for cursor regeneration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -263,6 +264,11 @@ pub(in crate::api::search) async fn perform_unified_search(
     let project_cursor_for_search = project_cursor.clone();
     let content_cursor_for_search = content_cursor.clone();
 
+    let channel_sort_mode = match req.channel_sort_timestamp {
+        ChannelSortTimestamp::Message => ChannelSortMode::Message,
+        ChannelSortTimestamp::Thread => ChannelSortMode::Thread,
+    };
+
     let unified_search_args = UnifiedSearchArgs {
         user_id: user_id.as_ref().to_string(),
         page: 0, // With cursor-based pagination, we always start from "page 0" relative to cursor
@@ -270,6 +276,7 @@ pub(in crate::api::search) async fn perform_unified_search(
         cursor: content_cursor_for_search,
         match_type: match_type.to_string(),
         collapse,
+        channel_sort_mode,
         search_indices: {
             let mut indices = std::collections::HashSet::new();
             if should_include_documents

@@ -1,10 +1,12 @@
 use std::collections::HashSet;
 
+pub use crate::search::builder::ChannelSortMode;
+
 use crate::{
     Result,
     error::{OpensearchClientError, ResponseExt},
     search::{
-        builder::{SearchQueryConfig, search_after, updated_at_sort},
+        builder::{SearchQueryConfig, search_after, unified_sort},
         call_records::{
             CallRecordIndex, CallRecordQueryBuilder, CallRecordSearchArgs, CallRecordSearchConfig,
         },
@@ -63,6 +65,9 @@ pub struct UnifiedSearchArgs {
     pub chat_search_args: UnifiedChatSearchArgs,
     /// The call record search args. If None, we do not search call records
     pub call_record_search_args: UnifiedCallRecordSearchArgs,
+    /// Sort mode. Use [`ChannelSortMode::Thread`] when scoping to channel
+    /// content where pagination should follow thread order.
+    pub channel_sort_mode: ChannelSortMode,
 }
 
 impl From<UnifiedSearchArgs> for DocumentSearchArgs {
@@ -504,7 +509,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     }
 
     // Build sort
-    let sort = updated_at_sort();
+    let sort = unified_sort(args.channel_sort_mode);
 
     for sort in sort {
         search_request_builder.add_sort(sort);
@@ -603,15 +608,52 @@ pub(crate) async fn search_unified(
     }
 
     let cursor = if has_more {
-        SearchCursorOption::NotDone(results.last().map(|last| SearchMethodCursor {
-            entity_id: last.entity_id,
-            updated_at: last.updated_at.unwrap_or(Utc::now()),
-        }))
+        let last_cursor = results
+            .last()
+            .and_then(|last| build_cursor_for_mode(last, args.channel_sort_mode));
+        SearchCursorOption::NotDone(last_cursor)
     } else {
         SearchCursorOption::Done
     };
 
     Ok((results, cursor))
+}
+
+/// Builds the cursor used as `search_after` for the next page.
+///
+/// In [`ChannelSortMode::Thread`] the sort produces `[effective_key_ms,
+/// message_id]`, so the cursor stores the effective-key ms in `updated_at` and
+/// the message_id in `entity_id` (re-using the slots whose semantics already
+/// match the cursor wire format `[long, string]`).
+fn build_cursor_for_mode(last: &SearchHit, mode: ChannelSortMode) -> Option<SearchMethodCursor> {
+    match mode {
+        ChannelSortMode::Message => Some(SearchMethodCursor {
+            entity_id: last.entity_id,
+            updated_at: last.updated_at.unwrap_or(Utc::now()),
+        }),
+        ChannelSortMode::Thread => {
+            let channel = match &last.goto {
+                Some(SearchGotoContent::Channels(ch)) => ch,
+                _ => return None,
+            };
+            let effective = channel.thread_id.unwrap_or(channel.channel_message_id);
+            let ms = uuidv7_unix_ms(effective)?;
+            Some(SearchMethodCursor {
+                entity_id: channel.channel_message_id,
+                updated_at: DateTime::from_timestamp_millis(ms)?,
+            })
+        }
+    }
+}
+
+/// Extracts the unix-ms timestamp from a uuidv7's first 48 bits.
+fn uuidv7_unix_ms(id: uuid::Uuid) -> Option<i64> {
+    let bytes = id.as_bytes();
+    let mut ms: i64 = 0;
+    for b in &bytes[..6] {
+        ms = (ms << 8) | (*b as i64);
+    }
+    Some(ms)
 }
 
 #[cfg(test)]

@@ -45,6 +45,25 @@ macro_rules! delegate_methods {
     };
 }
 
+/// Sort mode for unified search. Defaults to [`ChannelSortMode::Message`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ChannelSortMode {
+    /// Sort by sent_at_seconds/updated_at_seconds with entity_id as tiebreaker.
+    #[default]
+    Message,
+    /// Sort by ms timestamp extracted from thread_id (or message_id when null),
+    /// with message_id as tiebreaker. Both keys are uuidv7 (ms-precise).
+    Thread,
+}
+
+/// Builds the OpenSearch sort vec for unified search.
+pub(crate) fn unified_sort<'a>(mode: ChannelSortMode) -> Vec<SortType<'a>> {
+    match mode {
+        ChannelSortMode::Message => updated_at_sort(),
+        ChannelSortMode::Thread => thread_sort(),
+    }
+}
+
 /// Creates sort vec to sort by sent_at_seconds (preferred) or updated_at_seconds (fallback)
 /// with entity_id as a tiebreaker. Items without a timestamp are pushed to the end.
 pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
@@ -63,6 +82,38 @@ pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
             SortOrder::Desc,
         )),
         SortType::Field(FieldSort::new("entity_id", SortOrder::Asc)),
+    ]
+}
+
+/// Sort vec for channel content with thread-grouped ordering.
+///
+/// Primary key is the ms timestamp extracted from thread_id (or message_id when
+/// thread_id is missing). Both fields are uuidv7 strings whose first 12 hex
+/// digits encode unix-ms — Long.parseLong on that prefix gives the timestamp.
+/// Tiebreaker is message_id keyword DESC so multiple replies in the same
+/// thread paginate deterministically.
+pub(crate) fn thread_sort<'a>() -> Vec<SortType<'a>> {
+    vec![
+        SortType::ScriptSort(ScriptSort::new(
+            Script::new(
+                r#"if (doc.containsKey('thread_id') && doc['thread_id'].size() > 0) {
+                    String hex = doc['thread_id'].value.replace('-', '').substring(0, 12);
+                    return Long.parseLong(hex, 16);
+                } else if (doc.containsKey('message_id') && doc['message_id'].size() > 0 && doc['message_id'].value.length() >= 18) {
+                    String hex = doc['message_id'].value.replace('-', '').substring(0, 12);
+                    return Long.parseLong(hex, 16);
+                } else if (doc.containsKey('sent_at_seconds') && doc['sent_at_seconds'].size() > 0) {
+                    return doc['sent_at_seconds'].value.toInstant().toEpochMilli();
+                } else if (doc.containsKey('updated_at_seconds') && doc['updated_at_seconds'].size() > 0) {
+                    return doc['updated_at_seconds'].value.toInstant().toEpochMilli();
+                } else {
+                    return 0L;
+                }"#,
+            ),
+            ScriptSortType::Number,
+            SortOrder::Desc,
+        )),
+        SortType::Field(FieldSort::new("message_id", SortOrder::Desc).unmapped_type("keyword")),
     ]
 }
 

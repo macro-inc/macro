@@ -919,31 +919,30 @@ fn test_thread_sort_interleaves_threadless_messages_by_message_id() {
     let msg_in_thread_new: Uuid = "019d4b03-5500-7000-8000-000000000033".parse().unwrap();
     let top_msg_new: Uuid = "019d4b03-7000-7000-8000-000000000044".parse().unwrap();
 
-    let make_hit = |msg_id: Uuid,
-                    thread_id: Option<Uuid>|
-     -> opensearch_client::search::model::SearchHit {
-        opensearch_client::search::model::SearchHit {
-            entity_id: channel_uuid,
-            entity_type: SearchEntityType::Channels,
-            goto: Some(
-                opensearch_client::search::model::SearchGotoContent::Channels(
-                    opensearch_client::search::model::SearchGotoChannel {
-                        channel_message_id: msg_id,
-                        created_at: DateTime::from_timestamp(1000, 0).unwrap(),
-                        updated_at: DateTime::from_timestamp(1000, 0).unwrap(),
-                        thread_id,
-                        sender_id: "user1".to_string(),
-                    },
+    let make_hit =
+        |msg_id: Uuid, thread_id: Option<Uuid>| -> opensearch_client::search::model::SearchHit {
+            opensearch_client::search::model::SearchHit {
+                entity_id: channel_uuid,
+                entity_type: SearchEntityType::Channels,
+                goto: Some(
+                    opensearch_client::search::model::SearchGotoContent::Channels(
+                        opensearch_client::search::model::SearchGotoChannel {
+                            channel_message_id: msg_id,
+                            created_at: DateTime::from_timestamp(1000, 0).unwrap(),
+                            updated_at: DateTime::from_timestamp(1000, 0).unwrap(),
+                            thread_id,
+                            sender_id: "user1".to_string(),
+                        },
+                    ),
                 ),
-            ),
-            score: None,
-            highlight: Highlight {
-                content: vec!["test".to_string()],
-                ..Default::default()
-            },
-            updated_at: None,
-        }
-    };
+                score: None,
+                highlight: Highlight {
+                    content: vec!["test".to_string()],
+                    ..Default::default()
+                },
+                updated_at: None,
+            }
+        };
 
     // Scrambled input order; expected sort key per hit (thread_id.or(message_id)):
     //   top_msg_new           -> top_msg_new       (T7)  [threadless]

@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::search::builder::updated_at_sort;
 use chrono::Utc;
 use models_search_cursor::SearchMethodCursor;
 use opensearch_query_builder::ToOpenSearchJson;
@@ -454,6 +455,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             entity_id,
             updated_at: time,
         })),
+        channel_sort_mode: ChannelSortMode::default(),
     };
 
     let result = build_unified_search_request(&unified_search_args)?;
@@ -840,6 +842,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             entity_id,
             updated_at: time,
         })),
+        channel_sort_mode: ChannelSortMode::default(),
     };
 
     let result = build_unified_search_request(&unified_search_args)?;
@@ -959,4 +962,57 @@ fn test_build_unified_search_request_empty_indices() -> anyhow::Result<()> {
     assert_eq!(err, OpensearchClientError::EmptySearchIndices);
 
     Ok(())
+}
+
+#[test]
+fn test_thread_sort_emits_thread_id_or_message_id_script_and_message_id_tiebreaker() {
+    use crate::search::builder::thread_sort;
+    let sort = thread_sort();
+    let json: Vec<serde_json::Value> = sort.iter().map(|s| s.to_json()).collect();
+
+    assert_eq!(sort.len(), 2);
+
+    let primary = &json[0];
+    let script_source = primary["_script"]["script"]["source"]
+        .as_str()
+        .expect("primary sort should be a _script");
+    assert!(
+        script_source.contains("doc['thread_id']"),
+        "thread_id branch missing: {script_source}"
+    );
+    assert!(
+        script_source.contains("doc['message_id']"),
+        "message_id fallback missing: {script_source}"
+    );
+    assert!(
+        script_source.contains("Long.parseLong(hex, 16)"),
+        "should parse the uuidv7 ms prefix: {script_source}"
+    );
+    assert_eq!(primary["_script"]["order"], "desc");
+
+    let tiebreaker = &json[1];
+    assert_eq!(tiebreaker["message_id"]["order"], "desc");
+    assert_eq!(tiebreaker["message_id"]["unmapped_type"], "keyword");
+}
+
+#[test]
+fn test_unified_sort_thread_mode_matches_thread_sort() {
+    use crate::search::builder::{ChannelSortMode, thread_sort, unified_sort};
+    let from_unified: Vec<_> = unified_sort(ChannelSortMode::Thread)
+        .iter()
+        .map(|s| s.to_json())
+        .collect();
+    let from_thread: Vec<_> = thread_sort().iter().map(|s| s.to_json()).collect();
+    assert_eq!(from_unified, from_thread);
+}
+
+#[test]
+fn test_unified_sort_message_mode_matches_updated_at_sort() {
+    use crate::search::builder::{ChannelSortMode, unified_sort};
+    let from_unified: Vec<_> = unified_sort(ChannelSortMode::Message)
+        .iter()
+        .map(|s| s.to_json())
+        .collect();
+    let from_updated: Vec<_> = updated_at_sort().iter().map(|s| s.to_json()).collect();
+    assert_eq!(from_unified, from_updated);
 }
