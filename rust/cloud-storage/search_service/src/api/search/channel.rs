@@ -234,7 +234,7 @@ pub async fn handler(
 
     let args = ChannelSearchArgs {
         user_id: user_id.as_ref().to_string(),
-        page_size: page_size as u32,
+        page_size,
         match_type: req.match_type.to_string(),
         cursor: cursor_option,
         terms,
