@@ -212,7 +212,7 @@ pub(crate) enum UnifiedSearchIndex {
     ChannelMessage(ChannelMessageIndex),
     Document(DocumentIndex),
     Chat(ChatIndex),
-    Email(EmailIndex),
+    Email(Box<EmailIndex>),
     CallRecord(CallRecordIndex),
 }
 
@@ -334,37 +334,40 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     .updated_at_seconds
                     .and_then(|s| DateTime::from_timestamp(s, 0)),
             },
-            UnifiedSearchIndex::Email(a) => SearchHit {
-                entity_id: a.entity_id,
-                entity_type: SearchEntityType::Emails,
-                score: index.score,
-                highlight: index
-                    .highlight
-                    .map(|h| {
-                        parse_highlight_hit(
-                            h,
-                            Keys {
-                                title_key: EmailSearchConfig::TITLE_KEY,
-                                content_key: EmailSearchConfig::CONTENT_KEY,
-                            },
-                        )
-                    })
-                    .unwrap_or_default(),
-                goto: Some(SearchGotoContent::Emails(SearchGotoEmail {
-                    email_message_id: a.message_id,
-                    bcc: a.bcc,
-                    cc: a.cc,
-                    labels: a.labels,
-                    sent_at: a
+            UnifiedSearchIndex::Email(a) => {
+                let a = *a;
+                SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: SearchEntityType::Emails,
+                    score: index.score,
+                    highlight: index
+                        .highlight
+                        .map(|h| {
+                            parse_highlight_hit(
+                                h,
+                                Keys {
+                                    title_key: EmailSearchConfig::TITLE_KEY,
+                                    content_key: EmailSearchConfig::CONTENT_KEY,
+                                },
+                            )
+                        })
+                        .unwrap_or_default(),
+                    goto: Some(SearchGotoContent::Emails(SearchGotoEmail {
+                        email_message_id: a.message_id,
+                        bcc: a.bcc,
+                        cc: a.cc,
+                        labels: a.labels,
+                        sent_at: a
+                            .sent_at_seconds
+                            .and_then(|ts| DateTime::from_timestamp(ts, 0)),
+                        sender: a.sender,
+                        recipients: a.recipients,
+                    })),
+                    updated_at: a
                         .sent_at_seconds
-                        .and_then(|ts| DateTime::from_timestamp(ts, 0)),
-                    sender: a.sender,
-                    recipients: a.recipients,
-                })),
-                updated_at: a
-                    .sent_at_seconds
-                    .and_then(|s| DateTime::from_timestamp(s, 0)),
-            },
+                        .and_then(|s| DateTime::from_timestamp(s, 0)),
+                }
+            }
             UnifiedSearchIndex::Chat(a) => SearchHit {
                 entity_id: a.entity_id,
                 entity_type: SearchEntityType::Chats,
