@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::call_record::CallRecordSearchResponseItemWithMetadata;
-use crate::channel::ChannelSearchResponseItemWithMetadata;
+use crate::channel::{ChannelSearchResponseItemWithMetadata, ChannelSortTimestamp};
 use crate::chat::ChatSearchResponseItemWithMetadata;
 use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
@@ -88,6 +88,10 @@ pub struct UnifiedSearchRequest {
 
     #[schemars(skip)]
     pub collapse: Option<bool>,
+
+    /// Sort key for channel content search results. Defaults to `message`.
+    #[serde(default)]
+    pub channel_sort_timestamp: ChannelSortTimestamp,
 }
 
 /// Whether a [FileAssociation] is indexed by the search processing service.

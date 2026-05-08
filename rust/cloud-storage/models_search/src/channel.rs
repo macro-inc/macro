@@ -5,6 +5,19 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+/// Sort key for channel content search results.
+#[derive(
+    Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq, ToSchema, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelSortTimestamp {
+    /// Sort by message created_at DESC, message_id DESC tiebreaker.
+    #[default]
+    Message,
+    /// Sort by thread_id DESC, message_id DESC tiebreaker.
+    Thread,
+}
+
 /// A channel message match for a given channel id
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChannelSearchResult {

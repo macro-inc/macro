@@ -22,7 +22,12 @@ fn active_states_for(
 
 #[test]
 fn test_construct_search_result_empty_input() {
-    let result = construct_search_result(vec![], HashMap::new(), HashMap::new());
+    let result = construct_search_result(
+        vec![],
+        HashMap::new(),
+        HashMap::new(),
+        ChannelSortTimestamp::Message,
+    );
     assert!(result.is_ok());
     assert_eq!(result.unwrap().len(), 0);
 }
@@ -60,7 +65,13 @@ fn test_construct_search_result_single_channel() {
     );
 
     let states = active_states_for(&search_results);
-    let result = construct_search_result(search_results, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_id, channel_uuid);
@@ -143,7 +154,13 @@ fn test_construct_search_result_multiple_messages_same_channel() {
     );
 
     let states = active_states_for(&search_results);
-    let result = construct_search_result(search_results, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_id, channel_uuid);
@@ -226,7 +243,13 @@ fn test_construct_search_result_filters_messages_without_content() {
     );
 
     let states = active_states_for(&search_results);
-    let result = construct_search_result(search_results, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_message_search_results.len(), 2);
@@ -281,7 +304,13 @@ fn test_construct_search_result_filters_orphans_and_propagates_deleted_at() {
     states.insert(deleted_message_id, Some(deleted_at));
     // orphan_message_id intentionally omitted to simulate a hard-deleted row.
 
-    let result = construct_search_result(search_results, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     assert_eq!(result.len(), 1);
     let hits = &result[0].extra.channel_message_search_results;
@@ -368,7 +397,13 @@ fn test_channel_history_timestamps() {
 
     // Call the function under test
     let states = active_states_for(&input);
-    let result = construct_search_result(input, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        input,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     // Verify that timestamps were copied from the channel history
     assert_eq!(result.len(), 1);
@@ -410,7 +445,13 @@ fn test_channel_history_missing_entry() {
 
     // Call the function under test
     let states = active_states_for(&input);
-    let result = construct_search_result(input, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        input,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     // Channels without history info should not be returned
     assert_eq!(result.len(), 0);
@@ -445,7 +486,13 @@ fn test_channel_history_null_viewed_at() {
 
     // Call the function under test
     let states = active_states_for(&input);
-    let result = construct_search_result(input, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        input,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
@@ -592,12 +639,27 @@ fn test_sort_stability() {
     }
 
     let states = active_states_for(&input);
-    let result1 =
-        construct_search_result(input.clone(), channel_histories.clone(), states.clone()).unwrap();
-    let result2 =
-        construct_search_result(input.clone(), channel_histories.clone(), states.clone()).unwrap();
-    let result3 =
-        construct_search_result(input.clone(), channel_histories.clone(), states).unwrap();
+    let result1 = construct_search_result(
+        input.clone(),
+        channel_histories.clone(),
+        states.clone(),
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
+    let result2 = construct_search_result(
+        input.clone(),
+        channel_histories.clone(),
+        states.clone(),
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
+    let result3 = construct_search_result(
+        input.clone(),
+        channel_histories.clone(),
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     assert_eq!(result1.len(), 5);
     assert_eq!(result2.len(), 5);
@@ -665,7 +727,13 @@ fn test_construct_search_result_breaks_created_at_ties_by_message_id() {
     );
     let states = active_states_for(&search_results);
 
-    let result = construct_search_result(search_results, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
     let hits = &result[0].extra.channel_message_search_results;
 
     assert_eq!(hits.len(), 3);
@@ -684,4 +752,301 @@ fn test_construct_search_result_breaks_created_at_ties_by_message_id() {
         Some(earlier_msg),
         "tied: smaller uuidv7 last"
     );
+}
+
+#[test]
+fn test_thread_sort_orders_by_thread_id_desc() {
+    // With ChannelSortTimestamp::Thread, hits within a channel should be
+    // sorted by thread_id DESC, regardless of created_at.
+    let channel_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440000".parse().unwrap();
+
+    // Three messages from different threads (uuidv7 IDs, time-ordered).
+    // The created_at timestamps are intentionally reversed relative to thread
+    // order to confirm that Thread mode ignores created_at.
+    let old_thread: Uuid = "019d4b03-5000-7000-8000-000000000001".parse().unwrap();
+    let mid_thread: Uuid = "019d4b03-6000-7000-8000-000000000002".parse().unwrap();
+    let new_thread: Uuid = "019d4b03-7000-7000-8000-000000000003".parse().unwrap();
+
+    let msg_in_old: Uuid = "019d4b03-5100-7000-8000-000000000011".parse().unwrap();
+    let msg_in_mid: Uuid = "019d4b03-6100-7000-8000-000000000012".parse().unwrap();
+    let msg_in_new: Uuid = "019d4b03-7100-7000-8000-000000000013".parse().unwrap();
+
+    let make_hit = |msg_id: Uuid,
+                    thread_id: Uuid,
+                    created_at: DateTime<Utc>|
+     -> opensearch_client::search::model::SearchHit {
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_uuid,
+            entity_type: SearchEntityType::Channels,
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: msg_id,
+                        created_at,
+                        updated_at: created_at,
+                        thread_id: Some(thread_id),
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
+            score: None,
+            highlight: Highlight {
+                content: vec!["test".to_string()],
+                ..Default::default()
+            },
+            updated_at: None,
+        }
+    };
+
+    // Feed them in an order that differs from both created_at and thread_id.
+    let search_results = vec![
+        make_hit(
+            msg_in_mid,
+            mid_thread,
+            DateTime::from_timestamp(1000, 0).unwrap(),
+        ),
+        make_hit(
+            msg_in_new,
+            new_thread,
+            DateTime::from_timestamp(900, 0).unwrap(),
+        ),
+        make_hit(
+            msg_in_old,
+            old_thread,
+            DateTime::from_timestamp(1100, 0).unwrap(),
+        ),
+    ];
+
+    let mut channel_histories = HashMap::new();
+    channel_histories.insert(
+        channel_uuid,
+        create_channel_history(&channel_uuid.to_string()),
+    );
+    let states = active_states_for(&search_results);
+
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Thread,
+    )
+    .unwrap();
+    let hits = &result[0].extra.channel_message_search_results;
+
+    assert_eq!(hits.len(), 3);
+    assert_eq!(hits[0].message_id, Some(msg_in_new), "newest thread first");
+    assert_eq!(hits[1].message_id, Some(msg_in_mid), "middle thread second");
+    assert_eq!(hits[2].message_id, Some(msg_in_old), "oldest thread last");
+}
+
+#[test]
+fn test_thread_sort_falls_back_to_message_id_within_same_thread() {
+    // Two messages in the same thread should be ordered by message_id DESC.
+    let channel_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440000".parse().unwrap();
+    let thread_id: Uuid = "019d4b03-6000-7000-8000-000000000001".parse().unwrap();
+    let earlier_msg: Uuid = "019d4b03-6100-7000-8000-000000000011".parse().unwrap();
+    let later_msg: Uuid = "019d4b03-6200-7000-8000-000000000012".parse().unwrap();
+
+    let make_hit = |msg_id: Uuid| -> opensearch_client::search::model::SearchHit {
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_uuid,
+            entity_type: SearchEntityType::Channels,
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: msg_id,
+                        created_at: DateTime::from_timestamp(1000, 0).unwrap(),
+                        updated_at: DateTime::from_timestamp(1000, 0).unwrap(),
+                        thread_id: Some(thread_id),
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
+            score: None,
+            highlight: Highlight {
+                content: vec!["test".to_string()],
+                ..Default::default()
+            },
+            updated_at: None,
+        }
+    };
+
+    // Pass in wrong order.
+    let search_results = vec![make_hit(earlier_msg), make_hit(later_msg)];
+
+    let mut channel_histories = HashMap::new();
+    channel_histories.insert(
+        channel_uuid,
+        create_channel_history(&channel_uuid.to_string()),
+    );
+    let states = active_states_for(&search_results);
+
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Thread,
+    )
+    .unwrap();
+    let hits = &result[0].extra.channel_message_search_results;
+
+    assert_eq!(hits.len(), 2);
+    assert_eq!(
+        hits[0].message_id,
+        Some(later_msg),
+        "larger message_id first"
+    );
+    assert_eq!(
+        hits[1].message_id,
+        Some(earlier_msg),
+        "smaller message_id second"
+    );
+}
+
+#[test]
+fn test_thread_sort_interleaves_threadless_messages_by_message_id() {
+    // Threadless hits (thread_id = None) should fall back to their own
+    // message_id as the sort key, interleaving with threaded hits in
+    // chronological order rather than clustering at the end.
+    let channel_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440000".parse().unwrap();
+
+    // uuidv7s with explicit chronological prefixes (timestamp portion = first
+    // 12 hex chars = ms-resolution). Ordered T1..T7 oldest to newest.
+    let thread_old: Uuid = "019d4b03-1000-7000-8000-000000000001".parse().unwrap();
+    let msg_in_thread_old: Uuid = "019d4b03-1500-7000-8000-000000000011".parse().unwrap();
+    let top_msg_mid: Uuid = "019d4b03-3000-7000-8000-000000000022".parse().unwrap();
+    let thread_new: Uuid = "019d4b03-5000-7000-8000-000000000003".parse().unwrap();
+    let msg_in_thread_new: Uuid = "019d4b03-5500-7000-8000-000000000033".parse().unwrap();
+    let top_msg_new: Uuid = "019d4b03-7000-7000-8000-000000000044".parse().unwrap();
+
+    let make_hit = |msg_id: Uuid,
+                    thread_id: Option<Uuid>|
+     -> opensearch_client::search::model::SearchHit {
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_uuid,
+            entity_type: SearchEntityType::Channels,
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: msg_id,
+                        created_at: DateTime::from_timestamp(1000, 0).unwrap(),
+                        updated_at: DateTime::from_timestamp(1000, 0).unwrap(),
+                        thread_id,
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
+            score: None,
+            highlight: Highlight {
+                content: vec!["test".to_string()],
+                ..Default::default()
+            },
+            updated_at: None,
+        }
+    };
+
+    // Scrambled input order; expected sort key per hit (thread_id.or(message_id)):
+    //   top_msg_new           -> top_msg_new       (T7)  [threadless]
+    //   msg_in_thread_new     -> thread_new        (T5)
+    //   top_msg_mid           -> top_msg_mid       (T3)  [threadless]
+    //   msg_in_thread_old     -> thread_old        (T1)
+    let search_results = vec![
+        make_hit(msg_in_thread_new, Some(thread_new)),
+        make_hit(top_msg_mid, None),
+        make_hit(msg_in_thread_old, Some(thread_old)),
+        make_hit(top_msg_new, None),
+    ];
+
+    let mut channel_histories = HashMap::new();
+    channel_histories.insert(
+        channel_uuid,
+        create_channel_history(&channel_uuid.to_string()),
+    );
+    let states = active_states_for(&search_results);
+
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Thread,
+    )
+    .unwrap();
+    let hits = &result[0].extra.channel_message_search_results;
+
+    assert_eq!(hits.len(), 4);
+    assert_eq!(
+        hits[0].message_id,
+        Some(top_msg_new),
+        "newest threadless message first"
+    );
+    assert_eq!(
+        hits[1].message_id,
+        Some(msg_in_thread_new),
+        "newer thread interleaved second"
+    );
+    assert_eq!(
+        hits[2].message_id,
+        Some(top_msg_mid),
+        "older threadless message third"
+    );
+    assert_eq!(
+        hits[3].message_id,
+        Some(msg_in_thread_old),
+        "older thread last"
+    );
+}
+
+#[test]
+fn test_thread_sort_threadless_message_id_ties_break_by_message_id() {
+    // Two threadless hits with no thread_id: primary key = message_id, and the
+    // tiebreaker also = message_id (collapses to a single message_id DESC sort).
+    let channel_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440000".parse().unwrap();
+    let earlier_msg: Uuid = "019d4b03-1000-7000-8000-000000000001".parse().unwrap();
+    let later_msg: Uuid = "019d4b03-2000-7000-8000-000000000002".parse().unwrap();
+
+    let make_hit = |msg_id: Uuid| -> opensearch_client::search::model::SearchHit {
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_uuid,
+            entity_type: SearchEntityType::Channels,
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: msg_id,
+                        created_at: DateTime::from_timestamp(1000, 0).unwrap(),
+                        updated_at: DateTime::from_timestamp(1000, 0).unwrap(),
+                        thread_id: None,
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
+            score: None,
+            highlight: Highlight {
+                content: vec!["test".to_string()],
+                ..Default::default()
+            },
+            updated_at: None,
+        }
+    };
+
+    let search_results = vec![make_hit(earlier_msg), make_hit(later_msg)];
+
+    let mut channel_histories = HashMap::new();
+    channel_histories.insert(
+        channel_uuid,
+        create_channel_history(&channel_uuid.to_string()),
+    );
+    let states = active_states_for(&search_results);
+
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Thread,
+    )
+    .unwrap();
+    let hits = &result[0].extra.channel_message_search_results;
+
+    assert_eq!(hits.len(), 2);
+    assert_eq!(hits[0].message_id, Some(later_msg));
+    assert_eq!(hits[1].message_id, Some(earlier_msg));
 }

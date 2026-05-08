@@ -7,6 +7,7 @@ use crate::api::context::SearchHandlerState;
 use model::comms::ChannelHistoryInfo;
 use models_search::channel::{
     ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
+    ChannelSortTimestamp,
 };
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
@@ -17,6 +18,7 @@ pub(in crate::api::search) async fn enrich_channels(
     ctx: &SearchHandlerState,
     user_id: &str,
     results: Vec<opensearch_client::search::model::SearchHit>,
+    sort_timestamp: ChannelSortTimestamp,
 ) -> Result<Vec<ChannelSearchResponseItemWithMetadata>, SearchError> {
     let results: Vec<opensearch_client::search::model::SearchHit> = results
         .into_iter()
@@ -60,8 +62,9 @@ pub(in crate::api::search) async fn enrich_channels(
     .map_err(SearchError::InternalError)?;
 
     // Construct enriched results
-    let enriched_results = construct_search_result(results, channel_histories, message_states)
-        .map_err(SearchError::InternalError)?;
+    let enriched_results =
+        construct_search_result(results, channel_histories, message_states, sort_timestamp)
+            .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
 }
@@ -70,6 +73,7 @@ pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     channel_histories: HashMap<Uuid, ChannelHistoryInfo>,
     message_states: HashMap<Uuid, Option<DateTime<Utc>>>,
+    sort_timestamp: ChannelSortTimestamp,
 ) -> anyhow::Result<Vec<ChannelSearchResponseItemWithMetadata>> {
     // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
     let entity_id_hit_map: IndexMap<sqlx::types::Uuid, Vec<ChannelSearchResult>> = search_results
@@ -114,15 +118,29 @@ pub fn construct_search_result(
     let result: Vec<ChannelSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
         .filter_map(|(entity_id, mut hits)| {
-            // OpenSearch sorts content matches by created_at DESC, but ties on the
-            // second resolution are non-deterministic. message_id is uuidv7
-            // (time-ordered), so it can be used as a tiebreaker. Sort DESC to keep newer
-            // messages first, matching the primary sort.
-            hits.sort_by(|a, b| {
-                b.created_at
-                    .cmp(&a.created_at)
-                    .then_with(|| b.message_id.cmp(&a.message_id))
-            });
+            // message_id is uuidv7 so it provides a deterministic tiebreaker
+            // when the primary key (created_at or thread_id) ties.
+            match sort_timestamp {
+                ChannelSortTimestamp::Message => {
+                    hits.sort_by(|a, b| {
+                        b.created_at
+                            .cmp(&a.created_at)
+                            .then_with(|| b.message_id.cmp(&a.message_id))
+                    });
+                }
+                ChannelSortTimestamp::Thread => {
+                    // For threadless hits, fall back to message_id as the primary
+                    // key so they interleave with threaded hits chronologically
+                    // (both are uuidv7 and globally comparable at ms precision).
+                    hits.sort_by(|a, b| {
+                        let a_key = a.thread_id.or(a.message_id);
+                        let b_key = b.thread_id.or(b.message_id);
+                        b_key
+                            .cmp(&a_key)
+                            .then_with(|| b.message_id.cmp(&a.message_id))
+                    });
+                }
+            }
 
             if let Some(info) = channel_histories.get(&entity_id) {
                 let info = info.clone();

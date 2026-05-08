@@ -1,6 +1,7 @@
 //! This module is responsible for enriching search results with metadata
 
 use models_opensearch::SearchEntityType;
+use models_search::channel::ChannelSortTimestamp;
 use models_search::unified::UnifiedSearchResponseItem;
 use opensearch_client::search::model::SearchHit;
 
@@ -13,7 +14,7 @@ use crate::api::{
     },
 };
 
-/// Enriches search results with metadat and converts to UnifiedSearchResponseItem
+/// Enriches search results with metadata and converts to UnifiedSearchResponseItem
 #[tracing::instrument(skip(ctx, results), fields(result_count = results.len()), err)]
 pub async fn enrich_search_response(
     ctx: &SearchHandlerState,
@@ -21,6 +22,7 @@ pub async fn enrich_search_response(
     results: Vec<SearchHit>,
     entity_type: SearchEntityType,
     search_term: Option<&str>,
+    channel_sort_timestamp: ChannelSortTimestamp,
 ) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
     match entity_type {
         SearchEntityType::Documents => {
@@ -38,7 +40,7 @@ pub async fn enrich_search_response(
                 .collect())
         }
         SearchEntityType::Channels => {
-            let response = enrich_channels(ctx, user_id, results).await?;
+            let response = enrich_channels(ctx, user_id, results, channel_sort_timestamp).await?;
             Ok(response
                 .into_iter()
                 .map(UnifiedSearchResponseItem::Channel)
