@@ -454,6 +454,10 @@
                 "$ref": "#/components/schemas/SearchOn",
                 "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
               },
+              "sort": {
+                "$ref": "#/components/schemas/ChannelSortTimestamp",
+                "description": "Sort key for results. Defaults to `message`."
+              },
               "terms": {
                 "type": ["array", "null"],
                 "items": {
@@ -470,6 +474,10 @@
         "description": "The document search response object",
         "required": ["results"],
         "properties": {
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Base64-encoded cursor for the next page; `None` when exhausted."
+          },
           "results": {
             "type": "array",
             "items": {
@@ -584,6 +592,11 @@
             "description": "When the channel message was last updated\nThis is only prsent if the search result is on the message content"
           }
         }
+      },
+      "ChannelSortTimestamp": {
+        "type": "string",
+        "description": "Sort key for channel content search results.",
+        "enum": ["message", "thread"]
       },
       "ChatFilters": {
         "type": "object",

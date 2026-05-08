@@ -60,6 +60,7 @@ impl IntoResponse for SearchError {
             | SearchError::InvalidQuerySize
             | SearchError::InvalidCursor
             | SearchError::NoQueryOrTermsProvided => StatusCode::BAD_REQUEST,
+            SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,
             SearchError::Search(_) | SearchError::NameSearch(_) | SearchError::InternalError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }

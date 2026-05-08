@@ -175,6 +175,9 @@ pub async fn search_project_names<'a>(
     if term.is_empty() {
         return Err(NameSearchError::EmptySearchTerm);
     }
+    if cursor.as_ref().is_some_and(|c| c.as_updated_at().is_none()) {
+        return Err(NameSearchError::IncompatibleCursor);
+    }
 
     let search_pattern = format!("%{term}%");
     let highlight_pattern = format!("({})", escape_regex(&term));
