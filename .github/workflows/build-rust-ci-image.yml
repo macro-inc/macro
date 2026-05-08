@@ -4,13 +4,13 @@ on:
   workflow_dispatch: {}
 
 # Create a GitHub-hosted larger image-generation runner with this label before
-# running this workflow. After it succeeds, configure linux-extra-beefy to use
-# the generated `macro-rust-ci` custom image.
+# running this workflow. Keep its CPU/RAM/disk size at or below the smallest
+# runner size that should be allowed to use the generated custom image.
 jobs:
   build-rust-ci-image:
-    runs-on: linux-extra-beefy-image-generation
+    runs-on: linux-rust-ci-image-generation-small
     snapshot:
-      image-name: macro-rust-ci
+      image-name: macro-rust-ci-small
       version: 1.*
     steps:
       - uses: actions/checkout@v6
