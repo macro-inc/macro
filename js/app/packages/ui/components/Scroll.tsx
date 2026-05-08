@@ -23,6 +23,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   }
 
   function reveal() {
+    if (scrollRef.scrollHeight <= scrollRef.clientHeight) { return; }
     setVisible(true);
     clearTimeout(hideTimer);
     hideTimer = setTimeout(() => setVisible(false), HIDE_DELAY);
