@@ -305,20 +305,17 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: sccache --show-stats || true
 
-  build-lambdas:
+  detect-changed-lambdas:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: linux-extra-beefy
+    runs-on: ubuntu-latest
+    outputs:
+      lambdas: ${{ steps.lambdas.outputs.lambdas }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           clean: false
           fetch-depth: 0
-
-      - name: Configure Cachix
-        uses: ./.github/actions/setup-cachix
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Determine changed lambdas
         id: lambdas
@@ -353,31 +350,47 @@ jobs:
           echo "lambdas=$lambdas" >> "$GITHUB_OUTPUT"
           echo "Changed lambdas: $lambdas"
 
-      - name: Build changed Lambda artifacts
-        if: ${{ steps.lambdas.outputs.lambdas != '[]' }}
+  build-lambdas:
+    name: Build ${{ matrix.lambda }} Lambda artifact
+    needs: detect-changed-lambdas
+    if: needs.detect-changed-lambdas.result == 'success' && needs.detect-changed-lambdas.outputs.lambdas != '[]'
+    runs-on: linux-extra-beefy
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        lambda: ${{ fromJson(needs.detect-changed-lambdas.outputs.lambdas || '[]') }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          clean: false
+
+      - name: Configure Cachix
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build Lambda artifact
         shell: bash
         env:
-          LAMBDAS_JSON: ${{ steps.lambdas.outputs.lambdas }}
+          LAMBDA: ${{ matrix.lambda }}
         run: |
           set -euo pipefail
-          mapfile -t lambdas < <(jq -r '.[]' <<< "$LAMBDAS_JSON")
-          LAMBDAS_ENV="${lambdas[*]}" nix develop .# -c bash -lc '
+          nix develop .# -c bash -lc '
             set -euo pipefail
             cd rust/cloud-storage
-            for lambda in $LAMBDAS_ENV; do
-              echo "::group::Build $lambda"
-              ulimit -n 10240
-              just "$lambda/build"
-              test -f "target/lambda/$lambda/bootstrap.zip"
-              echo "::endgroup::"
-            done
+            echo "::group::Build $LAMBDA"
+            ulimit -n 10240
+            just "$LAMBDA/build"
+            test -f "target/lambda/$LAMBDA/bootstrap.zip"
+            echo "::endgroup::"
           '
 
   # Collector job that always runs - use this as the required status check
   status-check:
     name: Cloud Storage Status Check
     if: always()
-    needs: [path-check, check, test, build-lambdas]
+    needs: [path-check, check, test, detect-changed-lambdas, build-lambdas]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
@@ -385,12 +398,14 @@ jobs:
           echo "path-check: ${{ needs.path-check.result }}"
           echo "check: ${{ needs.check.result }}"
           echo "test: ${{ needs.test.result }}"
+          echo "detect-changed-lambdas: ${{ needs.detect-changed-lambdas.result }}"
           echo "build-lambdas: ${{ needs.build-lambdas.result }}"
 
           # Fail if any job failed (skipped and success are both OK)
           if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
              [[ "${{ needs.check.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
+             [[ "${{ needs.detect-changed-lambdas.result }}" == "failure" ]] || \
              [[ "${{ needs.build-lambdas.result }}" == "failure" ]]; then
             echo "❌ One or more jobs failed"
             exit 1
