@@ -90,7 +90,7 @@
   --color-dialog:          var(--b0); /* dialog, e.g. dialog background */
   --color-input:           var(--b0); /* input, e.g. chat/channel input */
   --color-button:          var(--b0); /* dialog, e.g. dialog background */
-  --color-shadow:          oklch(calc(var(--b0l) - 0.01 ) var(--b0c) var(--b0h) / 0.2);
+  --color-drop-shadow:     oklch(calc(var(--b0l) - 0.01 ) var(--b0c) var(--b0h) / 0.4);
   --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2)); /* message background */
   --color-hover:           var(--b2); /* hover, e.g. hover state for buttons/items */
   --color-active:          var(--b1); /* elements that are selected or activated */

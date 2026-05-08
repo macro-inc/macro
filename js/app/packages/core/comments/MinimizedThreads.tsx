@@ -1,5 +1,5 @@
 import ChatTeardrop from '@icon/regular/chat-teardrop.svg';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import {
   createEffect,
@@ -94,30 +94,32 @@ export function MinimizedThread(props: {
         isActive={props.isActive}
         transition={false}
       >
-        <div
-          class={cn(
-            'flex flex-row justify-between p-0.5 gap-1 transition-transform items-center text-ink-muted border-edge border relative overflow-clip rounded-sm pointer-events-auto',
-            props.isActive && '-translate-x-4'
-          )}
-          onClick={clickHandler}
-        >
+        <Layer depth={2}>
           <div
             class={cn(
-              'size-6 flex items-center justify-center rounded-xs',
-              props.isActive
-                ? 'bg-comment text-page'
-                : 'bg-comment-bg text-comment-fg'
+              'flex flex-row justify-between p-0.5 gap-1 bg-panel transition-transform shadow-md shadow-drop-shadow items-center text-ink-muted ring-edge ring relative overflow-clip rounded-sm pointer-events-auto',
+              props.isActive && '-translate-x-4'
             )}
+            onClick={clickHandler}
           >
-            <ChatTeardrop
-              class="size-5 pointer-events-auto"
-              onClick={clickHandler}
-            />
+            <div
+              class={cn(
+                'size-6 flex items-center justify-center rounded-xs',
+                props.isActive
+                  ? 'bg-comment text-page'
+                  : 'bg-comment-bg text-comment-fg'
+              )}
+            >
+              <ChatTeardrop
+                class="size-5 pointer-events-auto"
+                onClick={clickHandler}
+              />
+            </div>
+            <div class="flex items-center px-1 h-6 pointer-events-none">
+              <span class="text-xs text-center">{commentCount()}</span>
+            </div>
           </div>
-          <div class="flex items-center px-1 h-6 pointer-events-none">
-            <span class="text-xs text-center">{commentCount()}</span>
-          </div>
-        </div>
+        </Layer>
       </MeasureContainer>
     </Show>
   );
