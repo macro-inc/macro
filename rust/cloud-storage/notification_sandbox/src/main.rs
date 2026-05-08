@@ -301,6 +301,7 @@ async fn run_notification_cycle<I: NotificationIngress>(
             sender: MacroUserIdStr::try_from_email("fake-user@example.com").unwrap(),
             message_content: "This is a message".to_string(),
             message_id: uuid::Uuid::now_v7().to_string(),
+            has_attachments: false,
             common: model_notifications::CommonChannelMetadata {
                 channel_type: model_notifications::ChannelType::Public,
                 channel_name: "test-channel-name".to_string(),

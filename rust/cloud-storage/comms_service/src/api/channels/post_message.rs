@@ -193,6 +193,7 @@ pub async fn post_message_handler(
     .ok();
     tracing::debug!("activity upsert took {:?}ms", start_time.elapsed());
 
+    let has_attachments = !req.attachments.is_empty();
     let start_time = Instant::now();
     let maybe_attachments = add_attachments::add_attachments_to_message(
         &ctx.db,
@@ -245,6 +246,7 @@ pub async fn post_message_handler(
         <Vec<model::comms::ChannelParticipant>>::mirror(channel_participants),
         message.clone(),
         req.mentions.clone(),
+        has_attachments,
     );
 
     service::search::send_channel_message_to_search_extractor_queue(
@@ -269,6 +271,7 @@ pub fn dispatch_notification_task(
     participants: Vec<ChannelParticipant>,
     message: Message,
     mentions: Vec<SimpleMention>,
+    has_attachments: bool,
 ) {
     // Safe to clone, context conains a bunch of Arcs
     let api_context = ctx.clone();
@@ -281,6 +284,7 @@ pub fn dispatch_notification_task(
             participants,
             message,
             mentions,
+            has_attachments,
         )
         .await
         {
