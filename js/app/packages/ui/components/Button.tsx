@@ -28,22 +28,13 @@ const variantStyles: Record<ButtonVariant, string> = {
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  'icon-lg': 'size-11   p-2    [&_svg]:size-7                  ', /* not used anywhere */
+  'lg':      '          p-2.5  [&_svg]:size-5 gap-2   text-base',
+  'md':      '          p-2                   gap-1.5 text-sm  ', /* scuffed */
+  'sm':      'h-6       px-2   [&_svg]:size-4 gap-1   text-xs  ',
+  'icon-lg': 'size-11   p-2    [&_svg]:size-7                  ', /* unused */
   'icon-md': 'size-9    p-1.5  [&_svg]:size-6                  ',
   'icon-sm': 'size-6    p-1    [&_svg]:size-4                  ',
-  'lg':      '          p-2.5  [&_svg]:size-5 gap-2   text-base',
-  'md':      '          p-2    [&_svg]:size-5 gap-1.5 text-sm  ',
-  'sm':      'h-6       px-2   [&_svg]:size-4 gap-1   text-xs  ',
 };
-
-// const sizeStyles: Record<ButtonSize, string> = {
-//   'icon-md': 'p-1.5 size-7  [&_svg]:size-5',
-//   'icon-sm': 'p-1   size-7  [&_svg]:size-5',
-
-//   'lg': 'p-2.5 text-xs gap-1',
-//   'md': 'p-2   text-xs gap-1',
-//   'sm': 'p-1   text-xs gap-1',
-// };
 
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
