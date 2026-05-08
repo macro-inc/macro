@@ -5,6 +5,11 @@ SERVICE="${SERVICE:?SERVICE is required}"
 OUTPUT_DIR="${OUTPUT_DIR:-lambda-artifacts}"
 CONFIG_PATH="${CONFIG_PATH:-.github/services-config.json}"
 
+if ! jq -e --arg service "$SERVICE" '.services | has($service)' "$CONFIG_PATH" >/dev/null; then
+  echo "Service '$SERVICE' not found in $CONFIG_PATH" >&2
+  exit 1
+fi
+
 mapfile -t LAMBDAS < <(jq -r --arg service "$SERVICE" '.services[$service].deploy_lambdas[]? // empty' "$CONFIG_PATH")
 
 if [[ ${#LAMBDAS[@]} -eq 0 ]]; then

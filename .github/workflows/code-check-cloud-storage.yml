@@ -310,7 +310,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-extra-beefy
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           clean: false
           fetch-depth: 0
@@ -332,13 +332,24 @@ jobs:
           all_lambdas=$(jq -r '[.services[].deploy_lambdas[]?] | unique | .[]' .github/services-config.json)
           changed_lambdas=()
 
-          while IFS= read -r lambda; do
-            if printf '%s\n' "$changed_files" | grep -qE "^(rust/cloud-storage/${lambda}/|rust/cloud-storage/Cargo\\.(toml|lock)|rust/rust-toolchain\\.toml|flake\\.nix|flake\\.lock|\\.github/scripts/build-cloud-storage-lambdas\\.sh|\\.github/workflows/code-check-cloud-storage\\.yml)"; then
-              changed_lambdas+=("$lambda")
+          if printf '%s\n' "$changed_files" | grep -qxF ".github/services-config.json"; then
+            if [[ -n "$all_lambdas" ]]; then
+              mapfile -t changed_lambdas <<< "$all_lambdas"
             fi
-          done <<< "$all_lambdas"
+          else
+            while IFS= read -r lambda; do
+              [[ -n "$lambda" ]] || continue
+              if printf '%s\n' "$changed_files" | grep -qE "^(rust/cloud-storage/${lambda}/|rust/cloud-storage/Cargo\\.(toml|lock)|rust/rust-toolchain\\.toml|flake\\.nix|flake\\.lock|\\.github/scripts/build-cloud-storage-lambdas\\.sh|\\.github/workflows/code-check-cloud-storage\\.yml)"; then
+                changed_lambdas+=("$lambda")
+              fi
+            done <<< "$all_lambdas"
+          fi
 
-          lambdas=$(printf '%s\n' "${changed_lambdas[@]}" | jq -R . | jq -s -c .)
+          if [[ ${#changed_lambdas[@]} -eq 0 ]]; then
+            lambdas='[]'
+          else
+            lambdas=$(printf '%s\n' "${changed_lambdas[@]}" | jq -R . | jq -s -c .)
+          fi
           echo "lambdas=$lambdas" >> "$GITHUB_OUTPUT"
           echo "Changed lambdas: $lambdas"
 

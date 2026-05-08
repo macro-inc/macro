@@ -41,6 +41,8 @@ on:
         required: true
       POSTHOG_API_KEY:
         required: true
+      CACHIX_AUTH_TOKEN:
+        required: true
 
 concurrency:
   group: ${{ github.workflow }}-web-app-${{ inputs.environment }}
