@@ -130,7 +130,6 @@ application:
 import { Mirror } from "loro-mirror-core";
 import { schema } from "loro-mirror-core/schema";
 import { LoroDoc } from "loro-crdt";
-import { useEffect, useState } from "react";
 
 // Define the schema
 const todoAppSchema = schema({
@@ -149,143 +148,72 @@ const todoAppSchema = schema({
   sorting: schema.String({ defaultValue: "createdAt" }),
 });
 
-// Create a custom hook to use the Mirror
-function useTodoApp() {
-  const [mirror] = useState(() => {
-    const doc = new LoroDoc();
-    return new Mirror({
-      doc,
-      schema: todoAppSchema,
-    });
+const mirror = new Mirror({
+  doc: new LoroDoc(),
+  schema: todoAppSchema,
+});
+
+const addTodo = (text: string) => {
+  const state = mirror.getState();
+
+  mirror.setState({
+    ...state,
+    todos: [
+      ...state.todos,
+      {
+        id: Date.now().toString(),
+        text,
+        completed: false,
+        priority: 0,
+        createdAt: Date.now(),
+      },
+    ],
+  });
+};
+
+const toggleTodo = (id: string) => {
+  const state = mirror.getState();
+
+  mirror.setState({
+    ...state,
+    todos: state.todos.map((todo) =>
+      todo.id === id ? { ...todo, completed: !todo.completed } : todo
+    ),
+  });
+};
+
+const removeTodo = (id: string) => {
+  const state = mirror.getState();
+
+  mirror.setState({
+    ...state,
+    todos: state.todos.filter((todo) => todo.id !== id),
+  });
+};
+
+const setSorting = (sortField: "createdAt" | "priority") => {
+  const state = mirror.getState();
+  const sortedTodos = [...state.todos].sort((a, b) => {
+    if (sortField === "priority") {
+      return b.priority - a.priority;
+    }
+    return a.createdAt - b.createdAt;
   });
 
-  const [state, setState] = useState(mirror.getState());
+  mirror.setState({
+    ...state,
+    sorting: sortField,
+    todos: sortedTodos,
+  });
+};
 
-  useEffect(() => {
-    // Subscribe to state changes
-    return mirror.subscribe((newState) => {
-      setState(newState);
-    });
-  }, [mirror]);
+const unsubscribe = mirror.subscribe((state) => {
+  console.log("Todo state changed", state);
+});
 
-  // Add a new todo
-  const addTodo = (text) => {
-    setState({
-      ...state,
-      todos: [
-        ...state.todos,
-        {
-          id: Date.now().toString(),
-          text,
-          completed: false,
-          priority: 0,
-          createdAt: Date.now(),
-        },
-      ],
-    });
-  };
-
-  // Toggle a todo's completed status
-  const toggleTodo = (id) => {
-    setState({
-      ...state,
-      todos: state.todos.map((todo) =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo
-      ),
-    });
-  };
-
-  // Remove a todo
-  const removeTodo = (id) => {
-    setState({
-      ...state,
-      todos: state.todos.filter((todo) => todo.id !== id),
-    });
-  };
-
-  // Change sort order - notice how this requires reordering
-  // but with idSelector, Mirror will use efficient move operations
-  const setSorting = (sortField) => {
-    const sortedTodos = [...state.todos].sort((a, b) => {
-      if (sortField === "priority") {
-        return b.priority - a.priority;
-      }
-      return a.createdAt - b.createdAt;
-    });
-
-    setState({
-      ...state,
-      sorting: sortField,
-      todos: sortedTodos,
-    });
-  };
-
-  return {
-    state,
-    addTodo,
-    toggleTodo,
-    removeTodo,
-    setSorting,
-  };
-}
-
-// Example React component
-function TodoApp() {
-  const { state, addTodo, toggleTodo, removeTodo, setSorting } = useTodoApp();
-  const [newTodo, setNewTodo] = useState("");
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (newTodo.trim()) {
-      addTodo(newTodo);
-      setNewTodo("");
-    }
-  };
-
-  return (
-    <div>
-      <h1>Todo List</h1>
-
-      <form onSubmit={handleSubmit}>
-        <input
-          value={newTodo}
-          onChange={(e) => setNewTodo(e.target.value)}
-          placeholder="Add todo"
-        />
-        <button type="submit">Add</button>
-      </form>
-
-      <div>
-        <button onClick={() => setSorting("createdAt")}>
-          Sort by Date
-        </button>
-        <button onClick={() => setSorting("priority")}>
-          Sort by Priority
-        </button>
-      </div>
-
-      <ul>
-        {state.todos.map((todo) => (
-          <li key={todo.id}>
-            <input
-              type="checkbox"
-              checked={todo.completed}
-              onChange={() => toggleTodo(todo.id)}
-            />
-            <span
-              style={{
-                textDecoration: todo.completed ? "line-through" : "none",
-              }}
-            >
-              {todo.text}
-            </span>
-            <button onClick={() => removeTodo(todo.id)}>Delete</button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+addTodo("Ship the core package");
+setSorting("priority");
+unsubscribe();
 ```
 
 In this example:
@@ -304,8 +232,7 @@ For large lists, using an `idSelector` can significantly improve performance by:
 
 - Reducing the number of operations sent to Loro
 - Minimizing network traffic in collaborative scenarios
-- Preserving item identity which can help with animations and React rendering
-  optimizations
+- Preserving item identity, which helps UI layers avoid unnecessary work
 
 For more examples and detailed API documentation, see the
 [API Reference](API.md).

@@ -181,6 +181,52 @@
           }
         );
 
+        deployCargoArtifacts = craneLib.buildDepsOnly (
+          commonArgs
+          // {
+            pname = "cloud-storage-deploy-deps";
+            cargoExtraArgs = "--locked";
+            CARGO_PROFILE = "release";
+          }
+        );
+
+        deployServiceBinaryPackage =
+          serviceName: binaries:
+          craneLib.buildPackage (
+            commonArgs
+            // {
+              cargoArtifacts = deployCargoArtifacts;
+              pname = "cloud-storage-${serviceName}-binaries";
+              doCheck = false;
+              cargoExtraArgs = "--locked " + pkgs.lib.concatMapStringsSep " " (binary: "--bin ${binary}") binaries;
+              CARGO_PROFILE = "release";
+              installPhaseCommand = ''
+                mkdir -p $out/bin
+                for binary in ${pkgs.lib.concatStringsSep " " binaries}; do
+                  cp target/release/$binary $out/bin/$binary
+                  ${pkgs.binutils}/bin/strip $out/bin/$binary || true
+                done
+              '';
+            }
+          );
+
+        deployServiceBinaryPackages = {
+          deploy-service-binaries-agent-schedule-service = deployServiceBinaryPackage "agent-schedule-service" [ "service" ];
+          deploy-service-binaries-authentication-service = deployServiceBinaryPackage "authentication-service" [ "authentication_service" ];
+          deploy-service-binaries-connection-gateway = deployServiceBinaryPackage "connection-gateway" [ "connection_gateway_service" ];
+          deploy-service-binaries-contacts-service = deployServiceBinaryPackage "contacts-service" [ "contacts_service" ];
+          deploy-service-binaries-convert-service = deployServiceBinaryPackage "convert-service" [ "convert_service" ];
+          deploy-service-binaries-document-cognition-service = deployServiceBinaryPackage "document-cognition-service" [ "document_cognition_service" ];
+          deploy-service-binaries-document-storage-service = deployServiceBinaryPackage "document-storage-service" [ "document_storage_service" ];
+          deploy-service-binaries-email-service = deployServiceBinaryPackage "email-service" [ "email_service" "pubsub_workers" ];
+          deploy-service-binaries-image-proxy-service = deployServiceBinaryPackage "image-proxy-service" [ "image_proxy_service" ];
+          deploy-service-binaries-mcp-server = deployServiceBinaryPackage "mcp-server" [ "mcp_service" ];
+          deploy-service-binaries-notification-service = deployServiceBinaryPackage "notification-service" [ "notification_service" ];
+          deploy-service-binaries-search-processing-service = deployServiceBinaryPackage "search-processing-service" [ "search_processing_service" ];
+          deploy-service-binaries-static-file-service = deployServiceBinaryPackage "static-file-service" [ "static_file_service" ];
+          deploy-service-binaries-unfurl-service = deployServiceBinaryPackage "unfurl-service" [ "unfurl_service" ];
+        };
+
         shellTools =
           with pkgs;
           [
@@ -388,7 +434,7 @@
         packages = {
           inherit cargoArtifacts workspaceArtifacts openApiBins nextestArchive;
           default = cargoArtifacts;
-        };
+        } // deployServiceBinaryPackages;
 
         devShells = {
           default = pkgs.mkShell (

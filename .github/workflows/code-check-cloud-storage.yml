@@ -36,6 +36,8 @@ jobs:
               - 'rust/rust-toolchain.toml'
               - 'flake.nix'
               - 'flake.lock'
+              - '.github/actions/setup-cachix/**'
+              - '.github/actions/setup-nix-dev-shell/**'
               - '.github/actions/setup-sccache/**'
               - .github/workflows/code-check-cloud-storage.yml
       - name: compute nextest package filter
@@ -60,7 +62,7 @@ jobs:
           printf '%s\n' "$changed_files" > /tmp/changed-files
 
           # Root cargo/toolchain/CI changes can affect the whole workspace, so run all tests.
-          if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|flake\.nix|flake\.lock|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-sccache)/.*|\.github/workflows/code-check-cloud-storage\.yml)$'; then
+          if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|flake\.nix|flake\.lock|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-cachix|setup-nix-dev-shell|setup-sccache)/.*|\.github/workflows/code-check-cloud-storage\.yml)$'; then
             echo "Workspace-level change detected; running all tests"
             echo "nextest_filter=" >> "$GITHUB_OUTPUT"
             exit 0
@@ -169,15 +171,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           clean: false
-      - name: Add Nix to PATH
-        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
-      - name: Enter Nix dev shell
-        run: |
-          set -euo pipefail
-          nix print-dev-env --accept-flake-config > /tmp/dev-env
-          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
-          source /tmp/dev-env
-          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-nix-dev-shell
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
         with:
           workspaces: rust/cloud-storage
@@ -243,15 +240,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           clean: false
-      - name: Add Nix to PATH
-        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
-      - name: Enter Nix dev shell
-        run: |
-          set -euo pipefail
-          nix print-dev-env --accept-flake-config > /tmp/dev-env
-          echo "BASH_ENV=/tmp/dev-env" >> "$GITHUB_ENV"
-          source /tmp/dev-env
-          printf '%s\n' "$PATH" | tr ':' '\n' >> "$GITHUB_PATH"
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-nix-dev-shell
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
         with:
           workspaces: rust/cloud-storage

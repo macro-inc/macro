@@ -1,5 +1,8 @@
 use crate::domain::{
-    models::{FrecencySoupItem, IntoSoupReqAst, SoupErr, SoupQuery, SoupRequest, SoupType},
+    models::{
+        FrecencyQueryInner, FrecencySoupItem, IntoSoupReqAst, SimpleQueryInner, SoupErr, SoupQuery,
+        SoupRequest, SoupType,
+    },
     ports::SoupService,
 };
 use axum::{
@@ -34,6 +37,7 @@ use models_pagination::{
     TypeEraseCursor,
 };
 use models_soup::item::SoupItem;
+use non_empty::IsEmpty;
 use recursion::CollapsibleExt;
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
@@ -398,7 +402,7 @@ pub async fn post_soup_ast_handler<T, U>(
     State(service): State<SoupRouterState<T, U>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
     email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
-    cursor: SoupCursor<EntityFilterAst>,
+    cursor: SoupCursor<ApiEntityFilterAst>,
     Json(PostSoupAstRequest {
         filters,
         params,
@@ -414,9 +418,6 @@ where
         Err(EmailLinkErr::NotFound) => None,
         Err(e) => Err(e)?,
     };
-    let filters = filters
-        .into_entity_ast()
-        .map_err(|_| SoupHandlerErr::Expand)?;
     service
         .handle(
             macro_user_id,
@@ -469,7 +470,47 @@ pub enum CompoundDocumentLiteral {
     FileAssoc(String),
 }
 
+impl IntoSoupReqAst for SoupRequest<ApiEntityFilterAst> {
+    fn into_ast(self) -> Result<SoupRequest<Option<EntityFilterAst>>, ExpandErr> {
+        let SoupRequest {
+            soup_type,
+            limit,
+            cursor,
+            user,
+            email_preview_view,
+            link_id,
+        } = self;
+
+        let cursor = match cursor {
+            SoupQuery::Simple(SimpleQueryInner(query)) => SoupQuery::Simple(SimpleQueryInner(
+                query.try_map_filter(ApiEntityFilterAst::into_optional_entity_ast)?,
+            )),
+            SoupQuery::Frecency(FrecencyQueryInner(query)) => {
+                SoupQuery::Frecency(FrecencyQueryInner(
+                    query.try_map_filter(ApiEntityFilterAst::into_optional_entity_ast)?,
+                ))
+            }
+        };
+
+        Ok(SoupRequest {
+            soup_type,
+            limit,
+            cursor,
+            user,
+            email_preview_view,
+            link_id,
+        })
+    }
+}
+
 impl ApiEntityFilterAst {
+    fn into_optional_entity_ast(self) -> Result<Option<EntityFilterAst>, ExpandErr> {
+        let ast = self
+            .into_entity_ast()
+            .map_err(|e| ExpandErr::ApiAst(e.to_string()))?;
+        Ok((!ast.is_empty()).then_some(ast))
+    }
+
     #[tracing::instrument(err, skip(self))]
     fn into_entity_ast(self) -> Result<EntityFilterAst, Report> {
         let ApiEntityFilterAst {

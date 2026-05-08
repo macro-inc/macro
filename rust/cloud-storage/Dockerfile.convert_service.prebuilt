@@ -1,0 +1,43 @@
+FROM ubuntu:noble AS base
+ARG SERVICE_NAME=convert_service
+WORKDIR /app
+
+# Accept the Microsoft core fonts license
+RUN printf '%s\n' "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" > /tmp/ms-fonts-selections \
+  && debconf-set-selections /tmp/ms-fonts-selections \
+  && rm /tmp/ms-fonts-selections
+
+RUN : \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+  curl \
+  tar \
+  libreoffice \
+  libreofficekit-dev \
+  ca-certificates \
+  openssl \
+  dumb-init \
+  libkrb5-3 \
+  ttf-mscorefonts-installer \
+  wget xfonts-utils \
+  cabextract \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN fc-cache -f -v
+
+RUN curl --fail --show-error -L -o core-co-25.04-assets.tar.gz https://github.com/CollaboraOnline/online/releases/download/for-code-assets/core-co-25.04-assets.tar.gz \
+  && echo "751a4323b6dd26cc1b6c3353d96173f63ff9910618eba93d614b6dabe38afc23  core-co-25.04-assets.tar.gz" | sha256sum -c - \
+  && tar -xvf core-co-25.04-assets.tar.gz \
+  && mkdir -p /app/lok \
+  && mv instdir /app/lok/instdir \
+  && mv include /app/lok/include \
+  && rm core-co-25.04-assets.tar.gz
+
+COPY ./prebuilt/nix-store/ /nix/store/
+COPY ./prebuilt/${SERVICE_NAME} /app/svc
+RUN chmod +x /app/svc
+
+ENV PORT=8080
+EXPOSE ${PORT}
+ENTRYPOINT ["dumb-init", "./svc"]

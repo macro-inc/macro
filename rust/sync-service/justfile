@@ -19,8 +19,12 @@ setup:
 worker_build_setup:
     cargo install worker-build
 
+# initialize the local D1 database used by wrangler dev
+migrate-d1-local:
+  CI=true npx wrangler d1 migrations apply USER_PEER_MAPPING --local --config wrangler.toml
+
 # run worker using wrangler / miniflare
-dev:
+dev: migrate-d1-local
   npx wrangler dev
 
 # clean testing artifacts

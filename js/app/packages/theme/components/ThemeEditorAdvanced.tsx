@@ -3,8 +3,6 @@ import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
 import type { ThemeReactiveColor } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { ColorSwatch } from './ColorSwatch';
-import { isMobile } from '@core/mobile/isMobile';
-import { Scroll } from '@ui';
 
 const displayType = () => 'hex';
 
@@ -42,25 +40,21 @@ export function ThemeEditorAdvanced(){
 
       <div
         style={{
-          'height': isMobile() ? '280px' : '390px', /* match themeEditorBasic height */
           'font-size': 'var(--text-xs)',
-          'position': 'relative',
-          'overflow': 'hidden',
           'font-weight': 300,
           'display': 'block',
         }}
       >
-        <Scroll style={{ 'overscroll-behavior': 'none' }}>
-          <div
-            style="
-              background-color: var(--b3);
-              box-sizing: border-box;
-              overflow-x: hidden;
-              display: grid;
-              gap: 1px;
-            "
-          >
-            <For each={Object.entries(themeReactive)}>
+        <div
+          style="
+            background-color: var(--b3);
+            box-sizing: border-box;
+            overflow-x: hidden;
+            display: grid;
+            gap: 1px;
+          "
+        >
+          <For each={Object.entries(themeReactive)}>
               {([colorKey, colorValue]) => {
                 // a1 thru a4 are not currently being used, so we will hide them
                 if (['a1', 'a2', 'a3', 'a4'].includes(colorKey)) return null;
@@ -177,9 +171,8 @@ export function ThemeEditorAdvanced(){
                   </div>
                 );
               }}
-            </For>
-          </div>
-        </Scroll>
+          </For>
+        </div>
       </div>
     </>
   );

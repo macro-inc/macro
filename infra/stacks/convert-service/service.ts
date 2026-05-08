@@ -172,6 +172,9 @@ export class ConvertService extends pulumi.ComponentResource {
         imagePath: BASE_PATH,
         dockerfile: 'Dockerfile.convert_service',
         platform,
+        buildArgs: {
+          SERVICE_NAME: 'convert_service',
+        },
         tags: this.tags,
       },
       { parent: this }

@@ -1,6 +1,7 @@
 import { Miniflare } from "miniflare";
+import { LoroDoc } from "loro-crdt";
 import { expect, test, describe, beforeEach } from "vitest";
-import { log, createTestUser, getTokenForDocument, INTERNAL_API_SECRET, setupMiniflare, sleep } from "./utils";
+import { createTestUser, INTERNAL_API_SECRET, setupMiniflare, sleep } from "./utils";
 
 let mf: Miniflare;
 
@@ -22,6 +23,16 @@ const callDebugEndpoint = (docId: string, headers = {...admin_headers}) => {
 
 const callWakeupEndpoint = (docId: string, headers = {...admin_headers}) => {
   return callEndpoint('wakeup', docId, headers);
+};
+
+const putSnapshotInKv = async (docId: string, content: string) => {
+  const doc = new LoroDoc();
+  doc.getText('content').push(content);
+  doc.commit();
+
+  const snapshot = doc.export({ mode: 'snapshot' });
+  const kv = await mf.getKVNamespace('SNAPSHOT_STORE_KV');
+  await kv.put(`${docId}/${docId}.snapshot`, snapshot);
 };
 
 const expectValidDebugResponse = async (response: Response) => {
@@ -102,5 +113,16 @@ describe("wakeup endpoint tests", async () => {
     expect(first).toBeNull();
     let [_tid, duration] = await(await callWakeupEndpoint("empty-doc")).json();
     expect(duration).toBe(60 * 1000);
-  })
+  });
+
+  test("wakeup initializes storage from an existing snapshot", async () => {
+    const documentId = "kv-wakeup-doc";
+    await putSnapshotInKv(documentId, "Warm me");
+
+    const wakeupResponse = await callWakeupEndpoint(documentId);
+    expect(wakeupResponse.status).toBe(200);
+
+    const response = await callEndpoint("debug_do_kv_list/o", documentId, admin_headers);
+    expect(response.status).toBe(200);
+  });
 });
