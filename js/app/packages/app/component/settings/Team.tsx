@@ -1009,7 +1009,7 @@ function TeamManagement(props: {
           </Show>
         </Panel.Header>
 
-        <Panel.Body class="flex flex-col h-full overflow-hidden">
+        <Panel.Body scroll>
           <div class="flex items-center px-2 h-15.25 border-b border-edge-muted shrink-0">
             <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2">
               <span class="text-sm text-ink-muted">Name</span>
@@ -1064,15 +1064,15 @@ function TeamManagement(props: {
             </div>
           </div>
 
-        <div class="flex flex-col flex-1 overflow-hidden">
-          <section class="flex flex-col min-h-0 flex-1">
+        <div class="flex flex-col">
+          <section class="flex flex-col">
             <Show
               when={!teamQuery.isLoading}
               fallback={
                 <div class="animate-pulse bg-ink-extra-muted rounded h-16" />
               }
             >
-              <div class="overflow-y-auto min-h-0" style="scrollbar-width: none;">
+              <div>
                 <For each={members()}>
                   {(member) => (
                     <MemberRow
@@ -1116,7 +1116,7 @@ function TeamManagement(props: {
           </section>
 
           <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
-            <section class="px-6 py-4 shrink-0 border-t border-edge-muted">
+            <section class="px-6 py-4 border-t border-edge-muted">
               <h3 class="text-sm font-medium mb-2">Pending Invites</h3>
               <div class="border border-edge rounded-sm px-3">
                 <For each={invitesQuery.data?.invites ?? []}>
