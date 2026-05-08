@@ -202,25 +202,22 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           }}
         />
 
-        <div
-          class={cn(
-            'min-w-4 h-full shrink-0 flex items-center gap-0.5 pl-2',
-            !shouldShowRightmost() && 'pr-2'
-          )}
-          ref={(ref) => {
-            panel.layoutRefs.headerRight = ref;
-          }}
-        />
-
         <Show when={shouldShowRightmost()}>
           <div
             class={
-              'pl-0.5 pr-2 z-annotation-layer relative flex items-center gap-0.5 h-full order-last'
+              'pl-2 z-annotation-layer relative flex items-center gap-0.5 h-full'
             }
           >
             <SplitSpotlightButton />
           </div>
         </Show>
+
+        <div
+          class="min-w-4 h-full shrink-0 flex items-center gap-0.5 pl-2 pr-2"
+          ref={(ref) => {
+            panel.layoutRefs.headerRight = ref;
+          }}
+        />
       </div>
     </div>
   );
