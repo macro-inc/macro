@@ -77,6 +77,21 @@ impl SearchMethodCursor {
             Self::Thread { .. } => None,
         }
     }
+
+    /// Encodes the cursor as a base64 string for client transport.
+    pub fn encode(&self) -> Option<String> {
+        serde_json::to_vec(self)
+            .ok()
+            .map(|bytes| BASE64.encode(bytes))
+    }
+
+    /// Decodes a base64-encoded cursor string.
+    pub fn decode(encoded: &str) -> Option<Self> {
+        BASE64
+            .decode(encoded)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+    }
 }
 
 /// Represents the state of a search cursor

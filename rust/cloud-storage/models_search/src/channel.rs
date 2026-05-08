@@ -112,6 +112,9 @@ impl From<SearchResponseItem<ChannelSearchResult, ChannelSearchMetadata>>
 pub struct ChannelSearchResponse {
     /// List containing results from email threads
     pub results: Vec<ChannelSearchResponseItemWithMetadata>,
+    /// Base64-encoded cursor for the next page; `None` when exhausted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, JsonSchema)]
@@ -131,6 +134,9 @@ pub struct ChannelSearchRequest {
     /// If true, returns only 1 result per entity. False by default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub collapse: Option<bool>,
+    /// Sort key for results. Defaults to `message`.
+    #[serde(default)]
+    pub sort: ChannelSortTimestamp,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]

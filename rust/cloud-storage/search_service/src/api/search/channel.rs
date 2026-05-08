@@ -4,12 +4,24 @@ use indexmap::IndexMap;
 use std::collections::HashMap;
 
 use crate::api::context::SearchHandlerState;
-use model::comms::ChannelHistoryInfo;
-use models_search::channel::{
-    ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
-    ChannelSortTimestamp,
+use crate::api::search::SearchPaginationParams;
+use axum::{
+    Extension, Router,
+    extract::{self, State},
+    response::Json,
+    routing::post,
 };
+use macro_user_id::user_id::MacroUserId;
+use model::comms::ChannelHistoryInfo;
+use model::user::UserContext;
+use models_search::channel::{
+    ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem,
+    ChannelSearchResponseItemWithMetadata, ChannelSearchResult, ChannelSortTimestamp,
+};
+use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
+use opensearch_client::search::channels::ChannelSearchArgs;
 use opensearch_client::search::model::SearchGotoContent;
+use opensearch_client::search::unified::ChannelSortMode;
 use sqlx::types::Uuid;
 
 /// Enriches channel message search results with metadata
@@ -154,6 +166,100 @@ pub fn construct_search_result(
         .collect();
 
     Ok(result)
+}
+
+pub fn router() -> Router<SearchHandlerState> {
+    Router::new().route("/", post(handler))
+}
+
+/// Channel content search.
+#[utoipa::path(
+    post,
+    path = "/search/channel",
+    operation_id = "channel_search",
+    params(
+        ("page_size" = i64, Query, description = "Page size, defaults to 10."),
+        ("cursor" = Option<String>, Query, description = "Base64-encoded cursor."),
+    ),
+    responses(
+        (status = 200, body=ChannelSearchResponse),
+        (status = 400, body=model::response::ErrorResponse),
+        (status = 401, body=model::response::ErrorResponse),
+        (status = 500, body=model::response::ErrorResponse),
+    )
+)]
+pub async fn handler(
+    State(ctx): State<SearchHandlerState>,
+    user_context: Extension<UserContext>,
+    extract::Query(query_params): extract::Query<SearchPaginationParams>,
+    extract::Json(req): extract::Json<ChannelSearchRequest>,
+) -> Result<Json<ChannelSearchResponse>, SearchError> {
+    let user_id = user_context.user_id.clone();
+    if user_id.is_empty() {
+        return Err(SearchError::NoUserId);
+    }
+    let user_id = MacroUserId::parse_from_str(&user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?
+        .lowercase();
+
+    let page_size = query_params.page_size.unwrap_or(10);
+    if !(0..=100).contains(&page_size) {
+        return Err(SearchError::InvalidPageSize);
+    }
+
+    let terms = match (req.query, req.terms) {
+        (Some(q), _) if !q.trim().is_empty() => vec![q.trim().to_string()],
+        (_, Some(t)) if !t.is_empty() => t,
+        _ => return Err(SearchError::NoQueryOrTermsProvided),
+    };
+    if terms.iter().any(|t| t.len() < 3) {
+        return Err(SearchError::InvalidQuerySize);
+    }
+
+    let cursor = query_params
+        .cursor
+        .as_ref()
+        .and_then(|c| SearchMethodCursor::decode(c));
+    let cursor_option = cursor
+        .map(|c| SearchCursorOption::NotDone(Some(c)))
+        .unwrap_or_default();
+
+    let filters = req.filters.unwrap_or_default();
+    let sort_mode = match req.sort {
+        ChannelSortTimestamp::Message => ChannelSortMode::Message,
+        ChannelSortTimestamp::Thread => ChannelSortMode::Thread,
+    };
+
+    let args = ChannelSearchArgs {
+        user_id: user_id.as_ref().to_string(),
+        page_size: page_size as u32,
+        match_type: req.match_type.to_string(),
+        cursor: cursor_option,
+        terms,
+        channel_ids: filters.channel_ids,
+        thread_ids: filters.thread_ids,
+        mentions: filters.mentions,
+        sender_ids: filters.sender_ids,
+        sort_mode,
+    };
+
+    let (hits, next_cursor) = ctx
+        .opensearch_client
+        .search_channel(args)
+        .await
+        .map_err(SearchError::Search)?;
+
+    let results = enrich_channels(&ctx, user_id.as_ref(), hits, req.sort).await?;
+
+    let next_cursor = match next_cursor {
+        SearchCursorOption::NotDone(Some(c)) => c.encode(),
+        _ => None,
+    };
+
+    Ok(Json(ChannelSearchResponse {
+        results,
+        next_cursor,
+    }))
 }
 
 #[cfg(test)]
