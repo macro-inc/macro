@@ -53,6 +53,7 @@ struct MockSoupCall {
     link_id: Option<Uuid>,
     cursor_kind: MockCursorKind,
     filter: serde_json::Value,
+    expanded_filter: serde_json::Value,
 }
 
 #[derive(Clone)]
@@ -87,7 +88,8 @@ impl SoupService for MockSoup {
         let soup_type = req.soup_type;
         let email_preview_view = req.email_preview_view.clone();
         let link_id = req.link_id;
-        let filter = serde_json::to_value(req.into_ast()?.cursor.filter()).unwrap();
+        let filter = serde_json::to_value(req.cursor.filter()).unwrap();
+        let expanded_filter = serde_json::to_value(req.into_ast()?.cursor.filter()).unwrap();
         let mut guard = self.called.lock().unwrap();
         guard.push(MockSoupCall {
             soup_type,
@@ -95,6 +97,7 @@ impl SoupService for MockSoup {
             link_id,
             cursor_kind,
             filter,
+            expanded_filter,
         });
         Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
     }
@@ -989,7 +992,7 @@ async fn ast_endpoint_expands_file_assoc_pdf() {
             .expect("SoupService::handle should have been called")
     };
 
-    let filter: EntityFilterAst = serde_json::from_value(arg.filter).unwrap();
+    let filter: EntityFilterAst = serde_json::from_value(arg.expanded_filter).unwrap();
     let doc_tree = filter
         .document_filter
         .expect("document_filter should be set");
@@ -1036,7 +1039,7 @@ async fn ast_endpoint_passes_through_plain_document_literal() {
             .expect("SoupService::handle should have been called")
     };
 
-    let filter: EntityFilterAst = serde_json::from_value(arg.filter).unwrap();
+    let filter: EntityFilterAst = serde_json::from_value(arg.expanded_filter).unwrap();
     let doc_tree = filter
         .document_filter
         .expect("document_filter should be set");
@@ -1082,7 +1085,7 @@ async fn ast_endpoint_expands_file_assoc_image_to_or_tree() {
             .expect("SoupService::handle should have been called")
     };
 
-    let filter: EntityFilterAst = serde_json::from_value(arg.filter).unwrap();
+    let filter: EntityFilterAst = serde_json::from_value(arg.expanded_filter).unwrap();
     let doc_tree = filter
         .document_filter
         .expect("document_filter should be set");
