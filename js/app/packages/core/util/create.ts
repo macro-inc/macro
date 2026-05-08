@@ -90,6 +90,12 @@ export async function createMarkdownFile(
   if (isErr(res)) {
     return;
   }
+
+  const finalizeRes = await storageServiceClient.finalizeUpload({ documentId });
+  if (isErr(finalizeRes)) {
+    console.error('Failed to finalize markdown document upload');
+    return;
+  }
   setPreviewOnCreate({
     itemId: documentId,
     itemType: 'document',
@@ -160,6 +166,11 @@ export async function createTask(
   if (isErr(syncRes)) {
     console.error('Failed to initialize task content in sync service');
     // Task was created, just without content - still return the id
+  } else {
+    const finalizeRes = await storageServiceClient.finalizeUpload({ documentId });
+    if (isErr(finalizeRes)) {
+      console.error('Failed to finalize task document upload');
+    }
   }
 
   setPreviewOnCreate({

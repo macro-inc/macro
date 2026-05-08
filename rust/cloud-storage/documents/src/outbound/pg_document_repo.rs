@@ -564,6 +564,26 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), Self::Err> {
+        let result = sqlx::query(
+            r#"
+            UPDATE "Document"
+            SET "uploaded" = true, "updatedAt" = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(document_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn share_with_team(&self, user_id: &str, document_id: &str) -> Result<(), Self::Err> {
         share::share_with_team(&self.pool, user_id, document_id).await
     }

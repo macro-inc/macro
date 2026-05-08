@@ -519,6 +519,19 @@ impl<
         Ok(short_id)
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), DocumentError> {
+        self.repo
+            .mark_document_uploaded(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn cleanup_created_document(&self, document_id: &str) {
+        self.cleanup_document(document_id).await;
+    }
+
     #[tracing::instrument(err, skip(self, args))]
     async fn create_document(
         &self,

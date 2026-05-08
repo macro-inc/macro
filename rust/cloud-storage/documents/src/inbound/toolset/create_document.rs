@@ -3,9 +3,9 @@
 use std::str::FromStr;
 
 use crate::domain::create::{
-    DocumentCreator, MarkdownSubtype, MarkdownText, MarkdownTextContent, NewDocument,
-    NewDocumentMetadata, NonMarkdownFileType, TextFile, TextFileContent,
+    DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewPlainTextDocument,
 };
+use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::Context;
@@ -17,6 +17,18 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::DocumentToolContext;
+
+fn failed_to_create_document(error: DocumentError) -> ToolCallError {
+    let description = match &error {
+        DocumentError::BadRequest(message) => message.clone(),
+        _ => "failed to create document".to_string(),
+    };
+
+    ToolCallError {
+        description,
+        internal_error: error.into(),
+    }
+}
 
 /// The read content response
 #[derive(Debug, Serialize, JsonSchema)]
@@ -66,15 +78,6 @@ where
             })?;
         let user_id: MacroUserIdStr<'static> = request_context.user_id.clone();
 
-        if self.is_task && parsed_file_type != FileType::Md {
-            return Err(ToolCallError {
-                description: "tasks must be markdown documents".to_string(),
-                internal_error: anyhow::anyhow!(
-                    "task requested with file type {parsed_file_type:?}"
-                ),
-            });
-        }
-
         let creator = DocumentCreator::new(
             service_context.service.as_ref(),
             service_context.lexical_client.as_ref(),
@@ -90,47 +93,19 @@ where
             skip_history: false,
         };
 
-        let response = if parsed_file_type == FileType::Md {
-            let document = NewDocument::<MarkdownText>::new(
-                metadata,
-                MarkdownTextContent {
-                    markdown: self.file_content.clone(),
-                    subtype: if self.is_task {
-                        MarkdownSubtype::Task {
-                            property_values: None,
-                            share_with_team: true,
-                        }
-                    } else {
-                        MarkdownSubtype::Note
-                    },
-                },
-            );
-            creator
-                .create_markdown_text(user_id.clone(), document)
-                .await
-                .map(|document| document.into_response())
-        } else {
-            let file_type =
-                NonMarkdownFileType::new(parsed_file_type).map_err(|e| ToolCallError {
-                    description: "failed to create document".to_string(),
-                    internal_error: e.into(),
-                })?;
-            let document = NewDocument::<TextFile>::new(
-                metadata,
-                TextFileContent {
-                    file_type,
-                    text: self.file_content.clone(),
-                },
-            );
-            creator
-                .create_text_file(user_id.clone(), document)
-                .await
-                .map(|document| document.into_response())
-        }
-        .map_err(|e| ToolCallError {
-            description: "failed to create document".to_string(),
-            internal_error: e.into(),
-        })?;
+        let document = NewPlainTextDocument::new(
+            metadata,
+            parsed_file_type,
+            self.file_content.clone(),
+            MarkdownSubtype::from_task_flag(self.is_task),
+        )
+        .map_err(failed_to_create_document)?;
+
+        let response = creator
+            .create_plain_text(user_id, document)
+            .await
+            .map(|document| document.into_response())
+            .map_err(failed_to_create_document)?;
         tracing::trace!("created document");
 
         let document_id_str = response

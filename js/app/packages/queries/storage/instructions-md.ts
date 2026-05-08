@@ -120,6 +120,13 @@ export function useCreateInstructionsMd() {
         );
         return;
       }
+      const finalizeRes = await storageServiceClient.finalizeUpload({
+        documentId,
+      });
+      if (!isOk(finalizeRes)) {
+        console.error('Failed to finalize instructions document upload');
+        return;
+      }
       queryClient.setQueryData(instructionsMdKeys.id.queryKey, documentId);
       return documentId;
     }

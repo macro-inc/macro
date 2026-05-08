@@ -1,10 +1,10 @@
 //! Document creation orchestration.
 //!
-//! Callers describe the document kind at the type level with marker structs like
-//! [`MarkdownText`], [`TextFile`], and [`FileUpload`]. Each marker owns its
-//! creation behavior and content shape.
-
-use std::{future::Future, marker::PhantomData};
+//! This module keeps backend-owned document creation policy in one place. It
+//! intentionally exposes explicit creation methods rather than a generic
+//! document-kind dispatcher: call sites should choose the lifecycle they need
+//! (`create_markdown_text`, `create_text_file`, or `MarkdownInitializer` for
+//! already-created uploads).
 
 use anyhow::Context;
 use base64::Engine;
@@ -75,84 +75,6 @@ impl RepoDocumentSubtype {
     }
 }
 
-/// A document to create, parameterized by its kind.
-#[derive(Debug, Clone)]
-pub struct NewDocument<K: DocumentKind> {
-    /// Common document metadata.
-    pub metadata: NewDocumentMetadata,
-    /// Kind-specific content.
-    pub content: K::Content,
-    _kind: PhantomData<K>,
-}
-
-impl<K: DocumentKind> NewDocument<K> {
-    /// Construct a new document description.
-    pub fn new(metadata: NewDocumentMetadata, content: K::Content) -> Self {
-        Self {
-            metadata,
-            content,
-            _kind: PhantomData,
-        }
-    }
-}
-
-/// Marker trait for document kinds.
-pub trait DocumentKind: Send + Sync + 'static {
-    /// Content required to create this kind of document.
-    type Content: Send + Sync;
-    /// Result returned after creating this kind of document.
-    type Created: Send;
-
-    /// Create this kind of document.
-    fn create<'a, Svc: DocumentService>(
-        creator: &'a DocumentCreator<'_, Svc>,
-        user_id: MacroUserIdStr<'static>,
-        document: NewDocument<Self>,
-    ) -> impl Future<Output = Result<Self::Created, DocumentError>> + Send + 'a
-    where
-        Self: Sized,
-        Self::Content: 'a,
-        Self::Created: 'a;
-}
-
-/// Markdown source text. Creation initializes sync-service immediately.
-#[derive(Debug)]
-pub struct MarkdownText;
-
-/// Backend-created text file. Creation uploads content to document storage.
-#[derive(Debug)]
-pub struct TextFile;
-
-/// Non-markdown file whose bytes will be uploaded by the caller.
-#[derive(Debug)]
-pub struct FileUpload;
-
-/// Markdown file whose bytes will be uploaded by the caller.
-///
-/// Creation only creates metadata and a presigned URL. A later finalize step
-/// should read the uploaded markdown and initialize sync-service.
-#[derive(Debug)]
-pub struct MarkdownUpload;
-
-/// Content for [`MarkdownText`].
-#[derive(Debug, Clone)]
-pub struct MarkdownTextContent {
-    /// Markdown source text.
-    pub markdown: String,
-    /// Markdown subtype.
-    pub subtype: MarkdownSubtype,
-}
-
-impl MarkdownTextContent {
-    /// Construct an empty markdown note.
-    pub fn empty_note() -> Self {
-        Self {
-            markdown: String::new(),
-            subtype: MarkdownSubtype::Note,
-        }
-    }
-}
-
 /// Markdown-specific subtype. Task-ness only exists for markdown documents.
 #[derive(Debug, Clone)]
 pub enum MarkdownSubtype {
@@ -167,6 +89,88 @@ pub enum MarkdownSubtype {
     },
 }
 
+impl MarkdownSubtype {
+    /// Convert a simple task flag into the default markdown subtype.
+    pub fn from_task_flag(is_task: bool) -> Self {
+        if is_task {
+            Self::Task {
+                property_values: None,
+                share_with_team: true,
+            }
+        } else {
+            Self::Note
+        }
+    }
+}
+
+/// A backend-created markdown document.
+///
+/// Creation writes document metadata, initializes sync-service from `markdown`,
+/// and applies task properties when `subtype` is [`MarkdownSubtype::Task`].
+#[derive(Debug, Clone)]
+pub struct NewMarkdownTextDocument {
+    /// Common document metadata.
+    pub metadata: NewDocumentMetadata,
+    /// Markdown source text.
+    pub markdown: String,
+    /// Markdown subtype.
+    pub subtype: MarkdownSubtype,
+}
+
+impl NewMarkdownTextDocument {
+    /// Construct an empty markdown note.
+    pub fn empty_note(metadata: NewDocumentMetadata) -> Self {
+        Self {
+            metadata,
+            markdown: String::new(),
+            subtype: MarkdownSubtype::Note,
+        }
+    }
+}
+
+/// A backend-created plaintext document whose file type determines the
+/// creation lifecycle.
+#[derive(Debug, Clone)]
+pub struct NewPlainTextDocument {
+    metadata: NewDocumentMetadata,
+    text: String,
+    kind: PlainTextDocumentKind,
+}
+
+#[derive(Debug, Clone)]
+enum PlainTextDocumentKind {
+    Markdown(MarkdownSubtype),
+    Text(NonMarkdownFileType),
+}
+
+impl NewPlainTextDocument {
+    /// Construct a plaintext document from a file type, rejecting impossible
+    /// combinations like task documents with non-markdown file types.
+    pub fn new(
+        metadata: NewDocumentMetadata,
+        file_type: FileType,
+        text: String,
+        markdown_subtype: MarkdownSubtype,
+    ) -> Result<Self, DocumentError> {
+        let kind = if file_type == FileType::Md {
+            PlainTextDocumentKind::Markdown(markdown_subtype)
+        } else {
+            if matches!(markdown_subtype, MarkdownSubtype::Task { .. }) {
+                return Err(DocumentError::BadRequest(
+                    "tasks must be markdown documents".to_string(),
+                ));
+            }
+            PlainTextDocumentKind::Text(NonMarkdownFileType::new(file_type)?)
+        };
+
+        Ok(Self {
+            metadata,
+            text,
+            kind,
+        })
+    }
+}
+
 /// A file type that is known not to be markdown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NonMarkdownFileType(FileType);
@@ -176,7 +180,7 @@ impl NonMarkdownFileType {
     pub fn new(file_type: FileType) -> Result<Self, DocumentError> {
         if file_type == FileType::Md {
             return Err(DocumentError::BadRequest(
-                "md documents must use MarkdownText or MarkdownUpload".to_string(),
+                "md documents must use NewMarkdownTextDocument".to_string(),
             ));
         }
 
@@ -201,48 +205,44 @@ impl TryFrom<FileType> for NonMarkdownFileType {
     }
 }
 
-/// Content for [`TextFile`].
+/// A backend-created non-markdown text file.
+///
+/// Creation writes document metadata and uploads `text` to the presigned
+/// document-storage URL returned by the document service.
 #[derive(Debug, Clone)]
-pub struct TextFileContent {
+pub struct NewTextFileDocument {
+    /// Common document metadata.
+    pub metadata: NewDocumentMetadata,
     /// Text document file type. Markdown is excluded by construction.
     pub file_type: NonMarkdownFileType,
     /// Text content to upload.
     pub text: String,
 }
 
-/// Content for [`FileUpload`].
-#[derive(Debug, Clone)]
-pub struct FileUploadContent {
-    /// File type for the upload, if known. Markdown is excluded by construction.
-    pub file_type: Option<NonMarkdownFileType>,
-    /// Hex-encoded sha256 of the future upload bytes.
-    pub sha: String,
-    /// Optional upload job id to associate with the document.
-    pub job_id: Option<String>,
-}
-
-/// Content for [`MarkdownUpload`].
-#[derive(Debug, Clone)]
-pub struct MarkdownUploadContent {
-    /// Hex-encoded sha256 of the future markdown upload bytes.
-    pub sha: String,
-    /// Optional upload job id to associate with the document.
-    pub job_id: Option<String>,
+impl NewTextFileDocument {
+    /// Construct a text file document, rejecting markdown file types.
+    pub fn new(
+        metadata: NewDocumentMetadata,
+        file_type: FileType,
+        text: String,
+    ) -> Result<Self, DocumentError> {
+        Ok(Self {
+            metadata,
+            file_type: NonMarkdownFileType::new(file_type)?,
+            text,
+        })
+    }
 }
 
 /// A fully created document.
 #[derive(Debug)]
-pub struct CreatedDocument<K: DocumentKind> {
+pub struct CreatedDocument {
     response: CreateDocumentResponseData,
-    _kind: PhantomData<K>,
 }
 
-impl<K: DocumentKind> CreatedDocument<K> {
+impl CreatedDocument {
     fn new(response: CreateDocumentResponseData) -> Self {
-        Self {
-            response,
-            _kind: PhantomData,
-        }
+        Self { response }
     }
 
     /// The created document id.
@@ -262,114 +262,6 @@ impl<K: DocumentKind> CreatedDocument<K> {
     /// Consume into the raw create response.
     pub fn into_response(self) -> CreateDocumentResponseData {
         self.response
-    }
-}
-
-/// A document waiting for caller-managed upload bytes.
-#[derive(Debug)]
-pub struct PendingUploadDocument<K: DocumentKind> {
-    response: CreateDocumentResponseData,
-    _kind: PhantomData<K>,
-}
-
-impl<K: DocumentKind> PendingUploadDocument<K> {
-    fn new(response: CreateDocumentResponseData) -> Self {
-        Self {
-            response,
-            _kind: PhantomData,
-        }
-    }
-
-    /// The created document id.
-    pub fn document_id(&self) -> &str {
-        &self
-            .response
-            .document_response
-            .document_metadata
-            .document_id
-    }
-
-    /// The presigned upload URL, if one was returned.
-    pub fn presigned_url(&self) -> Option<&str> {
-        self.response.document_response.presigned_url.as_deref()
-    }
-
-    /// Get the underlying create response.
-    pub fn response(&self) -> &CreateDocumentResponseData {
-        &self.response
-    }
-
-    /// Consume into the raw create response.
-    pub fn into_response(self) -> CreateDocumentResponseData {
-        self.response
-    }
-}
-
-impl DocumentKind for MarkdownText {
-    type Content = MarkdownTextContent;
-    type Created = CreatedDocument<MarkdownText>;
-
-    fn create<'a, Svc: DocumentService>(
-        creator: &'a DocumentCreator<'_, Svc>,
-        user_id: MacroUserIdStr<'static>,
-        document: NewDocument<Self>,
-    ) -> impl Future<Output = Result<Self::Created, DocumentError>> + Send + 'a
-    where
-        Self::Content: 'a,
-        Self::Created: 'a,
-    {
-        async move { creator.create_markdown_text(user_id, document).await }
-    }
-}
-
-impl DocumentKind for TextFile {
-    type Content = TextFileContent;
-    type Created = CreatedDocument<TextFile>;
-
-    fn create<'a, Svc: DocumentService>(
-        creator: &'a DocumentCreator<'_, Svc>,
-        user_id: MacroUserIdStr<'static>,
-        document: NewDocument<Self>,
-    ) -> impl Future<Output = Result<Self::Created, DocumentError>> + Send + 'a
-    where
-        Self::Content: 'a,
-        Self::Created: 'a,
-    {
-        async move { creator.create_text_file(user_id, document).await }
-    }
-}
-
-impl DocumentKind for FileUpload {
-    type Content = FileUploadContent;
-    type Created = PendingUploadDocument<FileUpload>;
-
-    fn create<'a, Svc: DocumentService>(
-        creator: &'a DocumentCreator<'_, Svc>,
-        user_id: MacroUserIdStr<'static>,
-        document: NewDocument<Self>,
-    ) -> impl Future<Output = Result<Self::Created, DocumentError>> + Send + 'a
-    where
-        Self::Content: 'a,
-        Self::Created: 'a,
-    {
-        async move { creator.begin_file_upload(user_id, document).await }
-    }
-}
-
-impl DocumentKind for MarkdownUpload {
-    type Content = MarkdownUploadContent;
-    type Created = PendingUploadDocument<MarkdownUpload>;
-
-    fn create<'a, Svc: DocumentService>(
-        creator: &'a DocumentCreator<'_, Svc>,
-        user_id: MacroUserIdStr<'static>,
-        document: NewDocument<Self>,
-    ) -> impl Future<Output = Result<Self::Created, DocumentError>> + Send + 'a
-    where
-        Self::Content: 'a,
-        Self::Created: 'a,
-    {
-        async move { creator.begin_markdown_upload(user_id, document).await }
     }
 }
 
@@ -393,9 +285,10 @@ impl<'a> MarkdownInitializer<'a> {
 
     /// Initialize an already-created markdown document from markdown text.
     ///
-    /// This is used by flows where metadata was created elsewhere, such as bulk
-    /// folder upload. It is still centralized here so callers do not know about
-    /// lexical-service or sync-service wiring.
+    /// This is used by flows where metadata was created elsewhere, such as
+    /// finalized browser uploads and bulk folder upload. It is still
+    /// centralized here so callers do not know about lexical-service or
+    /// sync-service wiring.
     #[tracing::instrument(skip(self, markdown), err)]
     pub async fn initialize_existing_markdown(
         &self,
@@ -413,7 +306,7 @@ impl<'a> MarkdownInitializer<'a> {
     }
 }
 
-/// Service for creating documents from typed [`NewDocument`] values.
+/// Service for creating backend-owned document content.
 pub struct DocumentCreator<'a, Svc: DocumentService> {
     document_service: &'a Svc,
     lexical_client: &'a LexicalClient,
@@ -451,14 +344,43 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
         }
     }
 
-    /// Create a document from its typed description.
+    /// Create a plaintext document using the lifecycle implied by its file type.
     #[tracing::instrument(skip(self, document), err)]
-    pub async fn create<K: DocumentKind>(
+    pub async fn create_plain_text(
         &self,
         user_id: MacroUserIdStr<'static>,
-        document: NewDocument<K>,
-    ) -> Result<K::Created, DocumentError> {
-        K::create(self, user_id, document).await
+        document: NewPlainTextDocument,
+    ) -> Result<CreatedDocument, DocumentError> {
+        let NewPlainTextDocument {
+            metadata,
+            text,
+            kind,
+        } = document;
+
+        match kind {
+            PlainTextDocumentKind::Markdown(subtype) => {
+                self.create_markdown_text(
+                    user_id,
+                    NewMarkdownTextDocument {
+                        metadata,
+                        markdown: text,
+                        subtype,
+                    },
+                )
+                .await
+            }
+            PlainTextDocumentKind::Text(file_type) => {
+                self.create_text_file(
+                    user_id,
+                    NewTextFileDocument {
+                        metadata,
+                        file_type,
+                        text,
+                    },
+                )
+                .await
+            }
+        }
     }
 
     /// Create a markdown text document and initialize sync-service.
@@ -466,12 +388,12 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
     pub async fn create_markdown_text(
         &self,
         user_id: MacroUserIdStr<'static>,
-        document: NewDocument<MarkdownText>,
-    ) -> Result<CreatedDocument<MarkdownText>, DocumentError> {
-        let NewDocument {
+        document: NewMarkdownTextDocument,
+    ) -> Result<CreatedDocument, DocumentError> {
+        let NewMarkdownTextDocument {
             metadata,
-            content: MarkdownTextContent { markdown, subtype },
-            _kind,
+            markdown,
+            subtype,
         } = document;
         let task = match &subtype {
             MarkdownSubtype::Note => None,
@@ -507,23 +429,37 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
             .document_id
             .clone();
 
-        self.markdown_initializer()
-            .initialize_existing_markdown(&document_id, &markdown)
-            .await?;
+        let finalize_result = async {
+            if let Some((property_values, share_with_team)) = task {
+                self.document_service
+                    .handle_task_properties(
+                        user_id,
+                        &document_id,
+                        &CreateTaskRequest {
+                            task_name,
+                            project_id,
+                            property_values,
+                            share_with_team,
+                        },
+                    )
+                    .await?;
+            }
 
-        if let Some((property_values, share_with_team)) = task {
             self.document_service
-                .handle_task_properties(
-                    user_id,
-                    &document_id,
-                    &CreateTaskRequest {
-                        task_name,
-                        project_id,
-                        property_values,
-                        share_with_team,
-                    },
-                )
+                .mark_document_uploaded(&document_id)
                 .await?;
+
+            self.markdown_initializer()
+                .initialize_existing_markdown(&document_id, &markdown)
+                .await?;
+
+            Ok(())
+        }
+        .await;
+
+        if let Err(error) = finalize_result {
+            self.cleanup_created_document(&document_id).await;
+            return Err(error);
         }
 
         Ok(CreatedDocument::new(response))
@@ -534,12 +470,12 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
     pub async fn create_text_file(
         &self,
         user_id: MacroUserIdStr<'static>,
-        document: NewDocument<TextFile>,
-    ) -> Result<CreatedDocument<TextFile>, DocumentError> {
-        let NewDocument {
+        document: NewTextFileDocument,
+    ) -> Result<CreatedDocument, DocumentError> {
+        let NewTextFileDocument {
             metadata,
-            content: TextFileContent { file_type, text },
-            _kind,
+            file_type,
+            text,
         } = document;
 
         let bytes = text.into_bytes();
@@ -558,80 +494,52 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
             .create_document(user_id, args, None)
             .await?;
 
-        let presigned_url = response
+        let document_id = response
             .document_response
-            .presigned_url
-            .as_ref()
-            .context("expected presigned url")
-            .map_err(DocumentError::Internal)?;
+            .document_metadata
+            .document_id
+            .clone();
 
-        self.upload_to_presigned_url(presigned_url, &response.content_type, &hashes.base64, bytes)
+        let finalize_result = async {
+            let presigned_url = response
+                .document_response
+                .presigned_url
+                .as_ref()
+                .context("expected presigned url")
+                .map_err(DocumentError::Internal)?;
+
+            self.upload_to_presigned_url(
+                presigned_url,
+                &response.content_type,
+                &hashes.base64,
+                bytes,
+            )
             .await?;
+
+            self.document_service
+                .mark_document_uploaded(&document_id)
+                .await?;
+
+            Ok(())
+        }
+        .await;
+
+        if let Err(error) = finalize_result {
+            self.cleanup_created_document(&document_id).await;
+            return Err(error);
+        }
 
         Ok(CreatedDocument::new(response))
     }
 
-    /// Create metadata and a presigned upload URL for a non-markdown file.
-    #[tracing::instrument(skip(self, document), err)]
-    pub async fn begin_file_upload(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        document: NewDocument<FileUpload>,
-    ) -> Result<PendingUploadDocument<FileUpload>, DocumentError> {
-        let NewDocument {
-            metadata,
-            content:
-                FileUploadContent {
-                    file_type,
-                    sha,
-                    job_id,
-                },
-            _kind,
-        } = document;
-        let args = metadata.into_repo_args(
-            user_id.clone(),
-            RepoDocumentKind {
-                file_type: file_type.map(NonMarkdownFileType::into_file_type),
-                sha,
-                subtype: RepoDocumentSubtype::Regular,
-            },
-        );
-
-        self.document_service
-            .create_document(user_id, args, job_id)
-            .await
-            .map(PendingUploadDocument::new)
-    }
-
-    /// Create metadata and a presigned upload URL for a markdown file.
-    #[tracing::instrument(skip(self, document), err)]
-    pub async fn begin_markdown_upload(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        document: NewDocument<MarkdownUpload>,
-    ) -> Result<PendingUploadDocument<MarkdownUpload>, DocumentError> {
-        let NewDocument {
-            metadata,
-            content: MarkdownUploadContent { sha, job_id },
-            _kind,
-        } = document;
-        let args = metadata.into_repo_args(
-            user_id.clone(),
-            RepoDocumentKind {
-                file_type: Some(FileType::Md),
-                sha,
-                subtype: RepoDocumentSubtype::Regular,
-            },
-        );
-
-        self.document_service
-            .create_document(user_id, args, job_id)
-            .await
-            .map(PendingUploadDocument::new)
-    }
-
     fn markdown_initializer(&self) -> MarkdownInitializer<'_> {
         MarkdownInitializer::new(self.lexical_client, self.sync_service_client)
+    }
+
+    async fn cleanup_created_document(&self, document_id: &str) {
+        self.document_service
+            .cleanup_created_document(document_id)
+            .await;
     }
 
     async fn upload_to_presigned_url(
@@ -681,7 +589,46 @@ fn file_shas(file_content: &[u8]) -> FileShas {
 
 #[cfg(test)]
 mod tests {
-    use super::file_shas;
+    use super::{MarkdownSubtype, NewDocumentMetadata, NewPlainTextDocument, file_shas};
+    use model::document::FileType;
+
+    fn metadata() -> NewDocumentMetadata {
+        NewDocumentMetadata {
+            id: None,
+            document_name: "test".to_string(),
+            project_id: None,
+            email_attachment_id: None,
+            created_at: None,
+            skip_history: false,
+        }
+    }
+
+    #[test]
+    fn new_plain_text_rejects_non_markdown_task() {
+        let err = NewPlainTextDocument::new(
+            metadata(),
+            FileType::Txt,
+            "hello".to_string(),
+            MarkdownSubtype::from_task_flag(true),
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "bad request: tasks must be markdown documents"
+        );
+    }
+
+    #[test]
+    fn new_plain_text_accepts_markdown_task() {
+        NewPlainTextDocument::new(
+            metadata(),
+            FileType::Md,
+            "# hello".to_string(),
+            MarkdownSubtype::from_task_flag(true),
+        )
+        .unwrap();
+    }
 
     #[test]
     fn test_file_shas() {

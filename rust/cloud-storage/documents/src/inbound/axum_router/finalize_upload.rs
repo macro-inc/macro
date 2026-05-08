@@ -24,8 +24,9 @@ use crate::domain::ports::DocumentService;
 ///
 /// Finalizes caller-managed uploads after the bytes have been PUT to the
 /// presigned URL. For markdown uploads this reads the uploaded markdown from
-/// document storage and initializes sync-service. Non-markdown uploads are a
-/// no-op so callers can safely finalize every uploaded document.
+/// document storage, initializes sync-service, and marks the document uploaded.
+/// Non-DOCX uploads are marked uploaded; DOCX completion remains owned by the
+/// unzip/conversion pipeline.
 #[utoipa::path(
     tag = "document",
     post,
@@ -57,7 +58,14 @@ pub async fn finalize_upload_handler<T: DocumentService, Svc: EntityAccessServic
         .as_deref()
         .and_then(|file_type| FileType::from_str(file_type).ok());
 
+    if matches!(file_type, Some(FileType::Docx)) {
+        // DOCX upload finalization is owned by the unzip/conversion pipeline,
+        // which marks the document uploaded after processing succeeds.
+        return Ok(success());
+    }
+
     if !matches!(file_type, Some(FileType::Md)) {
+        state.service.mark_document_uploaded(&document_id).await?;
         return Ok(success());
     }
 
@@ -67,6 +75,7 @@ pub async fn finalize_upload_handler<T: DocumentService, Svc: EntityAccessServic
         .await
         .map_err(DocumentError::Internal)?
     {
+        state.service.mark_document_uploaded(&document_id).await?;
         return Ok(success());
     }
 
@@ -74,10 +83,13 @@ pub async fn finalize_upload_handler<T: DocumentService, Svc: EntityAccessServic
         uploaded_document_presigned_url(state.service.as_ref(), &document_context, &document_id)
             .await?
     else {
+        state.service.mark_document_uploaded(&document_id).await?;
         return Ok(success());
     };
 
     let markdown = download_markdown(&presigned_url).await?;
+
+    state.service.mark_document_uploaded(&document_id).await?;
 
     let initializer = MarkdownInitializer::new(
         state.lexical_client.as_ref(),
@@ -97,6 +109,7 @@ pub async fn finalize_upload_handler<T: DocumentService, Svc: EntityAccessServic
                 .await
                 .map_err(DocumentError::Internal)?
             {
+                state.service.mark_document_uploaded(&document_id).await?;
                 Ok(success())
             } else {
                 Err(error)
