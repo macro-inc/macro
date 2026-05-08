@@ -176,6 +176,9 @@ export class SearchProcessingService extends pulumi.ComponentResource {
         imagePath: BASE_PATH,
         dockerfile: 'Dockerfile.search_processing_service',
         platform,
+        buildArgs: {
+          SERVICE_NAME: 'search_processing_service',
+        },
         tags: this.tags,
       },
       { parent: this }

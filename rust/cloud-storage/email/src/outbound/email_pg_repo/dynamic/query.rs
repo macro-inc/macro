@@ -1,4 +1,5 @@
 use super::filters::*;
+use super::resolve::{ResolvedFilters, can_short_circuit, resolve_filters};
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use crate::outbound::email_pg_repo::db_types::*;
 use chrono::{DateTime, Utc};
@@ -20,11 +21,48 @@ struct QueryParams {
     is_important: bool,
     shared: SharedEmailFilter,
     user_id: String,
+    resolved: ResolvedFilters,
 }
 
 enum ThreadCandidateSource {
     Owned,
     Shared,
+}
+
+/// Pushes the `user_source_ids AS (…), SharedEmailThreads AS (…)` CTE pair
+/// (without the leading `WITH` keyword and without trailing comma) into the
+/// builder. Caller is responsible for emitting the `WITH` keyword and any
+/// commas between sibling CTEs.
+fn push_shared_cte(builder: &mut QueryBuilder<'static, Postgres>, params: &QueryParams) {
+    builder.push(
+        r#"user_source_ids AS (
+            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
+                WHERE cp.user_id = "#,
+    );
+    builder.push_bind(params.user_id.clone());
+    builder.push(
+        r#" AND cp.left_at IS NULL
+            UNION ALL
+            SELECT t.team_id::text FROM team_user t
+                WHERE t.user_id = "#,
+    );
+    builder.push_bind(params.user_id.clone());
+    builder.push(
+        r#"
+            UNION ALL
+            SELECT "#,
+    );
+    builder.push_bind(params.user_id.clone());
+    builder.push(
+        r#"
+        ),
+        SharedEmailThreads AS (
+            SELECT entity_id AS thread_id
+            FROM entity_access
+            WHERE source_id = ANY(SELECT source_id FROM user_source_ids)
+              AND entity_type = 'thread'
+        )"#,
+    );
 }
 
 fn push_thread_candidate_select(
@@ -90,6 +128,15 @@ fn push_thread_candidate_select(
         build_thread_email_filter(email_filter).push_into(builder);
     }
 
+    // Push address (Sender/Cc/Bcc/Recipient) constraints into the candidate
+    // WHERE so pagination's LIMIT counts threads that actually contain a
+    // matching message. The actual matching set is materialized once in the
+    // top-level `matching_threads` CTE; the candidate WHERE just references
+    // it via `t.id IN (SELECT thread_id FROM matching_threads)`.
+    if has_address_literals(email_filter) {
+        build_thread_address_filter(email_filter).push_into(builder);
+    }
+
     builder.push(
         r#"
                   -- Cursor logic
@@ -132,43 +179,26 @@ fn build_query(
     let view_message_filter = build_view_message_filter(view);
 
     let needs_shared_cte = !matches!(params.shared, SharedEmailFilter::Exclude);
+    let matching_threads_body = build_matching_threads_cte_body(email_filter, &params.resolved);
 
-    let mut builder = if needs_shared_cte {
-        let mut b = sqlx::QueryBuilder::new(
-            r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = "#,
-        );
-        b.push_bind(params.user_id.clone());
-        b.push(
-            r#" AND cp.left_at IS NULL
-            UNION ALL
-            SELECT t.team_id::text FROM team_user t
-                WHERE t.user_id = "#,
-        );
-        b.push_bind(params.user_id.clone());
-        b.push(
-            r#"
-            UNION ALL
-            SELECT "#,
-        );
-        b.push_bind(params.user_id.clone());
-        b.push(
-            r#"
-        ),
-        SharedEmailThreads AS (
-            SELECT entity_id AS thread_id
-            FROM entity_access
-            WHERE source_id = ANY(SELECT source_id FROM user_source_ids)
-              AND entity_type = 'thread'
-        )
-        "#,
-        );
-        b
-    } else {
-        sqlx::QueryBuilder::new("")
-    };
+    let mut builder = sqlx::QueryBuilder::new("");
+    if needs_shared_cte || matching_threads_body.is_some() {
+        builder.push("\n        WITH ");
+        let mut needs_comma = false;
+        if needs_shared_cte {
+            push_shared_cte(&mut builder, &params);
+            needs_comma = true;
+        }
+        if let Some(body) = matching_threads_body {
+            if needs_comma {
+                builder.push(",\n        ");
+            }
+            builder.push("matching_threads AS MATERIALIZED (\n            ");
+            body.push_into(&mut builder);
+            builder.push("\n        )");
+        }
+        builder.push("\n        ");
+    }
 
     builder.push(
         r#"
@@ -279,12 +309,9 @@ fn build_query(
                    m.is_draft
             FROM email_messages m
             WHERE m.thread_id = t.id
-              AND NOT EXISTS (
-                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON ml.label_id = l.id
-                WHERE ml.message_id = m.id AND l.name = 'TRASH' AND l.link_id = t.link_id
-              )
-        "#,
+              AND "#,
     );
+    build_lateral_trash_exclusion(&params.resolved).push_into(&mut builder);
 
     // Add view-specific message filters
     if !view_message_filter.is_empty() {
@@ -292,7 +319,7 @@ fn build_query(
     }
 
     if has_message_literals(email_filter) {
-        build_message_email_filter(email_filter).push_into(&mut builder);
+        build_message_email_filter(email_filter, &params.resolved).push_into(&mut builder);
     }
 
     builder.push(
@@ -316,6 +343,15 @@ pub(super) fn debug_build_query_sql(
     view: &PreviewView,
     email_filter: &Expr<EmailLiteral>,
 ) -> String {
+    debug_build_query_sql_with_resolved(view, email_filter, ResolvedFilters::empty())
+}
+
+#[cfg(test)]
+pub(super) fn debug_build_query_sql_with_resolved(
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    resolved: ResolvedFilters,
+) -> String {
     use sqlx::Execute;
 
     let shared = extract_shared_filter(email_filter);
@@ -336,6 +372,7 @@ pub(super) fn debug_build_query_sql(
             is_important,
             shared,
             user_id: "test-user".to_string(),
+            resolved,
         },
     )
     .build()
@@ -405,6 +442,14 @@ pub(crate) async fn dynamic_email_thread_cursor(
         PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
     );
 
+    // Resolve Complete email addresses to contact ids and look up the TRASH
+    // label id once, so the candidate WHERE can use direct id equality
+    // instead of joining email_contacts/email_labels per message row.
+    let resolved = resolve_filters(pool, *link_id, email_filter).await?;
+    if can_short_circuit(email_filter, &resolved) {
+        return Ok(Vec::new());
+    }
+
     let mut qb = build_query(
         view,
         email_filter,
@@ -417,8 +462,10 @@ pub(crate) async fn dynamic_email_thread_cursor(
             is_important,
             shared,
             user_id: user_id.to_string(),
+            resolved,
         },
     );
+
     qb.build()
         .try_map(|row| {
             Ok(ThreadPreviewCursorDbRow {

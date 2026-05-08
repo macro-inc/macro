@@ -40,17 +40,10 @@ jobs:
           echo 'PATH="/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' \
             | sudo tee /etc/environment >/dev/null
 
-      - name: Configure cachix substituter
-        shell: bash
-        env:
-          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        run: |
-          set -euo pipefail
-          export NIX_REMOTE=daemon
-          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
-          nix profile add nixpkgs#cachix
-          cachix authtoken "$CACHIX_AUTH_TOKEN"
-          cachix use macro-inc
+      - name: Configure Cachix
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Materialize dev shell into /nix/store
         shell: bash
@@ -60,6 +53,9 @@ jobs:
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
           sudo mkdir -p /var/cache/nix
           sudo chown runner:runner /var/cache/nix
+          cachix watch-store "$CACHIX_CACHE_NAME" &
+          cachix_pid=$!
+          trap 'kill "$cachix_pid" || true' EXIT
           nix develop --profile /var/cache/nix/dev-shell --command true
 
       - name: Write image markers
@@ -84,6 +80,9 @@ jobs:
           set -euo pipefail
           export NIX_REMOTE=daemon
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          cachix watch-store "$CACHIX_CACHE_NAME" &
+          cachix_pid=$!
+          trap 'kill "$cachix_pid" || true' EXIT
           nix --version
           test -L /var/cache/nix/dev-shell
           nix develop --profile /var/cache/nix/dev-shell --command bash -lc '

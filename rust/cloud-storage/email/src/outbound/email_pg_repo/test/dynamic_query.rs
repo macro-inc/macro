@@ -1652,3 +1652,161 @@ async fn test_shared_only_returns_correct_owner_id(pool: Pool<Postgres>) -> anyh
 
     Ok(())
 }
+
+// Filtering by a Complete email that has no contact in `email_contacts`
+// for this link must short-circuit to an empty result set without
+// running the main query. This is what `resolve_filters` +
+// `can_short_circuit` are for: the AST `Sender(Complete(missing))`
+// folds to FALSE and the entry point returns `Vec::new()`.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_dynamic_query_short_circuits_on_unresolved_complete_email(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    // No contact with this email exists in the fixture.
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Complete(
+        EmailStr::parse_from_str("nobody@nowhere.com")?.into_owned(),
+    ))));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query, "").await?;
+
+    assert!(
+        results.is_empty(),
+        "filtering by an unresolved Complete email must short-circuit to no results, got {} threads",
+        results.len()
+    );
+
+    Ok(())
+}
+
+// Filtering by `Bcc(bob)` must return thread 4: the edge-cases fixture
+// adds bob as a BCC recipient on message 4. Exercises the BCC arm of
+// `build_address_predicate_on_m` and the Bcc UNION branch in
+// `build_matching_threads_cte_body`. Without this test, no SQL-level
+// path covers BCC.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_dynamic_query_address_edge_cases")
+    )
+)]
+async fn test_dynamic_query_with_bcc_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    let email_filter = Arc::new(Expr::Literal(EmailLiteral::Bcc(Email::Complete(
+        EmailStr::parse_from_str("bob@example.com")?.into_owned(),
+    ))));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, email_filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query, "").await?;
+
+    let result_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(
+        result_ids.contains("20000004-0000-0000-0000-000000000004"),
+        "Bcc(bob) should match thread 4 (bob is BCC on message 4); got {:?}",
+        result_ids
+    );
+    // Thread 7 has bob as CC, not BCC — it must NOT match a Bcc filter.
+    assert!(
+        !result_ids.contains("20000007-0000-0000-0000-000000000007"),
+        "Bcc(bob) must not match thread 7 (bob is CC there, not BCC); got {:?}",
+        result_ids
+    );
+
+    Ok(())
+}
+
+// `Sender(john) AND Recipient(alice)` must match using *single-message*
+// semantics: the thread is included iff some single message satisfies
+// both conjuncts. Thread 12 (split between msg12a john→bob and msg12b
+// bob→alice) has john-as-sender on one message AND alice-as-recipient on
+// a *different* message — neither message individually satisfies both,
+// so the thread must be excluded. The same filter must still match
+// thread 1 (msg1: john→alice) where a single message does satisfy both.
+//
+// Sanity check: filtering by `Sender(john)` alone must include thread 12,
+// proving the fixture is wired correctly and the exclusion above is
+// driven by single-message semantics rather than a missing fixture row.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_dynamic_query_address_edge_cases")
+    )
+)]
+async fn test_dynamic_query_and_filter_uses_single_message_semantics(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    // Sanity: Sender(john) alone matches the split thread (msg12a is from
+    // john) — so the fixture is wired up and john has at least one
+    // message on thread 12.
+    {
+        let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Complete(
+            EmailStr::parse_from_str("john@example.com")?.into_owned(),
+        ))));
+        let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+        let results =
+            dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query, "").await?;
+        let ids: std::collections::HashSet<String> =
+            results.iter().map(|r| r.id.to_string()).collect();
+        assert!(
+            ids.contains("20000012-0000-0000-0000-000000000012"),
+            "fixture sanity: Sender(john) should include thread 12 (msg12a is from john); got {:?}",
+            ids
+        );
+    }
+
+    // The actual assertion: AND-of-conjuncts is single-message-scoped.
+    let filter = Arc::new(Expr::and(
+        Expr::Literal(EmailLiteral::Sender(Email::Complete(
+            EmailStr::parse_from_str("john@example.com")?.into_owned(),
+        ))),
+        Expr::Literal(EmailLiteral::Recipient(Email::Complete(
+            EmailStr::parse_from_str("alice@example.com")?.into_owned(),
+        ))),
+    ));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query, "").await?;
+    let ids: std::collections::HashSet<String> = results.iter().map(|r| r.id.to_string()).collect();
+
+    assert!(
+        !ids.contains("20000012-0000-0000-0000-000000000012"),
+        "Sender(john) AND Recipient(alice) must NOT match thread 12: john's message and \
+         alice's message are different messages on that thread, so no single message satisfies \
+         both conjuncts. got: {:?}",
+        ids
+    );
+
+    // And it should still match thread 1, where msg1 is john → alice on
+    // a single message (the positive case, already covered by
+    // `test_dynamic_query_with_and_filter` but re-asserted here so a
+    // regression that drops thread 1 wouldn't be hidden by the negative
+    // assertion above succeeding for the wrong reason).
+    assert!(
+        ids.contains("20000001-0000-0000-0000-000000000001"),
+        "Sender(john) AND Recipient(alice) should still match thread 1 (msg1: john → alice); \
+         got: {:?}",
+        ids
+    );
+
+    Ok(())
+}
