@@ -44,6 +44,14 @@ inputs:
     description: 'GitHub token for PR comments'
     required: false
     default: ''
+  cloud-storage-service-name:
+    description: 'Optional service key from .github/services-config.json; used to build Lambda artifacts before preview'
+    required: false
+    default: ''
+  cachix-auth-token:
+    description: 'Cachix auth token used when building Lambda artifacts'
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -52,6 +60,29 @@ runs:
     - uses: actions/checkout@v6
       with:
         lfs: ${{ inputs.use-lfs }}
+
+    - name: Configure Cachix
+      if: ${{ inputs.cloud-storage-service-name != '' }}
+      uses: ./.github/actions/setup-cachix
+      with:
+        cachix-auth-token: ${{ inputs.cachix-auth-token }}
+
+    - name: Check Lambda config
+      if: ${{ inputs.cloud-storage-service-name != '' }}
+      id: check-lambdas
+      shell: bash
+      env:
+        SERVICE: ${{ inputs.cloud-storage-service-name }}
+      run: |
+        has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
+        echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
+
+    - name: Build Lambda artifacts for preview
+      if: ${{ inputs.cloud-storage-service-name != '' && steps.check-lambdas.outputs.has_lambdas == 'true' }}
+      shell: bash
+      env:
+        SERVICE: ${{ inputs.cloud-storage-service-name }}
+      run: .github/scripts/build-cloud-storage-lambdas.sh
 
     # setup docker
     - uses: docker/setup-buildx-action@v3

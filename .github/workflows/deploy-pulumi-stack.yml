@@ -14,6 +14,10 @@ on:
         type: string
         required: true
         description: The name of the pulumi service to deploy. This will be the exact name of the folder containing your stacks.
+      cloud-storage-service-name:
+        type: string
+        required: false
+        description: Optional service key from .github/services-config.json; set this for Lambda-backed stacks so CI can build Lambda zips before Pulumi runs.
 
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.pulumi-service-name }}-${{ inputs.environment }}
@@ -30,8 +34,6 @@ jobs:
         ssh=false,
         'run-id=${{github.run_id}}',
       ]
-    outputs:
-      level: ${{ steps.set-level.outputs.level }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -43,5 +45,7 @@ jobs:
           aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ inputs.pulumi-service-name }} # TODO: we should have validation that this is a valid pulumi service name before we allow it to be set here
+          cloud-storage-service-name: ${{ inputs.cloud-storage-service-name }}
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}

@@ -38,6 +38,8 @@ jobs:
               - 'flake.lock'
               - '.github/actions/setup-cachix/**'
               - '.github/actions/setup-sccache/**'
+              - '.github/services-config.json'
+              - '.github/scripts/build-cloud-storage-lambdas.sh'
               - .github/workflows/code-check-cloud-storage.yml
       - name: compute nextest package filter
         id: package-filter
@@ -303,114 +305,68 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: sccache --show-stats || true
 
-  diff-check:
+  build-lambdas:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    outputs:
-      docx-unzip-handler: ${{ steps.changes.outputs.docx-unzip-handler }}
-      worker-trigger: ${{ steps.changes.outputs.worker-trigger }}
-      document-text-extractor: ${{ steps.changes.outputs.document-text-extractor }}
-      organization_retention_trigger: ${{ steps.changes.outputs.organization_retention_trigger }}
-      organization_retention_handler: ${{ steps.changes.outputs.organization_retention_handler }}
-      delete_chat_handler: ${{ steps.changes.outputs.delete_chat_handler }}
-      search_upload_handler: ${{ steps.changes.outputs.search_upload_handler }}
-      upload_extractor_lambda_trigger: ${{ steps.changes.outputs.upload_extractor_lambda_trigger }}
-      upload_extractor_lambda_handler: ${{ steps.changes.outputs.upload_extractor_lambda_handler }}
-      email_suppression_handler: ${{ steps.changes.outputs.email_suppression_handler }}
-      deleted_item_poller: ${{ steps.changes.outputs.deleted_item_poller }}
-      email_refresh_handler: ${{ steps.changes.outputs.email_refresh_handler }}
-      email_scheduled_handler: ${{ steps.changes.outputs.email_scheduled_handler }}
-      email_sfs_delete_handler: ${{ steps.changes.outputs.email_sfs_delete_handler }}
-      user_link_cleanup_handler: ${{ steps.changes.outputs.user_link_cleanup_handler }}
+    runs-on: linux-extra-beefy
     steps:
       - uses: actions/checkout@v6
-      - uses: whutchinson98/diff-checker-action@v1.0.2
-        id: changes
         with:
-          token: ${{ GITHUB.TOKEN }}
-          diff: |
-            docx-unzip-handler: ./rust/cloud-storage/docx-unzip-handler/*
-            worker-trigger: ./rust/cloud-storage/worker-trigger/*
-            document-text-extractor: ./rust/cloud-storage/document-text-extractor/*
-            organization_retention_trigger: ./rust/cloud-storage/organization_retention_trigger/*
-            organization_retention_handler: ./rust/cloud-storage/organization_retention_handler/*
-            delete_chat_handler: ./rust/cloud-storage/delete_chat_handler/*
-            search_upload_handler: ./rust/cloud-storage/search_upload_handler/*
-            upload_extractor_lambda_trigger: ./rust/cloud-storage/upload_extractor_lambda_trigger/*
-            upload_extractor_lambda_handler: ./rust/cloud-storage/upload_extractor_lambda_handler/*
-            email_suppression_handler: ./rust/cloud-storage/email_suppression_handler/*
-            deleted_item_poller: ./rust/cloud-storage/deleted_item_poller/*
-            email_refresh_handler: ./rust/cloud-storage/email_refresh_handler/*
-            email_scheduled_handler: ./rust/cloud-storage/email_scheduled_handler/*
-            email_sfs_delete_handler: ./rust/cloud-storage/email_sfs_delete_handler/*
-            user_link_cleanup_handler: ./rust/cloud-storage/user_link_cleanup_handler/*
-            lambda_aggregate_frecency: ./rust/cloud-storage/lambda_aggregate_frecency/*
+          clean: false
+          fetch-depth: 0
 
-  check-lambdas:
-    needs: diff-check
-    runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
-    strategy:
-      # we want to fail the particular item that failed not all of them.
-      fail-fast: false
-      matrix:
-        include:
-          - service: docx-unzip-handler
-          - service: worker-trigger
-          - service: document-text-extractor
-          - service: organization_retention_trigger
-          - service: organization_retention_handler
-          - service: delete_chat_handler
-          - service: search_upload_handler
-          - service: upload_extractor_lambda_trigger
-          - service: upload_extractor_lambda_handler
-          - service: email_suppression_handler
-          - service: deleted_item_poller
-          - service: email_refresh_handler
-          - service: email_scheduled_handler
-          - service: email_sfs_delete_handler
-          - service: user_link_cleanup_handler
-    steps:
-      - name: setup env var
+      - name: Configure Cachix
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Determine changed lambdas
+        id: lambdas
         shell: bash
         run: |
-          echo "Check for ${{ matrix.service }}"
-          echo "SHOULD_RUN=${{ needs.diff-check.outputs[matrix.service] }}" >> $GITHUB_ENV
-      - uses: actions/checkout@v6
-        if: env.SHOULD_RUN == 'true'
-      - name: check if lambda is built
-        if: env.SHOULD_RUN == 'true'
-        run: |
-          echo "Checking diff to ensure bootstrap.zip is part of PR"
-          git fetch origin ${{ github.base_ref }}
-          if ! git diff --name-only --diff-filter=AM origin/${{ github.base_ref }} HEAD | grep "rust/cloud-storage/target/lambda/${{ matrix.service }}/bootstrap.zip" > /dev/null; then
-          echo "Code changes detected, but new bootstrap.zip for ${{matrix.service}} not found in PR. Please run: just rust/cloud-storage/${{matrix.service}}/build to build and commit bootstrap.zip. Alternatively you can run just rust/cloud-storage/build_lambads to build all lambdas."
-            exit 1
-          fi
+          set -euo pipefail
+          git fetch origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+          compare_rev=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          changed_files=$(git diff --name-only "$compare_rev" HEAD)
 
-  check-no-bootstrap-deletions:
-    needs: path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: check for deleted bootstrap.zip files
+          all_lambdas=$(jq -r '[.services[].deploy_lambdas[]?] | unique | .[]' .github/services-config.json)
+          changed_lambdas=()
+
+          while IFS= read -r lambda; do
+            if printf '%s\n' "$changed_files" | grep -qE "^(rust/cloud-storage/${lambda}/|rust/cloud-storage/Cargo\\.(toml|lock)|rust/rust-toolchain\\.toml|flake\\.nix|flake\\.lock|\\.github/scripts/build-cloud-storage-lambdas\\.sh|\\.github/workflows/code-check-cloud-storage\\.yml)"; then
+              changed_lambdas+=("$lambda")
+            fi
+          done <<< "$all_lambdas"
+
+          lambdas=$(printf '%s\n' "${changed_lambdas[@]}" | jq -R . | jq -s -c .)
+          echo "lambdas=$lambdas" >> "$GITHUB_OUTPUT"
+          echo "Changed lambdas: $lambdas"
+
+      - name: Build changed Lambda artifacts
+        if: ${{ steps.lambdas.outputs.lambdas != '[]' }}
+        shell: bash
+        env:
+          LAMBDAS_JSON: ${{ steps.lambdas.outputs.lambdas }}
         run: |
-          git fetch origin ${{ github.base_ref }}
-          DELETED=$(git diff --name-only --diff-filter=D origin/${{ github.base_ref }} HEAD | grep "bootstrap\.zip" || true)
-          if [ -n "$DELETED" ]; then
-            echo "❌ bootstrap.zip files should never be deleted. The following bootstrap.zip files were removed in this PR:"
-            echo "$DELETED"
-            exit 1
-          fi
-          echo "✅ No bootstrap.zip files were deleted"
+          set -euo pipefail
+          mapfile -t lambdas < <(jq -r '.[]' <<< "$LAMBDAS_JSON")
+          LAMBDAS_ENV="${lambdas[*]}" nix develop .# -c bash -lc '
+            set -euo pipefail
+            cd rust/cloud-storage
+            for lambda in $LAMBDAS_ENV; do
+              echo "::group::Build $lambda"
+              ulimit -n 10240
+              just "$lambda/build"
+              test -f "target/lambda/$lambda/bootstrap.zip"
+              echo "::endgroup::"
+            done
+          '
 
   # Collector job that always runs - use this as the required status check
   status-check:
     name: Cloud Storage Status Check
     if: always()
-    needs: [path-check, check, test, diff-check, check-lambdas, check-no-bootstrap-deletions]
+    needs: [path-check, check, test, build-lambdas]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
@@ -418,17 +374,13 @@ jobs:
           echo "path-check: ${{ needs.path-check.result }}"
           echo "check: ${{ needs.check.result }}"
           echo "test: ${{ needs.test.result }}"
-          echo "diff-check: ${{ needs.diff-check.result }}"
-          echo "check-lambdas: ${{ needs.check-lambdas.result }}"
-          echo "check-no-bootstrap-deletions: ${{ needs.check-no-bootstrap-deletions.result }}"
+          echo "build-lambdas: ${{ needs.build-lambdas.result }}"
 
           # Fail if any job failed (skipped and success are both OK)
           if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
              [[ "${{ needs.check.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
-             [[ "${{ needs.diff-check.result }}" == "failure" ]] || \
-             [[ "${{ needs.check-lambdas.result }}" == "failure" ]] || \
-             [[ "${{ needs.check-no-bootstrap-deletions.result }}" == "failure" ]]; then
+             [[ "${{ needs.build-lambdas.result }}" == "failure" ]]; then
             echo "❌ One or more jobs failed"
             exit 1
           fi

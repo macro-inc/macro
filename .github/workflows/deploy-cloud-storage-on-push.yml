@@ -153,9 +153,51 @@ jobs:
           path: prebuilt-binaries.tar.gz
           retention-days: 7
 
+  build-lambda-artifacts:
+    name: Build ${{ matrix.service }} Lambda artifacts
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.has_changes == 'true' }}
+    runs-on: linux-extra-beefy
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          clean: false
+
+      - name: Configure Cachix
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Check Lambda config
+        id: check-lambdas
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
+          echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
+
+      - name: Build Lambda artifacts
+        if: ${{ steps.check-lambdas.outputs.has_lambdas == 'true' }}
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: .github/scripts/build-cloud-storage-lambdas.sh
+
+      - name: Upload Lambda artifacts
+        if: ${{ steps.check-lambdas.outputs.has_lambdas == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cloud-storage-lambdas-${{ matrix.service }}-${{ github.sha }}
+          path: lambda-artifacts.tar.gz
+          retention-days: 7
+
   deploy-services:
     name: Deploy ${{ matrix.service }}
-    needs: [detect-changes, migrate-db, build-service-binaries]
+    needs: [detect-changes, migrate-db, build-service-binaries, build-lambda-artifacts]
     if: ${{ needs.detect-changes.outputs.has_changes == 'true' }}
     runs-on:
       [
@@ -180,13 +222,15 @@ jobs:
         with:
           service-name: ${{ matrix.service }}
 
-      - name: Check prebuilt binaries config
-        id: check-binaries
+      - name: Check artifact config
+        id: check-artifacts
         env:
           SERVICE: ${{ matrix.service }}
         run: |
           has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' .github/services-config.json)
+          has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
           echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
+          echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
 
       - name: Deploy ${{ matrix.service }}
         uses: ./.github/actions/deploy-cloud-storage-pulumi
@@ -196,14 +240,15 @@ jobs:
           aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
-          prebuilt-binaries-artifact: ${{ steps.check-binaries.outputs.has_binaries == 'true' && format('cloud-storage-service-binaries-{0}-{1}', matrix.service, github.sha) || '' }}
+          prebuilt-binaries-artifact: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && format('cloud-storage-service-binaries-{0}-{1}', matrix.service, github.sha) || '' }}
+          lambda-artifacts: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && format('cloud-storage-lambdas-{0}-{1}', matrix.service, github.sha) || '' }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}
 
   deployment-summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
-    needs: [detect-changes, migrate-db, build-service-binaries, deploy-services]
+    needs: [detect-changes, migrate-db, build-service-binaries, build-lambda-artifacts, deploy-services]
     if: always()
     steps:
       - name: Check deployment results
@@ -215,6 +260,9 @@ jobs:
             exit 1
           elif [[ "${{ needs.build-service-binaries.result }}" == "failure" ]]; then
             echo "❌ One or more service binary builds failed"
+            exit 1
+          elif [[ "${{ needs.build-lambda-artifacts.result }}" == "failure" ]]; then
+            echo "❌ One or more Lambda artifact builds failed"
             exit 1
           elif [[ "${{ needs.deploy-services.result }}" == "failure" ]]; then
             echo "❌ One or more service deployments failed"

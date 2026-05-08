@@ -39,10 +39,12 @@ on:
         required: true
       DD_API_KEY:
         required: true
+      CACHIX_AUTH_TOKEN:
+        required: true
 
 jobs:
   preview:
-    runs-on: ubuntu-latest
+    runs-on: linux-extra-beefy
     steps:
       - uses: actions/checkout@v6
       
@@ -64,3 +66,5 @@ jobs:
           use-docker: ${{ inputs.use-docker }}
           use-lfs: ${{ inputs.use-lfs }}
           github-token: ${{ inputs.github-token }}
+          cloud-storage-service-name: ${{ inputs.service-name }}
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
