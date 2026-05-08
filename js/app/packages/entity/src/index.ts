@@ -32,10 +32,12 @@ export {
 } from './utils/notification';
 export { useIsShared } from './utils/shared';
 export {
+  getPropertyOptionLabel,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
   isCurrentUserAssigned,
   isTaskClosed,
+  TASK_PRIORITY_OPTIONS,
   TASK_STATUS_OPTIONS,
 } from './utils/task-properties';
 export {

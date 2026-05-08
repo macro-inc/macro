@@ -11,15 +11,29 @@ import {
   type Query,
   type QueryStore,
 } from '@app/component/next-soup/filters/filter-store/query-store';
+import { createInfiniteQueries } from '@app/component/next-soup/soup-view/create-infinite-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
+import { throwOnErr } from '@core/util/maybeResult';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { type EntityData, isWithNotification } from '@entity';
+import { type EntityData, isWithNotification, getPropertyOptionLabel } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import { useQueryClient } from '@queries/client';
+import {
+  serializeGroupByField,
+  parseGroupedSoupPage,
+} from '@queries/soup/grouped/api';
+import type {
+  GroupByField,
+  GroupMeta,
+  GroupedSoupPage,
+} from '@queries/soup/grouped/types';
 import { type SoupParams, useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
+import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
+import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { storageServiceClient } from '@service-storage/client';
 import type { SoupPage } from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import {
@@ -61,6 +75,16 @@ interface SoupViewContextValues {
   setAssigneeFilter: Setter<string[]>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
+  groupByField: Accessor<GroupByField | undefined>;
+  totalCount: Accessor<number>;
+  getGroupAtIndex: (index: number) => { group: GroupMeta; indexInGroup: number; isCollapsed: boolean } | undefined;
+  getEntityAtGroupIndex: (groupKey: string, index: number) => SoupEntity | undefined;
+  getRowAtIndex: (index: number) => SoupRow | undefined;
+  getGroupHeaderMeta: (groupKey: string) => { id: string; value: string; label: string; count: number; isExpanded: () => boolean; toggle: () => void } | undefined;
+  loadMoreForGroup: (groupKey: string) => void;
+  isGroupLoadingMore: (groupKey: string) => boolean;
+  getGroupLoadedCount: (groupKey: string) => number;
+  hasMoreForGroup: (groupKey: string) => boolean;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -163,6 +187,18 @@ export const SoupViewContextProvider: FlowComponent<
   const [assigneeFilter, setAssigneeFilter] = createSignal<string[]>([]);
   const [activeTab, setActiveTab] = createSignal<string | undefined>(undefined);
 
+  const groupByField = createMemo((): GroupByField | undefined => {
+    const id = soup.grouping.activeGroupId();
+    if (!id) return undefined;
+    if (id === 'date') return { type: 'date' };
+    if (id === 'entity_type') return { type: 'entity_type' };
+    if (id === 'project') return { type: 'project' };
+    if (id.startsWith('property:')) {
+      return { type: 'property', propertyDefinitionId: id.slice('property:'.length) };
+    }
+    return undefined;
+  });
+
   // Clear sub-filters when task filter is deactivated
   createEffect(() => {
     if (!soup.predicates.isActive('task')) {
@@ -203,6 +239,7 @@ export const SoupViewContextProvider: FlowComponent<
     () => ({
       params: soupParams(),
       body: soupBody(),
+      groupBy: groupByField(),
     }),
     () => ({
       enabled: !search.isSearching(),
@@ -216,7 +253,7 @@ export const SoupViewContextProvider: FlowComponent<
       if (!searching) {
         const data = itemsQuery.data;
         if (!data) return prev;
-        const base = data.map((e) =>
+        const base = data.entities.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
         const extras = props.additionalEntities?.() ?? [];
@@ -304,6 +341,180 @@ export const SoupViewContextProvider: FlowComponent<
     return entities().map((e) => soup.buildRow(e));
   });
 
+  const getLoadedCountForGroup = (groupKey: string) => {
+    const query = groupQueries().find((q) => q.key === groupKey);
+    return query?.data()?.length ?? 0;
+  };
+
+  const totalCount = createMemo(() => {
+    const groups = itemsQuery.data?.groups;
+    if (!groups) return itemsQuery.data?.entities.length ?? 0;
+    // Read groupQueries and collapsed state to create dependencies
+    groupQueries();
+    soup.grouping.collapsedGroups();
+    return groups.reduce((sum, g) => {
+      const isExpanded = soup.grouping.isExpanded(g.key);
+      if (!isExpanded) {
+        // Collapsed: just 1 slot for header
+        return sum + 1;
+      }
+      const loadedCount = getLoadedCountForGroup(g.key) || g.pageCount;
+      return sum + loadedCount;
+    }, 0);
+  });
+
+  const getGroupAtIndex = (index: number) => {
+    const groups = itemsQuery.data?.groups;
+    if (!groups) return undefined;
+
+    let cumulative = 0;
+    for (const g of groups) {
+      const isExpanded = soup.grouping.isExpanded(g.key);
+      const groupSize = isExpanded
+        ? (getLoadedCountForGroup(g.key) || g.pageCount)
+        : 1; // collapsed = 1 slot for header
+
+      if (index < cumulative + groupSize) {
+        return {
+          group: g,
+          indexInGroup: index - cumulative,
+          isCollapsed: !isExpanded,
+        };
+      }
+      cumulative += groupSize;
+    }
+    return undefined;
+  };
+
+  const instructionsIdQuery = useInstructionsMdIdQuery();
+
+  const groupQueries = createInfiniteQueries<GroupedSoupPage, SoupEntity[]>(() => {
+    const field = groupByField();
+    const groups = itemsQuery.data?.groups;
+    const items = itemsQuery.data?.items;
+
+    if (!field || !groups || !items) {
+      return [];
+    }
+
+    return groups.map((group) => {
+      const initialGroupItems = items.slice(
+        group.startIndex,
+        group.startIndex + group.pageCount
+      );
+
+      return {
+        key: group.key,
+        queryKey: soupKeys.groupedGroup({
+          params: soupParams(),
+          body: soupBody(),
+          groupBy: field,
+          groupKey: group.key,
+        }).queryKey as readonly unknown[],
+        queryFn: async (ctx: { pageParam: string | null }) => {
+          const response = await throwOnErr(async () =>
+            storageServiceClient.getSoupAstItems({
+              params: {
+                cursor: ctx.pageParam ?? undefined,
+                group_by: serializeGroupByField(field),
+                group_key: group.key,
+              },
+              body: {
+                ...soupBody(),
+                ...soupParams(),
+              },
+            })
+          );
+          return parseGroupedSoupPage(response);
+        },
+        getNextPageParam: (lastPage: GroupedSoupPage): string | null => {
+          const meta = lastPage.groups.find((g) => g.key === group.key);
+          return meta?.nextCursor ?? null;
+        },
+        initialData: {
+          pages: [
+            {
+              items: initialGroupItems,
+              nextCursor: group.nextCursor,
+              groups: [group],
+            },
+          ],
+          pageParams: [null],
+        },
+        select: (pages: GroupedSoupPage[]): SoupEntity[] => {
+          const allItems = pages.flatMap((p) => p.items);
+          return mapSoupPageToEntityList(
+            { items: allItems, next_cursor: null },
+            { instructionsIdQuery }
+          ).map((e) => attachNotifications(e)) as SoupEntity[];
+        },
+        enabled: true,
+        staleTime: Infinity,
+      };
+    });
+  });
+
+  const getEntityAtGroupIndex = (groupKey: string, index: number): SoupEntity | undefined => {
+    const query = groupQueries().find((q) => q.key === groupKey);
+    return query?.data()?.[index];
+  };
+
+  const loadMoreForGroup = (groupKey: string) => {
+    const query = groupQueries().find((q) => q.key === groupKey);
+    query?.fetchNextPage();
+  };
+
+  const isGroupLoadingMore = (groupKey: string) => {
+    const query = groupQueries().find((q) => q.key === groupKey);
+    return query?.isFetchingNextPage() ?? false;
+  };
+
+  const getGroupLoadedCount = (groupKey: string) => {
+    return getLoadedCountForGroup(groupKey);
+  };
+
+  const hasMoreForGroup = (groupKey: string) => {
+    const query = groupQueries().find((q) => q.key === groupKey);
+    return query?.hasNextPage() ?? false;
+  };
+
+  const getGroupHeaderMeta = (groupKey: string) => {
+    const groups = itemsQuery.data?.groups;
+    const group = groups?.find((g) => g.key === groupKey);
+    if (!group) return undefined;
+
+    const resolvedLabel = getPropertyOptionLabel(group.key) ?? group.label;
+    return {
+      id: group.key,
+      value: group.key,
+      label: resolvedLabel,
+      count: group.totalCount,
+      isExpanded: () => soup.grouping.isExpanded(group.key),
+      toggle: () => soup.grouping.toggle(group.key),
+    };
+  };
+
+  const getRowAtIndex = (index: number): SoupRow | undefined => {
+    const field = groupByField();
+
+    // Not grouped - use regular rows array
+    if (!field) {
+      return rows()[index];
+    }
+
+    // Grouped - look up via group queries
+    const groupInfo = getGroupAtIndex(index);
+    if (!groupInfo) return undefined;
+
+    const { group, indexInGroup } = groupInfo;
+    const entity = getEntityAtGroupIndex(group.key, indexInGroup);
+    if (!entity) return undefined;
+
+    return soup.buildRow(entity, {
+      parentGroupId: group.key,
+    });
+  };
+
   const { searchQuery } = search;
 
   const context = {
@@ -342,6 +553,16 @@ export const SoupViewContextProvider: FlowComponent<
     setAssigneeFilter,
     activeTab,
     setActiveTab,
+    groupByField,
+    totalCount,
+    getGroupAtIndex,
+    getEntityAtGroupIndex,
+    getRowAtIndex,
+    getGroupHeaderMeta,
+    loadMoreForGroup,
+    isGroupLoadingMore,
+    getGroupLoadedCount,
+    hasMoreForGroup,
   };
 
   return (
