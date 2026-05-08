@@ -190,7 +190,7 @@ livekit-protocol = "0.7.2"
 log = "0.4.26"
 mockall = "0.13"
 nom = "8"
-openssl = { version = "0.10.71", features = ["vendored"] }
+openssl = { version = "0.10.79", features = ["vendored"] }
 opentelemetry = "0.31.0"
 opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
 opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
