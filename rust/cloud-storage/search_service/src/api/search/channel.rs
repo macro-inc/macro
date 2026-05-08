@@ -224,6 +224,9 @@ pub async fn handler(
         .unwrap_or_default();
 
     let filters = req.filters.unwrap_or_default();
+    if filters.channel_ids.is_empty() {
+        return Err(SearchError::NoChannelIds);
+    }
     let sort_mode = match req.sort {
         ChannelSortTimestamp::Message => ChannelSortMode::Message,
         ChannelSortTimestamp::Thread => ChannelSortMode::Thread,
