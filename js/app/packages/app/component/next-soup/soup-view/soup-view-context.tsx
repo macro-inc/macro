@@ -31,7 +31,7 @@ import {
 } from '@queries/soup/grouped/api';
 import type {
   GroupByField,
-  GroupMeta,
+  GroupMeta as ApiGroupMeta,
   GroupedSoupPage,
 } from '@queries/soup/grouped/types';
 import { type SoupParams, useSoupAstItemsQuery } from '@queries/soup/items';
@@ -82,30 +82,8 @@ interface SoupViewContextValues {
   setActiveTab: Setter<string | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
   totalCount: Accessor<number>;
-  getGroupAtIndex: (
-    index: number
-  ) =>
-    | { group: GroupMeta; indexInGroup: number; isCollapsed: boolean }
-    | undefined;
-  getEntityAtGroupIndex: (
-    groupKey: string,
-    index: number
-  ) => SoupEntity | undefined;
   getRowAtIndex: (index: number) => SoupRow | undefined;
-  getGroupHeaderMeta: (groupKey: string) =>
-    | {
-        id: string;
-        value: string;
-        label: string;
-        count: number;
-        isExpanded: () => boolean;
-        toggle: () => void;
-      }
-    | undefined;
-  loadMoreForGroup: (groupKey: string) => void;
   isGroupLoadingMore: (groupKey: string) => boolean;
-  getGroupLoadedCount: (groupKey: string) => number;
-  hasMoreForGroup: (groupKey: string) => boolean;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -370,54 +348,75 @@ export const SoupViewContextProvider: FlowComponent<
     return [...featured, ...rest];
   };
 
-  const rows = createMemo(() => {
-    return entities().map((e) => soup.buildRow(e));
-  });
-
-  const getLoadedCountForGroup = (groupKey: string) => {
-    const query = groupQueries().find((q) => q.key === groupKey);
-    return query?.data()?.length ?? 0;
-  };
-
-  const totalCount = createMemo(() => {
+  const rows = createMemo((): SoupRow[] => {
+    const field = groupByField();
     const groups = itemsQuery.data?.groups;
-    if (!groups) return itemsQuery.data?.entities.length ?? 0;
-    // Read groupQueries and collapsed state to create dependencies
-    groupQueries();
-    soup.grouping.collapsedGroups();
-    return groups.reduce((sum, g) => {
-      const isExpanded = soup.grouping.isExpanded(g.key);
-      if (!isExpanded) {
-        // Collapsed: just 1 slot for header
-        return sum + 1;
-      }
-      const loadedCount = getLoadedCountForGroup(g.key) || g.pageCount;
-      return sum + loadedCount;
-    }, 0);
-  });
 
-  const getGroupAtIndex = (index: number) => {
-    const groups = itemsQuery.data?.groups;
-    if (!groups) return undefined;
-
-    let cumulative = 0;
-    for (const g of groups) {
-      const isExpanded = soup.grouping.isExpanded(g.key);
-      const groupSize = isExpanded
-        ? getLoadedCountForGroup(g.key) || g.pageCount
-        : 1; // collapsed = 1 slot for header
-
-      if (index < cumulative + groupSize) {
-        return {
-          group: g,
-          indexInGroup: index - cumulative,
-          isCollapsed: !isExpanded,
-        };
-      }
-      cumulative += groupSize;
+    // Not grouped - build simple entity rows
+    if (!field || !groups) {
+      return entities().map((entity, index) =>
+        soup.buildRow({ id: entity.id, index, original: entity })
+      );
     }
-    return undefined;
-  };
+
+    // Grouped - build header + entity + loadMore rows for each group
+    const result: SoupRow[] = [];
+    let globalIndex = 0;
+
+    for (const apiGroup of groups) {
+      const groupMeta = buildGroupMeta(apiGroup);
+      const isExpanded = soup.grouping.isExpanded(apiGroup.key);
+      const query = groupQueries().find((q) => q.key === apiGroup.key);
+      const groupEntities = query?.data() ?? [];
+
+      // Get first entity for header (or create placeholder if empty)
+      const firstEntity = groupEntities[0];
+      if (!firstEntity) continue;
+
+      // Header row
+      result.push(
+        soup.buildRow({
+          id: `header:${apiGroup.key}`,
+          index: globalIndex++,
+          original: firstEntity,
+          group: groupMeta,
+          isGrouped: true,
+        })
+      );
+
+      if (isExpanded) {
+        // Entity rows
+        for (const entity of groupEntities) {
+          result.push(
+            soup.buildRow({
+              id: entity.id,
+              index: globalIndex++,
+              original: entity,
+              group: groupMeta,
+            })
+          );
+        }
+
+        // Load more row (if has more pages)
+        if (groupMeta.hasMore()) {
+          const lastEntity = groupEntities[groupEntities.length - 1];
+          result.push(
+            soup.buildRow({
+              id: `loadmore:${apiGroup.key}`,
+              index: globalIndex++,
+              original: lastEntity,
+              group: groupMeta,
+              isLoadMore: true,
+            })
+          );
+        }
+      }
+    }
+
+    return result;
+  });
+
+  const totalCount = createMemo(() => rows().length);
 
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
@@ -489,14 +488,6 @@ export const SoupViewContextProvider: FlowComponent<
     }
   );
 
-  const getEntityAtGroupIndex = (
-    groupKey: string,
-    index: number
-  ): SoupEntity | undefined => {
-    const query = groupQueries().find((q) => q.key === groupKey);
-    return query?.data()?.[index];
-  };
-
   const loadMoreForGroup = (groupKey: string) => {
     const query = groupQueries().find((q) => q.key === groupKey);
     query?.fetchNextPage();
@@ -507,70 +498,27 @@ export const SoupViewContextProvider: FlowComponent<
     return query?.isFetchingNextPage() ?? false;
   };
 
-  const getGroupLoadedCount = (groupKey: string) => {
-    return getLoadedCountForGroup(groupKey);
-  };
-
   const hasMoreForGroup = (groupKey: string) => {
     const query = groupQueries().find((q) => q.key === groupKey);
     return query?.hasNextPage() ?? false;
   };
 
-  const getGroupHeaderMeta = (groupKey: string) => {
-    const groups = itemsQuery.data?.groups;
-    const group = groups?.find((g) => g.key === groupKey);
-    if (!group) return undefined;
-
+  const buildGroupMeta = (group: ApiGroupMeta): UiGroupMeta => {
     const resolvedLabel = getPropertyOptionLabel(group.key) ?? group.label;
     return {
-      id: group.key,
+      key: group.key,
       value: group.key,
       label: resolvedLabel,
       count: group.totalCount,
       isExpanded: () => soup.grouping.isExpanded(group.key),
       toggle: () => soup.grouping.toggle(group.key),
-    };
-  };
-
-  const getRowAtIndex = (index: number): SoupRow | undefined => {
-    const field = groupByField();
-
-    // Not grouped - use regular rows array
-    if (!field) {
-      return rows()[index];
-    }
-
-    // Grouped - look up via group queries
-    const groupInfo = getGroupAtIndex(index);
-    if (!groupInfo) return undefined;
-
-    const { group, indexInGroup } = groupInfo;
-    const entity = getEntityAtGroupIndex(group.key, indexInGroup);
-    if (!entity) return undefined;
-
-    const loadedCount = getLoadedCountForGroup(group.key);
-    const isFirstInGroup = indexInGroup === 0;
-    const isLastInGroup = indexInGroup === loadedCount - 1;
-
-    // Build UI group meta for all entities in the group
-    const uiGroup: UiGroupMeta = {
-      id: group.key,
-      value: group.key,
-      label: getPropertyOptionLabel(group.key) ?? group.label,
-      count: group.totalCount,
-      isExpanded: () => soup.grouping.isExpanded(group.key),
-      toggle: () => soup.grouping.toggle(group.key),
       hasMore: () => hasMoreForGroup(group.key),
       loadMore: () => loadMoreForGroup(group.key),
+      isLoading: () => isGroupLoadingMore(group.key),
     };
-
-    return soup.buildRow(entity, {
-      group: uiGroup,
-      indexInGroup,
-      isFirstInGroup,
-      isLastInGroup,
-    });
   };
+
+  const getRowAtIndex = (index: number): SoupRow | undefined => rows()[index];
 
   const { searchQuery } = search;
 
@@ -612,14 +560,8 @@ export const SoupViewContextProvider: FlowComponent<
     setActiveTab,
     groupByField,
     totalCount,
-    getGroupAtIndex,
-    getEntityAtGroupIndex,
     getRowAtIndex,
-    getGroupHeaderMeta,
-    loadMoreForGroup,
     isGroupLoadingMore,
-    getGroupLoadedCount,
-    hasMoreForGroup,
   };
 
   return (

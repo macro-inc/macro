@@ -18,28 +18,29 @@ export type SoupEntity = WithNotification<EntityData | WithSearch<EntityData>>;
 
 export type GroupHeaderProps = {
   group: GroupMeta;
+  highlighted?: boolean;
 };
 
 export type GroupMeta = {
-  id: string;
-  value: unknown;
+  key: string;
   label: string;
+  value: unknown;
   count: number;
   isExpanded: () => boolean;
   toggle: () => void;
   hasMore: () => boolean;
   loadMore: () => void;
+  isLoading: () => boolean;
   renderHeader?: (props: GroupHeaderProps) => JSX.Element;
 };
 
 export type SoupRow = {
-  original: SoupEntity;
   id: string;
-  depth: number;
-  group?: GroupMeta;
-  indexInGroup: number;
-  isFirstInGroup: boolean;
-  isLastInGroup: boolean;
+  index: number;
+  original: SoupEntity;
+  group: GroupMeta | undefined;
+  getIsGrouped: () => boolean;
+  getIsLoadMore: () => boolean;
   isFocused: () => boolean;
   isSelected: () => boolean;
 };
@@ -118,38 +119,29 @@ export const createSoupState = <TId extends string = FilterID>(
 
   const isGroupExpanded = (groupId: string) => !collapsedGroups().has(groupId);
 
-  const buildRow = (
-    entity: SoupEntity,
-    options: {
-      depth?: number;
-      group?: GroupMeta;
-      indexInGroup?: number;
-      isFirstInGroup?: boolean;
-      isLastInGroup?: boolean;
-    } = {}
-  ): SoupRow => {
-    const {
-      depth = 0,
-      group,
-      indexInGroup = 0,
-      isFirstInGroup = false,
-      isLastInGroup = false,
-    } = options;
+  const buildRow = (options: {
+    id: string;
+    index: number;
+    original: SoupEntity;
+    group?: GroupMeta;
+    isGrouped?: boolean;
+    isLoadMore?: boolean;
+  }): SoupRow => {
+    const { id, index, original, group, isGrouped = false, isLoadMore = false } = options;
     return {
-      original: entity,
-      id: entity.id,
-      depth,
+      id,
+      index,
+      original,
       group,
-      indexInGroup,
-      isFirstInGroup,
-      isLastInGroup,
-      isFocused: () => focusedId() === entity.id,
-      isSelected: () => selection.isSelected(entity.id),
+      getIsGrouped: () => isGrouped,
+      getIsLoadMore: () => isLoadMore,
+      isFocused: () => focusedId() === id,
+      isSelected: () => !isGrouped && !isLoadMore && selection.isSelected(original.id),
     };
   };
 
   const [rows, setRowsInternal] = createSignal<SoupRow[]>(
-    initialData?.map((e) => buildRow(e)) ?? []
+    initialData?.map((e, i) => buildRow({ id: e.id, index: i, original: e })) ?? []
   );
 
   const setRows = (newRows: SoupRow[]) => {

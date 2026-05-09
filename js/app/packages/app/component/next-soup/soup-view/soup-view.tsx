@@ -103,7 +103,6 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
-  Dynamic,
   type JSX,
   Match,
   on,
@@ -114,6 +113,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { createStore, reconcile } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
@@ -122,11 +122,16 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
-const DefaultGroupHeader = (props: GroupHeaderProps) => {
+const DefaultGroupHeader = (
+  props: GroupHeaderProps & { highlighted?: boolean }
+) => {
   return (
     <button
       type="button"
-      class="w-full px-3 py-3 flex items-center gap-2 text-sm font-medium text-text-muted bg-ink/[0.02] hover:bg-ink/5"
+      class={cn(
+        'w-full px-3 py-3 flex items-center gap-2 text-sm font-medium text-text-muted bg-ink/[0.02] hover:bg-ink/5',
+        { 'bg-ink/5': props.highlighted }
+      )}
       onClick={() => props.group.toggle()}
     >
       <ChevronRightIcon
@@ -457,7 +462,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     setAssigneeFilter,
     totalCount,
     getRowAtIndex,
-    isGroupLoadingMore,
   } = useSoupView();
   const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
 
@@ -1007,132 +1011,139 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                       </div>
                                     </Show>
 
-                                    {/* Group header before first entity in group */}
-                                    <Show
-                                      when={r().isFirstInGroup && r().group}
-                                    >
-                                      {(group) => (
-                                        <Dynamic
-                                          component={
-                                            group().renderHeader ??
-                                            DefaultGroupHeader
-                                          }
-                                          group={group()}
-                                        />
-                                      )}
-                                    </Show>
-
-                                    {/* Entity (hidden when group is collapsed) */}
-                                    <Show
-                                      when={
-                                        !r().group || r().group.isExpanded()
-                                      }
-                                    >
-                                      <SoupEntityContextMenu
-                                        entity={r().original}
+                                    <Switch>
+                                      {/* Group header row */}
+                                      <Match
+                                        when={r().getIsGrouped() && r().group}
                                       >
-                                        <ListEntity
-                                          entity={r().original}
-                                          timestamp={timestamp()}
-                                          highlighted={
-                                            panel.isPanelActive() &&
-                                            r().isFocused()
-                                          }
-                                          onMouseMove={() => {
-                                            if (isKeypressActive()) return;
-                                            if (soup.previewEntity()) return;
-                                            soup.focus.set(r().id);
-                                          }}
-                                          showUnrollNotifications={
-                                            soup.predicates.isActive('inbox') &&
-                                            !soup.predicates.isActive('noise')
-                                          }
-                                          checked={r().isSelected()}
-                                          onChecked={(
-                                            next: boolean,
-                                            shiftKey: boolean
-                                          ) =>
-                                            handleMultiSelectChecked({
-                                              entity: r().original,
-                                              entityIndex: i(),
-                                              next,
-                                              shiftKey: shiftKey ?? false,
-                                            })
-                                          }
-                                          onClick={(event: MouseEvent) => {
-                                            onEntityClick({
-                                              type: 'entity',
-                                              entity: r().original,
-                                              event,
-                                              location: undefined,
-                                            });
-                                          }}
-                                          onProjectClick={(
-                                            projectEntity,
-                                            event
-                                          ) => {
-                                            onEntityClick({
-                                              type: 'project',
-                                              projectEntity,
-                                              entity: r().original,
-                                              event,
-                                              location: undefined,
-                                            });
-                                          }}
-                                          onContentHitClick={(
-                                            e: PointerEvent | MouseEvent,
-                                            location?: SearchLocation
-                                          ) => {
-                                            onEntityClick({
-                                              type: 'entity',
-                                              entity: r().original,
-                                              event: e,
-                                              location,
-                                            });
-                                          }}
-                                          entityRowConfig={{
-                                            swipeLeftColor: 'bg-success',
-                                            swipeLeftRevealedComponent: (
-                                              <CheckIcon class="size-8 text-panel" />
-                                            ),
-                                          }}
-                                        />
-                                      </SoupEntityContextMenu>
-                                    </Show>
+                                        {(group) => (
+                                          <Dynamic
+                                            component={
+                                              group().renderHeader ??
+                                              DefaultGroupHeader
+                                            }
+                                            group={group()}
+                                            highlighted={
+                                              panel.isPanelActive() &&
+                                              r().isFocused()
+                                            }
+                                          />
+                                        )}
+                                      </Match>
 
-                                    {/* Load more button for groups */}
-                                    <Show
-                                      when={
-                                        r().isLastInGroup &&
-                                        r().group?.hasMore() &&
-                                        r().group?.isExpanded()
-                                      }
-                                    >
-                                      <div class="flex justify-center py-2">
-                                        <Button
-                                          variant="base"
-                                          size="sm"
-                                          onClick={() => r().group?.loadMore()}
-                                          disabled={isGroupLoadingMore(
-                                            r().group!.id
-                                          )}
-                                        >
-                                          <Show
-                                            when={
-                                              !isGroupLoadingMore(r().group!.id)
-                                            }
-                                            fallback={
-                                              <>
-                                                <Spinner class="size-3 animate-spin" />
-                                                Loading...
-                                              </>
-                                            }
+                                      {/* Load more row */}
+                                      <Match
+                                        when={r().getIsLoadMore() && r().group}
+                                      >
+                                        {(group) => (
+                                          <div
+                                            class={cn(
+                                              'flex justify-center py-2',
+                                              {
+                                                'bg-ink/5':
+                                                  panel.isPanelActive() &&
+                                                  r().isFocused(),
+                                              }
+                                            )}
                                           >
-                                            Load more
-                                          </Show>
-                                        </Button>
-                                      </div>
-                                    </Show>
+                                            <Button
+                                              variant="base"
+                                              size="sm"
+                                              onClick={() => group().loadMore()}
+                                              disabled={group().isLoading()}
+                                            >
+                                              <Show
+                                                when={!group().isLoading()}
+                                                fallback={
+                                                  <>
+                                                    <Spinner class="size-3 animate-spin" />
+                                                    Loading...
+                                                  </>
+                                                }
+                                              >
+                                                Load more
+                                              </Show>
+                                            </Button>
+                                          </div>
+                                        )}
+                                      </Match>
+
+                                      {/* Entity row */}
+                                      <Match when={true}>
+                                        <SoupEntityContextMenu
+                                          entity={r().original}
+                                        >
+                                          <ListEntity
+                                            entity={r().original}
+                                            timestamp={timestamp()}
+                                            highlighted={
+                                              panel.isPanelActive() &&
+                                              r().isFocused()
+                                            }
+                                            onMouseMove={() => {
+                                              if (isKeypressActive()) return;
+                                              if (soup.previewEntity()) return;
+                                              soup.focus.set(r().id);
+                                            }}
+                                            showUnrollNotifications={
+                                              soup.predicates.isActive(
+                                                'inbox'
+                                              ) &&
+                                              !soup.predicates.isActive('noise')
+                                            }
+                                            checked={r().isSelected()}
+                                            onChecked={(
+                                              next: boolean,
+                                              shiftKey: boolean
+                                            ) =>
+                                              handleMultiSelectChecked({
+                                                entity: r().original,
+                                                entityIndex: i(),
+                                                next,
+                                                shiftKey: shiftKey ?? false,
+                                              })
+                                            }
+                                            onClick={(event: MouseEvent) => {
+                                              onEntityClick({
+                                                type: 'entity',
+                                                entity: r().original,
+                                                event,
+                                                location: undefined,
+                                              });
+                                            }}
+                                            onProjectClick={(
+                                              projectEntity,
+                                              event
+                                            ) => {
+                                              onEntityClick({
+                                                type: 'project',
+                                                projectEntity,
+                                                entity: r().original,
+                                                event,
+                                                location: undefined,
+                                              });
+                                            }}
+                                            onContentHitClick={(
+                                              e: PointerEvent | MouseEvent,
+                                              location?: SearchLocation
+                                            ) => {
+                                              onEntityClick({
+                                                type: 'entity',
+                                                entity: r().original,
+                                                event: e,
+                                                location,
+                                              });
+                                            }}
+                                            entityRowConfig={{
+                                              swipeLeftColor: 'bg-success',
+                                              swipeLeftRevealedComponent: (
+                                                <CheckIcon class="size-8 text-panel" />
+                                              ),
+                                            }}
+                                          />
+                                        </SoupEntityContextMenu>
+                                      </Match>
+                                    </Switch>
                                     <Show
                                       when={
                                         i() === totalCount() - 1 &&
