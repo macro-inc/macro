@@ -1,13 +1,13 @@
-import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import {
-  isChannelMessageEntity,
   type ChannelMessageEntity,
+  isChannelMessageEntity,
   type WithSearch,
 } from '@entity';
 import {
-  useSearchSoupQuery,
+  useSearchChannelQuery,
   validateSearchServiceText,
 } from '@queries/soup/search';
+import { ChannelSortTimestamp } from '@service-search/generated/models';
 import {
   type Accessor,
   createEffect,
@@ -34,17 +34,18 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
   const [activeIndex, setActiveIndex] = createSignal(0);
   const [inputEl, setInputEl] = createSignal<HTMLInputElement>();
 
-  const searchQuery = useSearchSoupQuery(
+  // Channel-only search with thread sort so results paginate monotonically
+  // through the channel's thread list (replies cluster with their parent
+  // thread instead of jumping around when sorted strictly by message_id).
+  const searchQuery = useSearchChannelQuery(
     () => ({
       params: { page_size: FIND_BAR_PAGE_SIZE },
       body: {
         match_type: 'partial',
         query: submittedQuery(),
         search_on: 'content',
-        filters: {
-          ...QUERY_FILTERS_BASE,
-          channel_filters: { channel_ids: [options.channelId()] },
-        },
+        channel_ids: [options.channelId()],
+        sort: ChannelSortTimestamp.thread,
       },
     }),
     () => ({ enabled: isOpen() && submittedQuery().length > 0 })
