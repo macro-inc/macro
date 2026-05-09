@@ -9,7 +9,10 @@ import {
   useEntityActionHotkeys,
 } from '@app/component/next-soup/actions';
 import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
-import type { SoupRow } from '@app/component/next-soup/create-soup-state';
+import type {
+  GroupHeaderProps,
+  SoupRow,
+} from '@app/component/next-soup/create-soup-state';
 import type { QueryState } from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { useSoup } from '@app/component/next-soup/soup-context';
@@ -100,6 +103,7 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
+  Dynamic,
   type JSX,
   Match,
   on,
@@ -117,6 +121,28 @@ import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
+
+const DefaultGroupHeader = (props: GroupHeaderProps) => {
+  return (
+    <button
+      type="button"
+      class="w-full px-3 py-3 flex items-center gap-2 text-sm font-medium text-text-muted bg-ink/[0.02] hover:bg-ink/5"
+      onClick={() => props.group.toggle()}
+    >
+      <ChevronRightIcon
+        class={cn('size-3 transition-transform', {
+          'rotate-90': props.group.isExpanded(),
+        })}
+      />
+      <PropertyValueIcon
+        optionId={props.group.value as string}
+        class="size-3.5"
+      />
+      <span>{props.group.label}</span>
+      <span class="text-text-subtle">{props.group.count}</span>
+    </button>
+  );
+};
 
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
@@ -431,38 +457,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     setAssigneeFilter,
     totalCount,
     getRowAtIndex,
-    groupByField,
-    getGroupAtIndex,
-    getGroupHeaderMeta,
-    loadMoreForGroup,
     isGroupLoadingMore,
-    getGroupLoadedCount,
-    hasMoreForGroup,
   } = useSoupView();
   const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
-
-  const getGroupIfLastInGroupWithMore = (
-    row: SoupRow,
-    index: number,
-    allRows: SoupRow[]
-  ) => {
-    if (!row.parentGroupId) return null;
-    const nextRow = allRows[index + 1];
-    const isLastInGroup =
-      !nextRow || nextRow.group || nextRow.parentGroupId !== row.parentGroupId;
-    if (!isLastInGroup) return null;
-    const groupRow = allRows.find((r) => r.group?.id === row.parentGroupId);
-    if (!groupRow?.group?.hasMore) return null;
-    return groupRow.group;
-  };
-
-  const shouldShowLoadMore = (groupKey: string | undefined, index: number) => {
-    if (!groupKey) return false;
-    if (!hasMoreForGroup(groupKey)) return false;
-    const groupInfo = getGroupAtIndex(index);
-    if (!groupInfo || groupInfo.isCollapsed) return false;
-    return groupInfo.indexInGroup === getGroupLoadedCount(groupKey) - 1;
-  };
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -1012,46 +1009,24 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
                                     {/* Group header before first entity in group */}
                                     <Show
-                                      when={
-                                        r().parentGroupId &&
-                                        getGroupAtIndex(i())?.indexInGroup === 0
-                                      }
+                                      when={r().isFirstInGroup && r().group}
                                     >
-                                      <Show
-                                        when={getGroupHeaderMeta(
-                                          r().parentGroupId!
-                                        )}
-                                      >
-                                        {(header) => (
-                                          <button
-                                            type="button"
-                                            class="w-full px-3 py-3 flex items-center gap-2 text-sm font-medium text-text-muted bg-ink/[0.02] hover:bg-ink/5"
-                                            onClick={() => header().toggle()}
-                                          >
-                                            <ChevronRightIcon
-                                              class={cn(
-                                                'size-3 transition-transform',
-                                                {
-                                                  'rotate-90':
-                                                    header().isExpanded(),
-                                                }
-                                              )}
-                                            />
-                                            <PropertyValueIcon
-                                              optionId={header().value}
-                                              class="size-3.5"
-                                            />
-                                            <span>{header().label}</span>
-                                            <span class="text-text-subtle">
-                                              {header().count}
-                                            </span>
-                                          </button>
-                                        )}
-                                      </Show>
+                                      {(group) => (
+                                        <Dynamic
+                                          component={
+                                            group().renderHeader ??
+                                            DefaultGroupHeader
+                                          }
+                                          group={group()}
+                                        />
+                                      )}
                                     </Show>
 
+                                    {/* Entity (hidden when group is collapsed) */}
                                     <Show
-                                      when={!getGroupAtIndex(i())?.isCollapsed}
+                                      when={
+                                        !r().group || r().group.isExpanded()
+                                      }
                                     >
                                       <SoupEntityContextMenu
                                         entity={r().original}
@@ -1127,27 +1102,24 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
                                     {/* Load more button for groups */}
                                     <Show
-                                      when={shouldShowLoadMore(
-                                        r().parentGroupId,
-                                        i()
-                                      )}
+                                      when={
+                                        r().isLastInGroup &&
+                                        r().group?.hasMore() &&
+                                        r().group?.isExpanded()
+                                      }
                                     >
                                       <div class="flex justify-center py-2">
                                         <Button
                                           variant="base"
                                           size="sm"
-                                          onClick={() =>
-                                            loadMoreForGroup(r().parentGroupId!)
-                                          }
+                                          onClick={() => r().group?.loadMore()}
                                           disabled={isGroupLoadingMore(
-                                            r().parentGroupId!
+                                            r().group!.id
                                           )}
                                         >
                                           <Show
                                             when={
-                                              !isGroupLoadingMore(
-                                                r().parentGroupId!
-                                              )
+                                              !isGroupLoadingMore(r().group!.id)
                                             }
                                             fallback={
                                               <>

@@ -16,6 +16,10 @@ import { createMemo, createSignal, type JSX } from 'solid-js';
 
 export type SoupEntity = WithNotification<EntityData | WithSearch<EntityData>>;
 
+export type GroupHeaderProps = {
+  group: GroupMeta;
+};
+
 export type GroupMeta = {
   id: string;
   value: unknown;
@@ -23,11 +27,9 @@ export type GroupMeta = {
   count: number;
   isExpanded: () => boolean;
   toggle: () => void;
-  renderHeader?: (props: {
-    value: unknown;
-    label: string;
-    count: number;
-  }) => JSX.Element;
+  hasMore: () => boolean;
+  loadMore: () => void;
+  renderHeader?: (props: GroupHeaderProps) => JSX.Element;
 };
 
 export type SoupRow = {
@@ -35,11 +37,11 @@ export type SoupRow = {
   id: string;
   depth: number;
   group?: GroupMeta;
-  parentGroupId: string | null;
+  indexInGroup: number;
+  isFirstInGroup: boolean;
+  isLastInGroup: boolean;
   isFocused: () => boolean;
   isSelected: () => boolean;
-  isExpanded: () => boolean;
-  isGrouped: () => boolean;
 };
 
 export type NavigationResult = { row: SoupRow; index: number } | undefined;
@@ -121,21 +123,28 @@ export const createSoupState = <TId extends string = FilterID>(
     options: {
       depth?: number;
       group?: GroupMeta;
-      parentGroupId?: string | null;
+      indexInGroup?: number;
+      isFirstInGroup?: boolean;
+      isLastInGroup?: boolean;
     } = {}
   ): SoupRow => {
-    const { depth = 0, group, parentGroupId = null } = options;
-    const rowId = group ? group.id : entity.id;
+    const {
+      depth = 0,
+      group,
+      indexInGroup = 0,
+      isFirstInGroup = false,
+      isLastInGroup = false,
+    } = options;
     return {
       original: entity,
-      id: rowId,
+      id: entity.id,
       depth,
       group,
-      parentGroupId,
-      isFocused: () => focusedId() === rowId,
+      indexInGroup,
+      isFirstInGroup,
+      isLastInGroup,
+      isFocused: () => focusedId() === entity.id,
       isSelected: () => selection.isSelected(entity.id),
-      isGrouped: () => parentGroupId !== null,
-      isExpanded: () => (group ? isGroupExpanded(group.id) : false),
     };
   };
 
