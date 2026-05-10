@@ -81,8 +81,6 @@ interface SoupViewContextValues {
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
-  totalCount: Accessor<number>;
-  getRowAtIndex: (index: number) => SoupRow | undefined;
   isGroupLoadingMore: (groupKey: string) => boolean;
 }
 
@@ -416,8 +414,6 @@ export const SoupViewContextProvider: FlowComponent<
     return result;
   });
 
-  const totalCount = createMemo(() => rows().length);
-
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
   const groupQueries = createInfiniteQueries<GroupedSoupPage, SoupEntity[]>(
@@ -518,8 +514,6 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  const getRowAtIndex = (index: number): SoupRow | undefined => rows()[index];
-
   const { searchQuery } = search;
 
   const context = {
@@ -559,8 +553,6 @@ export const SoupViewContextProvider: FlowComponent<
     activeTab,
     setActiveTab,
     groupByField,
-    totalCount,
-    getRowAtIndex,
     isGroupLoadingMore,
   };
 

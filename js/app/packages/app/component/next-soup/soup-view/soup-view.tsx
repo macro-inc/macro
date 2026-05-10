@@ -460,8 +460,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     setActiveTab,
     assigneeFilter,
     setAssigneeFilter,
-    totalCount,
-    getRowAtIndex,
   } = useSoupView();
   const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
 
@@ -966,203 +964,189 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           virtualizerRef={registerVirtualizerHandler}
                           onScrollBottom={debouncedFetchMore}
                           scrollBottomOffset={300}
-                          count={totalCount()}
-                          getRow={getRowAtIndex}
+                          rows={rows()}
                         >
-                          {(row, i) => (
-                            <Show when={row()}>
-                              {(r) => {
-                                const timestamp = () => {
-                                  if (r().original.sortTs)
-                                    return r().original.sortTs;
+                          {(row, i) => {
+                            const timestamp = () => {
+                              if (row.original.sortTs)
+                                return row.original.sortTs;
 
-                                  const sort_ = soup.sort.active();
-                                  if (!sort_.length) return;
+                              const sort_ = soup.sort.active();
+                              if (!sort_.length) return;
 
-                                  switch (sort_[0].id) {
-                                    case 'viewed_at':
-                                      return r().original.viewedAt;
-                                    case 'created_at':
-                                      return r().original.createdAt;
-                                    case 'updated_at':
-                                      return r().original.updatedAt;
-                                    default:
-                                      return r().original.createdAt;
+                              switch (sort_[0].id) {
+                                case 'viewed_at':
+                                  return row.original.viewedAt;
+                                case 'created_at':
+                                  return row.original.createdAt;
+                                case 'updated_at':
+                                  return row.original.updatedAt;
+                                default:
+                                  return row.original.createdAt;
+                              }
+                            };
+
+                            return (
+                              <>
+                                <Show when={i() === 0 && featuredCount() > 0}>
+                                  <div class="px-3 py-1.5 text-xs text-text-muted font-medium">
+                                    Featured Results
+                                  </div>
+                                </Show>
+                                <Show
+                                  when={
+                                    i() === featuredCount() &&
+                                    featuredCount() > 0
                                   }
-                                };
+                                >
+                                  <div class="px-3 py-1.5 text-xs text-text-muted font-medium border-t border-edge-muted mt-1">
+                                    More Results
+                                  </div>
+                                </Show>
 
-                                return (
-                                  <>
-                                    <Show
-                                      when={i() === 0 && featuredCount() > 0}
-                                    >
-                                      <div class="px-3 py-1.5 text-xs text-text-muted font-medium">
-                                        Featured Results
-                                      </div>
-                                    </Show>
-                                    <Show
-                                      when={
-                                        i() === featuredCount() &&
-                                        featuredCount() > 0
-                                      }
-                                    >
-                                      <div class="px-3 py-1.5 text-xs text-text-muted font-medium border-t border-edge-muted mt-1">
-                                        More Results
-                                      </div>
-                                    </Show>
+                                <Switch>
+                                  {/* Group header row */}
+                                  <Match when={row.getIsGrouped() && row.group}>
+                                    {(group) => (
+                                      <Dynamic
+                                        component={
+                                          group().renderHeader ??
+                                          DefaultGroupHeader
+                                        }
+                                        group={group()}
+                                        highlighted={
+                                          panel.isPanelActive() &&
+                                          row.isFocused()
+                                        }
+                                      />
+                                    )}
+                                  </Match>
 
-                                    <Switch>
-                                      {/* Group header row */}
-                                      <Match
-                                        when={r().getIsGrouped() && r().group}
+                                  {/* Load more row */}
+                                  <Match
+                                    when={row.getIsLoadMore() && row.group}
+                                  >
+                                    {(group) => (
+                                      <div
+                                        class={cn('flex justify-center py-2', {
+                                          'bg-ink/5':
+                                            panel.isPanelActive() &&
+                                            row.isFocused(),
+                                        })}
                                       >
-                                        {(group) => (
-                                          <Dynamic
-                                            component={
-                                              group().renderHeader ??
-                                              DefaultGroupHeader
-                                            }
-                                            group={group()}
-                                            highlighted={
-                                              panel.isPanelActive() &&
-                                              r().isFocused()
-                                            }
-                                          />
-                                        )}
-                                      </Match>
-
-                                      {/* Load more row */}
-                                      <Match
-                                        when={r().getIsLoadMore() && r().group}
-                                      >
-                                        {(group) => (
-                                          <div
-                                            class={cn(
-                                              'flex justify-center py-2',
-                                              {
-                                                'bg-ink/5':
-                                                  panel.isPanelActive() &&
-                                                  r().isFocused(),
-                                              }
-                                            )}
-                                          >
-                                            <Button
-                                              variant="base"
-                                              size="sm"
-                                              onClick={() => group().loadMore()}
-                                              disabled={group().isLoading()}
-                                            >
-                                              <Show
-                                                when={!group().isLoading()}
-                                                fallback={
-                                                  <>
-                                                    <Spinner class="size-3 animate-spin" />
-                                                    Loading...
-                                                  </>
-                                                }
-                                              >
-                                                Load more
-                                              </Show>
-                                            </Button>
-                                          </div>
-                                        )}
-                                      </Match>
-
-                                      {/* Entity row */}
-                                      <Match when={true}>
-                                        <SoupEntityContextMenu
-                                          entity={r().original}
+                                        <Button
+                                          variant="base"
+                                          size="sm"
+                                          onClick={() => group().loadMore()}
+                                          disabled={group().isLoading()}
                                         >
-                                          <ListEntity
-                                            entity={r().original}
-                                            timestamp={timestamp()}
-                                            highlighted={
-                                              panel.isPanelActive() &&
-                                              r().isFocused()
+                                          <Show
+                                            when={!group().isLoading()}
+                                            fallback={
+                                              <>
+                                                <Spinner class="size-3 animate-spin" />
+                                                Loading...
+                                              </>
                                             }
-                                            onMouseMove={() => {
-                                              if (isKeypressActive()) return;
-                                              if (soup.previewEntity()) return;
-                                              soup.focus.set(r().id);
-                                            }}
-                                            showUnrollNotifications={
-                                              soup.predicates.isActive(
-                                                'inbox'
-                                              ) &&
-                                              !soup.predicates.isActive('noise')
-                                            }
-                                            checked={r().isSelected()}
-                                            onChecked={(
-                                              next: boolean,
-                                              shiftKey: boolean
-                                            ) =>
-                                              handleMultiSelectChecked({
-                                                entity: r().original,
-                                                entityIndex: i(),
-                                                next,
-                                                shiftKey: shiftKey ?? false,
-                                              })
-                                            }
-                                            onClick={(event: MouseEvent) => {
-                                              onEntityClick({
-                                                type: 'entity',
-                                                entity: r().original,
-                                                event,
-                                                location: undefined,
-                                              });
-                                            }}
-                                            onProjectClick={(
-                                              projectEntity,
-                                              event
-                                            ) => {
-                                              onEntityClick({
-                                                type: 'project',
-                                                projectEntity,
-                                                entity: r().original,
-                                                event,
-                                                location: undefined,
-                                              });
-                                            }}
-                                            onContentHitClick={(
-                                              e: PointerEvent | MouseEvent,
-                                              location?: SearchLocation
-                                            ) => {
-                                              onEntityClick({
-                                                type: 'entity',
-                                                entity: r().original,
-                                                event: e,
-                                                location,
-                                              });
-                                            }}
-                                            entityRowConfig={{
-                                              swipeLeftColor: 'bg-success',
-                                              swipeLeftRevealedComponent: (
-                                                <CheckIcon class="size-8 text-panel" />
-                                              ),
-                                            }}
-                                          />
-                                        </SoupEntityContextMenu>
-                                      </Match>
-                                    </Switch>
-                                    <Show
-                                      when={
-                                        i() === totalCount() - 1 &&
-                                        isSearchServiceLoading()
-                                      }
-                                    >
-                                      <div class="flex items-center gap-2 p-3 text-xs text-text-muted">
-                                        <Spinner class="size-3 animate-spin" />
-                                        Searching...
+                                          >
+                                            Load more
+                                          </Show>
+                                        </Button>
                                       </div>
-                                    </Show>
-                                    <Show when={i() === totalCount() - 1}>
-                                      <div class="h-15" />
-                                    </Show>
-                                  </>
-                                );
-                              }}
-                            </Show>
-                          )}
+                                    )}
+                                  </Match>
+
+                                  {/* Entity row */}
+                                  <Match when={true}>
+                                    <SoupEntityContextMenu
+                                      entity={row.original}
+                                    >
+                                      <ListEntity
+                                        entity={row.original}
+                                        timestamp={timestamp()}
+                                        highlighted={
+                                          panel.isPanelActive() &&
+                                          row.isFocused()
+                                        }
+                                        onMouseMove={() => {
+                                          if (isKeypressActive()) return;
+                                          if (soup.previewEntity()) return;
+                                          soup.focus.set(row.id);
+                                        }}
+                                        showUnrollNotifications={
+                                          soup.predicates.isActive('inbox') &&
+                                          !soup.predicates.isActive('noise')
+                                        }
+                                        checked={row.isSelected()}
+                                        onChecked={(
+                                          next: boolean,
+                                          shiftKey: boolean
+                                        ) =>
+                                          handleMultiSelectChecked({
+                                            entity: row.original,
+                                            entityIndex: i(),
+                                            next,
+                                            shiftKey: shiftKey ?? false,
+                                          })
+                                        }
+                                        onClick={(event: MouseEvent) => {
+                                          onEntityClick({
+                                            type: 'entity',
+                                            entity: row.original,
+                                            event,
+                                            location: undefined,
+                                          });
+                                        }}
+                                        onProjectClick={(
+                                          projectEntity,
+                                          event
+                                        ) => {
+                                          onEntityClick({
+                                            type: 'project',
+                                            projectEntity,
+                                            entity: row.original,
+                                            event,
+                                            location: undefined,
+                                          });
+                                        }}
+                                        onContentHitClick={(
+                                          e: PointerEvent | MouseEvent,
+                                          location?: SearchLocation
+                                        ) => {
+                                          onEntityClick({
+                                            type: 'entity',
+                                            entity: row.original,
+                                            event: e,
+                                            location,
+                                          });
+                                        }}
+                                        entityRowConfig={{
+                                          swipeLeftColor: 'bg-success',
+                                          swipeLeftRevealedComponent: (
+                                            <CheckIcon class="size-8 text-panel" />
+                                          ),
+                                        }}
+                                      />
+                                    </SoupEntityContextMenu>
+                                  </Match>
+                                </Switch>
+                                <Show
+                                  when={
+                                    i() === rows().length - 1 &&
+                                    isSearchServiceLoading()
+                                  }
+                                >
+                                  <div class="flex items-center gap-2 p-3 text-xs text-text-muted">
+                                    <Spinner class="size-3 animate-spin" />
+                                    Searching...
+                                  </div>
+                                </Show>
+                                <Show when={i() === rows().length - 1}>
+                                  <div class="h-15" />
+                                </Show>
+                              </>
+                            );
+                          }}
                         </SoupList>
                       </EntityRowProvider>
                     </ListLayoutProvider>
@@ -1224,15 +1208,10 @@ interface SoupListProps {
   virtualizerClass?: string;
   itemSize?: number;
   overscan?: number;
-  children: (
-    row: Accessor<SoupRow | undefined>,
-    index: Accessor<number>
-  ) => JSX.Element;
+  children: (row: SoupRow, index: Accessor<number>) => JSX.Element;
   onScrollBottom?: VoidFunction;
   scrollBottomOffset?: number;
-  rows?: SoupRow[];
-  count?: number;
-  getRow?: (index: number) => SoupRow | undefined;
+  rows: SoupRow[];
   cache?: CacheSnapshot;
 }
 
@@ -1246,17 +1225,7 @@ const SoupList = (props: SoupListProps) => {
   const [stableRows, setStableRows] = createStore<SoupRow[]>([]);
 
   createRenderEffect(() => {
-    if (props.rows) {
-      setStableRows(reconcile(props.rows, { key: 'id' }));
-    }
-  });
-
-  // Index-based mode: create indices array for VList
-  const indices = createMemo(() => {
-    if (props.count !== undefined) {
-      return Array.from({ length: props.count }, (_, i) => i);
-    }
-    return null;
+    setStableRows(reconcile(props.rows, { key: 'id' }));
   });
 
   const handleScroll = (offset: number) => {
@@ -1290,41 +1259,18 @@ const SoupList = (props: SoupListProps) => {
         props.class
       )}
     >
-      <Show
-        when={indices()}
-        fallback={
-          <VList
-            cache={props.cache}
-            ref={registerVirtualizerHandler}
-            class={props.virtualizerClass}
-            data={stableRows}
-            itemSize={itemSize()}
-            bufferSize={overscan() * itemSize()}
-            onScroll={handleScroll}
-            data-soup-list-container
-          >
-            {(row, i) => props.children(() => row, i)}
-          </VList>
-        }
+      <VList
+        cache={props.cache}
+        ref={registerVirtualizerHandler}
+        class={props.virtualizerClass}
+        data={stableRows}
+        itemSize={itemSize()}
+        bufferSize={overscan() * itemSize()}
+        onScroll={handleScroll}
+        data-soup-list-container
       >
-        {(idxArray) => (
-          <VList
-            cache={props.cache}
-            ref={registerVirtualizerHandler}
-            class={props.virtualizerClass}
-            data={idxArray()}
-            itemSize={itemSize()}
-            bufferSize={overscan() * itemSize()}
-            onScroll={handleScroll}
-            data-soup-list-container
-          >
-            {(idx, i) => {
-              const row = () => props.getRow?.(idx);
-              return props.children(row, i);
-            }}
-          </VList>
-        )}
-      </Show>
+        {(row, i) => props.children(row, i)}
+      </VList>
     </div>
   );
 };
