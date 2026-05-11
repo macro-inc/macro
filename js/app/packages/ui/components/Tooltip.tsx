@@ -21,10 +21,10 @@ export type TooltipProps = ParentProps<{
 
 /**
  * Tooltip component to wrap some piece of UI with a tooltip.
- * @param props.tooltip - The JSX element to render in the tooltip.
- * @param props.placement - A optional floating ui placement string.
  * @param props.floatingOptions - A optional floating ui options object.
+ * @param props.placement - A optional floating ui placement string.
  * @param props.unstyled - When true, removes default styling from the tooltip content.
+ * @param props.tooltip - The JSX element to render in the tooltip.
  * @example
  * <Tooltip tooltip={<div class="text-xs">Hello</div>}>
  *     <Button>Hover over me</Button>
@@ -142,8 +142,8 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
               <>
                 <div class="text-xxs rounded-sm border border-edge-muted px-1.5 py-px">
                   <Hotkey
-                    token={step.token}
                     shortcut={step.shortcut}
+                    token={step.token}
                     class="flex gap-1"
                   />
                 </div>
@@ -159,7 +159,8 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
         <div class="text-xxs rounded-sm ml-auto border border-edge-muted px-1.5 py-px">
           {props.hotkeyToken
             ? Hotkey({ token: props.hotkeyToken, class: 'flex gap-1' })
-            : Hotkey({ shortcut: props.shortcut, class: 'flex gap-1' })}
+            : Hotkey({ shortcut: props.shortcut, class: 'flex gap-1' })
+          }
         </div>
       </Show>
     </div>
@@ -176,8 +177,8 @@ export function TooltipWrapper(props: {
         tooltip={
           <div class="flex flex-col">
             <LabelAndHotKey
-              label={props.tooltip.label}
               hotkeyToken={props.tooltip.hotkeyToken}
+              label={props.tooltip.label}
             />
           </div>
         }

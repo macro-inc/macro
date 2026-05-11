@@ -1,9 +1,9 @@
 import { Button as KobalteButton, type ButtonRootProps } from '@kobalte/core/button';
 import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
 import type { Placement } from '@floating-ui/dom';
-import CorvuTooltip from '@corvu/tooltip';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
+import { Tooltip } from './Tooltip';
 
 export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
@@ -68,34 +68,14 @@ export const Button = (props: ButtonProps) => {
         }
         when={local.tooltip}
       >
-        <CorvuTooltip
+        <Tooltip
           placement={local.tooltipPlacement ?? 'bottom'}
-          floatingOptions={{
-            size: { padding: 16, fitViewPort: true },
-            shift: { padding: 16 },
-            offset: 12,
-            flip: true,
-          }}
-          group="tooltip-single-group"
-          closeDelay={250}
-          openDelay={250}
+          tooltip={local.tooltip}
         >
-          <CorvuTooltip.Trigger as={KobalteButton} class={cls()} {...others}>
+          <KobalteButton class={cls()} {...others}>
             {local.children}
-          </CorvuTooltip.Trigger>
-          <CorvuTooltip.Portal>
-            <CorvuTooltip.Content
-              style={{ 'max-width': 'calc(100vw - 32px)' }}
-              class="z-tool-tip"
-            >
-              <Layer depth={3}>
-              <div class="border border-edge bg-panel flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm shadow-md shadow-[#000]/5">
-                {local.tooltip}
-              </div>
-              </Layer>
-            </CorvuTooltip.Content>
-          </CorvuTooltip.Portal>
-        </CorvuTooltip>
+          </KobalteButton>
+        </Tooltip>
       </Show>
     </Layer>
   );
