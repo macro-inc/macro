@@ -3,6 +3,7 @@
 use std::str::FromStr;
 
 use crate::domain::{
+    content::LocationResponseV3,
     models::{CommentThread, LocationQueryParams},
     ports::DocumentService,
 };
@@ -205,9 +206,10 @@ async fn get_document_content_from_location<DSvc: DocumentService, ESvc: EntityA
         .await?;
 
     let presigned_url = match location {
-        model::document::response::LocationResponseV3::PresignedUrl {
+        LocationResponseV3::PresignedUrl {
             presigned_url,
             metadata: _metadata,
+            content: _content,
         } => presigned_url,
         // This should only be called with text documents which result in 1 presigned url
         _ => unreachable!(),

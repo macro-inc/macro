@@ -3348,6 +3348,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "document_upload_finalizer_handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-sdk-s3",
+ "aws_lambda_events",
+ "documents",
+ "lambda_runtime",
+ "lexical_client",
+ "macro_aws_config",
+ "macro_entrypoint",
+ "model",
+ "openssl",
+ "s3_key",
+ "sqlx",
+ "sync_service_client",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "documents"
 version = "0.1.0"
 dependencies = [

@@ -40,6 +40,7 @@ build_lambdas compiler="":
     ulimit -n 10240 && just dataloss_prevention_handler/build {{compiler}}
     ulimit -n 10240 && just search_upload_handler/build {{compiler}}
     ulimit -n 10240 && just document_text_extractor/build {{compiler}}
+    ulimit -n 10240 && just document_upload_finalizer_handler/build {{compiler}}
     ulimit -n 10240 && just email_suppression_handler/build {{compiler}}
     ulimit -n 10240 && just deleted_item_poller/build {{compiler}}
     ulimit -n 10240 && just email_refresh_handler/build {{compiler}}

@@ -35,6 +35,7 @@ members = [
   "document_storage_service_client",
   "document_sub_type",
   "document_text_extractor",
+  "document_upload_finalizer_handler",
   "documents",
   "docx_unzip_handler",
   "dynamodb_client",

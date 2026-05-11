@@ -1,12 +1,16 @@
 //! Domain layer: models, ports (trait interfaces), and service implementation.
 
 pub mod branch_name;
+pub mod content;
 
 #[cfg(feature = "document_create")]
 pub mod create;
 
 #[cfg(feature = "markdown_init")]
 pub mod markdown_init;
+
+#[cfg(all(feature = "markdown_init", feature = "ports"))]
+pub mod upload_finalize;
 
 pub mod models;
 

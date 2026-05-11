@@ -19,6 +19,10 @@ import {
   DocxUnzipHandlerLambda,
   type DocxUnzipLambdaEnvVars,
 } from './docx-unzip-handler-lambda';
+import {
+  DocumentUploadFinalizerLambda,
+  type DocumentUploadFinalizerLambdaEnvVars,
+} from './document-upload-finalizer-lambda';
 
 const tags = {
   environment: stack,
@@ -62,14 +66,26 @@ const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .apply((secret) => secret.arn);
 
 const INTERNAL_API_SECRET_KEY = config.require(`internal_api_key`);
-const internalApiKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: INTERNAL_API_SECRET_KEY })
-  .apply((secret) => secret.arn);
+const internalApiSecret = aws.secretsmanager.getSecretVersionOutput({
+  secretId: INTERNAL_API_SECRET_KEY,
+});
+const internalApiKeyArn: pulumi.Output<string> = internalApiSecret.apply(
+  (secret) => secret.arn
+);
+const internalApiSecretValue: pulumi.Output<string> = internalApiSecret.apply(
+  (secret) => secret.secretString
+);
 
 const SYNC_SERVICE_AUTH_KEY = config.require(`sync_service_auth_key`);
-const syncServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY })
-  .apply((secret) => secret.arn);
+const syncServiceAuthSecret = aws.secretsmanager.getSecretVersionOutput({
+  secretId: SYNC_SERVICE_AUTH_KEY,
+});
+const syncServiceAuthKeyArn: pulumi.Output<string> = syncServiceAuthSecret.apply(
+  (secret) => secret.arn
+);
+const syncServiceAuthKeyValue: pulumi.Output<string> = syncServiceAuthSecret.apply(
+  (secret) => secret.secretString
+);
 
 const AUTHENTICATION_SERVICE_SECRET_KEY = config.require(
   `authentication_service_secret_key`
@@ -680,6 +696,103 @@ const docxUnzipHandler = new DocxUnzipHandlerLambda(
 
 export const docxUnzipHandlerRoleArn = docxUnzipHandler.role.arn;
 export const docxUnzipHandlerName = docxUnzipHandler.lambda.name;
+
+// ------------------------------------------- Document Upload Finalizer -------------------------------------------
+const documentUploadFinalizerEnvVars: DocumentUploadFinalizerLambdaEnvVars = {
+  DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
+  DOCUMENT_STORAGE_BUCKET: pulumi.interpolate`${documentStorageBucketId}`,
+  INTERNAL_API_SECRET_KEY: pulumi.interpolate`${internalApiSecretValue}`,
+  SYNC_SERVICE_AUTH_KEY: pulumi.interpolate`${syncServiceAuthKeyValue}`,
+  LEXICAL_SERVICE_URL: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
+  SYNC_SERVICE_URL: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
+  RUST_LOG: 'document_upload_finalizer_handler=info,documents=info',
+};
+
+const documentUploadFinalizer = new DocumentUploadFinalizerLambda(
+  `document-upload-finalizer-${stack}`,
+  {
+    documentStorageBucketArn,
+    envVars: documentUploadFinalizerEnvVars,
+    vpc: coparse_api_vpc,
+    tags,
+  }
+);
+
+export const documentUploadFinalizerRoleArn = documentUploadFinalizer.role.arn;
+export const documentUploadFinalizerName = documentUploadFinalizer.lambda.name;
+export const documentUploadFinalizerArn = documentUploadFinalizer.lambda.arn;
+
+// The document-storage-bucket-integrations stack enables EventBridge delivery
+// for the bucket. This stack only adds the finalizer rule/target.
+const documentUploadFinalizerRule = new aws.cloudwatch.EventRule(
+  `document-upload-finalizer-rule-${stack}`,
+  {
+    name: `document-upload-finalizer-rule-${stack}`,
+    description: 'Finalize documents when their versioned storage object is created',
+    eventPattern: pulumi
+      .all([documentStorageBucketId])
+      .apply(([bucketId]) =>
+        JSON.stringify({
+          source: ['aws.s3'],
+          'detail-type': ['Object Created'],
+          detail: {
+            bucket: {
+              name: [bucketId],
+            },
+          },
+        })
+      ),
+    tags,
+  }
+);
+
+const documentUploadFinalizerDlq = new aws.sqs.Queue(
+  `document-upload-finalizer-dlq-${stack}`,
+  {
+    name: `document-upload-finalizer-dlq-${stack}`,
+    messageRetentionSeconds: 14 * 24 * 60 * 60,
+    tags,
+  }
+);
+
+new aws.sqs.QueuePolicy(`document-upload-finalizer-dlq-policy-${stack}`, {
+  queueUrl: documentUploadFinalizerDlq.url,
+  policy: pulumi
+    .all([documentUploadFinalizerDlq.arn, documentUploadFinalizerRule.arn])
+    .apply(([queueArn, ruleArn]) =>
+      JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: { Service: 'events.amazonaws.com' },
+            Action: 'sqs:SendMessage',
+            Resource: queueArn,
+            Condition: {
+              ArnEquals: {
+                'aws:SourceArn': ruleArn,
+              },
+            },
+          },
+        ],
+      })
+    ),
+});
+
+new aws.cloudwatch.EventTarget(`document-upload-finalizer-target-${stack}`, {
+  rule: documentUploadFinalizerRule.name,
+  arn: documentUploadFinalizer.lambda.arn,
+  deadLetterConfig: {
+    arn: documentUploadFinalizerDlq.arn,
+  },
+});
+
+new aws.lambda.Permission(`document-upload-finalizer-eventbridge-${stack}`, {
+  action: 'lambda:InvokeFunction',
+  function: documentUploadFinalizer.lambda.name,
+  principal: 'events.amazonaws.com',
+  sourceArn: documentUploadFinalizerRule.arn,
+});
 
 // attach lambda to s3 event
 // disabling in dev to test theory of editor crash in web app and potentially use a new paradigm for docx file upload

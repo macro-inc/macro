@@ -1,5 +1,6 @@
 //! ReadMetadata tool for reading document metadata.
 
+use crate::domain::content::DocumentMetadataWithContent;
 use crate::domain::ports::DocumentService;
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -7,7 +8,6 @@ use entity_access::domain::{
     models::{AccessLevel, EntityType},
     ports::EntityAccessService,
 };
-use model::document::DocumentMetadata;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -20,7 +20,7 @@ use crate::domain::branch_name::build_task_branch_name;
 pub struct ReadDocumentMetadata {
     /// The document metadata
     #[serde(flatten)]
-    document: DocumentMetadata,
+    document: DocumentMetadataWithContent,
     /// If the document is a "task" the branch name of the document will be provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     branch_name: Option<String>,

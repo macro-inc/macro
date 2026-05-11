@@ -28,13 +28,6 @@ const uploadWithPresignedUrl = async (params: {
   return !isErr(uploadResult);
 };
 
-const finalizeUploadedDocument = async (
-  documentId: string
-): Promise<boolean> => {
-  const result = await storageServiceClient.finalizeUpload({ documentId });
-  return !isErr(result);
-};
-
 type DocumentUploadResult = {
   type: 'document';
   name: string;
@@ -237,12 +230,9 @@ export async function upload(
     return handleUploadError('Failed to upload file', toastId);
   }
 
-  if (!(await finalizeUploadedDocument(documentId))) {
-    console.error('failed to finalize upload', documentId);
-    await storageServiceClient.deleteDocument({ documentId });
-    return handleUploadError('Failed to finalize file upload', toastId);
-  }
-
+  // Document upload finalization is owned by the backend S3 ObjectCreated
+  // pipeline. The event finalizer marks object-storage documents uploaded and
+  // initializes markdown documents in sync-service.
   if (docxProcessingPromise) {
     await docxProcessingPromise;
   }

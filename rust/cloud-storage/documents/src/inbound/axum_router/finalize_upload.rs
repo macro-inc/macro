@@ -9,24 +9,27 @@ use axum::{
 use entity_access::domain::models::EntityAccessReceipt;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use model::document::response::LocationResponseV3;
 use model::document::{DocumentBasic, FileType};
 use model::response::{GenericSuccessResponse, SuccessResponse};
 use model_entity::EntityType;
 use models_permissions::share_permission::access_level::{EditAccessLevel, ViewAccessLevel};
 
 use super::{DocumentRouterState, Params};
-use crate::domain::create::MarkdownInitializer;
+use crate::domain::content::{DocumentContentState, LocationResponseV3};
 use crate::domain::models::{DocumentError, LocationQueryParams};
 use crate::domain::ports::DocumentService;
+use crate::domain::upload_finalize::UploadedDocumentFinalizer;
 
 /// Handler for `POST /documents/{document_id}/finalize_upload`.
 ///
-/// Finalizes caller-managed uploads after the bytes have been PUT to the
-/// presigned URL. For markdown uploads this reads the uploaded markdown from
-/// document storage, initializes sync-service, and marks the document uploaded.
-/// Non-DOCX uploads are marked uploaded; DOCX completion remains owned by the
-/// unzip/conversion pipeline.
+/// Compatibility/manual finalization endpoint.
+///
+/// Browser S3 uploads are finalized by the S3 ObjectCreated event pipeline.
+/// This endpoint remains for legacy frontend-created markdown documents,
+/// manual retry/debug, and temporary callers. For markdown S3 uploads it reads
+/// the uploaded markdown from document storage, initializes sync-service, and
+/// marks the document uploaded. Non-DOCX uploads are marked uploaded; DOCX
+/// completion remains owned by the unzip/conversion pipeline.
 #[utoipa::path(
     tag = "document",
     post,
@@ -64,58 +67,56 @@ pub async fn finalize_upload_handler<T: DocumentService, Svc: EntityAccessServic
         return Ok(success());
     }
 
-    if !matches!(file_type, Some(FileType::Md)) {
-        state.service.mark_document_uploaded(&document_id).await?;
+    let content = state
+        .service
+        .get_document_content(&document_context)
+        .await?;
+    if content.state == DocumentContentState::Ready {
         return Ok(success());
     }
 
-    if state
-        .sync_service_client
-        .exists(&document_id)
-        .await
-        .map_err(DocumentError::Internal)?
+    if matches!(file_type, Some(FileType::Md))
+        && state
+            .sync_service_client
+            .exists(&document_id)
+            .await
+            .map_err(DocumentError::Internal)?
     {
+        // Compatibility for legacy frontend-created markdown documents that
+        // initialize sync-service directly and do not write an S3 object.
+        // Browser S3 uploads no longer call this endpoint; ObjectCreated events
+        // run the canonical upload finalizer without probing sync-service.
         state.service.mark_document_uploaded(&document_id).await?;
         return Ok(success());
     }
 
-    let Some(presigned_url) =
-        uploaded_document_presigned_url(state.service.as_ref(), &document_context, &document_id)
-            .await?
-    else {
-        state.service.mark_document_uploaded(&document_id).await?;
-        return Ok(success());
+    let markdown = if matches!(file_type, Some(FileType::Md)) {
+        let Some(presigned_url) = uploaded_document_presigned_url(
+            state.service.as_ref(),
+            &document_context,
+            &document_id,
+        )
+        .await?
+        else {
+            state.service.mark_document_uploaded(&document_id).await?;
+            return Ok(success());
+        };
+
+        Some(download_markdown(&presigned_url).await?)
+    } else {
+        None
     };
 
-    let markdown = download_markdown(&presigned_url).await?;
-
-    state.service.mark_document_uploaded(&document_id).await?;
-
-    let initializer = MarkdownInitializer::new(
+    let finalizer = UploadedDocumentFinalizer::new(
+        state.service.as_ref(),
         state.lexical_client.as_ref(),
         state.sync_service_client.as_ref(),
     );
+    finalizer
+        .finalize_uploaded_document(&document_context, markdown.as_deref())
+        .await?;
 
-    match initializer
-        .initialize_existing_markdown(&document_id, &markdown)
-        .await
-    {
-        Ok(()) => Ok(success()),
-        Err(error) => {
-            // Make finalize idempotent across retries/races.
-            if state
-                .sync_service_client
-                .exists(&document_id)
-                .await
-                .map_err(DocumentError::Internal)?
-            {
-                state.service.mark_document_uploaded(&document_id).await?;
-                Ok(success())
-            } else {
-                Err(error)
-            }
-        }
-    }
+    Ok(success())
 }
 
 async fn uploaded_document_presigned_url<T: DocumentService>(

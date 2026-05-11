@@ -3,6 +3,8 @@
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentMetadata, FileType};
+
+use super::content::DocumentResponse;
 use model::sync_service::SyncServiceVersionID;
 use models_properties::api::requests::SetPropertyValue;
 use serde_json::Value;
@@ -51,7 +53,7 @@ pub struct CopyDocumentResponse {
     /// Indicates if an error occurred.
     pub error: bool,
     /// The copied document data.
-    pub data: model::document::response::DocumentResponse,
+    pub data: DocumentResponse,
 }
 
 /// Arguments for copying a document in the repository.

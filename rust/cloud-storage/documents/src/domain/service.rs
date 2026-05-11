@@ -21,10 +21,7 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::response::{
-    CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadata,
-    GetDocumentResponseData, LocationResponseData, LocationResponseV3,
-};
+use model::document::response::{DocumentResponseMetadata, LocationResponseData};
 use model::document::{ContentType, DocumentBasic, FileAssociation, FileType, FileTypeExt};
 use model::response::PresignedUrl;
 use s3_key::{
@@ -37,6 +34,11 @@ use crate::domain::models::{
     ASSIGNEES_PROPERTY_ID, NOT_STARTED_STATUS_OPTION_ID, PropertyInput, STATUS_PROPERTY_ID,
 };
 
+use super::content::{
+    CreateDocumentResponseData, DocumentContent, DocumentContentLocation, DocumentContentState,
+    DocumentMetadataWithContent, DocumentResponse, DocumentResponseMetadataWithContent,
+    GetDocumentResponseData, LocationResponseV3,
+};
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, CreateTaskResponse, DocumentError, EMPTY_SHA256, EditDocumentRepoArgs,
@@ -60,6 +62,38 @@ pub struct DocumentServiceImpl<
     connection_service: C,
     #[allow(dead_code)]
     entity_access_management_service: Eam,
+}
+
+fn ready_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
+    match file_type {
+        Some(FileType::Md) => DocumentContent::ready(DocumentContentLocation::SyncService),
+        Some(FileType::Docx) => DocumentContent::ready(DocumentContentLocation::DocxBomParts),
+        _ => DocumentContent::ready(DocumentContentLocation::ObjectStorage),
+    }
+}
+
+fn content_at_location(
+    state: DocumentContentState,
+    location: DocumentContentLocation,
+) -> DocumentContent {
+    DocumentContent {
+        state,
+        location: Some(location),
+    }
+}
+
+fn presigned_location_content(
+    state: DocumentContentState,
+    file_type: Option<FileType>,
+    get_converted_docx: bool,
+) -> DocumentContent {
+    let location = match (file_type, get_converted_docx) {
+        (Some(FileType::Docx), true) => DocumentContentLocation::ConvertedPdf,
+        (Some(FileType::Docx), false) => DocumentContentLocation::DocxBomParts,
+        _ => DocumentContentLocation::ObjectStorage,
+    };
+
+    content_at_location(state, location)
 }
 
 impl<
@@ -253,6 +287,28 @@ impl<
         }
     }
 
+    async fn content_for_document(
+        &self,
+        document_id: &str,
+        file_type: Option<FileType>,
+    ) -> Result<DocumentContent, DocumentError> {
+        let (_, uploaded) = if file_type
+            .is_none_or(|file_type| file_type == FileType::Docx || file_type.is_static())
+        {
+            self.repo
+                .get_document_version_id(document_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?
+        } else {
+            self.repo
+                .get_latest_document_version_id(document_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?
+        };
+
+        Ok(DocumentContent::from_legacy_uploaded(uploaded, file_type))
+    }
+
     async fn try_get_from_sync_service(
         &self,
         document_id: &str,
@@ -343,8 +399,14 @@ impl<
             _ => unreachable!(),
         };
 
+        let file_type = document_metadata
+            .file_type
+            .as_deref()
+            .and_then(|file_type| FileType::from_str(file_type).ok());
+        let content = self.content_for_document(&document_id, file_type).await?;
+
         Ok(GetDocumentResponseData {
-            document_metadata,
+            document_metadata: DocumentMetadataWithContent::new(document_metadata, content),
             user_access_level: *access_level,
             view_location,
         })
@@ -363,14 +425,18 @@ impl<
             .and_then(|f| FileType::from_str(f).ok());
 
         let document_id = entity_access_receipt.entity().entity_id.clone();
+        let content = self.content_for_document(&document_id, file_type).await?;
 
-        // For markdown files, check sync service first
-        if matches!(file_type, Some(FileType::Md)) {
+        // Ready markdown documents should resolve from sync-service when available.
+        // Pending markdown uploads still live in object storage and should not
+        // probe sync-service on the finalize path.
+        if matches!(file_type, Some(FileType::Md)) && content.state == DocumentContentState::Ready {
             match self.try_get_from_sync_service(&document_id).await {
                 Ok(Some(sync_service_metadata)) => {
                     return Ok(LocationResponseV3::SyncServiceContent {
                         metadata: document_context.clone(),
                         sync_service_metadata,
+                        content: DocumentContent::ready(DocumentContentLocation::SyncService),
                     });
                 }
                 Ok(None) => {
@@ -384,24 +450,38 @@ impl<
         }
 
         let owner = document_context.owner.as_ref();
+        let get_converted_docx_url = params.get_converted_docx_url.unwrap_or(false);
         let response_data = self
             .get_presigned_url_by_type(
                 owner,
                 &document_id,
                 file_type,
                 params.document_version_id,
-                params.get_converted_docx_url.unwrap_or(false),
+                get_converted_docx_url,
             )
             .await
             .map(|response| match response {
-                LocationResponseData::PresignedUrl(url) => LocationResponseV3::PresignedUrl {
-                    presigned_url: url,
-                    metadata: document_context.clone(),
-                },
-                LocationResponseData::PresignedUrls(urls) => LocationResponseV3::PresignedUrls {
-                    presigned_urls: urls,
-                    metadata: document_context.clone(),
-                },
+                LocationResponseData::PresignedUrl(url) => {
+                    let content = presigned_location_content(
+                        content.state,
+                        file_type,
+                        get_converted_docx_url,
+                    );
+                    LocationResponseV3::PresignedUrl {
+                        presigned_url: url,
+                        metadata: document_context.clone(),
+                        content,
+                    }
+                }
+                LocationResponseData::PresignedUrls(urls) => {
+                    let content =
+                        content_at_location(content.state, DocumentContentLocation::DocxBomParts);
+                    LocationResponseV3::PresignedUrls {
+                        presigned_urls: urls,
+                        metadata: document_context.clone(),
+                        content,
+                    }
+                }
             })
             .map_err(|e| {
                 if e.to_string() == "document does not exist in s3" {
@@ -527,6 +607,18 @@ impl<
             .map_err(|e| DocumentError::Internal(e.into()))
     }
 
+    #[tracing::instrument(err, skip(self, document_context))]
+    async fn get_document_content(
+        &self,
+        document_context: &DocumentBasic,
+    ) -> Result<DocumentContent, DocumentError> {
+        self.content_for_document(
+            &document_context.document_id,
+            document_context.try_file_type(),
+        )
+        .await
+    }
+
     #[tracing::instrument(skip(self))]
     async fn cleanup_created_document(&self, document_id: &str) {
         self.cleanup_document(document_id).await;
@@ -642,7 +734,10 @@ impl<
 
         Ok(CreateDocumentResponseData {
             document_response: DocumentResponse {
-                document_metadata: document_response_metadata,
+                document_metadata: DocumentResponseMetadataWithContent::new(
+                    document_response_metadata,
+                    DocumentContent::pending_upload(),
+                ),
                 presigned_url: Some(presigned_url),
             },
             content_type: mime_type,
@@ -976,6 +1071,13 @@ impl<
             return Err(DocumentError::Internal(e));
         }
 
+        if let Err(e) = self.repo.mark_document_uploaded(&new_document_id).await {
+            tracing::error!(error=?e, document_id=?new_document_id, "failed to mark copied document uploaded");
+            self.cleanup_document(&new_document_id).await;
+            return Err(DocumentError::Internal(e.into()));
+        }
+        let content = ready_content_for_file_type(file_type);
+
         let document_response_metadata =
             DocumentResponseMetadata::from_document_metadata(&new_metadata).map_err(|e| {
                 tracing::error!(error=?e, "unable to convert document metadata");
@@ -983,7 +1085,10 @@ impl<
             })?;
 
         Ok(DocumentResponse {
-            document_metadata: document_response_metadata,
+            document_metadata: DocumentResponseMetadataWithContent::new(
+                document_response_metadata,
+                content,
+            ),
             presigned_url: None,
         })
     }

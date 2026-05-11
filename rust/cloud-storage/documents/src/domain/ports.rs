@@ -8,10 +8,12 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::response::{
-    CreateDocumentResponseData, GetDocumentResponseData, LocationResponseV3,
-};
 use model::document::{ContentType, DocumentBasic, DocumentMetadata};
+
+use super::content::{
+    CreateDocumentResponseData, DocumentContent, DocumentResponse, GetDocumentResponseData,
+    LocationResponseV3,
+};
 
 use model::sync_service::SyncServiceVersionID;
 
@@ -303,6 +305,12 @@ pub trait DocumentService: Send + Sync + 'static {
         document_id: &str,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
+    /// Get content lifecycle metadata for a document.
+    fn get_document_content(
+        &self,
+        document_context: &DocumentBasic,
+    ) -> impl Future<Output = Result<DocumentContent, DocumentError>> + Send;
+
     /// Clean up a document that failed during backend-owned creation.
     fn cleanup_created_document(&self, document_id: &str) -> impl Future<Output = ()> + Send;
 
@@ -339,7 +347,7 @@ pub trait DocumentService: Send + Sync + 'static {
         document_name: String,
         query_version_id: Option<i64>,
         sync_version_id: Option<SyncServiceVersionID>,
-    ) -> impl Future<Output = Result<model::document::response::DocumentResponse, DocumentError>> + Send;
+    ) -> impl Future<Output = Result<DocumentResponse, DocumentError>> + Send;
 
     /// Get the name of a project by ID.
     fn get_project_name(

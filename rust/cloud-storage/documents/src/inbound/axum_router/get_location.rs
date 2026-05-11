@@ -8,10 +8,10 @@ use axum::{
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use model::document::DocumentBasic;
-use model::document::response::LocationResponseV3;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
 use super::{DocumentRouterState, Params};
+use crate::domain::content::LocationResponseV3;
 use crate::domain::models::{DocumentError, LocationQueryParams};
 use crate::domain::ports::DocumentService;
 

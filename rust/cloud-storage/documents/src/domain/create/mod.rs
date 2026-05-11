@@ -11,10 +11,12 @@ use base64::Engine;
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
-use model::document::response::CreateDocumentResponseData;
 use sha2::{Digest, Sha256};
 use sync_service_client::SyncServiceClient;
 
+use crate::domain::content::{
+    CreateDocumentResponseData, DocumentContent, DocumentContentLocation,
+};
 use crate::domain::models::{
     CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, EMPTY_SHA256, PropertyInput,
 };
@@ -557,7 +559,7 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
             },
         );
 
-        let response = self
+        let mut response = self
             .document_service
             .create_document(user_id.clone(), args, None)
             .await?;
@@ -584,12 +586,12 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
                     .await?;
             }
 
-            self.document_service
-                .mark_document_uploaded(&document_id)
-                .await?;
-
             self.markdown_initializer()
                 .initialize_existing_markdown(&document_id, &markdown)
+                .await?;
+
+            self.document_service
+                .mark_document_uploaded(&document_id)
                 .await?;
 
             Ok(())
@@ -600,6 +602,9 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
             self.cleanup_created_document(&document_id).await;
             return Err(error);
         }
+
+        response.document_response.document_metadata.content =
+            DocumentContent::ready(DocumentContentLocation::SyncService);
 
         Ok(CreatedDocument::new(response))
     }
@@ -628,7 +633,7 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
             },
         );
 
-        let response = self
+        let mut response = self
             .document_service
             .create_document(user_id, args, None)
             .await?;
@@ -667,6 +672,9 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
             self.cleanup_created_document(&document_id).await;
             return Err(error);
         }
+
+        response.document_response.document_metadata.content =
+            DocumentContent::ready(DocumentContentLocation::ObjectStorage);
 
         Ok(CreatedDocument::new(response))
     }
