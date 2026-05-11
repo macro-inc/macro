@@ -158,18 +158,18 @@ export function Hotkey(props: HotkeyProps){
         <For each={hotkey().modifiers}>
           {(mod) => (
             <>
-              <span class="text-current">
+              <span>
                 {modifierMap[mod as keyof typeof modifierMap] || mod}
               </span>
 
               <Show when={local.showPlus}>
-                <span class="text-current"> + </span>
+                <span> + </span>
               </Show>
             </>
           )}
         </For>
         <Show when={normalizedKey()}>
-          <span class="text-current">{normalizedKey()}</span>
+          <span>{normalizedKey()}</span>
         </Show>
       </div>
     </Show>
