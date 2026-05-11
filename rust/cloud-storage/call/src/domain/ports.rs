@@ -168,6 +168,17 @@ pub trait CallRepository: Send + Sync + 'static {
         voice_id: Option<Uuid>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Return a voice id already attached to this speaker in the active call,
+    /// if one exists. Prefer `diarized_speaker_id` when present because a
+    /// single participant track can contain multiple diarized voices; otherwise
+    /// fall back to the LiveKit speaker/participant id.
+    fn get_transcript_voice_id_for_speaker<'a>(
+        &self,
+        call_id: &Uuid,
+        speaker_id: &'a str,
+        diarized_speaker_id: Option<&'a str>,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
     /// Get the profile picture URL for a user by their `MacroUserIdStr`.
     fn get_user_profile_picture<'a>(
         &self,
@@ -606,9 +617,11 @@ pub trait VoiceRepository: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + Debug;
 
-    /// Insert a new `voice` row with the supplied embedding and return its id.
-    /// Does not attempt to deduplicate — callers that want similarity-based
-    /// dedup should first try [`Self::find_nearest_user`] or query directly.
+    /// Return the id for the supplied voice embedding.
+    ///
+    /// Implementations may reuse an existing nearby embedding instead of
+    /// inserting a new row, so repeated transcript segments from the same
+    /// speaker resolve to the same `voice.id`.
     fn upsert_voice(
         &self,
         embedding: &[f32],

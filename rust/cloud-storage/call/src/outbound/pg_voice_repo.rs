@@ -9,6 +9,13 @@ use uuid::Uuid;
 
 use crate::domain::ports::VoiceRepository;
 
+/// Cosine-distance cutoff for treating two embeddings as the same voice.
+///
+/// This keeps transcript ingestion from creating a fresh `voice.id` for every
+/// finalized utterance from the same speaker while still allowing clearly
+/// different speakers to get separate ids.
+const VOICE_DEDUP_DISTANCE_THRESHOLD: f64 = 0.25;
+
 /// Postgres adapter implementing [`VoiceRepository`].
 #[derive(Clone)]
 pub struct PgVoiceRepo {
@@ -28,16 +35,32 @@ impl VoiceRepository for PgVoiceRepo {
     async fn upsert_voice(&self, embedding: &[f32]) -> Result<Uuid, Self::Err> {
         let id = macro_uuid::generate_uuid_v7();
         let vec = Vector::from(embedding.to_vec());
-        let row = sqlx::query!(
+        let voice_id = sqlx::query_scalar::<_, Uuid>(
             r#"
-            INSERT INTO voice (id, embedding) VALUES ($1, $2) RETURNING id
+            WITH nearest AS (
+                SELECT id
+                FROM voice
+                WHERE (embedding <=> $1) <= $2
+                ORDER BY embedding <=> $1 ASC
+                LIMIT 1
+            ), inserted AS (
+                INSERT INTO voice (id, embedding)
+                SELECT $3, $1
+                WHERE NOT EXISTS (SELECT 1 FROM nearest)
+                RETURNING id
+            )
+            SELECT id FROM nearest
+            UNION ALL
+            SELECT id FROM inserted
+            LIMIT 1
             "#,
-            id,
-            vec as Vector,
         )
+        .bind(vec)
+        .bind(VOICE_DEDUP_DISTANCE_THRESHOLD)
+        .bind(id)
         .fetch_one(&self.pool)
         .await?;
-        Ok(row.id)
+        Ok(voice_id)
     }
 
     async fn link_user_voice(

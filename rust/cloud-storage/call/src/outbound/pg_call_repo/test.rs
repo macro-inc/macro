@@ -48,6 +48,21 @@ fn repo(pool: Pool<Postgres>) -> PgCallRepo {
     PgCallRepo::new(pool)
 }
 
+fn axis_unit_vector(axis: usize) -> Vec<f32> {
+    let mut v = vec![0.0_f32; 256];
+    v[axis] = 1.0;
+    v
+}
+
+async fn insert_voice(pool: &Pool<Postgres>, voice_id: Uuid, axis: usize) -> anyhow::Result<()> {
+    sqlx::query("INSERT INTO voice (id, embedding) VALUES ($1, $2)")
+        .bind(voice_id)
+        .bind(pgvector::Vector::from(axis_unit_vector(axis)))
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 // -- create_call --------------------------------------------------------------
 
 #[sqlx::test(
@@ -743,6 +758,106 @@ async fn create_transcript_segment_stores_and_increments_sequence(
     assert_eq!(rows[1].content, "hi there");
     assert_eq!(rows[1].sequence_num, 2);
     assert_eq!(rows[1].diarized_speaker_id, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_transcript_voice_id_for_speaker_uses_diarized_speaker_id(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let now = Utc::now();
+    let voice_a = macro_uuid::generate_uuid_v7();
+    let voice_b = macro_uuid::generate_uuid_v7();
+    insert_voice(&pool, voice_a, 0).await?;
+    insert_voice(&pool, voice_b, 1).await?;
+
+    let seg_a = TranscriptSegmentRequest {
+        segment_id: "seg-voice-a".to_string(),
+        speaker_id: USER_A.to_string(),
+        diarized_speaker_id: Some("spk-a0".to_string()),
+        content: "first voice".to_string(),
+        started_at: now,
+        ended_at: Some(now),
+        is_final: true,
+        stream_started_at: None,
+        embedding: None,
+    };
+    let seg_b = TranscriptSegmentRequest {
+        segment_id: "seg-voice-b".to_string(),
+        speaker_id: USER_A.to_string(),
+        diarized_speaker_id: Some("spk-a1".to_string()),
+        content: "second voice".to_string(),
+        started_at: now,
+        ended_at: Some(now),
+        is_final: true,
+        stream_started_at: None,
+        embedding: None,
+    };
+
+    repo.create_transcript_segment(&CALL1, &seg_a, Some(voice_a))
+        .await?;
+    repo.create_transcript_segment(&CALL1, &seg_b, Some(voice_b))
+        .await?;
+
+    assert_eq!(
+        repo.get_transcript_voice_id_for_speaker(&CALL1, USER_A.as_ref(), Some("spk-a0"))
+            .await?,
+        Some(voice_a)
+    );
+    assert_eq!(
+        repo.get_transcript_voice_id_for_speaker(&CALL1, USER_A.as_ref(), Some("spk-a1"))
+            .await?,
+        Some(voice_b)
+    );
+    assert_eq!(
+        repo.get_transcript_voice_id_for_speaker(&CALL1, USER_A.as_ref(), Some("missing"))
+            .await?,
+        None
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_transcript_voice_id_for_speaker_falls_back_to_participant_id(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let now = Utc::now();
+    let voice_id = macro_uuid::generate_uuid_v7();
+    insert_voice(&pool, voice_id, 0).await?;
+
+    let segment = TranscriptSegmentRequest {
+        segment_id: "seg-voice-participant".to_string(),
+        speaker_id: USER_A.to_string(),
+        diarized_speaker_id: None,
+        content: "voice without diarization".to_string(),
+        started_at: now,
+        ended_at: Some(now),
+        is_final: true,
+        stream_started_at: None,
+        embedding: None,
+    };
+
+    repo.create_transcript_segment(&CALL1, &segment, Some(voice_id))
+        .await?;
+
+    assert_eq!(
+        repo.get_transcript_voice_id_for_speaker(&CALL1, USER_A.as_ref(), None)
+            .await?,
+        Some(voice_id)
+    );
+    assert_eq!(
+        repo.get_transcript_voice_id_for_speaker(&CALL1, USER_B.as_ref(), None)
+            .await?,
+        None
+    );
     Ok(())
 }
 
