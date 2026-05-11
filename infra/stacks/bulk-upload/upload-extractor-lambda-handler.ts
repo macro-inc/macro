@@ -12,13 +12,10 @@ export type UploadExtractorLambdaHandlerEnvVars = {
   DYNAMODB_TABLE: pulumi.Output<string> | string;
   UPLOAD_BUCKET_NAME: pulumi.Output<string> | string;
   INTERNAL_API_SECRET_KEY: pulumi.Output<string> | string;
-  SYNC_SERVICE_AUTH_KEY: pulumi.Output<string> | string;
   DSS_URL: pulumi.Output<string> | string;
   ENVIRONMENT: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
   CONNECTION_GATEWAY_URL: pulumi.Output<string> | string;
-  LEXICAL_SERVICE_URL: pulumi.Output<string> | string;
-  SYNC_SERVICE_URL: pulumi.Output<string> | string;
 };
 
 export interface UploadExtractorLambdaHandlerArgs {

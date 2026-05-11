@@ -125,22 +125,11 @@ if (stack !== 'local') {
     throw new Error('document_storage_service_auth_key must be set');
   }
 
-  const syncServiceAuthKeyName = config.get(`sync_service_auth_key`);
-  if (!syncServiceAuthKeyName) {
-    throw new Error('sync_service_auth_key must be set');
-  }
-
   const documentStorageServiceAuthKey = aws.secretsmanager
     .getSecretVersionOutput({
       secretId: documentStorageServiceAuthKeyName,
     })
     .apply((secret) => secret.secretString);
-  const syncServiceAuthKey = aws.secretsmanager
-    .getSecretVersionOutput({
-      secretId: syncServiceAuthKeyName,
-    })
-    .apply((secret) => secret.secretString);
-
   cloudStorageServiceUrl = cloudStorageServiceStack!
     .getOutput('cloudStorageServiceUrl')
     .apply((url) => url as string);
@@ -167,13 +156,10 @@ if (stack !== 'local') {
         DYNAMODB_TABLE: pulumi.interpolate`${dynamoTableName}`,
         UPLOAD_BUCKET_NAME: pulumi.interpolate`${bulkUploadBucket.bucket.bucket}`,
         INTERNAL_API_SECRET_KEY: pulumi.interpolate`${documentStorageServiceAuthKey}`,
-        SYNC_SERVICE_AUTH_KEY: pulumi.interpolate`${syncServiceAuthKey}`,
         DSS_URL: pulumi.interpolate`${cloudStorageServiceUrl}`,
         CONNECTION_GATEWAY_URL: getServiceUrl(
           ServiceUrl.CONNECTION_GATEWAY_URL
         ),
-        LEXICAL_SERVICE_URL: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
-        SYNC_SERVICE_URL: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
         ENVIRONMENT: stack,
         RUST_LOG: 'upload_extractor_lambda_handler=trace',
       },
