@@ -556,6 +556,57 @@ pub trait CallSearchIndexer: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
+/// Repository port for persisting speaker voice embeddings and their
+/// association with macro users.
+///
+/// `voice` stores a row per distinct speaker fingerprint (a `vector(N)`
+/// embedding produced by the LiveKit agent's speaker-embedding model).
+/// `macro_user_voice` is a many-to-many join linking enrolled users to
+/// the voice rows that identify them.
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait VoiceRepository: Send + Sync + 'static {
+    /// The error type returned by repository operations.
+    type Err: Into<anyhow::Error> + Send + Debug;
+
+    /// Insert a new `voice` row with the supplied embedding and return its id.
+    /// Does not attempt to deduplicate — callers that want similarity-based
+    /// dedup should first try [`Self::find_nearest_user`] or query directly.
+    fn upsert_voice(
+        &self,
+        embedding: &[f32],
+    ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
+
+    /// Link a `voice` row to a macro user. Idempotent on the composite
+    /// primary key `(macro_user_id, voice_id)`.
+    fn link_user_voice(
+        &self,
+        macro_user_id: &Uuid,
+        voice_id: &Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// All voice ids currently linked to a macro user.
+    fn get_user_voices(
+        &self,
+        macro_user_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+
+    /// Resolve a `voice_id` back to its linked macro user, if any. Uses the
+    /// `macro_user_voice` join — does not perform similarity search.
+    fn find_user_by_voice(
+        &self,
+        voice_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Find the macro user whose enrolled voice embedding is closest to
+    /// `embedding`, provided the cosine distance is `<= threshold`. Returns
+    /// `None` when no enrolled voice is within the threshold.
+    fn find_nearest_user(
+        &self,
+        embedding: &[f32],
+        threshold: f32,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+}
+
 /// No-op for services without search.
 pub struct NoOpCallSearchIndexer;
 
