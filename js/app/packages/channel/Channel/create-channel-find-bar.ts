@@ -119,8 +119,8 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
 
   const submit = () => {
     const trimmed = query().trim();
-    setSubmittedQuery(validateSearchServiceText(trimmed) ? trimmed : '');
     options.clearSelection();
+    setSubmittedQuery(validateSearchServiceText(trimmed) ? trimmed : '');
   };
 
   const open = () => {
