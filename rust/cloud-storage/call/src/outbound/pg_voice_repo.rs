@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::domain::ports::VoiceRepository;
 
 /// Postgres adapter implementing [`VoiceRepository`].
+#[derive(Clone)]
 pub struct PgVoiceRepo {
     pool: PgPool,
 }
@@ -84,6 +85,29 @@ impl VoiceRepository for PgVoiceRepo {
              LIMIT 1",
         )
         .bind(vec)
+        .bind(threshold)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|r| r.0))
+    }
+
+    async fn find_nearest_user_for_voice(
+        &self,
+        voice_id: &Uuid,
+        threshold: f32,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        // The CTE pulls the target embedding once; the main query then uses
+        // it for both the WHERE threshold and the ORDER BY ranking.
+        let row: Option<(Uuid,)> = sqlx::query_as(
+            "WITH target AS (SELECT embedding FROM voice WHERE id = $1) \
+             SELECT muv.macro_user_id \
+             FROM voice v \
+             JOIN macro_user_voice muv ON muv.voice_id = v.id \
+             WHERE (v.embedding <=> (SELECT embedding FROM target)) <= $2 \
+             ORDER BY v.embedding <=> (SELECT embedding FROM target) ASC \
+             LIMIT 1",
+        )
+        .bind(voice_id)
         .bind(threshold)
         .fetch_optional(&self.pool)
         .await?;

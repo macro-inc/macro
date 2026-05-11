@@ -353,7 +353,7 @@ impl<
     Sm: CallSummarizer + Clone,
     I: CallSearchIndexer,
     V: VoipPushSender,
-    Vr: VoiceRepository,
+    Vr: VoiceRepository + Clone,
 > CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
@@ -1235,9 +1235,14 @@ impl<
     Sm: CallSummarizer + Clone,
     I: CallSearchIndexer,
     V: VoipPushSender,
-    Vr: VoiceRepository,
+    Vr: VoiceRepository + Clone,
 > CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
 {
+    /// Default cosine distance threshold for matching transcript voice ids
+    /// to enrolled users. Resemblyzer's docs suggest ~0.75 cosine similarity
+    /// (≈ 0.25 distance) for "same speaker"; we start there.
+    const VOICE_MATCH_DISTANCE_THRESHOLD: f32 = 0.25;
+
     /// Fire-and-forget spawn of [`CallService::summarize_call`] for `call_id`.
     ///
     /// Called after the `call_records` row is persisted so that summarization
@@ -1314,6 +1319,92 @@ impl<
             }
         });
     }
+
+    /// Fire-and-forget spawn of [`match_voices_for_call_record`].
+    ///
+    /// Called from `process_webhook_event` immediately after `archive_call`
+    /// finalizes the `call_records` row so voice matching runs off the
+    /// request path. Errors are logged inside the spawned task.
+    fn spawn_match_voices_for_call(&self, call_record_id: Uuid) {
+        let repo = self.repo.clone();
+        let voice_repo = self.voice_repo.clone();
+        tokio::spawn(async move {
+            match_voices_for_call_record(
+                &repo,
+                &voice_repo,
+                call_record_id,
+                Self::VOICE_MATCH_DISTANCE_THRESHOLD,
+            )
+            .await;
+        });
+    }
+}
+
+/// Match the voice ids on a freshly archived call to enrolled users and
+/// populate `custom_speaker` for the matched diarized speakers.
+///
+/// Pulls the distinct `(diarized_speaker_id, voice_id)` pairs from the
+/// call's transcripts, resolves each `voice_id` to a macro user via
+/// the voice repository's nearest-neighbour lookup, then writes the
+/// assignments back via [`CallRepository::patch_call_transcript_speakers_from_voice_match`]
+/// (which only fills `custom_speaker` rows that are still `NULL` so
+/// manual corrections are preserved).
+async fn match_voices_for_call_record<R: CallRepository, Vr: VoiceRepository>(
+    repo: &R,
+    voice_repo: &Vr,
+    call_record_id: Uuid,
+    distance_threshold: f32,
+) {
+    let pairs = match repo
+        .get_distinct_voice_speakers_for_call_record(&call_record_id)
+        .await
+    {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!(
+                error=?e, %call_record_id,
+                "failed to load voice/speaker pairs for matching"
+            );
+            return;
+        }
+    };
+
+    if pairs.is_empty() {
+        return;
+    }
+
+    let total = pairs.len();
+    let mut assignments: Vec<(String, Uuid)> = Vec::new();
+    for (diarized_speaker_id, voice_id) in pairs {
+        match voice_repo
+            .find_nearest_user_for_voice(&voice_id, distance_threshold)
+            .await
+        {
+            Ok(Some(user_id)) => assignments.push((diarized_speaker_id, user_id)),
+            Ok(None) => {}
+            Err(e) => tracing::error!(
+                error=?e, %call_record_id, %voice_id,
+                "voice match lookup failed; skipping speaker"
+            ),
+        }
+    }
+
+    let matched = assignments.len();
+    if let Err(e) = repo
+        .patch_call_transcript_speakers_from_voice_match(&call_record_id, &assignments)
+        .await
+    {
+        tracing::error!(
+            error=?e, %call_record_id,
+            "failed to persist voice-matched speakers"
+        );
+        return;
+    }
+
+    tracing::info!(
+        %call_record_id, matched, total,
+        "voice match completed"
+    );
 }
 
 /// Extract the recording key from a full S3 URL.

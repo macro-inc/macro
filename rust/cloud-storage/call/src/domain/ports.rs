@@ -255,6 +255,25 @@ pub trait CallRepository: Send + Sync + 'static {
         assignments: &[CustomSpeakerAssignment],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Distinct `(diarized_speaker_id, voice_id)` pairs from a call's
+    /// archived transcripts. Used by the post-archive voice matcher; rows
+    /// with NULL `diarized_speaker_id` or NULL `voice_id` are skipped.
+    fn get_distinct_voice_speakers_for_call_record(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<(String, Uuid)>, Self::Err>> + Send;
+
+    /// Apply auto-matched speaker assignments to `call_record_transcripts`
+    /// rows, only where `custom_speaker IS NULL` (so manual overrides are
+    /// never clobbered). Each tuple is `(diarized_speaker_id, macro_user_id)`;
+    /// the macro_user's email is resolved inline and stored in
+    /// `custom_speaker` as `macro|<email>`. Empty `assignments` is a no-op.
+    fn patch_call_transcript_speakers_from_voice_match(
+        &self,
+        call_record_id: &Uuid,
+        assignments: &[(String, Uuid)],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Persist the AI-generated summary text on the archived call record.
     ///
     /// Tolerates unknown `call_id` (no row matches): the summarization flow
@@ -623,6 +642,16 @@ pub trait VoiceRepository: Send + Sync + 'static {
         embedding: &[f32],
         threshold: f32,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Same as [`Self::find_nearest_user`] but looks the embedding up by
+    /// `voice_id` in the `voice` table first. Used by the call-finished
+    /// matcher, which already has `voice_id`s on the transcript rows and
+    /// shouldn't need to re-load the embeddings client-side.
+    fn find_nearest_user_for_voice(
+        &self,
+        voice_id: &Uuid,
+        threshold: f32,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 }
 
 /// No-op [`VoiceRepository`] used as the default for services that do not
@@ -657,6 +686,14 @@ impl VoiceRepository for NoOpVoiceRepository {
     async fn find_nearest_user(
         &self,
         _embedding: &[f32],
+        _threshold: f32,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn find_nearest_user_for_voice(
+        &self,
+        _voice_id: &Uuid,
         _threshold: f32,
     ) -> Result<Option<Uuid>, Self::Err> {
         Ok(None)
