@@ -135,6 +135,19 @@ export type StackedAvatarInput = {
   ariaLabel?: string;
 };
 
+function OverflowTooltip(props: {
+  chip: JSX.Element;
+  render: (close: () => void) => JSX.Element;
+}) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <Tooltip open={open()} onOpenChange={setOpen}>
+      <Tooltip.Trigger>{props.chip}</Tooltip.Trigger>
+      <Tooltip.Content>{props.render(() => setOpen(false))}</Tooltip.Content>
+    </Tooltip>
+  );
+}
+
 export type StackedAvatarsRowProps<T = unknown> = {
   each: Accessor<T[]>;
   max: number | Accessor<number>;
@@ -340,12 +353,10 @@ export function StackedAvatarsRow<T = unknown>(
 
     if (props.overflowTooltipContent) {
       return faceShell(
-        <Tooltip
-          unstyled
-          tooltip={(close) => props.overflowTooltipContent!(close, ctx)}
-        >
-          {chip}
-        </Tooltip>
+        <OverflowTooltip
+          chip={chip}
+          render={(close) => props.overflowTooltipContent!(close, ctx)}
+        />
       );
     }
 

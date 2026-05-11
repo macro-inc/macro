@@ -16,9 +16,14 @@ function Path(props: { path: string[] }) {
   const truncated = () => displayPath().length < fullPath().length;
 
   return (
-    <Tooltip tooltip={fullPath()} hide={!truncated()}>
-      <div class="truncate">{displayPath()}</div>
-    </Tooltip>
+    <Show
+      when={truncated()}
+      fallback={<div class="truncate">{displayPath()}</div>}
+    >
+      <Tooltip tooltip={fullPath()}>
+        <div class="truncate">{displayPath()}</div>
+      </Tooltip>
+    </Show>
   );
 }
 

@@ -1,13 +1,12 @@
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
 import ArrowsOut from '@icon/regular/arrows-out.svg';
-import { cn } from '@ui';
+import { cn, Surface } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';
 import type { CallControlsVariant } from '../CallControls/CallControls';
 import { CallControls } from '../CallControls/CallControls';
 import type { InCallPanelProps } from '../InCallPanel/types';
 import { openChannelCallTab } from '../open-channel-call-tab';
 import {
-  IN_CALL_ROSTER_CARD_CLASS,
   InCallParticipantsListPopover,
   InCallRosterListSection,
 } from './InCallParticipantsListPopover';
@@ -164,14 +163,14 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
                 defaultEmptyUserPlaceholder
                 overflowChipClass="bg-edge-muted"
                 overflowTooltipContent={(close) => (
-                  <div class={IN_CALL_ROSTER_CARD_CLASS}>
+                  <Surface depth={3} class="min-w-48 max-w-72">
                     <InCallRosterListSection
                       panel={panel}
                       members={orderedMembers()}
                       onClose={() => close()}
                       allowOpenDm={false}
                     />
-                  </div>
+                  </Surface>
                 )}
               >
                 {(image) => (

@@ -1,7 +1,7 @@
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@ui';
+import { Surface, Tooltip } from '@ui';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { useEmail } from '@core/context/user';
 import { emailToMacroId, useDisplayName } from '@core/user';
@@ -10,7 +10,7 @@ import {
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import WideCopy from '@macro-icons/wide/copy.svg';
-import { For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
 import { isSearchEntity } from '../types/search';
 
@@ -56,32 +56,32 @@ function ParticipantWithTooltip(props: {
   const [macroDisplayName] = useDisplayName(macroId());
   const tooltipName = () =>
     resolveParticipantName(props.participant, macroDisplayName());
+  const [open, setOpen] = createSignal(false);
 
   return (
-    <Tooltip
-      unstyled
-      spanMode
-      tooltip={(close) => (
+    <Tooltip open={open()} onOpenChange={setOpen}>
+      <Tooltip.Trigger as="span">
+        <Show
+          when={props.highlighted}
+          fallback={<span>{props.displayName}</span>}
+        >
+          {(md) => (
+            <StaticMarkdown
+              markdown={md()}
+              theme={unifiedListMarkdownTheme}
+              singleLine
+            />
+          )}
+        </Show>
+      </Tooltip.Trigger>
+      <Tooltip.Content>
         <UserTooltip
           displayName={tooltipName()}
           email={props.participant.email}
           id={macroId()}
-          onClose={close}
+          onClose={() => setOpen(false)}
         />
-      )}
-    >
-      <Show
-        when={props.highlighted}
-        fallback={<span>{props.displayName}</span>}
-      >
-        {(md) => (
-          <StaticMarkdown
-            markdown={md()}
-            theme={unifiedListMarkdownTheme}
-            singleLine
-          />
-        )}
-      </Show>
+      </Tooltip.Content>
     </Tooltip>
   );
 }
@@ -147,11 +147,12 @@ function copyEmail(email: string, e: MouseEvent) {
 
 function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {
   return (
-    <Tooltip
-      spanMode
-      unstyled
-      tooltip={
-        <div class="bg-panel text-ink border border-edge py-1">
+    <Tooltip>
+      <Tooltip.Trigger as="span">
+        <span class="opacity-60">+{props.hidden.length}</span>
+      </Tooltip.Trigger>
+      <Tooltip.Content>
+        <Surface depth={3} class="py-1 text-ink">
           <For each={props.hidden}>
             {(r) => (
               <div
@@ -163,10 +164,8 @@ function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {
               </div>
             )}
           </For>
-        </div>
-      }
-    >
-      <span class="opacity-60">+{props.hidden.length}</span>
+        </Surface>
+      </Tooltip.Content>
     </Tooltip>
   );
 }

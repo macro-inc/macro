@@ -12,7 +12,7 @@ import { isOk } from '@core/util/maybeResult';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { Avatar, type AvatarSize } from '@ui';
-import { createMemo, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { Tooltip } from '@ui';
 import { UserTooltip } from './UserTooltip';
@@ -179,11 +179,22 @@ export function UserIcon(props: UserIconProps) {
 
       <Match when={macroId()} keyed>
         {(id) => (
-          <Tooltip
-            placement="left"
-            class={triggerClass()}
-            unstyled
-            tooltip={(close) => (
+          <UserAvatarWithTooltip
+            triggerClass={triggerClass()}
+            avatar={
+              <Avatar
+                size={size()}
+                class={props.class}
+                onMouseDown={props.suppressClick ? undefined : getOrCreateDm}
+              >
+                <UserIconContent
+                  id={id}
+                  email={props.email}
+                  isDeleted={props.isDeleted}
+                />
+              </Avatar>
+            }
+            renderContent={(close) => (
               <UserTooltip
                 displayName={displayName() || email() || ''}
                 email={email()}
@@ -192,28 +203,27 @@ export function UserIcon(props: UserIconProps) {
                 onClose={close}
               />
             )}
-          >
+          />
+        )}
+      </Match>
+
+      <Match when={email()}>
+        <UserAvatarWithTooltip
+          triggerClass={triggerClass()}
+          avatar={
             <Avatar
               size={size()}
               class={props.class}
               onMouseDown={props.suppressClick ? undefined : getOrCreateDm}
             >
               <UserIconContent
-                id={id}
+                id={props.id}
                 email={props.email}
                 isDeleted={props.isDeleted}
               />
             </Avatar>
-          </Tooltip>
-        )}
-      </Match>
-
-      <Match when={email()}>
-        <Tooltip
-          placement="left"
-          class={triggerClass()}
-          unstyled
-          tooltip={(close) => (
+          }
+          renderContent={(close) => (
             <UserTooltip
               displayName={email() || ''}
               email={email()}
@@ -221,20 +231,28 @@ export function UserIcon(props: UserIconProps) {
               onClose={close}
             />
           )}
-        >
-          <Avatar
-            size={size()}
-            class={props.class}
-            onMouseDown={props.suppressClick ? undefined : getOrCreateDm}
-          >
-            <UserIconContent
-              id={props.id}
-              email={props.email}
-              isDeleted={props.isDeleted}
-            />
-          </Avatar>
-        </Tooltip>
+        />
       </Match>
     </Switch>
+  );
+}
+
+/**
+ * Local wrapper that owns the controlled-open state needed to let
+ * `<UserTooltip>`'s internal close button dismiss the surrounding tooltip.
+ */
+function UserAvatarWithTooltip(props: {
+  triggerClass: string;
+  avatar: JSX.Element;
+  renderContent: (close: () => void) => JSX.Element;
+}) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <Tooltip placement="left" open={open()} onOpenChange={setOpen}>
+      <Tooltip.Trigger class={props.triggerClass}>{props.avatar}</Tooltip.Trigger>
+      <Tooltip.Content>
+        {props.renderContent(() => setOpen(false))}
+      </Tooltip.Content>
+    </Tooltip>
   );
 }

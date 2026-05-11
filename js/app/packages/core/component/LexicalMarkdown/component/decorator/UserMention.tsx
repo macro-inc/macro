@@ -3,7 +3,7 @@ import { UserTooltip } from '@core/component/UserTooltip';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import type { UserMentionDecoratorProps } from '@lexical-core';
 import { cn } from '@ui';
-import { createMemo, useContext } from 'solid-js';
+import { createMemo, createSignal, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 export function UserMention(props: UserMentionDecoratorProps) {
@@ -32,34 +32,34 @@ export function UserMention(props: UserMentionDecoratorProps) {
     return propEmail();
   });
 
+  const [open, setOpen] = createSignal(false);
+
   return (
-    <Tooltip
-      placement="top"
-      spanMode
-      unstyled
-      tooltip={(close) => (
+    <Tooltip placement="top" open={open()} onOpenChange={setOpen}>
+      <Tooltip.Trigger as="span">
+        <span
+          class={cn(
+            'relative p-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink',
+            isSelectedAsNode() && 'bg-active'
+          )}
+        >
+          <span
+            data-user-id={props.userId}
+            data-email={props.email}
+            data-user-mention="true"
+          >
+            @{propEmail().split('@')[0]}
+          </span>
+        </span>
+      </Tooltip.Trigger>
+      <Tooltip.Content>
         <UserTooltip
           displayName={displayName() || email() || propEmail()}
           email={email() || propEmail()}
           id={userId()}
-          onClose={close}
+          onClose={() => setOpen(false)}
         />
-      )}
-    >
-      <span
-        class={cn(
-          'relative p-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink',
-          isSelectedAsNode() && 'bg-active'
-        )}
-      >
-        <span
-          data-user-id={props.userId}
-          data-email={props.email}
-          data-user-mention="true"
-        >
-          @{propEmail().split('@')[0]}
-        </span>
-      </span>
+      </Tooltip.Content>
     </Tooltip>
   );
 }

@@ -44,6 +44,21 @@ import {
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 
+function ChipWithUserTooltip(props: {
+  chip: JSX.Element;
+  renderTooltip: (close: () => void) => JSX.Element;
+}) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <Tooltip placement="bottom" open={open()} onOpenChange={setOpen}>
+      <Tooltip.Trigger>{props.chip}</Tooltip.Trigger>
+      <Tooltip.Content>
+        {props.renderTooltip(() => setOpen(false))}
+      </Tooltip.Content>
+    </Tooltip>
+  );
+}
+
 function RecipientChip(props: {
   icon?: JSX.Element;
   label: string;
@@ -521,10 +536,30 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                             const displayText = () => name || email;
 
                             return (
-                              <Tooltip
-                                placement="bottom"
-                                unstyled
-                                tooltip={(close) => (
+                              <ChipWithUserTooltip
+                                chip={
+                                  <RecipientChip
+                                    icon={
+                                      <UserIcon
+                                        id={opt.id}
+                                        size="sm"
+                                        isDeleted={false}
+                                        showTooltip={false}
+                                      />
+                                    }
+                                    label={displayText() ?? ''}
+                                    onRemove={() => state.remove(option)}
+                                    draggable={!!props.onChipDragStart}
+                                    onDragStart={(e) =>
+                                      props.onChipDragStart?.(
+                                        option as WithCustomUserInput<K>,
+                                        e
+                                      )
+                                    }
+                                    onDragEnd={props.onChipDragEnd}
+                                  />
+                                }
+                                renderTooltip={(close) => (
                                   <UserTooltip
                                     displayName={name || ''}
                                     email={email}
@@ -533,28 +568,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                     onClose={close}
                                   />
                                 )}
-                              >
-                                <RecipientChip
-                                  icon={
-                                    <UserIcon
-                                      id={opt.id}
-                                      size="sm"
-                                      isDeleted={false}
-                                      showTooltip={false}
-                                    />
-                                  }
-                                  label={displayText() ?? ''}
-                                  onRemove={() => state.remove(option)}
-                                  draggable={!!props.onChipDragStart}
-                                  onDragStart={(e) =>
-                                    props.onChipDragStart?.(
-                                      option as WithCustomUserInput<K>,
-                                      e
-                                    )
-                                  }
-                                  onDragEnd={props.onChipDragEnd}
-                                />
-                              </Tooltip>
+                              />
                             );
                           }}
                         </Match>
@@ -581,10 +595,30 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                             const email = customOption().data.email;
 
                             return (
-                              <Tooltip
-                                placement="bottom"
-                                unstyled
-                                tooltip={(close) => (
+                              <ChipWithUserTooltip
+                                chip={
+                                  <RecipientChip
+                                    icon={
+                                      <UserIcon
+                                        id={email}
+                                        size="sm"
+                                        isDeleted={false}
+                                        showTooltip={false}
+                                      />
+                                    }
+                                    label={email}
+                                    onRemove={() => state.remove(option)}
+                                    draggable={!!props.onChipDragStart}
+                                    onDragStart={(e) =>
+                                      props.onChipDragStart?.(
+                                        option as WithCustomUserInput<K>,
+                                        e
+                                      )
+                                    }
+                                    onDragEnd={props.onChipDragEnd}
+                                  />
+                                }
+                                renderTooltip={(close) => (
                                   <UserTooltip
                                     displayName={email}
                                     email={email}
@@ -592,28 +626,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                     onClose={close}
                                   />
                                 )}
-                              >
-                                <RecipientChip
-                                  icon={
-                                    <UserIcon
-                                      id={email}
-                                      size="sm"
-                                      isDeleted={false}
-                                      showTooltip={false}
-                                    />
-                                  }
-                                  label={email}
-                                  onRemove={() => state.remove(option)}
-                                  draggable={!!props.onChipDragStart}
-                                  onDragStart={(e) =>
-                                    props.onChipDragStart?.(
-                                      option as WithCustomUserInput<K>,
-                                      e
-                                    )
-                                  }
-                                  onDragEnd={props.onChipDragEnd}
-                                />
-                              </Tooltip>
+                              />
                             );
                           }}
                         </Match>

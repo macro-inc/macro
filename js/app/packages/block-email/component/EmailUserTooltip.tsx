@@ -1,7 +1,7 @@
 import { Tooltip } from '@ui';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { emailToMacroId } from '@core/user';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 
 interface Recipient {
   name?: string | null;
@@ -15,12 +15,12 @@ interface EmailUserTooltipProps {
 }
 
 export function EmailUserTooltip(props: EmailUserTooltipProps) {
+  const [open, setOpen] = createSignal(false);
+
   return (
-    <Tooltip
-      placement="bottom"
-      unstyled
-      spanMode
-      tooltip={(close) => (
+    <Tooltip placement="bottom" open={open()} onOpenChange={setOpen}>
+      <Tooltip.Trigger as="span">{props.children}</Tooltip.Trigger>
+      <Tooltip.Content>
         <UserTooltip
           displayName={props.recipient?.name ?? props.recipient?.email ?? ''}
           email={props.recipient?.email ?? undefined}
@@ -29,11 +29,9 @@ export function EmailUserTooltip(props: EmailUserTooltipProps) {
               ? emailToMacroId(props.recipient.email)
               : undefined
           }
-          onClose={close}
+          onClose={() => setOpen(false)}
         />
-      )}
-    >
-      {props.children}
+      </Tooltip.Content>
     </Tooltip>
   );
 }

@@ -13,7 +13,7 @@ export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> &
   variant?: ButtonVariant;
   children?: JSX.Element;
   /** Custom JSX content for the tooltip body (escape hatch). */
-  tooltip?: JSX.Element | ((close: () => void) => JSX.Element);
+  tooltip?: JSX.Element;
   /** Label for a single-row tooltip. */
   label?: string;
   /** Hotkey token; renders as a key-cap badge next to `label`. */
