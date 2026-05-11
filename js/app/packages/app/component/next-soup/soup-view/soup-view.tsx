@@ -81,6 +81,7 @@ import {
   type SearchLocation,
 } from '@entity';
 import CheckIcon from '@icon/bold/check-bold.svg';
+import CaretDownIcon from '@icon/regular/caret-down.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
@@ -128,11 +129,18 @@ const DefaultGroupHeader = (
     <button
       type="button"
       class={cn(
-        'w-full px-3 py-3 flex items-center gap-2 text-sm font-medium text-text-muted bg-ink/[0.02] hover:bg-ink/5',
-        { 'bg-ink/5': props.highlighted }
+        'w-full px-3 py-3 flex items-center gap-2 text-sm font-medium text-text-muted bg-ink/5 hover:bg-hover relative',
+        {
+          'outline-1 outline-accent/20 -outline-offset-1': props.highlighted,
+        }
       )}
       onClick={() => props.group.toggle()}
     >
+      <div
+        class={cn('absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0', {
+          'opacity-100': props.highlighted,
+        })}
+      />
       <ChevronRightIcon
         class={cn('size-3 transition-transform', {
           'rotate-90': props.group.isExpanded(),
@@ -1030,20 +1038,29 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   <Match
                                     when={row.getIsLoadMore() && row.group}
                                   >
-                                    {(group) => (
-                                      <div
-                                        class={cn('flex justify-center py-2', {
-                                          'bg-ink/5':
-                                            panel.isPanelActive() &&
-                                            row.isFocused(),
-                                        })}
-                                      >
-                                        <Button
-                                          variant="base"
-                                          size="sm"
+                                    {(group) => {
+                                      const highlighted = () =>
+                                        panel.isPanelActive() &&
+                                        row.isFocused();
+                                      return (
+                                        <button
+                                          type="button"
+                                          class={cn(
+                                            'w-full min-h-10 flex items-center justify-center gap-1.5 relative text-sm text-text-muted hover:bg-hover',
+                                            {
+                                              'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1':
+                                                highlighted(),
+                                            }
+                                          )}
                                           onClick={() => group().loadMore()}
                                           disabled={group().isLoading()}
                                         >
+                                          <div
+                                            class={cn(
+                                              'absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0',
+                                              { 'opacity-100': highlighted() }
+                                            )}
+                                          />
                                           <Show
                                             when={!group().isLoading()}
                                             fallback={
@@ -1053,11 +1070,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                               </>
                                             }
                                           >
+                                            <CaretDownIcon class="size-3" />
                                             Load more
                                           </Show>
-                                        </Button>
-                                      </div>
-                                    )}
+                                        </button>
+                                      );
+                                    }}
                                   </Match>
 
                                   {/* Entity row */}
