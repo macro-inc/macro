@@ -24,6 +24,7 @@ from livekit.agents import (
     WorkerOptions,
 )
 from livekit.plugins import silero
+from resemblyzer import VoiceEncoder, preprocess_wav
 
 load_dotenv()
 
