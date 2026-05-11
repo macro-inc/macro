@@ -1,5 +1,5 @@
 import { Button as KobalteButton, type ButtonRootProps } from '@kobalte/core/button';
-import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
+import { type ComponentProps, type JSX, Match, Switch, splitProps } from 'solid-js';
 import type { Placement } from '@floating-ui/dom';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { cn } from '../utils/classname';
@@ -80,35 +80,45 @@ export const Button = (props: ButtonProps) => {
       local.class
     );
 
-  const hasTooltip = () =>
-    local.tooltip !== undefined ||
-    local.label !== undefined ||
-    (local.rows !== undefined && local.rows.length > 0);
+  const placement = () => local.tooltipPlacement ?? 'bottom';
+
+  const button = () => (
+    <KobalteButton class={cls()} {...others}>
+      {local.children}
+    </KobalteButton>
+  );
 
   return (
     <Layer depth={local.depth ?? 0}>
-      <Show
-        fallback={
-          <KobalteButton class={cls()} {...others}>
-            {local.children}
-          </KobalteButton>
-        }
-        when={hasTooltip()}
-      >
-        <Tooltip
-          placement={local.tooltipPlacement ?? 'bottom'}
-          tooltip={local.tooltip}
-          label={local.label}
-          hotkeyToken={local.hotkeyToken}
-          shortcut={local.shortcut}
-          hotkeySequence={local.hotkeySequence}
-          rows={local.rows}
-        >
-          <KobalteButton class={cls()} {...others}>
-            {local.children}
-          </KobalteButton>
-        </Tooltip>
-      </Show>
+      <Switch fallback={button()}>
+        <Match when={local.rows && local.rows.length > 0 ? local.rows : false}>
+          {(rows) => (
+            <Tooltip placement={placement()} rows={rows()}>
+              {button()}
+            </Tooltip>
+          )}
+        </Match>
+        <Match when={local.label !== undefined ? local.label : false}>
+          {(label) => (
+            <Tooltip
+              placement={placement()}
+              label={label()}
+              hotkeyToken={local.hotkeyToken}
+              shortcut={local.shortcut}
+              hotkeySequence={local.hotkeySequence}
+            >
+              {button()}
+            </Tooltip>
+          )}
+        </Match>
+        <Match when={local.tooltip !== undefined ? local.tooltip : false}>
+          {(tooltip) => (
+            <Tooltip placement={placement()} tooltip={tooltip()}>
+              {button()}
+            </Tooltip>
+          )}
+        </Match>
+      </Switch>
     </Layer>
   );
 };

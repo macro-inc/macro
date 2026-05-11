@@ -10,20 +10,85 @@ type SurfaceSlotProps = ParentProps<{ class?: string }>;
 
 type ContentProps = ParentProps<{ class?: string }>;
 
-export type TooltipProps = ParentProps<{
+/** Props shared by both sugar mode and compound mode. */
+type CommonTooltipProps = {
   onOpenChange?: (open: boolean) => void;
-  hotkeySequence?: HotkeySequenceStep[];
-  ref?: (el: HTMLElement) => void;
-  rows?: LabelAndHotKeyProps[];
-  hotkeyToken?: HotkeyToken;
-  tooltip?: JSX.Element;
   placement?: Placement;
-  as?: 'div' | 'span';
-  shortcut?: string;
-  label?: string;
-  class?: string;
   open?: boolean;
-}>;
+};
+
+/**
+ * Props that configure the auto-generated `<Tooltip.Trigger>` element
+ * Tooltip renders in sugar mode. In compound mode these belong on
+ * `<Tooltip.Trigger>` directly, so they are forbidden on the root.
+ */
+type TriggerForwardingProps = {
+  as?: 'div' | 'span';
+  ref?: (el: HTMLElement) => void;
+  class?: string;
+};
+
+/** Sugar variant: pre-built multi-row tooltip from `rows`. */
+type RowsSugarProps = {
+  rows: LabelAndHotKeyProps[];
+  label?: never;
+  tooltip?: never;
+  hotkeyToken?: never;
+  shortcut?: never;
+  hotkeySequence?: never;
+};
+
+/** Sugar variant: pre-built single-row tooltip from `label` (+ optional hotkey). */
+type LabelSugarProps = {
+  label: string;
+  rows?: never;
+  tooltip?: never;
+  hotkeyToken?: HotkeyToken;
+  shortcut?: string;
+  hotkeySequence?: HotkeySequenceStep[];
+};
+
+/** Sugar variant: arbitrary JSX/string content via `tooltip`. */
+type TooltipSugarProps = {
+  tooltip: JSX.Element;
+  label?: never;
+  rows?: never;
+  hotkeyToken?: never;
+  shortcut?: never;
+  hotkeySequence?: never;
+};
+
+/**
+ * One of `rows` / `label` / `tooltip` is required; the others are forbidden.
+ * Trigger-forwarding props (`as`, `ref`, `class`) are allowed here because
+ * Tooltip itself owns the `<Tooltip.Trigger>` in this mode.
+ */
+export type SugarTooltipProps = ParentProps<
+  CommonTooltipProps &
+    TriggerForwardingProps &
+    (RowsSugarProps | LabelSugarProps | TooltipSugarProps)
+>;
+
+/**
+ * Compound mode: the caller composes `<Tooltip.Trigger>` /
+ * `<Tooltip.Content>` themselves. All sugar fields and trigger-forwarding
+ * fields are forbidden on the root — they belong on the child slots.
+ */
+export type CompoundTooltipProps = ParentProps<
+  CommonTooltipProps & {
+    tooltip?: never;
+    label?: never;
+    rows?: never;
+    hotkeyToken?: never;
+    shortcut?: never;
+    hotkeySequence?: never;
+    as?: never;
+    ref?: never;
+    class?: never;
+  }
+>;
+
+export type TooltipProps = SugarTooltipProps | CompoundTooltipProps;
 
 type LabelAndHotKeyProps = {
   hotkeySequence?: HotkeySequenceStep[];
@@ -181,17 +246,21 @@ export function Tooltip(props: TooltipProps) {
   return (
     <KobalteTooltip
       placement={props.placement ?? DEFAULT_PLACEMENT}
-      gutter={TOOLTIP_GUTTER}
-      flip={TOOLTIP_FLIP}
       overflowPadding={TOOLTIP_OVERFLOW_PADDING}
       fitViewport={TOOLTIP_FIT_VIEWPORT}
-      openDelay={TOOLTIP_DELAY}
-      closeDelay={TOOLTIP_DELAY}
-      open={props.open}
       onOpenChange={props.onOpenChange}
+      closeDelay={TOOLTIP_DELAY}
+      openDelay={TOOLTIP_DELAY}
+      gutter={TOOLTIP_GUTTER}
+      flip={TOOLTIP_FLIP}
+      open={props.open}
     >
       <Show when={isSugarMode()} fallback={props.children}>
-        <TooltipTrigger as={props.as} ref={props.ref} class={props.class}>
+        <TooltipTrigger
+          class={props.class}
+          ref={props.ref}
+          as={props.as}
+        >
           {props.children}
         </TooltipTrigger>
         <TooltipContent>
