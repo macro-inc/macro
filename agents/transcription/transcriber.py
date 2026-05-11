@@ -1,8 +1,9 @@
+import array
 import asyncio
 import logging
 import os
 import uuid
-from collections import Counter
+from collections import Counter, deque
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -68,6 +69,15 @@ class Transcriber(Agent):
         self.participant_identity = participant_identity
         self.channel_id = channel_id
         self.http_client = http_client
+        # Rolling buffer of recent audio frames keyed off this participant's
+        # stream. Used to compute a speaker-embedding on turn completion.
+        # `_audio_sample_rate` and `_audio_num_channels` are captured from
+        # the first frame so we can stitch the buffer back into a flat PCM
+        # array at embed time without re-inspecting every frame.
+        self._audio_frames: deque[rtc.AudioFrame] = deque()
+        self._audio_buffered_samples: int = 0
+        self._audio_sample_rate: int | None = None
+        self._audio_num_channels: int | None = None
         # Word counts per Deepgram speaker int, accumulated across final
         # transcripts inside a single user turn and cleared on turn completion.
         self._pending_speakers: Counter[int] = Counter()
@@ -103,8 +113,52 @@ class Transcriber(Agent):
         self._speaker_uuids[dg_speaker] = value
         return value
 
+    # Keep at most ~3 seconds of audio in the rolling buffer per participant.
+    # Resemblyzer needs at least ~1.5s of speech for a useful embedding; the
+    # cap keeps memory bounded for long-running sessions.
+    _AUDIO_BUFFER_MAX_SECONDS = 3.0
+
+    def _record_audio_frame(self, frame: rtc.AudioFrame) -> None:
+        if self._audio_sample_rate is None:
+            self._audio_sample_rate = frame.sample_rate
+            self._audio_num_channels = frame.num_channels
+        self._audio_frames.append(frame)
+        self._audio_buffered_samples += frame.samples_per_channel
+        if self._audio_sample_rate:
+            max_samples = int(
+                self._AUDIO_BUFFER_MAX_SECONDS * self._audio_sample_rate
+            )
+            while (
+                self._audio_buffered_samples > max_samples
+                and self._audio_frames
+            ):
+                dropped = self._audio_frames.popleft()
+                self._audio_buffered_samples -= dropped.samples_per_channel
+
+    def _drain_audio_buffer(self) -> tuple[array.array, int, int] | None:
+        """Return the buffered audio as (interleaved int16 PCM, rate, channels).
+
+        Returns `None` when no audio has been captured yet. Clears the buffer
+        so the next turn starts fresh.
+        """
+        if not self._audio_frames or self._audio_sample_rate is None:
+            return None
+        pcm = array.array("h")
+        for frame in self._audio_frames:
+            pcm.frombytes(bytes(frame.data))
+        sample_rate = self._audio_sample_rate
+        num_channels = self._audio_num_channels or 1
+        self._audio_frames.clear()
+        self._audio_buffered_samples = 0
+        return pcm, sample_rate, num_channels
+
     async def stt_node(self, audio, model_settings):
-        async for event in super().stt_node(audio, model_settings):
+        async def _tee():
+            async for frame in audio:
+                self._record_audio_frame(frame)
+                yield frame
+
+        async for event in super().stt_node(_tee(), model_settings):
             if isinstance(event, stt_pkg.SpeechEvent) and (
                 event.type == stt_pkg.SpeechEventType.FINAL_TRANSCRIPT
             ):
