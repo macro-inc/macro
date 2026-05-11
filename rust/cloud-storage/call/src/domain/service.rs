@@ -34,7 +34,7 @@ use super::models::{
 };
 use super::ports::{
     CallRecordQueryService, CallRepository, CallRtcClient, CallSearchIndexer, CallService,
-    CallSummarizer, NoOpCallSearchIndexer, RecordingStorage,
+    CallSummarizer, NoOpCallSearchIndexer, NoOpVoiceRepository, RecordingStorage, VoiceRepository,
 };
 
 /// The concrete call service implementation.
@@ -48,6 +48,7 @@ pub struct CallServiceImpl<
     Sm: CallSummarizer = NoopCallSummarizer,
     I: CallSearchIndexer = NoOpCallSearchIndexer,
     V: VoipPushSender = (),
+    Vr: VoiceRepository = NoOpVoiceRepository,
 > {
     repo: R,
     rtc_client: C,
@@ -61,6 +62,7 @@ pub struct CallServiceImpl<
     internal_call_secret: Option<String>,
     summarizer: Option<Sm>,
     voip_push_sender: V,
+    voice_repo: Vr,
 }
 
 impl<
@@ -71,7 +73,7 @@ impl<
     N: NotificationIngress,
     S: RecordingStorage,
     Sm: CallSummarizer,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, NoOpCallSearchIndexer, ()>
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, NoOpCallSearchIndexer, (), NoOpVoiceRepository>
 {
     /// Create a new call service.
     pub fn new(
@@ -96,6 +98,7 @@ impl<
             internal_call_secret: None,
             summarizer: None,
             voip_push_sender: (),
+            voice_repo: NoOpVoiceRepository,
         }
     }
 }
@@ -110,7 +113,8 @@ impl<
     Sm: CallSummarizer,
     I: CallSearchIndexer,
     V: VoipPushSender,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V>
+    Vr: VoiceRepository,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
 {
     /// Enable auto-recording with the given S3 configuration.
     pub fn with_egress(mut self, s3_config: EgressS3Config) -> Self {
@@ -136,7 +140,7 @@ impl<
     pub fn with_voip_push_sender<V2: VoipPushSender>(
         self,
         sender: V2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V2> {
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V2, Vr> {
         CallServiceImpl {
             repo: self.repo,
             rtc_client: self.rtc_client,
@@ -150,6 +154,7 @@ impl<
             internal_call_secret: self.internal_call_secret,
             summarizer: self.summarizer,
             voip_push_sender: sender,
+            voice_repo: self.voice_repo,
         }
     }
 
@@ -157,7 +162,7 @@ impl<
     pub fn with_search_indexer<I2: CallSearchIndexer>(
         self,
         indexer: I2,
-    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I2, V> {
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I2, V, Vr> {
         CallServiceImpl {
             repo: self.repo,
             rtc_client: self.rtc_client,
@@ -171,6 +176,29 @@ impl<
             internal_call_secret: self.internal_call_secret,
             summarizer: self.summarizer,
             voip_push_sender: self.voip_push_sender,
+            voice_repo: self.voice_repo,
+        }
+    }
+
+    /// Swap the voice repository.
+    pub fn with_voice_repo<Vr2: VoiceRepository>(
+        self,
+        voice_repo: Vr2,
+    ) -> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr2> {
+        CallServiceImpl {
+            repo: self.repo,
+            rtc_client: self.rtc_client,
+            connection_service: self.connection_service,
+            entity_access_service: self.entity_access_service,
+            notification_ingress: self.notification_ingress,
+            recording_storage: self.recording_storage,
+            search_indexer: self.search_indexer,
+            server_url: self.server_url,
+            egress_s3_config: self.egress_s3_config,
+            internal_call_secret: self.internal_call_secret,
+            summarizer: self.summarizer,
+            voip_push_sender: self.voip_push_sender,
+            voice_repo,
         }
     }
 
@@ -325,7 +353,8 @@ impl<
     Sm: CallSummarizer + Clone,
     I: CallSearchIndexer,
     V: VoipPushSender,
-> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V>
+    Vr: VoiceRepository,
+> CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
 {
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
@@ -1166,7 +1195,8 @@ impl<
     Sm: CallSummarizer + Clone,
     I: CallSearchIndexer,
     V: VoipPushSender,
-> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V>
+    Vr: VoiceRepository,
+> CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
 {
     /// Fire-and-forget spawn of [`CallService::summarize_call`] for `call_id`.
     ///

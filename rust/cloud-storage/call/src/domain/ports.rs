@@ -607,6 +607,44 @@ pub trait VoiceRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 }
 
+/// No-op [`VoiceRepository`] used as the default for services that do not
+/// have speaker-identification wired up. All operations are no-ops or
+/// return `None`/empty results.
+#[derive(Default, Clone, Copy)]
+pub struct NoOpVoiceRepository;
+
+impl VoiceRepository for NoOpVoiceRepository {
+    type Err = anyhow::Error;
+
+    async fn upsert_voice(&self, _embedding: &[f32]) -> Result<Uuid, Self::Err> {
+        anyhow::bail!("voice repository not configured");
+    }
+
+    async fn link_user_voice(
+        &self,
+        _macro_user_id: &Uuid,
+        _voice_id: &Uuid,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn get_user_voices(&self, _macro_user_id: &Uuid) -> Result<Vec<Uuid>, Self::Err> {
+        Ok(Vec::new())
+    }
+
+    async fn find_user_by_voice(&self, _voice_id: &Uuid) -> Result<Option<Uuid>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn find_nearest_user(
+        &self,
+        _embedding: &[f32],
+        _threshold: f32,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        Ok(None)
+    }
+}
+
 /// No-op for services without search.
 pub struct NoOpCallSearchIndexer;
 
