@@ -7,7 +7,7 @@ import {
   type EditableLabelProps,
   EditingContext,
 } from './Editable';
-import { BasicHotkey } from './Hotkey';
+import { Hotkey } from './Hotkey';
 import { type Theme, themeColors, themeStyles } from './Themes';
 import { LabelAndHotKey, Tooltip } from './Tooltip';
 
@@ -191,10 +191,9 @@ export function DeprecatedTextButton(props: TextButtonProps) {
                 !props.hideShortcut && (props.shortcut || props.hotkeyToken)
               }
             >
-              <BasicHotkey
+              <Hotkey
                 token={props.hotkeyToken}
                 shortcut={props.shortcut}
-                theme={props.theme}
               />
             </Show>
           </div>

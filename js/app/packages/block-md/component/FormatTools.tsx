@@ -1,5 +1,5 @@
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
-import { BasicHotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@core/component/Hotkey';
 import {
   INSERT_HORIZONTAL_RULE_COMMAND,
   NODE_TRANSFORM,
@@ -226,7 +226,7 @@ const InlineFormatMenuItem = (props: {
       <span class="capitalize">{props.format}</span>
       <Show when={InlineShortcuts[props.format]}>
         {(shortcut) => {
-          return <BasicHotkey shortcut={shortcut()} />;
+          return <Hotkey shortcut={shortcut()} />;
         }}
       </Show>
     </div>

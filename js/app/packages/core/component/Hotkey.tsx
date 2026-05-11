@@ -184,23 +184,3 @@ export const Hotkey = (props: HotkeyProps) => {
   );
 };
 
-// Created for backwards compatibility with the old Hotkey component, accepts theme and size props for styling. New hotkeys should roll their own Hotkey component.
-export function BasicHotkey(
-  props: HotkeyProps & { theme?: Theme; size?: 'base' | 'lg' }
-) {
-  return (
-    <div class="flex flex-row items-center font-mono">
-      <div
-        classList={{
-          'font-mono inline-flex items-center': true,
-          [hotkeyStyles[props.theme || 'base'].hotkey]: true,
-          'text-[11px]/[8px] p-1 space-x-1':
-            props.size === 'base' || !props.size,
-          'text-[16px]/[24px] px-2.25 space-x-2': props.size === 'lg',
-        }}
-      >
-        <Hotkey {...props} class="flex gap-[1ch]" />
-      </div>
-    </div>
-  );
-}

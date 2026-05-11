@@ -12,7 +12,7 @@ import {
   splitProps,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { BasicHotkey } from './Hotkey';
+import { Hotkey } from './Hotkey';
 import { type Theme, themeColors, themeStyles } from './Themes';
 import { LabelAndHotKey, NullTooltip, Tooltip } from './Tooltip';
 
@@ -203,7 +203,7 @@ export function DeprecatedIconButton(props: IconButtonProps) {
           {(token) => {
             return (
               <div class="absolute bottom-[-0.5px] right-[-0.5px] text-[7.5px] uppercase pointer-events-none font-semibold mobile-width:invisible">
-                <BasicHotkey token={token()} />
+                <Hotkey token={token()} />
               </div>
             );
           }}
