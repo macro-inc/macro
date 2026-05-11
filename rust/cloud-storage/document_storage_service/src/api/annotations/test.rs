@@ -228,6 +228,30 @@ fn new_thread_comment_notifies_doc_owner() {
 }
 
 #[test]
+fn non_owner_non_assignee_commenter_gets_subsequent_thread_reply() {
+    let sender = user_id("macro|sender@test.com");
+    let owner = user_id("macro|owner@test.com");
+    let commenter = "macro|commenter@test.com";
+
+    let result = compute_notification_recipients(
+        Some(&sender),
+        &[],
+        &[commenter.to_string(), sender.as_ref().to_string()],
+        &[],
+        &owner,
+        true,
+    );
+
+    assert!(
+        result.thread_reply_recipients.contains(&user_id(commenter)),
+        "a prior commenter should be subscribed to subsequent replies even when they are not the owner or an assignee"
+    );
+    assert!(result.assignee_recipients.is_empty());
+    assert_eq!(result.doc_owner_recipient.as_deref(), Some(owner.as_ref()));
+    assert_eq!(result.all_recipients().len(), result.total_count());
+}
+
+#[test]
 fn reply_notifies_thread_participants_and_doc_owner() {
     let sender = user_id("macro|sender@test.com");
     let owner = user_id("macro|owner@test.com");
