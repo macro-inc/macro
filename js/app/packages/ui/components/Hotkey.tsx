@@ -39,6 +39,10 @@ export const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
     hotkey: 'bg-dialog border border-ink-muted text-ink-muted',
     label: 'bg-ink-muted border border-ink-muted text-dialog',
   },
+  subtle: {
+    hotkey: 'bg-transparent border border-edge text-ink-extra-muted',
+    label: 'bg-ink-extra-muted border border-edge text-dialog',
+  },
   accent: {
     hotkey: 'bg-accent/10 border border-accent/30 text-accent',
     label: 'bg-accent border border-accent/30 text-dialog',

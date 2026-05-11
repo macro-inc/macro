@@ -177,7 +177,7 @@ function LabelAndHotKey(props: LabelAndHotKeyProps) {
                 <Hotkey
                   shortcut={step.shortcut}
                   token={step.token}
-                  theme="muted"
+                  theme="subtle"
                 />
                 <Show when={ndx() < steps().length - 1}>
                   <span class="text-ink-extra-muted">then</span>
