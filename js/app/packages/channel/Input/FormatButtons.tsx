@@ -29,28 +29,28 @@ export function FormatButtons(props: FormatButtonsProps) {
         active={props.selectionState()?.bold}
         onClick={() => props.onInlineFormat('bold')}
       >
-        <TextBoldIcon class="size-5" />
+        <TextBoldIcon />
       </RibbonButton>
       <RibbonButton
         label="Italic"
         active={props.selectionState()?.italic}
         onClick={() => props.onInlineFormat('italic')}
       >
-        <TextItalicIcon class="size-5" />
+        <TextItalicIcon />
       </RibbonButton>
       <RibbonButton
         label="Strikethrough"
         active={props.selectionState()?.strikethrough}
         onClick={() => props.onInlineFormat('strikethrough')}
       >
-        <TextStrikethroughIcon class="size-5" />
+        <TextStrikethroughIcon />
       </RibbonButton>
       <RibbonButton
         label="Code"
         active={props.selectionState()?.code}
         onClick={() => props.onInlineFormat('code')}
       >
-        <TextCodeIcon class="size-5" />
+        <TextCodeIcon />
       </RibbonButton>
       <div class="w-px h-5 bg-edge-muted" />
       <RibbonButton
@@ -58,21 +58,21 @@ export function FormatButtons(props: FormatButtonsProps) {
         active={props.selectionState()?.elementsInRange.has('list-bullet')}
         onClick={() => props.onNodeFormat('list-bullet')}
       >
-        <ListBulletsIcon class="size-5" />
+        <ListBulletsIcon />
       </RibbonButton>
       <RibbonButton
         label="Numbered list"
         active={props.selectionState()?.elementsInRange.has('list-number')}
         onClick={() => props.onNodeFormat('list-number')}
       >
-        <ListNumbersIcon class="size-5" />
+        <ListNumbersIcon />
       </RibbonButton>
       <RibbonButton
         label="Checklist"
         active={props.selectionState()?.elementsInRange.has('list-check')}
         onClick={() => props.onNodeFormat('list-check')}
       >
-        <ListChecksIcon class="size-5" />
+        <ListChecksIcon />
       </RibbonButton>
       {props.includeQuote && (
         <RibbonButton
@@ -80,7 +80,7 @@ export function FormatButtons(props: FormatButtonsProps) {
           active={props.selectionState()?.elementsInRange.has('quote')}
           onClick={() => props.onNodeFormat('quote')}
         >
-          <TextQuoteIcon class="size-5" />
+          <TextQuoteIcon />
         </RibbonButton>
       )}
     </>

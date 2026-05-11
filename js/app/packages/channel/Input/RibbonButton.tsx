@@ -1,4 +1,4 @@
-import { cn } from '@ui';
+import { Button } from '@ui';
 import type { JSX } from 'solid-js';
 
 type RibbonButtonProps = {
@@ -10,16 +10,11 @@ type RibbonButtonProps = {
 
 export function RibbonButton(props: RibbonButtonProps) {
   return (
-    <button
-      type="button"
+    <Button
       aria-label={props.label}
       title={props.label}
-      class={cn(
-        'flex flex-col items-center justify-center size-7 hover:bg-hover hover-transition-bg rounded-md',
-        {
-          'bg-active': props.active,
-        }
-      )}
+      variant={props.active ? 'active' : 'ghost'}
+      size="icon-md"
       onPointerDown={(event) => {
         event.preventDefault();
       }}
@@ -28,6 +23,6 @@ export function RibbonButton(props: RibbonButtonProps) {
       }}
     >
       {props.children}
-    </button>
+    </Button>
   );
 }
