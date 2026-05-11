@@ -1,7 +1,7 @@
 import PencilSimpleLine from '@icon/regular/pencil-simple-line.svg';
 import { cn } from '@ui';
-import { createSignal, Show } from 'solid-js';
-import { DeprecatedEditingTextButton } from './DeprecatedTextButton';
+import { createSignal, Show, useContext } from 'solid-js';
+import { EditableLabel, EditingContext } from './Editable';
 
 export interface EditableFieldProps {
   label?: string;
@@ -15,8 +15,10 @@ export interface EditableFieldProps {
 const EditableField = (props: EditableFieldProps) => {
   const [isEditing, setIsEditing] = createSignal(false);
   const [inputValue, setInputValue] = createSignal(props.value || '');
+  const [, setIsRenaming] = useContext(EditingContext);
 
   const handleSave = (newValue: string) => {
+    setIsRenaming(false);
     if (props.onSave) {
       props.onSave(newValue);
     }
@@ -24,6 +26,7 @@ const EditableField = (props: EditableFieldProps) => {
   };
 
   const handleCancel = () => {
+    setIsRenaming(false);
     setInputValue(props.value || '');
     setIsEditing(false);
   };
@@ -51,17 +54,20 @@ const EditableField = (props: EditableFieldProps) => {
         }
       >
         <div class="space-y-2 inline-block">
-          <DeprecatedEditingTextButton
-            handleSubmitEdit={handleSave}
-            handleCancelEdit={handleCancel}
-            labelText={props.value || inputValue() || ''}
-            theme="clear"
-            type="text"
-            dynamicSizing
-            data-1p-ignore
-            placeholder={props.placeholder}
-            allowEmpty={props.allowEmpty}
-          />
+          <div class="flex flex-row h-8 justify-start items-center cursor-default border shadow-inner border-edge bg-input text-ink">
+            <div class="flex flex-row h-full px-2 justify-center items-center gap-2 font-medium text-sm/5 whitespace-nowrap">
+              <EditableLabel
+                handleSubmitEdit={handleSave}
+                handleCancelEdit={handleCancel}
+                labelText={props.value || inputValue() || ''}
+                type="text"
+                dynamicSizing
+                data-1p-ignore
+                placeholder={props.placeholder}
+                allowEmpty={props.allowEmpty}
+              />
+            </div>
+          </div>
         </div>
       </Show>
     </div>

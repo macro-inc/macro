@@ -8,12 +8,12 @@ import { Layer } from './Layer';
 export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
   tooltipPlacement?: Placement;
+  noTouchResize?: boolean;
   variant?: ButtonVariant;
   children?: JSX.Element;
   tooltip?: JSX.Element;
   size?: ButtonSize;
   class?: string;
-  noTouchResize?: boolean;
 };
 
 type ButtonSize = 'sm' | 'icon-sm' | 'md' | 'icon-md' | 'lg' | 'icon-lg';
