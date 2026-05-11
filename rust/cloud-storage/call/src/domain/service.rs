@@ -681,7 +681,7 @@ impl<
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
                     self.spawn_summarize_call(call.id);
-                    self.spawn_match_voices_for_call(call.id);
+                    self.spawn_process_voices_for_call(call.id);
 
                     if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
                         tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
@@ -791,7 +791,7 @@ impl<
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
                     self.spawn_summarize_call(call.id);
-                    self.spawn_match_voices_for_call(call.id);
+                    self.spawn_process_voices_for_call(call.id);
 
                     if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
                         tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
@@ -1352,15 +1352,18 @@ impl<
         });
     }
 
-    /// Fire-and-forget spawn of [`match_voices_for_call_record`].
+    /// Fire-and-forget spawn of finished-call voice processing.
     ///
     /// Called from `process_webhook_event` immediately after `archive_call`
-    /// finalizes the `call_records` row so voice matching runs off the
-    /// request path. Errors are logged inside the spawned task.
-    fn spawn_match_voices_for_call(&self, call_record_id: Uuid) {
+    /// finalizes the `call_records` row. First, stable speaker voice ids are
+    /// enrolled for the users who spoke them; then the regular voice matcher
+    /// can use both pre-existing and newly-enrolled voices to populate speaker
+    /// overrides. Errors are logged inside the spawned task.
+    fn spawn_process_voices_for_call(&self, call_record_id: Uuid) {
         let repo = self.repo.clone();
         let voice_repo = self.voice_repo.clone();
         tokio::spawn(async move {
+            enroll_stable_speaker_voices_for_call_record(&repo, &voice_repo, call_record_id).await;
             match_voices_for_call_record(
                 &repo,
                 &voice_repo,
@@ -1370,6 +1373,53 @@ impl<
             .await;
         });
     }
+}
+
+/// Enroll stable speaker voice ids observed in a freshly archived call.
+///
+/// For each `speaker_id` in the call transcript, the repository returns a
+/// candidate only when every transcript row for that speaker has the same
+/// non-NULL `voice_id`. Those unambiguous pairs are linked to the resolved
+/// macro user in `macro_user_voice` via [`VoiceRepository::link_user_voice`].
+async fn enroll_stable_speaker_voices_for_call_record<R: CallRepository, Vr: VoiceRepository>(
+    repo: &R,
+    voice_repo: &Vr,
+    call_record_id: Uuid,
+) {
+    let stable_voices = match repo
+        .get_stable_speaker_voices_for_call_record(&call_record_id)
+        .await
+    {
+        Ok(stable_voices) => stable_voices,
+        Err(e) => {
+            tracing::error!(
+                error=?e, %call_record_id,
+                "failed to load stable speaker voices for enrollment"
+            );
+            return;
+        }
+    };
+
+    if stable_voices.is_empty() {
+        return;
+    }
+
+    let total = stable_voices.len();
+    let mut linked = 0usize;
+    for (macro_user_id, voice_id) in stable_voices {
+        match voice_repo.link_user_voice(&macro_user_id, &voice_id).await {
+            Ok(()) => linked += 1,
+            Err(e) => tracing::error!(
+                error=?e, %call_record_id, %macro_user_id, %voice_id,
+                "failed to link stable speaker voice to user"
+            ),
+        }
+    }
+
+    tracing::info!(
+        %call_record_id, linked, total,
+        "stable speaker voice enrollment completed"
+    );
 }
 
 /// Match the voice ids on a freshly archived call to enrolled users and

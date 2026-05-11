@@ -1441,6 +1441,40 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_stable_speaker_voices_for_call_record(
+        &self,
+        call_record_id: &Uuid,
+    ) -> Result<Vec<(Uuid, Uuid)>, Self::Err> {
+        sqlx::query_as::<_, (Uuid, Uuid)>(
+            r#"
+            WITH per_speaker AS (
+                SELECT
+                    u.macro_user_id,
+                    COUNT(*) AS total_segments,
+                    COUNT(t.voice_id) AS voiced_segments,
+                    COUNT(DISTINCT t.voice_id) AS distinct_voice_ids,
+                    (array_agg(DISTINCT t.voice_id) FILTER (WHERE t.voice_id IS NOT NULL))[1] AS voice_id,
+                    MIN(t.sequence_num) AS first_sequence_num
+                FROM call_record_transcripts t
+                JOIN "User" u
+                  ON u.id = t.speaker_id
+                 AND u.macro_user_id IS NOT NULL
+                WHERE t.call_record_id = $1
+                GROUP BY t.speaker_id, u.macro_user_id
+            )
+            SELECT macro_user_id, voice_id
+            FROM per_speaker
+            WHERE total_segments = voiced_segments
+              AND distinct_voice_ids = 1
+            ORDER BY first_sequence_num ASC
+            "#,
+        )
+        .bind(call_record_id)
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_distinct_voice_speakers_for_call_record(
         &self,
         call_record_id: &Uuid,

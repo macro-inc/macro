@@ -266,6 +266,17 @@ pub trait CallRepository: Send + Sync + 'static {
         assignments: &[CustomSpeakerAssignment],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Stable `(macro_user_id, voice_id)` pairs inferred from a finished
+    /// call's archived transcripts. A speaker is returned only when every
+    /// transcript row for that `speaker_id` has a non-NULL `voice_id` and all
+    /// of those voice ids are the same. The `speaker_id` is resolved through
+    /// the canonical `User` row to get the `macro_user.id` used by
+    /// `macro_user_voice`.
+    fn get_stable_speaker_voices_for_call_record(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<(Uuid, Uuid)>, Self::Err>> + Send;
+
     /// Distinct `(diarized_speaker_id, voice_id)` pairs from a call's
     /// archived transcripts. Used by the post-archive voice matcher; rows
     /// with NULL `diarized_speaker_id` or NULL `voice_id` are skipped.
