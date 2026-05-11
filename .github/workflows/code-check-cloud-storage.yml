@@ -216,17 +216,9 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-extra-beefy
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-        total_shards: [4]
-        test_threads: [8]
     env:
       NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
-      NEXTEST_SHARD: ${{ matrix.shard }}
-      NEXTEST_TOTAL_SHARDS: ${{ matrix.total_shards }}
-      NEXTEST_TEST_THREADS: ${{ matrix.test_threads }}
+      NEXTEST_TEST_THREADS: '32'
       RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=mold"
     services:
       postgres:
@@ -315,7 +307,6 @@ jobs:
           if [ -n "$NEXTEST_FILTER" ]; then
             args+=(-E "$NEXTEST_FILTER")
           fi
-          args+=(--partition "count:${NEXTEST_SHARD}/${NEXTEST_TOTAL_SHARDS}")
           cargo nextest run "${args[@]}"
       - name: show sccache stats
         if: always()
