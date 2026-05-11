@@ -68,7 +68,7 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
         };
       });
 
-      const data = createMemo(() => {
+      const data = () => {
         const pages = query.data?.pages.filter((p): p is TData => p !== null);
         if (!pages) return undefined;
         const select = getSelect();
@@ -76,7 +76,7 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
           return select(pages);
         }
         return pages as TSelect;
-      });
+      };
 
       return {
         key,
