@@ -21,6 +21,7 @@ import {
 /// the interface for a singular notification on this device
 export interface PlatformNotificationHandle {
   onClick: (cb: () => void) => void;
+  onDismiss: (cb: () => void) => void;
   close: () => void;
 }
 

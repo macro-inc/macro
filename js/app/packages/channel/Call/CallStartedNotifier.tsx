@@ -199,4 +199,7 @@ async function emitCallStartedNotification(args: {
     handle.close();
     ringer.stop();
   });
+  handle.onDismiss(() => {
+    ringer.stop();
+  });
 }
