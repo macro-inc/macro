@@ -36,7 +36,9 @@ import {
 } from 'solid-js';
 import { TaskGridLayout } from './task-grid-layout';
 
-type TaskListEntityProps = BaseListEntityProps;
+interface TaskListEntityProps extends BaseListEntityProps {
+  showUnrollNotifications?: boolean;
+}
 
 function MaybeEntityRow(props: {
   entityId: string;
