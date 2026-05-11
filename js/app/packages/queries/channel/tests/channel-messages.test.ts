@@ -52,10 +52,7 @@ describe('channelMessagesQueryOptions', () => {
 
     let error: unknown;
     try {
-      await options.queryFn({
-        pageParam: null,
-        signal: new AbortController().signal,
-      });
+      await options.queryFn({ pageParam: null });
     } catch (err) {
       error = err;
     }
@@ -68,16 +65,13 @@ describe('channelMessagesQueryOptions', () => {
     expect(isMissingChannelMessageError(error)).toBe(true);
     expect(options.retry(0, error)).toBe(false);
     expect(mocks.getChannelMessages).toHaveBeenCalledTimes(1);
-    expect(mocks.getChannelMessages).toHaveBeenCalledWith(
-      {
-        channel_id: 'channel-1',
-        limit: 50,
-        next_cursor: null,
-        previous_cursor: null,
-        load_around_message_id: 'message-missing',
-      },
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
-    );
+    expect(mocks.getChannelMessages).toHaveBeenCalledWith({
+      channel_id: 'channel-1',
+      limit: 50,
+      next_cursor: null,
+      previous_cursor: null,
+      load_around_message_id: 'message-missing',
+    });
   });
 
   it('preserves the default single retry for other errors', () => {

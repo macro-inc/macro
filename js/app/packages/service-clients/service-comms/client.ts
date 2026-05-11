@@ -390,8 +390,7 @@ export const commsServiceClient = {
       next_cursor: string | null;
       previous_cursor: string | null;
       load_around_message_id: string | null;
-    },
-    init?: SafeFetchInit
+    }
   ) {
     const {
       channel_id,
@@ -412,7 +411,7 @@ export const commsServiceClient = {
     return mapOk(
       await commsFetch<ApiChannelMessagesPage>(
         `/channels/${channel_id}/messages?${params.toString()}`,
-        { method: 'GET', ...init }
+        { method: 'GET' }
       ),
       (result) => result
     );

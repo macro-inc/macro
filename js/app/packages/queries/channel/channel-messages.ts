@@ -71,23 +71,18 @@ export function channelMessagesQueryOptions(
     queryKey: channelKeys.messages(channelId, loadAroundMessageId).queryKey,
     queryFn: async ({
       pageParam,
-      signal,
     }: {
       pageParam: ChannelMessagesPageParam | null;
-      signal: AbortSignal;
     }) => {
       return await throwOnErr(
         async () =>
-          await commsServiceClient.getChannelMessages(
-            {
-              channel_id: channelId,
-              limit: pageParam ? 100 : 50,
-              next_cursor: pageParam?.next_cursor ?? null,
-              previous_cursor: pageParam?.previous_cursor ?? null,
-              load_around_message_id: !pageParam ? loadAroundMessageId : null,
-            },
-            { signal }
-          )
+          await commsServiceClient.getChannelMessages({
+            channel_id: channelId,
+            limit: pageParam ? 100 : 50,
+            next_cursor: pageParam?.next_cursor ?? null,
+            previous_cursor: pageParam?.previous_cursor ?? null,
+            load_around_message_id: !pageParam ? loadAroundMessageId : null,
+          })
       );
     },
     initialPageParam: null as ChannelMessagesPageParam | null,
