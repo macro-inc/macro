@@ -470,14 +470,15 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const [soupViewRef, setSoupViewRef] = createSignal<HTMLElement | undefined>();
 
   const focusFirstEntity = () => {
-    let next = soup.navigate.toFirst();
+    const allRows = rows();
+    const firstEntityIndex = allRows.findIndex(
+      (row) => !row.getIsGrouped() && !row.getIsLoadMore()
+    );
+    if (firstEntityIndex === -1) return;
 
-    while (next?.row.getIsGrouped()) {
-      next = soup.navigate.down();
-    }
-
-    if (next) {
-      virtualizerHandle()?.scrollToIndex(next.index, { align: 'nearest' });
+    const result = soup.navigate.toIndex(firstEntityIndex);
+    if (result) {
+      virtualizerHandle()?.scrollToIndex(result.index, { align: 'nearest' });
     }
   };
 
