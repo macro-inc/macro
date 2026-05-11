@@ -8,7 +8,7 @@ use model::document::{DocumentBasic, DocumentMetadata, FileType};
 use model::response::{PresignedUrl, TypedSuccessResponse};
 use models_permissions::share_permission::access_level::AccessLevel;
 
-/// Durable content lifecycle state exposed by document APIs.
+/// API-visible content lifecycle state derived from current document metadata.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
@@ -16,14 +16,10 @@ use models_permissions::share_permission::access_level::AccessLevel;
 pub enum DocumentContentState {
     /// The service cannot determine the content lifecycle state from current metadata.
     Unknown,
-    /// Metadata exists, but the uploaded bytes are not finalized yet.
-    PendingUpload,
-    /// Uploaded bytes were accepted and backend processing is in progress.
-    Processing,
+    /// Metadata exists, but canonical content is not ready to consume yet.
+    Pending,
     /// Content is finalized and should be readable from `location`.
     Ready,
-    /// Finalization or processing failed.
-    Failed,
 }
 
 /// Where document content is, or is expected to be, read from.
@@ -74,17 +70,9 @@ impl DocumentContent {
     }
 
     /// Metadata exists, but upload/finalization has not completed.
-    pub fn pending_upload() -> Self {
+    pub fn pending() -> Self {
         Self {
-            state: DocumentContentState::PendingUpload,
-            location: None,
-        }
-    }
-
-    /// Backend processing is in progress.
-    pub fn processing() -> Self {
-        Self {
-            state: DocumentContentState::Processing,
+            state: DocumentContentState::Pending,
             location: None,
         }
     }
@@ -97,19 +85,11 @@ impl DocumentContent {
         }
     }
 
-    /// Content finalization failed.
-    pub fn failed() -> Self {
-        Self {
-            state: DocumentContentState::Failed,
-            location: None,
-        }
-    }
-
     /// Derive the best content metadata available from the legacy
     /// `Document.uploaded` boolean and file type.
     pub fn from_legacy_uploaded(uploaded: bool, file_type: Option<FileType>) -> Self {
         if !uploaded {
-            return Self::pending_upload();
+            return Self::pending();
         }
 
         let location = match file_type {
@@ -340,7 +320,7 @@ mod tests {
         assert_eq!(
             DocumentContent::from_legacy_uploaded(false, Some(FileType::Pdf)),
             DocumentContent {
-                state: DocumentContentState::PendingUpload,
+                state: DocumentContentState::Pending,
                 location: None,
             }
         );

@@ -736,7 +736,7 @@ impl<
             document_response: DocumentResponse {
                 document_metadata: DocumentResponseMetadataWithContent::new(
                     document_response_metadata,
-                    DocumentContent::pending_upload(),
+                    DocumentContent::pending(),
                 ),
                 presigned_url: Some(presigned_url),
             },
