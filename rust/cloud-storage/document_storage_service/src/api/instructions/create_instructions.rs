@@ -2,11 +2,10 @@ use crate::{
     api::context::ApiContext, model::response::instructions::CreateInstructionsDocumentResponse,
 };
 use axum::{Json, extract::State};
-use documents_hex::domain::create::{
-    DocumentCreator, NewDocumentMetadata, NewMarkdownTextDocument,
-};
 use documents_hex::domain::models::DocumentError;
-use documents_hex::domain::ports::DocumentService as _;
+use documents_hex::domain::ports::create::{
+    DocumentCreationService as _, DocumentCreator, NewDocumentMetadata, NewMarkdownTextDocument,
+};
 use macro_db_client::instructions::create::{
     CreateInstructionsError, insert_instructions_document,
 };

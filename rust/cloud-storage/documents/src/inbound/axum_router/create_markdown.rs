@@ -7,13 +7,14 @@ use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
-use crate::domain::create::{
-    DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
-};
 use crate::domain::models::{
     CreateMarkdownDocumentRequest, CreateMarkdownDocumentResponse, DocumentError,
 };
 use crate::domain::ports::DocumentService;
+use crate::domain::ports::create::{
+    DocumentCreationService, DocumentCreator, MarkdownSubtype, NewDocumentMetadata,
+    NewMarkdownTextDocument,
+};
 
 /// Creates and initializes a markdown document in one backend-owned lifecycle.
 #[utoipa::path(
@@ -30,7 +31,10 @@ use crate::domain::ports::DocumentService;
     )
 )]
 #[tracing::instrument(skip(state, user_context, project), fields(user_id=?user_context.macro_user_id))]
-pub async fn create_markdown_handler<T: DocumentService, Svc: EntityAccessService>(
+pub async fn create_markdown_handler<
+    T: DocumentService + DocumentCreationService,
+    Svc: EntityAccessService,
+>(
     State(state): State<DocumentRouterState<T, Svc>>,
     user_context: MacroUserExtractor,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateMarkdownDocumentRequest, Svc>,

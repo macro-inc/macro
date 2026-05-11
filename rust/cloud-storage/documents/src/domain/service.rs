@@ -40,6 +40,8 @@ use super::models::{
     CreateTaskRequest, CreateTaskResponse, DocumentError, EMPTY_SHA256, EditDocumentRepoArgs,
     EditDocumentServiceArgs, FileTypeUpdate, LocationQueryParams,
 };
+#[cfg(feature = "document_create")]
+use super::ports::create::DocumentCreationService;
 use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 use super::response::{
     CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
@@ -351,6 +353,29 @@ impl<
     }
 }
 
+#[cfg(feature = "document_create")]
+impl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+    Eam: EntityAccessManagementService,
+> DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam>
+{
+    #[tracing::instrument(err, skip(self))]
+    async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), DocumentError> {
+        self.repo
+            .mark_document_uploaded(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn cleanup_created_document(&self, document_id: &str) {
+        self.cleanup_document(document_id).await;
+    }
+}
+
 impl<
     R: DocumentRepo,
     U: PresignedUploadUrlPort,
@@ -599,14 +624,6 @@ impl<
         Ok(short_id)
     }
 
-    #[tracing::instrument(err, skip(self))]
-    async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), DocumentError> {
-        self.repo
-            .mark_document_uploaded(document_id)
-            .await
-            .map_err(|e| DocumentError::Internal(e.into()))
-    }
-
     #[tracing::instrument(err, skip(self, document_context))]
     async fn get_document_content(
         &self,
@@ -617,11 +634,6 @@ impl<
             document_context.try_file_type(),
         )
         .await
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn cleanup_created_document(&self, document_id: &str) {
-        self.cleanup_document(document_id).await;
     }
 
     #[tracing::instrument(err, skip(self, args))]

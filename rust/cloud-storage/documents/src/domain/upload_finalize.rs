@@ -9,7 +9,7 @@ use sync_service_client::SyncServiceClient;
 use super::content::{DocumentContent, DocumentContentState};
 use super::markdown_init::initialize_markdown_document;
 use super::models::DocumentError;
-use super::ports::{DocumentRepo, DocumentService};
+use super::ports::DocumentRepo;
 
 /// Minimal document operations needed to finalize an uploaded object.
 pub trait UploadFinalizeDocumentPort: Send + Sync {
@@ -24,22 +24,6 @@ pub trait UploadFinalizeDocumentPort: Send + Sync {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
-}
-
-impl<T> UploadFinalizeDocumentPort for T
-where
-    T: DocumentService,
-{
-    async fn get_document_content(
-        &self,
-        document_context: &DocumentBasic,
-    ) -> Result<DocumentContent, DocumentError> {
-        DocumentService::get_document_content(self, document_context).await
-    }
-
-    async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), DocumentError> {
-        DocumentService::mark_document_uploaded(self, document_id).await
-    }
 }
 
 /// Repo-backed upload-finalization port for infrastructure workers.

@@ -41,6 +41,8 @@ use sqlx::PgPool;
 
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
+#[cfg(feature = "document_create")]
+use crate::domain::ports::create::DocumentCreationService;
 
 // Re-export handlers and utoipa path types for external use (swagger, internal routes)
 pub use copy_document::*;
@@ -127,7 +129,7 @@ pub struct Params {
 /// Build the documents router with all endpoints.
 pub fn documents_router<T, Svc, S>(state: DocumentRouterState<T, Svc>) -> Router<S>
 where
-    T: DocumentService,
+    T: DocumentService + DocumentCreationService,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {

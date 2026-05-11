@@ -3,9 +3,6 @@
 pub mod branch_name;
 pub mod content;
 
-#[cfg(feature = "document_create")]
-pub mod create;
-
 #[cfg(feature = "markdown_init")]
 pub mod markdown_init;
 

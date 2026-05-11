@@ -7,11 +7,12 @@ use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
-use crate::domain::create::{
-    DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
-};
 use crate::domain::models::{CreateTaskRequest, CreateTaskResponse, DocumentError};
 use crate::domain::ports::DocumentService;
+use crate::domain::ports::create::{
+    DocumentCreationService, DocumentCreator, MarkdownSubtype, NewDocumentMetadata,
+    NewMarkdownTextDocument,
+};
 
 /// Creates a task document with properties and initialized markdown content in
 /// one backend-owned lifecycle.
@@ -28,7 +29,10 @@ use crate::domain::ports::DocumentService;
     )
 )]
 #[tracing::instrument(skip(state, user_context, project), fields(user_id=?user_context.macro_user_id))]
-pub async fn create_task_handler<T: DocumentService, Svc: EntityAccessService>(
+pub async fn create_task_handler<
+    T: DocumentService + DocumentCreationService,
+    Svc: EntityAccessService,
+>(
     State(state): State<DocumentRouterState<T, Svc>>,
     user_context: MacroUserExtractor,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateTaskRequest, Svc>,

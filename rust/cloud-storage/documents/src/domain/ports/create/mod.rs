@@ -6,6 +6,8 @@
 //! (`create_markdown_text`, `create_text_file`, or `MarkdownInitializer` for
 //! already-created uploads).
 
+use std::future::Future;
+
 use anyhow::Context;
 use base64::Engine;
 use lexical_client::LexicalClient;
@@ -447,15 +449,27 @@ impl<'a> MarkdownInitializer<'a> {
     }
 }
 
+/// Service operations needed by backend-owned document creation.
+pub trait DocumentCreationService: DocumentService {
+    /// Mark a created document's upload/finalization lifecycle as complete.
+    fn mark_document_uploaded(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Clean up a document that failed after its database row was created.
+    fn cleanup_created_document(&self, document_id: &str) -> impl Future<Output = ()> + Send;
+}
+
 /// Service for creating backend-owned document content.
-pub struct DocumentCreator<'a, Svc: DocumentService> {
+pub struct DocumentCreator<'a, Svc: DocumentCreationService> {
     document_service: &'a Svc,
     lexical_client: &'a LexicalClient,
     sync_service_client: &'a SyncServiceClient,
     http_client: reqwest::Client,
 }
 
-impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
+impl<'a, Svc: DocumentCreationService> DocumentCreator<'a, Svc> {
     /// Construct a document creator.
     pub fn new(
         document_service: &'a Svc,

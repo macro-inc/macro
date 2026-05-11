@@ -2,9 +2,11 @@
 
 use std::str::FromStr;
 
-use crate::domain::create::{DocumentCreator, NewDocumentMetadata, NewPlainTextDocument};
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
+use crate::domain::ports::create::{
+    DocumentCreationService, DocumentCreator, NewDocumentMetadata, NewPlainTextDocument,
+};
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::Context;
 use async_trait::async_trait;
@@ -57,7 +59,7 @@ pub struct CreateDocument {
 #[async_trait]
 impl<DSvc, ESvc> AsyncTool<DocumentToolContext<DSvc, ESvc>> for CreateDocument
 where
-    DSvc: DocumentService,
+    DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
 {
     type Output = CreateDocumentResponse;

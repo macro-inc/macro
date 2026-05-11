@@ -2,6 +2,9 @@
 //!
 //! These traits define the contracts that adapters must implement.
 
+#[cfg(feature = "document_create")]
+pub mod create;
+
 use std::future::Future;
 
 use entity_access::domain::models::{
@@ -299,20 +302,11 @@ pub trait DocumentService: Send + Sync + 'static {
         job_id: Option<String>,
     ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
 
-    /// Mark a document's upload/finalization lifecycle as complete.
-    fn mark_document_uploaded(
-        &self,
-        document_id: &str,
-    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
-
     /// Get content lifecycle metadata for a document.
     fn get_document_content(
         &self,
         document_context: &DocumentBasic,
     ) -> impl Future<Output = Result<DocumentContent, DocumentError>> + Send;
-
-    /// Clean up a document that failed during backend-owned creation.
-    fn cleanup_created_document(&self, document_id: &str) -> impl Future<Output = ()> + Send;
 
     /// Convert a document's entity_id to a short UUID.
     fn get_short_id(

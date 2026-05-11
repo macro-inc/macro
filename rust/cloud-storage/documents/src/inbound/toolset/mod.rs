@@ -9,6 +9,7 @@ mod test;
 
 use crate::{
     domain::ports::DocumentService,
+    domain::ports::create::DocumentCreationService,
     inbound::toolset::{
         create_document::CreateDocument, read_content::ReadContent, read_metadata::ReadMetadata,
     },
@@ -64,7 +65,7 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentToolContext<DSvc,
 /// Create a document toolset
 pub fn document_toolset<DSvc, ESvc>() -> AsyncToolSet<DocumentToolContext<DSvc, ESvc>>
 where
-    DSvc: DocumentService,
+    DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
 {
     AsyncToolSet::new()
