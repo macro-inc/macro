@@ -1,11 +1,25 @@
-import { createSignal, For, type JSX, mergeProps, type ParentProps, Show } from 'solid-js';
-import CorvuTooltip, { type FloatingOptions } from '@corvu/tooltip';
+import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
+import { createSignal, For, mergeProps, Show } from 'solid-js';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { Hotkey } from '../../ui/components/Hotkey';
 import type { Placement } from '@floating-ui/dom';
+import type { JSX, ParentProps }  from 'solid-js';
 import { cn, Layer } from '@ui';
 
 const TOOLTIP_DELAY = 250;
+
+/**
+ * Floating UI options retained from the previous `@corvu/tooltip` API so callers
+ * don't have to change their usage. Internally these get translated to the
+ * matching Kobalte popper props.
+ */
+export type FloatingOptions = {
+  size?: { padding?: number; fitViewPort?: boolean };
+  shift?: { padding?: number };
+  flip?: boolean | string;
+  boundary?: string;
+  offset?: number;
+};
 
 export type TooltipProps = ParentProps<{
   tooltip?: JSX.Element | ((close: () => void) => JSX.Element);
@@ -34,7 +48,7 @@ export function Tooltip(props: TooltipProps) {
   props = mergeProps(
     {
       floatingOptions: {
-        size: {padding: 16, fitViewPort: true },
+        size: { padding: 16, fitViewPort: true },
         shift: { padding: 16 },
         boundary: 'viewport',
         offset: 12,
@@ -45,39 +59,45 @@ export function Tooltip(props: TooltipProps) {
     props
   );
 
-  function padding(){
-    let padding = props.floatingOptions?.size?.padding;
+  function padding() {
+    const padding = props.floatingOptions?.size?.padding;
     if (typeof padding === 'number') return padding;
     return 0;
-  };
+  }
 
   const [open, setOpen] = createSignal(false);
   const close = () => setOpen(false);
 
-  function tooltipContent(){
-    if (typeof props.tooltip === 'function') { return props.tooltip(close); }
+  function tooltipContent() {
+    if (typeof props.tooltip === 'function') {
+      return props.tooltip(close);
+    }
     return props.tooltip;
-  };
+  }
 
   return (
-    <CorvuTooltip
-      closeDelay={props.delayOverride ?? TOOLTIP_DELAY}
-      floatingOptions={props.floatingOptions}
-      group={'tooltip-single-group'} /* only allow one open tooltip */
-      placement={props.placement}
+    <KobalteTooltip
       openDelay={TOOLTIP_DELAY}
-      onOpenChange={setOpen}
+      closeDelay={props.delayOverride ?? TOOLTIP_DELAY}
       open={open()}
+      onOpenChange={setOpen}
+      placement={props.placement}
+      gutter={props.floatingOptions?.offset}
+      flip={props.floatingOptions?.flip}
+      overflowPadding={props.floatingOptions?.shift?.padding}
+      fitViewport={props.floatingOptions?.size?.fitViewPort}
     >
-      <CorvuTooltip.Trigger
-        class={cn('inline-flex items-center', props.class)}
+      <KobalteTooltip.Trigger
         as={props.spanMode ? 'span' : 'div'}
-        ref={(el) => { props.ref?.(el); }}
+        class={cn('inline-flex items-center', props.class)}
+        ref={(el: HTMLDivElement | HTMLSpanElement) => {
+          props.ref?.(el);
+        }}
       >
         {props.children}
-      </CorvuTooltip.Trigger>
-      <CorvuTooltip.Portal>
-        <CorvuTooltip.Content
+      </KobalteTooltip.Trigger>
+      <KobalteTooltip.Portal>
+        <KobalteTooltip.Content
           style={{ 'max-width': `calc(100vw - ${2 * padding()}px)` }}
           hidden={props.hide}
           class="z-tool-tip"
@@ -90,23 +110,23 @@ export function Tooltip(props: TooltipProps) {
             </Layer>
           </Show>
           {/* Note disabling arrows for now. I think its more on-brand - seamus */}
-          {/*<CorvuTooltip.Arrow />*/}
-        </CorvuTooltip.Content>
-      </CorvuTooltip.Portal>
-    </CorvuTooltip>
+          {/*<KobalteTooltip.Arrow />*/}
+        </KobalteTooltip.Content>
+      </KobalteTooltip.Portal>
+    </KobalteTooltip>
   );
 }
 
-export function NullTooltip(props: ParentProps<{}>){
+export function NullTooltip(props: ParentProps<{}>) {
   return (
-    <CorvuTooltip group={'tooltip-single-group'} openDelay={0}>
-      <CorvuTooltip.Trigger as="div">{props.children}</CorvuTooltip.Trigger>
-      <CorvuTooltip.Portal>
-        <CorvuTooltip.Content style={{ visibility: 'hidden' }} />
-      </CorvuTooltip.Portal>
-    </CorvuTooltip>
+    <KobalteTooltip openDelay={0}>
+      <KobalteTooltip.Trigger as="div">{props.children}</KobalteTooltip.Trigger>
+      <KobalteTooltip.Portal>
+        <KobalteTooltip.Content style={{ visibility: 'hidden' }} />
+      </KobalteTooltip.Portal>
+    </KobalteTooltip>
   );
-};
+}
 
 export type HotkeySequenceStep = {
   token?: HotkeyToken;
