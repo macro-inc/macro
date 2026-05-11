@@ -1,10 +1,10 @@
-import { For, Show, type JSX } from 'solid-js';
-import { cn } from '@ui/utils/classname';
 import { Tooltip } from '@core/component/Tooltip';
 import { useListLayout } from '@entity/composed/list-entity/shared';
+import UsersIcon from '@icon/regular/users.svg';
 import StatusInProgress from '@macro-icons/square/task-in-progress-circle.svg';
 import PriorityHigh from '@macro-icons/wide/priority-high.svg';
-import UsersIcon from '@icon/regular/users.svg';
+import { cn } from '@ui/utils/classname';
+import { For, type JSX, Show } from 'solid-js';
 import {
   TASK_GRID_COLUMNS,
   TASK_GRID_TEMPLATE_AREAS,

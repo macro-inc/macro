@@ -11,13 +11,15 @@ import {
   isSelectProperty,
   isStringProperty,
   PropertyDataTypeIcon,
+  hasValue as propertyHasValue,
 } from '@core/component/Properties/utils';
 import { UserIcon } from '@core/component/UserIcon';
+import { useUnfurl } from '@core/signal/unfurl';
 import LinkIcon from '@icon/regular/link.svg';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { useUnfurl } from '@core/signal/unfurl';
 import { proxyResource } from '@service-unfurl/client';
+import { Layer } from '@ui';
 import {
   createSignal,
   For,
@@ -28,8 +30,6 @@ import {
   Switch,
 } from 'solid-js';
 import { PropertyValueIcon } from './PropertyValueIcon';
-import { hasValue as propertyHasValue } from '@core/component/Properties/utils';
-import { Layer } from '@ui';
 
 type PropertyTooltipProps = ParentProps<{
   property: Property;

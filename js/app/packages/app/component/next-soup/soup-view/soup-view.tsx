@@ -38,6 +38,8 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
+import { ResponsiveTaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -74,8 +76,6 @@ import {
   type ProjectEntity,
   type SearchLocation,
 } from '@entity';
-import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
-import { ResponsiveTaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
