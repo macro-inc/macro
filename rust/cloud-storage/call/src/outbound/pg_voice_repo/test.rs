@@ -126,9 +126,7 @@ async fn find_user_by_voice_returns_none_for_unlinked_voice(
     fixtures(path = "../../../fixtures", scripts("voice_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn find_nearest_user_matches_identical_embedding(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
+async fn find_nearest_user_matches_identical_embedding(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     let voice_id = repo.upsert_voice(&axis_unit_vector(0)).await?;
     repo.link_user_voice(&USER_A, &voice_id).await?;
@@ -160,9 +158,7 @@ async fn find_nearest_user_returns_none_above_threshold(
     fixtures(path = "../../../fixtures", scripts("voice_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn find_nearest_user_picks_closest_of_multiple(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
+async fn find_nearest_user_picks_closest_of_multiple(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     let v_a = repo.upsert_voice(&axis_unit_vector(0)).await?;
     let v_b = repo.upsert_voice(&axis_unit_vector(1)).await?;
@@ -215,7 +211,9 @@ async fn find_nearest_user_for_voice_resolves_via_embedding_lookup(
     // similarity, not exact id match.
     let segment_voice = repo.upsert_voice(&axis_unit_vector(0)).await?;
     assert_ne!(enrolled, segment_voice);
-    let match_id = repo.find_nearest_user_for_voice(&segment_voice, 0.1).await?;
+    let match_id = repo
+        .find_nearest_user_for_voice(&segment_voice, 0.1)
+        .await?;
     assert_eq!(match_id, Some(USER_A));
     Ok(())
 }
