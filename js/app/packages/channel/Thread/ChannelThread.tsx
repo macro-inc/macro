@@ -206,6 +206,7 @@ export function ChannelThread(props: ThreadProps) {
           return;
         }
 
+        // TODO: we need a stable fix for deeply nested threads
         if (!handle?.scrollToIndex(targetReplyIndex)) return;
         props.onTargetReplyScrolled?.(targetReplyId);
       }
