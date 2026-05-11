@@ -110,17 +110,6 @@ export function Tooltip(props: TooltipProps) {
   );
 }
 
-export function NullTooltip(props: ParentProps<{}>) {
-  return (
-    <KobalteTooltip openDelay={0}>
-      <KobalteTooltip.Trigger as="div">{props.children}</KobalteTooltip.Trigger>
-      <KobalteTooltip.Portal>
-        <KobalteTooltip.Content style={{ visibility: 'hidden' }} />
-      </KobalteTooltip.Portal>
-    </KobalteTooltip>
-  );
-}
-
 export function LabelAndHotKey(props: LabelAndHotKeyProps) {
   const hasSingleHotkey = () =>
     !props.hotkeySequence && (!!props.hotkeyToken || !!props.shortcut);

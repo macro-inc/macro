@@ -1,5 +1,5 @@
 /* components */
-export { Tooltip, TooltipWrapper, NullTooltip, LabelAndHotKey,  } from './components/Tooltip';
+export { Tooltip, TooltipWrapper, LabelAndHotKey,  } from './components/Tooltip';
 export { SegmentedControl } from './components/SegmentedControl';
 export { TabbedControl } from './components/TabbedControl';
 export { Avatar, AvatarGroup } from './components/Avatar';
