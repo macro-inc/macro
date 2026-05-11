@@ -156,6 +156,12 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       if (focusedRow.getIsLoadMore() && focusedRow.group) {
         const currentIndex = focusedRow.index;
         focusedRow.group.loadMore().then(() => {
+          const currentFocused = soup.focus.row();
+
+          // If the focus was changed by the user, we shouldn't push focus back
+          // to an old position.
+          if (currentFocused?.id !== focusedRow.id) return;
+
           soup.navigate.toIndex(currentIndex);
           virtualizerHandle()?.scrollToIndex(currentIndex, {
             align: 'nearest',
