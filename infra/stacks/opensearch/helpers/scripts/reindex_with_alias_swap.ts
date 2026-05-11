@@ -143,23 +143,85 @@ async function startReindexAsync(
   return taskId;
 }
 
+type TaskNode = {
+  status?: TaskStatus;
+  running_time_in_nanos?: number;
+};
+
 async function getTask(
   opensearchClient: Client,
   taskId: string
 ): Promise<{
   completed: boolean;
-  task?: { status?: TaskStatus };
+  task?: TaskNode;
   response?: unknown;
   error?: unknown;
 }> {
-  // The opensearch-js client supports tasks.get(); fall back to raw transport
-  // if the API surface differs.
   const resp = await opensearchClient.tasks.get({ task_id: taskId });
   return resp.body as {
     completed: boolean;
-    task?: { status?: TaskStatus };
+    task?: TaskNode;
     response?: unknown;
     error?: unknown;
+  };
+}
+
+/**
+ * Aggregate live progress across sliced reindex sub-tasks. The parent task's
+ * own `status` stays at zero during a sliced reindex; the per-shard children
+ * carry the real numbers. Falls back to the parent's status when there are
+ * no children (non-sliced reindex case).
+ */
+async function getAggregatedStatus(
+  opensearchClient: Client,
+  parentTaskId: string,
+  parentTask: TaskNode | undefined
+): Promise<TaskStatus> {
+  let total = 0;
+  let created = 0;
+  let updated = 0;
+  let conflicts = 0;
+  let elapsedNs = parentTask?.running_time_in_nanos ?? 0;
+
+  try {
+    const list = await opensearchClient.tasks.list({
+      parent_task_id: parentTaskId,
+      detailed: true,
+    });
+    const nodes =
+      (
+        list.body as {
+          nodes?: Record<string, { tasks?: Record<string, TaskNode> }>;
+        }
+      ).nodes ?? {};
+    for (const node of Object.values(nodes)) {
+      for (const child of Object.values(node.tasks ?? {})) {
+        const s = child.status ?? {};
+        total += s.total ?? 0;
+        created += s.created ?? 0;
+        updated += s.updated ?? 0;
+        conflicts += s.version_conflicts ?? 0;
+        elapsedNs = Math.max(elapsedNs, child.running_time_in_nanos ?? 0);
+      }
+    }
+  } catch {
+    // ignore — fall back to parent below
+  }
+
+  if (total === 0) {
+    const ps = parentTask?.status ?? {};
+    total = ps.total ?? 0;
+    created = ps.created ?? 0;
+    updated = ps.updated ?? 0;
+    conflicts = ps.version_conflicts ?? 0;
+  }
+
+  return {
+    total,
+    created,
+    updated,
+    version_conflicts: conflicts,
+    running_time_in_nanos: elapsedNs,
   };
 }
 
@@ -187,10 +249,34 @@ async function waitForTask(
   };
   process.on('SIGINT', onSigint);
 
+  // Completed children drop out of `tasks.list` mid-run, so a naive sum would
+  // shrink the aggregated counters and walk progress backward. Hold each
+  // counter at its running max so the display stays monotonic.
+  const highWater: TaskStatus = {
+    total: 0,
+    created: 0,
+    updated: 0,
+    version_conflicts: 0,
+  };
+
   try {
     while (true) {
       const t = await getTask(opensearchClient, taskId);
-      const status = t.task?.status ?? {};
+      const raw = await getAggregatedStatus(opensearchClient, taskId, t.task);
+      highWater.total = Math.max(highWater.total ?? 0, raw.total ?? 0);
+      highWater.created = Math.max(highWater.created ?? 0, raw.created ?? 0);
+      highWater.updated = Math.max(highWater.updated ?? 0, raw.updated ?? 0);
+      highWater.version_conflicts = Math.max(
+        highWater.version_conflicts ?? 0,
+        raw.version_conflicts ?? 0
+      );
+      const status: TaskStatus = {
+        ...raw,
+        total: highWater.total,
+        created: highWater.created,
+        updated: highWater.updated,
+        version_conflicts: highWater.version_conflicts,
+      };
       console.log(`reindex progress: ${formatTaskProgress(status)}`);
       if (t.completed) {
         const failures =
