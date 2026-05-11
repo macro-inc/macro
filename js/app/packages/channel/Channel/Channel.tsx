@@ -412,23 +412,21 @@ export function Channel(props: ChannelProps) {
               data-channel-message-list
             >
               <Show when={findBar.isOpen()}>
-                <div class="flex justify-end p-2">
-                  <FindBar
-                    class="w-80 max-w-full"
-                    query={findBar.query()}
-                    onQueryChange={findBar.setQuery}
-                    onSubmit={findBar.submit}
-                    onClose={findBar.close}
-                    onPrevious={findBar.previous}
-                    onNext={findBar.next}
-                    index={findBar.activeIndex()}
-                    hasUnsubmittedChanges={findBar.hasUnsubmittedChanges()}
-                    isPending={findBar.isPending()}
-                    direction="desc"
-                    inputRef={findBar.setInputEl}
-                    placeholder="Find"
-                  />
-                </div>
+                <FindBar
+                  class="absolute top-2 right-3 z-10 w-80 max-w-[calc(100%-1.5rem)]"
+                  query={findBar.query()}
+                  onQueryChange={findBar.setQuery}
+                  onSubmit={findBar.submit}
+                  onClose={findBar.close}
+                  onPrevious={findBar.previous}
+                  onNext={findBar.next}
+                  index={findBar.activeIndex()}
+                  hasUnsubmittedChanges={findBar.hasUnsubmittedChanges()}
+                  isPending={findBar.isPending()}
+                  direction="desc"
+                  inputRef={findBar.setInputEl}
+                  placeholder="Find"
+                />
               </Show>
               <Show when={messages().length > 0}>
                 <div class="relative flex-1 min-h-0">
