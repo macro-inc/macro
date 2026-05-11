@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"Project\" (\"id\", \"name\", \"userId\", \"deletedAt\")\n            VALUES ('p4', 'd', 'macro|user@user.com', '2019-10-16 00:00:00')\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "907030d443b119e502d681d83a895336b04fc5c7ff0aa9ad1d0e619da59fa037"
+}

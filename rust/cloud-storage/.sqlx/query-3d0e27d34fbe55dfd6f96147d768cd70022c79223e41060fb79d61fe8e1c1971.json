@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) as \"count!\"\n            FROM comms_entity_mentions\n            WHERE source_entity_type = 'message'\n              AND source_entity_id = $1\n              AND entity_type = 'document'\n              AND entity_id = 'doc456'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3d0e27d34fbe55dfd6f96147d768cd70022c79223e41060fb79d61fe8e1c1971"
+}

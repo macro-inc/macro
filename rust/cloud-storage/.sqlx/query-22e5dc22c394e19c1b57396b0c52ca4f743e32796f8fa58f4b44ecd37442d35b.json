@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE \"Project\" SET \"parentId\" = 'p4' WHERE \"id\" = 'p1'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "22e5dc22c394e19c1b57396b0c52ca4f743e32796f8fa58f4b44ecd37442d35b"
+}

@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, user_id, device_token, device_endpoint, device_type as \"device_type:DeviceType\" \n            FROM notification_user_device_registration \n            WHERE device_endpoint = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "device_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "device_endpoint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "device_type:DeviceType",
+        "type_info": {
+          "Custom": {
+            "name": "notification_device_type_option",
+            "kind": {
+              "Enum": [
+                "ios",
+                "android",
+                "iosvoip"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2601beb7d46f7f44b9e2cd62f330c5e7420290d55b8c4b4a8178abbb41601004"
+}

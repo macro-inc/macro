@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"SharePermission\" SET \"isPublic\" = true, \"publicAccessLevel\" = 'edit' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b063534165d557942e39edd875bec83fd8f7809ce55d80adef4c20a8a548eb0c"
+}

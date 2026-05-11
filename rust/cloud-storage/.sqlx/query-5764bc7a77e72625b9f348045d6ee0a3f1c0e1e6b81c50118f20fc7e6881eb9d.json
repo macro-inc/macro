@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT user_id\n        FROM call_record_participants\n        WHERE call_record_id = $1\n        ORDER BY joined_at ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5764bc7a77e72625b9f348045d6ee0a3f1c0e1e6b81c50118f20fc7e6881eb9d"
+}

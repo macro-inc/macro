@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_access\n            (entity_id, entity_type, source_id, source_type, access_level)\n        VALUES ($1, 'document', 'macro|teammate1@user.com', 'user', 'edit')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ea00cda61b6a3013f3d54ed41f12d89161d6a096212c751ecbbe81898d153cba"
+}

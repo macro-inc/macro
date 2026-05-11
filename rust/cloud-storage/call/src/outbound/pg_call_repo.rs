@@ -572,8 +572,8 @@ impl CallRepository for PgCallRepo {
         // Copy transcripts to call_record_transcripts.
         sqlx::query!(
             r#"
-            INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num)
-            SELECT $1, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num
+            INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num, voice_id)
+            SELECT $1, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num, voice_id
             FROM call_transcripts
             WHERE call_id = $2
             "#,

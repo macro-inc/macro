@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) as \"count!\"\n        FROM entity_access\n        WHERE entity_id = $1\n          AND entity_type = 'document'\n          AND source_id = $2\n          AND source_type = 'channel'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9ff4ff6ce18ce84d7c83bdd1c9af3220608ccd78cc746de620c4ebc04758c621"
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \"macro_user_id\" as \"macro_user_id!\" FROM \"User\" WHERE \"macro_user_id\" = $1 AND \"id\" = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_user_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bca4c5ebcfe4b6716bd20d8a031735081e3a2e2181b5c52b5c42a9506310bfc8"
+}

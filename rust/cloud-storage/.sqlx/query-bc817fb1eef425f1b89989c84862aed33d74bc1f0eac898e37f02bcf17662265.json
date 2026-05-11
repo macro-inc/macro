@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id FROM \"Project\" \n            WHERE \"parentId\" = $1 AND name = 'subfolder1'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bc817fb1eef425f1b89989c84862aed33d74bc1f0eac898e37f02bcf17662265"
+}

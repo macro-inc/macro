@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) as \"count!\"\n            FROM comms_entity_mentions\n            WHERE entity_id = 'user1' AND source_entity_id = 'different_doc'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6afd9b2962faea63afc99a8d075fab233f34c6165c59a22c10804d3141b2c5cf"
+}
