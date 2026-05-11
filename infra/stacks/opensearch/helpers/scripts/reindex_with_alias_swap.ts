@@ -249,14 +249,34 @@ async function waitForTask(
   };
   process.on('SIGINT', onSigint);
 
+  // Completed children drop out of `tasks.list` mid-run, so a naive sum would
+  // shrink the aggregated counters and walk progress backward. Hold each
+  // counter at its running max so the display stays monotonic.
+  const highWater: TaskStatus = {
+    total: 0,
+    created: 0,
+    updated: 0,
+    version_conflicts: 0,
+  };
+
   try {
     while (true) {
       const t = await getTask(opensearchClient, taskId);
-      const status = await getAggregatedStatus(
-        opensearchClient,
-        taskId,
-        t.task
+      const raw = await getAggregatedStatus(opensearchClient, taskId, t.task);
+      highWater.total = Math.max(highWater.total ?? 0, raw.total ?? 0);
+      highWater.created = Math.max(highWater.created ?? 0, raw.created ?? 0);
+      highWater.updated = Math.max(highWater.updated ?? 0, raw.updated ?? 0);
+      highWater.version_conflicts = Math.max(
+        highWater.version_conflicts ?? 0,
+        raw.version_conflicts ?? 0
       );
+      const status: TaskStatus = {
+        ...raw,
+        total: highWater.total,
+        created: highWater.created,
+        updated: highWater.updated,
+        version_conflicts: highWater.version_conflicts,
+      };
       console.log(`reindex progress: ${formatTaskProgress(status)}`);
       if (t.completed) {
         const failures =
