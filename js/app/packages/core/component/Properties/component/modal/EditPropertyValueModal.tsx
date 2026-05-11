@@ -220,7 +220,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
               }));
             })}
             class={cn(
-              'absolute border border-edge rounded sm z-action-menu max-h-96 overflow-hidden flex flex-col w-full max-w-sm'
+              'absolute border border-edge rounded-md z-action-menu max-h-96 overflow-hidden flex flex-col w-full max-w-60 shadow-md shadow-drop-shadow'
             )}
             tabIndex={-1}
             onClick={(e) => e.stopPropagation()}

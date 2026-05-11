@@ -1,5 +1,3 @@
-import { createMemo, For, Show, Suspense } from 'solid-js';
-import { cn } from '@ui/utils/classname';
 import { Modals } from '@core/component/Properties/component/modal';
 import {
   PropertiesProvider,
@@ -9,8 +7,6 @@ import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
-import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import {
   Entity,
   type EntityData,
@@ -21,9 +17,15 @@ import {
   SharedBadge,
   UnreadIndicator,
 } from '@entity';
-import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { soupPropertyToProperty } from '@entity/extractors-property';
+import { SharedBadgeSmall } from '@entity/components/Badges';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
+import { soupPropertyToProperty } from '@entity/extractors-property';
+import { useUserId } from '@queries/auth';
+import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { cn } from '@ui/utils/classname';
+import { createMemo, For, Show, Suspense } from 'solid-js';
 import { ListPropertyValue } from './list-property-value';
 import {
   TASK_GRID_COLUMNS,
@@ -57,6 +59,7 @@ function buildStubProperty(col: TaskGridColumn): Property {
 }
 
 export function TaskGridLayout(props: LayoutProps) {
+  const currentId = useUserId();
   const entity = () => props.entity as EntityWithProperties<EntityData>;
 
   const propertyMap = createMemo(() => {
@@ -144,7 +147,7 @@ export function TaskGridLayout(props: LayoutProps) {
           </span>
           <Show when={isProjectContainedEntity(props.entity) && props.entity}>
             {(entity) => (
-              <span class="ph-no-capture text-ink text-xs shrink-0 truncate border border-edge px-2 rounded-full py-0.5">
+              <span class="ph-no-capture text-ink text-xs shrink-0 truncate border border-edge-muted px-2 rounded-sm py-0.5">
                 <ProjectBreadCrumb
                   entity={entity()}
                   onClick={props.onProjectClick}
@@ -152,7 +155,9 @@ export function TaskGridLayout(props: LayoutProps) {
               </span>
             )}
           </Show>
-          <SharedBadge ownerId={props.entity.ownerId} />
+          <Show when={props.entity.ownerId !== currentId()}>
+            <SharedBadgeSmall ownerId={props.entity.ownerId} />
+          </Show>
         </Entity.Slot>
 
         <For each={TASK_GRID_COLUMNS}>

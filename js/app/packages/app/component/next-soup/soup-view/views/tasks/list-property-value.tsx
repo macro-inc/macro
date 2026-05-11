@@ -1,19 +1,19 @@
-import CaretDownIcon from '@icon/regular/caret-down.svg';
-import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
 import { CondensedPropertyValue } from '@core/component/Properties/component/propertyValue/CondensedPropertyValue';
 import { PropertyTooltip } from '@core/component/Properties/component/propertyValue/PropertyTooltip';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { usePropertiesContext } from '@core/component/Properties/context/PropertiesContext';
-import { Tooltip } from '@core/component/Tooltip';
 import type { Property } from '@core/component/Properties/types';
 import {
   formatPropertyValue,
   getEntityValues,
   getSelectValues,
 } from '@core/component/Properties/utils';
-import { UserIcon } from '@core/component/UserIcon';
+import { Tooltip } from '@core/component/Tooltip';
+import { UserGroup } from '@core/component/UserGroup';
+import CaretDownIcon from '@icon/regular/caret-down.svg';
+import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
 import { cn } from '@ui/utils/classname';
-import { type Component, For, Show } from 'solid-js';
+import { type Component, Show } from 'solid-js';
 
 type ListPropertyValueProps = {
   property: Property;
@@ -90,7 +90,7 @@ const ListSelectValue: Component<{ property: Property }> = (props) => {
     if (value !== undefined) {
       return formatPropertyValue(props.property, value);
     }
-    return `No ${props.property.displayName}`;
+    return `None`;
   };
 
   return (
@@ -159,7 +159,7 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
             <>
               <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted opacity-50" />
               <span class="truncate flex-1 text-ink-extra-muted opacity-50">
-                No {props.property.displayName}
+                None
               </span>
             </>
           }
@@ -174,24 +174,13 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
               </span>
             }
           >
-            <div class="flex items-center gap-0.5 shrink-0">
-              <For each={entities().slice(0, 3)}>
-                {(entity) => (
-                  <UserIcon
-                    id={entity.entity_id}
-                    isDeleted={false}
-                    size="xs"
-                    suppressClick
-                    showTooltip={true}
-                  />
-                )}
-              </For>
-              <Show when={entities().length > 3}>
-                <div class="size-4 rounded-full text-ink text-xs flex items-center justify-center">
-                  +{entities().length - 3}
-                </div>
-              </Show>
-            </div>
+            <UserGroup
+              userIds={entities().map((e) => e.entity_id)}
+              size="sm"
+              suppressClick
+              showTooltip
+              maxUsers={2}
+            />
           </Show>
         </Show>
         <Show when={!isReadOnly()}>

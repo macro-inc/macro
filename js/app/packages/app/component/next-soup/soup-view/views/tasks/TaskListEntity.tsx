@@ -2,37 +2,25 @@ import '@entity/composed/ListEntity.css';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
-import type { DateValue } from '@core/util/date';
 import {
   getStreamState,
   subscribeToStreamState,
 } from '@service-connection/stream-events';
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui/utils/classname';
-import {
-  createSignal,
-  type JSX,
-  Match,
-  type Ref,
-  Show,
-  Switch,
-  useContext,
-} from 'solid-js';
+import { createSignal, type JSX, Match, Show, Switch, useContext } from 'solid-js';
 import {
   Entity,
   createEntityDraggable,
   filterNotDoneNotifications,
   filterValidNotifications,
   isWithNotification,
-  type ProjectEntity,
-  type SearchLocation,
-  type TaskEntity,
   unreadFilterFn,
   useIsShared,
-  type WithNotification,
 } from '@entity';
 import type { EntityRowConfig } from '@entity/extractors-notification';
 import {
+  type BaseListEntityProps,
   hasSearchContentHits,
   type LayoutProps,
   useCharacterCount,
@@ -41,27 +29,7 @@ import {
 import { NarrowLayout } from '@entity/composed/list-entity/narrow-layout';
 import { TaskGridLayout } from './task-grid-layout';
 
-interface TaskListEntityProps {
-  entity: WithNotification<TaskEntity>;
-  onClick?: (event: MouseEvent) => void;
-  timestamp?: DateValue | null;
-  ref?: Ref<HTMLDivElement>;
-  checked?: boolean;
-  highlighted?: boolean;
-  hovered?: boolean;
-  hideContentHits?: boolean;
-  onChecked?: (checked: boolean, shiftKey: boolean) => void;
-  onMouseMove?: () => void;
-  onProjectClick?: (
-    entity: ProjectEntity,
-    e: PointerEvent | MouseEvent
-  ) => void;
-  onContentHitClick?: (
-    e: PointerEvent | MouseEvent,
-    location?: SearchLocation
-  ) => void;
-  entityRowConfig?: EntityRowConfig;
-}
+type TaskListEntityProps = BaseListEntityProps;
 
 function MaybeEntityRow(props: {
   entityId: string;

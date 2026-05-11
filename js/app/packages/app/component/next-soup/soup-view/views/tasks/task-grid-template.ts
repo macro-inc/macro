@@ -28,7 +28,7 @@ export const TASK_GRID_COLUMNS = [
     dataType: DataType.ENTITY,
     isMultiSelect: true,
     specificEntityType: EntityType.USER,
-    width: 'minmax(9rem, 9rem)',
+    width: '6rem',
   },
 ] as const;
 
