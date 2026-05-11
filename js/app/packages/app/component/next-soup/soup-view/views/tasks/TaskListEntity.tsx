@@ -8,7 +8,14 @@ import {
 } from '@service-connection/stream-events';
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui/utils/classname';
-import { createSignal, type JSX, Match, Show, Switch, useContext } from 'solid-js';
+import {
+  createSignal,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+  useContext,
+} from 'solid-js';
 import {
   Entity,
   createEntityDraggable,

@@ -905,9 +905,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   </Match>
                   <Match when={rows().length}>
                     <ListLayoutProvider ref={localEntityListRef}>
-                                          <Show when={currentView() === 'tasks' && !isMobile()}>
-                                            <ResponsiveTaskListHeader class="shrink-0" />
-                                          </Show>
+                      <Show when={currentView() === 'tasks' && !isMobile()}>
+                        <ResponsiveTaskListHeader class="shrink-0" />
+                      </Show>
                       <EntityRowProvider
                         container={localEntityListRef}
                         canSwipeLeft={(entityId) => {

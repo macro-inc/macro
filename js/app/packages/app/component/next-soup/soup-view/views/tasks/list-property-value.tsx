@@ -166,7 +166,9 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
           fallback={
             <>
               <CircleDashedEmpty class="size-3 shrink-0" />
-              <span class="truncate flex-1 @max-[840px]/uList:hidden">None</span>
+              <span class="truncate flex-1 @max-[840px]/uList:hidden">
+                None
+              </span>
             </>
           }
         >
@@ -174,10 +176,10 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
             when={isUser()}
             fallback={
               <span class="truncate flex-1 @max-[840px]/uList:hidden">
-                  {entities().length === 1
-                    ? '1 item'
-                    : `${entities().length} items`}
-                </span>
+                {entities().length === 1
+                  ? '1 item'
+                  : `${entities().length} items`}
+              </span>
             }
           >
             {/* Wide mode: show up to 2 users. Narrow mode: show 1 user */}

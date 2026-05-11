@@ -67,7 +67,10 @@ export function TaskListHeader(props: { class?: string }) {
             {/* Wide: show label, Narrow: hide */}
             <span class="truncate @max-[840px]/uList:hidden">{col.label}</span>
             {/* Narrow: show icon with tooltip */}
-            <Tooltip tooltip={col.label} class="hidden @max-[840px]/uList:flex @max-[840px]/uList:px-1.5">
+            <Tooltip
+              tooltip={col.label}
+              class="hidden @max-[840px]/uList:flex @max-[840px]/uList:px-1.5"
+            >
               {COLUMN_ICONS[col.id]?.()}
             </Tooltip>
           </div>

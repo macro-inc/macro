@@ -103,15 +103,15 @@ export function TaskGridLayout(props: LayoutProps) {
       saveHandler={saveHandler}
     >
       <Entity.Layout
-              class={cn(
-                'task-grid-row w-full min-h-[inherit] items-center text-sm px-2',
-                'gap-2 grid grid-rows-[1fr]'
-              )}
-              style={{
-                'grid-template-columns': TASK_GRID_TEMPLATE_COLUMNS,
-                'grid-template-areas': TASK_GRID_TEMPLATE_AREAS,
-              }}
-            >
+        class={cn(
+          'task-grid-row w-full min-h-[inherit] items-center text-sm px-2',
+          'gap-2 grid grid-rows-[1fr]'
+        )}
+        style={{
+          'grid-template-columns': TASK_GRID_TEMPLATE_COLUMNS,
+          'grid-template-areas': TASK_GRID_TEMPLATE_AREAS,
+        }}
+      >
         <Entity.Slot placement="indicator" class="relative size-full group">
           <div class="absolute inset-0 grid place-items-center group-hover:opacity-0">
             <UnreadIndicator active={props.unread} />
