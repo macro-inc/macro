@@ -157,22 +157,6 @@ export function ChannelThread(props: ThreadProps) {
   const [replyListHandle, setReplyListHandle] =
     createSignal<ThreadReplyListHandle>();
 
-  // Tracks the reply ID this effect last selected, so we only clear that
-  // *auto-target* when the target goes away — a click-driven manual selection
-  // (`selectReply`) won't be wiped by unrelated reruns of this effect (e.g.
-  // when `loadedReplies` / `displayReplies` / `replyListHandle` / `isExpanded`
-  // change but `targetReplyId` is unrelated).
-  let autoSelectedReplyId: string | undefined;
-  const clearIfAutoSelected = () => {
-    if (
-      autoSelectedReplyId &&
-      replySelection.selectedId() === autoSelectedReplyId
-    ) {
-      replySelection.clear();
-    }
-    autoSelectedReplyId = undefined;
-  };
-
   createEffect(
     on(
       [
@@ -192,7 +176,7 @@ export function ChannelThread(props: ThreadProps) {
         handle,
       ]) => {
         if (!targetReplyId) {
-          clearIfAutoSelected();
+          if (replySelection.selectedId()) replySelection.clear();
           return;
         }
         if (!canScroll) return;
@@ -201,13 +185,12 @@ export function ChannelThread(props: ThreadProps) {
           (reply) => reply.id === targetReplyId
         );
         if (targetReplyIndex === -1) {
-          clearIfAutoSelected();
+          if (replySelection.selectedId()) replySelection.clear();
           return;
         }
 
         props.onSelectMessage?.(props.data().id);
         replySelection.select(targetReplyId);
-        autoSelectedReplyId = targetReplyId;
 
         if (!isExpanded) {
           const renderedTargetReplyIndex = renderedReplies.findIndex(

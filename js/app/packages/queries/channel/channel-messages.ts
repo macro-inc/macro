@@ -743,13 +743,13 @@ export function createMessageIndex(
   const [messageIndex, setMessageIndex] = createStore(buildIndex());
 
   createEffect(
-    on(data, (rawData) => {
-      // The underlying query can briefly emit undefined data during a refetch.
-      // Preserve the previous index for that transient state only — a resolved
-      // empty payload (channel really has no messages, last one deleted, etc.)
-      // should still reconcile through.
-      if (!rawData && messageIndex.items.length > 0) return;
-      setMessageIndex(reconcile(buildIndex()));
+    on(data, () => {
+      const next = buildIndex();
+      // The underlying query can briefly emit undefined data during a refetch
+      if (next.items.length === 0 && messageIndex.items.length > 0) {
+        return;
+      }
+      setMessageIndex(reconcile(next));
     })
   );
 
