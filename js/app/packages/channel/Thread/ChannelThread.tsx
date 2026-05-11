@@ -73,10 +73,7 @@ export function ChannelThread(props: ThreadProps) {
     keys: () => activeReplies().map((r) => r.id),
   });
 
-  // Clear the local reply selection when the channel-level selection moves
-  // away from this thread (e.g., user presses arrow keys after selecting a
-  // reply). Without this, the reply stays highlighted alongside the new
-  // selection.
+  // Clears the local reply selection when the channel-level selection moves away
   createEffect(
     on(
       () => props.selectedMessageId?.(),
@@ -187,8 +184,7 @@ export function ChannelThread(props: ThreadProps) {
     )
   );
 
-  // Within-mount guard: `targetReplyId` clearing handles re-fire across
-  // mounts; this stops noise re-runs from re-scrolling the same target.
+  // this stops re-scrolling to the same target
   let lastScrolledReplyId: string | undefined;
   createEffect(
     on(
