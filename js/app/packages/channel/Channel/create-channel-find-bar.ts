@@ -55,8 +55,8 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
     if (!submittedQuery()) return [];
     // While a new submitted-query is in flight, ignore the placeholder data
     // from the previous query so we don't auto-jump to a stale result.
-    // (`fetchNextPage` doesn't trigger placeholder mode — same queryKey.)
-    if (searchQuery.isPlaceholderData) return [];
+    if (searchQuery.isFetching) return [];
+    // NOTE: this guard prevents the Channel from blanking while the query is pending
     if (!searchQuery.isSuccess) return [];
     const data = searchQuery.data;
     if (!data) return [];
@@ -105,24 +105,9 @@ export function createChannelFindBar(options: CreateChannelFindBarOptions) {
   const next = () => {
     const rs = results();
     if (rs.length === 0) return;
-    if (activeIndex() < rs.length) {
-      const i = activeIndex() + 1;
-      setActiveIndex(i);
-      goToResult(rs[i - 1]);
-      return;
-    }
-    // At the end of the loaded results — fetch the next page if available.
-    // The `on(results)` effect below will navigate to the new tail item once
-    // the fetch lands. If no next page, wrap.
-    if (searchQuery.hasNextPage) {
-      if (!searchQuery.isFetchingNextPage) {
-        setActiveIndex(rs.length + 1);
-        searchQuery.fetchNextPage();
-      }
-      return;
-    }
-    setActiveIndex(1);
-    goToResult(rs[0]);
+    const i = activeIndex() >= rs.length ? 1 : activeIndex() + 1;
+    setActiveIndex(i);
+    goToResult(rs[i - 1]);
   };
 
   const previous = () => {
