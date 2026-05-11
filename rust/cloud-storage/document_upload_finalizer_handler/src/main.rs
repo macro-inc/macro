@@ -7,6 +7,7 @@ use aws_lambda_events::event::eventbridge::EventBridgeEvent;
 use documents::domain::models::DocumentError;
 use documents::domain::ports::DocumentRepo;
 use documents::domain::upload_finalize::{RepoUploadFinalizePort, UploadedDocumentFinalizer};
+use documents::outbound::markdown_init::LexicalSyncMarkdownInitializer;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use lambda_runtime::{Error, LambdaEvent, run, service_fn, tracing};
 use lexical_client::LexicalClient;
@@ -140,11 +141,9 @@ async fn process_object_created(context: &AppContext, key: &str) -> Result<(), E
     };
 
     let port = RepoUploadFinalizePort::new(context.repo.clone());
-    let finalizer = UploadedDocumentFinalizer::new(
-        &port,
-        &context.lexical_client,
-        &context.sync_service_client,
-    );
+    let markdown_initializer =
+        LexicalSyncMarkdownInitializer::new(&context.lexical_client, &context.sync_service_client);
+    let finalizer = UploadedDocumentFinalizer::new(&port, &markdown_initializer);
 
     match finalizer
         .finalize_uploaded_document(&document_context, markdown.as_deref())

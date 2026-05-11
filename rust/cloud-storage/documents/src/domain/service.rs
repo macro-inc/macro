@@ -362,6 +362,24 @@ impl<
     Eam: EntityAccessManagementService,
 > DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam>
 {
+    async fn create_document(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        args: CreateDocumentRepoArgs,
+        job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        <Self as DocumentService>::create_document(self, user_id, args, job_id).await
+    }
+
+    async fn handle_task_properties(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
+        <Self as DocumentService>::handle_task_properties(self, user_id, document_id, request).await
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), DocumentError> {
         self.repo
@@ -1140,24 +1158,24 @@ impl<
         plain_user_id: String,
         request: CreateTaskRequest,
     ) -> Result<CreateTaskResponse, DocumentError> {
-        let response_data = self
-            .create_document(
-                user_id.clone(),
-                CreateDocumentRepoArgs {
-                    id: None,
-                    sha: EMPTY_SHA256.to_string(),
-                    document_name: request.task_name.clone(),
-                    user_id: user_id.clone(),
-                    file_type: Some(FileType::Md),
-                    project_id: request.project_id,
-                    email_attachment_id: None,
-                    created_at: None,
-                    is_task: true,
-                    skip_history: false,
-                },
-                None,
-            )
-            .await?;
+        let response_data = <Self as DocumentService>::create_document(
+            self,
+            user_id.clone(),
+            CreateDocumentRepoArgs {
+                id: None,
+                sha: EMPTY_SHA256.to_string(),
+                document_name: request.task_name.clone(),
+                user_id: user_id.clone(),
+                file_type: Some(FileType::Md),
+                project_id: request.project_id,
+                email_attachment_id: None,
+                created_at: None,
+                is_task: true,
+                skip_history: false,
+            },
+            None,
+        )
+        .await?;
 
         let document_id = response_data
             .document_response
@@ -1166,16 +1184,20 @@ impl<
             .document_id
             .clone();
 
-        let _ = self
-            .handle_task_properties(user_id, &document_id, &request)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(
-                    error=?e,
-                    document_id=?document_id,
-                    "failed to assign task properties",
-                );
-            });
+        let _ = <Self as DocumentService>::handle_task_properties(
+            self,
+            user_id,
+            &document_id,
+            &request,
+        )
+        .await
+        .inspect_err(|e| {
+            tracing::error!(
+                error=?e,
+                document_id=?document_id,
+                "failed to assign task properties",
+            );
+        });
 
         Ok(CreateTaskResponse { document_id })
     }

@@ -2,14 +2,12 @@
 
 use std::future::Future;
 
-use lexical_client::LexicalClient;
 use model::document::{DocumentBasic, FileType, FileTypeExt};
-use sync_service_client::SyncServiceClient;
 
 use super::content::{DocumentContent, DocumentContentState};
-use super::markdown_init::initialize_markdown_document;
 use super::models::DocumentError;
 use super::ports::DocumentRepo;
+use super::ports::markdown::MarkdownInitializationPort;
 
 /// Minimal document operations needed to finalize an uploaded object.
 pub trait UploadFinalizeDocumentPort: Send + Sync {
@@ -73,26 +71,21 @@ where
 }
 
 /// Finalizes uploaded document bytes once object storage reports them present.
-pub struct UploadedDocumentFinalizer<'a, P> {
+pub struct UploadedDocumentFinalizer<'a, P, M> {
     document_port: &'a P,
-    lexical_client: &'a LexicalClient,
-    sync_service_client: &'a SyncServiceClient,
+    markdown_initializer: &'a M,
 }
 
-impl<'a, P> UploadedDocumentFinalizer<'a, P>
+impl<'a, P, M> UploadedDocumentFinalizer<'a, P, M>
 where
     P: UploadFinalizeDocumentPort,
+    M: MarkdownInitializationPort,
 {
     /// Construct a finalizer.
-    pub fn new(
-        document_port: &'a P,
-        lexical_client: &'a LexicalClient,
-        sync_service_client: &'a SyncServiceClient,
-    ) -> Self {
+    pub fn new(document_port: &'a P, markdown_initializer: &'a M) -> Self {
         Self {
             document_port,
-            lexical_client,
-            sync_service_client,
+            markdown_initializer,
         }
     }
 
@@ -128,17 +121,14 @@ where
                 )
             })?;
 
-            match initialize_markdown_document(
-                self.lexical_client,
-                self.sync_service_client,
-                &document_context.document_id,
-                markdown,
-            )
-            .await
+            match self
+                .markdown_initializer
+                .initialize_existing_markdown(&document_context.document_id, markdown)
+                .await
             {
                 Ok(()) => {}
                 Err(error) if sync_snapshot_already_exists(&error) => {}
-                Err(error) => return Err(DocumentError::Internal(error)),
+                Err(error) => return Err(error),
             }
         }
 
@@ -148,6 +138,6 @@ where
     }
 }
 
-fn sync_snapshot_already_exists(error: &anyhow::Error) -> bool {
+fn sync_snapshot_already_exists(error: &DocumentError) -> bool {
     error.to_string().contains("snapshot already exists")
 }
