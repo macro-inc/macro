@@ -1,8 +1,10 @@
 import { GroupDropdown } from '@app/component/next-soup/soup-view/filters-bar/group-dropdown';
 import {
   DEFAULT_GROUP_OPTIONS,
+  EMAIL_GROUP_OPTIONS,
   type GroupOption,
   type GroupOptionId,
+  INBOX_GROUP_OPTIONS,
   TASK_GROUP_OPTIONS,
 } from '@app/component/next-soup/soup-view/group-options';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
@@ -54,10 +56,10 @@ export const SoupViewContextGroup = () => {
         <TasksGroup {...openProps()} />
       </Match>
       <Match when={isComponentListView('inbox')}>
-        <DefaultGroup {...openProps()} />
+        <InboxGroup {...openProps()} />
       </Match>
       <Match when={isComponentListView('mail')}>
-        <DefaultGroup {...openProps()} />
+        <MailGroup {...openProps()} />
       </Match>
       <Match when={isComponentListView('documents')}>
         <DefaultGroup {...openProps()} />
@@ -105,6 +107,34 @@ const DefaultGroup = (props: GroupOpenProps) => {
 
 const TasksGroup = (props: GroupOpenProps) => {
   const group = useGroupDropdown(TASK_GROUP_OPTIONS);
+
+  return (
+    <GroupDropdown
+      value={group.value}
+      onChange={group.onChange}
+      options={group.options}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+    />
+  );
+};
+
+const MailGroup = (props: GroupOpenProps) => {
+  const group = useGroupDropdown(EMAIL_GROUP_OPTIONS);
+
+  return (
+    <GroupDropdown
+      value={group.value}
+      onChange={group.onChange}
+      options={group.options}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+    />
+  );
+};
+
+const InboxGroup = (props: GroupOpenProps) => {
+  const group = useGroupDropdown(INBOX_GROUP_OPTIONS);
 
   return (
     <GroupDropdown

@@ -32,3 +32,16 @@ export const TASK_GROUP_OPTIONS: GroupOption[] = [
   { value: 'project', label: 'Project' },
   { value: 'date', label: 'Date' },
 ];
+
+export const EMAIL_GROUP_OPTIONS: GroupOption[] = [
+  { value: 'none', label: 'None' },
+  { value: 'date', label: 'Date' },
+  { value: 'project', label: 'Project' },
+];
+
+export const INBOX_GROUP_OPTIONS: GroupOption[] = [
+  { value: 'none', label: 'None' },
+  { value: 'date', label: 'Date' },
+  { value: 'entity_type', label: 'Type' },
+  { value: 'project', label: 'Project' },
+];
