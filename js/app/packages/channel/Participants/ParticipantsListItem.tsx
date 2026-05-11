@@ -1,4 +1,4 @@
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';

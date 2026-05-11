@@ -1,5 +1,5 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@icon/regular/x.svg';
 import { Button, Layer } from '@ui';

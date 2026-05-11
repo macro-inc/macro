@@ -17,7 +17,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { DropdownMenuContent, MenuItem } from './Menu';
-import { Tooltip } from './Tooltip';
+import { Tooltip } from '@ui';
 
 export type DropdownPreset = {
   value: string;

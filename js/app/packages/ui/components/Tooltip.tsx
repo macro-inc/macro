@@ -1,29 +1,22 @@
-import type { HotkeyToken } from '@core/hotkey/tokens';
+import { createSignal, For, type JSX, mergeProps, type ParentProps, Show } from 'solid-js';
 import CorvuTooltip, { type FloatingOptions } from '@corvu/tooltip';
+import type { HotkeyToken } from '@core/hotkey/tokens';
+import { Hotkey } from '../../ui/components/Hotkey';
 import type { Placement } from '@floating-ui/dom';
 import { cn, Layer } from '@ui';
-import {
-  createSignal,
-  For,
-  type JSX,
-  mergeProps,
-  type ParentProps,
-  Show,
-} from 'solid-js';
-import { Hotkey } from '../../ui/components/Hotkey';
 
 const TOOLTIP_DELAY = 250;
 
 export type TooltipProps = ParentProps<{
   tooltip?: JSX.Element | ((close: () => void) => JSX.Element);
-  placement?: Placement;
-  floatingOptions?: FloatingOptions;
   ref?: (el: HTMLDivElement | HTMLSpanElement) => void;
-  class?: string;
+  floatingOptions?: FloatingOptions;
   delayOverride?: number;
+  placement?: Placement;
   spanMode?: boolean;
-  hide?: boolean;
   unstyled?: boolean;
+  class?: string;
+  hide?: boolean;
 }>;
 
 /**
@@ -40,24 +33,19 @@ export type TooltipProps = ParentProps<{
 export function Tooltip(props: TooltipProps) {
   props = mergeProps(
     {
-      placement: 'bottom' as Placement,
       floatingOptions: {
+        size: {padding: 16, fitViewPort: true },
+        shift: { padding: 16 },
+        boundary: 'viewport',
         offset: 12,
         flip: true,
-        shift: {
-          padding: 16,
-        },
-        size: {
-          padding: 16,
-          fitViewPort: true,
-        },
-        boundary: 'viewport',
       } as FloatingOptions,
+      placement: 'bottom' as Placement,
     },
     props
   );
 
-  const padding = () => {
+  function padding(){
     let padding = props.floatingOptions?.size?.padding;
     if (typeof padding === 'number') return padding;
     return 0;
@@ -66,39 +54,33 @@ export function Tooltip(props: TooltipProps) {
   const [open, setOpen] = createSignal(false);
   const close = () => setOpen(false);
 
-  const tooltipContent = () => {
-    if (typeof props.tooltip === 'function') {
-      return props.tooltip(close);
-    }
+  function tooltipContent(){
+    if (typeof props.tooltip === 'function') { return props.tooltip(close); }
     return props.tooltip;
   };
 
   return (
     <CorvuTooltip
-      open={open()}
-      onOpenChange={setOpen}
-      placement={props.placement}
-      floatingOptions={props.floatingOptions}
-      group={'tooltip-single-group'} // hardcoding implies we only allow one tooltip to be open at a time throughout app
-      openDelay={TOOLTIP_DELAY}
       closeDelay={props.delayOverride ?? TOOLTIP_DELAY}
+      floatingOptions={props.floatingOptions}
+      group={'tooltip-single-group'} /* only allow one open tooltip */
+      placement={props.placement}
+      openDelay={TOOLTIP_DELAY}
+      onOpenChange={setOpen}
+      open={open()}
     >
       <CorvuTooltip.Trigger
-        as={props.spanMode ? 'span' : 'div'}
-        ref={(el) => {
-          props.ref?.(el);
-        }}
         class={cn('inline-flex items-center', props.class)}
+        as={props.spanMode ? 'span' : 'div'}
+        ref={(el) => { props.ref?.(el); }}
       >
         {props.children}
       </CorvuTooltip.Trigger>
       <CorvuTooltip.Portal>
         <CorvuTooltip.Content
+          style={{ 'max-width': `calc(100vw - ${2 * padding()}px)` }}
           hidden={props.hide}
           class="z-tool-tip"
-          style={{
-            'max-width': `calc(100vw - ${2 * padding()}px)`,
-          }}
         >
           <Show when={!props.unstyled} fallback={tooltipContent()}>
             <Layer depth={3}>
@@ -115,7 +97,7 @@ export function Tooltip(props: TooltipProps) {
   );
 }
 
-export const NullTooltip = (props: ParentProps<{}>) => {
+export function NullTooltip(props: ParentProps<{}>){
   return (
     <CorvuTooltip group={'tooltip-single-group'} openDelay={0}>
       <CorvuTooltip.Trigger as="div">{props.children}</CorvuTooltip.Trigger>
@@ -132,10 +114,10 @@ export type HotkeySequenceStep = {
 };
 
 export type LabelAndHotKeyProps = {
-  label: string;
+  hotkeySequence?: HotkeySequenceStep[];
   hotkeyToken?: HotkeyToken;
   shortcut?: string;
-  hotkeySequence?: HotkeySequenceStep[];
+  label: string;
 };
 
 export function LabelAndHotKey(props: LabelAndHotKeyProps) {

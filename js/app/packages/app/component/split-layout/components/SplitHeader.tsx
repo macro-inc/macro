@@ -1,5 +1,5 @@
 import { isListViewID } from '@app/constants/list-views';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import {
   ENABLE_PREVIEW,
   ENABLE_PROJECT_VIEW_PREVIEW,

@@ -1,4 +1,4 @@
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import { useAiDataConsent } from '@core/context/user';
 import CloseIcon from '@icon/regular/x.svg';
 import { invalidateUserInfo } from '@queries/auth/user-info';

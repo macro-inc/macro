@@ -3,7 +3,7 @@ import {
   type EntityWithValidIcon,
 } from '@core/component/EntityIcon';
 import { OldMenu } from '@core/component/OldMenu';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import { blockAcceptedFileExtensionSet } from '@core/constant/allBlocks';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';

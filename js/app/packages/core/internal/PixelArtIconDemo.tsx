@@ -1,6 +1,6 @@
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { DebugSlider } from '@core/component/Slider';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import { Bar } from '@core/component/TopBar/Bar';
 import clickOutside from '@core/directive/clickOutside';
 import Rotate from '@icon/regular/arrow-counter-clockwise.svg';

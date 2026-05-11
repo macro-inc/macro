@@ -1,4 +1,4 @@
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
 import { Popover } from '@kobalte/core/popover';

@@ -25,7 +25,7 @@ import {
   downloadImage as downloadImageAction,
 } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
-import { LabelAndHotKey } from './Tooltip';
+import { LabelAndHotKey } from '@ui';
 import { Zoompinch, type ZoompinchHandle } from './Zoompinch';
 
 const SpinnerIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (p) => (

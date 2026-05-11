@@ -12,7 +12,7 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/Menu';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import ArrowLineDown from '@icon/regular/arrow-line-down.svg';
 import ArrowLineLeft from '@icon/regular/arrow-line-left.svg';
 import ArrowLineRight from '@icon/regular/arrow-line-right.svg';

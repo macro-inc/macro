@@ -1,7 +1,7 @@
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { useEmail, useUserId } from '@core/context/user';

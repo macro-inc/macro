@@ -6,7 +6,7 @@ import {
   DO_SEARCH_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import type { FloatingStyle } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { IS_MAC } from '@core/constant/isMac';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { useCanEdit } from '@core/signal/permissions';

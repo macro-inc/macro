@@ -1,7 +1,7 @@
 import { UnfurlLink } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import clickOutside from '@core/directive/clickOutside';
 import { useUnfurl } from '@core/signal/unfurl';
 import NewTab from '@icon/regular/arrow-square-out.svg';

@@ -1,6 +1,6 @@
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useUserContext } from '@core/context/user';
 import { Show } from 'solid-js';

@@ -5,7 +5,7 @@ import {
   showTabBarSignal,
 } from '@block-pdf/signal/placeables';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import {
   useCanComment,
   useCanEdit,

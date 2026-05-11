@@ -15,7 +15,7 @@ import {
   MenuItem,
   SubTrigger,
 } from '@core/component/Menu';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import ThreeDots from '@icon/bold/dots-three-bold.svg';

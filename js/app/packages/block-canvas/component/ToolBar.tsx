@@ -7,7 +7,7 @@ import { useToolManager } from '@block-canvas/signal/toolManager';
 import { useIsNestedBlock } from '@core/block';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import {
   ENABLE_CANVAS_FILES,
   ENABLE_CANVAS_IMAGES,

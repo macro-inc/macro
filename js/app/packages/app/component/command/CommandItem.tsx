@@ -1,5 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import type { HotkeySequenceStep } from '@core/component/Tooltip';
+import type { HotkeySequenceStep } from '@ui';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { Entity, type EntityData } from '@entity';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';

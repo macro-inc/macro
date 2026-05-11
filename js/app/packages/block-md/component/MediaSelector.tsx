@@ -1,7 +1,7 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { INSERT_MEDIA_COMMAND } from '@core/component/LexicalMarkdown/plugins';
 import { DropdownMenuContent } from '@core/component/Menu';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import {
   blockAcceptsFileExtension,
   blockNameToFileExtensions,

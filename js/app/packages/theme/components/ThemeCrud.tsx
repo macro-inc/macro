@@ -1,7 +1,7 @@
 import { deleteTheme, exportTheme } from '../utils/themeUtils';
 import { userThemes } from '../signals/themeSignals';
 import { Button } from '@ui';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import IconClipboard from '@macro-icons/macro-clipboard.svg';
 import IconTrash from '@macro-icons/macro-trash.svg';

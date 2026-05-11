@@ -2,7 +2,7 @@ import type {
   SortOption,
   SystemSortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { LabelAndHotKey, Tooltip } from '@ui';
 import CheckIcon from '@icon/regular/check.svg';
 import SortIcon from '@phosphor-icons/core/regular/funnel-simple.svg?component-solid';
 import { Dropdown, Layer } from '@ui';

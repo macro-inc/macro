@@ -1,4 +1,4 @@
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import FolderIcon from '@icon/regular/folder-simple.svg';
 import { useProjectPreviewQuery } from '@queries/storage/project-preview';
 import { cn } from '@ui';

@@ -1,5 +1,5 @@
 import { LIST_VIEW_ID } from '@app/constants/list-views';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import SplitIcon from '@icon/regular/square-half.svg';

@@ -1,4 +1,4 @@
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import type { UserMentionDecoratorProps } from '@lexical-core';

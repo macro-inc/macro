@@ -1,5 +1,5 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import type { HotkeySequenceStep } from '@core/component/Tooltip';
+import type { HotkeySequenceStep } from '@ui';
 import {
   type Bucket,
   type EntityItem,

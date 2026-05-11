@@ -14,7 +14,7 @@ import { commsServiceClient } from '@service-comms/client';
 import { Avatar, type AvatarSize } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
-import { Tooltip } from './Tooltip';
+import { Tooltip } from '@ui';
 import { UserTooltip } from './UserTooltip';
 
 export type UserIconSize = AvatarSize;

@@ -8,7 +8,7 @@ import { commsServiceClient } from '@service-comms/client';
 import type { ItemType } from '@service-storage/client';
 import { createResource, Suspense } from 'solid-js';
 import { References } from './References';
-import { Tooltip } from './Tooltip';
+import { Tooltip } from '@ui';
 
 false && clickOutside;
 export const REFERENCES_DRAWER_ID = 'references';

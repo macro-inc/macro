@@ -1,4 +1,4 @@
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,

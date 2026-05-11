@@ -14,7 +14,7 @@ import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { LabelAndHotKey, Tooltip } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';

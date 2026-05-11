@@ -6,7 +6,7 @@ import {
   isArchiveType,
 } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
   useCanComment,

@@ -1,4 +1,5 @@
 /* components */
+export { Tooltip, TooltipWrapper, NullTooltip, LabelAndHotKey,  } from './components/Tooltip';
 export { SegmentedControl } from './components/SegmentedControl';
 export { TabbedControl } from './components/TabbedControl';
 export { Avatar, AvatarGroup } from './components/Avatar';
@@ -14,8 +15,10 @@ export { Layer } from './components/Layer';
 
 /* types */
 export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
+export type { HotkeySequenceStep } from './components/Tooltip';
 export type { ButtonProps } from './components/Button';
 export type { DialogProps } from './components/Dialog';
+
 
 /* utils */
 export { cn } from './utils/classname';

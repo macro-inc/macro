@@ -67,7 +67,7 @@ import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
 import { useItemPreviewData } from './ItemPreview';
-import { Tooltip } from './Tooltip';
+import { Tooltip } from '@ui';
 
 /**
  * Container for displaying mentions with optional collapsing

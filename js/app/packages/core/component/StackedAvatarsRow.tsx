@@ -10,7 +10,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { Tooltip } from './Tooltip';
+import { Tooltip } from '@ui';
 import type { UserIconProps } from './UserIcon';
 
 /** Same keys as {@link UserIconProps} `size` (aligned ring + overlap + overflow chip). */

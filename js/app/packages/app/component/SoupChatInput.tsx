@@ -10,7 +10,7 @@ import {
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';

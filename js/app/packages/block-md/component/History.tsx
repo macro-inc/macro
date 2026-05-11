@@ -20,7 +20,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { initializeEditorWithState } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';

@@ -1,4 +1,4 @@
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
 import { Button, cn } from '@ui';

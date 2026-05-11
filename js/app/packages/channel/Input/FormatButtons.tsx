@@ -2,7 +2,7 @@ import type {
   NodeTransformType,
   SelectionData,
 } from '@core/component/LexicalMarkdown/plugins';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import TextBoldIcon from '@icon/bold/text-b-bold.svg';
 import TextCodeIcon from '@icon/regular/code.svg';
 import ListBulletsIcon from '@icon/regular/list-bullets.svg';

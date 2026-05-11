@@ -7,7 +7,7 @@ import { vec2 } from '@block-canvas/util/vector2';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { DropdownMenuContent } from '@core/component/Menu';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import {
   blockAcceptsFileExtension,
   blockNameToFileExtensions,

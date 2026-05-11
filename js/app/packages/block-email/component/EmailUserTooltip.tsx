@@ -1,4 +1,4 @@
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { emailToMacroId } from '@core/user';
 import type { JSX } from 'solid-js';

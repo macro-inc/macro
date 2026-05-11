@@ -1,4 +1,4 @@
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { useEmail } from '@core/context/user';
 import type { DateValue } from '@core/util/date';
 import CaretDown from '@icon/regular/caret-down.svg';

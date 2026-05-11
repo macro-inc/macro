@@ -3,7 +3,7 @@ import { useSenderName } from '@app/component/app-sidebar/utils';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { compareDateDesc } from '@core/util/date';
 import { ContextMenu } from '@kobalte/core/context-menu';

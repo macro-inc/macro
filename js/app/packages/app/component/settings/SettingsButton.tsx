@@ -3,7 +3,7 @@ import { useSplitLayout } from "../split-layout/layout";
 import { Show } from "solid-js";
 import { Button } from "@ui";
 import { cn } from "@ui";
-import { LabelAndHotKey } from "@core/component/Tooltip";
+import { LabelAndHotKey } from "@ui";
 import { TOKENS } from "@core/hotkey/tokens";
 import IconGear from '@macro-icons/macro-gear.svg';
 

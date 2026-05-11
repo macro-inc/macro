@@ -34,7 +34,7 @@ function toTeamUserTier(tier: PaidPlanTier): TeamUserTier {
 }
 
 import { analytics } from '@app/lib/analytics/analytics';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 
 function ReviewPayContent() {
   return (

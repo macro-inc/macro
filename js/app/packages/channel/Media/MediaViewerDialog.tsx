@@ -1,5 +1,5 @@
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import * as stackingContext from '@core/constant/stackingContext';
 import { isMobile } from '@core/mobile/isMobile';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';

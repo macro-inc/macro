@@ -10,7 +10,7 @@ import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { Button } from '@ui';
 import { Dialog, Panel } from '@ui';
 import { cn } from '@ui';

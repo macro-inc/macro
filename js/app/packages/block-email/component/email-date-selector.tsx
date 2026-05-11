@@ -1,5 +1,5 @@
 import { DateSelector } from '@block-email/component/date-selector';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { isMobile } from '@core/mobile/isMobile';
 import IconX from '@icon/regular/x.svg';
 import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';

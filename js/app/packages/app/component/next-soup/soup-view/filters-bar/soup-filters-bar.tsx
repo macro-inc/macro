@@ -4,7 +4,7 @@ import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { LabelAndHotKey, Tooltip } from '@ui';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';

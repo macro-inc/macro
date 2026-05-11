@@ -1,5 +1,5 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import MacroIcon from '@macro-icons/macro-logo.svg';

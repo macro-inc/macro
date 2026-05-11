@@ -1,7 +1,7 @@
 import type { PaidPlanTier } from '@app/component/paywall/plans';
 import { TierSelect } from '@app/component/teams/TierSelect';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { ENABLE_TEAM_INVITE_TIERS_OVERRIDE } from '@core/constant/featureFlags';
 import { useEmail } from '@core/context/user';
 import CheckIcon from '@icon/regular/check.svg';

@@ -1,4 +1,4 @@
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import clickOutside from '@core/directive/clickOutside';
 import { useCanEdit } from '@core/signal/permissions';
 import Check from '@icon/regular/check-circle.svg';

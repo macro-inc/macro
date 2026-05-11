@@ -19,7 +19,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { registerHotkey } from '@core/hotkey/hotkeys';

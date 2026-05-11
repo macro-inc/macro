@@ -1,6 +1,6 @@
 import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
 import { Button } from '@ui';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import { LabelAndHotKey } from '@ui';
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import { invertTheme, saveTheme } from '../utils/themeUtils';
 import { randomizeTheme } from './ThemeEditorBasic';

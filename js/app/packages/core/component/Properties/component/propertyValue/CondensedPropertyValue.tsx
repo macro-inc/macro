@@ -1,5 +1,5 @@
 import { getSelectValues } from '@core/component/Properties/utils';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
 import { cn } from '@ui';
 import type { Component, JSX } from 'solid-js';

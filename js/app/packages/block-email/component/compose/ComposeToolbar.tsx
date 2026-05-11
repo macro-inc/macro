@@ -4,7 +4,7 @@ import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { fileSelector } from '@core/directive/fileSelector';
 import { isMobile } from '@core/mobile/isMobile';

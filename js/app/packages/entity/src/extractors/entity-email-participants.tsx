@@ -1,7 +1,7 @@
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { useEmail } from '@core/context/user';
 import { emailToMacroId, useDisplayName } from '@core/user';

@@ -87,7 +87,7 @@ import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
-import { Tooltip } from '../Tooltip';
+import { Tooltip } from '@ui';
 import { ScrollIndicators } from '../VerticalScrollIndicators';
 import { openLoginModal } from './LoginButton';
 

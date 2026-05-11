@@ -2,7 +2,7 @@ import { formatCallDuration } from '@block-call/utils';
 import { UserGroup } from '@core/component/Properties/component/propertyValue/UserGroup';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
 import type { EntityReference } from '@core/component/Properties/types';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { matches } from '@core/util/match';
 import UserCircleIcon from '@icon/regular/user-circle.svg';

@@ -5,7 +5,7 @@ import type { Model, ToolSet } from '@core/component/AI/types';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { LabelAndHotKey, Tooltip } from '@ui';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
