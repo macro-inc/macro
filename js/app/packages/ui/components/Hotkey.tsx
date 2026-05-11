@@ -3,6 +3,7 @@ import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { Theme } from 'core/component/Themes';
 import { IS_MAC } from '@core/constant/isMac';
+import { cn } from '@ui';
 
 export const modifierMap = {
   shift: IS_MAC ? '⇧' : 'Shift',
@@ -105,6 +106,7 @@ interface HotkeyProps extends JSX.HTMLAttributes<HTMLDivElement> {
   token?: HotkeyToken;
   showPlus?: boolean;
   shortcut?: string;
+  theme?: Theme;
 }
 
 /**
@@ -121,6 +123,8 @@ export function Hotkey(props: HotkeyProps){
     'shortcut',
     'showPlus',
     'token',
+    'theme',
+    'class',
   ]);
   const tokenShortcut = createMemo(() => { return local.token ? getPrettyHotkeyStringByToken(local.token) : undefined });
 
@@ -154,7 +158,15 @@ export function Hotkey(props: HotkeyProps){
 
   return (
     <Show when={hasContent()}>
-      <div {...rest}>
+      <div
+        {...rest}
+        class={cn(
+          'inline-flex items-center gap-1',
+          local.theme && 'rounded-sm px-1.5 py-px text-xxs',
+          local.theme && hotkeyStyles[local.theme]?.hotkey,
+          local.class
+        )}
+      >
         <For each={hotkey().modifiers}>
           {(mod) => (
             <>
