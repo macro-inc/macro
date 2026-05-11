@@ -26,6 +26,34 @@ pub enum ParticipantRole {
     Member,
 }
 
+/// The role a user has within a team.
+///
+/// Ordered least to most privileged so comparisons reflect access strength.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum TeamRole {
+    /// Regular team member.
+    #[default]
+    Member,
+    /// Team administrator.
+    Admin,
+    /// Team owner with full control.
+    Owner,
+}
+
+/// Team member role.
+#[derive(Debug)]
+pub struct MemberTeamRole;
+
+/// Team administrator role.
+#[derive(Debug)]
+pub struct AdminTeamRole;
+
+/// Team owner role with full control.
+#[derive(Debug)]
+pub struct OwnerTeamRole;
+
 /// Channel owner role with full control
 #[derive(Debug)]
 pub struct OwnerParticipantRole;
@@ -62,6 +90,11 @@ pub enum EntityPermission {
         /// The role the user has in the channel.
         role: ParticipantRole,
     },
+    /// Permission for team-based entities.
+    TeamRole {
+        /// The role the user has in the team.
+        role: TeamRole,
+    },
 }
 
 impl EntityPermission {
@@ -93,6 +126,14 @@ impl EntityPermission {
                 },
                 ParticipantRole::Member
             )
+        )
+    }
+
+    /// Returns whether this permission grants at least the requested team role.
+    pub fn allows_team_role(&self, required: TeamRole) -> bool {
+        matches!(
+            self,
+            EntityPermission::TeamRole { role } if *role >= required
         )
     }
 
@@ -142,6 +183,33 @@ impl RequiredPermission for MemberParticipantRole {
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_participant_role(ParticipantRole::Member)
     }
+}
+
+impl RequiredPermission for MemberTeamRole {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        permission.allows_team_role(TeamRole::Member)
+    }
+}
+
+impl RequiredPermission for AdminTeamRole {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        permission.allows_team_role(TeamRole::Admin)
+    }
+}
+
+impl RequiredPermission for OwnerTeamRole {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        permission.allows_team_role(TeamRole::Owner)
+    }
+}
+
+/// The team a user belongs to and the role they hold in it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UserTeamInfo {
+    /// The team's id.
+    pub team_id: Uuid,
+    /// The user's role within the team.
+    pub role: TeamRole,
 }
 
 /// Result of resolving a user's role in a channel.
