@@ -569,13 +569,79 @@ impl CallRepository for PgCallRepo {
         .execute(tx.as_mut())
         .await?;
 
-        // Copy transcripts to call_record_transcripts.
+        // Copy transcripts to call_record_transcripts, rolling up consecutive
+        // segments that share both speaker_id and diarized_speaker_id when the
+        // gap between them (next.started_at - prev.ended_at) is <= 5 seconds.
+        // voice_id must also match so the propagated value is unambiguous.
         sqlx::query!(
             r#"
-            INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num, voice_id)
-            SELECT $1, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num, voice_id
-            FROM call_transcripts
-            WHERE call_id = $2
+            WITH ordered AS (
+                SELECT
+                    segment_id,
+                    speaker_id,
+                    diarized_speaker_id,
+                    voice_id,
+                    content,
+                    started_at,
+                    ended_at,
+                    sequence_num,
+                    LAG(speaker_id) OVER w AS prev_speaker_id,
+                    LAG(diarized_speaker_id) OVER w AS prev_diarized_speaker_id,
+                    LAG(voice_id) OVER w AS prev_voice_id,
+                    LAG(ended_at) OVER w AS prev_ended_at
+                FROM call_transcripts
+                WHERE call_id = $2
+                WINDOW w AS (ORDER BY sequence_num)
+            ),
+            marked AS (
+                SELECT
+                    segment_id,
+                    speaker_id,
+                    diarized_speaker_id,
+                    voice_id,
+                    content,
+                    started_at,
+                    ended_at,
+                    sequence_num,
+                    CASE
+                        WHEN prev_speaker_id IS NOT NULL
+                            AND speaker_id = prev_speaker_id
+                            AND diarized_speaker_id IS NOT DISTINCT FROM prev_diarized_speaker_id
+                            AND voice_id IS NOT DISTINCT FROM prev_voice_id
+                            AND prev_ended_at IS NOT NULL
+                            AND started_at - prev_ended_at <= INTERVAL '5 seconds'
+                        THEN 0
+                        ELSE 1
+                    END AS is_new_group
+                FROM ordered
+            ),
+            grouped AS (
+                SELECT
+                    segment_id,
+                    speaker_id,
+                    diarized_speaker_id,
+                    voice_id,
+                    content,
+                    started_at,
+                    ended_at,
+                    sequence_num,
+                    SUM(is_new_group) OVER (ORDER BY sequence_num) AS group_id
+                FROM marked
+            )
+            INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, diarized_speaker_id, voice_id, content, started_at, ended_at, sequence_num)
+            SELECT
+                $1,
+                MIN(segment_id),
+                MIN(speaker_id),
+                MIN(diarized_speaker_id),
+                -- voice_id is UUID (no MIN); all rows in a group share the same value via IS NOT DISTINCT FROM.
+                (array_agg(voice_id ORDER BY sequence_num))[1],
+                STRING_AGG(content, ' ' ORDER BY sequence_num),
+                MIN(started_at),
+                MAX(ended_at),
+                MIN(sequence_num)
+            FROM grouped
+            GROUP BY group_id
             "#,
             call_id,
             call_id,

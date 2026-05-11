@@ -6,7 +6,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use filter_ast::Expr;
 use item_filters::ast::{LiteralTree, call::CallLiteral};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -802,6 +802,126 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
     .fetch_one(&pool)
     .await?;
     assert_eq!(ephemeral, 0);
+
+    Ok(())
+}
+
+// -- archive_call rolls up consecutive same-speaker transcripts --------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn archive_call_rolls_up_consecutive_same_speaker_transcripts(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let t0 = Utc::now();
+
+    // Row 1: USER_A / spk-a0, ends at t0+3s.
+    // Row 2: USER_A / spk-a0, starts at t0+5s (gap=2s) -> merges with row 1.
+    // Row 3: USER_A / spk-a0, starts at t0+20s (gap=12s) -> new group.
+    // Row 4: USER_B / spk-b0 -> new group (different speaker).
+    // Row 5: USER_B / spk-b1 -> new group (different diarized_speaker_id).
+    let segs = [
+        (
+            "seg-1",
+            USER_A.to_string(),
+            Some("spk-a0"),
+            "hello",
+            t0,
+            t0 + Duration::seconds(3),
+        ),
+        (
+            "seg-2",
+            USER_A.to_string(),
+            Some("spk-a0"),
+            "world",
+            t0 + Duration::seconds(5),
+            t0 + Duration::seconds(8),
+        ),
+        (
+            "seg-3",
+            USER_A.to_string(),
+            Some("spk-a0"),
+            "distant",
+            t0 + Duration::seconds(20),
+            t0 + Duration::seconds(22),
+        ),
+        (
+            "seg-4",
+            USER_B.to_string(),
+            Some("spk-b0"),
+            "hey",
+            t0 + Duration::seconds(22),
+            t0 + Duration::seconds(24),
+        ),
+        (
+            "seg-5",
+            USER_B.to_string(),
+            Some("spk-b1"),
+            "other",
+            t0 + Duration::seconds(24),
+            t0 + Duration::seconds(26),
+        ),
+    ];
+    for (segment_id, speaker_id, diar, content, started_at, ended_at) in segs {
+        repo.create_transcript_segment(
+            &CALL1,
+            &TranscriptSegmentRequest {
+                segment_id: segment_id.to_string(),
+                speaker_id,
+                diarized_speaker_id: diar.map(str::to_string),
+                content: content.to_string(),
+                started_at,
+                ended_at: Some(ended_at),
+                is_final: true,
+                stream_started_at: None,
+                embedding: None,
+            },
+            None,
+        )
+        .await?;
+    }
+
+    let record_id = repo.archive_call(&CALL1).await?;
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT speaker_id, diarized_speaker_id, content, started_at, ended_at
+        FROM call_record_transcripts
+        WHERE call_record_id = $1
+        ORDER BY sequence_num ASC
+        "#,
+        record_id,
+    )
+    .fetch_all(&pool)
+    .await?;
+
+    // 5 segments collapse into 4 rolled-up rows.
+    assert_eq!(rows.len(), 4);
+
+    // Group 1: seg-1 + seg-2 merged.
+    assert_eq!(rows[0].speaker_id, USER_A.as_ref());
+    assert_eq!(rows[0].diarized_speaker_id.as_deref(), Some("spk-a0"));
+    assert_eq!(rows[0].content, "hello world");
+    assert_eq!(rows[0].started_at, t0);
+    assert_eq!(rows[0].ended_at, Some(t0 + Duration::seconds(8)));
+
+    // Group 2: seg-3 alone (gap from seg-2 was 12s).
+    assert_eq!(rows[1].speaker_id, USER_A.as_ref());
+    assert_eq!(rows[1].diarized_speaker_id.as_deref(), Some("spk-a0"));
+    assert_eq!(rows[1].content, "distant");
+
+    // Group 3: seg-4 alone (different speaker_id).
+    assert_eq!(rows[2].speaker_id, USER_B.as_ref());
+    assert_eq!(rows[2].diarized_speaker_id.as_deref(), Some("spk-b0"));
+    assert_eq!(rows[2].content, "hey");
+
+    // Group 4: seg-5 alone (different diarized_speaker_id).
+    assert_eq!(rows[3].speaker_id, USER_B.as_ref());
+    assert_eq!(rows[3].diarized_speaker_id.as_deref(), Some("spk-b1"));
+    assert_eq!(rows[3].content, "other");
 
     Ok(())
 }
