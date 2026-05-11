@@ -107,13 +107,6 @@ export function channelMessagesQueryOptions(
       }
       return failureCount < 1;
     },
-    placeholderData: (
-      prev: ChannelMessagesData | undefined,
-      prevQuery: { queryKey: ChannelMessagesQueryKey } | undefined
-    ) => {
-      const prevChannelId = prevQuery?.queryKey[2];
-      return prev && prevChannelId === channelId ? prev : undefined;
-    },
   };
 }
 
