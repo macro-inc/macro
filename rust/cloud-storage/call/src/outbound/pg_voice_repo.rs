@@ -24,12 +24,10 @@ impl VoiceRepository for PgVoiceRepo {
 
     async fn upsert_voice(&self, embedding: &[f32]) -> Result<Uuid, Self::Err> {
         let vec = Vector::from(embedding.to_vec());
-        let row: (Uuid,) = sqlx::query_as(
-            "INSERT INTO voice (embedding) VALUES ($1) RETURNING id",
-        )
-        .bind(vec)
-        .fetch_one(&self.pool)
-        .await?;
+        let row: (Uuid,) = sqlx::query_as("INSERT INTO voice (embedding) VALUES ($1) RETURNING id")
+            .bind(vec)
+            .fetch_one(&self.pool)
+            .await?;
         Ok(row.0)
     }
 
@@ -51,12 +49,11 @@ impl VoiceRepository for PgVoiceRepo {
     }
 
     async fn get_user_voices(&self, macro_user_id: &Uuid) -> Result<Vec<Uuid>, Self::Err> {
-        let rows: Vec<(Uuid,)> = sqlx::query_as(
-            "SELECT voice_id FROM macro_user_voice WHERE macro_user_id = $1",
-        )
-        .bind(macro_user_id)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows: Vec<(Uuid,)> =
+            sqlx::query_as("SELECT voice_id FROM macro_user_voice WHERE macro_user_id = $1")
+                .bind(macro_user_id)
+                .fetch_all(&self.pool)
+                .await?;
         Ok(rows.into_iter().map(|r| r.0).collect())
     }
 

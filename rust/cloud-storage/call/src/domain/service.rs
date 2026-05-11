@@ -37,6 +37,18 @@ use super::ports::{
     CallSummarizer, NoOpCallSearchIndexer, NoOpVoiceRepository, RecordingStorage, VoiceRepository,
 };
 
+/// Cosine distance threshold used by the post-archive voice matcher when
+/// resolving a transcript's `voice_id` to an enrolled macro user.
+///
+/// pgvector exposes cosine *distance* via `<=>` (range 0.0–2.0; 0.0 ≈
+/// identical, 1.0 ≈ orthogonal). Resemblyzer's docs report ~0.75 cosine
+/// *similarity* for same-speaker pairs, which corresponds to ~0.25
+/// cosine distance — that's our starting point. Lower = stricter (fewer
+/// false matches, more missed matches); higher = looser. Tune with real
+/// enrollment data; consider promoting to per-tenant config once we have
+/// signal on false-positive vs miss rates.
+pub const VOICE_MATCH_DISTANCE_THRESHOLD: f32 = 0.25;
+
 /// The concrete call service implementation.
 pub struct CallServiceImpl<
     R: CallRepository,
@@ -1240,11 +1252,6 @@ impl<
     Vr: VoiceRepository + Clone,
 > CallServiceImpl<R, C, Cn, E, N, S, Sm, I, V, Vr>
 {
-    /// Default cosine distance threshold for matching transcript voice ids
-    /// to enrolled users. Resemblyzer's docs suggest ~0.75 cosine similarity
-    /// (≈ 0.25 distance) for "same speaker"; we start there.
-    const VOICE_MATCH_DISTANCE_THRESHOLD: f32 = 0.25;
-
     /// Fire-and-forget spawn of [`CallService::summarize_call`] for `call_id`.
     ///
     /// Called after the `call_records` row is persisted so that summarization
@@ -1335,7 +1342,7 @@ impl<
                 &repo,
                 &voice_repo,
                 call_record_id,
-                Self::VOICE_MATCH_DISTANCE_THRESHOLD,
+                VOICE_MATCH_DISTANCE_THRESHOLD,
             )
             .await;
         });
