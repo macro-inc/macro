@@ -18,7 +18,6 @@ import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
-import { Hotkey } from '@ui';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
@@ -49,7 +48,7 @@ import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
 import { useNotificationSettings } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { useLocation } from '@solidjs/router';
-import { Button, cn } from '@ui';
+import { Button, cn, Hotkey } from '@ui';
 import {
   type Component,
   createMemo,

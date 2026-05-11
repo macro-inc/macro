@@ -1,7 +1,6 @@
 import { useCanvasFileDrop } from '@block-canvas/signal/fileDrop';
 import { type BlockName, useBlockId, useIsNestedBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { Hotkey } from '@ui';
 import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import {
   blockNameToFileExtensions,
@@ -35,7 +34,7 @@ import StackPlus from '@phosphor-icons/core/regular/stack-plus.svg?component-sol
 import { createCallback } from '@solid-primitives/rootless';
 import { throttle } from '@solid-primitives/scheduled';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { cn } from '@ui';
+import { cn, Hotkey } from '@ui';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMethodRegistration } from 'core/orchestrator';
 import { usePinch } from 'solid-gesture';

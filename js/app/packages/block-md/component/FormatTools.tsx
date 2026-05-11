@@ -1,5 +1,4 @@
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
-import { Hotkey } from '@ui';
 import {
   INSERT_HORIZONTAL_RULE_COMMAND,
   NODE_TRANSFORM,
@@ -50,7 +49,7 @@ import TextT from '@icon/regular/text-t.svg';
 import TextUnderline from '@icon/regular/text-underline.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { ElementName } from '@lexical-core';
-import { Button, Layer } from '@ui';
+import { Button, Hotkey, Layer } from '@ui';
 import { toast } from 'core/component/Toast/Toast';
 import type { ValidHotkey } from 'core/hotkey/types';
 import {
