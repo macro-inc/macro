@@ -1,5 +1,5 @@
 import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
-import { For, mergeProps, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { Hotkey } from '../../ui/components/Hotkey';
 import type { Placement } from '@floating-ui/dom';
@@ -17,27 +17,6 @@ type LabelAndHotKeyProps = {
   shortcut?: string;
   label: string;
 };
-
-const TOOLTIP_DELAY = 250;
-const DEFAULT_VIEWPORT_PADDING = 16;
-
-// ---------------------------------------------------------------------------
-// Compound primitives
-//
-// Use these directly when you need full control (custom chrome, controlled
-// open state, etc.):
-//
-//   <Tooltip open={open()} onOpenChange={setOpen} placement="left">
-//     <Tooltip.Trigger as="span">{trigger}</Tooltip.Trigger>
-//     <Tooltip.Content>
-//       <CustomThing onClose={() => setOpen(false)} />
-//     </Tooltip.Content>
-//   </Tooltip>
-//
-// To opt into the default styled chrome (border, bg, padding) wrap your
-// content in `<Tooltip.Surface>`. The sugar API on the root component below
-// adds Trigger + Content + Surface for you automatically.
-// ---------------------------------------------------------------------------
 
 type TriggerProps = ParentProps<{
   as?: 'div' | 'span';
@@ -57,18 +36,25 @@ function TooltipTrigger(props: TriggerProps) {
   );
 }
 
-type ContentProps = ParentProps<{
-  class?: string;
-  /** Padding kept between the tooltip content and the viewport edge (max-width calc). */
-  viewportPadding?: number;
-}>;
+type SurfaceSlotProps = ParentProps<{ class?: string }>;
+
+type ContentProps = ParentProps<{ class?: string }>;
+
+
+
+const DEFAULT_PLACEMENT: Placement = 'bottom';
+const TOOLTIP_OVERFLOW_PADDING = 16;
+const TOOLTIP_VIEWPORT_PADDING = 16;
+const TOOLTIP_FIT_VIEWPORT = true;
+const TOOLTIP_GUTTER = 4;
+const TOOLTIP_DELAY = 250;
+const TOOLTIP_FLIP = true;
 
 function TooltipContent(props: ContentProps) {
-  const padding = () => props.viewportPadding ?? DEFAULT_VIEWPORT_PADDING;
   return (
     <KobalteTooltip.Portal>
       <KobalteTooltip.Content
-        style={{ 'max-width': `calc(100vw - ${2 * padding()}px)` }}
+        style={{ 'max-width': `calc(100vw - ${2 * TOOLTIP_VIEWPORT_PADDING}px)` }}
         class={cn('z-tool-tip', props.class)}
       >
         {props.children}
@@ -77,14 +63,6 @@ function TooltipContent(props: ContentProps) {
   );
 }
 
-type SurfaceSlotProps = ParentProps<{ class?: string }>;
-
-/**
- * Default visual chrome for sugar-mode tooltips: small muted text inside a
- * depth-3 `<Surface>`. Compound-mode callers that want chrome can either use
- * this preset, or drop in `<Surface>` directly when they need different
- * dimensions / depth / active highlighting (e.g. richer cards).
- */
 function TooltipSurface(props: SurfaceSlotProps) {
   return (
     <Surface
@@ -99,51 +77,22 @@ function TooltipSurface(props: SurfaceSlotProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Root + sugar
-// ---------------------------------------------------------------------------
-
 export type TooltipProps = ParentProps<{
-  // ----- Sugar content props (mutually exclusive convenience) -----
-  /** Plain string or JSX rendered inside the default styled surface. */
-  tooltip?: JSX.Element;
-  /** Label for a single-row tooltip; combine with `hotkeyToken`, `shortcut`, or `hotkeySequence`. */
-  label?: string;
-  hotkeyToken?: HotkeyToken;
-  shortcut?: string;
-  hotkeySequence?: HotkeySequenceStep[];
-  /** Multi-row tooltip; each entry renders as its own row. */
-  rows?: LabelAndHotKeyProps[];
-
-  // ----- Sugar trigger props (used when sugar content is present) -----
-  /** Element type for the trigger wrapper (sugar mode only). */
-  as?: 'div' | 'span';
-  ref?: (el: HTMLElement) => void;
-  class?: string;
-
-  // ----- Positioning (forwarded to Kobalte) -----
-  placement?: Placement;
-  gutter?: number;
-  flip?: boolean | string;
-  overflowPadding?: number;
-  fitViewport?: boolean;
-  viewportPadding?: number;
-
-  // ----- Delays -----
-  openDelay?: number;
-  closeDelay?: number;
-
-  // ----- Controlled open state (for compound usage that needs to close from inside) -----
-  open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  hotkeySequence?: HotkeySequenceStep[];
+  ref?: (el: HTMLElement) => void;
+  rows?: LabelAndHotKeyProps[];
+  hotkeyToken?: HotkeyToken;
+  tooltip?: JSX.Element;
+  placement?: Placement;
+  as?: 'div' | 'span';
+  shortcut?: string;
+  label?: string;
+  class?: string;
+  open?: boolean;
 }>;
 
 /**
- * Tooltip component. Has two usage modes:
- *
- * **Sugar mode** — pass `tooltip` / `label` / `rows`; the component renders a
- * styled tooltip and uses its `children` as the trigger.
- *
  * @example
  * <Tooltip tooltip="Close"><Button>X</Button></Tooltip>
  *
@@ -168,20 +117,6 @@ export type TooltipProps = ParentProps<{
  * );
  */
 export function Tooltip(props: TooltipProps) {
-  const merged = mergeProps(
-    {
-      placement: 'bottom' as Placement,
-      flip: true as boolean | string,
-      overflowPadding: 16,
-      viewportPadding: DEFAULT_VIEWPORT_PADDING,
-      fitViewport: true,
-      gutter: 4,
-      openDelay: TOOLTIP_DELAY,
-      closeDelay: TOOLTIP_DELAY,
-    },
-    props
-  );
-
   const sugarContent = (): JSX.Element | undefined => {
     if (props.rows && props.rows.length > 0) {
       return (
@@ -210,13 +145,13 @@ export function Tooltip(props: TooltipProps) {
 
   return (
     <KobalteTooltip
-      placement={merged.placement}
-      gutter={merged.gutter}
-      flip={merged.flip}
-      overflowPadding={merged.overflowPadding}
-      fitViewport={merged.fitViewport}
-      openDelay={merged.openDelay}
-      closeDelay={merged.closeDelay}
+      placement={props.placement ?? DEFAULT_PLACEMENT}
+      gutter={TOOLTIP_GUTTER}
+      flip={TOOLTIP_FLIP}
+      overflowPadding={TOOLTIP_OVERFLOW_PADDING}
+      fitViewport={TOOLTIP_FIT_VIEWPORT}
+      openDelay={TOOLTIP_DELAY}
+      closeDelay={TOOLTIP_DELAY}
       open={props.open}
       onOpenChange={props.onOpenChange}
     >
@@ -224,7 +159,7 @@ export function Tooltip(props: TooltipProps) {
         <TooltipTrigger as={props.as} ref={props.ref} class={props.class}>
           {props.children}
         </TooltipTrigger>
-        <TooltipContent viewportPadding={merged.viewportPadding}>
+        <TooltipContent>
           <TooltipSurface>{sugarContent()}</TooltipSurface>
         </TooltipContent>
       </Show>
@@ -236,12 +171,6 @@ Tooltip.Trigger = TooltipTrigger;
 Tooltip.Content = TooltipContent;
 Tooltip.Surface = TooltipSurface;
 
-/**
- * Renders a label with optional keyboard shortcut badge(s).
- * Internal to the Tooltip component — callers should use the flat
- * `label` / `hotkeyToken` / `shortcut` / `hotkeySequence` / `rows` props
- * on `<Tooltip>` (or `<Button>`) instead.
- */
 function LabelAndHotKey(props: LabelAndHotKeyProps) {
   const steps = (): HotkeySequenceStep[] => {
     if (props.hotkeySequence?.length) { return props.hotkeySequence; }
