@@ -1,25 +1,26 @@
 use super::chat::Chat;
-use crate::tool::types::AsyncToolSet;
+use crate::openai_toolset::OpenAIToolSetExt;
+use crate::tool::types::{AsyncToolCollection, ToolSet};
 use crate::types::AnthropicClient;
 use crate::types::ExtendedClient;
 use anthropic::openai::request::{AnthropicRequestExtension, AnthropicRequestExtensions};
 use std::sync::Arc;
 
-pub struct ToolLoop<I, T>
+pub struct ToolLoop<I, T, S = AsyncToolCollection<T>>
 where
     I: ExtendedClient + Clone + Send + Sync,
     T: Clone + Send + Sync,
 {
     client: I,
     context: T,
-    toolset: Arc<AsyncToolSet<T>>,
+    toolset: Arc<S>,
 }
 
-impl<T> ToolLoop<AnthropicClient, T>
+impl<T, S> ToolLoop<AnthropicClient, T, S>
 where
     T: Clone + Send + Sync,
 {
-    pub fn new(toolset: Arc<AsyncToolSet<T>>, context: T) -> Self {
+    pub fn new(toolset: Arc<S>, context: T) -> Self {
         let extensions = AnthropicRequestExtensions(vec![
             AnthropicRequestExtension::WebSearchTool,
             AnthropicRequestExtension::FetchTool,
@@ -34,12 +35,13 @@ where
     }
 }
 
-impl<I, T> ToolLoop<I, T>
+impl<I, T, S> ToolLoop<I, T, S>
 where
     I: ExtendedClient + Clone + Send + Sync,
     T: Clone + Send + Sync,
+    S: ToolSet<T> + OpenAIToolSetExt,
 {
-    pub fn chat(&self) -> Chat<I, T> {
+    pub fn chat(&self) -> Chat<I, T, S> {
         Chat::new(
             self.client.clone(),
             self.toolset.clone(),

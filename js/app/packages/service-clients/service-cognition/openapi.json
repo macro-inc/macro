@@ -885,6 +885,284 @@
         }
       }
     },
+    "/mcp/servers": {
+      "get": {
+        "tags": ["mcp"],
+        "summary": "List all MCP servers configured for the authenticated user.",
+        "operationId": "list_mcp_servers",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ServerResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["mcp"],
+        "summary": "Update an existing MCP server's name or enabled status.",
+        "operationId": "update_mcp_server",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateServerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["mcp"],
+        "summary": "Add a new MCP server for the authenticated user.",
+        "operationId": "add_mcp_server",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddServerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["mcp"],
+        "summary": "Delete an MCP server by URL.",
+        "operationId": "delete_mcp_server",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "description": "The server URL to delete.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mcp/servers/auth/callback": {
+      "get": {
+        "tags": ["mcp"],
+        "summary": "OAuth callback endpoint — receives code and state from the authorization server.",
+        "operationId": "mcp_auth_callback",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "description": "Authorization code from the OAuth provider.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "CSRF state parameter.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OAuth flow completed successfully"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mcp/servers/auth/start": {
+      "post": {
+        "tags": ["mcp"],
+        "summary": "Start the OAuth authorization flow for an MCP server.",
+        "operationId": "start_mcp_auth",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartAuthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartAuthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/memory": {
       "get": {
         "tags": ["memory"],
@@ -1096,6 +1374,21 @@
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
+      },
+      "AddServerRequest": {
+        "type": "object",
+        "description": "Request body for adding a new MCP server.",
+        "required": ["url", "server_name"],
+        "properties": {
+          "server_name": {
+            "type": "string",
+            "description": "Human-readable name for the server."
+          },
+          "url": {
+            "type": "string",
+            "description": "The MCP server's streamable HTTP URL."
+          }
+        }
       },
       "AssistantMessagePart": {
         "oneOf": [
@@ -1997,6 +2290,17 @@
           "static_file"
         ]
       },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "A plain old json error response for use with axum.\nyup, thats it.",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
+      },
       "ExtractionStatusEnum": {
         "oneOf": [
           {
@@ -2859,6 +3163,29 @@
           }
         }
       },
+      "ServerResponse": {
+        "type": "object",
+        "description": "An MCP server record as returned by the API.",
+        "required": ["url", "server_name", "enabled", "authenticated"],
+        "properties": {
+          "authenticated": {
+            "type": "boolean",
+            "description": "Whether the server has valid stored credentials."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the server is enabled for tool use."
+          },
+          "server_name": {
+            "type": "string",
+            "description": "Human-readable server name."
+          },
+          "url": {
+            "type": "string",
+            "description": "The MCP server URL."
+          }
+        }
+      },
       "SharePermissionV2": {
         "type": "object",
         "required": ["id", "isPublic", "owner"],
@@ -2892,6 +3219,32 @@
                 "description": "The level of public access"
               }
             ]
+          }
+        }
+      },
+      "StartAuthRequest": {
+        "type": "object",
+        "description": "Request body for starting an OAuth authorization flow.",
+        "required": ["server_url", "server_name"],
+        "properties": {
+          "server_name": {
+            "type": "string",
+            "description": "Human-readable name for the server."
+          },
+          "server_url": {
+            "type": "string",
+            "description": "The MCP server URL to authorize against."
+          }
+        }
+      },
+      "StartAuthResponse": {
+        "type": "object",
+        "description": "Response from starting an OAuth authorization flow.",
+        "required": ["authorization_url"],
+        "properties": {
+          "authorization_url": {
+            "type": "string",
+            "description": "The OAuth authorization URL to redirect the user to."
           }
         }
       },
@@ -3070,6 +3423,25 @@
       "UpdateOperation": {
         "type": "string",
         "enum": ["add", "remove", "replace"]
+      },
+      "UpdateServerRequest": {
+        "type": "object",
+        "description": "Request body for updating an MCP server.",
+        "required": ["url"],
+        "properties": {
+          "enabled": {
+            "type": ["boolean", "null"],
+            "description": "Enable or disable the server."
+          },
+          "server_name": {
+            "type": ["string", "null"],
+            "description": "New name for the server."
+          },
+          "url": {
+            "type": "string",
+            "description": "The server URL to update."
+          }
+        }
       },
       "UpdateSharePermissionRequestV2": {
         "type": "object",

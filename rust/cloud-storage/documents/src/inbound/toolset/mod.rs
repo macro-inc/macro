@@ -13,7 +13,7 @@ use crate::{
         create_document::CreateDocument, read_content::ReadContent, read_metadata::ReadMetadata,
     },
 };
-use ai::tool::AsyncToolSet;
+use ai::tool::AsyncToolCollection;
 use entity_access::domain::ports::EntityAccessService;
 use lexical_client::LexicalClient;
 use std::sync::Arc;
@@ -51,12 +51,12 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentToolContext<DSvc,
 }
 
 /// Create a document toolset
-pub fn document_toolset<DSvc, ESvc>() -> AsyncToolSet<DocumentToolContext<DSvc, ESvc>>
+pub fn document_toolset<DSvc, ESvc>() -> AsyncToolCollection<DocumentToolContext<DSvc, ESvc>>
 where
     DSvc: DocumentService,
     ESvc: EntityAccessService,
 {
-    AsyncToolSet::new()
+    AsyncToolCollection::new()
         .add_tool::<ReadMetadata, DocumentToolContext<DSvc, ESvc>>()
         .add_tool::<ReadContent, DocumentToolContext<DSvc, ESvc>>()
         .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc>>()

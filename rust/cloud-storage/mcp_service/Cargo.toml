@@ -40,7 +40,7 @@ notification = { path = "../notification", features = ["ai_tool"] }
 properties = { path = "../properties", features = ["ai_tools"] }
 readonly_pool = { path = "../readonly_pool" }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
-rmcp = { version = "1.2.0", features = ["transport-streamable-http-server"] }
+rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 search_service_client = { path = "../search_service_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde_json = { workspace = true }

@@ -54,6 +54,15 @@ pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 pub type DcsMemoryService =
     memory::domain::service::MemoryServiceImpl<memory::outbound::pg_memory_repo::PgMemoryRepo>;
 
+/// Concrete MCP router state for DCS.
+pub type DcsMcpRouterState = mcp_client::inbound::McpRouterState<
+    mcp_client::outbound::pg_server_repo::PgServerRepo,
+    mcp_client::domain::service::OAuthService<
+        mcp_client::outbound::pg_server_repo::PgServerRepo,
+        mcp_client::outbound::redis_state_store::RedisOAuthStateStore,
+    >,
+>;
+
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
     pub db: PgPool,
@@ -81,6 +90,7 @@ pub struct ApiContext {
     pub entity_access_service: Arc<DcsEntityAccessService>,
     pub message_service: Arc<DcsMessageService>,
     pub ai_stream_registry: AiStreamRegistry,
+    pub mcp_state: DcsMcpRouterState,
 }
 
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();

@@ -1,4 +1,4 @@
-use ai_toolset::{AsyncToolSet, RequestContext};
+use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::{
     handler::server::ServerHandler,
@@ -11,13 +11,13 @@ use std::sync::Arc;
 /// MCP server handler that extracts authenticated user identity from HTTP
 /// request parts injected by rmcp's `StreamableHttpService`.
 pub struct AuthenticatedToolService<Context> {
-    toolset: Arc<AsyncToolSet<Context>>,
+    toolset: Arc<AsyncToolCollection<Context>>,
     context: Context,
 }
 
 impl<Context> AuthenticatedToolService<Context> {
     /// Creates a new authenticated tool service.
-    pub fn new(toolset: Arc<AsyncToolSet<Context>>, context: Context) -> Self {
+    pub fn new(toolset: Arc<AsyncToolCollection<Context>>, context: Context) -> Self {
         Self { toolset, context }
     }
 }
