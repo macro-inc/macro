@@ -152,9 +152,15 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         return true;
       }
 
-      // If focused on a load more row, trigger load more
+      // If focused on a load more row, trigger load more and navigate to first new entity
       if (focusedRow.getIsLoadMore() && focusedRow.group) {
-        focusedRow.group.loadMore();
+        const currentIndex = focusedRow.index;
+        focusedRow.group.loadMore().then(() => {
+          soup.navigate.toIndex(currentIndex);
+          virtualizerHandle()?.scrollToIndex(currentIndex, {
+            align: 'nearest',
+          });
+        });
         return true;
       }
 

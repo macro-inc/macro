@@ -488,9 +488,9 @@ export const SoupViewContextProvider: FlowComponent<
     }
   );
 
-  const loadMoreForGroup = (groupKey: string) => {
+  const loadMoreForGroup = async (groupKey: string): Promise<void> => {
     const query = groupQueries().find((q) => q.key === groupKey);
-    query?.fetchNextPage();
+    await query?.fetchNextPage();
   };
 
   const isGroupLoadingMore = (groupKey: string) => {

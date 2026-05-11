@@ -17,7 +17,7 @@ type InfiniteQueryResult<TSelect> = {
   data: Accessor<TSelect | undefined>;
   hasNextPage: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
-  fetchNextPage: () => void;
+  fetchNextPage: () => Promise<unknown>;
 };
 
 export function createInfiniteQueries<TData, TSelect = TData[]>(
@@ -26,7 +26,9 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
   const queries = mapArray(
     () => getConfigs().map((c) => c.key),
     (key): InfiniteQueryResult<TSelect> => {
-      const getConfig = createMemo(() => getConfigs().find((c) => c.key === key));
+      const getConfig = createMemo(() =>
+        getConfigs().find((c) => c.key === key)
+      );
 
       const query = createInfiniteQuery(() => {
         const config = getConfig();
@@ -39,7 +41,8 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
             return config.queryFn({ pageParam: ctx.pageParam });
           },
           initialPageParam: null as string | null,
-          getNextPageParam: (lastPage: TData) => config?.getNextPageParam(lastPage) ?? null,
+          getNextPageParam: (lastPage: TData) =>
+            config?.getNextPageParam(lastPage) ?? null,
           enabled: config?.enabled ?? false,
           staleTime: config?.staleTime ?? Infinity,
         };
@@ -49,7 +52,8 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
         }
 
         if (config?.select) {
-          options.select = (data: InfiniteData<TData>) => config.select!(data.pages);
+          options.select = (data: InfiniteData<TData>) =>
+            config.select!(data.pages);
         }
 
         return options;
@@ -62,7 +66,9 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
           if (config?.select) {
             return query.data as TSelect | undefined;
           }
-          return (query.data as InfiniteData<TData> | undefined)?.pages as TSelect | undefined;
+          return (query.data as InfiniteData<TData> | undefined)?.pages as
+            | TSelect
+            | undefined;
         },
         hasNextPage: () => query.hasNextPage ?? false,
         isFetchingNextPage: () => query.isFetchingNextPage,

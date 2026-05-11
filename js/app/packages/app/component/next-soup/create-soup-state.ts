@@ -29,7 +29,7 @@ export type GroupMeta = {
   isExpanded: () => boolean;
   toggle: () => void;
   hasMore: () => boolean;
-  loadMore: () => void;
+  loadMore: () => Promise<void>;
   isLoading: () => boolean;
   renderHeader?: (props: GroupHeaderProps) => JSX.Element;
 };
@@ -127,7 +127,14 @@ export const createSoupState = <TId extends string = FilterID>(
     isGrouped?: boolean;
     isLoadMore?: boolean;
   }): SoupRow => {
-    const { id, index, original, group, isGrouped = false, isLoadMore = false } = options;
+    const {
+      id,
+      index,
+      original,
+      group,
+      isGrouped = false,
+      isLoadMore = false,
+    } = options;
     return {
       id,
       index,
@@ -136,12 +143,14 @@ export const createSoupState = <TId extends string = FilterID>(
       getIsGrouped: () => isGrouped,
       getIsLoadMore: () => isLoadMore,
       isFocused: () => focusedId() === id,
-      isSelected: () => !isGrouped && !isLoadMore && selection.isSelected(original.id),
+      isSelected: () =>
+        !isGrouped && !isLoadMore && selection.isSelected(original.id),
     };
   };
 
   const [rows, setRowsInternal] = createSignal<SoupRow[]>(
-    initialData?.map((e, i) => buildRow({ id: e.id, index: i, original: e })) ?? []
+    initialData?.map((e, i) => buildRow({ id: e.id, index: i, original: e })) ??
+      []
   );
 
   const setRows = (newRows: SoupRow[]) => {
