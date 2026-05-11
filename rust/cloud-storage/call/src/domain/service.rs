@@ -20,7 +20,7 @@ use notification::domain::models::{
 use notification::domain::ports::VoipPushSender;
 use notification::domain::service::NotificationIngress;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
@@ -1383,13 +1383,13 @@ async fn match_voices_for_call_record<R: CallRepository, Vr: VoiceRepository>(
     }
 
     let total = pairs.len();
-    let mut assignments: Vec<(String, Uuid)> = Vec::new();
+    let mut raw_assignments: Vec<(String, Uuid)> = Vec::new();
     for (diarized_speaker_id, voice_id) in pairs {
         match voice_repo
             .find_nearest_user_for_voice(&voice_id, distance_threshold)
             .await
         {
-            Ok(Some(user_id)) => assignments.push((diarized_speaker_id, user_id)),
+            Ok(Some(user_id)) => raw_assignments.push((diarized_speaker_id, user_id)),
             Ok(None) => {}
             Err(e) => tracing::error!(
                 error=?e, %call_record_id, %voice_id,
@@ -1397,6 +1397,30 @@ async fn match_voices_for_call_record<R: CallRepository, Vr: VoiceRepository>(
             ),
         }
     }
+
+    // The same diarized_speaker_id can appear with multiple voice_ids, each
+    // potentially resolving to a different user. The patch query joins only on
+    // diarized_speaker_id, so collapse to one winner per speaker — most-frequent
+    // user wins, ties broken by earliest appearance for determinism.
+    let mut tally: HashMap<(String, Uuid), (usize, usize)> = HashMap::new();
+    for (idx, (speaker, user)) in raw_assignments.iter().enumerate() {
+        tally.entry((speaker.clone(), *user)).or_insert((0, idx)).0 += 1;
+    }
+    let mut winners: HashMap<String, (Uuid, usize, usize)> = HashMap::new();
+    for ((speaker, user), (count, first_idx)) in tally {
+        let replace = winners
+            .get(&speaker)
+            .is_none_or(|(_, cur_count, cur_first)| {
+                count > *cur_count || (count == *cur_count && first_idx < *cur_first)
+            });
+        if replace {
+            winners.insert(speaker, (user, count, first_idx));
+        }
+    }
+    let assignments: Vec<(String, Uuid)> = winners
+        .into_iter()
+        .map(|(speaker, (user, _, _))| (speaker, user))
+        .collect();
 
     let matched = assignments.len();
     if let Err(e) = repo
