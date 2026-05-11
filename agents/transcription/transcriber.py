@@ -1,11 +1,13 @@
+import array
 import asyncio
 import logging
 import os
 import uuid
-from collections import Counter
+from collections import Counter, deque
 from datetime import datetime, timedelta, timezone
 
 import httpx
+import numpy as np
 from dotenv import load_dotenv
 from livekit import rtc
 from livekit.agents import (
@@ -24,6 +26,7 @@ from livekit.agents import (
     WorkerOptions,
 )
 from livekit.plugins import silero
+from resemblyzer import VoiceEncoder, preprocess_wav
 
 load_dotenv()
 
@@ -42,6 +45,7 @@ class Transcriber(Agent):
         participant_identity: str,
         channel_id: str,
         http_client: httpx.AsyncClient,
+        voice_encoder: VoiceEncoder | None = None,
     ):
         super().__init__(
             instructions="Transcribe user speech.",
@@ -67,6 +71,16 @@ class Transcriber(Agent):
         self.participant_identity = participant_identity
         self.channel_id = channel_id
         self.http_client = http_client
+        self.voice_encoder = voice_encoder
+        # Rolling buffer of recent audio frames keyed off this participant's
+        # stream. Used to compute a speaker-embedding on turn completion.
+        # `_audio_sample_rate` and `_audio_num_channels` are captured from
+        # the first frame so we can stitch the buffer back into a flat PCM
+        # array at embed time without re-inspecting every frame.
+        self._audio_frames: deque[rtc.AudioFrame] = deque()
+        self._audio_buffered_samples: int = 0
+        self._audio_sample_rate: int | None = None
+        self._audio_num_channels: int | None = None
         # Word counts per Deepgram speaker int, accumulated across final
         # transcripts inside a single user turn and cleared on turn completion.
         self._pending_speakers: Counter[int] = Counter()
@@ -102,8 +116,96 @@ class Transcriber(Agent):
         self._speaker_uuids[dg_speaker] = value
         return value
 
+    # Keep at most ~3 seconds of audio in the rolling buffer per participant.
+    # Resemblyzer needs at least ~1.5s of speech for a useful embedding; the
+    # cap keeps memory bounded for long-running sessions.
+    _AUDIO_BUFFER_MAX_SECONDS = 3.0
+
+    def _record_audio_frame(self, frame: rtc.AudioFrame) -> None:
+        if self._audio_sample_rate is None:
+            self._audio_sample_rate = frame.sample_rate
+            self._audio_num_channels = frame.num_channels
+        self._audio_frames.append(frame)
+        self._audio_buffered_samples += frame.samples_per_channel
+        if self._audio_sample_rate:
+            max_samples = int(
+                self._AUDIO_BUFFER_MAX_SECONDS * self._audio_sample_rate
+            )
+            while (
+                self._audio_buffered_samples > max_samples
+                and self._audio_frames
+            ):
+                dropped = self._audio_frames.popleft()
+                self._audio_buffered_samples -= dropped.samples_per_channel
+
+    def _drain_audio_buffer(self) -> tuple[array.array, int, int] | None:
+        """Return the buffered audio as (interleaved int16 PCM, rate, channels).
+
+        Returns `None` when no audio has been captured yet. Clears the buffer
+        so the next turn starts fresh.
+        """
+        if not self._audio_frames or self._audio_sample_rate is None:
+            return None
+        pcm = array.array("h")
+        for frame in self._audio_frames:
+            pcm.frombytes(bytes(frame.data))
+        sample_rate = self._audio_sample_rate
+        num_channels = self._audio_num_channels or 1
+        self._audio_frames.clear()
+        self._audio_buffered_samples = 0
+        return pcm, sample_rate, num_channels
+
+    # Resemblyzer needs at least ~1s of speech for a usable embedding;
+    # shorter buffers produce noisy / unreliable vectors.
+    _MIN_EMBED_SECONDS = 1.0
+
+    async def _compute_voice_embedding(self) -> list[float] | None:
+        """Drain the audio buffer and embed it with Resemblyzer.
+
+        Runs the CPU-bound preprocess+embed on a worker thread to keep the
+        agent event loop responsive. Returns `None` when there isn't enough
+        speech, when no encoder is configured, or when the model raises.
+        """
+        if self.voice_encoder is None:
+            return None
+        drained = self._drain_audio_buffer()
+        if drained is None:
+            return None
+        pcm, sample_rate, num_channels = drained
+        if len(pcm) == 0:
+            return None
+        duration_seconds = len(pcm) / float(sample_rate * max(num_channels, 1))
+        if duration_seconds < self._MIN_EMBED_SECONDS:
+            return None
+
+        encoder = self.voice_encoder
+        pcm_bytes = pcm.tobytes()
+
+        def _embed() -> list[float] | None:
+            samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+            if num_channels > 1:
+                samples = samples.reshape(-1, num_channels).mean(axis=1)
+            try:
+                wav = preprocess_wav(samples, source_sr=sample_rate)
+            except Exception:
+                logger.exception("preprocess_wav failed")
+                return None
+            try:
+                embedding = encoder.embed_utterance(wav)
+            except Exception:
+                logger.exception("voice encoder embed_utterance failed")
+                return None
+            return embedding.astype(np.float32).tolist()
+
+        return await asyncio.to_thread(_embed)
+
     async def stt_node(self, audio, model_settings):
-        async for event in super().stt_node(audio, model_settings):
+        async def _tee():
+            async for frame in audio:
+                self._record_audio_frame(frame)
+                yield frame
+
+        async for event in super().stt_node(_tee(), model_settings):
             if isinstance(event, stt_pkg.SpeechEvent) and (
                 event.type == stt_pkg.SpeechEventType.FINAL_TRANSCRIPT
             ):
@@ -158,6 +260,13 @@ class Transcriber(Agent):
         self._pending_first_word_offset = None
         self._pending_last_word_offset = None
         self._pending_speakers = Counter()
+        # Always drain the audio buffer at turn boundary even on empty
+        # content so leftover frames don't bleed into the next turn's
+        # embedding. _compute_voice_embedding returns None when there's
+        # nothing usable.
+        embedding = await self._compute_voice_embedding() if content else None
+        if not content:
+            self._drain_audio_buffer()
 
         if content:
             now = datetime.now(timezone.utc)
@@ -209,6 +318,7 @@ class Transcriber(Agent):
                     if self._stream_t0_wall is not None
                     else None
                 ),
+                "embedding": embedding,
                 "isFinal": True,
             }
             max_attempts = 3
@@ -318,6 +428,7 @@ class MultiUserTranscriber:
                 participant_identity=participant.identity,
                 channel_id=self.ctx.room.name,
                 http_client=self.http_client,
+                voice_encoder=self.ctx.proc.userdata.get("voice_encoder"),
             ),
             room=self.ctx.room,
             room_options=room_io.RoomOptions(
@@ -354,6 +465,9 @@ async def entrypoint(ctx: JobContext):
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
+    # Load the Resemblyzer encoder once per worker process so per-turn
+    # embedding doesn't pay the model-load cost on the hot path.
+    proc.userdata["voice_encoder"] = VoiceEncoder()
 
 
 if __name__ == "__main__":
