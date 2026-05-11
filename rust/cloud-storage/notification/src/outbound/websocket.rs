@@ -8,7 +8,8 @@ use model_entity::{Entity, EntityType};
 use rootcause::Report;
 use serde::Serialize;
 
-use crate::domain::ports::WebSocketSender;
+use crate::domain::models::NotificationStatusUpdate;
+use crate::domain::ports::{NotificationRealtimePublisher, WebSocketSender};
 
 /// WebSocket gateway implementation of the WebSocket sender port.
 ///
@@ -91,24 +92,19 @@ struct BatchSendMessageBody<'a> {
     entities: Vec<Entity<'a>>,
 }
 
-impl WebSocketGatewayOps for ConnectionGatewayClient {
-    #[tracing::instrument(err, skip(self, payload))]
-    async fn send_to_users<'a, T: Serialize + Send + Sync>(
+impl ConnectionGatewayClient {
+    async fn batch_send_to_entities<T: Serialize + Send + Sync>(
         &self,
-        user_ids: &[MacroUserIdStr<'a>],
+        message_type: &str,
         payload: &T,
-    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
-        if user_ids.is_empty() {
-            return Ok(HashSet::new());
+        entities: Vec<Entity<'_>>,
+    ) -> Result<Vec<MessageReceipt>, Report> {
+        if entities.is_empty() {
+            return Ok(Vec::new());
         }
 
-        let entities: Vec<Entity<'_>> = user_ids
-            .iter()
-            .map(|id| EntityType::User.with_entity_str(id.as_ref()))
-            .collect();
-
         let body = BatchSendMessageBody {
-            message_type: "notification",
+            message_type,
             message: serde_json::to_value(payload)?,
             entities,
         };
@@ -126,10 +122,32 @@ impl WebSocketGatewayOps for ConnectionGatewayClient {
 
         let json = res.json().await?;
         let response: GatewayResponse = serde_json::from_value(json)?;
+        Ok(response.receipts)
+    }
+}
+
+impl WebSocketGatewayOps for ConnectionGatewayClient {
+    #[tracing::instrument(err, skip(self, payload))]
+    async fn send_to_users<'a, T: Serialize + Send + Sync>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+        payload: &T,
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        if user_ids.is_empty() {
+            return Ok(HashSet::new());
+        }
+
+        let entities: Vec<Entity<'_>> = user_ids
+            .iter()
+            .map(|id| EntityType::User.with_entity_str(id.as_ref()))
+            .collect();
+
+        let receipts = self
+            .batch_send_to_entities("notification", payload, entities)
+            .await?;
 
         // Convert receipts to user IDs that were delivered
-        let delivered = response
-            .receipts
+        let delivered = receipts
             .into_iter()
             .filter(|r| r.delivery_count > 0)
             .filter_map(|r| {
@@ -152,5 +170,18 @@ impl<W: WebSocketGatewayOps + Send + Sync + 'static> WebSocketSender
         notification: &T,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         self.gateway.send_to_users(recipients, notification).await
+    }
+}
+
+impl NotificationRealtimePublisher for WebSocketGatewayAdapter<ConnectionGatewayClient> {
+    async fn publish_status_update(
+        &self,
+        update: &NotificationStatusUpdate,
+    ) -> Result<(), Report> {
+        let entities = update.target_entities();
+        self.gateway
+            .batch_send_to_entities(NotificationStatusUpdate::MESSAGE_TYPE, update, entities)
+            .await?;
+        Ok(())
     }
 }

@@ -148,11 +148,16 @@ pub async fn main() -> anyhow::Result<()> {
         fcm_platform_arn: config.sns_fcm_platform_arn.clone(),
         apns_voip_platform_arn: config.sns_apns_voip_platform_arn.clone(),
     };
-    let reader_service = ::notification::domain::service::NotificationReaderService::new(
+    let reader_realtime_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
+        internal_secret_key.as_ref().to_string(),
+        vars.connection_gateway_url.as_ref().to_string(),
+    ));
+    let reader_service = ::notification::domain::service::NotificationReaderService::new_with_realtime(
         notification_repository,
         notification_queue.clone(),
         sns_endpoint_manager,
         platform_config,
+        reader_realtime_adapter,
     );
     let ingress_state = ::notification::inbound::http::NotificationRouterState::new(
         reader_service,

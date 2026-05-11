@@ -18,10 +18,11 @@ use crate::domain::models::request::{
 };
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
-    NotificationTypeName, UserNotificationRow,
+    NotificationStatusUpdate, NotificationTypeName, UserNotificationRow,
 };
 use crate::domain::ports::{
-    NotificationIngressQueue, NotificationQueue, NotificationRepository, SnsEndpointManager,
+    NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
+    NotificationRealtimePublisher, NotificationRepository, SnsEndpointManager,
 };
 use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
@@ -442,14 +443,15 @@ pub struct PlatformArnConfig {
 ///
 /// Handles notification queries, status updates, and deletion.
 /// Does not require a bulk-digest state machine.
-pub struct NotificationReaderService<N, Q, S> {
+pub struct NotificationReaderService<N, Q, S, R = NoopNotificationRealtimePublisher> {
     pub(crate) repository: N,
     pub(crate) queue: Q,
     pub(crate) sns_endpoint: S,
     pub(crate) platform_config: PlatformArnConfig,
+    pub(crate) realtime: R,
 }
 
-impl<N, Q, S> NotificationReaderService<N, Q, S>
+impl<N, Q, S> NotificationReaderService<N, Q, S, NoopNotificationRealtimePublisher>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
@@ -462,11 +464,37 @@ where
         sns_endpoint: S,
         platform_config: PlatformArnConfig,
     ) -> Self {
+        Self::new_with_realtime(
+            repository,
+            queue,
+            sns_endpoint,
+            platform_config,
+            NoopNotificationRealtimePublisher,
+        )
+    }
+}
+
+impl<N, Q, S, R> NotificationReaderService<N, Q, S, R>
+where
+    N: NotificationRepository,
+    Q: NotificationQueue,
+    S: SnsEndpointManager,
+    R: NotificationRealtimePublisher,
+{
+    /// Create a new reader service with a realtime publisher.
+    pub fn new_with_realtime(
+        repository: N,
+        queue: Q,
+        sns_endpoint: S,
+        platform_config: PlatformArnConfig,
+        realtime: R,
+    ) -> Self {
         Self {
             repository,
             queue,
             sns_endpoint,
             platform_config,
+            realtime,
         }
     }
 
@@ -483,16 +511,23 @@ where
         &self,
         req: UpdateNotificationsRequest<'_>,
     ) -> Result<(), Report> {
-        match &req.status {
+        let changed = match &req.status {
             NotificationStatus::Seen => {
                 self.repository
                     .mark_notifications_seen(req.user_id.copied(), req.notification_ids)
-                    .await?;
+                    .await?
             }
             NotificationStatus::Done(done) => {
                 self.repository
                     .mark_notifications_done(&req.user_id, req.notification_ids, *done)
-                    .await?;
+                    .await?
+            }
+        };
+
+        if !changed.is_empty() {
+            let update = NotificationStatusUpdate::new(changed);
+            if let Err(err) = self.realtime.publish_status_update(&update).await {
+                tracing::warn!(error = ?err, "failed to publish notification status realtime update");
             }
         }
 
@@ -581,11 +616,12 @@ where
     }
 }
 
-impl<N, Q, S> NotificationReader for NotificationReaderService<N, Q, S>
+impl<N, Q, S, R> NotificationReader for NotificationReaderService<N, Q, S, R>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
     S: SnsEndpointManager,
+    R: NotificationRealtimePublisher,
 {
     fn update_notifications(
         &self,

@@ -13,7 +13,7 @@ use crate::domain::models::queue_message::{
 use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
-    NotificationIdAndCollapseKey, RateLimitConfig, RateLimitExceeded, RateLimitKey,
+    NotificationIdAndCollapseKey, NotificationStatusChanged, RateLimitConfig, RateLimitExceeded, RateLimitKey,
     RateLimitResult, SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
 };
 use crate::domain::ports::{
@@ -243,12 +243,12 @@ impl NotificationRepository for MockRepository {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<NotificationStatusChanged>, Report> {
         self.mark_seen_calls
             .lock()
             .unwrap()
             .push((user_id.to_string(), notification_ids.to_vec()));
-        Ok(())
+        Ok(Vec::new())
     }
 
     async fn mark_notifications_done(
@@ -256,13 +256,13 @@ impl NotificationRepository for MockRepository {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<NotificationStatusChanged>, Report> {
         self.mark_done_calls.lock().unwrap().push((
             user_id.to_string(),
             notification_ids.to_vec(),
             done,
         ));
-        Ok(())
+        Ok(Vec::new())
     }
 
     async fn get_basic_notifications(
@@ -429,7 +429,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<NotificationStatusChanged>, Report> {
         (**self)
             .mark_notifications_seen(user_id, notification_ids)
             .await
@@ -440,7 +440,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<NotificationStatusChanged>, Report> {
         (**self)
             .mark_notifications_done(user_id, notification_ids, done)
             .await

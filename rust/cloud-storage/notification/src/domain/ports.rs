@@ -22,7 +22,8 @@ use crate::domain::models::email_notification_digest::ports::{ClaimResult, Diges
 use crate::domain::models::request::NotificationListFilters;
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
-    SendNotificationRequestBuilder, UserNotificationRow,
+    NotificationStatusChanged, NotificationStatusUpdate, SendNotificationRequestBuilder,
+    UserNotificationRow,
     android::FCMMessage,
     apple::{APNSPushNotification, VoipPushPayload},
     mobile::MessageAttributes,
@@ -98,7 +99,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<NotificationStatusChanged>, Report>> + Send;
 
     /// Mark notifications as done or undone for a user.
     fn mark_notifications_done(
@@ -106,7 +107,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
         done: bool,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<NotificationStatusChanged>, Report>> + Send;
 
     /// Get basic notification data (collapse keys) needed for push clearing.
     fn get_basic_notifications(
@@ -225,6 +226,25 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
         notification_event_type: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for publishing realtime notification updates.
+pub trait NotificationRealtimePublisher: Send + Sync + 'static {
+    /// Publish a notification status update to the entities referenced by the notifications.
+    fn publish_status_update(
+        &self,
+        update: &NotificationStatusUpdate,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// No-op realtime publisher for consumers that do not wire connection gateway.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopNotificationRealtimePublisher;
+
+impl NotificationRealtimePublisher for NoopNotificationRealtimePublisher {
+    async fn publish_status_update(&self, _: &NotificationStatusUpdate) -> Result<(), Report> {
+        Ok(())
+    }
 }
 
 /// Port for WebSocket delivery via connection gateway.

@@ -34,6 +34,62 @@ pub struct NotificationIdAndCollapseKey {
     pub apns_collapse_key: String,
 }
 
+/// A compact row describing a user notification whose status changed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationStatusChanged {
+    /// The notification ID.
+    #[serde(rename = "id")]
+    pub notification_id: uuid::Uuid,
+    /// The entity the notification points to.
+    #[serde(flatten)]
+    pub entity: Entity<'static>,
+    /// Whether the notification is marked as done after the update.
+    pub done: bool,
+    /// When the notification was viewed/seen after the update.
+    pub viewed_at: Option<DateTime<Utc>>,
+    /// The time this status change was persisted.
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Realtime payload emitted when notification seen/done state changes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationStatusUpdate {
+    /// Constant event discriminator for frontend consumers.
+    #[serde(rename = "type")]
+    pub event_type: String,
+    /// The changed notification rows.
+    pub updates: Vec<NotificationStatusChanged>,
+}
+
+impl NotificationStatusUpdate {
+    /// The connection-gateway message type for notification status changes.
+    pub const MESSAGE_TYPE: &'static str = "notification_status_updated";
+
+    /// Build a realtime status update payload.
+    pub fn new(updates: Vec<NotificationStatusChanged>) -> Self {
+        Self {
+            event_type: Self::MESSAGE_TYPE.to_string(),
+            updates,
+        }
+    }
+
+    /// The entities to target in connection gateway.
+    pub fn target_entities(&self) -> Vec<Entity<'static>> {
+        let mut seen = std::collections::HashSet::new();
+        self.updates
+            .iter()
+            .filter_map(|update| {
+                if seen.insert(update.entity.clone()) {
+                    Some(update.entity.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+}
+
 /// A row from the `user_notification` + `notification` join query.
 ///
 /// The metadata field is generic so callers can deserialize it into
