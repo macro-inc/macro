@@ -67,9 +67,7 @@ function LocalParticipantTile(props: {
             <div
               class={cn(
                 'rounded-full bg-surface-3 flex items-center justify-center text-ink-muted font-medium',
-                props.avatarSize === 'sm'
-                  ? 'size-8 text-sm'
-                  : 'size-12 text-lg'
+                props.avatarSize === 'sm' ? 'size-8 text-sm' : 'size-12 text-lg'
               )}
             >
               You
