@@ -1,4 +1,3 @@
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { Popover, type PopoverRootProps } from '@kobalte/core/popover';
 import { createMutationObserver } from '@solid-primitives/mutation-observer';
 import { Button } from '@ui';
@@ -27,7 +26,6 @@ const DropdownMenu: ParentComponent<
     ref?: (ref: HTMLButtonElement) => void | HTMLButtonElement;
   } & PopoverRootProps
 > = (props) => {
-  const panelRef = useSplitPanel()?.panelRef;
   const [open, setOpen] = createSignal(props.open ?? false);
   const [triggerSize, setTriggerSize] = createSignal({ width: 0, height: 0 });
   const [popoverPosition, setPopoverPosition] = createSignal<
@@ -86,14 +84,12 @@ const DropdownMenu: ParentComponent<
   return (
     <Popover
       modal
-      layoutPosition
       open={open()}
       onOpenChange={onOpenChange}
       arrowPadding={0}
       placement="bottom-start"
       gutter={0}
       overflowPadding={0}
-      boundary={props.boundary ?? panelRef}
     >
       <Popover.Trigger
         size={props.size ?? 'md'}
