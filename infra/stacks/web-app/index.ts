@@ -35,11 +35,11 @@ const webAppAssets = new aws.s3.Bucket(`web-app-assets-${stack}`, {
   loggings:
     stack === 'prod' || stack === 'compare-prod'
       ? [
-        {
-          targetBucket: 'macro-logging-bucket',
-          targetPrefix: `web-app-${stack}`,
-        },
-      ]
+          {
+            targetBucket: 'macro-logging-bucket',
+            targetPrefix: `web-app-${stack}`,
+          },
+        ]
       : undefined,
 });
 
