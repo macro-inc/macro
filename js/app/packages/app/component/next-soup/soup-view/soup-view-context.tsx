@@ -1,10 +1,10 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   createSoupState,
-  type GroupMeta as UiGroupMeta,
   type SoupEntity,
   type SoupRow,
   type SoupState,
+  type GroupMeta as UiGroupMeta,
 } from '@app/component/next-soup/create-soup-state';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
 import {
