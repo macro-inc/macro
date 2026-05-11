@@ -170,7 +170,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       placement={props.placement ?? 'bottom-start'}
       gutter={props.gutter ?? 4}
     >
-      <Combobox.Control class="contents">
+      <Combobox.Control class="flex items-center h-full">
         {props.children}
         <Combobox.Input class="sr-only" />
       </Combobox.Control>
