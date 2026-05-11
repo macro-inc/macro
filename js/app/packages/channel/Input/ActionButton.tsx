@@ -1,4 +1,4 @@
-import { LabelAndHotKey } from '@ui';
+
 import { Button } from '@ui';
 import type { JSX } from 'solid-js';
 
@@ -12,7 +12,7 @@ export function InputActionButton(props: {
     <Button
       title={props.label}
       aria-label={props.label}
-      tooltip={<LabelAndHotKey label={props.label} />}
+      label={props.label}
       variant={props.active ? 'active' : 'ghost'}
       size="icon-md"
       onPointerDown={(event: PointerEvent) => event.preventDefault()}

@@ -1,9 +1,10 @@
 import { Button as KobalteButton, type ButtonRootProps } from '@kobalte/core/button';
 import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
 import type { Placement } from '@floating-ui/dom';
+import type { HotkeyToken } from '@core/hotkey/tokens';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
-import { Tooltip } from './Tooltip';
+import { Tooltip, type HotkeySequenceStep } from './Tooltip';
 
 export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
@@ -11,7 +12,23 @@ export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> &
   noTouchResize?: boolean;
   variant?: ButtonVariant;
   children?: JSX.Element;
-  tooltip?: JSX.Element;
+  /** Custom JSX content for the tooltip body (escape hatch). */
+  tooltip?: JSX.Element | ((close: () => void) => JSX.Element);
+  /** Label for a single-row tooltip. */
+  label?: string;
+  /** Hotkey token; renders as a key-cap badge next to `label`. */
+  hotkeyToken?: HotkeyToken;
+  /** Raw shortcut string; renders as a key-cap badge next to `label`. */
+  shortcut?: string;
+  /** Multi-step hotkey sequence. */
+  hotkeySequence?: HotkeySequenceStep[];
+  /** Multi-row tooltip rows. */
+  rows?: Array<{
+    label: string;
+    hotkeyToken?: HotkeyToken;
+    shortcut?: string;
+    hotkeySequence?: HotkeySequenceStep[];
+  }>;
   size?: ButtonSize;
   class?: string;
 };
@@ -42,6 +59,11 @@ export const Button = (props: ButtonProps) => {
     'children',
     'variant',
     'tooltip',
+    'label',
+    'hotkeyToken',
+    'shortcut',
+    'hotkeySequence',
+    'rows',
     'class',
     'depth',
     'size',
@@ -58,6 +80,11 @@ export const Button = (props: ButtonProps) => {
       local.class
     );
 
+  const hasTooltip = () =>
+    local.tooltip !== undefined ||
+    local.label !== undefined ||
+    (local.rows !== undefined && local.rows.length > 0);
+
   return (
     <Layer depth={local.depth ?? 0}>
       <Show
@@ -66,11 +93,16 @@ export const Button = (props: ButtonProps) => {
             {local.children}
           </KobalteButton>
         }
-        when={local.tooltip}
+        when={hasTooltip()}
       >
         <Tooltip
           placement={local.tooltipPlacement ?? 'bottom'}
           tooltip={local.tooltip}
+          label={local.label}
+          hotkeyToken={local.hotkeyToken}
+          shortcut={local.shortcut}
+          hotkeySequence={local.hotkeySequence}
+          rows={local.rows}
         >
           <KobalteButton class={cls()} {...others}>
             {local.children}

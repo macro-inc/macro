@@ -14,7 +14,7 @@ import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
-import { LabelAndHotKey, Tooltip } from '@ui';
+import { Tooltip } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -795,7 +795,7 @@ export const UnifiedFilterDropdown = () => {
   return (
     <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
       <Dropdown open={open()} onOpenChange={setOpen}>
-        <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="F" />}>
+        <Tooltip label="Filter" shortcut="F">
           <Dropdown.Trigger>
             <SlidersHorizontalIcon />
             <span>Filter</span>

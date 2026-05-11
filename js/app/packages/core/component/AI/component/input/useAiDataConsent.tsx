@@ -1,4 +1,4 @@
-import { LabelAndHotKey } from '@ui';
+
 import { useAiDataConsent } from '@core/context/user';
 import CloseIcon from '@icon/regular/x.svg';
 import { invalidateUserInfo } from '@queries/auth/user-info';
@@ -44,7 +44,7 @@ export function useAiDataConsentGate() {
               <div class="flex flex-row items-center gap-2">
                 <Dialog.CloseButton>
                   <Button
-                    tooltip={<LabelAndHotKey label="Close" />}
+                    label="Close"
                     variant="ghost"
                     size="icon-sm"
                   >

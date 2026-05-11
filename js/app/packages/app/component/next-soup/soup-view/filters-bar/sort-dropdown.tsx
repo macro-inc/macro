@@ -2,7 +2,7 @@ import type {
   SortOption,
   SystemSortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
-import { LabelAndHotKey, Tooltip } from '@ui';
+import { Tooltip } from '@ui';
 import CheckIcon from '@icon/regular/check.svg';
 import SortIcon from '@phosphor-icons/core/regular/funnel-simple.svg?component-solid';
 import { Dropdown, Layer } from '@ui';
@@ -31,7 +31,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       placement="bottom-start"
       gutter={4}
     >
-      <Tooltip tooltip={<LabelAndHotKey label="Sort" shortcut="S" />}>
+      <Tooltip label="Sort" shortcut="S">
         <Dropdown.Trigger>
           <SortIcon />
           <span>Sort</span>

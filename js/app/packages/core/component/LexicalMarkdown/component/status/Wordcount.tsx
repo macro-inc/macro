@@ -1,4 +1,4 @@
-import { LabelAndHotKey } from '@ui';
+
 import CaretUp from '@icon/regular/caret-up.svg';
 import Stats from '@icon/regular/chart-bar.svg';
 import { Popover } from '@kobalte/core/popover';
@@ -57,7 +57,7 @@ export function Wordcount(props: { stats: Store<WordcountStats> }) {
           <Button
             variant="ghost"
             size="icon-md"
-            tooltip={<LabelAndHotKey label="Wordcount" />}
+            label="Wordcount"
             onClick={toggleExpanded}
           >
             <Stats class=" size-5 opacity-50" />

@@ -6,9 +6,24 @@ import type { Placement } from '@floating-ui/dom';
 import type { JSX, ParentProps }  from 'solid-js';
 import { cn, Layer } from '@ui';
 
+export type HotkeySequenceStep = {
+  token?: HotkeyToken;
+  shortcut?: string;
+};
+
+type LabelAndHotKeyProps = {
+  hotkeySequence?: HotkeySequenceStep[];
+  hotkeyToken?: HotkeyToken;
+  shortcut?: string;
+  label: string;
+};
+
 export type TooltipProps = ParentProps<{
   tooltip?: JSX.Element | ((close: () => void) => JSX.Element);
   ref?: (el: HTMLDivElement | HTMLSpanElement) => void;
+  hotkeySequence?: HotkeySequenceStep[];
+  rows?: LabelAndHotKeyProps[];
+  hotkeyToken?: HotkeyToken;
   overflowPadding?: number;
   viewportPadding?: number;
   flip?: boolean | string;
@@ -17,22 +32,12 @@ export type TooltipProps = ParentProps<{
   placement?: Placement;
   spanMode?: boolean;
   unstyled?: boolean;
+  shortcut?: string;
   gutter?: number;
   class?: string;
+  label?: string;
   hide?: boolean;
 }>;
-
-export type HotkeySequenceStep = {
-  token?: HotkeyToken;
-  shortcut?: string;
-};
-
-export type LabelAndHotKeyProps = {
-  hotkeySequence?: HotkeySequenceStep[];
-  hotkeyToken?: HotkeyToken;
-  shortcut?: string;
-  label: string;
-};
 
 const TOOLTIP_DELAY = 250;
 
@@ -45,10 +50,26 @@ const TOOLTIP_DELAY = 250;
  * @param props.fitViewport - Constrain the tooltip size to the viewport.
  * @param props.viewportPadding - Padding used when computing max-width.
  * @param props.unstyled - When true, removes default styling from the tooltip content.
- * @param props.tooltip - The JSX element to render in the tooltip.
+ * @param props.label - Label for a single-row tooltip; combine with `hotkeyToken`, `shortcut`, or `hotkeySequence`.
+ * @param props.rows - Multi-row tooltip; each entry renders as its own row.
+ * @param props.tooltip - Custom JSX or render function; used when none of the above structured props are set.
  * @example
- * <Tooltip tooltip={<div class="text-xs">Hello</div>}>
- *     <Button>Hover over me</Button>
+ * // Structured single-row
+ * <Tooltip label="Close" hotkeyToken={TOKENS.close}>
+ *     <Button>X</Button>
+ * </Tooltip>
+ *
+ * // Multi-row
+ * <Tooltip rows={[
+ *   { label: 'Zoom', hotkeyToken: TOKENS.canvas.zoomInTool },
+ *   { label: 'Zoom out', shortcut: 'hold option' },
+ * ]}>
+ *     <Button>Zoom</Button>
+ * </Tooltip>
+ *
+ * // Custom JSX escape hatch
+ * <Tooltip tooltip={<PropertyTooltip property={prop} />}>
+ *     <PropertyValue />
  * </Tooltip>
  */
 export function Tooltip(props: TooltipProps) {
@@ -68,6 +89,23 @@ export function Tooltip(props: TooltipProps) {
   const close = () => setOpen(false);
 
   function tooltipContent() {
+    if (props.rows && props.rows.length > 0) {
+      return (
+        <div class="flex flex-col">
+          <For each={props.rows}>{(row) => <LabelAndHotKey {...row} />}</For>
+        </div>
+      );
+    }
+    if (props.label !== undefined) {
+      return (
+        <LabelAndHotKey
+          label={props.label}
+          hotkeyToken={props.hotkeyToken}
+          shortcut={props.shortcut}
+          hotkeySequence={props.hotkeySequence}
+        />
+      );
+    }
     if (typeof props.tooltip === 'function') { return props.tooltip(close); }
     return props.tooltip;
   }
@@ -110,12 +148,16 @@ export function Tooltip(props: TooltipProps) {
   );
 }
 
-export function LabelAndHotKey(props: LabelAndHotKeyProps) {
+/**
+ * Renders a label with optional keyboard shortcut badge(s).
+ * Internal to the Tooltip component — callers should use the flat
+ * `label` / `hotkeyToken` / `shortcut` / `hotkeySequence` / `rows` props
+ * on `<Tooltip>` (or `<Button>`) instead.
+ */
+function LabelAndHotKey(props: LabelAndHotKeyProps) {
   const steps = (): HotkeySequenceStep[] => {
     if (props.hotkeySequence?.length) { return props.hotkeySequence; }
-    if (props.hotkeyToken || props.shortcut) {
-      return [{ token: props.hotkeyToken, shortcut: props.shortcut }];
-    }
+    if (props.hotkeyToken || props.shortcut) { return [{ token: props.hotkeyToken, shortcut: props.shortcut }]; }
     return [];
   };
 
@@ -147,27 +189,4 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
       </Show>
     </div>
   );
-}
-
-export function TooltipWrapper(props: {
-  tooltip?: LabelAndHotKeyProps;
-  children: JSX.Element;
-}) {
-  if (props.tooltip) {
-    return (
-      <Tooltip
-        tooltip={
-          <div class="flex flex-col">
-            <LabelAndHotKey
-              hotkeyToken={props.tooltip.hotkeyToken}
-              label={props.tooltip.label}
-            />
-          </div>
-        }
-      >
-        {props.children}
-      </Tooltip>
-    );
-  }
-  return props.children;
 }

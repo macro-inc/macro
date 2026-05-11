@@ -25,7 +25,7 @@ import {
   downloadImage as downloadImageAction,
 } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
-import { LabelAndHotKey } from '@ui';
+
 import { Zoompinch, type ZoompinchHandle } from './Zoompinch';
 
 const SpinnerIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (p) => (
@@ -289,7 +289,7 @@ export function Lightbox(props: LightboxProps) {
             size="icon-md"
             onClick={copyToClipboard}
             disabled={isCopying()}
-            tooltip={<LabelAndHotKey label="Copy image" />}
+            label="Copy image"
           >
             {isCopying() ? <SpinnerIcon /> : <ClipboardIcon />}
           </Button>
@@ -298,7 +298,7 @@ export function Lightbox(props: LightboxProps) {
             size="icon-md"
             onClick={downloadImage}
             disabled={isDownloading()}
-            tooltip={<LabelAndHotKey label="Download image" />}
+            label="Download image"
           >
             {isDownloading() ? <SpinnerIcon /> : <DownloadIcon />}
           </Button>
@@ -306,7 +306,7 @@ export function Lightbox(props: LightboxProps) {
             <Button
               variant="ghost"
               size="icon-md"
-              tooltip={<LabelAndHotKey label="Close" />}
+              label="Close"
             >
               <XIcon />
             </Button>

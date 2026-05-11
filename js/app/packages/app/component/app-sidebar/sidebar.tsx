@@ -19,7 +19,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-import { LabelAndHotKey } from '@ui';
+
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -391,11 +391,8 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1"
       variant="ghost"
       tooltipPlacement="right"
-      tooltip={
-        props.isSlim() ? (
-          <LabelAndHotKey label={props.label} hotkeyToken={props.hotkeyToken} />
-        ) : undefined
-      }
+      label={props.isSlim() ? props.label : undefined}
+      hotkeyToken={props.isSlim() ? props.hotkeyToken : undefined}
       onClick={props.onClick}
       disabled={isDisabled()}
       onMouseEnter={() => setHovering(true)}
@@ -551,12 +548,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
             onClick={() => handleSidebarOpenChange(!isExpanded())}
             onMouseEnter={() => setSidebarBtnHovering(true)}
             onMouseLeave={() => setSidebarBtnHovering(false)}
-            tooltip={
-              <LabelAndHotKey
-                label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
-                hotkeyToken={TOKENS.global.toggleSidebar}
-              />
-            }
+            label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
+            hotkeyToken={TOKENS.global.toggleSidebar}
           >
             <AnimatedSidebarIcon triggerAnimation={sidebarBtnHovering()} />
           </Button>
@@ -735,20 +728,18 @@ const SidebarLink = (props: SidebarLinkProps) => {
           )}
           tooltipPlacement="right"
           onMouseEnter={() => setIsHovering(true)}
-          tooltip={
-            props.sidebarState === 'slim' ? (
-              <LabelAndHotKey
-                label={`Go to ${props.label}`}
-                hotkeySequence={
-                  props.standaloneHotkey
-                    ? [{ shortcut: props.hotkey }]
-                    : [
-                        { shortcut: GO_TO_LEADER_KEY },
-                        { shortcut: props.hotkey },
-                      ]
-                }
-              />
-            ) : undefined
+          label={
+            props.sidebarState === 'slim' ? `Go to ${props.label}` : undefined
+          }
+          hotkeySequence={
+            props.sidebarState === 'slim'
+              ? props.standaloneHotkey
+                ? [{ shortcut: props.hotkey }]
+                : [
+                    { shortcut: GO_TO_LEADER_KEY },
+                    { shortcut: props.hotkey },
+                  ]
+              : undefined
           }
           onMouseLeave={() => setIsHovering(false)}
           onClick={(e) => {

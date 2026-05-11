@@ -15,7 +15,6 @@ import {
   MenuItem,
   SubTrigger,
 } from '@core/component/Menu';
-import { LabelAndHotKey } from '@ui';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import ThreeDots from '@icon/bold/dots-three-bold.svg';
@@ -192,12 +191,8 @@ const InlineFormatButton = (props: {
   const icon = InlineIcons[props.format];
   return (
     <Button
-      tooltip={
-        <LabelAndHotKey
-          label={props.format}
-          shortcut={InlineShortcuts[props.format]}
-        />
-      }
+      label={props.format}
+      shortcut={InlineShortcuts[props.format]}
       size="icon-sm"
       variant="ghost"
       classList={{

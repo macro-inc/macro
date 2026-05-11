@@ -1,7 +1,7 @@
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { LabelAndHotKey } from '@ui';
+
 import DropdownMenu from '../DropdownMenu';
 import { SegmentedControl } from '../SegmentControls';
 import { ToggleButton } from '../ToggleButton';
@@ -40,7 +40,8 @@ const NewFormPrimitivesDemo = () => {
 
         <Button
           size="sm"
-          tooltip={<LabelAndHotKey label="Console" shortcut="cmd+k" />}
+          label="Console"
+          shortcut="cmd+k"
         >
           Console
         </Button>
@@ -182,7 +183,8 @@ const NewFormPrimitivesDemo = () => {
         <ToggleButton size="Base">Select Btn</ToggleButton>
         <Button
           size="md"
-          tooltip={<LabelAndHotKey label="Console" shortcut="cmd+k" />}
+          label="Console"
+          shortcut="cmd+k"
         >
           Console
         </Button>

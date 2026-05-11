@@ -7,7 +7,6 @@ import { vec2 } from '@block-canvas/util/vector2';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { DropdownMenuContent } from '@core/component/Menu';
-import { LabelAndHotKey } from '@ui';
 import {
   blockAcceptsFileExtension,
   blockNameToFileExtensions,
@@ -140,7 +139,7 @@ export function MediaSelector() {
         <Button
           variant="ghost"
           size="icon-md"
-          tooltip={<LabelAndHotKey label="Media" />}
+          label="Media"
           tabIndex={-1}
         >
           <Image />

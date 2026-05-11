@@ -7,7 +7,6 @@ import { useToolManager } from '@block-canvas/signal/toolManager';
 import { useIsNestedBlock } from '@core/block';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { LabelAndHotKey } from '@ui';
 import {
   ENABLE_CANVAS_FILES,
   ENABLE_CANVAS_IMAGES,
@@ -179,12 +178,8 @@ export function ToolBar() {
           <Button
             variant={activeTool() === Tools.Grab ? 'active' : 'ghost'}
             size="icon-md"
-            tooltip={
-              <LabelAndHotKey
-                label="Hand tool"
-                hotkeyToken={TOKENS.canvas.handTool}
-              />
-            }
+            label="Hand tool"
+            hotkeyToken={TOKENS.canvas.handTool}
             onClick={() => {
               toolManager.setSelectedTool(Tools.Grab);
             }}
@@ -200,18 +195,16 @@ export function ToolBar() {
                   : 'ghost'
               }
               size="icon-md"
-              tooltip={
-                <>
-                  <LabelAndHotKey
-                    label="Zoom"
-                    hotkeyToken={TOKENS.canvas.zoomInTool}
-                  />
-                  <LabelAndHotKey
-                    label="Zoom out"
-                    shortcut={`hold ${IS_MAC ? 'option' : 'alt'}`}
-                  />
-                </>
-              }
+              rows={[
+                {
+                  label: 'Zoom',
+                  hotkeyToken: TOKENS.canvas.zoomInTool,
+                },
+                {
+                  label: 'Zoom out',
+                  shortcut: `hold ${IS_MAC ? 'option' : 'alt'}`,
+                },
+              ]}
               onClick={() => {
                 toolManager.setSelectedTool(Tools.ZoomIn);
               }}
@@ -230,12 +223,8 @@ export function ToolBar() {
                   : 'ghost'
               }
               size="icon-md"
-              tooltip={
-                <LabelAndHotKey
-                  label="Move"
-                  hotkeyToken={TOKENS.canvas.selectTool}
-                />
-              }
+              label="Move"
+              hotkeyToken={TOKENS.canvas.selectTool}
               onClick={() => {
                 toolManager.setSelectedTool(Tools.Select);
               }}
@@ -249,12 +238,8 @@ export function ToolBar() {
             <Button
               variant={activeTool() === Tools.Shape ? 'active' : 'ghost'}
               size="icon-md"
-              tooltip={
-                <LabelAndHotKey
-                  label="Rectangle"
-                  hotkeyToken={TOKENS.canvas.shapeTool}
-                />
-              }
+              label="Rectangle"
+              hotkeyToken={TOKENS.canvas.shapeTool}
               onClick={() => {
                 toolManager.setSelectedTool(Tools.Shape);
               }}
@@ -265,12 +250,8 @@ export function ToolBar() {
             <Button
               variant={activeTool() === Tools.Pencil ? 'active' : 'ghost'}
               size="icon-md"
-              tooltip={
-                <LabelAndHotKey
-                  label="Pencil"
-                  hotkeyToken={TOKENS.canvas.pencilTool}
-                />
-              }
+              label="Pencil"
+              hotkeyToken={TOKENS.canvas.pencilTool}
               onClick={() => {
                 toolManager.setSelectedTool(Tools.Pencil);
               }}
@@ -281,12 +262,8 @@ export function ToolBar() {
             <Button
               variant={activeTool() === Tools.Line ? 'active' : 'ghost'}
               size="icon-md"
-              tooltip={
-                <LabelAndHotKey
-                  label="Connector"
-                  hotkeyToken={TOKENS.canvas.lineTool}
-                />
-              }
+              label="Connector"
+              hotkeyToken={TOKENS.canvas.lineTool}
               onClick={() => {
                 toolManager.setSelectedTool(Tools.Line);
               }}
@@ -303,12 +280,8 @@ export function ToolBar() {
                     : 'ghost'
                 }
                 size="icon-md"
-                tooltip={
-                  <LabelAndHotKey
-                    label="Text"
-                    hotkeyToken={TOKENS.canvas.textTool}
-                  />
-                }
+                label="Text"
+                hotkeyToken={TOKENS.canvas.textTool}
                 onClick={() => {
                   toolManager.setSelectedTool(Tools.Text);
                 }}
