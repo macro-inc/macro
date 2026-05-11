@@ -669,6 +669,7 @@ impl<
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
                     self.spawn_summarize_call(call.id);
+                    self.spawn_match_voices_for_call(call.id);
 
                     if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
                         tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
@@ -778,6 +779,7 @@ impl<
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
                     self.spawn_summarize_call(call.id);
+                    self.spawn_match_voices_for_call(call.id);
 
                     if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
                         tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
