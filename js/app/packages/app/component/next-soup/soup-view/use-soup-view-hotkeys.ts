@@ -135,7 +135,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     );
   };
 
-  // enter - Open entity in split or toggle group
+  // enter - Open entity in split, toggle group, or load more
   registerHotkey({
     hotkey: ['enter'],
     hotkeyToken: TOKENS.entity.open,
@@ -147,8 +147,14 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       if (!focusedRow) return false;
 
       // If focused on a group header, toggle expand/collapse
-      if (focusedRow.group) {
+      if (focusedRow.getIsGrouped() && focusedRow.group) {
         focusedRow.group.toggle();
+        return true;
+      }
+
+      // If focused on a load more row, trigger load more
+      if (focusedRow.getIsLoadMore() && focusedRow.group) {
+        focusedRow.group.loadMore();
         return true;
       }
 
