@@ -1,5 +1,6 @@
 /* components */
 export { Tooltip } from './components/Tooltip';
+export { Popover } from './components/Popover';
 export { SegmentedControl } from './components/SegmentedControl';
 export { TabbedControl } from './components/TabbedControl';
 export { Avatar, AvatarGroup } from './components/Avatar';
