@@ -175,12 +175,9 @@ export function Account() {
   };
 
   return (
-    <div
-      class="h-full overflow-y-auto p-2"
-      style="scrollbar-width: none;"
-    >
-      <div class="max-w-200 w-full mx-auto">
-        <Panel depth={2}>
+      <div class="h-full overflow-hidden flex justify-center p-2">
+        <div class="max-w-200 size-full">
+          <Panel depth={2} class="h-full overflow-hidden text-ink">
           <Panel.Header class="px-6">
             <div class="text-sm font-semibold">Account</div>
           </Panel.Header>
@@ -197,7 +194,7 @@ export function Account() {
             </Show>
           </Panel.Toolbar>
 
-          <Panel.Body class="text-ink">
+          <Panel.Body scroll class="text-ink">
             <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
               <Show when={ENABLE_PROFILE_PICTURES && userId()}>
                 <Row label="Profile Picture">
