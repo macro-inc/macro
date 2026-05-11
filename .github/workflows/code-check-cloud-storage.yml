@@ -216,9 +216,17 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-extra-beefy
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+        total_shards: [4]
+        test_threads: [8]
     env:
       NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
-      NEXTEST_TEST_THREADS: '32'
+      NEXTEST_SHARD: ${{ matrix.shard }}
+      NEXTEST_TOTAL_SHARDS: ${{ matrix.total_shards }}
+      NEXTEST_TEST_THREADS: ${{ matrix.test_threads }}
       RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=mold"
     services:
       postgres:
@@ -230,7 +238,13 @@ jobs:
         ports:
           - 5432:5432
         # needed because the postgres container does not provide a healthcheck
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+        # tmpfs keeps sqlx's per-test databases off disk in CI.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --tmpfs /var/lib/postgresql/data:rw,size=8g
       redis:
         image: redis:7
         ports:
@@ -276,7 +290,14 @@ jobs:
             exit 1
           fi
 
-          docker exec "$postgres_container" psql -U user -d macrodb -c "ALTER SYSTEM SET max_locks_per_transaction = 256;"
+          docker exec -i "$postgres_container" psql -U user -d macrodb <<'SQL'
+          ALTER SYSTEM SET fsync = off;
+          ALTER SYSTEM SET synchronous_commit = off;
+          ALTER SYSTEM SET full_page_writes = off;
+          ALTER SYSTEM SET max_wal_size = '4GB';
+          ALTER SYSTEM SET checkpoint_timeout = '30min';
+          ALTER SYSTEM SET max_locks_per_transaction = 256;
+          SQL
           docker restart "$postgres_container"
           until docker exec "$postgres_container" pg_isready -U user -d macrodb; do
             sleep 1
@@ -294,6 +315,7 @@ jobs:
           if [ -n "$NEXTEST_FILTER" ]; then
             args+=(-E "$NEXTEST_FILTER")
           fi
+          args+=(--partition "count:${NEXTEST_SHARD}/${NEXTEST_TOTAL_SHARDS}")
           cargo nextest run "${args[@]}"
       - name: show sccache stats
         if: always()
