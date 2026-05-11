@@ -80,8 +80,6 @@ interface SoupViewContextValues {
   setAssigneeFilter: Setter<string[]>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
-  groupByField: Accessor<GroupByField | undefined>;
-  isGroupLoadingMore: (groupKey: string) => boolean;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -367,8 +365,10 @@ export const SoupViewContextProvider: FlowComponent<
       const query = groupQueries().find((q) => q.key === apiGroup.key);
       const groupEntities = query?.data() ?? [];
 
-      // Get first entity for header (or create placeholder if empty)
+      // Get first entity to use for header original
+      // If the group has no entities, we can skip it
       const firstEntity = groupEntities[0];
+
       if (!firstEntity) continue;
 
       // Header row
@@ -382,33 +382,37 @@ export const SoupViewContextProvider: FlowComponent<
         })
       );
 
-      if (isExpanded) {
-        // Entity rows
-        for (const entity of groupEntities) {
-          result.push(
-            soup.buildRow({
-              id: entity.id,
-              index: globalIndex++,
-              original: entity,
-              group: groupMeta,
-            })
-          );
-        }
+      // We skip building rows for entities that are
+      // not visible because the group is collapsed
+      if (!isExpanded) continue;
 
-        // Load more row (if has more pages)
-        if (groupMeta.hasMore()) {
-          const lastEntity = groupEntities[groupEntities.length - 1];
-          result.push(
-            soup.buildRow({
-              id: `loadmore:${apiGroup.key}`,
-              index: globalIndex++,
-              original: lastEntity,
-              group: groupMeta,
-              isLoadMore: true,
-            })
-          );
-        }
+      // Entity rows
+      for (const entity of groupEntities) {
+        result.push(
+          soup.buildRow({
+            id: entity.id,
+            index: globalIndex++,
+            original: entity,
+            group: groupMeta,
+          })
+        );
       }
+
+      // We can stop here if the group has no more data
+      // that needs to be fetched
+      if (!groupMeta.hasMore()) continue;
+
+      const lastEntity = groupEntities[groupEntities.length - 1];
+
+      result.push(
+        soup.buildRow({
+          id: `loadmore:${apiGroup.key}`,
+          index: globalIndex++,
+          original: lastEntity,
+          group: groupMeta,
+          isLoadMore: true,
+        })
+      );
     }
 
     return result;
@@ -552,8 +556,6 @@ export const SoupViewContextProvider: FlowComponent<
     setAssigneeFilter,
     activeTab,
     setActiveTab,
-    groupByField,
-    isGroupLoadingMore,
   };
 
   return (
