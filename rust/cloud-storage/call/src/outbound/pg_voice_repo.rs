@@ -16,6 +16,21 @@ use crate::domain::ports::VoiceRepository;
 /// different speakers to get separate ids.
 const VOICE_DEDUP_DISTANCE_THRESHOLD: f64 = 0.25;
 
+fn embedding_advisory_lock_key(embedding: &[f32]) -> i64 {
+    const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x100000001b3;
+
+    let mut hash = FNV_OFFSET_BASIS;
+    for value in embedding {
+        for byte in value.to_le_bytes() {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(FNV_PRIME);
+        }
+    }
+
+    hash as i64
+}
+
 /// Postgres adapter implementing [`VoiceRepository`].
 #[derive(Clone)]
 pub struct PgVoiceRepo {
@@ -34,7 +49,15 @@ impl VoiceRepository for PgVoiceRepo {
 
     async fn upsert_voice(&self, embedding: &[f32]) -> Result<Uuid, Self::Err> {
         let id = macro_uuid::generate_uuid_v7();
+        let lock_key = embedding_advisory_lock_key(embedding);
         let vec = Vector::from(embedding.to_vec());
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+            .bind(lock_key)
+            .fetch_one(tx.as_mut())
+            .await?;
+
         let voice_id = sqlx::query_scalar::<_, Uuid>(
             r#"
             WITH nearest AS (
@@ -58,8 +81,9 @@ impl VoiceRepository for PgVoiceRepo {
         .bind(vec)
         .bind(VOICE_DEDUP_DISTANCE_THRESHOLD)
         .bind(id)
-        .fetch_one(&self.pool)
+        .fetch_one(tx.as_mut())
         .await?;
+        tx.commit().await?;
         Ok(voice_id)
     }
 
