@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentMetadata, FileType};
 
-use super::content::DocumentResponse;
+use super::response::DocumentResponse;
 use model::sync_service::SyncServiceVersionID;
 use models_properties::api::requests::SetPropertyValue;
 use serde_json::Value;

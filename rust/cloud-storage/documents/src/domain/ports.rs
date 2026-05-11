@@ -10,9 +10,9 @@ use entity_access::domain::models::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{ContentType, DocumentBasic, DocumentMetadata};
 
-use super::content::{
-    CreateDocumentResponseData, DocumentContent, DocumentResponse, GetDocumentResponseData,
-    LocationResponseV3,
+use super::content::DocumentContent;
+use super::response::{
+    CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
 };
 
 use model::sync_service::SyncServiceVersionID;

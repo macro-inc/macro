@@ -21,7 +21,7 @@ use model_file_type::{FileAssociation, FileType};
 use non_empty::NonEmpty;
 
 use crate::domain::{
-    content::LocationResponseV3, models::LocationQueryParams, ports::DocumentService,
+    models::LocationQueryParams, ports::DocumentService, response::LocationResponseV3,
 };
 
 use super::markdown;

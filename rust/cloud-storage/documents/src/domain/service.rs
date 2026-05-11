@@ -34,17 +34,17 @@ use crate::domain::models::{
     ASSIGNEES_PROPERTY_ID, NOT_STARTED_STATUS_OPTION_ID, PropertyInput, STATUS_PROPERTY_ID,
 };
 
-use super::content::{
-    CreateDocumentResponseData, DocumentContent, DocumentContentLocation, DocumentContentState,
-    DocumentMetadataWithContent, DocumentResponse, DocumentResponseMetadataWithContent,
-    GetDocumentResponseData, LocationResponseV3,
-};
+use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, CreateTaskResponse, DocumentError, EMPTY_SHA256, EditDocumentRepoArgs,
     EditDocumentServiceArgs, FileTypeUpdate, LocationQueryParams,
 };
 use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
+use super::response::{
+    CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
+    DocumentResponseMetadataWithContent, GetDocumentResponseData, LocationResponseV3,
+};
 
 /// The concrete document service implementation.
 pub struct DocumentServiceImpl<
@@ -1150,6 +1150,7 @@ impl<
         let document_id = response_data
             .document_response
             .document_metadata
+            .metadata
             .document_id
             .clone();
 

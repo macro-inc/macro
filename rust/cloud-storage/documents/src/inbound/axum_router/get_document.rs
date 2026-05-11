@@ -10,9 +10,9 @@ use model::user::UserContext;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
 use super::{DocumentRouterState, Params};
-use crate::domain::content::GetDocumentResponse;
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
+use crate::domain::response::GetDocumentResponse;
 
 /// Handler for `GET /documents/{document_id}`.
 ///

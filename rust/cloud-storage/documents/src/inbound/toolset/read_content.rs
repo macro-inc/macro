@@ -3,9 +3,9 @@
 use std::str::FromStr;
 
 use crate::domain::{
-    content::LocationResponseV3,
     models::{CommentThread, LocationQueryParams},
     ports::DocumentService,
+    response::LocationResponseV3,
 };
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;

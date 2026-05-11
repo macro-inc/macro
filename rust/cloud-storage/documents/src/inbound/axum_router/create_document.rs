@@ -11,9 +11,9 @@ use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
-use crate::domain::content::CreateDocumentResponse;
 use crate::domain::models::{CreateDocumentRepoArgs, DocumentError};
 use crate::domain::ports::DocumentService;
+use crate::domain::response::CreateDocumentResponse;
 
 /// Handler for `POST /documents`.
 ///

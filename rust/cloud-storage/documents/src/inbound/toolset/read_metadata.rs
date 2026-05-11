@@ -1,7 +1,7 @@
 //! ReadMetadata tool for reading document metadata.
 
-use crate::domain::content::DocumentMetadataWithContent;
 use crate::domain::ports::DocumentService;
+use crate::domain::response::DocumentMetadataWithContent;
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use entity_access::domain::{
@@ -83,7 +83,7 @@ where
                 internal_error: e.into(),
             })?;
 
-        let branch_name = if let Some(sub_type) = result.document_metadata.sub_type {
+        let branch_name = if let Some(sub_type) = result.document_metadata.metadata.sub_type {
             match sub_type {
                 document_sub_type::DocumentSubType::Task => {
                     let short_id = service_context
@@ -97,7 +97,7 @@ where
 
                     Some(build_task_branch_name(
                         &short_id,
-                        &result.document_metadata.document_name,
+                        &result.document_metadata.metadata.document_name,
                     ))
                 }
             }

@@ -11,9 +11,9 @@ use model::document::DocumentBasic;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
 use super::{DocumentRouterState, Params};
-use crate::domain::content::LocationResponseV3;
 use crate::domain::models::{DocumentError, LocationQueryParams};
 use crate::domain::ports::DocumentService;
+use crate::domain::response::LocationResponseV3;
 
 /// Handler for `GET /documents/{document_id}/location_v3`.
 ///

@@ -14,13 +14,12 @@ use model::document::FileType;
 use sha2::{Digest, Sha256};
 use sync_service_client::SyncServiceClient;
 
-use crate::domain::content::{
-    CreateDocumentResponseData, DocumentContent, DocumentContentLocation,
-};
+use crate::domain::content::{DocumentContent, DocumentContentLocation};
 use crate::domain::models::{
     CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, EMPTY_SHA256, PropertyInput,
 };
 use crate::domain::ports::DocumentService;
+use crate::domain::response::CreateDocumentResponseData;
 
 /// Common metadata for a document that has not been created yet.
 #[derive(Debug, Clone)]
@@ -392,6 +391,7 @@ impl CreatedDocument {
             .response
             .document_response
             .document_metadata
+            .metadata
             .document_id
     }
 
@@ -567,6 +567,7 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
         let document_id = response
             .document_response
             .document_metadata
+            .metadata
             .document_id
             .clone();
 
@@ -642,6 +643,7 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
         let document_id = response
             .document_response
             .document_metadata
+            .metadata
             .document_id
             .clone();
 

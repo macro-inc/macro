@@ -101,6 +101,7 @@ where
         let document_id_str = response
             .document_response
             .document_metadata
+            .metadata
             .document_id
             .to_string();
 
