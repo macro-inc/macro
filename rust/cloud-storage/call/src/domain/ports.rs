@@ -158,11 +158,14 @@ pub trait CallRepository: Send + Sync + 'static {
         started_at: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Insert a transcript segment for an active call.
+    /// Insert a transcript segment for an active call. When `voice_id` is
+    /// `Some`, it's stored on the row so the call-finished pipeline can
+    /// resolve the speaker to a macro user.
     fn create_transcript_segment(
         &self,
         call_id: &Uuid,
         segment: &TranscriptSegmentRequest,
+        voice_id: Option<Uuid>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Get the profile picture URL for a user by their `MacroUserIdStr`.

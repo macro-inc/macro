@@ -704,6 +704,7 @@ async fn create_transcript_segment_stores_and_increments_sequence(
         ended_at: Some(now),
         is_final: true,
         stream_started_at: None,
+        embedding: None,
     };
     let seg2 = TranscriptSegmentRequest {
         segment_id: "seg-002".to_string(),
@@ -714,13 +715,14 @@ async fn create_transcript_segment_stores_and_increments_sequence(
         ended_at: Some(now),
         is_final: true,
         stream_started_at: None,
+        embedding: None,
     };
 
-    repo.create_transcript_segment(&CALL1, &seg1).await?;
-    repo.create_transcript_segment(&CALL1, &seg2).await?;
+    repo.create_transcript_segment(&CALL1, &seg1, None).await?;
+    repo.create_transcript_segment(&CALL1, &seg2, None).await?;
 
     // Duplicate segment_id should be ignored.
-    repo.create_transcript_segment(&CALL1, &seg1).await?;
+    repo.create_transcript_segment(&CALL1, &seg1, None).await?;
 
     let rows = sqlx::query!(
         r#"
@@ -764,8 +766,9 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
         ended_at: Some(now),
         is_final: true,
         stream_started_at: None,
+        embedding: None,
     };
-    repo.create_transcript_segment(&CALL1, &seg).await?;
+    repo.create_transcript_segment(&CALL1, &seg, None).await?;
 
     // Archive the call.
     let record_id = repo.archive_call(&CALL1).await?;
@@ -825,7 +828,9 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
             ended_at: Some(now),
             is_final: true,
             stream_started_at: None,
+            embedding: None,
         },
+        None,
     )
     .await?;
     repo.create_transcript_segment(
@@ -839,7 +844,9 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
             ended_at: Some(now),
             is_final: true,
             stream_started_at: None,
+            embedding: None,
         },
+        None,
     )
     .await?;
 

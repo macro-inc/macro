@@ -1004,8 +1004,22 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?
             .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?;
 
+        // Upsert the speaker embedding (if the agent sent one) so we can
+        // store the resulting voice id on the transcript row. Failure to
+        // persist the embedding must not block transcript ingest — log and
+        // continue without a voice id.
+        let voice_id = match segment.embedding.as_deref() {
+            Some(embedding) if !embedding.is_empty() => self
+                .voice_repo
+                .upsert_voice(embedding)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, "failed to upsert voice embedding"))
+                .ok(),
+            _ => None,
+        };
+
         self.repo
-            .create_transcript_segment(&call.id, &segment)
+            .create_transcript_segment(&call.id, &segment, voice_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 

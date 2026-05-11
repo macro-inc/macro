@@ -692,11 +692,12 @@ impl CallRepository for PgCallRepo {
         &self,
         call_id: &Uuid,
         segment: &TranscriptSegmentRequest,
+        voice_id: Option<Uuid>,
     ) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
-            INSERT INTO call_transcripts (call_id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, (
+            INSERT INTO call_transcripts (call_id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, voice_id, sequence_num)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, (
                 SELECT COALESCE(MAX(sequence_num), 0) + 1
                 FROM call_transcripts
                 WHERE call_id = $1
@@ -710,6 +711,7 @@ impl CallRepository for PgCallRepo {
             segment.content,
             segment.started_at,
             segment.ended_at,
+            voice_id,
         )
         .execute(&self.pool)
         .await?;
