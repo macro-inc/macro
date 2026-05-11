@@ -10,7 +10,6 @@ import {
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
-import { Hotkey } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { pressedKeys } from '@core/hotkey/state';
@@ -20,6 +19,7 @@ import { isErr } from '@core/util/maybeResult';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
+import { Hotkey } from '@ui';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { createSignal, onCleanup, onMount } from 'solid-js';

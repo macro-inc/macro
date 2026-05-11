@@ -1018,17 +1018,40 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?
             .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?;
 
-        // Upsert the speaker embedding (if the agent sent one) so we can
-        // store the resulting voice id on the transcript row. Failure to
-        // persist the embedding must not block transcript ingest — log and
-        // continue without a voice id.
+        // Attach a stable voice id to each transcript row. Reuse an earlier
+        // voice id for the same diarized speaker in this call before falling
+        // back to embedding-based upsert; this prevents creating a fresh
+        // `voice.id` for every finalized utterance from the same user.
+        // Failure to persist the embedding must not block transcript ingest —
+        // log and continue without a voice id.
         let voice_id = match segment.embedding.as_deref() {
-            Some(embedding) if !embedding.is_empty() => self
-                .voice_repo
-                .upsert_voice(embedding)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, "failed to upsert voice embedding"))
-                .ok(),
+            Some(embedding) if !embedding.is_empty() => {
+                let existing_voice_id = self
+                    .repo
+                    .get_transcript_voice_id_for_speaker(
+                        &call.id,
+                        &segment.speaker_id,
+                        segment.diarized_speaker_id.as_deref(),
+                    )
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "failed to look up existing speaker voice id")
+                    })
+                    .ok()
+                    .flatten();
+
+                match existing_voice_id {
+                    Some(voice_id) => Some(voice_id),
+                    None => self
+                        .voice_repo
+                        .upsert_voice(embedding)
+                        .await
+                        .inspect_err(
+                            |e| tracing::error!(error=?e, "failed to upsert voice embedding"),
+                        )
+                        .ok(),
+                }
+            }
             _ => None,
         };
 

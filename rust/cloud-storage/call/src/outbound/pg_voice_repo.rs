@@ -9,6 +9,28 @@ use uuid::Uuid;
 
 use crate::domain::ports::VoiceRepository;
 
+/// Cosine-distance cutoff for treating two embeddings as the same voice.
+///
+/// This keeps transcript ingestion from creating a fresh `voice.id` for every
+/// finalized utterance from the same speaker while still allowing clearly
+/// different speakers to get separate ids.
+const VOICE_DEDUP_DISTANCE_THRESHOLD: f64 = 0.25;
+
+fn embedding_advisory_lock_key(embedding: &[f32]) -> i64 {
+    const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x100000001b3;
+
+    let mut hash = FNV_OFFSET_BASIS;
+    for value in embedding {
+        for byte in value.to_le_bytes() {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(FNV_PRIME);
+        }
+    }
+
+    hash as i64
+}
+
 /// Postgres adapter implementing [`VoiceRepository`].
 #[derive(Clone)]
 pub struct PgVoiceRepo {
@@ -27,17 +49,42 @@ impl VoiceRepository for PgVoiceRepo {
 
     async fn upsert_voice(&self, embedding: &[f32]) -> Result<Uuid, Self::Err> {
         let id = macro_uuid::generate_uuid_v7();
+        let lock_key = embedding_advisory_lock_key(embedding);
         let vec = Vector::from(embedding.to_vec());
-        let row = sqlx::query!(
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+            .bind(lock_key)
+            .fetch_one(tx.as_mut())
+            .await?;
+
+        let voice_id = sqlx::query_scalar::<_, Uuid>(
             r#"
-            INSERT INTO voice (id, embedding) VALUES ($1, $2) RETURNING id
+            WITH nearest AS (
+                SELECT id
+                FROM voice
+                WHERE (embedding <=> $1) <= $2
+                ORDER BY embedding <=> $1 ASC
+                LIMIT 1
+            ), inserted AS (
+                INSERT INTO voice (id, embedding)
+                SELECT $3, $1
+                WHERE NOT EXISTS (SELECT 1 FROM nearest)
+                RETURNING id
+            )
+            SELECT id FROM nearest
+            UNION ALL
+            SELECT id FROM inserted
+            LIMIT 1
             "#,
-            id,
-            vec as Vector,
         )
-        .fetch_one(&self.pool)
+        .bind(vec)
+        .bind(VOICE_DEDUP_DISTANCE_THRESHOLD)
+        .bind(id)
+        .fetch_one(tx.as_mut())
         .await?;
-        Ok(row.id)
+        tx.commit().await?;
+        Ok(voice_id)
     }
 
     async fn link_user_voice(

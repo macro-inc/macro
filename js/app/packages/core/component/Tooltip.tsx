@@ -10,7 +10,7 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
-import { Hotkey } from './Hotkey';
+import { Hotkey } from '../../ui/components/Hotkey';
 
 const TOOLTIP_DELAY = 250;
 

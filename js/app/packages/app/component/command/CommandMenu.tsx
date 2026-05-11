@@ -2,7 +2,6 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { Hotkey } from '@core/component/Hotkey';
 import { Tabs } from '@core/component/Tabs';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
@@ -11,7 +10,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { type EntityData, InlineEntity } from '@entity';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import Macro from '@macro-icons/macro-logo.svg';
-import { cn, Dialog, Panel } from '@ui';
+import { cn, Dialog, Hotkey, Panel } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,

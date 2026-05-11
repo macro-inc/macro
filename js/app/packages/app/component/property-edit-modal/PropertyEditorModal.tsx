@@ -1,4 +1,3 @@
-import { Hotkey } from '@core/component/Hotkey';
 import {
   type CombinedEntity,
   getEntityName,
@@ -29,7 +28,7 @@ import { type EntityData, InlineEntity } from '@entity';
 import { useEntityPropertiesQuery } from '@queries/properties/entity';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { mergeRefs } from '@solid-primitives/refs';
-import { cn, Dialog, Surface } from '@ui';
+import { cn, Dialog, Hotkey, Surface } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,

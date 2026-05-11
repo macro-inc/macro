@@ -42,11 +42,30 @@ async fn upsert_voice_inserts_row(pool: Pool<Postgres>) -> anyhow::Result<()> {
     fixtures(path = "../../../fixtures", scripts("voice_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn upsert_voice_returns_distinct_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = repo(pool);
+async fn upsert_voice_reuses_existing_nearby_embedding(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
     let v1 = repo.upsert_voice(&axis_unit_vector(0)).await?;
     let v2 = repo.upsert_voice(&axis_unit_vector(0)).await?;
-    assert_ne!(v1, v2, "each upsert generates a fresh id");
+    assert_eq!(v1, v2, "same speaker embedding should reuse one voice id");
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM voice")
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(count, 1);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("voice_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn upsert_voice_inserts_distinct_id_for_different_embedding(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let v1 = repo.upsert_voice(&axis_unit_vector(0)).await?;
+    let v2 = repo.upsert_voice(&axis_unit_vector(1)).await?;
+    assert_ne!(v1, v2, "orthogonal voices should not be deduplicated");
     Ok(())
 }
 
@@ -201,16 +220,22 @@ async fn find_nearest_user_skips_unlinked_voices(pool: Pool<Postgres>) -> anyhow
 async fn find_nearest_user_for_voice_resolves_via_embedding_lookup(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = repo(pool);
+    let repo = repo(pool.clone());
     // user_a is enrolled with axis-0 vector.
     let enrolled = repo.upsert_voice(&axis_unit_vector(0)).await?;
     repo.link_user_voice(&USER_A, &enrolled).await?;
 
-    // A separate voice row with the *same* embedding (the typical
-    // post-archive transcript case) must resolve back to user_a via
-    // similarity, not exact id match.
-    let segment_voice = repo.upsert_voice(&axis_unit_vector(0)).await?;
+    // Insert a separate transcript sample directly so this exercises the
+    // lookup-by-voice path even though `upsert_voice` now deduplicates nearby
+    // embeddings.
+    let segment_voice = macro_uuid::generate_uuid_v7();
+    sqlx::query("INSERT INTO voice (id, embedding) VALUES ($1, $2)")
+        .bind(segment_voice)
+        .bind(pgvector::Vector::from(axis_unit_vector(0)))
+        .execute(&pool)
+        .await?;
     assert_ne!(enrolled, segment_voice);
+
     let match_id = repo
         .find_nearest_user_for_voice(&segment_voice, 0.1)
         .await?;

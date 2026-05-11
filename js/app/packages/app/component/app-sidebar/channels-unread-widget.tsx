@@ -11,7 +11,7 @@ import { openNotification } from '@notifications';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
-import { Button, cn } from '@ui';
+import { Avatar, Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -72,9 +72,9 @@ function computeChannelLetters(groups: ChannelGroup[]): Map<string, string> {
 
 function ChannelLetterIcon(props: { letters: string }) {
   return (
-    <div class="size-full rounded-sm border border-ink/40 text-ink-muted flex items-center justify-center">
-      <span class="text-xxs leading-none">{props.letters}</span>
-    </div>
+    <Avatar size="md">
+      <Avatar.Fallback>#{props.letters}</Avatar.Fallback>
+    </Avatar>
   );
 }
 
@@ -190,7 +190,7 @@ function ChannelGroupItem(props: {
     <Button
       class={cn(
         'flex items-center cursor-default rounded-xs',
-        isSlim() ? 'justify-center size-8' : 'justify-start gap-3 size-full'
+        isSlim() ? 'justify-center size-8' : 'justify-start gap-3 size-full h-8'
       )}
       draggable={false}
       variant="ghost"
@@ -210,13 +210,13 @@ function ChannelGroupItem(props: {
         >
           <UserIcon
             id={senderId()!}
-            size="fill"
+            size="md"
             suppressClick
             showTooltip={false}
           />
         </Show>
         <Show when={isSlim()}>
-          <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full" />
+          <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full ring-page ring-2" />
         </Show>
       </div>
 

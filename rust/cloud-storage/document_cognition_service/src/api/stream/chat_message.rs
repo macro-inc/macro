@@ -443,7 +443,6 @@ fn stream_and_save_message(
     cancellation_sub: CancellationSubscription,
 ) {
     tracing::trace!(request=?request, "streaming chat request");
-    let model = Model::Claude45Haiku;
     let tool_context = ctx.tool_service_context.clone();
     let toolset = ctx.all_tools.clone();
 

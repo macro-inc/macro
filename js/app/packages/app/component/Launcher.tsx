@@ -2,7 +2,6 @@ import { analytics } from '@app/lib/analytics';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
-import { Hotkey } from '@core/component/Hotkey';
 import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
 import {
   createHotkeyGroup,
@@ -42,7 +41,7 @@ import WideFolder from '@macro-icons/wide/folder.svg';
 import WideStar from '@macro-icons/wide/star.svg';
 import WideTask from '@macro-icons/wide/task.svg';
 import { createProject } from '@queries/storage/projects';
-import { cn, Layer } from '@ui';
+import { cn, Hotkey, Layer } from '@ui';
 import {
   type Component,
   createEffect,

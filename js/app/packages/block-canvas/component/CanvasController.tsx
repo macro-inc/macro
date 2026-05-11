@@ -1,7 +1,6 @@
 import { useCanvasFileDrop } from '@block-canvas/signal/fileDrop';
 import { type BlockName, useBlockId, useIsNestedBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { BasicHotkey } from '@core/component/Hotkey';
 import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import {
   blockNameToFileExtensions,
@@ -35,7 +34,7 @@ import StackPlus from '@phosphor-icons/core/regular/stack-plus.svg?component-sol
 import { createCallback } from '@solid-primitives/rootless';
 import { throttle } from '@solid-primitives/scheduled';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { cn } from '@ui';
+import { cn, Hotkey } from '@ui';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMethodRegistration } from 'core/orchestrator';
 import { usePinch } from 'solid-gesture';
@@ -1022,7 +1021,7 @@ export function CanvasController(props: ParentProps) {
             edges.save();
             closeContextMenu();
           }}
-          hotkey={<BasicHotkey token={'canvas.cut'} />}
+          hotkey={<Hotkey token={'canvas.cut'} />}
           disabled={!selection.active()}
         />
         <OldMenuItem
@@ -1033,7 +1032,7 @@ export function CanvasController(props: ParentProps) {
             clipboard.copySelection(false);
             closeContextMenu();
           }}
-          hotkey={<BasicHotkey token={'canvas.copy'} />}
+          hotkey={<Hotkey token={'canvas.copy'} />}
           disabled={!selection.active()}
         />
         <OldMenuItem
@@ -1054,7 +1053,7 @@ export function CanvasController(props: ParentProps) {
             edges.save();
             closeContextMenu();
           }}
-          hotkey={<BasicHotkey token={'canvas.paste'} />}
+          hotkey={<Hotkey token={'canvas.paste'} />}
         />
         <OldMenuItem
           text="Delete"
@@ -1064,7 +1063,7 @@ export function CanvasController(props: ParentProps) {
             deleteSelection();
             closeContextMenu();
           }}
-          hotkey={<BasicHotkey token={'canvas.delete'} />}
+          hotkey={<Hotkey token={'canvas.delete'} />}
           disabled={!selection.active()}
         />
         <Show when={selection.active()}>
@@ -1085,7 +1084,7 @@ export function CanvasController(props: ParentProps) {
                     reorder.reorder(ReorderOperations.Forward, true);
                     closeContextMenu();
                   }}
-                  hotkey={<BasicHotkey token={'canvas.bringForward'} />}
+                  hotkey={<Hotkey token={'canvas.bringForward'} />}
                 />
                 <OldMenuItem
                   text="Send backward"
@@ -1095,7 +1094,7 @@ export function CanvasController(props: ParentProps) {
                     reorder.reorder(ReorderOperations.Backward, true);
                     closeContextMenu();
                   }}
-                  hotkey={<BasicHotkey token={'canvas.sendBackward'} />}
+                  hotkey={<Hotkey token={'canvas.sendBackward'} />}
                 />
                 <OldMenuItem
                   text="Bring to front"
@@ -1105,7 +1104,7 @@ export function CanvasController(props: ParentProps) {
                     reorder.reorder(ReorderOperations.BringToFront, true);
                     closeContextMenu();
                   }}
-                  hotkey={<BasicHotkey token={'canvas.bringToFront'} />}
+                  hotkey={<Hotkey token={'canvas.bringToFront'} />}
                 />
                 <OldMenuItem
                   text="Send to back"
@@ -1115,7 +1114,7 @@ export function CanvasController(props: ParentProps) {
                     reorder.reorder(ReorderOperations.SendToBack, true);
                     closeContextMenu();
                   }}
-                  hotkey={<BasicHotkey token={'canvas.sendToBack'} />}
+                  hotkey={<Hotkey token={'canvas.sendToBack'} />}
                 />
               </OldMenu>
             }

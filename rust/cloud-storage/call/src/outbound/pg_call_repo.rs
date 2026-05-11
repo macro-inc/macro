@@ -838,6 +838,34 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_transcript_voice_id_for_speaker(
+        &self,
+        call_id: &Uuid,
+        speaker_id: &str,
+        diarized_speaker_id: Option<&str>,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        sqlx::query_scalar::<_, Uuid>(
+            r#"
+            SELECT voice_id
+            FROM call_transcripts
+            WHERE call_id = $1
+              AND voice_id IS NOT NULL
+              AND (
+                  ($3::text IS NOT NULL AND diarized_speaker_id = $3)
+                  OR ($3::text IS NULL AND diarized_speaker_id IS NULL AND speaker_id = $2)
+              )
+            ORDER BY sequence_num ASC
+            LIMIT 1
+            "#,
+        )
+        .bind(call_id)
+        .bind(speaker_id)
+        .bind(diarized_speaker_id)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_call_record_by_call_id(
         &self,
         call_id: &Uuid,

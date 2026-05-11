@@ -7,6 +7,7 @@ export { Keyboard } from './components/Keyboard';
 export { Surface } from './components/Surface';
 export { Dialog  } from './components/Dialog';
 export { Button } from './components/Button';
+export { Hotkey } from './components/Hotkey';
 export { Scroll } from './components/Scroll';
 export { Panel  } from './components/Panel';
 export { Layer } from './components/Layer';
