@@ -17,7 +17,7 @@ use crate::domain::ports::ChatService;
 use ai_toolset::tool_object::UserToolResponse;
 use entity_access::domain::models::{
     AccessError, AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType,
-    OwnerAccessLevel, ViewAccessLevel,
+    OwnerAccessLevel, UserTeamInfo, ViewAccessLevel,
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::lowercased::Lowercase;
@@ -421,6 +421,13 @@ impl EntityAccessService for MockAccessService {
         _channel_id: &sqlx::types::Uuid,
     ) -> std::result::Result<Option<entity_access::domain::models::CallChannelInfo>, AccessError>
     {
+        unimplemented!()
+    }
+
+    async fn get_user_team(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> std::result::Result<Option<UserTeamInfo>, AccessError> {
         unimplemented!()
     }
 }
