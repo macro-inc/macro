@@ -1,5 +1,5 @@
-import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import StopIcon from '@phosphor-icons/core/bold/stop-bold.svg?component-solid';
+import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import type { Accessor } from 'solid-js';
 
 export function SendMessageButton(props: {
