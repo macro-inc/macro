@@ -1,5 +1,5 @@
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
-import { Hotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@ui';
 import {
   INSERT_HORIZONTAL_RULE_COMMAND,
   NODE_TRANSFORM,

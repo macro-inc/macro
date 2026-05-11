@@ -2,7 +2,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { Hotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@ui';
 import { Tabs } from '@core/component/Tabs';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';

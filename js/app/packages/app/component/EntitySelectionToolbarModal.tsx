@@ -1,4 +1,4 @@
-import { Hotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@ui';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import type { EntityData } from '@entity';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';

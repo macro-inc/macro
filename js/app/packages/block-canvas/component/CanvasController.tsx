@@ -1,7 +1,7 @@
 import { useCanvasFileDrop } from '@block-canvas/signal/fileDrop';
 import { type BlockName, useBlockId, useIsNestedBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { Hotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@ui';
 import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import {
   blockNameToFileExtensions,

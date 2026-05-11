@@ -12,7 +12,7 @@ import {
   splitProps,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { Hotkey } from './Hotkey';
+import { Hotkey } from '../../ui/components/Hotkey';
 import { type Theme, themeColors, themeStyles } from './Themes';
 import { LabelAndHotKey, NullTooltip, Tooltip } from './Tooltip';
 

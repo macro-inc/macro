@@ -2,7 +2,7 @@ import { analytics } from '@app/lib/analytics';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
-import { Hotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@ui';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';

@@ -1,4 +1,4 @@
-import { Hotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@ui';
 import {
   type CombinedEntity,
   getEntityName,

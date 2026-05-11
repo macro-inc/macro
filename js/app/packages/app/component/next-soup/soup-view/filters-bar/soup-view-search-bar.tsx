@@ -2,7 +2,7 @@ import { useSoup } from '@app/component/next-soup/soup-context';
 import { registerSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { Hotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@ui';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { registerHotkey } from '@core/hotkey/hotkeys';

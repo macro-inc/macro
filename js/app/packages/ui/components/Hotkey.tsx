@@ -1,41 +1,63 @@
-import { IS_MAC } from '@core/constant/isMac';
-import type { HotkeyToken } from '@core/hotkey/tokens';
-import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
-import type { Theme } from './Themes';
+import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
+import type { HotkeyToken } from '@core/hotkey/tokens';
+import type { Theme } from 'core/component/Themes';
+import { IS_MAC } from '@core/constant/isMac';
 
 export const modifierMap = {
-  cmd: IS_MAC ? '⌘' : 'Ctrl',
-  opt: IS_MAC ? '⌥' : 'Alt',
   shift: IS_MAC ? '⇧' : 'Shift',
   ctrl: IS_MAC ? '⌃' : 'Ctrl',
   meta: IS_MAC ? '⌘' : 'Ctrl',
+  cmd: IS_MAC ? '⌘' : 'Ctrl',
+  opt: IS_MAC ? '⌥' : 'Alt',
 } as const;
 
 const symbolMap = {
-  ARROWUP: '↑',
-  ARROWDOWN: '↓',
-  ARROWLEFT: '←',
   ARROWRIGHT: '→',
-  ENTER: '↵',
-  SPACE: 'Space',
+  ARROWLEFT: '←',
+  ARROWDOWN: '↓',
   BACKSPACE: '⌫',
-  DELETE: '⌦',
+  SPACE: 'Space',
   ESCAPE: 'ESC',
+  ARROWUP: '↑',
+  DELETE: '⌦',
+  ENTER: '↵',
 };
 
 export const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
-  base: {
-    label: 'bg-ink border border-ink text-dialog',
-    hotkey: 'bg-dialog border border-ink text-ink',
+
+  extraMuted: {
+    hotkey: 'bg-dialog border border-ink-extra-muted text-ink-extra-muted',
+    label: 'bg-ink-extra-muted border border-ink-extra-muted text-dialog',
+  },
+  disabled: {
+    hotkey: 'bg-dialog border border-ink-disabled text-ink-disabled',
+    label: 'bg-ink-disabled border border-ink-disabled text-dialog',
+  },
+  muted: {
+    hotkey: 'bg-dialog border border-ink-muted text-ink-muted',
+    label: 'bg-ink-muted border border-ink-muted text-dialog',
   },
   accent: {
-    label: 'bg-accent border border-accent/30 text-dialog',
     hotkey: 'bg-accent/10 border border-accent/30 text-accent',
+    label: 'bg-accent border border-accent/30 text-dialog',
+  },
+  current: {
+    hotkey: 'bg-dialog border border-current text-current',
+    label: 'bg-current border border-current text-dialog',
   },
   accentFill: {
-    label: 'bg-accent border border-accent text-dialog',
     hotkey: 'bg-dialog border border-accent text-accent',
+    label: 'bg-accent border border-accent text-dialog',
+  },
+  reverse: {
+    hotkey: 'bg-ink border border-dialog text-dialog',
+    label: 'bg-dialog border border dialog text-ink',
+  },
+
+  base: {
+    hotkey: 'bg-dialog border border-ink text-ink',
+    label: 'bg-ink border border-ink text-dialog',
   },
   accentOpaque: {
     label: '',
@@ -45,11 +67,11 @@ export const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
     label: '',
     hotkey: '',
   },
-  clear: {
+  selected: {
     label: '',
     hotkey: '',
   },
-  selected: {
+  clear: {
     label: '',
     hotkey: '',
   },
@@ -61,40 +83,16 @@ export const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
     label: '',
     hotkey: '',
   },
-  muted: {
-    label: 'bg-ink-muted border border-ink-muted text-dialog',
-    hotkey: 'bg-dialog border border-ink-muted text-ink-muted',
-  },
-  extraMuted: {
-    label: 'bg-ink-extra-muted border border-ink-extra-muted text-dialog',
-    hotkey: 'bg-dialog border border-ink-extra-muted text-ink-extra-muted',
-  },
-  disabled: {
-    label: 'bg-ink-disabled border border-ink-disabled text-dialog',
-    hotkey: 'bg-dialog border border-ink-disabled text-ink-disabled',
-  },
-  reverse: {
-    label: 'bg-dialog border border dialog text-ink',
-    hotkey: 'bg-ink border border-dialog text-dialog',
-  },
-  current: {
-    label: 'bg-current border border-current text-dialog',
-    hotkey: 'bg-dialog border border-current text-current',
-  },
+
 };
 
-const getSymbol = (key: string) =>
-  key.toUpperCase() in symbolMap
-    ? symbolMap[key.toUpperCase() as keyof typeof symbolMap]
-    : key;
+const getSymbol = (key: string) => key.toUpperCase() in symbolMap ? symbolMap[key.toUpperCase() as keyof typeof symbolMap] : key;
 
 const modifierKeys = Object.keys(modifierMap);
 
 function breakApartHotkeyString(hotkey: string) {
   const parts = hotkey.split('+');
-  if (parts.length === 0) {
-    return { key: '', modifiers: [] };
-  }
+  if (parts.length === 0) { return { key: '', modifiers: [] }; }
   const key = parts
     .filter((part) => !modifierKeys.includes(part))
     .map(getSymbol);
@@ -103,10 +101,10 @@ function breakApartHotkeyString(hotkey: string) {
 }
 
 interface HotkeyProps extends JSX.HTMLAttributes<HTMLDivElement> {
+  lowercase?: boolean;
   token?: HotkeyToken;
+  showPlus?: boolean;
   shortcut?: string;
-  showPlus?: boolean; // Whether to show the plus sign in compound hotkeys
-  lowercase?: boolean; // Whether to display the key in lowercase
 }
 
 /**
@@ -116,30 +114,24 @@ interface HotkeyProps extends JSX.HTMLAttributes<HTMLDivElement> {
  * @example
  * <Hotkey token="canvas.cut" />
  */
-export const Hotkey = (props: HotkeyProps) => {
+export function Hotkey(props: HotkeyProps){
   const [local, rest] = splitProps(props, [
-    'token',
+    'lowercase',
+    'children',
     'shortcut',
     'showPlus',
-    'children',
-    'lowercase',
+    'token',
   ]);
-  const tokenShortcut = createMemo(() =>
-    local.token ? getPrettyHotkeyStringByToken(local.token) : undefined
-  );
+  const tokenShortcut = createMemo(() => { return local.token ? getPrettyHotkeyStringByToken(local.token) : undefined });
 
   const hotkey = createMemo(() => {
     // fallback for when we specify a shortcut directly instead of a hotkey token
-    if (local.shortcut && !tokenShortcut()) {
-      return breakApartHotkeyString(local.shortcut);
-    }
-    if (!tokenShortcut()) {
-      return { key: '', modifiers: [] };
-    }
+    if (local.shortcut && !tokenShortcut()) { return breakApartHotkeyString(local.shortcut); }
+    if (!tokenShortcut()) { return { key: '', modifiers: [] }; }
     return breakApartHotkeyString(tokenShortcut() ?? '');
   });
 
-  const normalizedKey = () => {
+  function normalizedKey(){
     const key = hotkey().key;
     return props.lowercase
       ? typeof key === 'string'
@@ -151,7 +143,7 @@ export const Hotkey = (props: HotkeyProps) => {
   };
 
   // Don't render anything if there are no modifiers and no key
-  const hasContent = () => {
+  function hasContent(){
     const h = hotkey();
     const key = normalizedKey();
     return (
@@ -183,4 +175,3 @@ export const Hotkey = (props: HotkeyProps) => {
     </Show>
   );
 };
-

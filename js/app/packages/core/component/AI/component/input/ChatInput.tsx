@@ -2,7 +2,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useChatInputContext } from '@core/component/AI/context';
 import type { Model, ToolSet } from '@core/component/AI/types';
-import { Hotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@ui';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';

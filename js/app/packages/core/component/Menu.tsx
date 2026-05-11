@@ -20,7 +20,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import clickOutside from '../directive/clickOutside';
 import { EditingContext } from './Editable';
-import { Hotkey } from './Hotkey';
+import { Hotkey } from '../../ui/components/Hotkey';
 
 false && clickOutside;
 

@@ -7,7 +7,7 @@ import {
   type EditableLabelProps,
   EditingContext,
 } from './Editable';
-import { Hotkey } from './Hotkey';
+import { Hotkey } from '../../ui/components/Hotkey';
 import { type Theme, themeColors, themeStyles } from './Themes';
 import { LabelAndHotKey, Tooltip } from './Tooltip';
 

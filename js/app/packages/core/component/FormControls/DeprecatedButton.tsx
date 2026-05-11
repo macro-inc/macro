@@ -6,7 +6,7 @@ import {
   Show,
   type ValidComponent,
 } from 'solid-js';
-import { Hotkey } from '../Hotkey';
+import { Hotkey } from '../../../ui/components/Hotkey';
 
 type Size = 'SM' | 'Base' | 'XS';
 type Theme = 'primary' | 'secondary' | 'primary' | 'secondary';

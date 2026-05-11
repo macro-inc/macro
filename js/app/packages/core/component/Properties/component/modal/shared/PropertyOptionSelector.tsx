@@ -1,4 +1,4 @@
-import { Hotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@ui';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/regular/plus.svg';
