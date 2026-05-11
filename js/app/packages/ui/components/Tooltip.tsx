@@ -1,15 +1,29 @@
 import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
-import { For, Show } from 'solid-js';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { Hotkey } from '../../ui/components/Hotkey';
 import type { Placement } from '@floating-ui/dom';
 import type { JSX, ParentProps } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { cn, Surface } from '@ui';
 
-export type HotkeySequenceStep = {
-  token?: HotkeyToken;
+type SurfaceSlotProps = ParentProps<{ class?: string }>;
+
+type ContentProps = ParentProps<{ class?: string }>;
+
+export type TooltipProps = ParentProps<{
+  onOpenChange?: (open: boolean) => void;
+  hotkeySequence?: HotkeySequenceStep[];
+  ref?: (el: HTMLElement) => void;
+  rows?: LabelAndHotKeyProps[];
+  hotkeyToken?: HotkeyToken;
+  tooltip?: JSX.Element;
+  placement?: Placement;
+  as?: 'div' | 'span';
   shortcut?: string;
-};
+  label?: string;
+  class?: string;
+  open?: boolean;
+}>;
 
 type LabelAndHotKeyProps = {
   hotkeySequence?: HotkeySequenceStep[];
@@ -18,11 +32,24 @@ type LabelAndHotKeyProps = {
   label: string;
 };
 
+export type HotkeySequenceStep = {
+  token?: HotkeyToken;
+  shortcut?: string;
+};
+
 type TriggerProps = ParentProps<{
   as?: 'div' | 'span';
   ref?: (el: HTMLElement) => void;
   class?: string;
 }>;
+
+const DEFAULT_PLACEMENT: Placement = 'bottom';
+const TOOLTIP_OVERFLOW_PADDING = 16;
+const TOOLTIP_VIEWPORT_PADDING = 16;
+const TOOLTIP_FIT_VIEWPORT = true;
+const TOOLTIP_GUTTER = 4;
+const TOOLTIP_DELAY = 250;
+const TOOLTIP_FLIP = true;
 
 function TooltipTrigger(props: TriggerProps) {
   return (
@@ -35,20 +62,6 @@ function TooltipTrigger(props: TriggerProps) {
     </KobalteTooltip.Trigger>
   );
 }
-
-type SurfaceSlotProps = ParentProps<{ class?: string }>;
-
-type ContentProps = ParentProps<{ class?: string }>;
-
-
-
-const DEFAULT_PLACEMENT: Placement = 'bottom';
-const TOOLTIP_OVERFLOW_PADDING = 16;
-const TOOLTIP_VIEWPORT_PADDING = 16;
-const TOOLTIP_FIT_VIEWPORT = true;
-const TOOLTIP_GUTTER = 4;
-const TOOLTIP_DELAY = 250;
-const TOOLTIP_FLIP = true;
 
 function TooltipContent(props: ContentProps) {
   return (
@@ -77,20 +90,42 @@ function TooltipSurface(props: SurfaceSlotProps) {
   );
 }
 
-export type TooltipProps = ParentProps<{
-  onOpenChange?: (open: boolean) => void;
-  hotkeySequence?: HotkeySequenceStep[];
-  ref?: (el: HTMLElement) => void;
-  rows?: LabelAndHotKeyProps[];
-  hotkeyToken?: HotkeyToken;
-  tooltip?: JSX.Element;
-  placement?: Placement;
-  as?: 'div' | 'span';
-  shortcut?: string;
-  label?: string;
-  class?: string;
-  open?: boolean;
-}>;
+function LabelAndHotKey(props: LabelAndHotKeyProps) {
+  const steps = (): HotkeySequenceStep[] => {
+    if (props.hotkeySequence?.length) { return props.hotkeySequence; }
+    if (props.hotkeyToken || props.shortcut) { return [{ token: props.hotkeyToken, shortcut: props.shortcut }]; }
+    return [];
+  };
+
+  return (
+    <div
+      class={cn(
+        'flex flex-row items-center space-x-2',
+        steps().length === 0 ? 'px-1' : 'px-0'
+      )}
+    >
+      <div class="text-xs capitalize">{props.label}</div>
+      <Show when={steps().length > 0}>
+        <div class="flex items-center gap-1 ml-auto">
+          <For each={steps()}>
+            {(step, ndx) => (
+              <>
+                <Hotkey
+                  shortcut={step.shortcut}
+                  token={step.token}
+                  theme="subtle"
+                />
+                <Show when={ndx() < steps().length - 1}>
+                  <span class="text-ink-extra-muted">then</span>
+                </Show>
+              </>
+            )}
+          </For>
+        </div>
+      </Show>
+    </div>
+  );
+}
 
 /**
  * @example
@@ -170,40 +205,3 @@ export function Tooltip(props: TooltipProps) {
 Tooltip.Trigger = TooltipTrigger;
 Tooltip.Content = TooltipContent;
 Tooltip.Surface = TooltipSurface;
-
-function LabelAndHotKey(props: LabelAndHotKeyProps) {
-  const steps = (): HotkeySequenceStep[] => {
-    if (props.hotkeySequence?.length) { return props.hotkeySequence; }
-    if (props.hotkeyToken || props.shortcut) { return [{ token: props.hotkeyToken, shortcut: props.shortcut }]; }
-    return [];
-  };
-
-  return (
-    <div
-      class={cn(
-        'flex flex-row items-center space-x-2',
-        steps().length === 0 ? 'px-1' : 'px-0'
-      )}
-    >
-      <div class="text-xs capitalize">{props.label}</div>
-      <Show when={steps().length > 0}>
-        <div class="flex items-center gap-1 ml-auto">
-          <For each={steps()}>
-            {(step, ndx) => (
-              <>
-                <Hotkey
-                  shortcut={step.shortcut}
-                  token={step.token}
-                  theme="subtle"
-                />
-                <Show when={ndx() < steps().length - 1}>
-                  <span class="text-ink-extra-muted">then</span>
-                </Show>
-              </>
-            )}
-          </For>
-        </div>
-      </Show>
-    </div>
-  );
-}
