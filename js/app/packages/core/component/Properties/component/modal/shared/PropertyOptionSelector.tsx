@@ -1,9 +1,9 @@
-import { Hotkey } from '@core/component/Hotkey';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
+import { Hotkey } from '@ui';
 import { cn } from '@ui/utils/classname';
 import type { JSX, ParentComponent } from 'solid-js';
 import {
