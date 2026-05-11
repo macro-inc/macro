@@ -42,7 +42,7 @@ document_create = [
   "markdown_init",
   "ports",
 ]
-inbound = ["axum", "ports"]
+inbound = ["axum", "document_create", "ports"]
 markdown_init = ["dep:lexical_client"]
 outbound = [
   "dep:aws-sdk-s3",

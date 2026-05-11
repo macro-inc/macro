@@ -1,4 +1,4 @@
-//! Handler for `POST /documents/create_task`.
+//! Handler for `POST /documents/create_markdown`.
 
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
@@ -10,34 +10,39 @@ use super::DocumentRouterState;
 use crate::domain::create::{
     DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
 };
-use crate::domain::models::{CreateTaskRequest, CreateTaskResponse, DocumentError};
+use crate::domain::models::{
+    CreateMarkdownDocumentRequest, CreateMarkdownDocumentResponse, DocumentError,
+};
 use crate::domain::ports::DocumentService;
 
-/// Creates a task document with properties and initialized markdown content in
-/// one backend-owned lifecycle.
+/// Creates and initializes a markdown document in one backend-owned lifecycle.
 #[utoipa::path(
     tag = "document",
     post,
-    path = "/documents/create_task",
-    request_body = CreateTaskRequest,
+    path = "/documents/create_markdown",
+    request_body = CreateMarkdownDocumentRequest,
     responses(
-        (status = 200, body = inline(CreateTaskResponse)),
+        (status = 200, body = inline(CreateMarkdownDocumentResponse)),
         (status = 400, body = model_error_response::ErrorResponse),
         (status = 401, body = model_error_response::ErrorResponse),
+        (status = 409, body = model_error_response::ErrorResponse),
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
 #[tracing::instrument(skip(state, user_context, project), fields(user_id=?user_context.macro_user_id))]
-pub async fn create_task_handler<T: DocumentService, Svc: EntityAccessService>(
+pub async fn create_markdown_handler<T: DocumentService, Svc: EntityAccessService>(
     State(state): State<DocumentRouterState<T, Svc>>,
     user_context: MacroUserExtractor,
-    project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateTaskRequest, Svc>,
-) -> Result<Json<CreateTaskResponse>, DocumentError> {
+    project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateMarkdownDocumentRequest, Svc>,
+) -> Result<Json<CreateMarkdownDocumentResponse>, DocumentError> {
     let req = project.into_inner();
 
-    let mut metadata = NewDocumentMetadata::builder(req.task_name.clone());
+    let mut metadata = NewDocumentMetadata::builder(req.document_name);
     if let Some(project_id) = req.project_id {
         metadata = metadata.project_id(project_id);
+    }
+    if req.skip_history {
+        metadata = metadata.skip_history();
     }
 
     let creator = DocumentCreator::new(
@@ -51,15 +56,12 @@ pub async fn create_task_handler<T: DocumentService, Svc: EntityAccessService>(
             NewMarkdownTextDocument {
                 metadata: metadata.build(),
                 markdown: req.markdown.unwrap_or_default(),
-                subtype: MarkdownSubtype::Task {
-                    property_values: req.property_values,
-                    share_with_team: req.share_with_team,
-                },
+                subtype: MarkdownSubtype::Note,
             },
         )
         .await?;
 
-    Ok(Json(CreateTaskResponse {
+    Ok(Json(CreateMarkdownDocumentResponse {
         document_id: created.document_id().to_string(),
     }))
 }

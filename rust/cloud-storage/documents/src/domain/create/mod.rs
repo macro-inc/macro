@@ -578,6 +578,7 @@ impl<'a, Svc: DocumentService> DocumentCreator<'a, Svc> {
                         &document_id,
                         &CreateTaskRequest {
                             task_name,
+                            markdown: None,
                             project_id,
                             property_values,
                             share_with_team,

@@ -104,12 +104,6 @@ const migrateToSyncService = async (documentId: string) => {
     return LoadErrors.INVALID;
   }
 
-  const finalizeRes = await storageServiceClient.finalizeUpload({ documentId });
-  if (isErr(finalizeRes)) {
-    console.error('Failed to finalize markdown migration', finalizeRes);
-    return LoadErrors.INVALID;
-  }
-
   return ok(undefined);
 };
 

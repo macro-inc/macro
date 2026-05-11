@@ -6,7 +6,7 @@
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + git branch name (when the document is a task)
 //! - `GET /{document_id}/short_id` — get document short ID
-//! - `POST /{document_id}/finalize_upload` — finalize caller-managed upload bytes
+//! - `POST /create_markdown` — create and initialize a markdown document
 //! - `DELETE /{document_id}` — soft-delete a document
 
 #[cfg(test)]
@@ -14,11 +14,11 @@ mod tests;
 
 mod copy_document;
 mod create_document;
+#[cfg(feature = "document_create")]
+mod create_markdown;
 mod create_task;
 mod delete_document;
 mod edit_document;
-#[cfg(feature = "document_create")]
-mod finalize_upload;
 mod get_branch_name;
 mod get_document;
 mod get_location;
@@ -45,11 +45,11 @@ use crate::domain::ports::DocumentService;
 // Re-export handlers and utoipa path types for external use (swagger, internal routes)
 pub use copy_document::*;
 pub use create_document::*;
+#[cfg(feature = "document_create")]
+pub use create_markdown::*;
 pub use create_task::*;
 pub use delete_document::*;
 pub use edit_document::*;
-#[cfg(feature = "document_create")]
-pub use finalize_upload::*;
 pub use get_branch_name::*;
 pub use get_document::*;
 pub use get_location::*;
@@ -89,10 +89,10 @@ pub struct DocumentRouterState<T, Svc> {
     pub access_service: Arc<Svc>,
     /// The database pool (used by middleware for document lookups).
     pub pool: PgPool,
-    /// Lexical-service client for markdown upload finalization.
+    /// Lexical-service client for backend-owned markdown initialization.
     #[cfg(feature = "document_create")]
     pub lexical_client: Arc<lexical_client::LexicalClient>,
-    /// Sync-service client for markdown upload finalization.
+    /// Sync-service client for backend-owned markdown initialization.
     #[cfg(feature = "document_create")]
     pub sync_service_client: Arc<sync_service_client::SyncServiceClient>,
 }
@@ -156,25 +156,26 @@ where
             axum::routing::post(copy_document_handler::<T, Svc>),
         );
 
-    #[cfg(feature = "document_create")]
-    let document_id_routes = document_id_routes.route(
-        "/{document_id}/finalize_upload",
-        axum::routing::post(finalize_upload_handler::<T, Svc>),
-    );
-
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
         state.clone(),
         ensure_document_exists,
     ));
 
-    Router::new()
+    let router = Router::new()
         .merge(document_id_routes)
         .route("/", axum::routing::post(create_document_handler::<T, Svc>))
         .route(
             "/create_task",
             axum::routing::post(create_task_handler::<T, Svc>),
-        )
-        .with_state(state)
+        );
+
+    #[cfg(feature = "document_create")]
+    let router = router.route(
+        "/create_markdown",
+        axum::routing::post(create_markdown_handler::<T, Svc>),
+    );
+
+    router.with_state(state)
 }
 
 /// Path parameters for document endpoints.
