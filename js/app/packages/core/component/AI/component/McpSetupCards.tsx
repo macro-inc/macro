@@ -96,7 +96,6 @@ export function McpSetupCards(props: { class?: string }) {
             hint={item.hint}
             copyKey={item.key}
             copyValue={MACRO_MCP_URL}
-
             copiedKey={copiedKey}
             onCopy={copy}
           />
