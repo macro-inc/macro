@@ -1,30 +1,30 @@
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import type { HotkeySequenceStep } from '@core/component/Tooltip';
 import {
-  useQuickAccess,
-  type QuickAccessItem,
   type Bucket,
   type EntityItem,
-  type UserItem,
   exclude,
+  type QuickAccessItem,
+  type UserItem,
+  useQuickAccess,
 } from '@core/context/quickAccess';
+import { HotkeyTags } from '@core/hotkey/constants';
+import {
+  type CommandWithInfo,
+  getActiveCommandsFromScope,
+} from '@core/hotkey/getCommands';
+import { activeScope } from '@core/hotkey/state';
 import type { HotkeyCommand } from '@core/hotkey/types';
 import {
   createFreshSearch,
   type FreshSortConfig,
   type TimestampedItem,
 } from '@core/util/freshSort';
-import { createMemo } from 'solid-js';
-import type { CategoryFilter } from './types';
-import {
-  getActiveCommandsFromScope,
-  type CommandWithInfo,
-} from '@core/hotkey/getCommands';
-import { activeScope } from '@core/hotkey/state';
-import { CommandState } from './state';
-import { HotkeyTags } from '@core/hotkey/constants';
-import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import type { HotkeySequenceStep } from '@core/component/Tooltip';
-import { getCommandLastUsedAt } from './recency';
 import { mergeSortedArrays } from '@core/util/list';
+import { createMemo } from 'solid-js';
+import { getCommandLastUsedAt } from './recency';
+import { CommandState } from './state';
+import type { CategoryFilter } from './types';
 
 /** Command item type - local to command menu, not part of quickAccess */
 type CommandItem = {
@@ -39,8 +39,20 @@ type CommandItem = {
   displayHotkeySequence?: HotkeySequenceStep[];
 };
 
+/** Search item: triggers full-text search in the sidebar Search view */
+type SearchItem = {
+  id: string;
+  kind: 'search';
+  bucket: 'search';
+  searchText: string;
+  sortTimestamp: number;
+  timestamps: TimestampedItem;
+  query: string;
+  category: CategoryFilter;
+};
+
 /** Combined item type for command menu (quickAccess items + commands) */
-type CommandMenuItem = QuickAccessItem | CommandItem;
+type CommandMenuItem = QuickAccessItem | CommandItem | SearchItem;
 
 function isCommandItem(item: CommandMenuItem): item is CommandItem {
   return item.kind === 'command';
@@ -52,6 +64,34 @@ function isEntityItem(item: CommandMenuItem): item is EntityItem {
 
 function isUserItem(item: CommandMenuItem): item is UserItem {
   return item.kind === 'user';
+}
+
+function isSearchItem(item: CommandMenuItem): item is SearchItem {
+  return item.kind === 'search';
+}
+
+/** Categories that surface a "Search for [query]" row in the command menu */
+const SEARCHABLE_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
+  'all',
+  'channels',
+  'dms',
+  'documents',
+  'tasks',
+  'chats',
+  'projects',
+]);
+
+function makeSearchItem(query: string, category: CategoryFilter): SearchItem {
+  return {
+    id: `search:${category}:${query}`,
+    kind: 'search',
+    bucket: 'search',
+    searchText: query,
+    sortTimestamp: 0,
+    timestamps: { viewedAt: undefined, updatedAt: undefined },
+    query,
+    category,
+  };
 }
 
 function createSearchConfig(hasQuery: boolean): FreshSortConfig {
@@ -235,19 +275,34 @@ export function useCommandItems(
     });
   });
 
+  const shouldShowSearchRow = (q: string) => {
+    if (!q.trim()) return false;
+    if (CommandState.commandScopeCommands().length > 0) return false;
+    if (CommandState.isEntityActionMode()) return false;
+    return SEARCHABLE_CATEGORIES.has(categoryFilter());
+  };
+
   const filteredItems = createMemo(() => {
     const q = query();
     const items = categoryItems();
 
-    if (!q) {
-      return items;
+    const ranked = q ? search()(items, q).map((result) => result.item) : items;
+
+    if (shouldShowSearchRow(q)) {
+      return [makeSearchItem(q, categoryFilter()), ...ranked];
     }
 
-    return search()(items, q).map((result) => result.item);
+    return ranked;
   });
 
   return filteredItems;
 }
 
-export { isEntityItem, isUserItem, isCommandItem };
-export type { QuickAccessItem, CommandMenuItem, CommandItem, Bucket };
+export type {
+  Bucket,
+  CommandItem,
+  CommandMenuItem,
+  QuickAccessItem,
+  SearchItem,
+};
+export { isCommandItem, isEntityItem, isSearchItem, isUserItem };

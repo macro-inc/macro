@@ -32,6 +32,7 @@ export * from './getUserInfoOrganizationId';
 export * from './getUserLinkExistsParams';
 export * from './initGithubLinkParams';
 export * from './initGithubLinkResponse';
+export * from './inviteEntry';
 export * from './inviteToTeamRequest';
 export * from './macroApiTokenParams';
 export * from './macroApiTokenResponse';

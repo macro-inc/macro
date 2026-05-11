@@ -47,6 +47,7 @@ import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import WarningIcon from '@icon/regular/warning.svg';
 import {
+  AwaitNode,
   CommentNode,
   createPeerIdValidator,
   InlineSearchNode,
@@ -200,7 +201,10 @@ export function InstructionsEditor() {
     const getBlockLoroManager = blockLoroManagerSignal.get;
     const peerId = () => getBlockLoroManager()?.getPeerIdStr();
     plugins.use(
-      peerIdPlugin({ peerId, nodes: [InlineSearchNode, CommentNode] })
+      peerIdPlugin({
+        peerId,
+        nodes: [InlineSearchNode, CommentNode, AwaitNode],
+      })
     );
   }
 

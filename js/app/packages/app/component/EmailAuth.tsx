@@ -1,3 +1,4 @@
+import { useAnalytics } from '@app/component/analytics-context';
 import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
@@ -7,7 +8,6 @@ import { whenSettled } from '@core/util/whenSettled';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { useNavigate } from '@solidjs/router';
 import { onMount, Suspense } from 'solid-js';
-import { useAnalytics } from '@app/component/analytics-context';
 
 type EmailAuthParams = {
   callbackPath: string;

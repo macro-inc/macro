@@ -1,6 +1,5 @@
 import { tryMacroId, useDisplayNameParts } from '@core/user';
-
-const DEFAULT_MAX_CHARS = 30;
+import { truncateLabel } from '@core/util/string';
 
 export function DisplayName(props: {
   id: string;
@@ -16,8 +15,7 @@ export function DisplayName(props: {
         ? parts.fullName()
         : parts[format]() || parts.fullName();
 
-    const max = props.maxChars ?? DEFAULT_MAX_CHARS;
-    return raw.length > max ? `${raw.slice(0, max)}…` : raw;
+    return truncateLabel(raw, props.maxChars);
   };
 
   return <>{name()}</>;

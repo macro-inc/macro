@@ -1,18 +1,18 @@
+import type { OverrideComponentProps } from '@kobalte/core';
+import { cn } from '@ui';
 import {
+  type Component,
   createMemo,
   createSignal,
-  splitProps,
-  type Component,
   type JSX,
+  splitProps,
 } from 'solid-js';
-import { cn } from '@ui/utils/classname';
-import type { OverrideComponentProps } from '@kobalte/core';
 
 export type CallControlButtonSize = 'sm' | 'md';
 export type CallControlButtonVariant = 'default' | 'active' | 'danger';
 
 export const callControlButtonStyles = {
-  base: 'flex items-center justify-center cursor-pointer outline outline-transarent bg-transparent transition-colors',
+  base: 'flex items-center justify-center outline outline-transarent bg-transparent transition-colors',
 
   size: {
     sm: 'w-6 h-6 rounded-md',

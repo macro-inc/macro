@@ -1,7 +1,7 @@
 import { createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
-import type { LessonDefinition, LessonContentProps } from './types';
 import { createOnboardingState } from './create-onboarding-state';
+import type { LessonContentProps, LessonDefinition } from './types';
 
 const NoopContent = (_props: LessonContentProps) => null;
 

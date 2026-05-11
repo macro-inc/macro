@@ -4,31 +4,63 @@ import ThemeTools from '@theme/components/ThemeTools';
 import ThemeList from '@theme/components/ThemeList';
 
 import { Panel } from '@ui';
+import { Tabs } from '@core/component/Tabs';
+import { createSignal, Show } from 'solid-js';
+import { isMobile } from '@core/mobile/isMobile';
+
+type EditorTab = 'basic' | 'advanced';
 
 export function Appearance() {
-  return (
-    <div
-      style={{
-        'grid-template-rows': 'min-content 1fr',
-        'grid-template-columns': '1fr',
-        'overflow': 'hidden',
-        'display': 'grid',
-        'height': '100%',
-        'padding': '8px',
-        'gap': '8px',
-      }}
-    >
-      <Panel depth={2}>
-        <ThemeTools />
-        <ThemeEditorBasic />
-      </Panel>
+  const [activeTab, setActiveTab] = createSignal<EditorTab>('basic');
 
-      <div class="@container grid grid-cols-1 @[700px]:grid-cols-2 gap-2 overflow-hidden min-h-0">
+  const tabList = [
+    { value: 'basic', label: 'Basic' },
+    { value: 'advanced', label: 'Advanced' },
+  ];
+
+  return (
+    <div class="h-full overflow-hidden flex justify-center p-2">
+      <div
+        class="max-w-200 size-full"
+        style={{
+          'grid-template-rows': `${isMobile() ? '322.5px' : '432.5px'} 1fr`,
+          'grid-template-columns': '1fr',
+          'overflow': 'hidden',
+          'display': 'grid',
+          'gap': '8px',
+        }}
+      >
+        <Panel depth={2}>
+          <Panel.Header>
+            <Tabs
+              list={tabList}
+              value={activeTab()}
+              defaultValue="basic"
+              onChange={(value) => setActiveTab(value as EditorTab)}
+            />
+            <Show when={!isMobile()}>
+              <ThemeTools class="flex-1 min-w-0" />
+            </Show>
+          </Panel.Header>
+
+          <Show when={isMobile()}>
+            <Panel.Toolbar>
+              <ThemeTools class="flex-1 min-w-0" />
+            </Panel.Toolbar>
+          </Show>
+
+          <Panel.Body scroll>
+            <Show when={activeTab() === 'basic'}>
+              <ThemeEditorBasic />
+            </Show>
+            <Show when={activeTab() === 'advanced'}>
+              <ThemeEditorAdvanced />
+            </Show>
+          </Panel.Body>
+        </Panel>
+
         <Panel depth={2}>
           <ThemeList />
-        </Panel>
-        <Panel depth={2}>
-          <ThemeEditorAdvanced />
         </Panel>
       </div>
     </div>

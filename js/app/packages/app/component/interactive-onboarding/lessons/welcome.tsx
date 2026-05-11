@@ -1,8 +1,8 @@
-import { onMount } from 'solid-js';
-import { A } from '@solidjs/router';
-import type { LessonContentProps, LessonDefinition } from '../types';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useAnalytics } from '@app/component/analytics-context';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { A } from '@solidjs/router';
+import { onMount } from 'solid-js';
+import type { LessonContentProps, LessonDefinition } from '../types';
 
 function WelcomeContent(props: LessonContentProps) {
   onMount(() => props.onComplete('Get Started'));
@@ -28,7 +28,7 @@ function WelcomeSecondaryAction() {
       <A
         href="/login"
         onClick={() => analytics.track('login_from_onboarding')}
-        class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between gap-2 bracket-never border-none bg-transparent text-ink-extra-muted hover:bg-hover ring-1 ring-edge-muted"
+        class="w-full px-3 py-2.5 text-lg rounded-xs flex items-center justify-between gap-2 border-none bg-transparent text-ink-extra-muted hover:bg-hover ring-1 ring-edge-muted"
       >
         Login
       </A>

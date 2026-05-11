@@ -1192,6 +1192,12 @@ export const ingestTranscriptBody = zod
       .describe(
         "Stable per-speaker identifier produced by the STT provider's diarization\npass. Namespaced upstream by audio track so values are unique across all\ntracks in a call. `None` when the provider didn't return a speaker label."
       ),
+    embedding: zod
+      .array(zod.number())
+      .nullish()
+      .describe(
+        'Speaker voice embedding computed by the transcription agent\n(e.g. a Resemblyzer 256-dim vector). When present, the server\nupserts a `voice` row and stores the resulting id on the transcript\nsegment so the call-finished pipeline can match it to enrolled users.'
+      ),
     endedAt: zod.iso
       .datetime({})
       .nullish()
@@ -1210,6 +1216,12 @@ export const ingestTranscriptBody = zod
     startedAt: zod.iso
       .datetime({})
       .describe('When the speaker started talking for this segment.'),
+    streamStartedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        "Wall-clock when the transcriber's STT stream first received audio\nfor this participant. The server takes the earliest non-null value\nacross all participants and uses it to overwrite the\n`egress_started`-derived `recording_started_at`, which is too early\n(it stamps egress bootstrap, not first audio frame)."
+      ),
   })
   .describe('A transcript segment from LiveKit Inference STT.');
 
@@ -3173,6 +3185,24 @@ export const editDocumentResponse = zod
     error: zod.boolean().describe('Whether an error occurred.'),
   })
   .describe('Edit document response.');
+
+/**
+ * Returns the short UUID and git branch name for a task document.
+Returns 400 if the document is not a task.
+ * @summary Handler for `GET /documents/{document_id}/branch_name`.
+ */
+export const getDocumentBranchNameParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const getDocumentBranchNameResponse = zod
+  .object({
+    branchName: zod
+      .string()
+      .describe('The git branch name for the task document.'),
+    shortId: zod.string().describe('The short id of the document.'),
+  })
+  .describe('Branch name response.');
 
 /**
  * Copies an existing document, creating a new document with the same content.
@@ -5175,6 +5205,12 @@ export const postItemsSoupBody = zod
           .nullish()
           .describe(
             'Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join.'
+          ),
+        call_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Call record IDs to filter by. Empty to include all calls.'
           ),
         channel_ids: zod
           .array(zod.string())
@@ -10089,6 +10125,10 @@ export const patchViewHandlerParams = zod.object({
 export const patchViewHandlerBody = zod.object({
   config: zod.unknown().optional(),
   name: zod.string().nullish(),
+});
+
+export const bulkWakeupSyncServiceDocumentsBody = zod.object({
+  document_ids: zod.array(zod.string()),
 });
 
 /**

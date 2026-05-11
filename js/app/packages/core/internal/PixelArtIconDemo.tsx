@@ -1,7 +1,6 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { DebugSlider } from '@core/component/Slider';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { Bar } from '@core/component/TopBar/Bar';
 import clickOutside from '@core/directive/clickOutside';
 import Rotate from '@icon/regular/arrow-counter-clockwise.svg';
@@ -17,6 +16,7 @@ import Plus from '@icon/regular/plus.svg';
 import Trash from '@icon/regular/trash.svg';
 import X from '@icon/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { Button } from '@ui';
 
 import {
   createEffect,
@@ -288,7 +288,7 @@ function EditableLabel(props: EditableLabelProps) {
         fallback={
           <div
             onClick={handleStartEdit}
-            class="cursor-pointer hover:bg-edge px-1 py-0.5 w-full h-full flex items-center"
+            class="hover:bg-edge px-1 py-0.5 size-full flex items-center"
             style="min-height: 20px;"
           >
             {props.value}
@@ -433,14 +433,14 @@ function GlyphGrid(props: GlyphGridProps) {
             Sort Alhpa
           </button>
         </div>
-        <DeprecatedTextButton
+        <Button
+          variant="base"
           onClick={() => {
             props.onNewGlyph();
           }}
-          text="New Icon"
-          theme="base"
-          icon={Plus}
-        />
+        >
+          <Plus /> New Icon
+        </Button>
       </div>
 
       <Show
@@ -492,11 +492,11 @@ function GlyphGrid(props: GlyphGridProps) {
                   onDblClick={() => props.onEditGlyph(glyph)}
                   class="items-center border relative group transition-colors justify-self-stretch"
                   classList={{
-                    'border-edge bg-edge bracket-offset-2': isSelected(),
+                    'border-edge bg-edge': isSelected(),
                     'border-edge bg-background hover:bg-edge': !isSelected(),
                   }}
                 >
-                  <div class="w-20 h-20 flex items-center justify-center mx-auto m-2">
+                  <div class="size-20 flex items-center justify-center mx-auto m-2">
                     <Show when={pixels().length > 0}>
                       <PixelIcon
                         pixels={pixels()}
@@ -517,24 +517,28 @@ function GlyphGrid(props: GlyphGridProps) {
                   </div>
 
                   <div class="absolute top-1 right-1 flex gap-0 opacity-0 bg-panel group-hover:opacity-100">
-                    <DeprecatedIconButton
-                      icon={Pencil}
-                      tooltip={{ label: 'Edit' }}
+                    <Button
+                      variant="base"
+                      size="icon-md"
+                      tooltip={<LabelAndHotKey label="Edit" />}
                       onClick={(e) => {
                         e.preventDefault();
                         props.onEditGlyph(glyph);
                       }}
-                      theme="base"
-                    />
-                    <DeprecatedIconButton
-                      icon={Trash}
-                      tooltip={{ label: 'Delete' }}
+                    >
+                      <Pencil />
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="icon-md"
+                      tooltip={<LabelAndHotKey label="Delete" />}
                       onClick={(e) => {
                         e.preventDefault();
                         props.onDeleteGlyph(glyph);
                       }}
-                      theme="red"
-                    />
+                    >
+                      <Trash />
+                    </Button>
                   </div>
                 </div>
               );
@@ -795,11 +799,9 @@ function GlyphEditor(props: GlyphEditorProps) {
         >
           <div class="p-2 border-b border-edge flex items-center justify-between">
             <h2 class="font-mono text-xs">Editor</h2>
-            <DeprecatedIconButton
-              icon={X}
-              onClick={props.onClose}
-              theme="clear"
-            />
+            <Button variant="ghost" size="icon-md" onClick={props.onClose}>
+              <X />
+            </Button>
           </div>
 
           <div class="flex flex-1 overflow-hidden">
@@ -819,7 +821,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                 >
                   <svg
                     viewBox={`0 0 280 280`}
-                    class="absolute inset-0 w-full h-full cursor-crosshair"
+                    class="absolute inset-0 size-full cursor-crosshair"
                     style="user-select: none;"
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
@@ -858,7 +860,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                                   : 'transparent'
                               }
                               stroke="transparent"
-                              class="cursor-pointer hover:stroke-current hover:stroke-1 hover:opacity-50"
+                              class="hover:stroke-current hover:stroke-1 hover:opacity-50"
                               onMouseDown={() => handleMouseDown(row(), col())}
                               onMouseEnter={() =>
                                 handleMouseEnter(row(), col())
@@ -875,7 +877,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                   <h3 class="font-mono text-ink-extra-muted text-xs">
                     [ PREVIEW ]
                   </h3>
-                  <div class="w-24 h-24 flex items-center justify-center border border-edge bg-background">
+                  <div class="size-24 flex items-center justify-center border border-edge bg-background">
                     <PixelIcon
                       pixels={pixels()}
                       iconSize={iconSize()}
@@ -917,57 +919,53 @@ function GlyphEditor(props: GlyphEditorProps) {
                 </div>
 
                 <div class="grid grid-cols-2 gap-2 mb-4">
-                  <DeprecatedTextButton
-                    text="Clear Grid"
-                    onClick={clearAll}
-                    theme="base"
-                    icon={Erase}
-                  />
-                  <DeprecatedTextButton
-                    text="Fill Grid"
-                    onClick={fillAll}
-                    theme="base"
-                    icon={Fill}
-                  />
+                  <Button variant="base" onClick={clearAll}>
+                    <Erase /> Clear Grid
+                  </Button>
+                  <Button variant="base" onClick={fillAll}>
+                    <Fill /> Fill Grid
+                  </Button>
                 </div>
 
                 <div class="space-y-2 mb-4">
                   <h4 class="font-mono text-xs text-ink-muted">Transforms</h4>
                   <div class="flex gap-2">
-                    <DeprecatedIconButton
-                      tooltip={{ label: 'Mirror X' }}
+                    <Button
+                      variant="base"
+                      size="icon-md"
+                      tooltip={<LabelAndHotKey label="Mirror X" />}
                       onClick={handleMirrorX}
-                      theme="base"
-                      icon={MirrorX}
-                    />
-                    <DeprecatedIconButton
-                      tooltip={{ label: 'Mirror Y' }}
+                    >
+                      <MirrorX />
+                    </Button>
+                    <Button
+                      variant="base"
+                      size="icon-md"
+                      tooltip={<LabelAndHotKey label="Mirror Y" />}
                       onClick={handleMirrorY}
-                      theme="base"
-                      icon={MirrorY}
-                    />
-                    <DeprecatedIconButton
-                      tooltip={{ label: 'Rotate 90 CCW' }}
+                    >
+                      <MirrorY />
+                    </Button>
+                    <Button
+                      variant="base"
+                      size="icon-md"
+                      tooltip={<LabelAndHotKey label="Rotate 90 CCW" />}
                       onClick={handleRotate90CC}
-                      theme="base"
-                      icon={Rotate}
-                    />
+                    >
+                      <Rotate />
+                    </Button>
                   </div>
                 </div>
               </div>
 
               <div class="pt-4 border-t border-edge">
                 <div class="grid grid-cols-2 gap-2">
-                  <DeprecatedTextButton
-                    text="Cancel"
-                    onClick={props.onClose}
-                    theme="muted"
-                  />
-                  <DeprecatedTextButton
-                    text="Save"
-                    onClick={handleSave}
-                    theme="accent"
-                  />
+                  <Button variant="base" onClick={props.onClose}>
+                    Cancel
+                  </Button>
+                  <Button variant="active" onClick={handleSave}>
+                    Save
+                  </Button>
                 </div>
               </div>
             </div>
@@ -1037,7 +1035,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
   });
 
   return (
-    <div class="w-[400px] bg-panel p-4 overflow-y-auto border-l border-edge border-dashed shrink-0">
+    <div class="w-100 bg-panel p-4 overflow-y-auto border-l border-edge border-dashed shrink-0">
       <div class="space-y-4">
         <h3 class="font-mono text-sm text-ink">[ Global Settings ]</h3>
 
@@ -1064,30 +1062,18 @@ function GlyphSidebar(props: GlyphSidebarProps) {
         <div class="mt-6 space-y-2">
           <h4 class="font-mono text-xs text-ink-muted">Batch Operations</h4>
           <div class="grid grid-cols-1 gap-2">
-            <DeprecatedTextButton
-              text="Export to Clipboard"
-              onClick={props.onExportAll}
-              theme="base"
-              icon={Copy}
-            />
-            <DeprecatedTextButton
-              text="Import from Clipboard"
-              onClick={props.onImportAll}
-              theme="base"
-              icon={Upload}
-            />
-            <DeprecatedTextButton
-              text="Copy SVGs"
-              onClick={props.onCopyAllSVGs}
-              theme="base"
-              icon={Copy}
-            />
-            <DeprecatedTextButton
-              text="Download SVGs"
-              onClick={props.onDownloadAllSVGs}
-              theme="base"
-              icon={Download}
-            />
+            <Button variant="base" onClick={props.onExportAll}>
+              <Copy /> Export to Clipboard
+            </Button>
+            <Button variant="base" onClick={props.onImportAll}>
+              <Upload /> Import from Clipboard
+            </Button>
+            <Button variant="base" onClick={props.onCopyAllSVGs}>
+              <Copy /> Copy SVGs
+            </Button>
+            <Button variant="base" onClick={props.onDownloadAllSVGs}>
+              <Download /> Download SVGs
+            </Button>
           </div>
         </div>
       </div>
@@ -1114,7 +1100,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
               }}
               class="font-mono text-ink-muted text-sm text-left w-full ring-1 ring-edge"
             />
-            <div class="w-32 h-32 flex items-center justify-center border border-edge bg-background">
+            <div class="size-32 flex items-center justify-center border border-edge bg-background">
               <Show when={selectedPixels()}>
                 <PixelIcon
                   pixels={selectedPixels()!}
@@ -1141,17 +1127,16 @@ function GlyphSidebar(props: GlyphSidebarProps) {
               </div>
 
               <div class="flex gap-2">
-                <DeprecatedTextButton
-                  text="Copy Svg"
-                  icon={Copy}
+                <Button
+                  variant="ghost"
                   onClick={() =>
                     navigator.clipboard.writeText(svgString() || '')
                   }
-                  theme="clear"
-                />
-                <DeprecatedTextButton
-                  text="Download Svg"
-                  icon={Download}
+                >
+                  <Copy /> Copy Svg
+                </Button>
+                <Button
+                  variant="ghost"
                   onClick={() => {
                     const svg = svgString();
                     if (!svg) return;
@@ -1165,8 +1150,9 @@ function GlyphSidebar(props: GlyphSidebarProps) {
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                   }}
-                  theme="clear"
-                />
+                >
+                  <Download /> Download Svg
+                </Button>
               </div>
             </div>
           </Show>
@@ -1182,16 +1168,16 @@ function GlyphSidebar(props: GlyphSidebarProps) {
               </div>
 
               <div class="flex gap-2">
-                <DeprecatedTextButton
-                  text="Copy Base64"
-                  icon={Copy}
+                <Button
+                  variant="ghost"
                   onClick={() =>
                     navigator.clipboard.writeText(
                       props.selectedGlyph?.data || ''
                     )
                   }
-                  theme="clear"
-                />
+                >
+                  <Copy /> Copy Base64
+                </Button>
               </div>
             </div>
           </Show>
@@ -1405,13 +1391,13 @@ export default function PixelArtIconDemo() {
   };
 
   return (
-    <div class="flex flex-col h-full w-full overflow-hidden">
+    <div class="flex flex-col size-full overflow-hidden">
       <Bar
         left={<div class="p-2 text-sm w-2xl truncate">Icon Editor</div>}
         center={<div></div>}
       />
 
-      <div class="flex h-full w-full">
+      <div class="flex size-full">
         <GlyphGrid
           glyphs={glyphs()}
           onGlyphSelect={handleGlyphSelect}

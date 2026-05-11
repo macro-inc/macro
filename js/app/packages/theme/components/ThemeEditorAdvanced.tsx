@@ -21,9 +21,7 @@ function setColor(colorValue: ThemeReactiveColor, colorString: string, inputElem
     });
     inputElement.classList.remove('invalid');
   }
-  catch(error) {
-    console.error(`Error processing color "${colorString}":`, error);
-  }
+  catch(error) { console.error(`Error processing color "${colorString}":`, error); }
 }
 
 export function ThemeEditorAdvanced(){
@@ -41,61 +39,22 @@ export function ThemeEditorAdvanced(){
       `}</style>
 
       <div
-        style="
-          background-color: var(--b0);
-          font-size: var(--text-xs);
-          scrollbar-width: none;
-          position: relative;
-          overflow: hidden;
-          font-weight: 300;
-          display: block;
-          height: 100%;
-          "
+        style={{
+          'font-size': 'var(--text-xs)',
+          'font-weight': 300,
+          'display': 'block',
+        }}
       >
         <div
           style="
-          overscroll-behavior: none;
-          box-sizing: border-box;
-          scrollbar-width: none;
-          overflow-y: scroll;
-          height: 100%;
-          width: 100%;
-        "
+            background-color: var(--b3);
+            box-sizing: border-box;
+            overflow-x: hidden;
+            display: grid;
+            gap: 1px;
+          "
         >
-          <div
-            style="
-              background-color: var(--b3);
-              box-sizing: border-box;
-              overflow-x: hidden;
-              display: grid;
-              gap: 1px;
-            "
-          >
-            <div
-              style="
-                border-bottom: 1px solid var(--b3);
-                background-color: var(--b0);
-                align-items: center;
-                position: absolute;
-                padding: 0 20px;
-                display: grid;
-                height: 42px;
-                width: 100%;
-                z-index: 1;
-            "
-            >
-              <div
-                style={{
-                  'font-size': '0.875rem',
-                  'font-weight': '600'
-                }}
-              >
-                Theme Tokens
-              </div>
-            </div>
-            <div style="height: 41px;" />
-
-            <For each={Object.entries(themeReactive)}>
+          <For each={Object.entries(themeReactive)}>
               {([colorKey, colorValue]) => {
                 // a1 thru a4 are not currently being used, so we will hide them
                 if (['a1', 'a2', 'a3', 'a4'].includes(colorKey)) return null;
@@ -109,12 +68,8 @@ export function ThemeEditorAdvanced(){
                     colorValue.h[0](),
                     displayType()
                   );
-                  if (untrack(isSetByInput)) {
-                    setIsSetByInput(false);
-                    // console.log('blocked!!!!!!!!!!!!');
-                  } else {
-                    setInputValue(newValue);
-                  }
+                  if (untrack(isSetByInput)) { setIsSetByInput(false); /* console.log('blocked!!!'); */ }
+                  else { setInputValue(newValue); }
                 });
 
                 return (
@@ -126,44 +81,45 @@ export function ThemeEditorAdvanced(){
                   >
                     <div
                       style="
-                      grid-template-columns: 140px 1fr 80px;
-                      background-color: var(--b3);
-                      align-items: center;
-                      display: grid;
-                      height: 41px;
-                      gap: 1px;
-                    "
+                        grid-template-columns: 104px calc(7ch + 40px) 1fr calc(4ch + 40px);
+                        background-color: var(--b3);
+                        align-items: center;
+                        display: grid;
+                        height: 40px;
+                        gap: 1px;
+                      "
                     >
                       <div
                         style="
-                        background-color: var(--b0);
-                        box-sizing: border-box;
-                        align-items: center;
-                        padding: 0 20px;
-                        display: grid;
-                        height: 100%;
-                        width: 100%;
-                      "
+                          background-color: var(--b0);
+                          box-sizing: border-box;
+                          align-items: center;
+                          padding: 0 20px;
+                          display: grid;
+                          height: 100%;
+                          width: 100%;
+                        "
                       >
                         <ColorSwatch
                           color={`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`}
-                          width={'100px'}
+                          width={'100%'}
                         />
                       </div>
 
                       <div
                         style="
-                        background-color: var(--b0);
-                        box-sizing: border-box;
-                        align-items: center;
-                        white-space: nowrap;
-                        padding: 0 20px;
-                        display: grid;
-                        height: 100%;
-                        width: 100%;
-                      "
+                          background-color: var(--b0);
+                          box-sizing: border-box;
+                          align-items: center;
+                          white-space: nowrap;
+                          padding: 0 20px;
+                          display: grid;
+                          height: 100%;
+                          width: 100%;
+                        "
                       >
                         <input
+                          onInput={ (e) => {setColor(colorValue, e.target.value, e.target, setIsSetByInput); }}
                           style="
                             color: var(--color-ink-extra-muted);
                             font-family: var(--font-mono);
@@ -176,29 +132,38 @@ export function ThemeEditorAdvanced(){
                           "
                           class="theme-editor-advanced-input"
                           value={inputValue()}
-                          onInput={(e) => {
-                            setColor(
-                              colorValue,
-                              e.target.value,
-                              e.target,
-                              setIsSetByInput
-                            );
-                          }}
                           type="text"
                         />
                       </div>
 
                       <div
                         style="
-                        background-color: var(--b0);
-                        box-sizing: border-box;
-                        white-space: nowrap;
-                        align-items: center;
-                        padding: 0 20px;
-                        display: grid;
-                        height: 100%;
-                        width: 100%;
-                      "
+                          color: var(--color-ink-extra-muted);
+                          background-color: var(--b0);
+                          box-sizing: border-box;
+                          align-items: center;
+                          white-space: nowrap;
+                          text-overflow: ellipsis;
+                          padding: 0 20px;
+                          overflow: hidden;
+                          display: grid;
+                          height: 100%;
+                          width: 100%;
+                        "
+                      >
+                        {colorValue.description}
+                      </div>
+                      <div
+                        style="
+                          background-color: var(--b0);
+                          box-sizing: border-box;
+                          white-space: nowrap;
+                          align-items: center;
+                          padding: 0 20px;
+                          display: grid;
+                          height: 100%;
+                          width: 100%;
+                        "
                       >
                         --{colorKey}
                       </div>
@@ -206,8 +171,7 @@ export function ThemeEditorAdvanced(){
                   </div>
                 );
               }}
-            </For>
-          </div>
+          </For>
         </div>
       </div>
     </>

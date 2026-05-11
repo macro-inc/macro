@@ -28,17 +28,13 @@ impl<R: MessageRepo, A: AttachmentService> MessageServiceImpl<R, A> {
     async fn resolve_attachments(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        attachments: &[(AttachmentType, String)],
+        attachments: &[Entity<'_>],
     ) -> Result<Option<FormattedParts>> {
         if attachments.is_empty() {
             return Ok(None);
         }
 
-        let entities: Vec<Entity<'static>> = attachments
-            .iter()
-            .map(|(kind, id)| attachment_type_to_entity_type(kind).with_entity_string(id.clone()))
-            .collect();
-        let entity_refs: Vec<&Entity<'_>> = entities.iter().collect();
+        let entity_refs: Vec<&Entity<'_>> = attachments.iter().collect();
         let non_empty = NonEmpty::new(entity_refs.as_slice()).expect("checked non-empty above");
 
         let resolved = self
@@ -58,15 +54,18 @@ impl<R: MessageRepo, A: AttachmentService> MessageService for MessageServiceImpl
         chat_id: &str,
         message: NewChatMessage,
     ) -> Result<ResolvedMessageContent> {
-        let attachment_pairs: Vec<_> = message
+        let entities: Vec<Entity<'static>> = message
             .attachments
             .as_deref()
             .unwrap_or_default()
             .iter()
-            .map(|a| (a.attachment_type.clone(), a.attachment_id.clone()))
+            .map(|a| {
+                attachment_type_to_entity_type(&a.attachment_type)
+                    .with_entity_string(a.attachment_id.clone())
+            })
             .collect();
 
-        let resolved = self.resolve_attachments(user_id, &attachment_pairs).await?;
+        let resolved = self.resolve_attachments(user_id, &entities).await?;
 
         let message_id = self.repo.create(chat_id, message).await?;
 
@@ -101,13 +100,7 @@ impl<R: MessageRepo, A: AttachmentService> MessageService for MessageServiceImpl
             .find(|m| m.id == message_id)
             .ok_or(ChatErr::NotFound)?;
 
-        let attachment_pairs: Vec<_> = msg
-            .attachments
-            .iter()
-            .map(|a| (a.attachment_type.clone(), a.attachment_id.clone()))
-            .collect();
-
-        let resolved = self.resolve_attachments(user_id, &attachment_pairs).await?;
+        let resolved = self.resolve_attachments(user_id, &msg.attachments).await?;
 
         self.repo
             .update_message_content(chat_id, message_id, content)

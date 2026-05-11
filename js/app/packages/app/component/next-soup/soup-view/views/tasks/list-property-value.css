@@ -1,0 +1,15 @@
+.task-grid-row {
+  --task-col-status: 7rem;
+  --task-col-priority: 7rem;
+  --task-col-assignees: 7rem;
+  --task-col-timestamp: 5rem;
+}
+
+@container uList (max-width: 840px) {
+  .task-grid-row {
+    --task-col-status: 2rem;
+    --task-col-priority: 2rem;
+    --task-col-assignees: 2rem;
+    --task-col-timestamp: 5rem;
+  }
+}

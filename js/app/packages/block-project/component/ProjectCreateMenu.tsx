@@ -1,28 +1,25 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { cn } from '@ui/utils/classname';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
-import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
-import { toast } from '@core/component/Toast/Toast';
-import { pressedKeys } from '@core/hotkey/state';
-import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
+import { toast } from '@core/component/Toast/Toast';
+import { pressedKeys } from '@core/hotkey/state';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import {
   createCanvasFileFromJsonString,
   createChat,
   createMarkdownFile,
   createTask,
 } from '@core/util/create';
-import { Dialog } from '@kobalte/core/dialog';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import PlusIcon from '@icon/regular/plus.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { createProject } from '@queries/storage/projects';
+import { Button, cn, Dialog, Layer, Surface } from '@ui';
 import { type Component, createSignal, For } from 'solid-js';
-import { DialogWrapper } from '@core/component/DialogWrapper';
 
 type MenuItemProps = {
   label: string;
@@ -223,8 +220,8 @@ function ProjectCreateDialog(props: {
 
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
-      <Dialog.Portal>
-        <DialogWrapper width="">
+      <Surface depth={2} active>
+        <div class="*:max-h-[75vh]">
           <div class="p-2">
             <Dialog.Title class="text-md font-semibold text-ink pb-3">
               Create in {props.name}
@@ -250,8 +247,8 @@ function ProjectCreateDialog(props: {
               )}
             </For>
           </div>
-        </DialogWrapper>
-      </Dialog.Portal>
+        </div>
+      </Surface>
     </Dialog>
   );
 }
@@ -262,7 +259,7 @@ function MenuItem(props: MenuItemProps) {
   return (
     <DropdownMenu.Item
       class={cn(
-        'flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-click duration-200 text-ink-extra-muted data-highlighted:bracket-offset-4',
+        'flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-click duration-200 text-ink-extra-muted outline-none data-highlighted:bg-active',
         `data-highlighted:${selectedColor}`
       )}
       onSelect={props.action}
@@ -295,7 +292,7 @@ function MenuContent(props: { projectId: string }) {
   }));
 
   return (
-    <DropdownMenu.Content class="isolate relative flex flex-col gap-2 bg-dialog -mb-1 p-2 border-2 border-accent min-w-max bracket-never">
+    <DropdownMenu.Content class="isolate relative flex flex-col gap-2 bg-dialog -mb-1 p-2 border-2 border-accent min-w-max">
       <For each={items}>
         {(item, index) => <MenuItem {...item} index={index() + 1} />}
       </For>
@@ -339,13 +336,15 @@ export function ProjectCreateMenu(props: { id: string }) {
     <DropdownMenu open={open()} onOpenChange={setOpen}>
       <div class="flex items-center">
         <DropdownMenu.Trigger class="h-min">
-          <DeprecatedButton size="XS" active={open()}>
+          <Button size="sm" variant={open() ? 'active' : 'base'}>
             Create
-          </DeprecatedButton>
+          </Button>
         </DropdownMenu.Trigger>
       </div>
       <DropdownMenu.Portal>
-        <MenuContent projectId={props.id} />
+        <Layer depth={2}>
+          <MenuContent projectId={props.id} />
+        </Layer>
       </DropdownMenu.Portal>
     </DropdownMenu>
   );

@@ -1,10 +1,10 @@
-import type { ApiChannelAttachment } from '@service-comms/client';
-import { stringToItemType } from '@service-storage/client';
-import type { EntityData } from '@entity';
-import { match } from 'ts-pattern';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { SplitContent } from '@app/component/split-layout/layoutManager';
 import { getChannelParams } from '@channel/Channel/link';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import type { EntityData } from '@entity';
+import type { ApiChannelAttachment } from '@service-comms/client';
+import { stringToItemType } from '@service-storage/client';
+import { match } from 'ts-pattern';
 
 /** size-23 = 92px */
 export const THUMB_SIZE = 92;
@@ -26,14 +26,14 @@ export function itemsPerRow(containerWidth: number): number {
  * so they return nothing instead of everything.
  */
 export function buildAttachmentEntityFilters(
-  attachments: ApiChannelAttachment[],
-  channelId: string
+  attachments: ApiChannelAttachment[]
 ) {
   const documentIds: string[] = [];
   const emailIds: string[] = [];
   const chatIds: string[] = [];
   const channelIds: string[] = [];
   const projectIds: string[] = [];
+  const callIds: string[] = [];
 
   for (const a of attachments) {
     const itemType = stringToItemType(a.entity_type);
@@ -71,7 +71,7 @@ export function buildAttachmentEntityFilters(
       project_ids: projectIds.length > 0 ? projectIds : [NIL_ID],
     },
     call_filters: {
-      channel_ids: [channelId],
+      call_ids: callIds.length > 0 ? callIds : [NIL_ID],
     },
   };
 }

@@ -1,5 +1,3 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { UnfurlLink } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
@@ -15,6 +13,7 @@ import Pencil from '@icon/regular/pencil-simple.svg';
 import LinkText from '@icon/regular/text-t.svg';
 import { mergeRegister } from '@lexical/utils';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
+import { Button } from '@ui';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -408,7 +407,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
                 'bg-active': activeInput() === urlInputRef,
               }}
             >
-              <Link class="text-ink-extra-muted w-4 h-4" />
+              <Link class="text-ink-extra-muted size-4" />
               <input
                 ref={urlInputRef}
                 tabIndex={2}
@@ -434,42 +433,42 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
             </div>
             <div class="relative flex items-center justify-end shrink">
               <div class="flex ease-in-out" classList={{ hidden: expanded() }}>
-                <Tooltip tooltip="Open in new tab">
-                  <DeprecatedIconButton
-                    onClick={openInNewTab}
-                    class="p-1 hover:bg-hover hover-transition-bg"
-                    theme="accent"
-                    icon={NewTab}
-                    size="sm"
-                  />
-                </Tooltip>
-                <Tooltip tooltip="Edit link">
-                  <DeprecatedIconButton
-                    onClick={handleEditClick}
-                    class="p-1 hover:bg-hover hover-transition-bg"
-                    theme="clear"
-                    icon={Pencil}
-                    size="sm"
-                  />
-                </Tooltip>
-                <Tooltip tooltip="Copy link">
-                  <DeprecatedIconButton
-                    onClick={copyLink}
-                    class="p-1 hover:bg-hover hover-transition-bg"
-                    theme="clear"
-                    icon={Copy}
-                    size="sm"
-                  />
-                </Tooltip>
-                <Tooltip tooltip="Remove link">
-                  <DeprecatedIconButton
-                    onClick={handleUnlink}
-                    class="p-1 hover:bg-hover hover-transition-bg"
-                    theme="clear"
-                    icon={Trash}
-                    size="sm"
-                  />
-                </Tooltip>
+                <Button
+                  onClick={openInNewTab}
+                  class="p-1 hover:bg-hover hover-transition-bg"
+                  variant="active"
+                  size="icon-sm"
+                  tooltip="Open in new tab"
+                >
+                  <NewTab />
+                </Button>
+                <Button
+                  onClick={handleEditClick}
+                  class="p-1 hover:bg-hover hover-transition-bg"
+                  variant="ghost"
+                  size="icon-sm"
+                  tooltip="Edit link"
+                >
+                  <Pencil />
+                </Button>
+                <Button
+                  onClick={copyLink}
+                  class="p-1 hover:bg-hover hover-transition-bg"
+                  variant="ghost"
+                  size="icon-sm"
+                  tooltip="Copy link"
+                >
+                  <Copy />
+                </Button>
+                <Button
+                  onClick={handleUnlink}
+                  class="p-1 hover:bg-hover hover-transition-bg"
+                  variant="ghost"
+                  size="icon-sm"
+                  tooltip="Remove link"
+                >
+                  <Trash />
+                </Button>
               </div>
             </div>
           </div>
@@ -486,7 +485,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
                 'bg-active': activeInput() === linkTextInputRef,
               }}
             >
-              <LinkText class="text-ink-extra-muted w-4 h-4" />
+              <LinkText class="text-ink-extra-muted size-4" />
               <input
                 tabIndex={3}
                 type="text"
@@ -519,16 +518,16 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
             }}
           >
             <Tooltip tooltip="Apply link changes">
-              <DeprecatedTextButton
+              <Button
                 onClick={handleSubmit}
                 class="focus:ring-failure focus:ring-2 focus:ring-offset-2"
-                theme="base"
+                variant="base"
                 disabled={
                   !pendingLinkInfo()?.url && !pendingLinkInfo()?.linkText
                 }
-                text="Apply"
-                icon={Check}
-              />
+              >
+                <Check /> Apply
+              </Button>
             </Tooltip>
           </div>
         </MenuWrapper>

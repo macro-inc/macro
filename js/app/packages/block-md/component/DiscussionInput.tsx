@@ -1,34 +1,35 @@
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { isMobile } from '@core/mobile/isMobile';
-import { isIOS } from '@solid-primitives/platform';
-import { createConfiguredDiscussionMarkdownEditor } from './configured-discussion-markdown-editor';
-import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
+import { InputActionButton } from '@channel/Input/ActionButton';
+import { useInputCommands } from '@channel/Input/context';
+import { FormatButtons } from '@channel/Input/FormatButtons';
+import { Input } from '@channel/Input/Input';
 import type {
   InputCallbacks,
   InputData,
   InputHandle,
   InputSnapshot,
 } from '@channel/Input/types';
-import {
-  createSignal,
-  type Accessor,
-  type JSX,
-  Show,
-  Match,
-  Switch,
-} from 'solid-js';
-import { Input } from '@channel/Input/Input';
-import { FormatButtons } from '@channel/Input/FormatButtons';
+import { isReplyInput } from '@channel/Input/types';
 import {
   applyInlineFormat,
   applyNodeFormat,
 } from '@channel/Input/utils/formatting';
-import { isReplyInput } from '@channel/Input/types';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
+import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
-import { InputActionButton } from '@channel/Input/ActionButton';
-import { useInputCommands } from '@channel/Input/context';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import { isIOS } from '@solid-primitives/platform';
+import { Surface } from '@ui';
+import {
+  type Accessor,
+  createSignal,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
+import { createConfiguredDiscussionMarkdownEditor } from './configured-discussion-markdown-editor';
 
 export type DiscussionInputProps = InputCallbacks & {
   input: InputData;
@@ -198,46 +199,48 @@ export function DiscussionInput(props: DiscussionInputProps) {
 
   return (
     <Input.Root input={inputView()} commands={commands}>
-      <Input.Layout>
-        <Input.FormatRibbon>
-          <FormatButtons
-            selectionState={() => markdownEditor.selection}
-            onInlineFormat={(format) =>
-              applyInlineFormat(markdownEditor.lexical, format)
-            }
-            onNodeFormat={(format) =>
-              applyNodeFormat(markdownEditor.lexical, format)
-            }
-          />
-        </Input.FormatRibbon>
-        <Input.EditorShell
-          ref={setScrollContainer}
-          onClick={(event) => {
-            if (!isMobile()) {
-              event.stopPropagation();
-              markdownEditor.controls.focus();
-            }
-          }}
-        >
-          <Input.Editor>
-            <MarkdownShell
-              config={markdownEditor}
-              placeholder={inputView().placeholder}
-              initialValue={inputView().value}
-              autofocus={!isMobile() && (props.autofocus ?? true)}
-              class="text-sm"
+      <Surface depth={2}>
+        <Input.Layout>
+          <Input.FormatRibbon>
+            <FormatButtons
+              selectionState={() => markdownEditor.selection}
+              onInlineFormat={(format) =>
+                applyInlineFormat(markdownEditor.lexical, format)
+              }
+              onNodeFormat={(format) =>
+                applyNodeFormat(markdownEditor.lexical, format)
+              }
             />
-          </Input.Editor>
-        </Input.EditorShell>
-        <Input.Footer>
-          <Switch>
-            <Match when={props.children}>{props.children}</Match>
-            <Match when>
-              <DefaultActions input={inputView()} />
-            </Match>
-          </Switch>
-        </Input.Footer>
-      </Input.Layout>
+          </Input.FormatRibbon>
+          <Input.EditorShell
+            ref={setScrollContainer}
+            onClick={(event) => {
+              if (!isMobile()) {
+                event.stopPropagation();
+                markdownEditor.controls.focus();
+              }
+            }}
+          >
+            <Input.Editor>
+              <MarkdownShell
+                config={markdownEditor}
+                placeholder={inputView().placeholder}
+                initialValue={inputView().value}
+                autofocus={!isMobile() && (props.autofocus ?? true)}
+                class="text-sm"
+              />
+            </Input.Editor>
+          </Input.EditorShell>
+          <Input.Footer>
+            <Switch>
+              <Match when={props.children}>{props.children}</Match>
+              <Match when>
+                <DefaultActions input={inputView()} />
+              </Match>
+            </Switch>
+          </Input.Footer>
+        </Input.Layout>
+      </Surface>
     </Input.Root>
   );
 }

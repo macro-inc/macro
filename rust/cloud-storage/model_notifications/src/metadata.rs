@@ -79,6 +79,9 @@ pub struct ChannelMessageSendMetadata {
     /// The message id
     #[serde(alias = "message_id")]
     pub message_id: String,
+    /// Whether the message includes attachments.
+    #[serde(skip)]
+    pub has_attachments: bool,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
     #[serde(default)]
@@ -118,6 +121,9 @@ pub struct ChannelMentionMetadata {
     /// The message content
     #[serde(alias = "message_content")]
     pub message_content: String,
+    /// Whether the message includes attachments.
+    #[serde(skip)]
+    pub has_attachments: bool,
     /// the id of the thread
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(alias = "thread_id")]
@@ -144,6 +150,9 @@ pub struct ChannelReplyMetadata {
     /// The message content
     #[serde(alias = "message_content")]
     pub message_content: String,
+    /// Whether the message includes attachments.
+    #[serde(skip)]
+    pub has_attachments: bool,
     /// The user who sent the root message of the thread
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(alias = "thread_parent_sender_id")]
@@ -265,7 +274,7 @@ impl NotificationTitle for ChannelMentionMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        parse_message_plain_text(&self.message_content)
+        parse_message_plain_text_or_attachment(&self.message_content, self.has_attachments)
     }
 }
 
@@ -309,7 +318,7 @@ impl NotificationTitle for ChannelMessageSendMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        parse_message_plain_text(&self.message_content)
+        parse_message_plain_text_or_attachment(&self.message_content, self.has_attachments)
     }
 }
 
@@ -352,7 +361,7 @@ impl NotificationTitle for ChannelReplyMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        parse_message_plain_text(&self.message_content)
+        parse_message_plain_text_or_attachment(&self.message_content, self.has_attachments)
     }
 }
 
@@ -378,6 +387,22 @@ pub struct TaskAssignedMetadata {
 fn parse_message_plain_text(content: &str) -> Result<String, Report> {
     let parsed = ParsedXmlText::parse(content)?;
     Ok(PlainTextFormatter::format_xml_text(parsed).0)
+}
+
+fn parse_message_plain_text_or_attachment(
+    content: &str,
+    has_attachments: bool,
+) -> Result<String, Report> {
+    let mut text = parse_message_plain_text(content)?;
+    let attached_items = "[attached items]";
+    if has_attachments && text.trim().is_empty() {
+        return Ok(attached_items.to_string());
+    }
+    if has_attachments {
+        text.push('\n');
+        text.push_str(attached_items);
+    }
+    Ok(text)
 }
 
 /// Helper to create an alert-style APNS notification with title and body.

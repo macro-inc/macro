@@ -6,11 +6,11 @@ VALUES ('macro|user@user.com', 'user@user.com','stripe_id','a1111111-1111-1111-1
 
 -- Test Documents
 INSERT INTO public."Document" ("id","name","fileType", "owner")
-VALUES ('document-one', 'test_document_name','pdf', 'macro|user@user.com');
+VALUES ('d0000001-0000-0000-0000-000000000001', 'test_document_name','pdf', 'macro|user@user.com');
 INSERT INTO public."Document" ("id","name","fileType", "owner")
-VALUES ('document-two', 'test_document_name','pdf', 'macro|user@user.com');
+VALUES ('d0000002-0000-0000-0000-000000000002', 'test_document_name','pdf', 'macro|user@user.com');
 INSERT INTO public."Document" ("id","name","fileType", "owner")
-VALUES ('document-three', 'test_document_name','pdf', 'macro|user@user.com');
+VALUES ('d0000003-0000-0000-0000-000000000003', 'test_document_name','pdf', 'macro|user@user.com');
 
 -- Test Chats
 INSERT INTO public."Chat" ("id","name","userId", "model", "createdAt", "updatedAt")
@@ -28,17 +28,17 @@ INSERT INTO public."ChatMessage" ("id", "content", "role", "chatId")
 VALUES ('message-two', '"test-chat message 2"', 'user', 'chat-three');
 
 -- Chat attachments on both chat
-INSERT INTO public."ChatAttachment" ("id", "chatId", "attachmentType", "attachmentId")
-VALUES ('chat-attachment-one', 'chat-one', 'document', 'document-two');
-INSERT INTO public."ChatAttachment" ("id", "chatId", "attachmentType", "attachmentId")
-VALUES ('chat-attachment-two', 'chat-one', 'document', 'document-two');
-INSERT INTO public."ChatAttachment" ("id", "chatId", "attachmentType", "attachmentId")
-VALUES ('chat-attachment-six', 'chat-two', 'document', 'document-two');
+INSERT INTO public."ChatAttachment" ("id", "chatId", "entity_type", "entity_id")
+VALUES ('chat-attachment-one', 'chat-one', 'document', 'd0000002-0000-0000-0000-000000000002');
+INSERT INTO public."ChatAttachment" ("id", "chatId", "entity_type", "entity_id")
+VALUES ('chat-attachment-two', 'chat-one', 'document', 'd0000002-0000-0000-0000-000000000002');
+INSERT INTO public."ChatAttachment" ("id", "chatId", "entity_type", "entity_id")
+VALUES ('chat-attachment-six', 'chat-two', 'document', 'd0000002-0000-0000-0000-000000000002');
 
 -- Chat attachments on messages
-INSERT INTO public."ChatAttachment" ("id", "messageId", "attachmentType", "attachmentId")
-VALUES ('chat-attachment-three', 'message-one', 'document', 'document-one');
-INSERT INTO public."ChatAttachment" ("id", "messageId", "attachmentType", "attachmentId")
-VALUES ('chat-attachment-four', 'message-one', 'document', 'document-two');
-INSERT INTO public."ChatAttachment" ("id", "messageId", "attachmentType", "attachmentId")
-VALUES ('chat-attachment-five', 'message-one', 'document', 'document-three');
+INSERT INTO public."ChatAttachment" ("id", "messageId", "entity_type", "entity_id")
+VALUES ('chat-attachment-three', 'message-one', 'document', 'd0000001-0000-0000-0000-000000000001');
+INSERT INTO public."ChatAttachment" ("id", "messageId", "entity_type", "entity_id")
+VALUES ('chat-attachment-four', 'message-one', 'document', 'd0000002-0000-0000-0000-000000000002');
+INSERT INTO public."ChatAttachment" ("id", "messageId", "entity_type", "entity_id")
+VALUES ('chat-attachment-five', 'message-one', 'document', 'd0000003-0000-0000-0000-000000000003');

@@ -8,8 +8,8 @@ import {
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { useBlockAliasedName, useBlockId } from '@core/block';
-import { ParamsProvider } from '@core/component/ParamsProvider';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
+import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_RAIL_CHAT_TASK_COMMENTS,

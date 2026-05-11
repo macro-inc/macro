@@ -7,6 +7,7 @@
 //! own mapping to [`sqs_client::search::SearchQueueMessage`] — but the public
 //! surface (orchestration + HTTP routes) stays uniform.
 
+pub mod jobs;
 pub mod models;
 pub mod ports;
 pub mod service;

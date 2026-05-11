@@ -1,7 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { cn } from '@ui/utils/classname';
 import ChevronDownIcon from '@icon/bold/caret-down-bold.svg';
 import CheckIcon from '@icon/bold/check-bold.svg';
+import { cn, Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -106,7 +106,7 @@ export const Dropdown = <T extends string | number>(
         </div>
       </div>
       <Show when={isSelected}>
-        <CheckIcon class="w-3 h-3 shrink-0" />
+        <CheckIcon class="size-3 shrink-0" />
       </Show>
     </>
   );
@@ -121,46 +121,48 @@ export const Dropdown = <T extends string | number>(
       >
         {props.renderValue?.(selectedOption()) ??
           defaultRenderValue(selectedOption())}
-        <ChevronDownIcon class="w-3 h-3 text-ink-muted shrink-0" />
+        <ChevronDownIcon class="size-3 text-ink-muted shrink-0" />
       </button>
       <Show when={isOpen()}>
         <ScopedPortal scope="local">
-          <div
-            ref={menuRef}
-            class="z-toast-region border border-edge-muted bg-menu shadow-lg max-h-64 overflow-y-auto p-1"
-            style={getMenuStyle()}
-          >
-            <For each={props.options}>
-              {(option) => {
-                const isSelected = () => option.value === props.value;
-                const isDisabled = () => option.disabled ?? false;
+          <Layer depth={2}>
+            <div
+              ref={menuRef}
+              class="z-toast-region border border-edge bg-menu shadow-lg max-h-64 overflow-y-auto p-1"
+              style={getMenuStyle()}
+            >
+              <For each={props.options}>
+                {(option) => {
+                  const isSelected = () => option.value === props.value;
+                  const isDisabled = () => option.disabled ?? false;
 
-                return (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isDisabled()) {
-                        props.onChange(option.value);
-                        setIsOpen(false);
-                      }
-                    }}
-                    disabled={isDisabled()}
-                    class={cn(
-                      'w-full p-1.5 text-sm text-left flex items-center justify-between',
-                      isDisabled()
-                        ? 'opacity-50 cursor-not-allowed'
-                        : isSelected()
-                          ? 'bg-active text-ink'
-                          : 'hover:bg-hover/50 text-ink'
-                    )}
-                  >
-                    {props.renderOption?.(option, isSelected()) ??
-                      defaultRenderOption(option, isSelected())}
-                  </button>
-                );
-              }}
-            </For>
-          </div>
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isDisabled()) {
+                          props.onChange(option.value);
+                          setIsOpen(false);
+                        }
+                      }}
+                      disabled={isDisabled()}
+                      class={cn(
+                        'w-full p-1.5 text-sm text-left flex items-center justify-between',
+                        isDisabled()
+                          ? 'opacity-50 cursor-not-allowed'
+                          : isSelected()
+                            ? 'bg-active text-ink'
+                            : 'hover:bg-hover text-ink'
+                      )}
+                    >
+                      {props.renderOption?.(option, isSelected()) ??
+                        defaultRenderOption(option, isSelected())}
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
+          </Layer>
         </ScopedPortal>
       </Show>
     </div>

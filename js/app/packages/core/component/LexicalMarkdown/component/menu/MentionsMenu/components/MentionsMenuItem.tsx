@@ -1,10 +1,11 @@
-import { createEffect } from 'solid-js';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
+import type { ChannelEntity } from '@entity';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
 import UsersIcon from '@icon/regular/users.svg';
-import type { ChannelEntity } from '@entity';
+import { cn } from '@ui';
+import { createEffect } from 'solid-js';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
 import {
   getBlockNameFromEntity,
@@ -34,7 +35,7 @@ export function MentionsMenuItem(props: {
   const icon = () => {
     switch (props.item.kind) {
       case 'user':
-        return <UserIcon id={props.item.id} size="xs" isDeleted={false} />;
+        return <UserIcon id={props.item.id} size="sm" isDeleted={false} />;
 
       case 'group':
         return <UsersIcon class="size-4 text-ink-muted" />;
@@ -81,10 +82,11 @@ export function MentionsMenuItem(props: {
         e.stopPropagation();
       }}
       on:mousemove={() => props.setIndex(props.index)}
-      class="group flex items-center p-1.5 mx-1.5"
-      classList={{ 'bg-active bracket': props.selected }}
+      class={cn('group flex items-center p-1.5 mx-1.5 rounded-sm', {
+        'bg-hover': props.selected,
+      })}
     >
-      <div class="mr-2">{icon()}</div>
+      <div class="mr-2 flex items-center">{icon()}</div>
       <span
         class="ph-no-capture text-ink text-xs sm:text-sm font-medium grow overflow-hidden text-nowrap"
         style={{ 'text-overflow': 'ellipsis' }}

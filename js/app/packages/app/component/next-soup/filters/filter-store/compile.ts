@@ -1,11 +1,11 @@
 import type {
   DateRangeFilter,
+  EmailView,
   FieldFilters,
   FieldName,
   PropertyFilter,
   Query,
   QueryState,
-  EmailView,
 } from './types';
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
@@ -97,6 +97,7 @@ const FIELD_CONFIG: Record<
   folderOwnerId: { target: 'pf', field: 'o' },
   folderSeen: { target: 'pf', field: 'ns' },
   folderDone: { target: 'pf', field: 'nd' },
+  callId: { target: 'callf', field: 'CallId' },
   callChannelId: { target: 'callf', field: 'ChannelId' },
   callSpeakerId: { target: 'callf', field: 'Speaker' },
   callAttended: { target: 'callf', field: 'Attended' },
@@ -274,7 +275,7 @@ const ID_FIELD_NAMES: Partial<Record<QueryTarget, FieldName>> = {
   chanf: 'channelId',
   cf: 'chatId',
   pf: 'folderId',
-  callf: 'callChannelId',
+  callf: 'callId',
 };
 
 type DefineQueryFiltersOptions = {

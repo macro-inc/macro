@@ -5,6 +5,8 @@ import {
   getAiToolsInfra,
   getMacroApiToken,
   getMacroNotify,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -158,10 +160,8 @@ const service = new AgentScheduleService(`agent-schedule-service-${stack}`, {
     },
     // Service URLs not covered by ai_tools
     {
-      name: 'CONNECTION_GATEWAY_URL',
-      value: `https://connection-gateway${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      name: ServiceUrl.CONNECTION_GATEWAY_URL,
+      value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
     },
     // AI model API keys
     {

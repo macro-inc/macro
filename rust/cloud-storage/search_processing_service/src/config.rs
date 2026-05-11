@@ -54,9 +54,6 @@ pub struct Config {
     /// The bucket where documents are stored
     pub document_storage_bucket: String,
 
-    /// API key for sync service
-    pub sync_service_auth_key: String,
-
     /// The number of workers to spawn
     pub worker_count: u8,
 
@@ -65,6 +62,15 @@ pub struct Config {
 
     /// Per-entity DB page sizes for backfill adapters.
     pub backfill_page_sizes: BackfillPageSizes,
+
+    /// DynamoDB table name backing the backfill job registry. Items carry an
+    /// `expires_at` epoch attribute that DynamoDB's TTL sweeps in the
+    /// background, so completed jobs vanish on their own.
+    pub backfill_jobs_table: String,
+
+    /// TTL applied to the `expires_at` attribute on each job record. Acts as
+    /// the GC mechanism — DynamoDB removes items shortly after this elapses.
+    pub backfill_job_ttl_seconds: u64,
 }
 
 fn parse_page_size(name: &str, default: usize) -> anyhow::Result<usize> {
@@ -119,9 +125,6 @@ impl Config {
         let document_storage_bucket = std::env::var("DOCUMENT_STORAGE_BUCKET")
             .context("DOCUMENT_STORAGE_BUCKET must be provided")?;
 
-        let sync_service_auth_key = std::env::var("SYNC_SERVICE_AUTH_KEY")
-            .context("SYNC_SERVICE_AUTH_KEY must be provided")?;
-
         let worker_count: u8 = std::env::var("WORKER_COUNT")
             .unwrap_or("10".to_string())
             .parse::<u8>()
@@ -138,6 +141,13 @@ impl Config {
             emails: parse_page_size("BACKFILL_EMAILS_PAGE_SIZE", DEFAULT_EMAILS_PAGE)?,
         };
 
+        let backfill_jobs_table =
+            std::env::var("BACKFILL_JOBS_TABLE").context("BACKFILL_JOBS_TABLE must be provided")?;
+        let backfill_job_ttl_seconds: u64 = std::env::var("BACKFILL_JOB_TTL_SECONDS")
+            .unwrap_or_else(|_| (24 * 60 * 60).to_string())
+            .parse()
+            .context("BACKFILL_JOB_TTL_SECONDS must be a positive integer")?;
+
         Ok(Config {
             database_url,
             database_url_readonly,
@@ -150,10 +160,11 @@ impl Config {
             opensearch_username,
             opensearch_password,
             document_storage_bucket,
-            sync_service_auth_key,
             worker_count,
             lexical_service_url,
             backfill_page_sizes,
+            backfill_jobs_table,
+            backfill_job_ttl_seconds,
         })
     }
 }

@@ -23,6 +23,7 @@ pub fn send_channel_message_to_search_extractor_queue(
                             sqs_client::search::channel::ChannelMessageUpdate {
                                 channel_id,
                                 message_id,
+                                index_override: None,
                             },
                         ),
                     )
@@ -61,6 +62,7 @@ pub fn send_remove_channel_message_to_search_extractor_queue(
                             sqs_client::search::channel::RemoveChannelMessage {
                                 channel_id,
                                 message_id,
+                                index_override: None,
                             },
                         ),
                     )

@@ -9,6 +9,8 @@ use comms_db_client::channels::{
     create_channel::{CreateChannelOptions, create_channel},
     get_dm,
 };
+use contacts::domain::ports::ContactsIngress;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::{
     comms::{ChannelType, GetOrCreateAction},
     user::UserContext,
@@ -108,12 +110,16 @@ pub async fn handler(
                 )
             })?;
             // Contacts: create connections
-            let sqs_client = &ctx.sqs_client;
-            sqs_client
-                .enqueue_contacts_create_channel(
-                    vec![user_id.clone(), recipient_id.clone()],
-                    &id.to_string(),
-                )
+            let contacts_users = vec![user_id.clone(), recipient_id.clone()]
+                .into_iter()
+                .map(MacroUserIdStr::try_from)
+                .collect::<Result<std::collections::HashSet<_>, _>>()
+                .map_err(|e| {
+                    tracing::error!(error=?e, "invalid user id for contacts");
+                    (StatusCode::BAD_REQUEST, "invalid user id".to_string())
+                })?;
+            ctx.contacts_ingress
+                .enqueue_contacts(contacts_users)
                 .await
                 .map_err(|e| {
                     tracing::error!(error=?e, "unable to create 'add participant' SQS message");

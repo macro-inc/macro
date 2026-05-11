@@ -1,9 +1,9 @@
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { Bar } from '@core/component/TopBar/Bar';
 import { useContacts } from '@core/user';
 import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
 import Copy from '@phosphor-icons/core/regular/copy.svg?component-solid';
 import { useHistoryQuery } from '@queries/history/history';
+import { Button } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 
 interface SignalDebugCardProps {
@@ -50,14 +50,14 @@ function SignalDebugCard(props: SignalDebugCardProps) {
       </div>
       <div class="border-t border-edge mt-3 pt-3">
         <details>
-          <summary class="cursor-pointer text-accent text-sm">Raw JSON</summary>
+          <summary class="text-accent text-sm">Raw JSON</summary>
           <div class="mt-2 relative">
             <button
               onClick={copyToClipboard}
               class="absolute top-2 right-2 p-1 rounded bg-surface-secondary hover:bg-surface-tertiary text-text-secondary hover:text-text-primary transition-colors z-10"
               title="Copy to clipboard"
             >
-              <Copy class="w-4 h-4" />
+              <Copy class="size-4" />
             </button>
             <pre class="text-xs bg-message p-3 rounded overflow-auto max-h-80 border border-edge">
               {formatJson(props.data)}
@@ -80,7 +80,7 @@ const DataDebug: Component = () => {
   };
 
   return (
-    <div class="flex flex-col h-full w-full">
+    <div class="flex flex-col size-full">
       <Bar
         left={
           <div class="p-2 text-sm w-2xl truncate">
@@ -88,12 +88,9 @@ const DataDebug: Component = () => {
           </div>
         }
         center={
-          <DeprecatedTextButton
-            theme="base"
-            text="Refresh"
-            icon={Refresh}
-            onClick={handleRefresh}
-          />
+          <Button variant="base" onClick={handleRefresh}>
+            <Refresh /> Refresh
+          </Button>
         }
       ></Bar>
       <div class="flex flex-col gap-6 p-6 overflow-scroll">

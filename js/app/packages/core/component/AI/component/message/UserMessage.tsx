@@ -1,12 +1,10 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import type { Model } from '@core/component/AI/types';
-import { isDssImage, isImageAttachment } from '@core/component/AI/util';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
 import PencilIcon from '@icon/regular/note-pencil.svg';
 import QuoteIcon from '@phosphor-icons/core/bold/arrow-elbow-down-right-bold.svg?component-solid';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
+import { Button } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { DEFAULT_MODEL } from '../../constant';
 import { ChatMessageMarkdown } from './ChatMessageMarkdown';
@@ -66,14 +64,11 @@ export function UserMessage(props: {
   };
 
   const imageAttachments = () =>
-    props.message.attachments.filter((a) => isImageAttachment(a));
+    props.message.attachments.filter((a) => a.entity_type === 'static_file');
 
   const itemPreviewAttachments = () =>
-    props.message.attachments.filter(
-      (a) =>
-        // jail
-        !isImageAttachment(a) &&
-        ['channel', 'document', 'email', 'project'].includes(a.attachmentType)
+    props.message.attachments.filter((a) =>
+      ['channel', 'document', 'email_thread', 'project'].includes(a.entity_type)
     );
 
   return (
@@ -81,7 +76,7 @@ export function UserMessage(props: {
       <Show when={quote()}>
         <div class="relative w-full text-xs flex flex-row space-x-2 items-start text-ink-muted">
           <div class="flex flex-row items-center space-x-3">
-            <QuoteIcon class="w-3 h-3 shrink-0" />
+            <QuoteIcon class="size-3 shrink-0" />
             <p>"{quote()?.substring(0, 300)}..."</p>
           </div>
         </div>
@@ -91,21 +86,23 @@ export function UserMessage(props: {
           <For each={imageAttachments()}>
             {(attachment) => (
               <ImagePreview
-                image={{ id: attachment.attachmentId }}
+                image={{ id: attachment.entity_id }}
                 variant="small"
-                isDss={isDssImage(attachment)}
+                isDss={false}
               />
             )}
           </For>
           <For each={itemPreviewAttachments()}>
             {(attachment) => (
               <ItemPreview
-                id={attachment.attachmentId}
-                // TODO: improve typing for item preview attachments
+                id={attachment.entity_id}
                 type={
-                  attachment.attachmentType as
+                  (attachment.entity_type === 'email_thread'
+                    ? 'email'
+                    : attachment.entity_type) as
                     | 'channel'
                     | 'document'
+                    | 'email'
                     | 'project'
                 }
               />
@@ -125,11 +122,13 @@ export function UserMessage(props: {
                 />
                 <Show when={props.edit}>
                   <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <DeprecatedIconButton
-                      icon={PencilIcon}
-                      theme="clear"
+                    <Button
+                      variant="ghost"
+                      size="icon-md"
                       onClick={() => setIsEditing(true)}
-                    />
+                    >
+                      <PencilIcon />
+                    </Button>
                   </div>
                 </Show>
               </div>
@@ -139,7 +138,7 @@ export function UserMessage(props: {
                 chatId={props.edit!.chatId}
                 attachments={props.message.attachments}
                 initialText={props.message.content.toString()}
-                model={(props.message.model as Model) ?? DEFAULT_MODEL}
+                model={DEFAULT_MODEL}
                 onAccept={() => {}}
                 onCancel={() => setIsEditing(false)}
               />

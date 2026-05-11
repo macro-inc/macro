@@ -1,22 +1,26 @@
 import './ListEntity.css';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { isMobile } from '@core/mobile/isMobile';
-import type { DateValue } from '@core/util/date';
 import { stackNotifications } from '@notifications';
+import {
+  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
+  enqueueDocumentWakeup,
+  isWakeableDocument,
+} from '@queries/preview';
 import {
   getStreamState,
   subscribeToStreamState,
 } from '@service-connection/stream-events';
 import { mergeRefs } from '@solid-primitives/refs';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   type JSX,
   Match,
-  type Ref,
   Show,
   Switch,
   useContext,
@@ -27,17 +31,9 @@ import {
   isHitSnippetComplete,
   isSnippetEntity,
 } from '../extractors-search/snippet-entity';
-import {
-  isChannelEntity,
-  isEmailEntity,
-  type EntityData,
-  type ProjectEntity,
-} from '../types/entity';
-import {
-  isWithNotification,
-  type WithNotification,
-} from '../types/notification';
-import { isSearchEntity, type SearchLocation } from '../types/search';
+import { isChannelEntity, isEmailEntity } from '../types/entity';
+import { isWithNotification } from '../types/notification';
+import { isSearchEntity } from '../types/search';
 import { createEntityDraggable } from '../utils/draggable';
 import { unreadFilterFn } from '../utils/filter';
 import {
@@ -45,40 +41,22 @@ import {
   filterValidNotifications,
 } from '../utils/notification';
 import { useIsShared } from '../utils/shared';
+import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
+import { NarrowLayout } from './list-entity/narrow-layout';
 import {
+  type BaseListEntityProps,
   hasSearchContentHits,
   InboxDivider,
   type LayoutProps,
   useCharacterCount,
   useListLayout,
 } from './list-entity/shared';
-import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
-import { NarrowLayout } from './list-entity/narrow-layout';
 import { WideLayout } from './list-entity/wide-layout';
 
 export { ListLayoutProvider } from './list-entity/shared';
 
-interface ListEntityProps {
-  entity: WithNotification<EntityData>;
-  onClick?: (event: MouseEvent) => void;
-  timestamp?: DateValue | null;
-  ref?: Ref<HTMLDivElement>;
-  checked?: boolean;
-  highlighted?: boolean;
-  hovered?: boolean;
-  hideContentHits?: boolean;
-  onChecked?: (checked: boolean, shiftKey: boolean) => void;
-  onMouseMove?: () => void;
+interface ListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
-  onProjectClick?: (
-    entity: ProjectEntity,
-    e: PointerEvent | MouseEvent
-  ) => void;
-  onContentHitClick?: (
-    e: PointerEvent | MouseEvent,
-    location?: SearchLocation
-  ) => void;
-  entityRowConfig?: EntityRowConfig;
 }
 
 function MaybeEntityRow(props: {
@@ -105,6 +83,14 @@ function MaybeEntityRow(props: {
 export function ListEntity(props: ListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
+  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
+
+  createEffect(() => {
+    if (!bulkWakeupEnabled().enabled) return;
+    if (!isWakeableDocument(props.entity)) return;
+
+    enqueueDocumentWakeup(props.entity);
+  });
 
   subscribeToStreamState(props.entity.id, props.entity.type);
   const streamState = getStreamState(props.entity.id);
@@ -200,11 +186,11 @@ export function ListEntity(props: ListEntityProps) {
         'soup-list-entity @container/entity w-full relative group/narrow flex flex-col',
         {
           'min-h-10': !isMobile(),
-          'bg-accent/5': props.checked,
-          'hover:bg-hover/30':
+          'bg-accent/8': props.checked,
+          'hover:bg-hover group-data-expanded/cm-trigger:bg-hover':
             !props.checked && !props.highlighted && !props.hovered,
-          'bg-hover/20': props.hovered && !props.highlighted && !props.checked,
-          'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1':
+          'bg-hover': props.hovered && !props.highlighted && !props.checked,
+          'bg-accent/8 outline-1 outline-accent/20 -outline-offset-1':
             props.highlighted && !isMobile(),
         }
       )}
@@ -212,7 +198,7 @@ export function ListEntity(props: ListEntityProps) {
     >
       <div
         data-accent-bar
-        class={cn('absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0', {
+        class={cn('absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0', {
           'opacity-100': props.highlighted && !isMobile(),
         })}
       />
@@ -264,7 +250,7 @@ export function ListEntity(props: ListEntityProps) {
       </Switch>
 
       <Show when={hasNotifications() && !isMobile()}>
-        <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
+        <div class="flex gap-2 size-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
           <div class={cn('min-w-0 flex-1 truncate ml-2 @lg/entity:ml-6')}>
             <Show when={isWithNotification(props.entity) && !showContentHits()}>
               <Entity.Notification.Stacks
@@ -277,7 +263,7 @@ export function ListEntity(props: ListEntityProps) {
       </Show>
 
       <Show when={showContentHits()}>
-        <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0">
+        <div class="flex gap-2 size-full items-center text-sm px-2 pb-1 -mt-2 min-w-0">
           <div
             class={cn('min-w-0 flex-1 overflow-hidden ml-4 @lg/entity:ml-6')}
           >

@@ -1,3 +1,4 @@
+import type { EditorType } from '@lexical-core';
 import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
 import type { PluginManager, SelectionData } from '../plugins';
@@ -18,7 +19,6 @@ import type {
   MediaOptions,
   MentionsOptions,
 } from './types';
-import type { EditorType } from '@lexical-core';
 
 export class EditorConfigBuilder implements EditorBuilder {
   private state: EditorConfig;

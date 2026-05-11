@@ -1,5 +1,5 @@
-import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from 'core/component/Toast/Toast';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { blockData } from '../signal/blockData';
@@ -10,7 +10,7 @@ export default function BlockVideo() {
   useBlockEntityCommands();
   return (
     <DocumentBlockContainer>
-      <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
+      <div class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
         <ModalsProvider>
           <div class="relative">
             <TopBar />
@@ -36,10 +36,10 @@ const Video = () => {
   });
 
   return (
-    <div class="w-full h-full flex flex-col items-center justify-center gap-3 text-ink">
+    <div class="size-full flex flex-col items-center justify-center gap-3 text-ink">
       <Show when={videoUrl()}>
         <video
-          class="w-full h-full"
+          class="size-full"
           controls
           autoplay
           src={videoUrl()}

@@ -1,16 +1,18 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { getChannelParams } from '@block-channel/utils/link';
 import type { BlockAlias, BlockName } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { tryMacroId, useDisplayName } from '@core/user';
+import { compareDateDesc, type DateValue } from '@core/util/date';
+import { isErr } from '@core/util/maybeResult';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   isAccessiblePreviewItem,
   type PreviewItem,
   useItemPreview,
 } from '@queries/preview';
-import { tryMacroId, useDisplayName } from '@core/user';
-import { isErr } from '@core/util/maybeResult';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { commsServiceClient } from '@service-comms/client';
 import type { EntityReference } from '@service-comms/generated/models/entityReference';
 import type { GenericReference } from '@service-comms/generated/models/genericReference';
@@ -19,8 +21,6 @@ import { createMemo, createResource, For, Show } from 'solid-js';
 import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from './UserIcon';
-import { compareDateDesc, type DateValue } from '@core/util/date';
-import { getChannelParams } from '@block-channel/utils/link';
 
 export type ReferenceProps = {
   documentId: string;
@@ -207,7 +207,7 @@ export function References(props: ReferenceProps) {
                   </div>
 
                   <span class="inline-flex items-center gap-2 pl-4 text-sm">
-                    <UserIcon id={ref.sender_id} size="xs" isDeleted={false} />
+                    <UserIcon id={ref.sender_id} size="sm" isDeleted={false} />
                     <span class="font-medium text-ink">{userName()}</span>
                     <span class="text-ink-extra-muted">
                       {hasMessageContent ? 'referenced in' : 'attached in'}
@@ -248,7 +248,7 @@ export function References(props: ReferenceProps) {
                   </div>
 
                   <span class="inline-flex items-center gap-1 text-sm pl-4">
-                    <UserIcon id={userId} size="xs" isDeleted={false} />
+                    <UserIcon id={userId} size="sm" isDeleted={false} />
                     <span class="font-medium text-ink">{userName()}</span>
                     <span class="text-ink-extra-muted">mentioned in</span>
                     <InlineItemPreview

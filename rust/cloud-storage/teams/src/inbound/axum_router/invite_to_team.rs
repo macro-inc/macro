@@ -7,15 +7,28 @@ use macro_user_id::{email::Email, lowercased::Lowercase};
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 
-use crate::domain::{model::InviteUsersToTeamError, team_repo::TeamService};
+use crate::domain::{
+    model::{InviteUsersToTeamError, TeamUserTier},
+    team_repo::TeamService,
+};
 
 use super::{TeamPathParam, TeamRouterState, middleware::TeamAccessRoleExtractor};
+
+/// A single invite entry with email and tier
+#[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema, Clone)]
+pub struct InviteEntry {
+    /// The email of the user to invite
+    pub email: String,
+    /// The tier for this user (defaults to Haiku if not provided)
+    #[serde(default)]
+    pub tier: TeamUserTier,
+}
 
 /// The request body to invite a user to a team
 #[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct InviteToTeamRequest {
-    /// The emails of the users you want to invite to the team
-    pub emails: Vec<String>,
+    /// The invites to send, each with an email and tier
+    pub invites: Vec<InviteEntry>,
 }
 
 /// Error type for the invite to team handler
@@ -92,24 +105,26 @@ pub async fn handler<T: TeamService>(
     Path(TeamPathParam { team_id }): Path<TeamPathParam>,
     Json(req): Json<InviteToTeamRequest>,
 ) -> Result<StatusCode, InviteToTeamError> {
-    let emails: Vec<Result<Email<Lowercase<'_>>, _>> = req
-        .emails
+    let parsed: Vec<Result<(Email<Lowercase<'_>>, TeamUserTier), _>> = req
+        .invites
         .iter()
-        .map(|email| Email::parse_from_str(email).map(|email| email.lowercase()))
+        .map(|entry| {
+            Email::parse_from_str(&entry.email).map(|email| (email.lowercase(), entry.tier))
+        })
         .collect();
 
-    if emails.iter().any(|e| e.is_err()) {
+    if parsed.iter().any(|e| e.is_err()) {
         return Err(InviteToTeamError::InvalidEmails);
     }
 
-    let emails = emails.into_iter().map(|e| e.unwrap()).collect::<Vec<_>>();
+    let invites: Vec<_> = parsed.into_iter().map(|e| e.unwrap()).collect();
 
-    let emails = non_empty::NonEmpty::new(emails.as_slice())
+    let invites = non_empty::NonEmpty::new(invites.as_slice())
         .map_err(|_| InviteToTeamError::NoValidEmailsProvided)?;
 
     let team_invites = state
         .service
-        .invite_users_to_team(&team_id, &user_context.macro_user_id, emails)
+        .invite_users_to_team(&team_id, &user_context.macro_user_id, invites)
         .await
         .map_err(InviteToTeamError::InviteUsersToTeamError)?;
 

@@ -1,12 +1,11 @@
 export { CommandMenu, CommandMenuInner } from './CommandMenu';
-export { CommandState } from './state';
 export type { ICommandState } from './state';
+export { CommandState } from './state';
 export type { CategoryFilter } from './types';
-
+export type { CommandMenuItem } from './useCommandItems';
 export {
-  useCommandItems,
+  isCommandItem,
   isEntityItem,
   isUserItem,
-  isCommandItem,
+  useCommandItems,
 } from './useCommandItems';
-export type { CommandMenuItem } from './useCommandItems';

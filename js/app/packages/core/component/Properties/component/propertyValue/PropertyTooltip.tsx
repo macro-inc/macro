@@ -11,13 +11,15 @@ import {
   isSelectProperty,
   isStringProperty,
   PropertyDataTypeIcon,
+  hasValue as propertyHasValue,
 } from '@core/component/Properties/utils';
 import { UserIcon } from '@core/component/UserIcon';
+import { useUnfurl } from '@core/signal/unfurl';
 import LinkIcon from '@icon/regular/link.svg';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { useUnfurl } from '@core/signal/unfurl';
 import { proxyResource } from '@service-unfurl/client';
+import { Layer } from '@ui';
 import {
   createSignal,
   For,
@@ -28,7 +30,6 @@ import {
   Switch,
 } from 'solid-js';
 import { PropertyValueIcon } from './PropertyValueIcon';
-import { hasValue as propertyHasValue } from '@core/component/Properties/utils';
 
 type PropertyTooltipProps = ParentProps<{
   property: Property;
@@ -76,36 +77,38 @@ const TooltipWrapper = (props: {
   const singleSelect = () => !props.property.isMultiSelect;
   const hasValue = () => propertyHasValue(props.property);
   return (
-    <Show
-      when={hasValue()}
-      fallback={
-        <div class="p-2 border border-edge-muted bg-panel text-xs">
-          No {props.property.displayName} set
-        </div>
-      }
-    >
-      <div
-        class="p-2 border border-edge-muted bg-panel"
-        classList={{
-          'flex flex-row gap-2 items-center': singleSelect(),
-          'min-w-48 max-w-72': !singleSelect(),
-        }}
+    <Layer depth={2}>
+      <Show
+        when={hasValue()}
+        fallback={
+          <div class="p-2 border border-edge bg-panel text-xs rounded-sm shadow-md shadow-[#0001]">
+            No {props.property.displayName} set
+          </div>
+        }
       >
         <div
-          class="flex items-center gap-2 text-ink-muted"
+          class="p-2 border border-edge bg-panel rounded-sm shadow-md shadow-[#0001]"
           classList={{
-            'border-b border-edge-muted pb-1.5 mb-1.5': !singleSelect(),
+            'flex flex-row gap-2 items-center': singleSelect(),
+            'min-w-48 max-w-72': !singleSelect(),
           }}
         >
-          <PropertyDataTypeIcon
-            property={props.property}
-            class="size-3.5 text-ink-muted"
-          />
-          <span class="text-xs">{props.property.displayName}</span>
+          <div
+            class="flex items-center gap-2 text-ink-muted"
+            classList={{
+              'border-b border-edge pb-1.5 mb-1.5': !singleSelect(),
+            }}
+          >
+            <PropertyDataTypeIcon
+              property={props.property}
+              class="size-3.5 text-ink-muted"
+            />
+            <span class="text-xs">{props.property.displayName}</span>
+          </div>
+          {props.children}
         </div>
-        {props.children}
-      </div>
-    </Show>
+      </Show>
+    </Layer>
   );
 };
 

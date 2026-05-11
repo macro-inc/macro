@@ -11,6 +11,11 @@ import { getThreadHandler } from './GetThread';
 import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
 import {
+  listNotificationsHandler,
+  markNotificationsDoneHandler,
+  markNotificationsSeenHandler,
+} from './Notifications';
+import {
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
 } from './Properties';
@@ -43,6 +48,9 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   GetEntityProperties: getEntityPropertiesHandler,
   ListCallRecords: listCallRecordsHandler,
   ListEntities: listEntitiesHandler,
+  ListNotifications: listNotificationsHandler,
+  MarkNotificationsDone: markNotificationsDoneHandler,
+  MarkNotificationsSeen: markNotificationsSeenHandler,
   bash_code_execution: bashCodeExecutionHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,

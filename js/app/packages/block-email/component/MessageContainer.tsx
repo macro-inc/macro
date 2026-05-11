@@ -6,18 +6,19 @@ import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
 import { getSenderMacroId } from '@block-email/util/emailUser';
+import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { Message } from '@core/component/Message';
 import { toast } from '@core/component/Toast/Toast';
 import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
-import { refetchSoupEntity } from '@queries/soup/cache';
 import { logger } from '@observability';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
-import type { Attachment, ApiMessage } from '@service-email/generated/schemas';
-import { useUserId } from '@core/context/user';
+import type { ApiMessage, Attachment } from '@service-email/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -61,6 +62,11 @@ export function MessageContainer(props: MessageContainerProps) {
       context.messages.replyingToMessageId() === props.message.db_id
     ) {
       context.messages.setReplyingToMessageId(undefined);
+    }
+    // Reply/Reply-All/Forward actions on the last message open the bottom
+    // reply input (the inline reply only renders for non-last messages).
+    if (props.isLastMessage) {
+      context.messages.setBottomReplyOpen(newValue);
     }
   };
 
@@ -211,6 +217,10 @@ export function MessageContainer(props: MessageContainerProps) {
             senderId={senderMacroId()}
             isNewMessage={isNewMessage()}
             isTarget={props.isTarget}
+            hasReplyInputBelow={true}
+            hasThreadChildren={
+              !props.isLastMessage && (showReply() || !!draftChild())
+            }
           >
             <Message.TopBar>
               <EmailMessageTopBar
@@ -334,11 +344,14 @@ export function MessageContainer(props: MessageContainerProps) {
             </Message>
             <Show when={context.permissions().isOwner}>
               <Portal mount={threadAppendMountTarget()}>
-                <EmailInput
-                  replyingTo={() => props.message}
-                  setShowReply={setShowReply}
-                  draft={draftChild()}
-                />
+                <div class="relative isolate">
+                  <ThreadReplyInputConnector />
+                  <EmailInput
+                    replyingTo={() => props.message}
+                    setShowReply={setShowReply}
+                    draft={draftChild()}
+                  />
+                </div>
               </Portal>
             </Show>
           </Show>

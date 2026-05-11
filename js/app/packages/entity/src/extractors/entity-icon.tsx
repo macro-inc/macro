@@ -38,7 +38,7 @@ function DirectMessageIcon(props: {
   };
 
   return (
-    <div class={'bg-panel size-full rounded-full'}>
+    <div class="size-full flex">
       <Show
         when={participantId()}
         fallback={

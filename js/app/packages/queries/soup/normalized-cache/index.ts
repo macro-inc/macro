@@ -1,21 +1,21 @@
-export { initSoupNormalizer, getSoupNormalizer } from './normalizer';
 export type { NormalizerData } from './normalizer';
-export type {
-  SoupTransaction,
-  SoupEntityTag,
-  SoupEntityPartial,
-} from './types';
+export { getSoupNormalizer, initSoupNormalizer } from './normalizer';
 export {
-  optimisticUpdateSoupEntity,
-  insertSoupEntity,
   getSoupEntityById,
-  invalidateSoupEntity,
-  invalidateAllSoup,
-  hasSoupEntity,
   getSoupItemId,
-  removeSoupEntities,
-  removeSearchEntities,
-  refetchSoupEntity,
-  optimisticUpdateSoupItemViewedAt,
+  hasSoupEntity,
+  insertSoupEntity,
+  invalidateAllSoup,
+  invalidateSoupEntity,
+  optimisticUpdateSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
+  optimisticUpdateSoupItemViewedAt,
+  refetchSoupEntity,
+  removeSearchEntities,
+  removeSoupEntities,
 } from './operations';
+export type {
+  SoupEntityPartial,
+  SoupEntityTag,
+  SoupTransaction,
+} from './types';

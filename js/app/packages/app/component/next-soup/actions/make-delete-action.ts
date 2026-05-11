@@ -1,12 +1,12 @@
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
+import { globalRemoveFromSplitHistory } from '@app/component/split-layout/layoutUtils';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
-import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { globalRemoveFromSplitHistory } from '@app/component/split-layout/layoutUtils';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import type { SoupState } from '../create-soup-state';
 import { restoreSoupFocus, trashEmails } from '../utils';
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 
 type MakeDeleteOptions = {
   userId: () => string | undefined;
@@ -49,7 +49,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
 
   const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
     const currentIndex = soup.focus.index();
-    const nextEntity =
+    const nextRow =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
 
     const inPreview = previewPanel !== undefined;
@@ -70,8 +70,8 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
       }
 
       soup.selection.clear();
-      if (nextEntity) {
-        soup.focus.set(nextEntity.id);
+      if (nextRow) {
+        soup.focus.set(nextRow.id);
       }
 
       const toastId = toast.success(
@@ -100,12 +100,12 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
         toast.failure('Failed to move to Trash');
       });
 
-      restoreSoupFocus(nextEntity?.id, inPreview);
+      restoreSoupFocus(nextRow?.id, inPreview);
     };
 
     if (nonEmailEntities.length > 0) {
       // Handle non-email entities first via the bulk edit modal,
-      // then trash emails in onFinish so nextEntity/focus are still valid.
+      // then trash emails in onFinish so nextRow/focus are still valid.
       openBulkEditModal({
         view: 'delete',
         entities: nonEmailEntities,
@@ -128,10 +128,10 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
             trashEmailEntities();
           } else {
             soup.selection.clear();
-            if (nextEntity) {
-              soup.focus.set(nextEntity.id);
+            if (nextRow) {
+              soup.focus.set(nextRow.id);
             }
-            restoreSoupFocus(nextEntity?.id, inPreview);
+            restoreSoupFocus(nextRow?.id, inPreview);
           }
         },
         onCancel: () => {

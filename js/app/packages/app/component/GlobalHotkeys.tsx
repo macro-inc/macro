@@ -1,15 +1,26 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
+import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import { useLogout } from '@core/auth/logout';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { toast } from '@core/component/Toast/Toast';
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ValidHotkey } from '@core/hotkey/types';
+import {
+  handleFolderSelect,
+  openFilePicker,
+  openFolderPicker,
+} from '@core/util/upload';
+import LogoutIcon from '@icon/regular/sign-out.svg';
+import Upload from '@icon/regular/upload.svg';
+import UserIcon from '@icon/regular/user.svg';
+import IconGear from '@macro-icons/macro-gear.svg';
 import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { useMutationUndoContext } from '@queries/undo';
+import { debounce } from '@solid-primitives/scheduled';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo, onCleanup } from 'solid-js';
-import { useLogout } from '@core/auth/logout';
-import LogoutIcon from '@icon/regular/sign-out.svg';
-import UserIcon from '@icon/regular/user.svg';
 import {
   monochromeIcons,
   setDarkModeTheme,
@@ -22,25 +33,9 @@ import {
 import { applyTheme } from '../../theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
 import { CommandState } from './command';
-import {
-  CREATABLE_BLOCKS,
-  createMenuOpen,
-  setCreateMenuOpen,
-} from './Launcher';
-import { useSplitLayout } from './split-layout/layout';
-import {
-  openFilePicker,
-  openFolderPicker,
-  handleFolderSelect,
-} from '@core/util/upload';
-import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import Upload from '@icon/regular/upload.svg';
-import { useAnalytics } from '@app/component/analytics-context';
-import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
-import { debounce } from '@solid-primitives/scheduled';
-import IconGear from '@macro-icons/macro-gear.svg';
-import { LOCAL_ONLY } from '@core/constant/featureFlags';
+import { createMenuOpen, setCreateMenuOpen } from './Launcher';
 import { openMacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
+import { useSplitLayout } from './split-layout/layout';
 
 function useHotkeyAnalytics(): void {
   const analytics = useAnalytics();
@@ -111,7 +106,7 @@ export default function GlobalShortcuts() {
     CommandState.toggle();
   };
 
-  const createCommandScope = registerHotkey({
+  registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
@@ -129,34 +124,6 @@ export default function GlobalShortcuts() {
     displayPriority: 10,
     activateCommandScope: true,
   });
-
-  for (const block of CREATABLE_BLOCKS) {
-    registerHotkey({
-      hotkeyToken: block.hotkeyToken,
-      hotkey: block.hotkey,
-      scopeId: createCommandScope.commandScopeId,
-      description: block.description,
-      runWithInputFocused: true,
-      keyDownHandler: () => {
-        block.keyDownHandler();
-        return true;
-      },
-    });
-
-    if (block.altHotkeyToken) {
-      registerHotkey({
-        hotkeyToken: block.altHotkeyToken,
-        hotkey: `opt+${block.hotkey}` as ValidHotkey,
-        scopeId: createCommandScope.commandScopeId,
-        description: `${block.description} in new split`,
-        runWithInputFocused: true,
-        keyDownHandler: () => {
-          block.keyDownHandler();
-          return true;
-        },
-      });
-    }
-  }
 
   registerHotkey({
     hotkeyToken: TOKENS.global.commandMenu,

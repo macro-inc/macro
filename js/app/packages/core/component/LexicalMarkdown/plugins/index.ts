@@ -1,4 +1,5 @@
 export * from './actions';
+export * from './await';
 export * from './checklist';
 export * from './code';
 export * from './comments';
@@ -14,8 +15,8 @@ export * from './file-paste';
 export * from './find-and-replace';
 export * from './generate';
 export * from './horizontal-rules';
-export * from './ios-cursor-scroll';
 export * from './insert-text';
+export * from './ios-cursor-scroll';
 export * from './katex';
 export * from './keyboard-focus';
 export * from './keyboard-shortcuts';

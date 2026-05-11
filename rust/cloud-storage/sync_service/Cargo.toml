@@ -1,0 +1,14 @@
+[package]
+edition = "2024"
+name = "sync_service"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+inbound = ["dep:axum", "dep:utoipa"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+serde = { workspace = true }
+utoipa = { workspace = true, optional = true }

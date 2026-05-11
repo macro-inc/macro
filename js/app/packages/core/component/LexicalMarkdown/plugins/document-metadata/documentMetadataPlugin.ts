@@ -11,7 +11,7 @@ import {
   type SerializedEditorState,
 } from 'lexical';
 import { MarkdownEditorErrors } from '../../constants';
-import { MARKDOWN_VERSION_COUNTER, STAGING_TAG } from '../../version';
+import { MARKDOWN_VERSION_COUNTER } from '../../version';
 
 export type DocumentMetadata = {
   version: number;
@@ -135,13 +135,7 @@ export function documentMetadataPlugin(props: {
         const meta = $getDocumentMetadata();
         if (meta.version > MARKDOWN_VERSION_COUNTER) {
           if (props.onVersionError) {
-            if (meta.environmentTags?.includes(STAGING_TAG)) {
-              props.onVersionError(
-                MarkdownEditorErrors.STAGING_VERSION_MISMATCH_ERROR
-              );
-            } else {
-              props.onVersionError(MarkdownEditorErrors.VERSION_MISMATCH_ERROR);
-            }
+            props.onVersionError(MarkdownEditorErrors.VERSION_MISMATCH_ERROR);
           }
         }
       })

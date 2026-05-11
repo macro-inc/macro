@@ -1,11 +1,11 @@
 import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import CheckIcon from '@icon/regular/check.svg';
-import { createEffect, createSignal, For, on, Show } from 'solid-js';
+import { endOfDay } from 'date-fns/endOfDay';
 import { isAfter } from 'date-fns/isAfter';
 import { isBefore } from 'date-fns/isBefore';
-import { endOfDay } from 'date-fns/endOfDay';
 import { startOfDay } from 'date-fns/startOfDay';
+import { createEffect, createSignal, For, on, Show } from 'solid-js';
 
 export type DatePickerUIProps = {
   value: Date;
@@ -196,7 +196,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
             class="p-1 hover:bg-active transition-colors"
             onClick={handlePrevMonth}
           >
-            <CaretLeft class="w-4 h-4" />
+            <CaretLeft class="size-4" />
           </button>
 
           <button
@@ -212,7 +212,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
             class="p-1 hover:bg-active transition-colors"
             onClick={handleNextMonth}
           >
-            <CaretRight class="w-4 h-4" />
+            <CaretRight class="size-4" />
           </button>
         </div>
 
@@ -232,7 +232,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
               <Show when={day !== null} fallback={<div class="h-8" />}>
                 <button
                   type="button"
-                  class="h-8 w-8 transition-colors disabled:opacity-40"
+                  class="size-8 transition-colors disabled:opacity-40"
                   classList={{
                     'bg-accent text-dialog': isSelected(day!),
                     'hover:bg-active': !isSelected(day!),
@@ -326,7 +326,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
               inputmode="numeric"
               maxLength={2}
               aria-label="Hour"
-              class="w-10 text-center bg-active border border-edge-muted px-1 py-1 text-sm focus:outline-none focus:border-accent"
+              class="w-10 text-center bg-active border border-edge-muted p-1 text-sm focus:outline-none focus:border-accent"
               value={hourDisplay()}
               onKeyDown={(e) => {
                 if (e.key.length === 1 && !/\d/.test(e.key)) {
@@ -351,7 +351,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
               inputmode="numeric"
               maxLength={2}
               aria-label="Minute"
-              class="w-10 text-center bg-active border border-edge-muted px-1 py-1 text-sm focus:outline-none focus:border-accent"
+              class="w-10 text-center bg-active border border-edge-muted p-1 text-sm focus:outline-none focus:border-accent"
               value={minuteDisplay()}
               onKeyDown={(e) => {
                 if (e.key.length === 1 && !/\d/.test(e.key)) {
@@ -402,7 +402,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
             disabled={isTimeInPast()}
             onClick={() => props.onChange(buildDateWithTime(selectedDate()))}
           >
-            <CheckIcon class="w-4 h-4" />
+            <CheckIcon class="size-4" />
           </button>
         </div>
       </Show>

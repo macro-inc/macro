@@ -1,6 +1,6 @@
+import Fallback from '@icon/regular/placeholder.svg';
 import type { UnknownMentionDecoratorProps } from '@lexical-core';
 import { useContext } from 'solid-js';
-import Fallback from '@icon/regular/placeholder.svg';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 export function UnknownMention(props: UnknownMentionDecoratorProps) {
@@ -15,9 +15,9 @@ export function UnknownMention(props: UnknownMentionDecoratorProps) {
 
   return (
     <span
-      class="relative py-0.5 px-0.5 cursor-default text-ink-muted/50"
+      class="relative p-0.5 cursor-default text-ink-muted/50"
       classList={{
-        'bracket-offset-2': isSelectedAsNode(),
+        'bg-active': isSelectedAsNode(),
       }}
     >
       <span class="relative top-[0.125em] size-[1em] inline-flex mx-1 opacity-50">

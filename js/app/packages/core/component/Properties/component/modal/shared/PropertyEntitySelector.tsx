@@ -1,19 +1,21 @@
-import { Entity, type EntityData } from '@entity';
 import { UserIcon } from '@core/component/UserIcon';
+import { useEmail, useUserId } from '@core/context/user';
 import { useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
+import { useKeyPressed } from '@core/util/useKeyPressed';
+import { useSelectedFirst } from '@core/util/useSelectedFirst';
+import type { EmailEntity } from '@entity';
+import { Entity, type EntityData } from '@entity';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { createEmailsInfiniteQuery } from '@macro-entity';
-import type { EmailEntity } from '@entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
-import { useEmail, useUserId } from '@core/context/user';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
 import {
-  For,
   createEffect,
   createMemo,
   createSignal,
-  on,
+  For,
   onCleanup,
   onMount,
   Show,
@@ -22,20 +24,18 @@ import { useSearchInputFocus } from '../../../utils';
 import {
   type CombinedEntity,
   createEntitySearchConfig,
-  useQuickAccessEntities,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
   isChannelEntity,
-  threadMapper,
   quickAccessItemToEntity,
-  userToEntity,
   sortEntitiesWithSelfFirst,
+  threadMapper,
+  useQuickAccessEntities,
+  userToEntity,
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
-import { useKeyPressed } from '@core/util/useKeyPressed';
 import type { EntitySelectorConfig, PinnedOption } from './types';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 
 type EntityInputProps = {
   config: EntitySelectorConfig;
@@ -274,50 +274,16 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return localResults;
   });
 
-  // Sort entities with selected items first when not searching
-  const sortedEntities = createMemo(
-    on([searchTerm, filteredEntities], () => {
-      const term = searchTerm();
-      const filteredResults = filteredEntities();
-
-      // When there's a search term, return results as-is
-      if (term) {
-        return filteredResults;
-      }
-
-      // When browsing (no search), show selected entities first, then others
-      // (self is already sorted to top within filteredEntities)
-      const selectedIds = props.selectedOptions();
-      const entityIdsInResults = new Set(filteredResults.map((e) => e.id));
-
-      // Partition filtered results into selected and unselected
-      const selected: CombinedEntity[] = [];
-      const unselected: CombinedEntity[] = [];
-
-      for (const entity of filteredResults) {
-        if (selectedIds.has(entity.id)) {
-          selected.push(entity);
-        } else {
-          unselected.push(entity);
-        }
-      }
-
-      // Add missing selected entities that aren't in the visible results
-      const allAvailableEntities = entities();
-      for (const selectedId of selectedIds) {
-        if (!entityIdsInResults.has(selectedId)) {
-          const actualEntity = allAvailableEntities.find(
-            (e) => e.id === selectedId
-          );
-          if (actualEntity) {
-            selected.push(actualEntity);
-          }
-        }
-      }
-
-      return [...selected, ...unselected];
-    })
-  );
+  // Sort entities with selected items first when not searching. Self is
+  // already pinned to the top within `filteredEntities`; this layers
+  // selected-first on top of that ordering.
+  const sortedEntities = useSelectedFirst({
+    items: filteredEntities,
+    allItems: entities,
+    selectedIds: props.selectedOptions,
+    searchQuery: searchTerm,
+    getId: (e: CombinedEntity) => e.id,
+  });
 
   const toggleEntity = (entity: CombinedEntity) => {
     const newSelected = new Set(props.selectedOptions());
@@ -426,7 +392,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     <div>
       <div class="relative">
         <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-          <SearchIcon class="h-4 w-4 text-ink-muted" />
+          <SearchIcon class="size-4 text-ink-muted" />
           <input
             class="w-full caret-accent"
             ref={searchInputRef}
@@ -517,13 +483,13 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                       }}
                     >
                       <div class="flex items-center gap-2 flex-1 min-w-0">
-                        <div class="size-4 shrink-0">
+                        <div class="size-4 shrink-0 flex items-center">
                           <Show
                             when={entity.kind === 'entity'}
                             fallback={
                               <UserIcon
                                 id={entity.id}
-                                size="xs"
+                                size="sm"
                                 isDeleted={false}
                                 suppressClick={true}
                               />

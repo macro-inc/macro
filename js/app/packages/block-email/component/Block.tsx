@@ -1,12 +1,12 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { EmailDebouncedReadMarker } from '@notifications';
+import { useThreadQuery } from '@queries/email/thread';
 import { createMemo, Show, Suspense } from 'solid-js';
 import { blockDataSignal } from '../signal/emailBlockData';
 import { EmailView } from './Email';
-import { useThreadQuery } from '@queries/email/thread';
 
 export default function BlockEmail() {
   useBlockEntityCommands();
@@ -31,7 +31,7 @@ export default function BlockEmail() {
   return (
     <Suspense>
       <DocumentBlockContainer title={title() ?? 'Email'}>
-        <div class="size-full bracket-never" tabIndex={-1}>
+        <div class="size-full" tabIndex={-1}>
           <Show when={blockData()}>
             <Show when={threadId()}>
               {(id) => (

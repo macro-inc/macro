@@ -1,10 +1,10 @@
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { MenuItem } from '@core/component/Menu';
 import type { EntityData } from '@entity';
 import { For, Show } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import { createSoupEntityActions } from './create-soup-entity-actions';
 import { useSoupView } from './soup-view-context';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 
 interface SoupEntityActionsMenuProps {
   entities: EntityData[];

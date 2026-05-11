@@ -125,6 +125,18 @@ export type SortBy =
   | 'recently_updated'
   | 'recently_created';
 /**
+ * User-facing notification categories used for list filtering.
+ */
+export type NotificationItemType =
+  | 'email'
+  | 'message'
+  | 'channel'
+  | 'document'
+  | 'project'
+  | 'chat'
+  | 'call'
+  | 'task';
+/**
  * Direction for reading more messages around a cursor.
  */
 export type PageDirection = 'older' | 'newer';
@@ -473,6 +485,10 @@ export interface ChannelSearchResult {
    * This is only prsent if the search result is on the message content
    */
   created_at?: string | null;
+  /**
+   * When the channel message was deleted, if it has been
+   */
+  deleted_at?: string | null;
   highlight: SearchHighlight;
   /**
    * The channel message id
@@ -701,15 +717,15 @@ export interface MarkdownNode {
   type: string;
 }
 /**
- * Search for items by their content. For documents, this searches the document body text. For emails, this searches the email message body. For chats, this searches the message content. For call records, this searches the call transcript text. This tool finds items based on what's inside them, not their titles or names.
+ * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. For emails, whitespace-separated terms are ANDed and each term is matched independently across the text fields and the local-part of address fields, with the two groups OR'd. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface ContentSearch {
   /**
-   * Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']
+   * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records'].
    */
   entityTypes?: UnifiedSearchIndex[];
   /**
-   * The text content to search for. This searches within the body of documents, emails, messages, and call transcripts.
+   * The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched across subject/body/sender/recipient. Wrap a term in double quotes to force exact-token (or full-email-address) matching.
    */
   query: string;
 }
@@ -1131,15 +1147,141 @@ export interface ListEntitiesResponse {
   summary: string;
 }
 /**
- * Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. For call records, this searches the channel name the call took place in. This tool finds items based on what they're called, not their content.
+ * List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `done` and `seen` to request done/not-done or seen/unseen notifications.
+ */
+export interface ListNotifications {
+  /**
+   * Filter by done status. If omitted, only not-done notifications are returned. Set true for done notifications, false for not-done notifications.
+   */
+  done?: boolean | null;
+  /**
+   * Filter to notifications for specific entities. Pair each id with entityType to avoid ambiguity. Example: [{"entityType":"email","id":"..."}] returns notifications for one email thread.
+   */
+  entities?: NotificationEntityRef[] | null;
+  /**
+   * Filter to specific notification item types. If omitted, returns all types. Example: ["email", "message"] returns only email and message notifications.
+   */
+  includeTypes?: NotificationItemType[] | null;
+  /**
+   * Maximum number of notifications to return. Defaults to 20, max 50.
+   */
+  limit?: number | null;
+  /**
+   * Filter by seen status. If omitted, both seen and unseen notifications are returned. Set true for seen notifications, false for unseen notifications.
+   */
+  seen?: boolean | null;
+}
+/**
+ * User-facing reference to one specific entity to filter notifications by.
+ */
+export interface NotificationEntityRef {
+  entityType: NotificationItemType;
+  /**
+   * Entity id. For `email`, this is the email thread id. For `message`, this is the channel message id.
+   */
+  id: string;
+}
+/**
+ * Response from listing notifications.
+ */
+export interface ListNotificationsResponse {
+  /**
+   * Whether there are more notifications available.
+   */
+  hasMore: boolean;
+  /**
+   * The list of notifications.
+   */
+  notifications: NotificationItem[];
+}
+/**
+ * A single notification item in the list response.
+ */
+export interface NotificationItem {
+  /**
+   * When the notification was created (ISO 8601).
+   */
+  createdAt: string;
+  /**
+   * Whether the notification is marked as done.
+   */
+  done: boolean;
+  /**
+   * The ID of the entity this notification is about.
+   */
+  entityId: string;
+  /**
+   * The type of entity this notification is about (e.g. "channel", "document").
+   */
+  entityType: string;
+  /**
+   * The notification event type (e.g. "channel_mention").
+   */
+  eventType: string;
+  /**
+   * The notification ID.
+   */
+  id: string;
+  /**
+   * The notification metadata/payload.
+   */
+  metadata: {
+    [k: string]: unknown;
+  };
+  /**
+   * Whether the notification has been seen.
+   */
+  seen: boolean;
+  /**
+   * The user ID of the sender, if any.
+   */
+  senderId?: string | null;
+}
+/**
+ * Mark one or more notifications as done or not done for the current user. Use this when the user has completed the action associated with a notification.
+ */
+export interface MarkNotificationsDone {
+  /**
+   * Whether to mark as done (true) or not done (false).
+   */
+  done: boolean;
+  /**
+   * The IDs of the notifications to update.
+   */
+  notificationIds: string[];
+}
+/**
+ * Response from marking notifications as seen or done.
+ */
+export interface MarkNotificationsResponse {
+  /**
+   * The number of notifications updated.
+   */
+  count: number;
+  /**
+   * Whether the operation succeeded.
+   */
+  success: boolean;
+}
+/**
+ * Mark one or more notifications as seen for the current user. Use this when the user has viewed notifications but hasn't acted on them yet.
+ */
+export interface MarkNotificationsSeen {
+  /**
+   * The IDs of the notifications to mark as seen.
+   */
+  notificationIds: string[];
+}
+/**
+ * Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface NameSearch {
   /**
-   * Which types of items to search. Leave empty to search all types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']
+   * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records'].
    */
   entityTypes?: UnifiedSearchIndex[];
   /**
-   * The name or title to search for. For emails, this is the subject line. For channels, this can be the channel name or participant names. For call records, this is the channel name the call belongs to.
+   * The name or title to search. Pass 1-3 keywords drawn from words that would literally appear in the title, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched against the subject. Wrap a term in double quotes to force exact-token matching.
    */
   name: string;
 }

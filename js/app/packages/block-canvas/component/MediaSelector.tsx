@@ -4,10 +4,10 @@ import {
 } from '@block-canvas/signal/fileDrop';
 import { useRenderState } from '@block-canvas/store/RenderState';
 import { vec2 } from '@block-canvas/util/vector2';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { DropdownMenuContent } from '@core/component/Menu';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import {
   blockAcceptsFileExtension,
   blockNameToFileExtensions,
@@ -25,6 +25,7 @@ import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?compo
 import Image from '@phosphor-icons/core/regular/image.svg?component-solid';
 //import { copiedFile } from "@core/state/clipboard";
 import { useHistoryQuery } from '@queries/history/history';
+import { Button } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { Tools } from '../constants';
@@ -136,12 +137,14 @@ export function MediaSelector() {
       onOpenChange={setImageSelectorOpen}
     >
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <DeprecatedIconButton
-          tooltip={{ label: 'Media' }}
-          theme="clear"
-          icon={Image}
+        <Button
+          variant="ghost"
+          size="icon-md"
+          tooltip={<LabelAndHotKey label="Media" />}
           tabIndex={-1}
-        />
+        >
+          <Image />
+        </Button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenuContent
@@ -170,7 +173,7 @@ export function MediaSelector() {
             </Show>
             <DropdownMenu.Item closeOnSelect={false}>
               <div
-                class="w-72 flex flex-row select-none items-center gap-1 "
+                class="w-72 flex flex-row select-none items-center gap-1"
                 onmousedown={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
@@ -193,7 +196,7 @@ export function MediaSelector() {
                     },
                   }}
                 >
-                  <UploadSimple class="w-3.5 h-3.5 shrink-0 text-accent-ink" />
+                  <UploadSimple class="size-3.5 shrink-0 text-accent-ink" />
                   <span class="text-sm font-medium text-accent-ink">
                     Upload File
                   </span>

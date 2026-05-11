@@ -1,12 +1,12 @@
-import { ItemPreview } from '@core/component/ItemPreview';
-import { stringToItemType } from '@service-storage/client';
-import { cn } from '@ui/utils/classname';
-import { createMemo, For, Show } from 'solid-js';
 import {
   type MediaItem,
   mapMediaItems,
   partitionAttachments,
 } from '@channel/Media/media-items';
+import { ItemPreview } from '@core/component/ItemPreview';
+import { stringToItemType } from '@service-storage/client';
+import { cn } from '@ui';
+import { createMemo, For, Show } from 'solid-js';
 import { useMessage } from './context';
 import { MediaPreview } from './MediaPreview';
 
@@ -33,10 +33,7 @@ export function Attachments(props: AttachmentsProps) {
 
   return (
     <Show when={shouldRender()}>
-      <div
-        class={cn('allow-css-brackets mb-2', props.class)}
-        data-message-attachments
-      >
+      <div class={cn('mb-2', props.class)} data-message-attachments>
         <Show when={mediaItems().length > 0}>
           <MediaPreview items={mediaItems()} />
         </Show>

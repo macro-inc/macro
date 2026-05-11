@@ -8,7 +8,7 @@ import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/f
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { logger } from '@observability/logger';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,
@@ -136,9 +136,9 @@ export function ComposeBody(props: {
 
   return (
     <>
-      <div class="w-full h-full min-h-0 sm:max-h-full mobile:flex-1 flex flex-col flex-1">
+      <div class="size-full min-h-0 sm:max-h-full mobile:flex-1 flex flex-col flex-1">
         <div
-          class="grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-auto"
+          class="grow size-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-auto"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();

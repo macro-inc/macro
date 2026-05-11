@@ -1,18 +1,35 @@
-const CHAT_INDEX = 'chats';
-const DOCUMENT_INDEX = 'documents';
-const EMAIL_INDEX = 'emails_v2';
-const CHANNEL_INDEX = 'channels';
-const CALL_RECORDS_INDEX = 'call_records';
-const CALL_RECORDS_ALIAS = 'call_records_alias';
+// Aliases — what application code references via SearchIndex/OpenSearchEntityType.
+// Aliases are stable; underlying physical indices behind them can be swapped
+// during a reindex via the OpenSearch _aliases API.
+export const CHANNELS_ALIAS = 'channels';
+export const CHATS_ALIAS = 'chats';
+export const DOCUMENTS_ALIAS = 'documents';
+export const EMAILS_ALIAS = 'emails';
+export const CALL_RECORDS_ALIAS = 'call_records';
 
-export {
-  CHAT_INDEX,
-  DOCUMENT_INDEX,
-  EMAIL_INDEX,
-  CHANNEL_INDEX,
-  CALL_RECORDS_INDEX,
-  CALL_RECORDS_ALIAS,
+// Underlying physical indices (versioned). Bump the suffix to roll a new
+// version, then swap the alias atomically.
+export const CHANNELS_INDEX = 'channels_v1';
+export const CHATS_INDEX = 'chats_v1';
+export const DOCUMENTS_INDEX = 'documents_v1';
+export const EMAILS_INDEX = 'emails_v1';
+export const CALL_RECORDS_INDEX = 'call_records_v1';
+
+export const ALIAS_TO_INDEX: Record<string, string> = {
+  [CHANNELS_ALIAS]: CHANNELS_INDEX,
+  [CHATS_ALIAS]: CHATS_INDEX,
+  [DOCUMENTS_ALIAS]: DOCUMENTS_INDEX,
+  [EMAILS_ALIAS]: EMAILS_INDEX,
+  [CALL_RECORDS_ALIAS]: CALL_RECORDS_INDEX,
 };
+
+// Backward-compat shorthands used by older migration scripts. They now point
+// at the alias rather than the physical index, so reads/writes go through the
+// alias and survive future index swaps.
+export const CHANNEL_INDEX = CHANNELS_ALIAS;
+export const CHAT_INDEX = CHATS_ALIAS;
+export const DOCUMENT_INDEX = DOCUMENTS_ALIAS;
+export const EMAIL_INDEX = EMAILS_ALIAS;
 
 export const SHARD_SETTINGS =
   process.env.ENVIRONMENT === 'prod'

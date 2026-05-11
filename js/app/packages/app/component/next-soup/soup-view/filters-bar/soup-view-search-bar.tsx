@@ -1,15 +1,28 @@
-import XIcon from '@icon/regular/x.svg?component-solid';
-import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
-import { cn } from '@ui/utils/classname';
+import { useSoup } from '@app/component/next-soup/soup-context';
+import { registerSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { Hotkey } from '@core/component/Hotkey';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { COMMAND_PRIORITY_HIGH, KEY_ARROW_DOWN_COMMAND } from 'lexical';
-import { createSignal, createEffect, on, onCleanup, Show } from 'solid-js';
+import XIcon from '@icon/regular/x.svg?component-solid';
+import { markdownToPlainText } from '@lexical-core/utils/parsers';
+import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import { cn, Hotkey } from '@ui';
+import {
+  $getRoot,
+  COMMAND_PRIORITY_HIGH,
+  KEY_ARROW_DOWN_COMMAND,
+} from 'lexical';
+import {
+  batch,
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 
 type SearchbarVariant = 'filled' | 'secondary';
 
@@ -18,17 +31,20 @@ interface SoupSearchbarProps {
   autoFocus?: boolean;
   onDismiss?: () => void;
   placeholder?: string;
+  initialValue?: string;
 }
 
 const variantStyles: Record<SearchbarVariant, string> = {
   filled:
-    'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-transparent focus-within:bg-ink/7 focus-within:text-ink',
+    'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-edge-muted focus-within:bg-ink/7 focus-within:text-ink',
   secondary:
     'bg-transparent text-ink-muted border-edge-muted hover:bg-input hover:text-ink focus-within:bg-input focus-within:text-ink',
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const { setSearchText, setSearchPaused, setSearchMentions } = useSoupView();
+  const { setSearchText, setSearchPaused, setSearchMentions, queryFilters } =
+    useSoupView();
+  const soup = useSoup();
   const panel = useSplitPanelOrThrow();
 
   const [hasContent, setHasContent] = createSignal(false);
@@ -112,6 +128,32 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
   onCleanup(searchHotkey.dispose);
 
+  onMount(() => {
+    const content = panel.handle.content();
+    if (content.type !== 'component' || content.id !== 'search') return;
+    const dispose = registerSearchSplit(panel.handle.id, {
+      applyOverrides: ({ query, filters, clientFilters }) => {
+        batch(() => {
+          editor.controls.setMarkdown(query);
+          editor.controls.getLexical().update(() => {
+            $getRoot().selectEnd();
+          });
+          editor.controls.blur();
+          queryFilters.replace(filters);
+          soup.predicates.set(clientFilters);
+        });
+        // Restore focus to the split panel so hotkey navigation works. The
+        // command menu suppresses Kobalte's onCloseAutoFocus for search
+        // rows so this stays put without needing a delay.
+        queueMicrotask(() => panel.panelRef()?.focus({ preventScroll: true }));
+      },
+      focus: () => {
+        setTimeout(() => editor.controls.focus());
+      },
+    });
+    onCleanup(dispose);
+  });
+
   return (
     <div
       class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2"
@@ -120,25 +162,26 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     >
       <div
         class={cn(
-          'w-full relative flex items-center gap-1 rounded-xs py-1.5 mobile:h-9 pl-2 pr-1 mobile:min-w-35 border text-xs',
+          'group w-full relative flex items-center gap-1 rounded-sm h-7 mobile:h-9 pl-2 pr-1 mobile:min-w-35 border text-xs',
           variantStyles[props.variant ?? 'secondary']
         )}
       >
         <SearchIcon class="size-4 shrink-0" />
         <div
           data-soup-search
-          class="flex-1 min-w-0 **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 [&_p]:my-0"
+          class="flex-1 min-w-0 whitespace-nowrap overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-nowrap [&_p]:my-0 [&_p]:whitespace-nowrap"
         >
           <MarkdownShell
             config={editor}
             placeholder={props.placeholder ?? 'Search'}
             autofocus={props.autoFocus}
+            initialValue={props.initialValue}
             class="min-h-0! overflow-visible!"
           />
         </div>
         <Show when={!hasContent() && !props.onDismiss}>
-          <div class="absolute -right-2 top-1/2 -translate-1/2 flex border border-edge-muted text-xs rounded-md items-center px-1 py-px">
-            <Hotkey shortcut="cmd+f" />
+          <div class="shrink-0 text-xxs text-ink-extra-muted/50 rounded-sm border border-ink/5 px-1.5 py-px group-focus-within:hidden">
+            <Hotkey shortcut="cmd+f" class="flex gap-1" />
           </div>
         </Show>
         <Show when={hasContent() || props.onDismiss}>

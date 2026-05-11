@@ -7,8 +7,6 @@ import {
   type GroupingConfig,
   getDocumentHistory,
 } from '@core/collab/time-travel';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import {
   createLexicalWrapper,
   type LexicalWrapper,
@@ -22,20 +20,17 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { initializeEditorWithState } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isErr } from '@core/util/maybeResult';
 import ClockIcon from '@icon/regular/clock-counter-clockwise.svg';
-import {
-  CommentNode,
-  CustomCodeNode,
-  InlineSearchNode,
-  peerIdPlugin,
-} from '@lexical-core';
+import { CommentNode, InlineSearchNode, peerIdPlugin } from '@lexical-core';
 import { storageServiceClient } from '@service-storage/client';
 import type { SyncServiceVersionID } from '@service-storage/generated/schemas/syncServiceVersionID';
 import { syncServiceClient } from '@service-sync/client';
+import { Button } from '@ui';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import type { SerializedEditorState } from 'lexical';
 import { LoroDoc } from 'loro-crdt';
@@ -93,13 +88,14 @@ async function getLoroDocFromId(documentId: string) {
 export function HistoryButton(props: { buttonSize?: 'sm' | 'base' }) {
   const drawerControl = useDrawerControl(HISTORY_DRAWER_ID);
   return (
-    <DeprecatedIconButton
-      tooltip={{ label: 'History' }}
-      icon={ClockIcon}
-      theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-      size={props.buttonSize ?? 'sm'}
+    <Button
+      tooltip={<LabelAndHotKey label="History" />}
+      variant={drawerControl.isOpen() ? 'active' : 'ghost'}
+      size={props.buttonSize === 'base' ? 'icon-md' : 'icon-sm'}
       onClick={drawerControl.toggle}
-    />
+    >
+      <ClockIcon />
+    </Button>
   );
 }
 
@@ -123,13 +119,14 @@ export function HistoryModal(props: { documentId: string }) {
 
   return (
     <>
-      <DeprecatedIconButton
-        tooltip={{ label: 'History' }}
-        icon={ClockIcon}
-        theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-        size="sm"
+      <Button
+        tooltip={<LabelAndHotKey label="History" />}
+        variant={drawerControl.isOpen() ? 'active' : 'ghost'}
+        size="icon-sm"
         onClick={drawerControl.toggle}
-      />
+      >
+        <ClockIcon />
+      </Button>
       <SplitDrawer
         id={HISTORY_DRAWER_ID}
         side="right"
@@ -256,10 +253,7 @@ export function History(props: HistoryProps) {
   };
 
   return (
-    <div
-      class="w-full h-full p-2 flex flex-col gap-2 pb-12 suppress-css-bracket"
-      tabindex={-1}
-    >
+    <div class="size-full p-2 flex flex-col gap-2 pb-12" tabindex={-1}>
       <Suspense fallback={'loading...'}>
         <Show when={selectedVersion()}>
           {(selectedVersion) => {
@@ -276,19 +270,20 @@ export function History(props: HistoryProps) {
                           total={sortedHistory()!.length}
                         />
                         <div class="pr-4">
-                          <DeprecatedTextButton
-                            text="Copy Version"
-                            theme="accent"
+                          <Button
+                            variant="active"
                             disabled={isForking()}
                             onClick={handleFork}
-                          />
+                          >
+                            Copy Version
+                          </Button>
                         </div>
                       </div>
                     );
                   }}
                 </Show>
                 <div
-                  class="w-full h-[50%] overflow-y-scroll border border-edge suppress-css-bracket"
+                  class="w-full h-[50%] overflow-y-scroll border border-edge"
                   tabindex={-1}
                   ref={(ref) => {
                     ref.focus();
@@ -401,21 +396,21 @@ function DocumentPreview(props: {
     .use(
       peerIdPlugin({
         peerId: () => undefined,
-        nodes: [InlineSearchNode, CommentNode, CustomCodeNode],
+        nodes: [InlineSearchNode, CommentNode],
       })
     );
 
   return (
-    <div class="w-full h-full supress-css-bracket p-2">
+    <div class="size-full p-2">
       <LexicalWrapperContext.Provider value={props.lexicalWrapper}>
         <Show when={props.isSelectedVersionEmpty}>
-          <div class="w-full h-full flex items-center justify-center">
+          <div class="size-full flex items-center justify-center">
             <p class="text-ink-placeholder italic">
               This version of the document is empty
             </p>
           </div>
         </Show>
-        <div class="w-full h-full" ref={mountRef} contentEditable={false} />
+        <div class="size-full" ref={mountRef} contentEditable={false} />
       </LexicalWrapperContext.Provider>
     </div>
   );
@@ -567,7 +562,7 @@ function VersionListItem(props: {
 }) {
   return (
     <button
-      class="w-full p-2 sm:p-3 text-left flex items-center gap-2 sm:gap-3 min-h-[60px] sm:min-h-auto"
+      class="w-full p-2 sm:p-3 text-left flex items-center gap-2 sm:gap-3 min-h-15 sm:min-h-auto"
       classList={{
         'bg-hover': props.isSelected && !!props.handleSelect,
         'hover:bg-hover hover-transition-bg': !!props.handleSelect,

@@ -1,5 +1,3 @@
-import { cn } from '@ui/utils/classname';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { platformFetch } from '@core/util/platformFetch';
 import { connectionGatewayClient } from '@service-connection/client';
@@ -9,6 +7,7 @@ import {
   type FromWebsocketMessage,
 } from '@service-connection/websocket';
 import { makePersisted } from '@solid-primitives/storage';
+import { Button, cn } from '@ui';
 import { WebsocketConnectionState } from '@websocket';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 
@@ -131,7 +130,7 @@ export default function HttpStreamDebug() {
   };
 
   return (
-    <div class="h-full w-full overflow-auto p-4">
+    <div class="size-full overflow-auto p-4">
       <div class="max-w-5xl mx-auto space-y-4">
         <h1 class="text-lg font-medium">HTTP Stream Debug</h1>
 
@@ -165,14 +164,14 @@ export default function HttpStreamDebug() {
             />
           </div>
           <div class="flex gap-2">
-            <DeprecatedTextButton
-              text={isStreaming() ? 'Streaming...' : 'Send Message'}
+            <Button
               onClick={sendMessage}
-              theme="accent"
+              variant="active"
               disabled={isStreaming()}
-            />
-            <DeprecatedTextButton
-              text="Reset"
+            >
+              {isStreaming() ? 'Streaming...' : 'Send Message'}
+            </Button>
+            <Button
               onClick={() => {
                 setChatId('');
                 setStreamId(null);
@@ -180,8 +179,10 @@ export default function HttpStreamDebug() {
                 setError(null);
                 setIsStreaming(false);
               }}
-              theme="base"
-            />
+              variant="base"
+            >
+              Reset
+            </Button>
           </div>
         </div>
 

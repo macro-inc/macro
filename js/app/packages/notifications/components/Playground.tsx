@@ -1,9 +1,9 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { formatDate } from '@core/util/date';
+import { Button } from '@ui';
 import {
   type Component,
   createEffect,
@@ -213,7 +213,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
           </div>
 
           <details class="group">
-            <summary class="text-xs font-mono text-ink-muted uppercase cursor-pointer hover:text-accent">
+            <summary class="text-xs font-mono text-ink-muted uppercase hover:text-accent">
               Raw JSON ▸
             </summary>
             <pre class="bg-menu p-4 rounded-lg border border-edge-muted text-xs overflow-auto mt-2">
@@ -233,11 +233,12 @@ function PermissionButton(props: { platformNotif: any }) {
         <Show
           when={props.platformNotif.permission() === 'granted'}
           fallback={
-            <DeprecatedTextButton
-              theme="accent"
-              text="Enable Browser Notifications"
+            <Button
+              variant="active"
               onClick={() => props.platformNotif.requestPermission()}
-            />
+            >
+              Enable Browser Notifications
+            </Button>
           }
         >
           <div class="flex items-center gap-3 text-sm text-accent bg-accent/10 px-4 py-3 rounded-lg">
@@ -283,11 +284,12 @@ function CustomBuilder(props: {
         </div>
 
         <div class="pt-4 border-t border-edge-muted">
-          <DeprecatedTextButton
-            theme="accent"
-            text="🔔 Test Browser Notification"
+          <Button
+            variant="active"
             onClick={() => props.onTest(props.customNotification)}
-          />
+          >
+            🔔 Test Browser Notification
+          </Button>
         </div>
 
         <div>
@@ -358,11 +360,12 @@ function NotificationDetail(props: {
               {formatDate(props.notification.created_at)}
             </p>
           </div>
-          <DeprecatedTextButton
-            theme="accent"
-            text="🔔 Test Notification"
+          <Button
+            variant="active"
             onClick={() => props.onTest(props.notification)}
-          />
+          >
+            🔔 Test Notification
+          </Button>
         </div>
       </div>
 
@@ -431,7 +434,7 @@ function NotificationDetail(props: {
 
       <section>
         <details class="group">
-          <summary class="text-lg font-semibold text-ink mb-4 cursor-pointer hover:text-accent">
+          <summary class="text-lg font-semibold text-ink mb-4 hover:text-accent">
             Raw Notification Data ▸
           </summary>
           <pre class="bg-menu p-6 rounded-xl border border-edge-muted text-xs overflow-auto mt-4">
@@ -706,19 +709,19 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
       <div class="flex items-start gap-3 p-4">
         {/* Icon with optional badge */}
         <div class="relative shrink-0">
-          <div class="w-10 h-10 rounded-lg overflow-hidden bg-[oklch(0.278_0.033_256.848)] flex items-center justify-center">
+          <div class="size-10 rounded-lg overflow-hidden bg-[oklch(0.278_0.033_256.848)] flex items-center justify-center">
             <Show
               when={props.icon}
               fallback={
-                <div class="w-6 h-6 bg-[oklch(0.446_0.03_256.802)] rounded" />
+                <div class="size-6 bg-[oklch(0.446_0.03_256.802)] rounded" />
               }
             >
-              <img src={props.icon} alt="" class="w-full h-full object-cover" />
+              <img src={props.icon} alt="" class="size-full object-cover" />
             </Show>
           </div>
           <Show when={props.badge}>
-            <div class="absolute -top-1 -left-1 w-5 h-5 bg-failure rounded-full flex items-center justify-center">
-              <img src={props.badge} alt="" class="w-3 h-3" />
+            <div class="absolute -top-1 -left-1 size-5 bg-failure rounded-full flex items-center justify-center">
+              <img src={props.badge} alt="" class="size-3" />
             </div>
           </Show>
         </div>
@@ -738,7 +741,7 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
           onClick={props.onClose}
           class="shrink-0 text-[oklch(0.551_0.027_264.364)] hover:text-[oklch(0.872_0.01_258.338)] transition-colors"
         >
-          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <svg class="size-4" fill="currentColor" viewBox="0 0 20 20">
             <path
               fill-rule="evenodd"
               d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"

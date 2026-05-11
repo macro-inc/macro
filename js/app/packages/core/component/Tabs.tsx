@@ -1,20 +1,21 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   SegmentedControl as KSegmentedControl,
-  useSegmentedControlContext,
   type SegmentedControlRootProps,
+  useSegmentedControlContext,
 } from '@kobalte/core/segmented-control';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { cn } from '@ui';
 import {
-  type JSX,
   batch,
   type ComponentProps,
   createEffect,
   createSignal,
   For,
+  type JSX,
   on,
   splitProps,
 } from 'solid-js';
-import { cn } from '@ui/utils/classname';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
 
 export type TabItem = {
   value: string;
@@ -61,7 +62,13 @@ export const Tabs = (
                   'text-ink-extra-muted',
                   'data-checked:text-accent hover:text-accent'
                 )}
-                onPointerDown={() => rootProps.onChange?.(item.value)}
+                // We don't want touches on touch to unfocus inputs
+                onPointerDown={(e) => {
+                  if (isTouchDevice()) e.preventDefault();
+                }}
+                onClick={() => {
+                  rootProps.onChange?.(item.value);
+                }}
               >
                 {item.label}
               </KSegmentedControl.ItemLabel>
@@ -71,7 +78,7 @@ export const Tabs = (
         <Indicator
           data-indicator
           class={cn(
-            'absolute h-[2px]! bg-accent transition-[transform,width] duration-150 pointer-events-none',
+            'absolute h-0.5! bg-accent transition-[transform,width] duration-150 pointer-events-none',
             (local.indicatorPosition ?? 'bottom') === 'top'
               ? 'top-0'
               : 'bottom-0'

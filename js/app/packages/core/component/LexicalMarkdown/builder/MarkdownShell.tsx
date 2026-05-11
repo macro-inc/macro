@@ -1,7 +1,8 @@
-import { cn } from '@ui/utils/classname';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { isMobile } from '@core/mobile/isMobile';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { onElementConnect } from '@solid-primitives/lifecycle';
+import { cn } from '@ui';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -17,13 +18,16 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { DecoratorRenderer } from '../component/core/DecoratorRenderer';
+import { NodeAccessoryRenderer } from '../component/core/NodeAccessoryRenderer';
+import { ActionMenu } from '../component/menu/ActionsMenu';
+import { EmojiMenu } from '../component/menu/EmojiMenu';
+import { FloatingLinkMenu } from '../component/menu/FloatingLinkMenu';
+import { MentionsMenu } from '../component/menu/MentionsMenu';
+import { DragInsertIndicator } from '../component/misc/DragInsertIndicator';
 import { FloatingMenuGroup } from '../context/FloatingMenuContext';
 import { LexicalWrapperContext } from '../context/LexicalWrapperContext';
 import { autoRegister, registerCommandEffect } from '../plugins';
-import {
-  createFilesReadyHandler,
-  getDragDropPosition,
-} from '../utils/fileUploadUtils';
 import {
   editorIsEmpty,
   focusEditorWithoutScroll,
@@ -31,14 +35,10 @@ import {
   initializeEditorWithState,
   setEditorStateFromMarkdown,
 } from '../utils';
-import { DecoratorRenderer } from '../component/core/DecoratorRenderer';
-import { DragInsertIndicator } from '../component/misc/DragInsertIndicator';
-import { NodeAccessoryRenderer } from '../component/core/NodeAccessoryRenderer';
-import { EmojiMenu } from '../component/menu/EmojiMenu';
-import { FloatingLinkMenu } from '../component/menu/FloatingLinkMenu';
-import { MentionsMenu } from '../component/menu/MentionsMenu';
-import { ActionMenu } from '../component/menu/ActionsMenu';
-import { isMobile } from '@core/mobile/isMobile';
+import {
+  createFilesReadyHandler,
+  getDragDropPosition,
+} from '../utils/fileUploadUtils';
 import type { EditorBuilder, EditorComponentProps } from './types';
 
 export const MarkdownShell: Component<
@@ -66,6 +66,9 @@ export const MarkdownShell: Component<
       });
     }
 
+    const hasInitialContent =
+      props.initialState !== undefined || props.initialValue !== undefined;
+
     if (props.initialState) {
       initializeEditorWithState(editor, props.initialState);
     } else if (props.initialValue) {
@@ -75,6 +78,12 @@ export const MarkdownShell: Component<
     }
 
     didInitializeContent = true;
+
+    // The deferred markdownState effect misses the synchronous change inside
+    // init, so push the initial value out to onChange manually.
+    if (hasInitialContent) {
+      builderConfig.handlers.onChange?.(markdownState());
+    }
   };
 
   // Track editable state

@@ -1,8 +1,8 @@
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
-import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { Button, cn } from '@ui';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { MediaImage } from './MediaImage';
 import { MediaVideo } from './MediaVideo';
 import type { MediaItem } from './media-items';
@@ -80,20 +80,20 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
   const videoHeight = () => props.item.height ?? undefined;
 
   return (
-    <div class="group relative flex min-h-20 max-h-[480px] max-w-[480px] min-w-0 overflow-hidden rounded-2xl border border-edge bg-menu">
+    <div class="group relative flex min-h-20 max-h-120 max-w-120 min-w-0 overflow-hidden rounded-2xl border border-edge bg-menu">
       <Show
         when={isInlinePlaying()}
         fallback={
           <>
             <button
               type="button"
-              class="block max-w-full cursor-pointer"
+              class="block max-w-full"
               onClick={props.onOpen}
               aria-label="Open video viewer"
             >
               <MediaVideo.Preview
                 src={props.item.src}
-                class="block max-h-[480px] max-w-full"
+                class="block max-h-120 max-w-full"
                 width={videoWidth()}
                 height={videoHeight()}
               />
@@ -113,7 +113,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
         }
       >
         <video
-          class="block max-h-[480px] max-w-full"
+          class="block max-h-120 max-w-full"
           controls
           autoplay
           playsinline
@@ -123,15 +123,17 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
         />
       </Show>
       <div class="absolute right-2 top-2 z-10">
-        <DeprecatedIconButton
-          icon={ExpandIcon}
-          theme="clear"
+        <Button
+          variant="ghost"
+          size="icon-md"
           onClick={(event) => {
             event.stopPropagation();
             props.onOpen();
           }}
-          tooltip={{ label: 'Open video viewer' }}
-        />
+          tooltip={<LabelAndHotKey label="Open video viewer" />}
+        >
+          <ExpandIcon />
+        </Button>
       </div>
     </div>
   );

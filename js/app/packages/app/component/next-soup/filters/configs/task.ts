@@ -3,31 +3,31 @@ import {
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
 import {
-  type TaskEntityWithProperties,
-  isTaskEntity,
   getTaskAssigneeIds,
+  isTaskEntity,
+  type TaskEntityWithProperties,
 } from '@entity';
 import {
-  isNotStarted,
+  hasNoPriority,
+  isCanceled,
+  isCompleted,
+  isHighPriority,
   isInProgress,
   isInReview,
-  isCompleted,
-  isCanceled,
+  isLowPriority,
+  isMediumPriority,
+  isNotStarted,
   isOpen,
   isUrgentPriority,
-  isHighPriority,
-  isMediumPriority,
-  isLowPriority,
-  hasNoPriority,
-  taskFilter as taskPredicate,
   taskAssignedToUserFilter as taskAssignedToUserPredicate,
+  taskFilter as taskPredicate,
 } from '../predicates';
 import {
   config,
-  propFilter,
   isTask,
   NO_ASSIGNEE,
   type Predicate,
+  propFilter,
 } from './base';
 
 const statusFilter = <TId extends string>(

@@ -1,13 +1,13 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
-import { triggerFocusInput } from '@core/directive/focusInput';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
+import { triggerFocusInput } from '@core/directive/focusInput';
 import { InlineEntity } from '@entity';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { For, Show } from 'solid-js';
 import { createSoupEntityActions } from './create-soup-entity-actions';
 import { useSoupEntityActionDrawer } from './soup-entity-action-drawer-context';
 import { useSoupView } from './soup-view-context';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 
 export function SoupEntityActionDrawer() {
   const panel = useSplitPanelOrThrow();
@@ -46,10 +46,7 @@ export function SoupEntityActionDrawer() {
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
         <MobileDrawer.Content aria-label="Entity actions">
-          {/* Drag handle */}
-          <div class="flex justify-center pt-3 pb-2 shrink-0">
-            <div class="w-10 h-1 rounded-full bg-edge-muted" />
-          </div>
+          <MobileDrawer.Handle />
 
           {/* Entity preview */}
           <Show when={drawerState.entity()}>
@@ -73,7 +70,7 @@ export function SoupEntityActionDrawer() {
                       <button
                         type="button"
                         class={cn(
-                          'flex items-center gap-3 px-4 py-3 text-sm hover:bg-hover hover-transition-bg text-left not-last:border-b border-page',
+                          'flex items-center gap-3 px-4 py-3 text-sm hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-panel',
                           action.destructive ? 'text-failure-ink' : 'text-ink'
                         )}
                         onClick={async (e: MouseEvent) => {

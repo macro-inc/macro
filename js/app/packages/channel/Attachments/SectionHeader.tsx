@@ -1,29 +1,24 @@
-import { type Accessor, Show, type JSX } from 'solid-js';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import { Button, cn, Panel } from '@ui';
+import { type Accessor, type JSX, Show } from 'solid-js';
 
 export function AttachmentSection(props: {
-  label: string;
-  action?: JSX.Element;
-  children: JSX.Element;
-  class?: string;
   contentClass?: string;
+  children: JSX.Element;
+  action?: JSX.Element;
+  class?: string;
+  label: string;
 }) {
   return (
-    <div
-      class={cn(
-        'rounded-sm border border-edge-muted bg-menu py-3',
-        props.class
-      )}
-    >
-      <div class="flex items-center justify-between px-3 pb-3">
+    <Panel depth={2} class={cn('h-auto', props.class)}>
+      <Panel.Header class="justify-between">
         <h3 class="text-sm font-medium text-ink">{props.label}</h3>
         <div class="shrink-0">{props.action}</div>
-      </div>
-      <div class="border-b border-edge-muted" />
-      <div class={cn('px-3 pt-3', props.contentClass)}>{props.children}</div>
-    </div>
+      </Panel.Header>
+      <Panel.Body class={cn('p-3', props.contentClass)}>
+        {props.children}
+      </Panel.Body>
+    </Panel>
   );
 }
 
@@ -43,7 +38,7 @@ export function LoadMoreButton(props: {
         when={!props.isFetching()}
         fallback={
           <>
-            <Spinner class="w-3.5 h-3.5 animate-spin" />
+            <Spinner class="size-3.5 animate-spin" />
             Loading...
           </>
         }

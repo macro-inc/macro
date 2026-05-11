@@ -1,6 +1,6 @@
-import { createMemo, createSignal, type Accessor } from 'solid-js';
-import type { InputAttachmentData } from './types';
 import { makePersisted } from '@solid-primitives/storage';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
+import type { InputAttachmentData } from './types';
 
 export type InputAttachmentTracker = {
   attachments: Accessor<InputAttachmentData[]>;

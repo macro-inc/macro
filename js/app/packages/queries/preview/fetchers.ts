@@ -1,12 +1,11 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
-import { formatDocumentName } from '@service-storage/util/filename';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { syncServiceClient } from '@service-sync/client';
+import { formatDocumentName } from '@service-storage/util/filename';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
 async function fetchChannelPreviews(
@@ -89,9 +88,6 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
 
     switch (doc.type) {
       case 'access':
-        if (doc.file_type === 'md') {
-          syncServiceClient.safeWakeup(doc.document_id);
-        }
         return {
           ...base,
           access: 'access' as const,

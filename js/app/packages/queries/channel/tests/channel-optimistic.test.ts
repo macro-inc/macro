@@ -27,8 +27,8 @@ vi.mock('@macro-entity', () => ({
 }));
 
 import {
-  getChannelMessagesQueryKey,
   type ChannelMessagesData,
+  getChannelMessagesQueryKey,
 } from '../channel-messages';
 import {
   optimisticInsertChannelMessage,

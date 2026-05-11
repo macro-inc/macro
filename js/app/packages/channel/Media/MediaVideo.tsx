@@ -1,5 +1,5 @@
 import PlayIcon from '@icon/fill/play-fill.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { ParentProps } from 'solid-js';
 
 function Root(props: ParentProps<{ class?: string }>) {
@@ -41,8 +41,7 @@ function PlayOverlay(props: { onOpen?: () => void; class?: string }) {
     <div
       class={cn(
         'absolute inset-0 flex items-center justify-center bg-ink/20',
-        props.onOpen &&
-          'cursor-pointer transition-colors group-hover:bg-ink/30',
+        props.onOpen && 'transition-colors group-hover:bg-ink/30',
         props.class
       )}
       onClick={() => props.onOpen?.()}

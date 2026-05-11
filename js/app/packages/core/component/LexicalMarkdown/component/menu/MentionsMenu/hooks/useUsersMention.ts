@@ -1,9 +1,9 @@
-import type { Accessor } from 'solid-js';
-import { createLazyMemo } from '@solid-primitives/memo';
-import { useQuickAccess, type UserItem } from '@core/context/quickAccess';
+import { type UserItem, useQuickAccess } from '@core/context/quickAccess';
+import { useEmail } from '@core/context/user';
 import type { IUser } from '@core/user';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
-import { useEmail } from '@core/context/user';
+import { createLazyMemo } from '@solid-primitives/memo';
+import type { Accessor } from 'solid-js';
 import type { GroupMentionItem } from '../../../../utils/mentionsUtils';
 
 export type UseUsersMentionOptions = {

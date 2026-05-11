@@ -1,6 +1,9 @@
-import { Combobox } from '@kobalte/core/combobox';
+import { useSelectedFirst } from '@core/util/useSelectedFirst';
+import CheckIcon from '@icon/regular/check.svg';
+import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import type { CollectionNode } from '@kobalte/core';
-import { cn } from '@ui/utils/classname';
+import { Combobox } from '@kobalte/core/combobox';
+import { cn } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -9,8 +12,6 @@ import {
   Show,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import CheckIcon from '@icon/regular/check.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import type { SearchableOption } from './search-filter-controls';
 
 const ITEM_HEIGHT = 36;
@@ -119,6 +120,8 @@ const useActiveOptions = (
     return options().filter((opt) => set.has(opt.id));
   });
 
+const getOptionId = (opt: SearchableOption) => opt.id;
+
 export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   const [internalOpen, setInternalOpen] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
@@ -131,6 +134,13 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
 
   const activeOptions = useActiveOptions(props.options, props.activeIds);
   const hasMatches = useHasMatches(props.options, searchQuery);
+  const sortedOptions = useSelectedFirst({
+    items: props.options,
+    selectedIds: props.activeIds,
+    searchQuery,
+    getId: getOptionId,
+    sortDeps: [isOpen],
+  });
 
   const handleChange = (selected: SearchableOption[]) => {
     props.onChange(selected.map((o) => o.id));
@@ -147,7 +157,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       selectionBehavior="toggle"
       closeOnSelection={false}
       open={isOpen()}
-      options={props.options()}
+      options={sortedOptions()}
       value={activeOptions()}
       onChange={handleChange}
       onInputChange={setSearchQuery}
@@ -160,7 +170,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       placement={props.placement ?? 'bottom-start'}
       gutter={props.gutter ?? 4}
     >
-      <Combobox.Control class="flex">
+      <Combobox.Control class="flex items-center h-full">
         {props.children}
         <Combobox.Input class="sr-only" />
       </Combobox.Control>
@@ -168,7 +178,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       <Combobox.Portal>
         <Combobox.Content
           class={cn(
-            'z-action-menu bg-menu border border-edge-muted rounded-sm shadow-md w-[260px] max-w-[90vw] overflow-hidden',
+            'z-action-menu bg-menu border border-edge-muted rounded-sm shadow-md w-65 max-w-[90vw] overflow-hidden',
             props.contentClass
           )}
         >
@@ -191,7 +201,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
               }
             >
               <VirtualizedListbox
-                options={props.options()}
+                options={sortedOptions()}
                 class={props.listboxClass}
               />
             </Show>
@@ -225,6 +235,15 @@ export const SearchableMultiSelectInline = (
 
   const activeOptions = useActiveOptions(props.options, props.activeIds);
   const hasMatches = useHasMatches(props.options, searchQuery);
+  // Inline variant is freshly mounted each time the parent submenu opens,
+  // so we don't need an explicit "menu opened" trigger — the memo's first
+  // run captures the current selection ordering.
+  const sortedOptions = useSelectedFirst({
+    items: props.options,
+    selectedIds: props.activeIds,
+    searchQuery,
+    getId: getOptionId,
+  });
 
   const handleChange = (selected: SearchableOption[]) => {
     props.onChange(selected.map((o) => o.id));
@@ -268,7 +287,7 @@ export const SearchableMultiSelectInline = (
       selectionBehavior="toggle"
       closeOnSelection={false}
       open
-      options={props.options()}
+      options={sortedOptions()}
       value={activeOptions()}
       onChange={handleChange}
       onInputChange={setSearchQuery}
@@ -297,7 +316,7 @@ export const SearchableMultiSelectInline = (
           }
         >
           <VirtualizedListbox
-            options={props.options()}
+            options={sortedOptions()}
             class={props.listboxClass}
           />
         </Show>

@@ -1,3 +1,4 @@
+import { isListViewID } from '@app/constants/list-views';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import {
   ENABLE_PREVIEW,
@@ -12,11 +13,9 @@ import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import SplitIcon from '@icon/regular/square-half.svg';
 import CloseIcon from '@icon/regular/x.svg';
-import { Button } from '@ui/components/Button';
+import { Button, cn } from '@ui';
 import {
-  createEffect,
   createMemo,
-  createSignal,
   type ParentProps,
   type Setter,
   Show,
@@ -25,8 +24,6 @@ import {
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
-import { cn } from '@ui/utils/classname';
-import { isListViewID } from '@app/constants/list-views';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -75,7 +72,7 @@ function SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 rounded-xs"
+        class="p-1 rounded-xs hidden"
         tooltip={
           <LabelAndHotKey
             label={
@@ -118,7 +115,7 @@ function SplitCloseButton() {
         }
         onClick={context.handle.close}
       >
-        <CloseIcon class="w-4 h-4" />
+        <CloseIcon class="size-4" />
       </Button>
     </Show>
   );
@@ -184,7 +181,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
 
   return (
     <div
-      class="isolate relative w-full h-10 touch:h-11 overflow-clip text-ink shrink-0 border-b border-edge-muted"
+      class="isolate relative w-full min-h-10.25 touch:min-h-11.25 overflow-clip text-ink shrink-0 border-b border-edge-muted"
       data-split-header
       ref={props.ref}
     >
@@ -199,54 +196,43 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           </Show>
         </div>
         <div
-          class="relative min-w-0 h-full grow shrink pl-2 flex items-center gap-0.5"
+          class="relative min-w-0 h-full shrink pl-2 flex items-center gap-0.5"
           ref={(ref) => {
             panel.layoutRefs.headerLeft = ref;
-          }}
-        />
-
-        <div
-          class={cn(
-            'min-w-4 h-full shrink-0 flex items-center gap-0.5 pl-2',
-            !shouldShowRightmost() && 'pr-2'
-          )}
-          ref={(ref) => {
-            panel.layoutRefs.headerRight = ref;
           }}
         />
 
         <Show when={shouldShowRightmost()}>
           <div
             class={
-              'pl-0.5 pr-2 z-annotation-layer relative flex items-center gap-0.5 h-full order-last'
+              'pl-2 z-annotation-layer relative flex items-center gap-0.5 h-full'
             }
           >
             <SplitSpotlightButton />
           </div>
         </Show>
+
+        <div
+          class="min-w-4 h-full grow shrink flex items-center justify-end gap-0.5 pl-2 pr-2"
+          ref={(ref) => {
+            panel.layoutRefs.headerRight = ref;
+          }}
+        />
       </div>
     </div>
   );
 }
 
-export function SplitHeaderLeft(props: ParentProps<{ order?: number }>) {
+export function SplitHeaderLeft(props: ParentProps) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
     throw new Error('<SplitHeaderLeft> must be used within a <SplitLayout>');
-  const [portalRef, setPortalRef] = createSignal<HTMLDivElement | null>(null);
-  createEffect(() => {
-    const ref = portalRef();
-    if (!ref) return;
-    ref.style.order = props.order?.toString() ?? '0';
-  });
+
   return (
     <Show when={ctx.layoutRefs.headerLeft}>
       <Portal
         mount={ctx.layoutRefs.headerLeft}
-        ref={(div) => {
-          setPortalRef(div);
-          div.style.display = 'contents';
-        }}
+        ref={(div) => (div.style.display = 'contents')}
       >
         {props.children}
       </Portal>
@@ -254,24 +240,16 @@ export function SplitHeaderLeft(props: ParentProps<{ order?: number }>) {
   );
 }
 
-export function SplitHeaderRight(props: ParentProps<{ order?: number }>) {
+export function SplitHeaderRight(props: ParentProps) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
     throw new Error('<SplitHeaderRight> must be used within a <SplitLayout>');
-  const [portalRef, setPortalRef] = createSignal<HTMLDivElement | null>(null);
-  createEffect(() => {
-    const ref = portalRef();
-    if (!ref) return;
-    ref.style.order = props.order?.toString() ?? '0';
-  });
+
   return (
     <Show when={ctx.layoutRefs.headerRight}>
       <Portal
         mount={ctx.layoutRefs.headerRight}
-        ref={(div) => {
-          setPortalRef(div);
-          div.style.display = 'contents';
-        }}
+        ref={(div) => (div.style.display = 'contents')}
       >
         {props.children}
       </Portal>

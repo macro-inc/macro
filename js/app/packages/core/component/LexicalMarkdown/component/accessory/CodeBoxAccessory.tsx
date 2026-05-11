@@ -3,8 +3,6 @@
  * language selector.
  */
 import { isInBlock, useIsNestedBlock } from '@core/block';
-import { cn } from '@ui/utils/classname';
-
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
@@ -30,10 +28,11 @@ import {
   normalizedLanguage,
   type SupportedLanguage,
 } from '@lexical-core';
+import { Button, cn } from '@ui';
 import {
   $getNodeByKey,
-  type LexicalEditor,
   type EditorThemeClasses,
+  type LexicalEditor,
   type NodeKey,
 } from 'lexical';
 import {
@@ -47,7 +46,6 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { glueToElement } from '../../directive/glueToElement';
 import { autoRegister } from '../../plugins/shared/utils';
-import { Button } from '@ui/components/Button';
 
 false && glueToElement;
 
@@ -76,7 +74,7 @@ const LanguageIcons: Record<
 
 function StaticLabel(props: { language: SupportedLanguage }) {
   return (
-    <div class="text-sm font-sans font-medium flex items-center gap-2 p-2 text-ink-extra-muted">
+    <div class="text-xs font-sans font-medium flex items-center gap-1 p-2 text-ink-extra-muted/50">
       <Dynamic component={LanguageIcons[props.language]} class="size-4" />
       <span>{LanguageDefinitions[props.language].label}</span>
     </div>
@@ -108,7 +106,6 @@ export function CodeLanguageSelector(props: {
           fallback={<StaticLabel language={validCurrentLanguage()} />}
         >
           <Button
-            // TODO: Icon mapping moved to frontend package
             variant="ghost"
             size="sm"
             class="text-ink-extra-muted/50 rounded-xs p-1.5"
@@ -234,7 +231,7 @@ export function CodeBoxAccessory(props: {
           }));
         }}
       >
-        <div class="w-full flex justify-between content-center items-start p-1 pointer-events-auto text-ink-extra-muted">
+        <div class="w-full flex justify-between content-center items-start p-1 pointer-events-auto text-ink-extra-muted/50">
           <CodeLanguageSelector
             language={language}
             setLanguage={setLanguageOnNode}
@@ -243,7 +240,7 @@ export function CodeBoxAccessory(props: {
           <div class="flex gap-2 items-center h-full">
             <Show when={showPreviewToggle()}>
               <div class="flex items-center gap-2">
-                <div class="text-xs text-ink-extra-muted">Preview</div>
+                <div class="text-xs text-ink-extra-muted/50">Preview</div>
                 <Switch
                   checked={isPreviewMode()}
                   onChange={(enabled) => {
@@ -253,7 +250,7 @@ export function CodeBoxAccessory(props: {
                 >
                   <Switch.Input class="sr-only" />
                   <Switch.Control class="inline-flex h-4 w-8 hover:ring-1 hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-checked:bg-accent">
-                    <Switch.Thumb class="block h-3 w-3 rounded-full bg-dialog transition-transform data-checked:translate-x-4" />
+                    <Switch.Thumb class="block size-3 rounded-full bg-dialog transition-transform data-checked:translate-x-4" />
                   </Switch.Control>
                 </Switch>
               </div>
@@ -261,7 +258,7 @@ export function CodeBoxAccessory(props: {
             <Button
               variant="ghost"
               size="icon-sm"
-              class="text-ink-extra-muted rounded-xs h-full"
+              class="text-ink-extra-muted/50 rounded-xs h-full"
               tooltip="Copy Code"
               on:click={(e) => {
                 e.stopPropagation();
@@ -305,7 +302,7 @@ function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
     const content = props.svgContent();
     if (!content.trim()) {
       return (
-        <div class="flex items-center justify-center h-full text-ink-muted text-sm">
+        <div class="flex items-center justify-center h-full text-ink-extra-muted/50 text-sm">
           No SVG content
         </div>
       );
@@ -346,10 +343,10 @@ function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
       };
 
       return (
-        <div class="w-full h-full overflow-hidden p-2">
+        <div class="size-full overflow-hidden p-2">
           <div
             ref={setContainerRef}
-            class="w-full h-full flex items-center justify-center min-h-0"
+            class="size-full flex items-center justify-center min-h-0"
             innerHTML={sanitizedContent}
           />
         </div>
@@ -365,7 +362,7 @@ function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
   };
 
   return (
-    <div class={'absolute top-12 left-0 right-0 bottom-0 z-10 p-2'}>
+    <div class={'absolute top-12 inset-x-0 bottom-0 z-10 p-2'}>
       {renderSvg()}
     </div>
   );
@@ -396,7 +393,7 @@ export const StaticCodeBoxAccessory = (props: {
     }
   };
 
-  const textColor = () => 'text-ink-extra-muted';
+  const textColor = () => 'text-ink-extra-muted/50';
   const language = () => normalizedLanguage(props.language);
 
   const showPreviewToggle = () => {
@@ -420,7 +417,7 @@ export const StaticCodeBoxAccessory = (props: {
               <Switch checked={isPreviewMode()} onChange={setIsPreviewMode}>
                 <Switch.Input class="sr-only" />
                 <Switch.Control class="inline-flex h-4 w-8 hover:ring-1 hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-checked:bg-accent">
-                  <Switch.Thumb class="block h-3 w-3 rounded-full transition-transform data-checked:translate-x-4 bg-dialog" />
+                  <Switch.Thumb class="block size-3 rounded-full transition-transform data-checked:translate-x-4 bg-dialog" />
                 </Switch.Control>
               </Switch>
             </div>
@@ -428,7 +425,7 @@ export const StaticCodeBoxAccessory = (props: {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="text-ink-extra-muted rounded-xs h-full"
+            class="text-ink-extra-muted/50 rounded-xs h-full"
             tooltip="Copy Code"
             on:click={(e) => {
               e.stopPropagation();

@@ -1,16 +1,16 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import CorvuTooltip, { type FloatingOptions } from '@corvu/tooltip';
 import type { Placement } from '@floating-ui/dom';
-import { cn } from '@ui/utils/classname';
+import { cn, Layer } from '@ui';
 import {
+  createSignal,
   For,
   type JSX,
   mergeProps,
   type ParentProps,
   Show,
-  createSignal,
 } from 'solid-js';
-import { Hotkey } from './Hotkey';
+import { Hotkey } from '../../ui/components/Hotkey';
 
 const TOOLTIP_DELAY = 250;
 
@@ -34,7 +34,7 @@ export type TooltipProps = ParentProps<{
  * @param props.unstyled - When true, removes default styling from the tooltip content.
  * @example
  * <Tooltip tooltip={<div class="text-xs">Hello</div>}>
- *     <DeprecatedButton>Hover over me</DeprecatedButton>
+ *     <Button>Hover over me</Button>
  * </Tooltip>
  */
 export function Tooltip(props: TooltipProps) {
@@ -88,7 +88,7 @@ export function Tooltip(props: TooltipProps) {
         ref={(el) => {
           props.ref?.(el);
         }}
-        class={props.class}
+        class={cn('inline-flex items-center', props.class)}
       >
         {props.children}
       </CorvuTooltip.Trigger>
@@ -101,9 +101,11 @@ export function Tooltip(props: TooltipProps) {
           }}
         >
           <Show when={!props.unstyled} fallback={tooltipContent()}>
-            <div class="flex items-center justify-center bg-panel p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm border border-edge-muted shadow-md shadow-[#000]/05">
-              {tooltipContent()}
-            </div>
+            <Layer depth={3}>
+              <div class="border border-edge bg-panel flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm shadow-md shadow-[#000]/5">
+                {tooltipContent()}
+              </div>
+            </Layer>
           </Show>
           {/* Note disabling arrows for now. I think its more on-brand - seamus */}
           {/*<CorvuTooltip.Arrow />*/}
@@ -156,7 +158,7 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
           <For each={props.hotkeySequence}>
             {(step, ndx) => (
               <>
-                <div class="text-xxs rounded-sm border border-edge-muted px-1.5 py-0.25">
+                <div class="text-xxs rounded-sm border border-edge-muted px-1.5 py-px">
                   <Hotkey
                     token={step.token}
                     shortcut={step.shortcut}
@@ -172,7 +174,7 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
         </div>
       </Show>
       <Show when={hasSingleHotkey()}>
-        <div class="text-xxs rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25">
+        <div class="text-xxs rounded-sm ml-auto border border-edge-muted px-1.5 py-px">
           {props.hotkeyToken
             ? Hotkey({ token: props.hotkeyToken, class: 'flex gap-1' })
             : Hotkey({ shortcut: props.shortcut, class: 'flex gap-1' })}

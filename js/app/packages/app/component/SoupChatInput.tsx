@@ -1,5 +1,6 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { useSoup } from '@app/component/next-soup/soup-context';
+import { useHasPaidAccess } from '@core/auth/license';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import {
@@ -9,9 +10,7 @@ import {
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
-import { Hotkey } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
-import { useHasPaidAccess } from '@core/auth/license';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -20,6 +19,7 @@ import { isErr } from '@core/util/maybeResult';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
+import { Hotkey } from '@ui';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { createSignal, onCleanup, onMount } from 'solid-js';
@@ -135,7 +135,7 @@ function SoupChatInputInner() {
   return (
     <div
       ref={containerRef}
-      class="absolute bottom-0 right-px left-px pb-2 px-2 flex justify-center pointer-events-none"
+      class="absolute bottom-0 inset-x-px pb-2 px-2 flex justify-center pointer-events-none"
       classList={{ hidden: !!soup.previewEntity() }}
       style={{
         'background-image': `linear-gradient(transparent, var(--color-panel) 85%)`,

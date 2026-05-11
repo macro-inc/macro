@@ -2,6 +2,7 @@ export * from './constants';
 export * from './decoratorRegistry';
 export * from './domFactoryRegistry';
 export * from './node-list';
+export * from './nodes/AwaitNode';
 export * from './nodes/ClassedBlockNode';
 export * from './nodes/CommentNode';
 export * from './nodes/CompletionNode';
@@ -33,4 +34,5 @@ export * from './plugins/nodeIdPlugin';
 export * from './plugins/peerIdPlugin';
 
 export * from './transformers';
+export * from './utils/markdown-state';
 export * from './utils/mentions';

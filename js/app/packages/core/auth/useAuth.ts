@@ -1,5 +1,5 @@
-import { invalidateUserInfo } from '@queries/auth/user-info';
 import { useIsAuthenticated } from '@core/context/user';
+import { invalidateUserInfo } from '@queries/auth/user-info';
 
 // Re-export useIsAuthenticated from context for backwards compatibility
 export { useIsAuthenticated };

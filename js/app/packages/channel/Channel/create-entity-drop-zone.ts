@@ -1,6 +1,6 @@
 import type { EntityDragData, EntityDragEvent } from '@entity';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { createMemo, type Accessor } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import type { InputAttachmentTracker } from '../Input';
 
 type CreateEntityDropZoneOptions = {

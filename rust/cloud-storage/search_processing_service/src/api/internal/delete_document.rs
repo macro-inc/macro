@@ -19,7 +19,7 @@ pub async fn handler(
     tracing::info!("delete document request initiated");
 
     ctx.opensearch_client
-        .delete_document(&document_id)
+        .delete_document(&document_id, None)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to delete document");

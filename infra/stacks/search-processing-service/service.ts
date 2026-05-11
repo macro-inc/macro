@@ -37,6 +37,9 @@ type Args = {
   containerEnvVars?: { name: string; value: pulumi.Output<string> | string }[];
   healthCheckPath: string;
   searchEventQueueArn: pulumi.Output<string> | string;
+  /// Extra managed policy ARNs to attach to the task role (e.g. DynamoDB
+  /// access for the backfill job registry).
+  extraManagedPolicyArns?: pulumi.Output<string>[];
   tags: { [key: string]: string };
 };
 
@@ -68,6 +71,7 @@ export class SearchProcessingService extends pulumi.ComponentResource {
       tags,
       secretKeyArns,
       searchEventQueueArn,
+      extraManagedPolicyArns = [],
     }: Args,
     opts?: pulumi.ComponentResourceOptions
   ) {
@@ -156,6 +160,7 @@ export class SearchProcessingService extends pulumi.ComponentResource {
           docStorageBucketPolicy.arn,
           secretsPolicy.arn,
           sqsPolicy.arn,
+          ...extraManagedPolicyArns,
         ],
       },
       { parent: this }
@@ -171,6 +176,9 @@ export class SearchProcessingService extends pulumi.ComponentResource {
         imagePath: BASE_PATH,
         dockerfile: 'Dockerfile.search_processing_service',
         platform,
+        buildArgs: {
+          SERVICE_NAME: 'search_processing_service',
+        },
         tags: this.tags,
       },
       { parent: this }

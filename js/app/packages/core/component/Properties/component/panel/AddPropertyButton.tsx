@@ -1,4 +1,4 @@
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import type { Component } from 'solid-js';
 
 interface AddPropertyButtonProps {
@@ -7,7 +7,7 @@ interface AddPropertyButtonProps {
 
 export const AddPropertyButton: Component<AddPropertyButtonProps> = (props) => {
   return (
-    <Button variant="secondary" class="w-full" onClick={props.onClick}>
+    <Button variant="base" class="w-full" onClick={props.onClick}>
       + Add Property
     </Button>
   );

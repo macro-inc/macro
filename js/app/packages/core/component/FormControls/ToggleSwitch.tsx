@@ -2,6 +2,7 @@ import {
   Switch as KSwitch,
   type SwitchRootOptions,
 } from '@kobalte/core/switch';
+import { Button } from '@ui';
 import {
   type Component,
   createEffect,
@@ -9,7 +10,6 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
-import { DeprecatedButton } from './DeprecatedButton';
 
 type Size = 'SM' | 'Base';
 const sizeClass: Record<Size, string> = {
@@ -91,8 +91,8 @@ export const ToggleSwitch: Component<
         </KSwitch.Label>
       </Show>
 
-      <div class="relative focus-bracket-within focus-within:[--focus-border-inset:-3px] w-fit h-fit">
-        <KSwitch.Input class="absolute inset-0 h-full! w-full! pointer-events-none" />
+      <div class="relative size-fit rounded-full focus-within:bg-active">
+        <KSwitch.Input class="absolute inset-0 size-full! pointer-events-none" />
         <KSwitch.Control
           classList={{
             'animate-[flicker_50ms_3_150ms]':
@@ -112,14 +112,14 @@ export const ToggleSwitch: Component<
             <div class="h-full min-w-[1.8333333333333333em] aspect-square invisible" />
             <div class="invisible" aria-hidden>
               {/* same button primitive to set correct height */}
-              <DeprecatedButton size={props.size}>False</DeprecatedButton>
+              <Button size={props.size === 'SM' ? 'sm' : 'md'}>False</Button>
             </div>
 
             {/* Visible Interactive, size relative to Fake Invisible Node */}
             <div style={{ 'container-type': 'size' }} class="absolute inset-0">
               <div class="absolute inset-0">
                 <div
-                  class="h-full w-full transition duration-100"
+                  class="size-full transition duration-100"
                   classList={{
                     '-translate-x-[calc(100%-100cqh)]': !checked(),
                     'translate-x-0': checked(),

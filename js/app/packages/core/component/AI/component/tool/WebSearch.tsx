@@ -65,7 +65,7 @@ const handler = createToolRenderer({
                 }}
               >
                 <CaretRight
-                  class="h-4 w-4 transition-transform"
+                  class="size-4 transition-transform"
                   classList={{
                     'rotate-90': isExpanded(),
                   }}

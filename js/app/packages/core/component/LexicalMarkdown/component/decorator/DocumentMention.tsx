@@ -506,9 +506,9 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
       trigger={
         <span class="relative">
           <span
-            class="w-full h-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
+            class="size-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
             classList={{
-              'bg-active text-ink bracket bracket-offset-2': isSelectedAsNode(),
+              'bg-active text-ink': isSelectedAsNode(),
             }}
             style={{
               'user-select': 'inherit',

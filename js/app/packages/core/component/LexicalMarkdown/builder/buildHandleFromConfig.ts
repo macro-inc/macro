@@ -1,6 +1,11 @@
+import { handleFileFolderDrop } from '@core/util/upload';
 import type { EditorType } from '@lexical-core';
+import type { SerializedEditorState } from 'lexical';
+import { createSignal } from 'solid-js';
 import { createLexicalWrapper } from '../context/LexicalWrapperContext';
 import {
+  actionsPlugin,
+  awaitPlugin,
   codePlugin,
   createAccessoryStore,
   createDraggableBlockStore,
@@ -17,23 +22,19 @@ import {
   selectionDataPlugin,
   singleLinePlugin,
   tabIndentationPlugin,
-  actionsPlugin,
   textPastePlugin,
 } from '../plugins';
-import { createFilesReadyHandler } from '../utils/fileUploadUtils';
-import { handleFileFolderDrop } from '@core/util/upload';
 import { checkboxToTaskPlugin } from '../plugins/checkbox-to-task';
 import { normalizeEnterPlugin } from '../plugins/normalize-enter';
 import { restoreFocusPlugin } from '../plugins/restore-focus';
 import { createMenuOperations } from '../shared/inlineMenu';
-import type { SerializedEditorState } from 'lexical';
 import {
   getSaveState,
   initializeEditorEmpty,
   initializeEditorWithState,
   setEditorStateFromMarkdown,
 } from '../utils';
-import { createSignal } from 'solid-js';
+import { createFilesReadyHandler } from '../utils/fileUploadUtils';
 import type {
   EditorConfig,
   EditorControls,
@@ -123,6 +124,11 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
   if (config.type !== 'plain-text' && !config.singleLine) {
     plugins.use(horizontalRulePlugin());
     plugins.use(normalizeEnterPlugin());
+  }
+
+  // Await placeholders for in-flight async operations (any non-plain-text editor).
+  if (config.type !== 'plain-text') {
+    plugins.use(awaitPlugin());
   }
 
   // Selection / formatting state

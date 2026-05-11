@@ -1,7 +1,7 @@
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import type { HotkeyCommand, ValidHotkey } from '@core/hotkey/types';
 import { prettyPrintHotkeyString } from '@core/hotkey/utils';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { StaticSplitLabel } from './split-layout/components/SplitLabel';
@@ -71,7 +71,7 @@ export default function HotkeyDebugger() {
   });
 
   return (
-    <div class="flex h-full w-full flex-col overflow-hidden bg-dialog font-mono text-xs text-ink">
+    <div class="flex size-full flex-col overflow-hidden bg-dialog font-mono text-xs text-ink">
       <SplitHeaderLeft>
         <StaticSplitLabel label="Hotkey Debugger" />
       </SplitHeaderLeft>

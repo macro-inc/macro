@@ -1,5 +1,4 @@
 import { useBlockAliasedName, useBlockId } from '@core/block';
-import { isMobile } from '@core/mobile/isMobile';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
@@ -19,13 +18,13 @@ import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
-import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
+import { isMobile } from '@core/mobile/isMobile';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
 import CaretRight from '@icon/bold/caret-right-bold.svg';
-import EyeSlash from '@icon/bold/eye-slash-bold.svg';
 import Plus from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
+import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
@@ -221,7 +220,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   return (
     <Show when={!error()} fallback={props.fallback}>
       <Suspense>
-        <div class="mt-6 mb-6" ref={setContainerRef}>
+        <div class="my-6 " ref={setContainerRef}>
           <PropertiesProvider
             entityType={entityType}
             canEdit={props.canEdit}
@@ -243,9 +242,9 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
                 onClick={toggleExpanded}
               >
                 {isExpanded() ? (
-                  <CaretDown class="w-3 h-3" />
+                  <CaretDown class="size-3" />
                 ) : (
-                  <CaretRight class="w-3 h-3" />
+                  <CaretRight class="size-3" />
                 )}
                 <span class="text-xs">Properties</span>
               </button>
@@ -257,7 +256,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
               <div class="py-2 text-xs">
                 <Show when={isLoading()}>
                   <div class="flex items-center justify-center py-8">
-                    <div class="w-5 h-5 animate-spin">
+                    <div class="size-5 animate-spin">
                       <LoadingSpinner />
                     </div>
                   </div>
@@ -276,21 +275,10 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
                 </Show>
 
                 <Show when={props.canEdit}>
-                  <div class="pt-2">
+                  <div class="py-2">
                     <AddPinnedPropertyButton />
                   </div>
                 </Show>
-
-                <div class="pt-4 pb-2">
-                  <button
-                    class="flex items-center gap-1 opacity-75 hover:opacity-50 transition-opacity"
-                    onClick={toggleExpanded}
-                  >
-                    <EyeSlash class="w-3 h-3 mr-2" />
-                    <span class="text-ink-muted">Hide Properties</span>
-                  </button>
-                </div>
-
                 <Modals />
               </div>
               <div class="border-t border-edge-muted pt-2" />
@@ -309,7 +297,7 @@ function AddPinnedPropertyButton() {
       class="flex items-center gap-1 opacity-75 hover:opacity-50 transition-opacity"
       onClick={openPropertySelector}
     >
-      <Plus class="w-3 h-3 mr-2" />
+      <Plus class="size-3 mr-2" />
       <span class="text-ink-muted">Add property</span>
     </button>
   );

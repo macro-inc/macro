@@ -1,7 +1,13 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Queue } from '../../packages/resources';
-import { config, getMacroApiToken, stack } from '../../packages/shared';
+import {
+  config,
+  getMacroApiToken,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { ContactsService } from './service';
 
@@ -61,7 +67,7 @@ const secretKeyArns = [
 let containerEnvVars = [
   {
     name: 'RUST_LOG',
-    value: `contacts_service=${stack === 'prod' ? 'info' : 'debug'},contacts_db_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
+    value: `warn,contacts_service=${stack === 'prod' ? 'info' : 'debug'},contacts=${stack === 'prod' ? 'info' : 'debug'},contacts_db_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
   },
   {
     name: 'ENVIRONMENT',
@@ -104,8 +110,8 @@ let containerEnvVars = [
     value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
   },
   {
-    name: 'CONNECTION_GATEWAY_URL',
-    value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+    name: ServiceUrl.CONNECTION_GATEWAY_URL,
+    value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
   },
   // OpenTelemetry / Datadog tracing configuration
   {

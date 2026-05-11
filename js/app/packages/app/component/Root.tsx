@@ -3,7 +3,6 @@ import { ROUTER_BASE } from '@app/constants/routerBase';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
@@ -16,7 +15,12 @@ import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal'
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
-import { getLoginCookieOptions, updateCookie } from '@core/util/cookies';
+import {
+  getLoginCookieOptions,
+  hasLoginCookie,
+  syncLoginStorage,
+  updateCookie,
+} from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
@@ -54,7 +58,9 @@ import { useHotKeyRoot } from 'core/hotkey/hotkeys';
 import { detect } from 'detect-browser';
 import {
   createEffect,
+  createSignal,
   type JSX,
+  lazy,
   Match,
   on,
   onCleanup,
@@ -63,29 +69,28 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { currentThemeId } from '../../theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
   systemThemeEffect,
 } from '../../theme/utils/themeUtils';
-import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { Login } from './auth/Login';
-import { Signup } from './auth/Signup';
-import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 import { setCookie } from './auth/Shared';
+import { Signup } from './auth/Signup';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
-import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
+import { SearchProvider } from './next-soup/search-context';
 import { ReactiveFavicon } from './ReactiveFavicon';
-import { lazy } from 'solid-js';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 
 const InteractiveOnboarding = lazy(
   () => import('./interactive-onboarding/InteractiveOnboarding')
 );
-import { QuickAccessProvider } from '@core/context/quickAccess';
+
 import {
   AnalyticsContextProvider,
   useAnalytics,
@@ -93,6 +98,8 @@ import {
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { QuickAccessProvider } from '@core/context/quickAccess';
+import { Button } from '@ui';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -101,10 +108,10 @@ function useSyncLoginCookie() {
   createEffect(() => {
     if (!userInfoQuery.isSuccess) return;
 
-    const { value, ...options } = getLoginCookieOptions(
-      userInfoQuery.data.authenticated ?? false
-    );
+    const authenticated = userInfoQuery.data.authenticated ?? false;
+    const { value, ...options } = getLoginCookieOptions(authenticated);
     updateCookie('login', value, options);
+    syncLoginStorage(authenticated);
   });
 }
 
@@ -150,6 +157,30 @@ const rootPreload: RoutePreloadFunc = async (args) => {
   }
 };
 
+function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
+  const [retrying, setRetrying] = createSignal(false);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    await props.onRetry();
+    setRetrying(false);
+  };
+
+  return (
+    <div class="flex flex-col items-center justify-center gap-4 size-full text-ink-muted">
+      <p class="text-sm">Unable to connect. Please check your network.</p>
+      <Button
+        class="mt-2"
+        disabled={retrying()}
+        onClick={handleRetry}
+        variant="base"
+      >
+        {retrying() ? 'Retrying…' : 'Retry'}
+      </Button>
+    </div>
+  );
+}
+
 function BasePathComponent() {
   const analytics = useAnalytics();
 
@@ -193,11 +224,16 @@ function BasePathComponent() {
     <Switch>
       <Match when={userInfoQuery.isLoading}>{null}</Match>
       <Match
+        when={
+          userInfoQuery.isError && hasLoginCookie() && isNativeMobilePlatform()
+        }
+      >
+        <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
+      </Match>
+      <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
-        <Navigate
-          href={`${isNativeMobilePlatform() ? '/welcome' : '/welcome'}${window.location.search}`}
-        />
+        <Navigate href={`/welcome${window.location.search}`} />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
         <Navigate href={redirectPath} />
@@ -285,15 +321,16 @@ const ROUTES: RouteDefinition[] = [
       return (
         <div class="h-full overflow-y-hidden">
           <div class="relative flex flex-row items-center pt-4 h-full">
-            <DeprecatedTextButton
-              theme="base"
-              text="Close"
+            <Button
+              variant="base"
               onClick={() => {
                 channel.postMessage({ type: 'login-success' });
                 channel.close();
                 window.close();
               }}
-            />
+            >
+              Close
+            </Button>
           </div>
         </div>
       );
@@ -306,7 +343,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/welcome',
     component: () => (
-      <div class="flex *:flex-1 w-full h-full overflow-y-hidden">
+      <div class="flex *:flex-1 size-full overflow-y-hidden">
         <InteractiveOnboarding />
       </div>
     ),

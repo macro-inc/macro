@@ -1,18 +1,16 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import { ActiveFilterChips } from '@app/component/next-soup/soup-view/filters-bar/active-filter-chips';
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
-import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
+import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import type { ListView } from '@app/constants/list-views';
-import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
-import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
-import { ActiveFilterChips } from '@app/component/next-soup/soup-view/filters-bar/active-filter-chips';
-import { isMobile } from '@core/mobile/isMobile';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import { Button } from './button';
-import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
-import { useSoup } from '../../soup-context';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { useAnalytics } from '@app/component/analytics-context';
+import { isMobile } from '@core/mobile/isMobile';
+import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
+import { Button } from '@ui';
+import { createMemo, Show } from 'solid-js';
+import { useSoup } from '../../soup-context';
 
 export const SoupFiltersBar = () => {
   const {
@@ -24,8 +22,6 @@ export const SoupFiltersBar = () => {
   } = useFilterRefinements();
 
   const analytics = useAnalytics();
-
-  const [previewBtnHovering, setPreviewBtnHovering] = createSignal(false);
 
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
@@ -55,80 +51,32 @@ export const SoupFiltersBar = () => {
     },
   });
 
-  const component = createMemo(() => {
+  const isSearchView = createMemo(() => {
     const content = panel.handle.content();
-
-    if (content.type !== 'component') return;
-
-    return content.id;
+    return content.type === 'component' && content.id === 'search';
   });
 
-  const isComponentListView = (listView: ListView) => {
-    return component() === listView;
-  };
-
   return (
-    <Switch>
-      <Match when={isComponentListView('search')}>
-        <div class="w-full flex flex-col gap-2 p-2 border-b border-edge-muted">
-          <SoupSearchbar autoFocus placeholder="Search, @mention contacts" />
-          <div class="flex items-start gap-2">
-            <UnifiedFilterDropdown />
-            <ActiveFilterChips
-              filters={activeFiltersList()}
-              onRemove={removeFilter}
-              onReplace={replaceFilter}
-              onClearAll={resetToTabDefaults}
-              isOptionActive={isOptionActive}
-            />
-            <div class="flex-1" />
-            <Tooltip
-              tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
-            >
-              <Button
-                variant={soup.previewEntity() ? 'primary' : 'ghost'}
-                size="sm"
-                class="rounded-xs [&_svg]:size-4 px-1 border border-transparent"
-                onClick={togglePreview}
-                onMouseEnter={() => setPreviewBtnHovering(true)}
-                onMouseLeave={() => setPreviewBtnHovering(false)}
-              >
-                <AnimatedPreviewIcon triggerAnimation={previewBtnHovering()} />
-              </Button>
-            </Tooltip>
-          </div>
-        </div>
-      </Match>
-      <Match when={true}>
-        <Show when={!isMobile()}>
-          <div class="flex items-start gap-2 px-2 py-1.5 border-b border-edge-muted w-full">
-            <UnifiedFilterDropdown />
-            <ActiveFilterChips
-              filters={activeFiltersList()}
-              onRemove={removeFilter}
-              onReplace={replaceFilter}
-              onClearAll={resetToTabDefaults}
-              isOptionActive={isOptionActive}
-            />
-            <div class="flex-1" />
-            <Tooltip
-              tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
-            >
-              <Button
-                variant={soup.previewEntity() ? 'primary' : 'ghost'}
-                size="sm"
-                class="rounded-xs [&_svg]:size-4 px-1 border border-transparent"
-                onClick={togglePreview}
-                onMouseEnter={() => setPreviewBtnHovering(true)}
-                onMouseLeave={() => setPreviewBtnHovering(false)}
-              >
-                <AnimatedPreviewIcon triggerAnimation={previewBtnHovering()} />
-              </Button>
-            </Tooltip>
-            <SoupViewContextSort />
-          </div>
+    <Show when={!isMobile()}>
+      <div class="flex items-start gap-2 border-b border-edge-muted w-full p-2">
+        <UnifiedFilterDropdown />
+        <ActiveFilterChips
+          filters={activeFiltersList()}
+          onRemove={removeFilter}
+          onReplace={replaceFilter}
+          onClearAll={resetToTabDefaults}
+          isOptionActive={isOptionActive}
+        />
+        <div class="flex-1" />
+        <Tooltip tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}>
+          <Button variant="ghost" size="icon-sm" onClick={togglePreview}>
+            <EyeIcon />
+          </Button>
+        </Tooltip>
+        <Show when={!isSearchView()}>
+          <SoupViewContextSort />
         </Show>
-      </Match>
-    </Switch>
+      </div>
+    </Show>
   );
 };

@@ -1,5 +1,5 @@
 import CheckIcon from '@icon/regular/check.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { Show } from 'solid-js';
 
 export interface MultiSelectCheckboxProps {
@@ -17,7 +17,7 @@ export function MultiSelectCheckbox(props: MultiSelectCheckboxProps) {
   return (
     <button
       type="button"
-      class="size-full relative group/button flex items-center justify-center bracket-never"
+      class="size-full relative group/button flex items-center justify-center"
       onMouseDown={(e) => {
         e.stopPropagation();
       }}
@@ -36,7 +36,7 @@ export function MultiSelectCheckbox(props: MultiSelectCheckboxProps) {
         )}
       >
         <Show when={props.checked}>
-          <CheckIcon class="w-full h-full text-panel" />
+          <CheckIcon class="size-full text-panel" />
         </Show>
       </div>
     </button>

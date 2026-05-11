@@ -16,6 +16,7 @@ pub fn router() -> Router<SearchHandlerState> {
     Router::new()
         .route("/", post(unified::handler))
         .nest("/simple", simple::router())
+        .nest("/channel", channel::router())
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

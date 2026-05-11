@@ -1,24 +1,21 @@
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { DropdownMenuContent, MENU_ITEM_CLASS } from '@core/component/Menu';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Microphone from '@icon/regular/microphone.svg';
 import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
 import Screencast from '@icon/regular/screencast.svg';
-import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
 import Users from '@icon/regular/users.svg';
 import VideoCamera from '@icon/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
 import VideoConference from '@icon/regular/video-conference.svg';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
+import { cn } from '@ui';
 import { For, Show } from 'solid-js';
-import { cn } from '@ui/utils/classname';
 import { useCallContext } from '../CallContext';
 
 const menuStyles = {
-  item: cn(
-    MENU_ITEM_CLASS,
-    'cursor-pointer hover:bg-hover hover-transition-bg'
-  ),
+  item: cn(MENU_ITEM_CLASS, 'hover:bg-hover hover-transition-bg'),
   groupLabel: cn(MENU_ITEM_CLASS, 'text-xs text-accent'),
 };
 
@@ -58,7 +55,7 @@ export function CallControlsPanelSmallRow(
           type="button"
           disabled={isConnecting()}
           class={cn(
-            'flex items-center justify-center w-4 h-4 shrink-0 rounded-md border-0 bg-transparent transition-colors',
+            'flex items-center justify-center size-4 shrink-0 rounded-md border-0 bg-transparent transition-colors',
             isConnecting() &&
               'opacity-50 pointer-events-none cursor-not-allowed',
             !isConnecting() &&
@@ -67,7 +64,7 @@ export function CallControlsPanelSmallRow(
                 callCtx.isScreenSharing())
               ? 'text-accent-2'
               : 'text-ink',
-            !isConnecting() && 'hover:bg-ink/5 cursor-pointer'
+            !isConnecting() && 'hover:bg-ink/5'
           )}
           aria-label="Call options"
         >
@@ -84,9 +81,9 @@ export function CallControlsPanelSmallRow(
               <div class="flex min-w-0 flex-1 items-center gap-2">
                 <Show
                   when={!callCtx.isAudioMuted()}
-                  fallback={<MicrophoneSlash class="h-4 w-4 shrink-0" />}
+                  fallback={<MicrophoneSlash class="size-4 shrink-0" />}
                 >
-                  <Microphone class="h-4 w-4 shrink-0" />
+                  <Microphone class="size-4 shrink-0" />
                 </Show>
                 <span class="min-w-0 flex-1">
                   {callCtx.isAudioMuted()
@@ -121,7 +118,7 @@ export function CallControlsPanelSmallRow(
                             device.deviceId
                           }
                         >
-                          <CheckIcon class="h-3 w-3 text-accent" />
+                          <CheckIcon class="size-3 text-accent" />
                         </Show>
                       </span>
                     </div>
@@ -154,7 +151,7 @@ export function CallControlsPanelSmallRow(
                               device.deviceId
                             }
                           >
-                            <CheckIcon class="h-3 w-3 text-accent" />
+                            <CheckIcon class="size-3 text-accent" />
                           </Show>
                         </span>
                       </div>
@@ -174,9 +171,9 @@ export function CallControlsPanelSmallRow(
               <div class="flex min-w-0 flex-1 items-center gap-2">
                 <Show
                   when={!callCtx.isVideoMuted()}
-                  fallback={<VideoCameraSlash class="h-4 w-4 shrink-0" />}
+                  fallback={<VideoCameraSlash class="size-4 shrink-0" />}
                 >
-                  <VideoCamera class="h-4 w-4 shrink-0" />
+                  <VideoCamera class="size-4 shrink-0" />
                 </Show>
                 <span class="min-w-0 flex-1">
                   {callCtx.isVideoMuted()
@@ -210,7 +207,7 @@ export function CallControlsPanelSmallRow(
                             device.deviceId
                           }
                         >
-                          <CheckIcon class="h-3 w-3 text-accent" />
+                          <CheckIcon class="size-3 text-accent" />
                         </Show>
                       </span>
                     </div>
@@ -227,7 +224,7 @@ export function CallControlsPanelSmallRow(
               onSelect={() => void callCtx.toggleScreenShare()}
             >
               <div class="flex min-w-0 flex-1 items-center gap-2">
-                <Screencast class="h-4 w-4 shrink-0" />
+                <Screencast class="size-4 shrink-0" />
                 <span class="min-w-0 flex-1">
                   {callCtx.isScreenSharing()
                     ? 'Stop sharing screen'
@@ -244,7 +241,7 @@ export function CallControlsPanelSmallRow(
               onSelect={() => void handleToggleShareWithTeam()}
             >
               <div class="flex min-w-0 flex-1 items-center gap-2">
-                <Users class="h-4 w-4 shrink-0" />
+                <Users class="size-4 shrink-0" />
                 <span class="min-w-0 flex-1">
                   {callCtx.isSharedWithTeam()
                     ? 'Shared with team'
@@ -258,12 +255,12 @@ export function CallControlsPanelSmallRow(
             <DropdownMenu.Item
               class={cn(
                 MENU_ITEM_CLASS,
-                'cursor-pointer text-failure hover:bg-failure/10 hover-transition-bg'
+                'text-failure hover:bg-failure/10 hover-transition-bg'
               )}
               onSelect={() => void props.onLeave()}
             >
               <div class="flex min-w-0 flex-1 items-center gap-2">
-                <PhoneDisconnect class="h-4 w-4 shrink-0" />
+                <PhoneDisconnect class="size-4 shrink-0" />
                 <span class="min-w-0 flex-1">Leave call</span>
               </div>
             </DropdownMenu.Item>

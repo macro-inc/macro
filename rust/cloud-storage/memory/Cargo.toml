@@ -12,6 +12,7 @@ ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
+call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 futures = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
@@ -28,9 +29,7 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 
 # For building ToolServiceContext
-call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 comms = { path = "../comms" }
-document_storage_service_client = { path = "../document_storage_service_client" }
 documents = { path = "../documents" }
 email = { path = "../email" }
 email_service_client = { path = "../email_service_client" }
@@ -39,16 +38,15 @@ entity_access_management = { path = "../entity_access_management" }
 frecency = { path = "../frecency" }
 lexical_client = { path = "../lexical_client" }
 macro_aws_config = { path = "../macro_aws_config" }
+notification = { path = "../notification", features = ["ai_tool"] }
 properties = { path = "../properties" }
 readonly_pool = { path = "../readonly_pool" }
-scribe = { path = "../scribe" }
 search_service_client = { path = "../search_service_client" }
 soup = { path = "../soup", features = ["all"] }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "email",
   "gmail",
 ] }
-static_file_service_client = { path = "../static_file_service_client" }
 sync_service_client = { path = "../sync_service_client" }
 
 

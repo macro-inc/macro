@@ -14,6 +14,8 @@ export interface CallFilters {
 `None` = no filter, `Some(true)` = only calls the user joined,
 `Some(false)` = only calls the user did not join. */
   attended?: CallFiltersAttended;
+  /** Call record IDs to filter by. Empty to include all calls. */
+  call_ids?: string[];
   /** Channel IDs to filter calls by. Empty to include all calls. */
   channel_ids?: string[];
   /** Speaker macro user ids. Empty to include all. */

@@ -1,6 +1,9 @@
-import { isTauri } from '@core/util/platform';
+import { useCallKitSetup } from '@channel/Call';
+import { isPlatform, isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';
 import type { RouteSectionProps } from '@solidjs/router';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
 import {
   type Accessor,
@@ -15,10 +18,9 @@ import {
 } from 'solid-js';
 import { getNetworkInfo } from 'tauri-plugin-device-info-api';
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
+import { ShareTargetProvider } from './ShareTargetProvider';
 
 type NotAndroid = 'not-android';
 
@@ -46,9 +48,7 @@ function TauriProvider(props: { children: JSX.Element }) {
   // we only care about this value on android.
   // ios should use the env(safe-area-inset-top) css properties
   // this css is not reliably set on android
-  const [insets, setInsets] = createSignal<NotAndroid | Insets>(
-    'not-android' as const
-  );
+  const [insets, setInsets] = createSignal<NotAndroid | Insets>('not-android');
   const [bundleUpdateStatus, setBundleUpdateStatus] =
     createSignal<BundleUpdateStatus>({ status: 'Idle' });
   const [waitingForWifi, setWaitingForWifi] = createSignal(false);
@@ -66,6 +66,8 @@ function TauriProvider(props: { children: JSX.Element }) {
     });
     grantBundleUpdate();
   }
+
+  if (isTauri() && isPlatform('ios')) useCallKitSetup();
 
   const value: TauriContextValue = {
     runtimeInsets: insets,
@@ -144,10 +146,22 @@ function TauriProvider(props: { children: JSX.Element }) {
 
   onMount(() => {
     console.info('[bundle-update] registering listener');
+    let loggedDownloading = false;
     const unlistenPromise = listen<BundleUpdateStatus>(
       'bundle-update-status',
       (ev) => {
-        console.info('[bundle-update] received', JSON.stringify(ev.payload));
+        if (ev.payload.status === 'Downloading') {
+          if (!loggedDownloading) {
+            console.info(
+              '[bundle-update] received',
+              JSON.stringify(ev.payload)
+            );
+            loggedDownloading = true;
+          }
+        } else {
+          console.info('[bundle-update] received', JSON.stringify(ev.payload));
+          loggedDownloading = false;
+        }
         batch(() => {
           setBundleUpdateStatus(ev.payload);
           if (ev.payload.status !== 'WaitingForWifi') setWaitingForWifi(false);
@@ -192,7 +206,7 @@ function TauriProvider(props: { children: JSX.Element }) {
 
   return (
     <TauriContext.Provider value={value}>
-      {props.children}
+      <ShareTargetProvider os={value.os}>{props.children}</ShareTargetProvider>
     </TauriContext.Provider>
   );
 }

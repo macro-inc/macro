@@ -1,28 +1,28 @@
 import {
-  Room,
-  RoomEvent,
-  ConnectionState,
-  Track,
-  type RemoteParticipant,
-  type LocalTrackPublication,
-  type LocalTrack,
-  type AudioCaptureOptions,
-} from 'livekit-client';
-import {
-  KrispNoiseFilter,
   isKrispNoiseFilterSupported,
+  KrispNoiseFilter,
 } from '@livekit/krisp-noise-filter';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
+import type { CallTokenResponse } from '@service-call/client';
+import { makePersisted } from '@solid-primitives/storage';
+import {
+  type AudioCaptureOptions,
+  ConnectionState,
+  type LocalTrack,
+  type LocalTrackPublication,
+  type RemoteParticipant,
+  Room,
+  RoomEvent,
+  Track,
+} from 'livekit-client';
 import {
   createContext,
   createSignal,
-  useContext,
   onCleanup,
   type ParentProps,
+  useContext,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { makePersisted } from '@solid-primitives/storage';
-import type { CallTokenResponse } from '@service-call/client';
 import { CallAudioSink } from './CallAudioSink';
 
 export type CallParticipantInfo = {

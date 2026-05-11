@@ -1,15 +1,16 @@
 import {
+  AwaitNode,
   ContactMentionNode,
   DateMentionNode,
   DiffInsertNode,
   DocumentCardNode,
   DocumentMentionNode,
   EquationNode,
-  SnapshotNode,
   GroupMentionNode,
   HorizontalRuleNode,
   HtmlRenderNode,
   ImageNode,
+  SnapshotNode,
   ThemeMentionNode,
   UnknownMentionNode,
   UserMentionNode,
@@ -17,21 +18,22 @@ import {
   WatermarkNode,
 } from '@lexical-core';
 import { clearDecorators, setDecorator } from '@lexical-core/decoratorRegistry';
+import { Await } from './component/decorator/Await';
 import { ContactMention } from './component/decorator/ContactMention';
 import { DateMention } from './component/decorator/DateMention';
 import { DiffInsert } from './component/decorator/DiffInsert';
 import { DocumentCard } from './component/decorator/DocumentCard';
 import { DocumentMention } from './component/decorator/DocumentMention';
 import { Equation } from './component/decorator/Equation';
-import { Snapshot } from './component/decorator/Snapshot';
 import { GroupMention } from './component/decorator/GroupMention';
 import { HorizontalRule } from './component/decorator/HorizontalRule';
 import { HtmlRender } from './component/decorator/HtmlRender';
 import { MarkdownImage } from './component/decorator/MarkdownImage';
 import { MarkdownVideo } from './component/decorator/MarkdownVideo';
-import { UserMention } from './component/decorator/UserMention';
+import { Snapshot } from './component/decorator/Snapshot';
 import { ThemeMention } from './component/decorator/ThemeMention';
 import { UnknownMention } from './component/decorator/UnknownMention';
+import { UserMention } from './component/decorator/UserMention';
 import { Watermark } from './component/decorator/Watermark';
 import { registerDiffNodeFactory } from './component/dom-factory/diff-factory';
 
@@ -56,5 +58,6 @@ export function initializeLexical() {
   setDecorator(ThemeMentionNode, ThemeMention);
   setDecorator(UnknownMentionNode, UnknownMention);
   setDecorator(WatermarkNode, Watermark);
+  setDecorator(AwaitNode, Await);
   registerDiffNodeFactory();
 }

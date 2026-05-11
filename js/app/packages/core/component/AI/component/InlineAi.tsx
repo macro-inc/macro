@@ -1,6 +1,6 @@
 import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
 import GridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import { createSignal, onMount } from 'solid-js';
 
 const defaultPlaceholder = 'Generate with AI...';
@@ -120,7 +120,7 @@ export function InlineInputLoading(props: InlineInputLoadingProps) {
   return (
     <div class="relative flex items-end justify-between p-2 ring-1 ring-edge rounded-xs w-full bg-hover">
       <textarea
-        class="flex resize-none rounded-md w-full p-1 text-sm h-max-[800px] overflow-hidden select-none cursor-pointer"
+        class="flex resize-none rounded-md w-full p-1 text-sm h-max-[800px] overflow-hidden select-none"
         disabled
         rows={props?.options?.defaultLines ?? 1}
         placeholder={props?.options?.placeholderText ?? defaultPlaceholder}
@@ -139,7 +139,7 @@ export function InlineInputDisabled(props: InlineInputLoadingProps) {
   return (
     <div class="relative flex items-end justify-between p-2 ring-1 ring-edge rounded-xs w-full bg-hover">
       <textarea
-        class="flex resize-none rounded-md w-full p-1 text-sm h-max-[800px] overflow-hidden select-none cursor-pointer"
+        class="flex resize-none rounded-md w-full p-1 text-sm h-max-[800px] overflow-hidden select-none"
         disabled
         rows={props?.options?.defaultLines ?? 1}
         placeholder={props?.options?.placeholderText ?? defaultPlaceholder}

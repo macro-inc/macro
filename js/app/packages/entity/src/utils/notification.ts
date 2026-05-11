@@ -1,8 +1,20 @@
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
+import type { NotificationType } from '@core/types';
 import { notificationIsRead, type UnifiedNotification } from '@notifications';
 import type { NotificationStack } from '@notifications/notification-stacking';
 import { match } from 'ts-pattern';
 import type { Notification } from '../types/notification';
+
+type CallStartedNotificationMetadata = {
+  tag: 'call-started';
+  content: {
+    channel_name?: string | null;
+  };
+};
+
+type KnownNotificationMetadata =
+  | UnifiedNotification['notification_metadata']
+  | CallStartedNotificationMetadata;
 
 /**
  * Filters out invalid notification types that shouldn't be displayed
@@ -53,7 +65,7 @@ export function extractNotificationSenderIds(
  * Returns a short verb phrase like "mentioned", "replied", "shared", etc.
  */
 export function getNotificationActionText(n: Notification): string {
-  const tag = n.notification_metadata.tag;
+  const tag = n.notification_metadata.tag as NotificationType;
 
   return match(tag)
     .with('channel_mention', () => 'mentioned')
@@ -68,12 +80,13 @@ export function getNotificationActionText(n: Notification): string {
     .with('invite_to_team', () => 'invited')
     .with('task_assigned', () => 'assigned')
     .with('ai_response', () => 'responded')
+    .with('call-started', () => 'called')
     .exhaustive();
 }
 
 export function extractMessageContent(notification: Notification): string {
   const n = notification as UnifiedNotification;
-  const meta = n.notification_metadata;
+  const meta = n.notification_metadata as KnownNotificationMetadata;
 
   return match(meta)
     .with({ tag: 'channel_mention' }, (m) => m.content.messageContent || '')
@@ -97,6 +110,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'ai_response' }, (m) => m.content.summary || '')
     .with({ tag: 'channel_invite' }, () => '')
     .with({ tag: 'invite_to_team' }, () => '')
+    .with({ tag: 'call-started' }, (m) => m.content.channel_name ?? '')
     .exhaustive();
 }
 

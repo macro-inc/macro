@@ -1,48 +1,58 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import { CommandState } from '@app/component/command';
+import { PLANS } from '@app/component/paywall/plans';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useIsAuthenticated } from '@core/auth';
+import { useHasPaidAccess } from '@core/auth/license';
 import MacroLogo from '@core/component/MacroLogo';
-import LogoIcon from '@macro-icons/macro-logo.svg';
+import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { toast } from '@core/component/Toast/Toast';
+import { Tooltip } from '@core/component/Tooltip';
+import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
+import { useTutorialCompleted } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fetchToken } from '@core/util/fetchWithToken';
+import { isOk } from '@core/util/maybeResult';
+import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
+import InfoIcon from '@icon/regular/info.svg';
+import LogoIcon from '@macro-icons/macro-logo.svg';
+import { useSendMobileWelcomeEmail } from '@queries/auth';
+import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
+import { useUserTeamsQuery } from '@queries/team';
 import { useLocation, useNavigate } from '@solidjs/router';
+import { Button, cn, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
+  For,
   on,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
-import { useTutorialCompleted } from '@core/context/user';
-import { CommandState } from '@app/component/command';
-import { resetSandbox } from './sandbox/sandbox-store';
-import { commandKOpen, setCommandKOpen } from './lessons/command-k';
+import { ContinueButton } from './components-lib';
 import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
-import { ContinueButton } from './components-lib';
-import { OnboardingProgress } from './OnboardingProgress';
-import { Panel } from '@ui';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import { useAnalytics } from '@app/component/analytics-context';
-import { useHasPaidAccess } from '@core/auth/license';
-import { useIsAuthenticated } from '@core/auth';
-import { fetchToken } from '@core/util/fetchWithToken';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import MobileWebWelcome from './MobileWebWelcome';
+import { commandKOpen, setCommandKOpen } from './lessons/command-k';
 import MobileWebSignupSent from './MobileWebSignupSent';
-import { useSendMobileWelcomeEmail } from '@queries/auth';
-import { isOk } from '@core/util/maybeResult';
-import { toast } from '@core/component/Toast/Toast';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
+import MobileWebWelcome from './MobileWebWelcome';
+import { OnboardingProgress } from './OnboardingProgress';
+import { OnboardingProvider, useOnboarding } from './onboarding-context';
+import { resetSandbox } from './sandbox/sandbox-store';
 
 export default function InteractiveOnboarding() {
   const isAuthenticated = useIsAuthenticated();
   const [mobileWebStep, setMobileWebStep] = createSignal<
     'welcome' | 'signup-sent'
   >('welcome');
+  const [submittedEmail, setSubmittedEmail] = createSignal<string | undefined>(
+    undefined
+  );
   const sendMobileWelcomeEmail = useSendMobileWelcomeEmail();
 
   // Mobile web users who aren't authenticated get a dedicated welcome screen
@@ -59,6 +69,7 @@ export default function InteractiveOnboarding() {
 
     if (isOk(result)) {
       if (result[1].sent) {
+        setSubmittedEmail(email);
         setMobileWebStep('signup-sent');
       } else {
         toast.alert('Email already sent.');
@@ -81,13 +92,105 @@ export default function InteractiveOnboarding() {
       fallback={
         <Show
           when={mobileWebStep() === 'welcome'}
-          fallback={<MobileWebSignupSent />}
+          fallback={<MobileWebSignupSent email={submittedEmail()} />}
         >
           <MobileWebWelcome onSignUp={handleMobileSignUp} />
         </Show>
       }
     >
-      <InteractiveOnboardingInner />
+      <OnboardingProvider>
+        <InteractiveOnboardingInner />
+      </OnboardingProvider>
+    </Show>
+  );
+}
+
+function OnboardingCostSummary() {
+  const onboarding = useOnboarding();
+
+  const selectedPlan = () => {
+    const tier = onboarding.selectedPlan();
+    return PLANS.find((p) => p.tier === tier);
+  };
+
+  const teamByTier = () => {
+    const groups: Record<
+      string,
+      { plan: (typeof PLANS)[number]; count: number }
+    > = {};
+    const order: string[] = [];
+    for (const member of onboarding.invitedMembers()) {
+      const plan = PLANS.find((p) => p.tier === member.tier);
+      if (plan) {
+        if (groups[member.tier]) {
+          groups[member.tier].count++;
+        } else {
+          groups[member.tier] = { plan, count: 1 };
+          order.push(member.tier);
+        }
+      }
+    }
+    return order.map((tier) => groups[tier]);
+  };
+
+  const hasTeam = () =>
+    onboarding.invitedMembers().length > 0 ||
+    onboarding.teamName().trim() !== '';
+
+  return (
+    <Show when={selectedPlan() && selectedPlan()!.price > 0}>
+      <div class="px-4 py-3 border-t border-ink/10">
+        <div class="flex items-center justify-between">
+          <div class="flex items-baseline gap-1">
+            <span class="text-3xl font-bold text-accent">
+              ${onboarding.userSeatCost()}
+            </span>
+            <span class="text-ink/40">/mo</span>
+          </div>
+          <div class="flex items-center gap-1.5 min-w-0 ml-4">
+            <Show when={hasTeam() && onboarding.teamName()}>
+              <span class="text-xs text-ink/50 truncate max-w-[50ch]">
+                {onboarding.teamName()}
+              </span>
+              <span class="text-ink/30">·</span>
+            </Show>
+            <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium shrink-0">
+              {hasTeam() ? 'Team plan' : selectedPlan()?.name}
+            </span>
+          </div>
+        </div>
+        <Show when={hasTeam()}>
+          <div class="flex flex-col gap-1.5 mt-1.5 text-xs text-ink/40">
+            <div class="flex justify-between">
+              <span>{selectedPlan()?.name}</span>
+              <span>${onboarding.userSeatCost()}/mo</span>
+            </div>
+            <For each={teamByTier()}>
+              {(group) => (
+                <div class="flex justify-between italic">
+                  <span>
+                    Team · {group.plan.name} ×{group.count}
+                  </span>
+                  <span class="border-b border-dashed border-ink/40">
+                    ${group.plan.price * group.count}/mo
+                  </span>
+                </div>
+              )}
+            </For>
+          </div>
+          <div class="flex justify-between items-center mt-2 pt-2 border-t border-ink/10 text-xs">
+            <span class="text-ink/40 flex items-center gap-1">
+              Total with team
+              <Tooltip tooltip="Team charges begin when members accept their invite">
+                <InfoIcon class="size-3 text-ink/30" />
+              </Tooltip>
+            </span>
+            <span class="text-ink/50 font-medium">
+              ${onboarding.totalCost()}/mo
+            </span>
+          </div>
+        </Show>
+      </div>
     </Show>
   );
 }
@@ -104,6 +207,8 @@ function InteractiveOnboardingInner() {
 
   const hasPaid = useHasPaidAccess();
   const isAuthenticated = useIsAuthenticated();
+  const userTeamsQuery = useUserTeamsQuery();
+  const hasExistingTeam = () => (userTeamsQuery.data?.length ?? 0) > 0;
   const inviteTeamEnabled = useFeatureFlag('enable-teams-onboarding', {
     enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
   });
@@ -112,7 +217,21 @@ function InteractiveOnboardingInner() {
       if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
         return false;
       if (l.id === 'about-us' && isAuthenticated()) return false;
-      if (l.id === 'invite-team' && !inviteTeamEnabled().enabled) return false;
+      // Skip team/payment lessons when feature flag disabled
+      if (
+        (l.id === 'team-choice' ||
+          l.id === 'invite-team' ||
+          l.id === 'review-pay') &&
+        !inviteTeamEnabled().enabled
+      )
+        return false;
+      // Skip review-pay if user already has subscription
+      if (l.id === 'review-pay' && hasPaid()) return false;
+      // Skip invite-team if user already has a team
+      if (l.id === 'invite-team' && hasExistingTeam()) return false;
+      // Skip team-choice if user has both subscription and team
+      if (l.id === 'team-choice' && hasPaid() && hasExistingTeam())
+        return false;
       return true;
     })
   );
@@ -266,6 +385,36 @@ function InteractiveOnboardingInner() {
     setReadyToContinue(false);
     setContinueLabel(undefined);
     setLessonKey((k) => k + 1);
+  };
+
+  const onboarding = useOnboarding();
+
+  const getBackContext = () => ({
+    onboarding,
+    isLessonSkipped: (id: string) =>
+      state.lessons().find((l) => l.definition.id === id)?.skipped ?? false,
+    hasPaidAccess: hasPaid(),
+  });
+
+  const getPreviousLesson = () => {
+    const current = state.currentLesson();
+    if (!current) return undefined;
+    const prev = current.definition.previousLesson;
+    if (!prev) return undefined;
+    if (typeof prev === 'function') {
+      return prev(getBackContext());
+    }
+    return prev;
+  };
+
+  const handleBack = (targetLesson: string) => {
+    const current = state.currentLesson();
+    if (!current) return;
+    const onBack = current.definition.onBack;
+    if (onBack) {
+      onBack(getBackContext());
+    }
+    state.goToLessonById(targetLesson);
   };
 
   // cmd+enter hotkey to continue
@@ -441,7 +590,7 @@ function InteractiveOnboardingInner() {
   return (
     <div
       ref={shellRef}
-      class="flex items-center justify-center h-full w-full p-6 sm:p-8 overflow-hidden relative"
+      class="flex items-center justify-center size-full p-6 sm:p-8 overflow-hidden relative"
       tabIndex={-1}
     >
       {/* Scoped keyframes */}
@@ -481,7 +630,7 @@ function InteractiveOnboardingInner() {
 
       {/* Centered card */}
       <div class="size-full max-w-400 max-h-225">
-        <Panel>
+        <Surface depth={1}>
           <div class="size-full flex">
             <Show
               when={state.currentLesson()}
@@ -537,6 +686,8 @@ function InteractiveOnboardingInner() {
                             onComplete={handleLessonComplete}
                             onUnready={handleLessonUnready}
                             advance={advanceLesson}
+                            skipLesson={state.skipLesson}
+                            goToLesson={state.goToLessonById}
                             isActive={true}
                             scopeId={scopeId}
                           />
@@ -549,6 +700,8 @@ function InteractiveOnboardingInner() {
                                 onComplete={handleLessonComplete}
                                 onUnready={handleLessonUnready}
                                 advance={advanceLesson}
+                                skipLesson={state.skipLesson}
+                                goToLesson={state.goToLessonById}
                                 isActive={true}
                                 scopeId={scopeId}
                               />
@@ -573,6 +726,8 @@ function InteractiveOnboardingInner() {
                                   onComplete={handleLessonComplete}
                                   onUnready={handleLessonUnready}
                                   advance={advanceLesson}
+                                  skipLesson={state.skipLesson}
+                                  goToLesson={state.goToLessonById}
                                   isActive={true}
                                   scopeId={scopeId}
                                 />
@@ -592,7 +747,25 @@ function InteractiveOnboardingInner() {
                         <div class="bg-ink text-panel text-xs font-mono size-4 flex items-center justify-center font-bold rounded-xs">
                           {lesson().index + 1}
                         </div>
-                        <h2 class="text-3xl font-semibold text-ink-muted mt-12">
+                        <Show when={getPreviousLesson()}>
+                          {(prevLesson) => (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleBack(prevLesson())}
+                              class="mt-6 gap-1.5 rounded-xs"
+                            >
+                              <ArrowLeftIcon class="size-4" />
+                              Back
+                            </Button>
+                          )}
+                        </Show>
+                        <h2
+                          class={cn(
+                            'text-3xl font-semibold text-ink-muted',
+                            getPreviousLesson() ? 'mt-4' : 'mt-12'
+                          )}
+                        >
                           {lesson().definition.title}
                         </h2>
                       </div>
@@ -611,6 +784,8 @@ function InteractiveOnboardingInner() {
                           onComplete={handleLessonComplete}
                           onUnready={handleLessonUnready}
                           advance={advanceLesson}
+                          skipLesson={state.skipLesson}
+                          goToLesson={state.goToLessonById}
                           isActive={true}
                           scopeId={scopeId}
                         />
@@ -633,6 +808,8 @@ function InteractiveOnboardingInner() {
                                 onComplete={handleLessonComplete}
                                 onUnready={handleLessonUnready}
                                 advance={advanceLesson}
+                                skipLesson={state.skipLesson}
+                                goToLesson={state.goToLessonById}
                                 isActive={true}
                                 scopeId={scopeId}
                               />
@@ -641,6 +818,11 @@ function InteractiveOnboardingInner() {
                         </div>
                       </Show>
                     </div>
+
+                    {/* Cost Summary */}
+                    <Show when={lesson().definition.id !== 'review-pay'}>
+                      <OnboardingCostSummary />
+                    </Show>
 
                     {/* Footer */}
                     <div class="flex flex-col gap-3 px-4 py-3 border-t border-ink/10">
@@ -658,7 +840,7 @@ function InteractiveOnboardingInner() {
 
                   {/* Right panel — demo (~2/3) */}
                   <div class="flex-1 min-w-0 flex items-center justify-center bg-surface-secondary/30 overflow-hidden">
-                    <div style={bodyStyle()} class="w-full h-full">
+                    <div style={bodyStyle()} class="size-full">
                       <Show
                         when={lesson().definition.demo}
                         fallback={
@@ -675,6 +857,8 @@ function InteractiveOnboardingInner() {
                             onComplete={handleLessonComplete}
                             onUnready={handleLessonUnready}
                             advance={advanceLesson}
+                            skipLesson={state.skipLesson}
+                            goToLesson={state.goToLessonById}
                             isActive={true}
                             scopeId={scopeId}
                           />
@@ -686,7 +870,7 @@ function InteractiveOnboardingInner() {
               )}
             </Show>
           </div>
-        </Panel>
+        </Surface>
       </div>
     </div>
   );

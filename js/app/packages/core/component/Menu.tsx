@@ -1,10 +1,10 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { cn } from '@ui/utils/classname';
 import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
 import CaretRight from '@icon/regular/caret-right.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { cn, Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -18,9 +18,9 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { Hotkey } from '../../ui/components/Hotkey';
 import clickOutside from '../directive/clickOutside';
 import { EditingContext } from './Editable';
-import { Hotkey } from './Hotkey';
 
 false && clickOutside;
 
@@ -129,7 +129,7 @@ export type MenuItemProps =
   | CheckboxMenuItemProps
   | RadioMenuItemProps;
 
-export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1 text-base' : 'py-1 pl-2 pr-2 text-sm'} font-medium justify-between items-center focus-bracket rounded-xs`;
+export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1 text-base' : 'py-1 pl-2 pr-2 text-sm'} font-medium justify-between items-center rounded-xs outline-none focus:bg-active data-[highlighted]:bg-active`;
 
 /**
  * A menu item component that can be used interchangeably within either a ContextMenu or DropdownMenu.
@@ -195,12 +195,12 @@ export function MenuItem(props: MenuItemProps) {
         <div
           class={cn(
             'shrink-0 flex items-center justify-center',
-            isMobile() ? 'w-5 h-5' : 'w-4 h-4'
+            isMobile() ? 'size-5' : 'size-4'
           )}
         >
           <CheckIcon
             class={cn(
-              'w-[14px] h-[14px] shrink-0 rounded-sm p-[2px]',
+              'size-3.5 shrink-0 rounded-sm p-0.5',
               (props as CheckboxMenuItemProps).checked
                 ? 'bg-accent text-[white]'
                 : 'bg-transparent text-transparent border border-edge'
@@ -212,12 +212,12 @@ export function MenuItem(props: MenuItemProps) {
         <div
           class={cn(
             'flex items-center justify-center shrink-0',
-            isMobile() ? 'w-5 h-5' : 'w-4 h-4'
+            isMobile() ? 'size-5' : 'size-4'
           )}
         >
           <div
             class={cn(
-              'w-[14px] h-[14px] shrink-0 rounded-full',
+              'size-3.5 shrink-0 rounded-full',
               (props as RadioMenuItemProps).value ===
                 (props as RadioMenuItemProps).groupValue
                 ? 'bg-accent text-[white]'
@@ -234,7 +234,7 @@ export function MenuItem(props: MenuItemProps) {
             }
             class={cn(
               'shrink-0',
-              isMobile() ? 'w-5 h-5' : 'w-4 h-4',
+              isMobile() ? 'size-5' : 'size-4',
               props.iconClass
             )}
           />
@@ -281,7 +281,7 @@ export function SubTrigger(props: {
             }
             class={cn(
               'shrink-0',
-              isMobile() ? 'w-5 h-5' : 'w-4 h-4',
+              isMobile() ? 'size-5' : 'size-4',
               props.iconClass
             )}
           />
@@ -291,7 +291,7 @@ export function SubTrigger(props: {
         </Show>
       </Show>
       <div class="flex-1 truncate">{props.text}</div>
-      <CaretRight class="w-4 h-4 shrink-0" />
+      <CaretRight class="size-4 shrink-0" />
     </ContextMenu.SubTrigger>
   );
 }
@@ -453,32 +453,36 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
       <Show
         when={props.submenu}
         fallback={
-          <ContextMenu.Content
-            class={cn(
-              !props.overrideStyling && MENU_CONTENT_CLASS,
-              props.class,
-              props.width && menuWidths[props.width],
-              props.mobileFullScreen &&
-                isMobile() &&
-                'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
-            )}
-            onOpenAutoFocus={props.onOpenAutoFocus}
-            ref={contentRef}
-            onCloseAutoFocus={props.onCloseAutoFocus}
-          >
-            {props.children}
-          </ContextMenu.Content>
+          <Layer depth={2}>
+            <ContextMenu.Content
+              class={cn(
+                !props.overrideStyling && MENU_CONTENT_CLASS,
+                props.class,
+                props.width && menuWidths[props.width],
+                props.mobileFullScreen &&
+                  isMobile() &&
+                  'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
+              )}
+              onOpenAutoFocus={props.onOpenAutoFocus}
+              ref={contentRef}
+              onCloseAutoFocus={props.onCloseAutoFocus}
+            >
+              {props.children}
+            </ContextMenu.Content>
+          </Layer>
         }
       >
-        <ContextMenu.SubContent
-          class={cn(
-            MENU_CONTENT_CLASS,
-            props.class,
-            props.width && menuWidths[props.width]
-          )}
-        >
-          {props.children}
-        </ContextMenu.SubContent>
+        <Layer depth={2}>
+          <ContextMenu.SubContent
+            class={cn(
+              MENU_CONTENT_CLASS,
+              props.class,
+              props.width && menuWidths[props.width]
+            )}
+          >
+            {props.children}
+          </ContextMenu.SubContent>
+        </Layer>
       </Show>
     </MobileConditionalOverlay>
   );
@@ -491,7 +495,22 @@ export function DropdownMenuContent(props: ParentProps<MenuContentProps>) {
     <Show
       when={props.submenu}
       fallback={
-        <DropdownMenu.Content
+        <Layer depth={2}>
+          <DropdownMenu.Content
+            class={cn(
+              MENU_CONTENT_CLASS,
+              local.class,
+              local.width && menuWidths[local.width]
+            )}
+            {...rest}
+          >
+            {local.children}
+          </DropdownMenu.Content>
+        </Layer>
+      }
+    >
+      <Layer depth={2}>
+        <DropdownMenu.SubContent
           class={cn(
             MENU_CONTENT_CLASS,
             local.class,
@@ -500,19 +519,8 @@ export function DropdownMenuContent(props: ParentProps<MenuContentProps>) {
           {...rest}
         >
           {local.children}
-        </DropdownMenu.Content>
-      }
-    >
-      <DropdownMenu.SubContent
-        class={cn(
-          MENU_CONTENT_CLASS,
-          local.class,
-          local.width && menuWidths[local.width]
-        )}
-        {...rest}
-      >
-        {local.children}
-      </DropdownMenu.SubContent>
+        </DropdownMenu.SubContent>
+      </Layer>
     </Show>
   );
 }

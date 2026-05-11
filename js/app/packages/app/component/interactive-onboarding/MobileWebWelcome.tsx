@@ -1,8 +1,8 @@
-import { createSignal, onMount } from 'solid-js';
-import { A } from '@solidjs/router';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
+import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import LogoIcon from '@macro-icons/macro-logo.svg';
+import { A } from '@solidjs/router';
+import { createSignal, onMount } from 'solid-js';
 
 interface MobileWebWelcomeProps {
   onSignUp: (email: string) => void;
@@ -26,7 +26,7 @@ export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
   };
 
   return (
-    <div class="flex flex-col h-full w-full p-6 overflow-hidden relative">
+    <div class="flex flex-col size-full p-6 overflow-hidden relative">
       <div class="inset-0 absolute text-edge bg-panel opacity-10 -z-1">
         <PcNoiseGrid
           cellSize={30}

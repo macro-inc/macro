@@ -1,10 +1,29 @@
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { cn } from '@ui/utils/classname';
-import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import type { FilterID } from '@app/component/next-soup/filters';
+import {
+  type FilterContext,
+  NO_ASSIGNEE,
+} from '@app/component/next-soup/filters/configs/';
+import type { PropertyFilter } from '@app/component/next-soup/filters/filter-store';
+import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
-import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@core/component/Properties/constants';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { UserIcon } from '@core/component/UserIcon';
+import { useUserId } from '@core/context/user';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import CaretRightIcon from '@icon/regular/caret-right.svg';
+import CheckIcon from '@icon/regular/check.svg';
+import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
+import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
+import { useContacts } from '@queries/contacts/contacts';
+import { cn, Dropdown, Layer } from '@ui';
 import {
   type Accessor,
   batch,
@@ -18,36 +37,16 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';
-import CaretRightIcon from '@icon/regular/caret-right.svg';
-import CheckIcon from '@icon/regular/check.svg';
-import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
-import { SearchableMultiSelectInline } from './searchable-multi-select';
-import { EntityIcon } from '@core/component/EntityIcon';
-import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
-import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
-
-import { useContacts } from '@queries/contacts/contacts';
-import { useUserId } from '@core/context/user';
-import { UserIcon } from '@core/component/UserIcon';
-import type { FilterID } from '@app/component/next-soup/filters';
-import {
-  NO_ASSIGNEE,
-  type FilterContext,
-} from '@app/component/next-soup/filters/configs/';
-import type { PropertyFilter } from '@app/component/next-soup/filters/filter-store';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import {
   INDEX_OPTIONS,
+  type SearchableOption,
   useCallSearchFilter,
   useChannelSearchFilter,
   useEmailSearchFilter,
   useSearchFilterOptions,
   useSearchIndexController,
-  type SearchableOption,
 } from './search-filter-controls';
+import { SearchableMultiSelectInline } from './searchable-multi-select';
 
 const TypeIndicator = (props: { active: boolean }) => (
   <span
@@ -391,8 +390,8 @@ const SearchableFilterSubmenu = (props: {
   });
 
   return (
-    <DropdownMenu.Sub gutter={4} open={isOpen()} onOpenChange={setIsOpen}>
-      <DropdownMenu.SubTrigger
+    <Dropdown.Sub gutter={4} open={isOpen()} onOpenChange={setIsOpen}>
+      <Dropdown.SubTrigger
         class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
         onPointerEnter={(e) => {
           // Kobalte's "grace polygon" keeps an open sub alive when the
@@ -408,21 +407,23 @@ const SearchableFilterSubmenu = (props: {
       >
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
-      </DropdownMenu.SubTrigger>
+      </Dropdown.SubTrigger>
 
-      <DropdownMenu.Portal>
-        <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden">
-          <SearchableMultiSelectInline
-            options={props.options}
-            activeIds={props.activeIds}
-            onChange={props.onChange}
-            placeholder={props.placeholder}
-            inputRef={setInputRef}
-            onRequestClose={() => setIsOpen(false)}
-          />
-        </DropdownMenu.SubContent>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Sub>
+      <Dropdown.Portal>
+        <Layer depth={2}>
+          <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-65 max-w-[90vw] overflow-hidden">
+            <SearchableMultiSelectInline
+              options={props.options}
+              activeIds={props.activeIds}
+              onChange={props.onChange}
+              placeholder={props.placeholder}
+              inputRef={setInputRef}
+              onRequestClose={() => setIsOpen(false)}
+            />
+          </Dropdown.SubContent>
+        </Layer>
+      </Dropdown.Portal>
+    </Dropdown.Sub>
   );
 };
 
@@ -434,38 +435,40 @@ function SingleValueSubmenu<T>(props: {
   onSelect: (value: T) => void;
 }) {
   return (
-    <DropdownMenu.Sub gutter={4}>
-      <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover">
+    <Dropdown.Sub gutter={4}>
+      <Dropdown.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover">
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
-      </DropdownMenu.SubTrigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
-          <For each={props.options}>
-            {(option) => {
-              const active = () => props.current() === option.value;
-              return (
-                <DropdownMenu.Item
-                  class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
-                  onSelect={() => props.onSelect(option.value)}
-                  closeOnSelect
-                >
-                  <TypeIndicator active={active()} />
-                  <span
-                    class={cn(
-                      'flex-1 truncate',
-                      active() ? 'text-ink' : 'text-ink-muted'
-                    )}
+      </Dropdown.SubTrigger>
+      <Dropdown.Portal>
+        <Layer depth={2}>
+          <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+            <For each={props.options}>
+              {(option) => {
+                const active = () => props.current() === option.value;
+                return (
+                  <Dropdown.Item
+                    class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+                    onSelect={() => props.onSelect(option.value)}
+                    closeOnSelect
                   >
-                    {option.label}
-                  </span>
-                </DropdownMenu.Item>
-              );
-            }}
-          </For>
-        </DropdownMenu.SubContent>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Sub>
+                    <TypeIndicator active={active()} />
+                    <span
+                      class={cn(
+                        'flex-1 truncate',
+                        active() ? 'text-ink' : 'text-ink-muted'
+                      )}
+                    >
+                      {option.label}
+                    </span>
+                  </Dropdown.Item>
+                );
+              }}
+            </For>
+          </Dropdown.SubContent>
+        </Layer>
+      </Dropdown.Portal>
+    </Dropdown.Sub>
   );
 }
 
@@ -599,21 +602,21 @@ const SearchIndexItem = (props: {
   active: Accessor<boolean>;
   onSelect: () => void;
 }) => (
-  <DropdownMenu.Item
+  <Dropdown.Item
     class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
     onSelect={props.onSelect}
     closeOnSelect
   >
     <SearchIndexRowLabel option={props.option} active={props.active} />
-  </DropdownMenu.Item>
+  </Dropdown.Item>
 );
 
 /** Row with a nested submenu.
  *
  * `children` must be lazy (via `<Match>`) so the nested submenus
- * instantiate *inside* this row's `DropdownMenu.SubContent`. Eager JSX
+ * instantiate *inside* this row's `Dropdown.SubContent`. Eager JSX
  * would evaluate in the outer content's context, which makes Kobalte
- * register nested `DropdownMenu.Sub`s against the wrong parent —
+ * register nested `Dropdown.Sub`s against the wrong parent —
  * positioning falls back to the viewport and keyboard nav treats them as
  * siblings of the row. */
 const SearchIndexSubRow = (props: {
@@ -623,8 +626,8 @@ const SearchIndexSubRow = (props: {
   closeRoot: () => void;
   children: JSX.Element;
 }) => (
-  <DropdownMenu.Sub gutter={4}>
-    <DropdownMenu.SubTrigger
+  <Dropdown.Sub gutter={4}>
+    <Dropdown.SubTrigger
       class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
       onPointerDown={props.onSelect}
       onKeyDown={(e) => {
@@ -638,13 +641,15 @@ const SearchIndexSubRow = (props: {
     >
       <SearchIndexRowLabel option={props.option} active={props.active} />
       <CaretRightIcon class="size-3 text-ink-muted" />
-    </DropdownMenu.SubTrigger>
-    <DropdownMenu.Portal>
-      <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[180px] p-1">
-        {props.children}
-      </DropdownMenu.SubContent>
-    </DropdownMenu.Portal>
-  </DropdownMenu.Sub>
+    </Dropdown.SubTrigger>
+    <Dropdown.Portal>
+      <Layer depth={2}>
+        <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
+          {props.children}
+        </Dropdown.SubContent>
+      </Layer>
+    </Dropdown.Portal>
+  </Dropdown.Sub>
 );
 
 export const UnifiedFilterDropdown = () => {
@@ -711,7 +716,7 @@ export const UnifiedFilterDropdown = () => {
         icon: () => (
           <UserIcon
             id={contact.id}
-            size="xs"
+            size="sm"
             suppressClick
             showTooltip={false}
           />
@@ -789,201 +794,206 @@ export const UnifiedFilterDropdown = () => {
 
   return (
     <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
-      <DropdownMenu open={open()} onOpenChange={setOpen}>
+      <Dropdown open={open()} onOpenChange={setOpen}>
         <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="F" />}>
-          <DropdownMenu.Trigger
-            as={Button}
-            variant="secondary"
-            size="sm"
-            class="rounded-xs [&_svg]:size-4 suppress-css-bracket"
-          >
+          <Dropdown.Trigger>
             <SlidersHorizontalIcon />
-            <span class="font-medium">Filter</span>
-          </DropdownMenu.Trigger>
+            <span>Filter</span>
+          </Dropdown.Trigger>
         </Tooltip>
 
-        <DropdownMenu.Portal>
-          <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[180px] p-1">
-            <Show
-              when={
-                categories().length === 1 && !isTasksView() && !isSearchView()
-              }
-              fallback={
-                <>
-                  <For each={categories()}>
-                    {(category) => (
-                      <DropdownMenu.Sub gutter={4}>
-                        <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover">
-                          <span class="text-ink">{category.label}</span>
-                          <CaretRightIcon class="size-3 text-ink-muted" />
-                        </DropdownMenu.SubTrigger>
+        <Dropdown.Portal>
+          <Layer depth={2}>
+            <Dropdown.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
+              <Show
+                when={
+                  categories().length === 1 && !isTasksView() && !isSearchView()
+                }
+                fallback={
+                  <>
+                    <For each={categories()}>
+                      {(category) => (
+                        <Dropdown.Sub gutter={4}>
+                          <Dropdown.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover">
+                            <span class="text-ink">{category.label}</span>
+                            <CaretRightIcon class="size-3 text-ink-muted" />
+                          </Dropdown.SubTrigger>
 
-                        <DropdownMenu.Portal>
-                          <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
-                            <For each={category.options}>
-                              {(option) => {
-                                const active = () => isOptionActive(option.id);
-                                return (
-                                  <DropdownMenu.Item
-                                    class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover cursor-pointer"
-                                    onSelect={() => toggleFilter(option.id)}
-                                    closeOnSelect={!category.multiple}
-                                  >
-                                    <span
-                                      class={cn(
-                                        'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                                        active()
-                                          ? 'bg-accent border-accent'
-                                          : 'border-edge'
-                                      )}
-                                    >
-                                      <Show when={active()}>
-                                        <CheckIcon class="size-2.5 text-page" />
-                                      </Show>
-                                    </span>
-
-                                    <Show when={option.icon}>
-                                      {(icon) => (
-                                        <span class="size-4 flex items-center justify-center shrink-0">
-                                          {icon()()}
+                          <Dropdown.Portal>
+                            <Layer depth={2}>
+                              <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+                                <For each={category.options}>
+                                  {(option) => {
+                                    const active = () =>
+                                      isOptionActive(option.id);
+                                    return (
+                                      <Dropdown.Item
+                                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+                                        onSelect={() => toggleFilter(option.id)}
+                                        closeOnSelect={!category.multiple}
+                                      >
+                                        <span
+                                          class={cn(
+                                            'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                                            active()
+                                              ? 'bg-accent border-accent'
+                                              : 'border-edge'
+                                          )}
+                                        >
+                                          <Show when={active()}>
+                                            <CheckIcon class="size-2.5 text-page" />
+                                          </Show>
                                         </span>
-                                      )}
-                                    </Show>
 
-                                    <span
-                                      class={cn(
-                                        'flex-1 truncate',
-                                        active() ? 'text-ink' : 'text-ink-muted'
-                                      )}
-                                    >
-                                      {option.label}
-                                    </span>
-                                  </DropdownMenu.Item>
-                                );
-                              }}
-                            </For>
-                          </DropdownMenu.SubContent>
-                        </DropdownMenu.Portal>
-                      </DropdownMenu.Sub>
-                    )}
-                  </For>
+                                        <Show when={option.icon}>
+                                          {(icon) => (
+                                            <span class="size-4 flex items-center justify-center shrink-0">
+                                              {icon()()}
+                                            </span>
+                                          )}
+                                        </Show>
 
-                  {/* Assignee filter for tasks view */}
-                  <Show when={isTasksView()}>
-                    <SearchableFilterSubmenu
-                      label="Assignee"
-                      options={assigneeOptions}
-                      activeIds={assigneeFilter}
-                      onChange={handleAssigneeChange}
-                      placeholder="Search assignees..."
-                    />
-                  </Show>
-
-                  {/* Search view: 7 type rows (Channels/Email have nested submenus) */}
-                  <Show when={isSearchView()}>
-                    <For each={INDEX_OPTIONS}>
-                      {(option) => {
-                        const rowProps = {
-                          option,
-                          active: () => soup.predicates.isActive(option.value),
-                          onSelect: () => handleIndexChange(option.value),
-                          closeRoot: () => setOpen(false),
-                        };
-                        return (
-                          <Switch fallback={<SearchIndexItem {...rowProps} />}>
-                            <Match when={option.value === 'channels'}>
-                              <SearchIndexSubRow {...rowProps}>
-                                <ChannelSearchSubContent
-                                  channel={channel}
-                                  channelOptions={inChannelOptions}
-                                  senderOptions={fromSenderOptions}
-                                />
-                              </SearchIndexSubRow>
-                            </Match>
-                            <Match when={option.value === 'email'}>
-                              <SearchIndexSubRow {...rowProps}>
-                                <EmailSearchSubContent email={email} />
-                              </SearchIndexSubRow>
-                            </Match>
-                            <Match when={option.value === 'calls'}>
-                              <SearchIndexSubRow {...rowProps}>
-                                <CallSearchSubContent
-                                  call={call}
-                                  channelOptions={inChannelOptions}
-                                  senderOptions={fromSenderOptions}
-                                />
-                              </SearchIndexSubRow>
-                            </Match>
-                          </Switch>
-                        );
-                      }}
+                                        <span
+                                          class={cn(
+                                            'flex-1 truncate',
+                                            active()
+                                              ? 'text-ink'
+                                              : 'text-ink-muted'
+                                          )}
+                                        >
+                                          {option.label}
+                                        </span>
+                                      </Dropdown.Item>
+                                    );
+                                  }}
+                                </For>
+                              </Dropdown.SubContent>
+                            </Layer>
+                          </Dropdown.Portal>
+                        </Dropdown.Sub>
+                      )}
                     </For>
 
-                    {/* All row */}
-                    <DropdownMenu.Item
-                      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
-                      onSelect={() => handleIndexChange('all')}
-                      closeOnSelect
-                    >
-                      <TypeIndicator active={!hasActiveIndex()} />
-                      <span
-                        class={cn(
-                          'flex-1 truncate',
-                          !hasActiveIndex() ? 'text-ink' : 'text-ink-muted'
-                        )}
+                    {/* Assignee filter for tasks view */}
+                    <Show when={isTasksView()}>
+                      <SearchableFilterSubmenu
+                        label="Assignee"
+                        options={assigneeOptions}
+                        activeIds={assigneeFilter}
+                        onChange={handleAssigneeChange}
+                        placeholder="Search assignees..."
+                      />
+                    </Show>
+
+                    {/* Search view: 7 type rows (Channels/Email have nested submenus) */}
+                    <Show when={isSearchView()}>
+                      <For each={INDEX_OPTIONS}>
+                        {(option) => {
+                          const rowProps = {
+                            option,
+                            active: () =>
+                              soup.predicates.isActive(option.value),
+                            onSelect: () => handleIndexChange(option.value),
+                            closeRoot: () => setOpen(false),
+                          };
+                          return (
+                            <Switch
+                              fallback={<SearchIndexItem {...rowProps} />}
+                            >
+                              <Match when={option.value === 'channels'}>
+                                <SearchIndexSubRow {...rowProps}>
+                                  <ChannelSearchSubContent
+                                    channel={channel}
+                                    channelOptions={inChannelOptions}
+                                    senderOptions={fromSenderOptions}
+                                  />
+                                </SearchIndexSubRow>
+                              </Match>
+                              <Match when={option.value === 'email'}>
+                                <SearchIndexSubRow {...rowProps}>
+                                  <EmailSearchSubContent email={email} />
+                                </SearchIndexSubRow>
+                              </Match>
+                              <Match when={option.value === 'calls'}>
+                                <SearchIndexSubRow {...rowProps}>
+                                  <CallSearchSubContent
+                                    call={call}
+                                    channelOptions={inChannelOptions}
+                                    senderOptions={fromSenderOptions}
+                                  />
+                                </SearchIndexSubRow>
+                              </Match>
+                            </Switch>
+                          );
+                        }}
+                      </For>
+
+                      {/* All row */}
+                      <Dropdown.Item
+                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+                        onSelect={() => handleIndexChange('all')}
+                        closeOnSelect
                       >
-                        All
-                      </span>
-                    </DropdownMenu.Item>
-                  </Show>
-                </>
-              }
-            >
-              {/* Single category: render options directly */}
-              <For each={categories()[0]!.options}>
-                {(option) => {
-                  const active = () => isOptionActive(option.id);
-                  return (
-                    <DropdownMenu.Item
-                      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover cursor-pointer"
-                      onSelect={() => toggleFilter(option.id)}
-                      closeOnSelect={!categories()[0]!.multiple}
-                    >
-                      <span
-                        class={cn(
-                          'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                          active() ? 'bg-accent border-accent' : 'border-edge'
-                        )}
+                        <TypeIndicator active={!hasActiveIndex()} />
+                        <span
+                          class={cn(
+                            'flex-1 truncate',
+                            !hasActiveIndex() ? 'text-ink' : 'text-ink-muted'
+                          )}
+                        >
+                          All
+                        </span>
+                      </Dropdown.Item>
+                    </Show>
+                  </>
+                }
+              >
+                {/* Single category: render options directly */}
+                <For each={categories()[0]!.options}>
+                  {(option) => {
+                    const active = () => isOptionActive(option.id);
+                    return (
+                      <Dropdown.Item
+                        class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+                        onSelect={() => toggleFilter(option.id)}
+                        closeOnSelect={!categories()[0]!.multiple}
                       >
-                        <Show when={active()}>
-                          <CheckIcon class="size-2.5 text-page" />
+                        <span
+                          class={cn(
+                            'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                            active() ? 'bg-accent border-accent' : 'border-edge'
+                          )}
+                        >
+                          <Show when={active()}>
+                            <CheckIcon class="size-2.5 text-page" />
+                          </Show>
+                        </span>
+
+                        <Show when={option.icon}>
+                          {(icon) => (
+                            <span class="size-4 flex items-center justify-center shrink-0">
+                              {icon()()}
+                            </span>
+                          )}
                         </Show>
-                      </span>
 
-                      <Show when={option.icon}>
-                        {(icon) => (
-                          <span class="size-4 flex items-center justify-center shrink-0">
-                            {icon()()}
-                          </span>
-                        )}
-                      </Show>
-
-                      <span
-                        class={cn(
-                          'flex-1 truncate',
-                          active() ? 'text-ink' : 'text-ink-muted'
-                        )}
-                      >
-                        {option.label}
-                      </span>
-                    </DropdownMenu.Item>
-                  );
-                }}
-              </For>
-            </Show>
-          </DropdownMenu.Content>
-        </DropdownMenu.Portal>
-      </DropdownMenu>
+                        <span
+                          class={cn(
+                            'flex-1 truncate',
+                            active() ? 'text-ink' : 'text-ink-muted'
+                          )}
+                        >
+                          {option.label}
+                        </span>
+                      </Dropdown.Item>
+                    );
+                  }}
+                </For>
+              </Show>
+            </Dropdown.Content>
+          </Layer>
+        </Dropdown.Portal>
+      </Dropdown>
     </Show>
   );
 };

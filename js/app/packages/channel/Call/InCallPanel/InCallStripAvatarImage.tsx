@@ -1,13 +1,13 @@
-import { Show, type Component } from 'solid-js';
-import { tryMacroId, useDisplayName } from '@core/user';
+import {
+  type StackedAvatarInput,
+  StackedAvatarsDefaultEmptyPlaceholder,
+  type StackedAvatarsSize,
+  stackedAvatarInnerClass,
+} from '@core/component/StackedAvatarsRow';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  StackedAvatarsDefaultEmptyPlaceholder,
-  stackedAvatarInnerClass,
-  type StackedAvatarInput,
-  type StackedAvatarsSize,
-} from '@core/component/StackedAvatarsRow';
+import { tryMacroId, useDisplayName } from '@core/user';
+import { type Component, Show } from 'solid-js';
 
 /** Matches {@link UserIcon} `lg` (`size-10`) for the in-call strip. */
 export const IN_CALL_STRIP_IMAGE_SIZE = 'lg' satisfies StackedAvatarsSize;

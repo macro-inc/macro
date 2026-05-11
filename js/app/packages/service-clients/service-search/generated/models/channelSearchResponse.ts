@@ -4,12 +4,16 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { ChannelSearchResponseItemWithMetadata } from './channelSearchResponseItemWithMetadata';
+import type { ChannelSearchResponseNextCursor } from './channelSearchResponseNextCursor';
 
 /**
  * The document search response object
  */
 export interface ChannelSearchResponse {
+  /** Base64-encoded cursor for the next page; `None` when exhausted. */
+  next_cursor?: ChannelSearchResponseNextCursor;
   /** List containing results from email threads */
   results: ChannelSearchResponseItemWithMetadata[];
 }

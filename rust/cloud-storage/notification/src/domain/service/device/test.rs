@@ -154,6 +154,7 @@ impl NotificationRepository for MockNotifRepo {
         _: macro_user_id::user_id::MacroUserIdStr<'_>,
         _: u32,
         _: models_pagination::Query<uuid::Uuid, models_pagination::CreatedAt, ()>,
+        _: crate::domain::models::request::NotificationListFilters,
     ) -> Result<Vec<crate::domain::models::UserNotificationRow<T>>, Report> {
         unimplemented!()
     }
@@ -163,6 +164,7 @@ impl NotificationRepository for MockNotifRepo {
         _: &[uuid::Uuid],
         _: u32,
         _: models_pagination::Query<uuid::Uuid, models_pagination::CreatedAt, ()>,
+        _: crate::domain::models::request::NotificationListFilters,
     ) -> Result<Vec<crate::domain::models::UserNotificationRow<T>>, Report> {
         unimplemented!()
     }
@@ -330,6 +332,7 @@ fn test_config() -> PlatformArnConfig {
     PlatformArnConfig {
         apns_platform_arn: "arn:apns".to_string(),
         fcm_platform_arn: "arn:fcm".to_string(),
+        apns_voip_platform_arn: "arn:apns-voip".to_string(),
     }
 }
 

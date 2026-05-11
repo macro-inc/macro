@@ -8,22 +8,39 @@ impl OpensearchClient {
     pub async fn upsert_chat_message(
         &self,
         upsert_chat_message_args: &UpsertChatMessageArgs,
+        index_override: Option<&str>,
     ) -> Result<()> {
-        upsert::chat_message::upsert_chat_message(&self.inner, upsert_chat_message_args).await
+        upsert::chat_message::upsert_chat_message(
+            &self.inner,
+            upsert_chat_message_args,
+            index_override,
+        )
+        .await
     }
 
     /// Deletes a chat from the opensearch chat index
     /// This will remove all messages for a given chat
     #[tracing::instrument(skip(self))]
-    pub async fn delete_chat(&self, chat_id: &str) -> Result<()> {
-        delete::chat::delete_chat_by_id(&self.inner, chat_id).await
+    pub async fn delete_chat(&self, chat_id: &str, index_override: Option<&str>) -> Result<()> {
+        delete::chat::delete_chat_by_id(&self.inner, chat_id, index_override).await
     }
 
     /// Deletes a chat message from the opensearch chat index
     /// This removes a specific message from a chat
     #[tracing::instrument(skip(self))]
-    pub async fn delete_chat_message(&self, chat_id: &str, chat_message_id: &str) -> Result<()> {
-        delete::chat::delete_chat_message_by_id(&self.inner, chat_id, chat_message_id).await
+    pub async fn delete_chat_message(
+        &self,
+        chat_id: &str,
+        chat_message_id: &str,
+        index_override: Option<&str>,
+    ) -> Result<()> {
+        delete::chat::delete_chat_message_by_id(
+            &self.inner,
+            chat_id,
+            chat_message_id,
+            index_override,
+        )
+        .await
     }
 
     pub async fn update_chat_metadata(&self, chat_id: &str, title: &str) -> Result<()> {

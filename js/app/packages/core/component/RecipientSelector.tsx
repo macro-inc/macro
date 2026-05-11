@@ -4,6 +4,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { UserTooltip } from '@core/component/UserTooltip';
+import { useEmail, useUserId } from '@core/context/user';
 import {
   type CombinedRecipientItem,
   type CombinedRecipientKind,
@@ -12,6 +13,8 @@ import {
   recipientEntityMapper,
   type WithCustomUserInput,
 } from '@core/user';
+import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
+import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { matches } from '@core/util/match';
 import { clamp } from '@core/util/math';
 import { truncateString } from '@core/util/string';
@@ -24,9 +27,8 @@ import {
   type ComboboxTriggerMode,
   useComboboxContext,
 } from '@kobalte/core/combobox';
-import { useEmail, useUserId } from '@core/context/user';
 import { debounce } from '@solid-primitives/scheduled';
-import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
+import { cn } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
   type Accessor,
@@ -41,8 +43,6 @@ import {
   Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
-import { cn } from '@ui/utils/classname';
 
 function RecipientChip(props: {
   icon?: JSX.Element;
@@ -63,7 +63,7 @@ function RecipientChip(props: {
       <Show when={props.icon}>{props.icon}</Show>
       <p class="text-sm whitespace-nowrap">{truncateString(props.label, 20)}</p>
       <XIcon
-        class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1"
+        class="size-5 hover:bg-hover hover-transition-bg p-1"
         onClick={props.onRemove}
       />
     </div>
@@ -190,7 +190,7 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
 
             return (
               <Combobox.ItemLabel class="flex flex-row w-full items-center gap-1.5 text-ink-muted select-none text-sm">
-                <UserIcon id={iconId ?? ''} size="sm" isDeleted={false} />
+                <UserIcon id={iconId ?? ''} size="md" isDeleted={false} />
                 <p
                   class={cn(
                     'ph-no-capture truncate my-auto',
@@ -222,7 +222,7 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
       </Switch>
 
       <Combobox.ItemIndicator>
-        <CheckIcon class="w-4 h-4" />
+        <CheckIcon class="size-4" />
       </Combobox.ItemIndicator>
     </Combobox.Item>
   );
@@ -240,7 +240,6 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   triggerMode?: ComboboxTriggerMode;
   hideBorder?: boolean;
   noPadding?: boolean;
-  noBrackets?: boolean;
   includeSelf?: boolean;
   disabled?: boolean;
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
@@ -482,10 +481,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           : undefined
       }
       class={cn(
-        'ph-no-capture w-full text-sm offset-2 bg-input',
+        'ph-no-capture w-full text-sm offset-2 bg-input focus-within:bg-active',
         !props.hideBorder && 'border border-edge',
         !props.noPadding && 'py-2',
-        !props.noBrackets && 'focus-within:bracket-offset-2',
         props.class
       )}
     >
@@ -501,8 +499,8 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                 class={cn(
                   'flex gap-1.5 text-ink scrollbar-hidden',
                   props.horizontalScroll
-                    ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-[150px] sm:overflow-y-auto pb-[2px] sm:pb-0'
-                    : 'flex-wrap max-h-[150px] overflow-y-auto'
+                    ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-37.5 sm:overflow-y-auto pb-0.5 sm:pb-0'
+                    : 'flex-wrap max-h-37.5 overflow-y-auto'
                 )}
               >
                 <For each={state.selectedOptions()}>
@@ -540,7 +538,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                   icon={
                                     <UserIcon
                                       id={opt.id}
-                                      size="xs"
+                                      size="sm"
                                       isDeleted={false}
                                       showTooltip={false}
                                     />
@@ -566,7 +564,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                           {(channelOption) => {
                             return (
                               <RecipientChip
-                                icon={<HashIcon class="w-4 h-4" />}
+                                icon={<HashIcon class="size-4" />}
                                 label={
                                   channelOption().data.name ??
                                   channelOption().id
@@ -599,7 +597,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                   icon={
                                     <UserIcon
                                       id={email}
-                                      size="xs"
+                                      size="sm"
                                       isDeleted={false}
                                       showTooltip={false}
                                     />
@@ -629,7 +627,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                     setInputRef(el);
                     props.inputRef?.(el);
                   }}
-                  class="flex-1 min-h-7 p-1 min-w-[200px] outline-none placeholder:text-ink-placeholder"
+                  class="flex-1 min-h-7 p-1 min-w-50 outline-none placeholder:text-ink-placeholder"
                   classList={{ 'ml-1': selectedLen() === 0 }}
                   onKeyDown={(e) => {
                     if (

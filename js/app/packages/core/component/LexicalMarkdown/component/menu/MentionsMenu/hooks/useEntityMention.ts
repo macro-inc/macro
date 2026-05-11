@@ -1,11 +1,11 @@
-import type { Accessor } from 'solid-js';
-import { createLazyMemo } from '@solid-primitives/memo';
 import {
-  useQuickAccess,
-  type EntityItem,
   type EntityBucket,
+  type EntityItem,
+  useQuickAccess,
 } from '@core/context/quickAccess';
 import { createFreshSearch } from '@core/util/freshSort';
+import { createLazyMemo } from '@solid-primitives/memo';
+import type { Accessor } from 'solid-js';
 
 export type UseEntityMentionOptions = {
   searchTerm: Accessor<string>;

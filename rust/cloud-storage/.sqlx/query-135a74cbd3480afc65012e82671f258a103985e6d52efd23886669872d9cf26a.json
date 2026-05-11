@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO team_invite (id, team_id, email, team_role, invited_by, created_at, last_sent_at, tier)\n            SELECT\n                t.id,\n                $1::uuid,\n                t.email,\n                $2,\n                $3::text,\n                NOW(),\n                NOW(),\n                t.tier\n            FROM UNNEST($4::uuid[], $5::text[], $6::text[], $7::\"team_user_tier\"[]) AS t(id, email, user_id, tier)\n            WHERE NOT EXISTS (\n                SELECT 1 FROM team_invite ti\n                WHERE ti.team_id = $1 AND ti.email = t.email\n            )\n            AND NOT EXISTS (\n                SELECT 1 FROM team_user tu\n                WHERE tu.team_id = $1 AND tu.user_id = t.user_id\n            )\n            RETURNING id, team_id, email\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Text",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        {
+          "Custom": {
+            "name": "team_user_tier[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "team_user_tier",
+                  "kind": {
+                    "Enum": [
+                      "haiku",
+                      "sonnet",
+                      "opus"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "135a74cbd3480afc65012e82671f258a103985e6d52efd23886669872d9cf26a"
+}

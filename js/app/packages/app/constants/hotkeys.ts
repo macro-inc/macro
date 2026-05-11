@@ -1,5 +1,5 @@
-import { registerScope } from '@core/hotkey/utils';
 import type { ValidHotkey } from '@core/hotkey/types';
+import { registerScope } from '@core/hotkey/utils';
 
 /** Leader key for vim-style "go to" commands (g + key sequences) */
 export const GO_TO_LEADER_KEY: ValidHotkey = 'g';

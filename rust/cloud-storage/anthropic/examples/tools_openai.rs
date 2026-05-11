@@ -1,9 +1,8 @@
 use anthropic::client::Client;
 use anthropic::types::response::{ContentDeltaEvent, StreamEvent};
-use async_openai::types::{
-    ChatCompletionRequestUserMessage, ChatCompletionRequestUserMessageContent,
-    ChatCompletionToolArgs, ChatCompletionToolType, CreateChatCompletionRequestArgs,
-    FunctionObjectArgs,
+use async_openai::types::chat::{
+    ChatCompletionRequestUserMessage, ChatCompletionRequestUserMessageContent, ChatCompletionTool,
+    CreateChatCompletionRequestArgs, FunctionObjectArgs,
 };
 use futures::StreamExt;
 use serde_json::json;
@@ -11,28 +10,24 @@ use std::io::Write;
 
 #[tokio::main]
 async fn main() {
-    let weather_tool = ChatCompletionToolArgs::default()
-        .r#type(ChatCompletionToolType::Function)
-        .function(
-            FunctionObjectArgs::default()
-                .name("get_current_weather")
-                .description("Get the current weather in a given location")
-                .parameters(json!({
-                    "type": "object",
-                    "properties": {
-                        "location": {
-                            "type": "string",
-                            "description": "The city and state, e.g. San Francisco, CA",
-                        },
-                        "unit": { "type": "string", "enum": ["celsius", "fahrenheit"] },
+    let weather_tool = ChatCompletionTool {
+        function: FunctionObjectArgs::default()
+            .name("get_current_weather")
+            .description("Get the current weather in a given location")
+            .parameters(json!({
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "The city and state, e.g. San Francisco, CA",
                     },
-                    "required": ["location"],
-                }))
-                .build()
-                .unwrap(),
-        )
-        .build()
-        .expect("tool");
+                    "unit": { "type": "string", "enum": ["celsius", "fahrenheit"] },
+                },
+                "required": ["location"],
+            }))
+            .build()
+            .unwrap(),
+    };
 
     let client = Client::dangerously_try_from_env(None);
     let request = CreateChatCompletionRequestArgs::default()
@@ -45,7 +40,7 @@ async fn main() {
             name: None,
         }
         .into()])
-        .tools(vec![weather_tool])
+        .tools(weather_tool)
         .build()
         .expect("request");
 
@@ -54,14 +49,13 @@ async fn main() {
     let mut tool_json = String::new();
 
     while let Some(part) = stream.next().await {
-        writeln!(out, "{:#?}", part);
+        let _ = writeln!(out, "{:#?}", part);
         if part.is_err() {
             writeln!(out, "{:?}", part).expect("io");
             break;
         }
         let part = part.unwrap();
         match part {
-            StreamEvent::ContentBlockStart { content_block, .. } => {}
             StreamEvent::ContentBlockDelta { delta, .. } => match delta {
                 ContentDeltaEvent::InputJsonDelta { partial_json } => {
                     tool_json.push_str(&partial_json);
@@ -72,9 +66,7 @@ async fn main() {
                 }
                 other => writeln!(out, "{:?}", other).expect("io"),
             },
-            StreamEvent::ContentBlockStop { .. } | StreamEvent::ContentBlockStart { .. } => {
-                writeln!(out).expect("io")
-            }
+            StreamEvent::ContentBlockStop { .. } => writeln!(out).expect("io"),
             event => writeln!(out, "{:?}", event).expect("io"),
         }
     }

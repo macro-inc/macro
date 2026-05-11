@@ -8,16 +8,18 @@ import {
   intersectEntityPools,
   nameFuzzySearchFilter,
 } from '@app/component/next-soup/search-utils';
-import { arrayEquals } from '@core/util/compareUtils';
 import { useUserId } from '@core/context/user';
+import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
-import { isChannelEntity, type EntityData } from '@entity';
+import { type EntityData, isChannelEntity } from '@entity';
 import {
   useSearchSoupQuery,
   validateSearchServiceText,
 } from '@queries/soup/search';
-import type { EntityFilters } from '@service-search/generated/models';
-import type { UnifiedSearchRequest } from '@service-search/generated/models';
+import type {
+  EntityFilters,
+  UnifiedSearchRequest,
+} from '@service-search/generated/models';
 import { type Accessor, createMemo, createSignal, on } from 'solid-js';
 
 function filterDataToQueryFilters(data: QueryState): EntityFilters {
@@ -92,11 +94,13 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
 
   // Call filters
   if (
+    include.callId?.length ||
     include.callChannelId?.length ||
     include.callSpeakerId?.length ||
     include.callAttended !== undefined
   ) {
     filters.call_filters = {
+      call_ids: include.callId,
       channel_ids: include.callChannelId,
       speaker_ids: include.callSpeakerId,
       attended: include.callAttended,
@@ -121,6 +125,8 @@ interface CreateSearchStateArgs {
   disableLocalSearch?: boolean;
   searchPaused?: Accessor<boolean>;
   searchMentions?: Accessor<string[]>;
+  /** Pre-populate searchText so the service request fires on mount (skips the debounce wait for the initial value). */
+  initialText?: string;
 }
 
 export const createSearchState = ({
@@ -130,8 +136,9 @@ export const createSearchState = ({
   disableLocalSearch,
   searchPaused,
   searchMentions,
+  initialText,
 }: CreateSearchStateArgs) => {
-  const [searchText, setSearchText] = createSignal('');
+  const [searchText, setSearchText] = createSignal(initialText ?? '');
 
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();

@@ -1,24 +1,24 @@
-import { Show, createMemo, type Component } from 'solid-js';
-import type { CallControlsVariant } from '../CallControls/CallControls';
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
 import ArrowsOut from '@icon/regular/arrows-out.svg';
+import { cn } from '@ui';
+import { type Component, createMemo, Show } from 'solid-js';
+import type { CallControlsVariant } from '../CallControls/CallControls';
 import { CallControls } from '../CallControls/CallControls';
+import type { InCallPanelProps } from '../InCallPanel/types';
 import { openChannelCallTab } from '../open-channel-call-tab';
 import {
   IN_CALL_ROSTER_CARD_CLASS,
   InCallParticipantsListPopover,
   InCallRosterListSection,
 } from './InCallParticipantsListPopover';
-import { profilePictureIdForMember } from './profile-picture-id-for-member';
-import type { InCallPanelProps } from '../InCallPanel/types';
-import { useInCallPanel } from './use-in-call-panel';
 import {
   IN_CALL_LOCAL_STRIP_PENDING_ID,
   IN_CALL_STRIP_IMAGE_SIZE,
   InCallStripAvatarImage,
   type InCallStripImage,
 } from './InCallStripAvatarImage';
-import { cn } from '@ui/utils/classname';
+import { profilePictureIdForMember } from './profile-picture-id-for-member';
+import { useInCallPanel } from './use-in-call-panel';
 
 export const InCallPanel: Component<InCallPanelProps> = (props) => {
   const panel = useInCallPanel({
@@ -124,7 +124,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
             <button
               type="button"
               class={cn(
-                'shrink-0 transition-colors cursor-pointer hover:bg-accent/30 outline-0 outline-accent/50 hover:outline-1 hover-transition-outline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-edge-muted',
+                'shrink-0 transition-colors hover:bg-accent/30 outline-0 outline-accent/50 hover:outline-1 hover-transition-outline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-edge-muted',
                 slim() && 'animate-pulse hover:outline-0'
               )}
               title="Open full call view"
@@ -135,7 +135,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
               }}
             >
               <ArrowsOut
-                class={cn('text-accent', slim() ? 'h-3.5 w-3.5' : 'h-4 w-4')}
+                class={cn('text-accent', slim() ? 'size-3.5' : 'size-4')}
               />
             </button>
           </Show>

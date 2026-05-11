@@ -86,8 +86,8 @@ export const MiniToggleSwitch: Component<
         </KSwitch.Label>
       </Show>
 
-      <div class="relative focus-bracket-within focus-within:[--focus-border-inset:-3px] w-fit h-fit">
-        <KSwitch.Input class="absolute inset-0 h-full! w-full! pointer-events-none" />
+      <div class="relative size-fit rounded-full focus-within:bg-active">
+        <KSwitch.Input class="absolute inset-0 size-full! pointer-events-none" />
         <KSwitch.Control class="relative">
           <div
             class="relative w-8 h-3 touch:w-12 touch:h-8 rounded-full transition-colors duration-80"

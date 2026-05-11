@@ -2,7 +2,7 @@ import {
   ToggleButton as KToggleButton,
   type ToggleButtonRootOptions,
 } from '@kobalte/core/toggle-button';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   createEffect,
   createSignal,
@@ -70,7 +70,7 @@ export const ToggleButton: ParentComponent<
   return (
     <KToggleButton
       class={cn(
-        'w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none focus:disabled:[--focus-border-inset:0] focus:[--focus-border-inset:-3px]',
+        'w-fit disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none outline-none focus-visible:bg-active',
         props.class
       )}
       classList={props.classList}
@@ -83,7 +83,7 @@ export const ToggleButton: ParentComponent<
     >
       {(state) => (
         <div
-          class="border border-edge-muted min-w-[22px] font-mono text-center uppercase leading-none whitespace-nowrap"
+          class="border border-edge-muted min-w-5.5 font-mono text-center uppercase leading-none whitespace-nowrap"
           classList={{
             [`${sizeClass[props.size || 'Base']}`]: true,
             'bg-edge-muted text-ink': state.pressed(),

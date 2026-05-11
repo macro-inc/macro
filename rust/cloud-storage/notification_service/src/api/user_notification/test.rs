@@ -270,6 +270,7 @@ fn api_user_notification_and_conn_gateway_inner_notif_metadata_serialize_identic
     let notif_metadata = ChannelMentionMetadata {
         message_id: "msg-1".to_string(),
         message_content: "Hello @user".to_string(),
+        has_attachments: false,
         thread_id: None,
         common: model_notifications::CommonChannelMetadata {
             channel_type: model_notifications::ChannelType::Public,
@@ -348,6 +349,7 @@ fn conn_gateway_inner_val_has_identical_serialization() {
     let notif_metadata = ChannelMentionMetadata {
         message_id: "testing".to_string(),
         message_content: "some data".to_string(),
+        has_attachments: false,
         thread_id: Some("threadid".to_string()),
         common: model_notifications::CommonChannelMetadata {
             channel_type: model_notifications::ChannelType::Public,

@@ -1,3 +1,6 @@
+use contacts::domain::service::SqsContactsIngress;
+use contacts::outbound::ingress::SqsContactsQueue;
+
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
 use cal::{
@@ -187,6 +190,14 @@ pub(crate) type DssChannelsState =
 pub(crate) type CallConnectionService =
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>;
 
+/// Type alias for the VoIP push sender (optional at runtime via `Option`).
+pub(crate) type DssVoipPushSender = Option<
+    notification::domain::service::VoipPushServiceImpl<
+        notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
+        aws_sdk_sns::Client,
+    >,
+>;
+
 /// Type alias for the call service.
 pub(crate) type DssCallService = CallServiceImpl<
     PgCallRepo,
@@ -197,6 +208,8 @@ pub(crate) type DssCallService = CallServiceImpl<
     Option<call::outbound::s3_recording_storage::S3RecordingStorage>,
     call::outbound::ai_call_summarizer::AiCallSummarizer,
     crate::service::call_search_indexer::SqsCallSearchIndexer,
+    DssVoipPushSender,
+    call::outbound::pg_voice_repo::PgVoiceRepo,
 >;
 
 /// Type alias for the call router state.
@@ -229,6 +242,7 @@ pub(crate) struct ApiContext {
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
     pub sqs_client: Arc<sqs_client::SQS>,
+    pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
     pub sync_service_client: Arc<SyncServiceClient>,
@@ -297,6 +311,7 @@ impl From<&ApiContext> for CommsHandlerState {
             connection_gateway_client: ctx.conn_gateway_client.clone(),
             notification_ingress_service: ctx.notification_ingress_service.clone(),
             sqs_client: ctx.sqs_client.clone(),
+            contacts_ingress: ctx.contacts_ingress.clone(),
             permissions_token_secret: ctx.permissions_token_secret.clone(),
             frecency_storage: ctx.frecency_storage.clone(),
             comms_state: ctx.comms_state.clone(),

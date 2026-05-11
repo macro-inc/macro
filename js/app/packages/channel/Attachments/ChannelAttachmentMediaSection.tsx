@@ -1,10 +1,10 @@
-import { createMemo } from 'solid-js';
+import { type MediaItem, mapMediaItems } from '@channel/Media/media-items';
 import {
+  type ChannelAttachmentsData,
   flattenAttachments,
   useChannelMediaAttachmentsQuery,
-  type ChannelAttachmentsData,
 } from '@queries/channel/channel-attachments';
-import { type MediaItem, mapMediaItems } from '@channel/Media/media-items';
+import { createMemo } from 'solid-js';
 import { MediaGallery } from './MediaGallery';
 
 export function ChannelAttachmentMediaSection(props: { channelId: string }) {

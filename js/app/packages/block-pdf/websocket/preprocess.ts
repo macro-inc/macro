@@ -1,8 +1,8 @@
-import { isErr } from '@core/util/maybeResult';
 import type {
   PreprocessInvoke,
   PreprocessResponseData,
 } from '@coparse/document-processing-types';
+import { isErr } from '@core/util/maybeResult';
 import {
   type ProcessingResultResponseType,
   storageServiceClient,

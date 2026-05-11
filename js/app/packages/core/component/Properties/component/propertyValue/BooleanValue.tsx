@@ -3,7 +3,7 @@ import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import { useBooleanEditor } from '../../hooks';
 import type { Property } from '../../types';
-import { stubSaveHandler, type PropertyValueProps } from './ValueComponents';
+import { type PropertyValueProps, stubSaveHandler } from './ValueComponents';
 
 /**
  * Display component for boolean properties with instant toggle

@@ -1,7 +1,7 @@
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
-import { FormatButtons } from '@channel/Input/FormatButtons';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
+import { FormatButtons } from '@channel/Input/FormatButtons';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
@@ -18,7 +18,7 @@ import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?compone
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,
@@ -75,7 +75,6 @@ export function EmailComposeToolbar(props: {
         <div class="flex flex-row w-full gap-2 items-center p-2 -ml-3">
           <FormatButtons
             selectionState={() => defaultSelectionData}
-            includeQuote
             onInlineFormat={(format) => {
               props.editor?.()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
             }}
@@ -85,7 +84,7 @@ export function EmailComposeToolbar(props: {
           />
         </div>
       </Show>
-      <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
+      <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 mt-2">
         <Show
           when={!isMobile()}
           fallback={
@@ -144,7 +143,7 @@ export function EmailComposeToolbar(props: {
           <div class="flex items-center gap-2">
             <Show when={ctx.onSaveDraft}>
               <Button
-                variant="secondary"
+                variant="base"
                 size="sm"
                 disabled={
                   ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()
@@ -221,7 +220,7 @@ function MobileToolbar(props: {
         >
           <Show when={ctx.onSaveDraft}>
             <Button
-              variant="secondary"
+              variant="base"
               size="sm"
               disabled={
                 ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()

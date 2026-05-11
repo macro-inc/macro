@@ -1,11 +1,11 @@
+import { isMobile } from '@core/mobile/isMobile';
 import {
+  type Accessor,
   createContext,
   createSignal,
-  useContext,
-  type Accessor,
   type JSX,
+  useContext,
 } from 'solid-js';
-import { isMobile } from '@core/mobile/isMobile';
 
 type MobileChannelInputVisibilityState = {
   isHidden: Accessor<boolean>;

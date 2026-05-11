@@ -1,8 +1,19 @@
 //! Insert a new chat message with optional attachments.
 
 use ai::types::Role;
-use model::chat::NewChatMessage;
+use model::chat::{AttachmentType, NewChatMessage};
+use model_entity::EntityType;
 use sqlx::PgPool;
+
+fn attachment_type_to_entity_type(at: &AttachmentType) -> EntityType {
+    match at {
+        AttachmentType::Document => EntityType::Document,
+        AttachmentType::Image => EntityType::StaticFile,
+        AttachmentType::Channel => EntityType::Channel,
+        AttachmentType::Email => EntityType::EmailThread,
+        AttachmentType::Project => EntityType::Project,
+    }
+}
 
 /// Insert a message into a chat, returning the message ID.
 ///
@@ -42,12 +53,12 @@ pub(crate) async fn create_message(
 
     if message.role == Role::User {
         let mut kinds = Vec::new();
-        let mut ids = Vec::new();
+        let mut ids: Vec<uuid::Uuid> = Vec::new();
         let mut chat_ids = Vec::new();
         let mut message_ids = Vec::new();
         for a in message.attachments.unwrap_or_default() {
-            kinds.push(a.attachment_type.to_string());
-            ids.push(a.attachment_id);
+            kinds.push(attachment_type_to_entity_type(&a.attachment_type).to_string());
+            ids.push(uuid::Uuid::parse_str(&a.attachment_id)?);
             chat_ids.push(chat_id.to_string());
             message_ids.push(message_id.clone());
         }
@@ -55,8 +66,8 @@ pub(crate) async fn create_message(
         if !kinds.is_empty() {
             sqlx::query!(
                 r#"
-                INSERT INTO "ChatAttachment" ("attachmentType", "attachmentId", "chatId", "messageId")
-                SELECT * FROM UNNEST($1::TEXT[], $2::TEXT[], $3::TEXT[], $4::TEXT[])
+                INSERT INTO "ChatAttachment" ("entity_type", "entity_id", "chatId", "messageId")
+                SELECT * FROM UNNEST($1::TEXT[], $2::UUID[], $3::TEXT[], $4::TEXT[])
                 "#,
                 &kinds,
                 &ids,

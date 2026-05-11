@@ -65,8 +65,7 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button, cn, Panel } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -84,7 +83,6 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
-import { Panel } from '@ui';
 import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
@@ -198,10 +196,10 @@ function DmRecipientIcon(props: { channelId: string }) {
   return (
     <Show
       when={dmPartnerId()}
-      fallback={<UserCircle class="shrink-0 w-4 h-4" />}
+      fallback={<UserCircle class="shrink-0 size-4" />}
     >
       {(id) => (
-        <UserIcon id={id()} size="xs" isDeleted={false} showTooltip={false} />
+        <UserIcon id={id()} size="sm" isDeleted={false} showTooltip={false} />
       )}
     </Show>
   );
@@ -391,7 +389,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               <Show when={props.owner}>
                 <div class="flex justify-between">
                   <div class="flex items-center gap-2 overflow-hidden">
-                    <UserIcon isDeleted={false} id={props.owner!} size="xs" />
+                    <UserIcon isDeleted={false} id={props.owner!} size="sm" />
                     <div class="font-medium truncate">
                       {props.formattedOwner}
                     </div>
@@ -405,14 +403,12 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                 {(recipient) => (
                   <div class="flex justify-between">
                     <div
-                      class="flex items-center gap-2 overflow-hidden cursor-pointer"
+                      class="flex items-center gap-2 overflow-hidden"
                       onClick={() =>
                         props.navigateToChannel(recipient.channel_id)
                       }
                     >
-                      <Switch
-                        fallback={<WideUsers class="flex-shrink-0 w-4 h-4" />}
-                      >
+                      <Switch fallback={<WideUsers class="shrink-0 size-4" />}>
                         <Match
                           when={
                             props.channelNameMap.get(recipient.channel_id)
@@ -424,7 +420,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                         <Match
                           when={props.channelNameMap.get(recipient.channel_id)}
                         >
-                          <WideUsers class="flex-shrink-0 w-4 h-4" />
+                          <WideUsers class="shrink-0 size-4" />
                         </Match>
                       </Switch>
                       <div class="font-medium truncate">
@@ -519,7 +515,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                     />
                   </span>
                   <Button
-                    variant="secondary"
+                    variant="base"
                     size="sm"
                     class="flex items-center gap-1 rounded-xs px-2 py-1"
                     onClick={props.copyPublicLink}
@@ -955,20 +951,18 @@ export function ShareModal(props: ShareModalProps) {
             >
               {/* Card 1: Share form — gradient border */}
               <Panel active>
-                <div class="text-ink flex flex-col">
-                  <div class="shrink-0 flex flex-row items-center justify-between px-3 h-10 gap-2 border-b border-edge-muted">
-                    <div class="flex-1 flex flex-row items-center gap-2 min-w-0">
-                      <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
-                        <span class="shrink-0">Share:</span>
-                        <EntityIcon
-                          targetType={props.blockAlias}
-                          size="sm"
-                          class="shrink-0"
-                        />
-                        <span class="truncate">{props.name}</span>
-                      </Dialog.Title>
-                    </div>
-                  </div>
+                <Panel.Header class="px-3">
+                  <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
+                    <span class="shrink-0">Share:</span>
+                    <EntityIcon
+                      targetType={props.blockAlias}
+                      size="sm"
+                      class="shrink-0"
+                    />
+                    <span class="truncate">{props.name}</span>
+                  </Dialog.Title>
+                </Panel.Header>
+                <Panel.Body>
                   <ForwardToChannel
                     submitPermissionInfo={{
                       setChannelPermissions: (id, accessLevel) =>
@@ -987,19 +981,21 @@ export function ShareModal(props: ShareModalProps) {
                     blockId={props.id}
                     blockName={props.blockAlias}
                   />
-                </div>
+                </Panel.Body>
               </Panel>
 
               {/* Card 2: Recipients — plain border */}
               <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
                 <Panel>
-                  <div class="text-ink flex flex-col">
-                    <div class="shrink-0 h-10 flex items-center px-3 border-b border-edge-muted text-sm font-medium">
+                  <Panel.Header class="px-3">
+                    <span class="text-sm font-medium">
                       People with access to this{' '}
                       {props.itemType === 'email'
                         ? 'email thread'
                         : props.itemType}
-                    </div>
+                    </span>
+                  </Panel.Header>
+                  <Panel.Body class="text-ink">
                     <div class="relative">
                       <ScrollIndicators
                         scrollRef={recipientScrollRef}
@@ -1011,14 +1007,14 @@ export function ShareModal(props: ShareModalProps) {
                         class="overflow-y-auto scrollbar-hidden max-h-[calc(27vh-40px)]"
                         ref={setRecipientScrollRef}
                       >
-                        <div class="grid gap-3 text-ink text-sm select-none py-3 px-3">
+                        <div class="grid gap-3 text-ink text-sm select-none p-3">
                           <Show when={props.owner}>
                             <div class="flex justify-between">
                               <div class="flex items-center gap-2 overflow-hidden">
                                 <UserIcon
                                   isDeleted={false}
                                   id={props.owner!}
-                                  size="xs"
+                                  size="sm"
                                 />
                                 <div class="font-medium truncate">
                                   {formattedOwner()}
@@ -1035,14 +1031,14 @@ export function ShareModal(props: ShareModalProps) {
                             {(recipient) => (
                               <div class="flex justify-between">
                                 <div
-                                  class="flex items-center gap-2 overflow-hidden cursor-pointer"
+                                  class="flex items-center gap-2 overflow-hidden"
                                   onClick={() =>
                                     navigateToChannel(recipient.channel_id)
                                   }
                                 >
                                   <Switch
                                     fallback={
-                                      <WideUsers class="shrink-0 w-4 h-4" />
+                                      <WideUsers class="shrink-0 size-4" />
                                     }
                                   >
                                     <Match
@@ -1061,7 +1057,7 @@ export function ShareModal(props: ShareModalProps) {
                                         recipient.channel_id
                                       )}
                                     >
-                                      <WideUsers class="shrink-0 w-4 h-4" />
+                                      <WideUsers class="shrink-0 size-4" />
                                     </Match>
                                   </Switch>
                                   <div class="font-medium truncate">
@@ -1113,7 +1109,7 @@ export function ShareModal(props: ShareModalProps) {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </Panel.Body>
                 </Panel>
               </Show>
 
@@ -1125,51 +1121,43 @@ export function ShareModal(props: ShareModalProps) {
                 }
               >
                 <Panel>
-                  <div class="text-ink flex flex-col">
-                    <div
-                      class={cn(
-                        'h-10 flex items-center justify-between px-3 text-sm font-medium',
-                        publicAccessLevel() != null &&
-                          'border-b border-edge-muted'
-                      )}
-                    >
-                      <div class="flex items-center gap-2">
-                        Public link
-                        <div
+                  <Panel.Header class="justify-between px-3">
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm font-medium">Public link</span>
+                      <div
+                        class={cn(
+                          'px-2 rounded-xl border py-0.5 flex justify-center items-center',
+                          publicAccessLevel() != null
+                            ? 'border-accent/30 bg-accent/10'
+                            : 'border-edge-muted bg-edge-muted'
+                        )}
+                      >
+                        <span
                           class={cn(
-                            'px-2 rounded-xl border py-0.5 flex justify-center items-center',
+                            'text-xs font-medium whitespace-nowrap',
                             publicAccessLevel() != null
-                              ? 'border-accent/30 bg-accent/10'
-                              : 'border-edge-muted bg-edge-muted'
+                              ? 'text-accent-ink'
+                              : 'text-ink-extra-muted'
                           )}
                         >
-                          <span
-                            class={cn(
-                              'text-xs font-medium whitespace-nowrap',
-                              publicAccessLevel() != null
-                                ? 'text-accent-ink'
-                                : 'text-ink-extra-muted'
-                            )}
-                          >
-                            {publicAccessLevel() != null
-                              ? 'ENABLED'
-                              : 'DISABLED'}
-                          </span>
-                        </div>
+                          {publicAccessLevel() != null ? 'ENABLED' : 'DISABLED'}
+                        </span>
                       </div>
-                      <MiniToggleSwitch
-                        size="Base"
-                        label="Enable public link"
-                        checked={publicAccessLevel() != null}
-                        onChange={(on) =>
-                          setPublicPermissions(on ? 'view' : null)
-                        }
-                      />
                     </div>
-                    <Show when={publicAccessLevel() != null}>
+                    <MiniToggleSwitch
+                      size="Base"
+                      label="Enable public link"
+                      checked={publicAccessLevel() != null}
+                      onChange={(on) =>
+                        setPublicPermissions(on ? 'view' : null)
+                      }
+                    />
+                  </Panel.Header>
+                  <Show when={publicAccessLevel() != null}>
+                    <Panel.Body class="text-ink">
                       <div class="flex items-center p-3 justify-between">
                         <Button
-                          variant="secondary"
+                          variant="base"
                           size="sm"
                           class="flex items-center gap-1 rounded-xs px-2 py-1"
                           onClick={copyPublicLink}
@@ -1189,8 +1177,8 @@ export function ShareModal(props: ShareModalProps) {
                           />
                         </span>
                       </div>
-                    </Show>
-                  </div>
+                    </Panel.Body>
+                  </Show>
                 </Panel>
               </Show>
             </Dialog.Content>
@@ -1431,7 +1419,7 @@ export function ShareOptions(props: {
         <Button
           disabled={props.disabled}
           class={`min-w-16.75 py-1 pl-2 pr-1 rounded-xs flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
-          variant="secondary"
+          variant="base"
         >
           {currentValueText()}
           <ChevronDownIcon class="size-4 text-ink-extra-muted/50" />
@@ -1452,14 +1440,14 @@ export function ShareOptions(props: {
                 return (
                   <DropdownMenu.RadioItem
                     value={option.value}
-                    class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg focus-bracket"
+                    class="flex items-center gap-2 w-full py-1 px-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-highlighted:bg-active"
                   >
-                    <div class="w-4 h-4 shrink-0">
-                      {Icon && <Icon class="w-full h-full" />}
+                    <div class="size-4 shrink-0">
+                      {Icon && <Icon class="size-full" />}
                     </div>
                     <div class="flex-1 truncate">{option.label}</div>
                     <Show when={currentValue() === option.value}>
-                      <CheckIcon class="w-3 h-3 text-accent" />
+                      <CheckIcon class="size-3 text-accent" />
                     </Show>
                   </DropdownMenu.RadioItem>
                 );
@@ -1469,14 +1457,14 @@ export function ShareOptions(props: {
               <div class="my-1 border-t border-edge-muted w-full" />
               <DropdownMenu.RadioItem
                 value="none"
-                class="flex items-center gap-2 w-full py-1 pl-2 pr-2 text-sm font-medium rounded-xs cursor-pointer hover:bg-hover hover-transition-bg focus-bracket"
+                class="flex items-center gap-2 w-full py-1 px-2 text-sm font-medium rounded-xs hover:bg-hover hover-transition-bg outline-none focus:bg-active data-highlighted:bg-active"
               >
-                <div class="w-4 h-4 shrink-0">
-                  <IconX class="w-full h-full" />
+                <div class="size-4 shrink-0">
+                  <IconX class="size-full" />
                 </div>
                 <div class="flex-1 truncate">{accessLevelText(null)}</div>
                 <Show when={currentValue() === 'none'}>
-                  <CheckIcon class="w-3 h-3 text-accent" />
+                  <CheckIcon class="size-3 text-accent" />
                 </Show>
               </DropdownMenu.RadioItem>
             </Show>

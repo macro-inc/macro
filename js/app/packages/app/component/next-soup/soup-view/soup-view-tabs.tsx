@@ -1,17 +1,17 @@
 import {
-  VIEW_TAB_PRESETS,
-  type PresetContext,
   getViewPreset,
+  type PresetContext,
+  VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import { type TabItem, Tabs } from '@core/component/Tabs';
 import { useUserContext } from '@core/context/user';
-import { Tabs, type TabItem } from '@core/component/Tabs';
-import { batch, createMemo, For, Match, Switch } from 'solid-js';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import { Dropdown, Layer } from '@ui';
+import { batch, createMemo, For, Match, Switch } from 'solid-js';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
@@ -160,32 +160,34 @@ export const CollapsedSoupViewTabs = () => {
   });
 
   return (
-    <DropdownMenu placement="bottom-start" gutter={4}>
-      <DropdownMenu.Trigger class="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xs border border-edge-muted hover:bg-ink/6 transition-colors">
+    <Dropdown placement="bottom-start" gutter={4}>
+      <Dropdown.Trigger class="flex items-center gap-1">
         <span class="truncate">{activeLabel()}</span>
         <ChevronDownIcon class="size-3 shrink-0" />
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content class="z-action-menu bg-surface-0 border border-edge-muted rounded-sm shadow-sm p-1">
-          <For each={list()}>
-            {(item) => (
-              <DropdownMenu.Item
-                class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
-                classList={{
-                  'font-semibold': activeTab() === item.value,
-                }}
-                onSelect={() => {
-                  const view = listView();
-                  if (view) applyTabPreset(view, item.value);
-                }}
-              >
-                {item.label}
-              </DropdownMenu.Item>
-            )}
-          </For>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+      </Dropdown.Trigger>
+      <Dropdown.Portal>
+        <Layer depth={2}>
+          <Dropdown.Content class="z-action-menu bg-page border border-edge-muted rounded-sm shadow-sm p-1">
+            <For each={list()}>
+              {(item) => (
+                <Dropdown.Item
+                  class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
+                  classList={{
+                    'font-semibold': activeTab() === item.value,
+                  }}
+                  onSelect={() => {
+                    const view = listView();
+                    if (view) applyTabPreset(view, item.value);
+                  }}
+                >
+                  {item.label}
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Content>
+        </Layer>
+      </Dropdown.Portal>
+    </Dropdown>
   );
 };
 
@@ -221,7 +223,7 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
       defaultValue={VIEW_TAB_PRESETS[props.view].default}
       onChange={(value) => applyTabPreset(props.view, value)}
       indicatorPosition="top"
-      class="**:data-indicator:h-[3px]"
+      class="**:data-indicator:h-0.75"
     />
   );
 };

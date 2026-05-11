@@ -1,13 +1,13 @@
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Combobox } from '@kobalte/core/combobox';
-import { cn } from '@ui/utils/classname';
-import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
-import XIcon from '@icon/regular/x.svg';
+import { truncateLabel } from '@core/util/string';
 import CheckIcon from '@icon/regular/check.svg';
-import type { FilterOption } from './unified-filter-dropdown';
+import XIcon from '@icon/regular/x.svg';
+import { Combobox } from '@kobalte/core/combobox';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { Button, cn, Layer } from '@ui';
+import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import type { SearchableOption } from './search-filter-controls';
 import { SearchableMultiSelect } from './searchable-multi-select';
-import { Button } from '@ui/components/Button';
+import type { FilterOption } from './unified-filter-dropdown';
 
 export type ActiveFilter = {
   categoryLabel: string;
@@ -79,6 +79,45 @@ interface ActiveFilterChipsProps {
   hideCategoryLabel?: boolean;
 }
 
+const ChipContent = (props: {
+  filter: ActiveFilter;
+  hideCategoryLabel?: boolean;
+}) => {
+  const showCategory = () =>
+    !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel);
+  return (
+    <>
+      <Show when={props.filter.icon}>
+        {(icon) => (
+          <span class="size-3 flex items-center justify-center shrink-0">
+            {icon()()}
+          </span>
+        )}
+      </Show>
+      <span class="font-medium" title={props.filter.optionLabel()}>
+        <Show when={showCategory()}>{props.filter.categoryLabel}: </Show>
+        {truncateLabel(props.filter.optionLabel())}
+      </span>
+    </>
+  );
+};
+
+const ChipRemoveButton = (props: { onRemove: () => void }) => (
+  <button
+    type="button"
+    class={cn(
+      'inline-flex items-center justify-center px-1',
+      'not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12'
+    )}
+    onClick={(e) => {
+      e.stopPropagation();
+      props.onRemove();
+    }}
+  >
+    <XIcon class="size-3" />
+  </button>
+);
+
 const SearchableFilterChip = (props: {
   filter: ActiveFilter;
   onRemove: () => void;
@@ -99,63 +138,34 @@ const SearchableFilterChip = (props: {
     `Search ${props.filter.categoryLabel.toLowerCase()}...`;
 
   return (
-    <div
-      class={cn(
-        'flex text-xs rounded-xs',
-        'bg-ink/10 text-ink-muted border border-edge-muted',
-        'group transition-colors',
-        props.chipClass
-      )}
-    >
-      <SearchableMultiSelect
-        options={options}
-        activeIds={activeIds}
-        onChange={handleChange}
-        placeholder={placeholder}
-        placement="bottom-start"
-        open={props.filter.isPopupOpen}
-        onOpenChange={(v) => props.filter.setPopupOpen?.(v)}
-      >
-        <Combobox.Trigger
-          class={cn(
-            'inline-flex items-center gap-1.5 pl-2 pr-1 py-1',
-            'hover:text-ink hover:bg-edge-muted'
-          )}
-        >
-          <Show when={props.filter.icon}>
-            {(icon) => (
-              <span class="size-3 flex items-center justify-center shrink-0">
-                {icon()()}
-              </span>
-            )}
-          </Show>
-          <span class="font-medium">
-            <Show
-              when={
-                !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
-              }
-            >
-              {props.filter.categoryLabel}:{' '}
-            </Show>
-            {props.filter.optionLabel()}
-          </span>
-        </Combobox.Trigger>
-      </SearchableMultiSelect>
-
-      <button
-        type="button"
+    <Layer depth={0}>
+      <div
         class={cn(
-          'px-1 min-h-full',
-          'hover:bg-edge-muted hover:text-ink transition-colors'
+          'h-6 inline-flex items-stretch overflow-hidden text-xs font-medium leading-none whitespace-nowrap rounded-sm',
+          'bg-transparent text-ink border border-edge-muted',
+          props.chipClass
         )}
-        onClick={(e) => {
-          e.stopPropagation();
-          props.onRemove();
-        }}
       >
-        <XIcon class="size-3" />
-      </button>
-    </div>
+        <SearchableMultiSelect
+          options={options}
+          activeIds={activeIds}
+          onChange={handleChange}
+          placeholder={placeholder}
+          placement="bottom-start"
+          open={props.filter.isPopupOpen}
+          onOpenChange={(v) => props.filter.setPopupOpen?.(v)}
+        >
+          <Combobox.Trigger class="inline-flex h-full items-center gap-1.5 px-2 leading-none not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12">
+            <ChipContent
+              filter={props.filter}
+              hideCategoryLabel={props.hideCategoryLabel}
+            />
+          </Combobox.Trigger>
+        </SearchableMultiSelect>
+
+        <ChipRemoveButton onRemove={props.onRemove} />
+      </div>
+    </Layer>
   );
 };
 
@@ -173,242 +183,175 @@ const FilterChip = (props: {
     props.filter.categoryOptions && props.filter.categoryOptions.length > 0;
 
   return (
-    <div
-      class={cn(
-        'flex text-xs rounded-xs',
-        'bg-ink/10 text-ink-muted border border-edge-muted',
-        'group',
-        'transition-colors',
-        props.chipClass
-      )}
-    >
-      <Show
-        when={hasOptions()}
-        fallback={
-          <span class="inline-flex items-center gap-1.5 pl-2 pr-1 py-1">
-            <Show when={props.filter.icon}>
-              {(icon) => (
-                <span class="size-3 flex items-center justify-center shrink-0">
-                  {icon()()}
-                </span>
-              )}
-            </Show>
-            <span class="font-medium">
-              <Show
-                when={
-                  !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
-                }
-              >
-                {props.filter.categoryLabel}:{' '}
-              </Show>
-              {props.filter.optionLabel()}
-            </span>
-          </span>
-        }
+    <Layer depth={0}>
+      <div
+        class={cn(
+          'h-6 inline-flex items-stretch overflow-hidden text-xs font-medium leading-none whitespace-nowrap rounded-sm',
+          'bg-transparent text-ink border border-edge-muted',
+          props.chipClass
+        )}
       >
-        <DropdownMenu open={open()} onOpenChange={setOpen} gutter={4}>
-          <DropdownMenu.Trigger
-            class={cn(
-              'inline-flex items-center gap-1.5 pl-2 pr-1 py-1',
-              'hover:text-ink hover:bg-edge-muted'
-            )}
-          >
-            <Show when={props.filter.icon}>
-              {(icon) => (
-                <span class="size-3 flex items-center justify-center shrink-0">
-                  {icon()()}
-                </span>
-              )}
-            </Show>
-            <span class="font-medium">
-              <Show
-                when={
-                  !(props.filter.hideCategoryLabel ?? props.hideCategoryLabel)
-                }
-              >
-                {props.filter.categoryLabel}:{' '}
-              </Show>
-              {props.filter.optionLabel()}
+        <Show
+          when={hasOptions()}
+          fallback={
+            <span class="inline-flex items-center gap-1.5 pxl-2 pr-1 py-1">
+              <ChipContent
+                filter={props.filter}
+                hideCategoryLabel={props.hideCategoryLabel}
+              />
             </span>
-          </DropdownMenu.Trigger>
+          }
+        >
+          <DropdownMenu open={open()} onOpenChange={setOpen} gutter={4}>
+            <DropdownMenu.Trigger class="inline-flex items-center gap-1.5 px-2 leading-none not-disabled:hover:bg-ink/10 not-disabled:active:bg-ink/12">
+              <ChipContent
+                filter={props.filter}
+                hideCategoryLabel={props.hideCategoryLabel}
+              />
+            </DropdownMenu.Trigger>
 
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
-              <For each={props.filter.categoryOptions}>
-                {(option) => {
-                  const active = () =>
-                    props.filter.isOptionActive
-                      ? props.filter.isOptionActive(option.id)
-                      : props.isOptionActive(option.id);
-                  const isSingleSelect = () => props.filter.multiple === false;
-                  return (
-                    <DropdownMenu.Item
-                      class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-highlighted:bg-ink/5 cursor-default"
-                      onSelect={() => {
-                        if (active()) return;
-                        if (props.filter.onReplace) {
-                          props.filter.onReplace(option.id);
-                        } else {
-                          props.onReplace(option.id);
-                        }
-                      }}
-                    >
-                      <Show
-                        when={isSingleSelect()}
-                        fallback={
+            <DropdownMenu.Portal>
+              <Layer depth={2}>
+                <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+                  <For each={props.filter.categoryOptions}>
+                    {(option) => {
+                      const active = () =>
+                        props.filter.isOptionActive
+                          ? props.filter.isOptionActive(option.id)
+                          : props.isOptionActive(option.id);
+                      const isSingleSelect = () =>
+                        props.filter.multiple === false;
+                      return (
+                        <DropdownMenu.Item
+                          class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-ink/5 outline-none data-highlighted:bg-ink/5 cursor-default"
+                          onSelect={() => {
+                            if (active()) return;
+                            if (props.filter.onReplace) {
+                              props.filter.onReplace(option.id);
+                            } else {
+                              props.onReplace(option.id);
+                            }
+                          }}
+                        >
+                          <Show
+                            when={isSingleSelect()}
+                            fallback={
+                              <span
+                                class={cn(
+                                  'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                                  active()
+                                    ? 'bg-accent border-accent'
+                                    : 'border-edge'
+                                )}
+                              >
+                                <Show when={active()}>
+                                  <CheckIcon class="size-2.5 text-page" />
+                                </Show>
+                              </span>
+                            }
+                          >
+                            <span
+                              class={cn(
+                                'size-4 flex items-center justify-center shrink-0 rounded-full border transition-colors',
+                                active()
+                                  ? 'bg-accent border-accent'
+                                  : 'border-edge'
+                              )}
+                            >
+                              <Show when={active()}>
+                                <CheckIcon class="size-2.5 text-page" />
+                              </Show>
+                            </span>
+                          </Show>
+
+                          <Show when={option.icon}>
+                            {(icon) => (
+                              <span class="size-4 flex items-center justify-center shrink-0">
+                                {icon()()}
+                              </span>
+                            )}
+                          </Show>
+
                           <span
                             class={cn(
-                              'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                              active()
-                                ? 'bg-accent border-accent'
-                                : 'border-edge'
+                              'flex-1 truncate',
+                              active() ? 'text-ink' : 'text-ink-muted'
                             )}
                           >
-                            <Show when={active()}>
-                              <CheckIcon class="size-2.5 text-page" />
-                            </Show>
+                            {option.label}
                           </span>
-                        }
-                      >
-                        <span
-                          class={cn(
-                            'size-4 flex items-center justify-center shrink-0 rounded-full border transition-colors',
-                            active() ? 'bg-accent border-accent' : 'border-edge'
-                          )}
-                        >
-                          <Show when={active()}>
-                            <CheckIcon class="size-2.5 text-page" />
-                          </Show>
-                        </span>
-                      </Show>
+                        </DropdownMenu.Item>
+                      );
+                    }}
+                  </For>
+                </DropdownMenu.Content>
+              </Layer>
+            </DropdownMenu.Portal>
+          </DropdownMenu>
+        </Show>
 
-                      <Show when={option.icon}>
-                        {(icon) => (
-                          <span class="size-4 flex items-center justify-center shrink-0">
-                            {icon()()}
-                          </span>
-                        )}
-                      </Show>
-
-                      <span
-                        class={cn(
-                          'flex-1 truncate',
-                          active() ? 'text-ink' : 'text-ink-muted'
-                        )}
-                      >
-                        {option.label}
-                      </span>
-                    </DropdownMenu.Item>
-                  );
-                }}
-              </For>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu>
-      </Show>
-
-      {/* Remove button */}
-      <button
-        type="button"
-        class={cn(
-          'px-1 min-h-full',
-          'hover:bg-edge-muted hover:text-ink transition-colors'
-        )}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (props.filter.onRemove) {
-            props.filter.onRemove();
-          } else {
-            props.onRemove();
-          }
-        }}
-      >
-        <XIcon class="size-3" />
-      </button>
-    </div>
+        <ChipRemoveButton onRemove={props.onRemove} />
+      </div>
+    </Layer>
   );
 };
 
 export const ActiveFilterChips = (props: ActiveFilterChipsProps) => {
   const lastIndex = () => props.filters.length - 1;
 
+  const renderChip = (filter: ActiveFilter) => {
+    const onRemove = () => {
+      if (filter.onRemove) {
+        filter.onRemove();
+      } else {
+        props.onRemove(filter.optionId());
+      }
+    };
+
+    return (
+      <Show
+        when={filter.searchableOptions}
+        fallback={
+          <FilterChip
+            filter={filter}
+            onRemove={onRemove}
+            onReplace={(newOptionId) =>
+              props.onReplace(filter.optionId(), newOptionId)
+            }
+            isOptionActive={props.isOptionActive}
+            chipClass={props.chipClass}
+            hideCategoryLabel={props.hideCategoryLabel}
+          />
+        }
+      >
+        <SearchableFilterChip
+          filter={filter}
+          onRemove={onRemove}
+          chipClass={props.chipClass}
+          hideCategoryLabel={props.hideCategoryLabel}
+        />
+      </Show>
+    );
+  };
+
   return (
     <Show when={props.filters.length > 0}>
-      <div class="flex items-center gap-1.5 flex-wrap px-2">
+      <div class="flex items-center gap-2 flex-wrap">
         <For each={props.filters}>
           {(filter, index) => (
             // To make sure that the Clear all button never wraps to a new line on its own, we wrap it with the last FilterChip
             <Show
               when={props.filters.length > 1 && index() === lastIndex()}
-              fallback={
-                <Show
-                  when={filter.searchableOptions}
-                  fallback={
-                    <FilterChip
-                      filter={filter}
-                      onRemove={() => props.onRemove(filter.optionId())}
-                      onReplace={(newOptionId) =>
-                        props.onReplace(filter.optionId(), newOptionId)
-                      }
-                      isOptionActive={props.isOptionActive}
-                      chipClass={props.chipClass}
-                      hideCategoryLabel={props.hideCategoryLabel}
-                    />
-                  }
-                >
-                  <SearchableFilterChip
-                    filter={filter}
-                    onRemove={() => {
-                      if (filter.onRemove) {
-                        filter.onRemove();
-                      } else {
-                        props.onRemove(filter.optionId());
-                      }
-                    }}
-                    chipClass={props.chipClass}
-                    hideCategoryLabel={props.hideCategoryLabel}
-                  />
-                </Show>
-              }
+              fallback={renderChip(filter)}
             >
               <span class="inline-flex items-center gap-1.5">
-                <Show
-                  when={filter.searchableOptions}
-                  fallback={
-                    <FilterChip
-                      filter={filter}
-                      onRemove={() => props.onRemove(filter.optionId())}
-                      onReplace={(newOptionId) =>
-                        props.onReplace(filter.optionId(), newOptionId)
-                      }
-                      isOptionActive={props.isOptionActive}
-                      chipClass={props.chipClass}
-                      hideCategoryLabel={props.hideCategoryLabel}
-                    />
-                  }
-                >
-                  <SearchableFilterChip
-                    filter={filter}
-                    onRemove={() => {
-                      if (filter.onRemove) {
-                        filter.onRemove();
-                      } else {
-                        props.onRemove(filter.optionId());
-                      }
-                    }}
-                    chipClass={props.chipClass}
-                    hideCategoryLabel={props.hideCategoryLabel}
-                  />
-                </Show>
+                {renderChip(filter)}
                 <Button
-                  class={cn(
-                    'rounded-xs whitespace-nowrap'
-                    // 'text-ink-muted hover:text-ink hover:bg-hover transition-colors'
-                  )}
-                  size="sm"
-                  variant="ghost"
                   onClick={() => props.onClearAll()}
+                  variant="base"
+                  size="sm"
                 >
+                  <XIcon class="size-3!" />
                   Clear
                 </Button>
               </span>

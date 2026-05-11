@@ -2,10 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import type { InfiniteData } from '@tanstack/solid-query';
+import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
-import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
+import type { InfiniteData } from '@tanstack/solid-query';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,17 +38,17 @@ vi.mock('./normalizer', () => ({
   },
 }));
 
-// biome-ignore lint/correctness/noPrivateImports: testing private export
-import { buildSingleEntityFilter } from './operations';
+import { soupKeys } from '../keys';
 import {
+  // biome-ignore lint/correctness/noPrivateImports: testing private export
+  buildSingleEntityFilter,
   getSoupItemId,
   insertSoupEntity,
-  removeSoupEntities,
-  removeSearchEntities,
-  optimisticUpdateSoupItemUpdatedAt,
   optimisticUpdateSoupEntity,
+  optimisticUpdateSoupItemUpdatedAt,
+  removeSearchEntities,
+  removeSoupEntities,
 } from './operations';
-import { soupKeys } from '../keys';
 
 // -- Fixtures --
 

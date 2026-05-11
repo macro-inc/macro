@@ -19,10 +19,13 @@ use crate::domain::models::TaggedContent;
 use crate::domain::models::device::DeviceType;
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
+use crate::domain::models::request::NotificationListFilters;
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
-    SendNotificationRequestBuilder, UserNotificationRow, android::FCMMessage,
-    apple::APNSPushNotification, mobile::MessageAttributes,
+    SendNotificationRequestBuilder, UserNotificationRow,
+    android::FCMMessage,
+    apple::{APNSPushNotification, VoipPushPayload},
+    mobile::MessageAttributes,
 };
 
 /// Port for sending mobile push notifications (iOS/Android via SNS).
@@ -111,26 +114,27 @@ pub trait NotificationRepository: Send + Sync + 'static {
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<NotificationIdAndCollapseKey>, Report>> + Send;
 
-    /// Get a user's active (not deleted, not done) notifications with cursor-based pagination.
+    /// Get a user's non-deleted notifications with cursor-based pagination.
     ///
-    /// The metadata JSON column is deserialized into `T`.
+    /// The metadata JSON column is deserialized into `T`. `filters` controls done/seen status.
     fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
+        filters: NotificationListFilters,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
 
-    /// Get a user's active notifications filtered by event item IDs, with cursor-based pagination.
+    /// Get a user's non-deleted notifications filtered by event item IDs, with cursor-based pagination.
     ///
-    /// Only returns notifications that are not deleted and not done,
-    /// matching one of the provided `event_item_ids`.
+    /// Only returns notifications matching one of the provided `event_item_ids` and the status filters.
     fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
         event_item_ids: &[Uuid],
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
+        filters: NotificationListFilters,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
 
     /// Get a single user notification by ID.
@@ -372,4 +376,45 @@ pub trait NotificationIngressQueue: Send + Sync + 'static {
         &self,
         receipt_handle: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for sending VoIP push notifications (PushKit / CallKit) to iOS devices.
+///
+/// VoIP pushes bypass the regular notification pipeline — they are delivered
+/// immediately without DB persistence and wake the app via PushKit so that
+/// CallKit can display the native incoming-call UI.
+pub trait VoipPushSender: Send + Sync + 'static {
+    /// Send a VoIP push to all registered VoIP device endpoints of the given users.
+    ///
+    /// Errors are logged but do not propagate. The returned set contains users
+    /// that received at least one successful VoIP push delivery.
+    fn send_voip_push(
+        &self,
+        recipient_ids: &[MacroUserIdStr<'_>],
+        payload: &VoipPushPayload,
+    ) -> impl std::future::Future<Output = HashSet<MacroUserIdStr<'static>>> + Send;
+}
+
+impl VoipPushSender for () {
+    async fn send_voip_push(
+        &self,
+        _: &[MacroUserIdStr<'_>],
+        _: &VoipPushPayload,
+    ) -> HashSet<MacroUserIdStr<'static>> {
+        HashSet::new()
+    }
+}
+
+impl<V: VoipPushSender> VoipPushSender for Option<V> {
+    async fn send_voip_push(
+        &self,
+        recipient_ids: &[MacroUserIdStr<'_>],
+        payload: &VoipPushPayload,
+    ) -> HashSet<MacroUserIdStr<'static>> {
+        if let Some(inner) = self {
+            inner.send_voip_push(recipient_ids, payload).await
+        } else {
+            HashSet::new()
+        }
+    }
 }

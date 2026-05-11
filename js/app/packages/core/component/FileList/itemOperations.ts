@@ -2,24 +2,24 @@ import { analytics } from '@app/lib/analytics';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr, isOk } from '@core/util/maybeResult';
+import { removeHistoryItem } from '@queries/history/history';
+import {
+  getDeletedTree,
+  optimisticallyRemoveDeletedItem,
+} from '@queries/storage/deleted';
 import { callServiceClient } from '@service-call/client';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
-import {
-  getDeletedTree,
-  optimisticallyRemoveDeletedItem,
-} from '@queries/storage/deleted';
+import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { removeHistoryItem } from '@queries/history/history';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import {
   getPermissions,
   hasPermissions,
   Permissions,
 } from '../SharePermissions';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
 
 const DEFAULT_CHUNK_SIZE = 10;
 

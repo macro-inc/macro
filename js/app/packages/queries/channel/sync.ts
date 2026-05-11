@@ -1,11 +1,11 @@
+import type { ApiThreadReply } from '@service-comms/client';
 import type {
   Attachment as ApiAttachment,
-  CountedReaction,
   Message as ApiMessage,
+  CountedReaction,
 } from '@service-comms/generated/models';
-import type { ApiThreadReply } from '@service-comms/client';
-import { ChannelNonceKeys } from './keys';
 import { consumeNonce } from '../nonce';
+import { ChannelNonceKeys } from './keys';
 import {
   getTargetMessageState,
   insertMessageIntoTargetCaches,
@@ -13,8 +13,8 @@ import {
   replaceTargetAttachments,
   replaceTargetMessageState,
   replaceTargetReactions,
-  softInvalidateTargetCaches,
   resolveMessageTarget,
+  softInvalidateTargetCaches,
 } from './reconcile';
 
 /**

@@ -15,7 +15,8 @@
             "kind": {
               "Enum": [
                 "ios",
-                "android"
+                "android",
+                "iosvoip"
               ]
             }
           }

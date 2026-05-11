@@ -1,9 +1,9 @@
 import { refetchDocumentShareButtonResource } from '@core/component/TopBar/ShareButton';
-import { invalidateDeletedItems } from '@queries/storage/deleted';
-import { invalidateProjects } from '@queries/storage/projects';
 import { invalidateUserQuota } from '@queries/auth';
 import { refetchHistory } from '@queries/history/history';
 import { invalidatePreview } from '@queries/preview';
+import { invalidateDeletedItems } from '@queries/storage/deleted';
+import { invalidateProjects } from '@queries/storage/projects';
 
 export function refetchResources() {
   // TODO: fetch documents

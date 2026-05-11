@@ -1,8 +1,6 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
 import { isErr } from '@core/util/maybeResult';
-import { cn } from '@ui/utils/classname';
 import VideoIcon from '@icon/regular/file-video.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -10,6 +8,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import { $isVideoNode, type VideoDecoratorProps } from '@lexical-core';
 import { debounce } from '@solid-primitives/scheduled';
+import { Button, cn } from '@ui';
 import {
   $createNodeSelection,
   $getNodeByKey,
@@ -254,7 +253,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         ref={containerRef}
         class={cn(
           'relative max-w-full my-4 grid place-items-center mx-auto',
-          isSelectedAsNode() && 'bracket-offset-4 ring-3 ring-edge-muted',
+          isSelectedAsNode() && 'ring-3 ring-edge-muted',
           state() === 'error' && 'media-error min-h-44'
         )}
         style={{
@@ -312,14 +311,14 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         />
 
         <Show when={state() === 'error'}>
-          <div class="absolute top-0 left-0 w-full h-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted min-h-44">
+          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted min-h-44">
             <VideoIcon class="size-5" />
             <div>{VideoErrors[videoError() ?? 'FALLBACK']}</div>
           </div>
         </Show>
 
         <Show when={state() === 'loading'}>
-          <div class="absolute top-0 left-0 w-full h-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
+          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
             <Spinner />
           </div>
         </Show>
@@ -337,7 +336,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
             (state() === 'ok' || state() === 'error')
           }
         >
-          <div class="w-full h-full absolute top-0 left-0 pointer-events-none bg-edge" />
+          <div class="size-full absolute top-0 left-0 pointer-events-none bg-edge" />
           <MediaButtons
             delete={interactable() ? deleteVideo : undefined}
             enlarge={state() === 'ok' ? viewFull : undefined}
@@ -359,12 +358,14 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
           <Dialog.Content class="relative max-w-[65%] max-h-[80vh] flex items-center justify-center">
             <div class="absolute bg-dialog top-2 right-2 flex flex-row z-10">
               <Dialog.CloseButton>
-                <DeprecatedIconButton icon={XIcon} theme="clear" />
+                <Button variant="ghost" size="icon-md">
+                  <XIcon />
+                </Button>
               </Dialog.CloseButton>
             </div>
             <video
               crossorigin="anonymous"
-              class="max-w-full max-h-[80vh] w-auto h-auto object-contain"
+              class="max-w-full max-h-[80vh] size-auto object-contain"
               controls
               src={videoUrl()}
             />

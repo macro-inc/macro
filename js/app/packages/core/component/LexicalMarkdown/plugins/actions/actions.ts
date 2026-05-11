@@ -1,3 +1,5 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
+import type { ComposeTaskSuccess } from '@block-md/component/ComposeTask';
 import CheckSquare from '@icon/regular/check-square.svg';
 import CodeBlock from '@icon/regular/code-block.svg';
 import VideoIcon from '@icon/regular/file-video.svg';
@@ -14,16 +16,13 @@ import TextH1 from '@icon/regular/text-h-one.svg';
 import TextH3 from '@icon/regular/text-h-three.svg';
 import TextH2 from '@icon/regular/text-h-two.svg';
 import TextT from '@icon/regular/text-t.svg';
-import { INSERT_TABLE_COMMAND, TableNode } from '@lexical/table';
-import type { LexicalEditor } from 'lexical';
-import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';
-import { TRY_INSERT_EQUATION_COMMAND } from '../katex';
-import { TRY_INSERT_LINK_COMMAND } from '../links';
-import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
-import { INSERT_DOCUMENT_MENTION_COMMAND } from '../mentions/mentionsPlugin';
-import { NODE_TRANSFORM } from '../node-transform';
+import { LinkNode } from '@lexical/link';
+import { ListNode } from '@lexical/list';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
+import { INSERT_TABLE_COMMAND, TableNode } from '@lexical/table';
 import {
+  $createDocumentMentionNode,
+  AwaitNode,
   CustomCodeNode,
   DocumentMentionNode,
   EquationNode,
@@ -31,10 +30,18 @@ import {
   ImageNode,
   VideoNode,
 } from '@lexical-core';
-import { ListNode } from '@lexical/list';
-import { LinkNode } from '@lexical/link';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import type { ComposeTaskSuccess } from '@block-md/component/ComposeTask';
+import type { LexicalEditor } from 'lexical';
+import { nanoid } from 'nanoid';
+import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';
+import {
+  INSERT_AWAIT_NODE_COMMAND,
+  REPLACE_AWAIT_NODE_COMMAND,
+} from '../await';
+import { TRY_INSERT_EQUATION_COMMAND } from '../katex';
+import { TRY_INSERT_LINK_COMMAND } from '../links';
+import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
+import { INSERT_DOCUMENT_MENTION_COMMAND } from '../mentions/mentionsPlugin';
+import { NODE_TRANSFORM } from '../node-transform';
 import { type Action, ActionCategory } from './types';
 
 export const ACTIONS: Action[] = [
@@ -153,12 +160,59 @@ export const ACTIONS: Action[] = [
     action: (editor: LexicalEditor) => {
       const splitManager = globalSplitManager();
       if (!splitManager) return;
+      const awaitId = nanoid(21);
+      let placeholderInserted = false;
+      console.log('[task-action] opening compose, awaitId=', awaitId);
       splitManager.createPopoverSplit({
         content: {
           type: 'component',
           id: 'task-compose',
           params: {
+            onCreateStart: ({ title }: { title: string }) => {
+              console.log('[task-action] onCreateStart fired, title=', title);
+              const handled = editor.dispatchCommand(
+                INSERT_AWAIT_NODE_COMMAND,
+                {
+                  awaitId,
+                  text: `Creating ${title}`,
+                }
+              );
+              console.log(
+                '[task-action] INSERT_AWAIT_NODE_COMMAND handled=',
+                handled
+              );
+              placeholderInserted = true;
+            },
+            onCreateFailure: () => {
+              console.log(
+                '[task-action] onCreateFailure, placeholderInserted=',
+                placeholderInserted
+              );
+              if (!placeholderInserted) return;
+              editor.dispatchCommand(REPLACE_AWAIT_NODE_COMMAND, { awaitId });
+              placeholderInserted = false;
+            },
             onSuccess: (result: ComposeTaskSuccess) => {
+              console.log(
+                '[task-action] onSuccess, placeholderInserted=',
+                placeholderInserted,
+                'documentId=',
+                result.documentId
+              );
+              if (placeholderInserted) {
+                editor.dispatchCommand(REPLACE_AWAIT_NODE_COMMAND, {
+                  awaitId,
+                  $createReplacement: () =>
+                    $createDocumentMentionNode({
+                      documentId: result.documentId,
+                      documentName: result.title,
+                      blockName: 'task',
+                      createdAt: Date.now(),
+                    }),
+                });
+                placeholderInserted = false;
+                return;
+              }
               editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
                 documentId: result.documentId,
                 documentName: result.title,
@@ -169,7 +223,7 @@ export const ACTIONS: Action[] = [
         },
       });
     },
-    dependencies: [DocumentMentionNode],
+    dependencies: [DocumentMentionNode, AwaitNode],
   },
   {
     id: 'image',

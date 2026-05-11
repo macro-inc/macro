@@ -1,12 +1,10 @@
 import { useBlockId } from '@core/block';
-import { DialogWrapper } from '@core/component/DialogWrapper';
 import { useListKeyBindings } from '@core/util/useListKeyBindings';
-import LoadingSpinner from '@icon/regular/spinner.svg';
 import PlusIcon from '@icon/regular/plus.svg';
-import { Dialog } from '@kobalte/core/dialog';
-import { useAddEntityPropertyMutation } from '@queries/properties/entity';
+import LoadingSpinner from '@icon/regular/spinner.svg';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
-import { cn } from '@ui/utils/classname';
+import { useAddEntityPropertyMutation } from '@queries/properties/entity';
+import { cn, Dialog, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -156,89 +154,85 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
       onOpenChange={(open) => {
         if (!open) props.onClose();
       }}
-      modal={true}
+      contentRef={setDialogRef}
     >
-      <Dialog.Portal>
-        <DialogWrapper contentRef={setDialogRef}>
-          <div class="flex flex-col overflow-hidden bracket-never text-sm">
-            <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
-              <span class="pl-2 pointer-events-none">❯</span>
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery()}
-                onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                placeholder="Add a property..."
-                class="flex-1 text-base border-0 outline-none! focus:outline-none ring-0! focus:ring-0 bg-transparent"
-                autofocus
-              />
-            </div>
-
-            <div class="min-h-0 overflow-y-auto scrollbar-hidden">
-              <Show
-                when={!listPropertiesQuery.isLoading}
-                fallback={
-                  <div class="flex items-center justify-center py-8">
-                    <div class="w-5 h-5 animate-spin">
-                      <LoadingSpinner />
-                    </div>
-                    <span class="ml-2 text-ink-muted">
-                      Loading properties...
-                    </span>
-                  </div>
-                }
-              >
-                <div class="p-1">
-                  <For each={filteredProperties()}>
-                    {(property, index) => (
-                      <button
-                        type="button"
-                        id={`select-property-option-${index()}`}
-                        class={cn(
-                          'flex flex-row w-full items-center gap-2 py-1.5 px-2 scroll-my-1',
-                          isFocused(index()) && 'bg-hover'
-                        )}
-                        onClick={() => addProperty(property.id)}
-                        onMouseEnter={() => setFocusedIndex(index())}
-                      >
-                        <PropertyDataTypeIcon
-                          property={property}
-                          class="opacity-50 shrink-0"
-                        />
-                        <p class="text-sm font-medium truncate text-left grow">
-                          {property.displayName}
-                        </p>
-                        <p class="text-sm text-ink-extra-muted/50 shrink-0">
-                          {getPropertyDefinitionTypeDisplay({
-                            dataType: property.valueType,
-                            specificEntityType: property.specificEntityType,
-                            isMultiSelect: property.isMultiSelect,
-                          })}
-                        </p>
-                      </button>
-                    )}
-                  </For>
-                  <button
-                    type="button"
-                    id={`select-property-option-${createIndex()}`}
-                    class={cn(
-                      'flex flex-row w-full items-center gap-2 py-1.5 px-2 scroll-my-1',
-                      isFocused(createIndex()) && 'bg-hover'
-                    )}
-                    onClick={handleCreate}
-                    onMouseEnter={() => setFocusedIndex(createIndex())}
-                  >
-                    <PlusIcon class="size-4 shrink-0" />
-                    <p class="text-sm font-medium truncate flex-1 text-left">
-                      {createLabel()}
-                    </p>
-                  </button>
-                </div>
-              </Show>
-            </div>
+      <Surface depth={2} class="*:max-h-[75vh]">
+        <div class="flex flex-col text-sm">
+          <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
+            <span class="pl-2 pointer-events-none text-ink-extra-muted">❯</span>
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery()}
+              onInput={(e) => setSearchQuery(e.currentTarget.value)}
+              placeholder="Add a property..."
+              class="flex-1 text-base border-0 outline-none! focus:outline-none ring-0! focus:ring-0 bg-transparent"
+              autofocus
+            />
           </div>
-        </DialogWrapper>
-      </Dialog.Portal>
+
+          <div class="min-h-0 overflow-y-auto scrollbar-hidden">
+            <Show
+              when={!listPropertiesQuery.isLoading}
+              fallback={
+                <div class="flex items-center justify-center py-8">
+                  <div class="size-5 animate-spin">
+                    <LoadingSpinner />
+                  </div>
+                  <span class="ml-2 text-ink-muted">Loading properties...</span>
+                </div>
+              }
+            >
+              <div class="p-1">
+                <For each={filteredProperties()}>
+                  {(property, index) => (
+                    <button
+                      type="button"
+                      id={`select-property-option-${index()}`}
+                      class={cn(
+                        'flex flex-row w-full items-center gap-2 py-1.5 px-2 scroll-my-1',
+                        isFocused(index()) && 'bg-active'
+                      )}
+                      onClick={() => addProperty(property.id)}
+                      onMouseEnter={() => setFocusedIndex(index())}
+                    >
+                      <PropertyDataTypeIcon
+                        property={property}
+                        class="opacity-50 shrink-0"
+                      />
+                      <p class="text-sm font-medium truncate text-left grow">
+                        {property.displayName}
+                      </p>
+                      <p class="text-sm text-ink-extra-muted/50 shrink-0">
+                        {getPropertyDefinitionTypeDisplay({
+                          dataType: property.valueType,
+                          specificEntityType: property.specificEntityType,
+                          isMultiSelect: property.isMultiSelect,
+                        })}
+                      </p>
+                    </button>
+                  )}
+                </For>
+                <button
+                  type="button"
+                  id={`select-property-option-${createIndex()}`}
+                  class={cn(
+                    'flex flex-row w-full items-center gap-2 py-1.5 px-2 scroll-my-1',
+                    isFocused(createIndex()) && 'bg-hover'
+                  )}
+                  onClick={handleCreate}
+                  onMouseEnter={() => setFocusedIndex(createIndex())}
+                >
+                  <PlusIcon class="size-4 shrink-0" />
+                  <p class="text-sm font-medium truncate flex-1 text-left">
+                    {createLabel()}
+                  </p>
+                </button>
+              </div>
+            </Show>
+          </div>
+        </div>
+      </Surface>
     </Dialog>
   );
 }

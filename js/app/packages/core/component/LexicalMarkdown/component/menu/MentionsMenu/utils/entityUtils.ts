@@ -1,8 +1,8 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { EntityItem } from '@core/context/quickAccess';
-import type { MentionItem } from '../../../../utils/mentionsUtils';
 import { match } from 'ts-pattern';
+import type { MentionItem } from '../../../../utils/mentionsUtils';
 
 /**
  * Get the block name from an entity item for use in mentions.

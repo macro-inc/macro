@@ -1,7 +1,13 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Queue } from '../../packages/resources';
-import { config, getMacroApiToken, stack } from '../../packages/shared';
+import {
+  config,
+  getMacroApiToken,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { PushNotificationEventHandler } from './push';
 import { NotificationService } from './service';
@@ -130,6 +136,20 @@ const notificationApnsPlatform = new aws.sns.PlatformApplication(
   }
 );
 
+const notificationApnsVoipPlatform = new aws.sns.PlatformApplication(
+  'notification-apns-voip-platform',
+  {
+    name: `notification-apns-voip-platform-${stack}`,
+    platform: stack === 'prod' ? 'APNS_VOIP' : 'APNS_VOIP_SANDBOX',
+    applePlatformTeamId: APPLE_TEAM_ID,
+    applePlatformBundleId: pulumi.interpolate`${APPLE_BUNDLE_ID}.voip`,
+    platformPrincipal: APNS_KEY_ID,
+    platformCredential: APNS_PRIVATE_KEY,
+    eventDeliveryFailureTopicArn: pushNotificationEventHandlerTopicArn,
+    eventEndpointDeletedTopicArn: pushNotificationEventHandlerTopicArn,
+  }
+);
+
 const notificationFcmPlatform = new aws.sns.PlatformApplication(
   'notification-fcm-platform',
   {
@@ -148,8 +168,10 @@ export const notificationIngressQueueArn = notificationIngressQueue.queue.arn;
 export const notificationIngressQueueName = notificationIngressQueue.queue.name;
 export const notificationSnsPlatformArns = [
   notificationApnsPlatform.arn,
+  notificationApnsVoipPlatform.arn,
   notificationFcmPlatform.arn,
 ];
+export const notificationApnsVoipPlatformArn = notificationApnsVoipPlatform.arn;
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
@@ -217,28 +239,16 @@ const notificationService = new NotificationService('notification-service', {
       value: pulumi.interpolate`${pushNotificationEventHandlerQueueName}`,
     },
     {
-      name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      name: ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
     },
     {
-      name: 'DOCUMENT_COGNITION_SERVICE_URL',
-      value: `https://document-cognition${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      name: ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL),
     },
     {
-      name: 'CONNECTION_GATEWAY_URL',
-      value: `https://connection-gateway${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
-      name: 'ORGANIZATION_SERVICE_URL',
-      value: `https://organization-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      name: ServiceUrl.CONNECTION_GATEWAY_URL,
+      value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
     },
     {
       name: 'SNS_APNS_PLATFORM_ARN',
@@ -247,6 +257,10 @@ const notificationService = new NotificationService('notification-service', {
     {
       name: 'SNS_FCM_PLATFORM_ARN',
       value: pulumi.interpolate`${notificationFcmPlatform.arn}`,
+    },
+    {
+      name: 'SNS_APNS_VOIP_PLATFORM_ARN',
+      value: pulumi.interpolate`${notificationApnsVoipPlatform.arn}`,
     },
     {
       name: 'SENDER_BASE_ADDRESS',
@@ -269,8 +283,8 @@ const notificationService = new NotificationService('notification-service', {
       value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
     },
     {
-      name: 'AUTHENTICATION_SERVICE_URL',
-      value: pulumi.interpolate`https://auth-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+      name: ServiceUrl.AUTHENTICATION_SERVICE_URL,
+      value: getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL),
     },
     {
       name: 'AUTHENTICATION_SERVICE_SECRET_KEY',

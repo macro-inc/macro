@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH user_source_ids AS (\n                SELECT cp.channel_id::text AS source_id\n                FROM comms_channel_participants cp\n                WHERE cp.user_id = $1 AND cp.left_at IS NULL\n                UNION ALL\n                SELECT t.team_id::text AS source_id\n                FROM team_user t\n                WHERE t.user_id = $1\n                UNION ALL\n                SELECT $1 AS source_id\n            )\n            SELECT\n                id as \"call_id!\",\n                channel_id as \"channel_id!\",\n                room_name as \"room_name!\",\n                created_by as \"created_by!\",\n                created_at as \"started_at!\",\n                NULL::timestamptz as \"ended_at\",\n                NULL::bigint as \"duration_ms\",\n                egress_id,\n                recording_key,\n                recording_started_at,\n                NULL::text as \"custom_name\",\n                NULL::text as \"summary\",\n                true as \"is_active!\"\n            FROM calls c\n            WHERE EXISTS (\n                SELECT 1 FROM entity_access ea\n                JOIN user_source_ids u ON u.source_id = ea.source_id\n                WHERE ea.entity_id = c.id\n                  AND ea.entity_type = 'call'\n            )\n            AND ($3::bool IS FALSE OR c.channel_id = ANY($4))\n            AND ($5::bool IS NULL OR EXISTS (\n                SELECT 1 FROM call_participants cp\n                WHERE cp.call_id = c.id AND cp.user_id = $1\n            ) = $5)\n            AND ($6::bool IS FALSE OR c.id = ANY($7))\n            UNION ALL\n            SELECT\n                id as \"call_id!\",\n                channel_id as \"channel_id!\",\n                room_name as \"room_name!\",\n                created_by as \"created_by!\",\n                started_at as \"started_at!\",\n                ended_at as \"ended_at\",\n                duration_ms as \"duration_ms\",\n                egress_id,\n                recording_key,\n                recording_started_at,\n                custom_name,\n                summary,\n                false as \"is_active!\"\n            FROM call_records cr\n            WHERE EXISTS (\n                SELECT 1 FROM entity_access ea\n                JOIN user_source_ids u ON u.source_id = ea.source_id\n                WHERE ea.entity_id = cr.id\n                  AND ea.entity_type = 'call'\n            )\n            AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))\n            AND ($5::bool IS NULL OR EXISTS (\n                SELECT 1 FROM call_record_participants crp\n                WHERE crp.call_record_id = cr.id AND crp.user_id = $1\n            ) = $5)\n            AND ($6::bool IS FALSE OR cr.id = ANY($7))\n            ORDER BY \"started_at!\" DESC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "room_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_by!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "started_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "duration_ms",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "egress_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "recording_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "recording_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "custom_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "summary",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "is_active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Bool",
+        "UuidArray",
+        "Bool",
+        "Bool",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "e2c56203be986cfddced6fdc1dad55e15f226bd72a17498c501b273762ca201c"
+}

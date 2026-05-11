@@ -1,8 +1,3 @@
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import { toast } from '@core/component/Toast/Toast';
-import type { EntityData } from '@entity';
-import type { NotificationSource } from '@notifications';
-import { useUndoableMutation } from '@queries/undo';
 import {
   applyEntitiesDoneOptimistic,
   executeMarkEntitiesDone,
@@ -12,8 +7,14 @@ import {
   restoreSoupFocus,
 } from '@app/component/next-soup/utils';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
-import type { SoupState } from '../create-soup-state';
 import type { ListView } from '@app/constants/list-views';
+import { toast } from '@core/component/Toast/Toast';
+import type { HotkeyGroup } from '@core/hotkey/types';
+import type { EntityData } from '@entity';
+import type { NotificationSource } from '@notifications';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import { useUndoableMutation } from '@queries/undo';
+import type { SoupState } from '../create-soup-state';
 
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
@@ -31,6 +32,9 @@ export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
 type MakeMarkDoneOptions = {
   userId?: () => string | undefined;
   notificationSource: () => NotificationSource;
+  /** When provided, undo entries pushed by this action are dropped from
+   *  the undo stack when the group is disposed. */
+  hotkeyGroup?: HotkeyGroup;
 };
 
 type MarkDoneVariables = {
@@ -42,7 +46,7 @@ type MarkDoneVariables = {
 
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
-  const { notificationSource } = options;
+  const { notificationSource, hotkeyGroup } = options;
   const previewPanel = useMaybePreviewPanel();
   const inPreview = previewPanel !== undefined;
 
@@ -52,6 +56,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     MarkDoneVariables,
     MarkEntitiesDoneContext
   >(() => ({
+    hotkeyGroup,
     onMutate: (variables) =>
       applyEntitiesDoneOptimistic({
         emailIds: variables.emailIds,
@@ -166,7 +171,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   ) => {
     const currentIndex = soup.focus.index();
     const focusedIdBeforeMarkDone = soup.focus.id();
-    const nextEntity =
+    const nextRow =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
 
     if (soup.collapseEntity.shouldCollapse()) {
@@ -182,9 +187,9 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
 
     soup.selection.clear();
 
-    if (nextEntity) {
-      soup.focus.set(nextEntity.id);
-      onNavigate?.(nextEntity);
+    if (nextRow) {
+      soup.focus.set(nextRow.id);
+      onNavigate?.(nextRow.original);
     }
 
     await execute(entities, restoreFocus);

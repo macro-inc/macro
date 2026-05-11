@@ -115,7 +115,7 @@ export function DebugSlider(props: SliderProps) {
       <div class="w-full shrink">
         <div
           ref={sliderRef}
-          class="relative h-6 bg-message cursor-pointer select-none w-full focus:ring focus:ring-edge"
+          class="relative h-6 bg-message select-none w-full focus:ring focus:ring-edge"
           onMouseDown={handleSliderMouseDown}
           onKeyDown={handleKeyDown}
           tabIndex={0}

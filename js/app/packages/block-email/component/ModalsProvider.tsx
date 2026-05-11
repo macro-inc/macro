@@ -1,10 +1,10 @@
 import { hasPermissions, Permissions } from '@core/component/SharePermissions';
-import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import {
   ShareBlockModal,
   ShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import { createSignal, Show, type ParentProps } from 'solid-js';
+import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
+import { createSignal, type ParentProps, Show } from 'solid-js';
 import { useEmailContext } from './EmailContext';
 import { EmailPropertiesDrawer } from './EmailPropertiesModal';
 

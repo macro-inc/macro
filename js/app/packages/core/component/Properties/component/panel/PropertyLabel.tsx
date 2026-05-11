@@ -1,13 +1,10 @@
 import { useMaybeBlockAliasedName, useMaybeBlockId } from '@core/block';
-import { cn } from '@ui/utils/classname';
-import { Button } from '@ui/components/Button';
-import { DialogWrapper } from '@core/component/DialogWrapper';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
 import UnpinIcon from '@icon/regular/push-pin-slash.svg';
 import XIcon from '@icon/regular/x.svg';
-import { Dialog } from '@kobalte/core/dialog';
 import { useDeleteEntityPropertyMutation } from '@queries/properties/entity';
+import { Button, cn, Dialog, Surface } from '@ui';
 import { type Component, createMemo, createSignal, Show } from 'solid-js';
 import {
   getBuiltinPropertyIds,
@@ -102,7 +99,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         {/* Always reserve space for delete button to prevent layout shift */}
         <Show
           when={canEdit && !props.property.isMetadata}
-          fallback={<div class="w-3 h-3 shrink-0" />}
+          fallback={<div class="size-3 shrink-0" />}
         >
           <Show
             when={
@@ -157,9 +154,9 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         open={deleteConfirmVisible()}
         onOpenChange={setDeleteConfirmVisible}
       >
-        <Dialog.Portal>
-          <DialogWrapper>
-            <div class="flex flex-col overflow-hidden bracket-never text-sm">
+        <Surface depth={2} active>
+          <div class="*:max-h-[75vh]">
+            <div class="flex flex-col overflow-hidden text-sm">
               <div class="flex items-center justify-between gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
                 <Dialog.Title class="pl-2 text-sm font-medium">
                   Delete Property
@@ -189,7 +186,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                   Cancel
                 </Button>
                 <Button
-                  variant="destructive"
+                  variant="danger"
                   onClick={handleDeleteConfirm}
                   disabled={deleteMutation.isPending}
                 >
@@ -197,8 +194,8 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
                 </Button>
               </div>
             </div>
-          </DialogWrapper>
-        </Dialog.Portal>
+          </div>
+        </Surface>
       </Dialog>
     </>
   );

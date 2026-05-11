@@ -1,7 +1,7 @@
-import { createEffect, onCleanup, type Accessor } from 'solid-js';
-import type { ThreadListNavigation } from './ThreadList';
 import { isPlatform } from '@core/util/platform';
+import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import { NEAR_BOTTOM_THRESHOLD } from './constants';
+import type { ThreadListNavigation } from './ThreadList';
 
 /**
  * On native ios app, when the main channel input is focused and the user was near the

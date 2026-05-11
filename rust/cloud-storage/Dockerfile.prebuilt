@@ -1,5 +1,5 @@
 FROM debian:trixie-slim AS runner
-ARG SERVICE_NAME
+ARG SERVICE_NAME=__MISSING_SERVICE_NAME__
 WORKDIR /app
 
 RUN apt-get update \
@@ -10,8 +10,9 @@ RUN apt-get update \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy the pre-built Linux binary from Docker build
-COPY --from=release ${SERVICE_NAME} /app/svc
+# Copy the runtime closure and pre-built Linux binary from the GitHub Actions artifact.
+COPY ./prebuilt/nix-store/ /nix/store/
+COPY ./prebuilt/${SERVICE_NAME} /app/svc
 RUN chmod +x /app/svc
 
 ENV PORT=8080

@@ -1,5 +1,7 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
+import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
+import type { Query } from '@app/component/next-soup/filters/filter-store/types';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
@@ -239,16 +241,30 @@ registerComponent(
   })
 );
 
+type SearchComponentParams = {
+  initialQuery?: string;
+  initialFilters?: Query;
+  initialClientFilters?: SetPredicatesInput<string>;
+};
+
 registerComponent(
   'search',
-  withAuth(() => {
+  withAuth((params: SearchComponentParams = {}) => {
     usePageViewTracking('search');
     const preset = getViewPreset('search');
+    const hasExplicitParams =
+      params.initialQuery !== undefined ||
+      params.initialFilters !== undefined ||
+      params.initialClientFilters !== undefined;
     return (
       <SoupView
         viewName="Search"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
+        initialFilters={params.initialFilters ?? preset?.filters}
+        initialClientFilters={
+          params.initialClientFilters ?? preset?.clientFilters
+        }
+        initialSearchText={params.initialQuery}
+        skipPersistedState={hasExplicitParams}
       />
     );
   })
@@ -266,14 +282,7 @@ registerComponent('email-compose', (params) => {
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
-  return (
-    <ComposeTask
-      initialContent={params?.initialContent}
-      initialTitle={params?.initialTitle}
-      initialAssigneeIds={params?.initialAssigneeIds}
-      onSuccess={params?.onSuccess}
-    />
-  );
+  return <ComposeTask {...params} />;
 });
 registerComponent(
   'import-linear',
@@ -367,6 +376,11 @@ if (LOCAL_ONLY) {
   registerComponent(
     'hotkey-debugger',
     lazy(() => import('@app/component/HotkeyDebugger'))
+  );
+
+  registerComponent(
+    'user-icon',
+    lazy(() => import('@core/internal/UserIconDemo'))
   );
 }
 

@@ -3,7 +3,8 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
-import { Hotkey } from '@core/component/Hotkey';
+import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
@@ -28,24 +29,25 @@ import type {
 } from '@core/component/Properties/types';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import CheckIcon from '@icon/bold/check-bold.svg';
 import ArrowSquareOutIcon from '@icon/regular/arrow-square-out.svg';
 import LinkIcon from '@icon/regular/link-simple.svg';
 import SplitIcon from '@icon/regular/square-half.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
-import { refetchSoupEntity } from '@queries/soup/cache';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
-import { useUserId } from '@core/context/user';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
-import { Button } from '@ui/components/Button';
+import { Button, Hotkey } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
@@ -56,9 +58,6 @@ import {
   saveTaskComposerDraft,
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
-import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import CheckIcon from '@icon/bold/check-bold.svg';
 
 // Show these props in the composer.
 const COMPOSER_PROPERTIES = [
@@ -171,6 +170,17 @@ export interface ComposeTaskProps {
    * toast) so the caller can handle the created task however it needs.
    */
   onSuccess?: (result: ComposeTaskSuccess) => void;
+  /**
+   * Fires when the user submits and the dialog closes but the create-task
+   * network call is still in flight. The originating editor can use this to
+   * drop in an await placeholder which onSuccess later replaces.
+   */
+  onCreateStart?: (init: { title: string; content: string }) => void;
+  /**
+   * Fires if the create-task API call fails after the dialog has been closed.
+   * Pairs with onCreateStart for placeholder cleanup.
+   */
+  onCreateFailure?: () => void;
 }
 
 export function ComposeTask(props: ComposeTaskProps) {
@@ -459,6 +469,11 @@ export function ComposeTask(props: ComposeTaskProps) {
       // Close the dialog immediately
       splitPanel.handle.close();
       props.onClose?.();
+      console.log(
+        '[ComposeTask] dispatching onCreateStart, hasHandler=',
+        Boolean(props.onCreateStart)
+      );
+      props.onCreateStart?.({ title: taskTitle, content: taskContent });
 
       const documentId = await createTaskWithProperties(
         taskTitle,
@@ -471,6 +486,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       setIsCreating(false);
 
       if (!documentId) {
+        props.onCreateFailure?.();
         // Restore the draft and re-open so the user can retry
         saveTaskComposerDraft(draftSnapshot);
         popoverSplit({ type: 'component', id: 'task-compose' });
@@ -596,7 +612,7 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   return (
     <div
-      class="flex flex-col relative bracket-never h-full max-h-full min-h-0"
+      class="flex flex-col relative h-full max-h-full min-h-0"
       tabIndex={-1}
       ref={setContainerRef}
     >
@@ -696,7 +712,7 @@ export function ComposeTask(props: ComposeTaskProps) {
 
       <Show when={errorMessage()}>
         <div class="w-full border-b border-edge-muted" />
-        <div class="px-2 py-2">
+        <div class="p-2">
           <div class="text-sm text-failure-ink px-3 py-2">{errorMessage()}</div>
         </div>
       </Show>
@@ -714,7 +730,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           onClick={handleCreateTask}
           class="px-3 pr-2"
           disabled={title().trim().length === 0 || isCreating()}
-          variant="secondary"
+          variant="base"
         >
           <Show
             when={isCreating()}

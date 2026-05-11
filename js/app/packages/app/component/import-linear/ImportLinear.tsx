@@ -1,14 +1,13 @@
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
-import { parseCsv } from '@core/util/csv';
+import { useContacts } from '@core/user';
 import { createTask } from '@core/util/create';
+import { parseCsv } from '@core/util/csv';
 import { linearCsvRecordToMacroTaskDraft } from '@core/util/linearImport';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { useQueryClient } from '@queries/client';
-import { soupKeys } from '@queries/soup/keys';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
-import { useContacts } from '@core/user';
-import { Button } from '@ui/components/Button';
+import { soupKeys } from '@queries/soup/keys';
+import { Button } from '@ui';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 
@@ -198,13 +197,12 @@ export default function ImportLinear() {
   };
 
   return (
-    <div class="flex flex-col h-full w-full">
+    <div class="flex flex-col size-full">
       <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         <div class="flex items-center justify-between">
           <div class="text-lg font-medium text-ink">Import Linear CSV</div>
-          <DeprecatedTextButton
-            theme="base"
-            text="Clear"
+          <Button
+            variant="base"
             onClick={() => {
               setFileName('');
               setParseError('');
@@ -213,12 +211,14 @@ export default function ImportLinear() {
               setProgress({ type: 'idle' });
               setAssigneeMapping(reconcile({}));
             }}
-          />
+          >
+            Clear
+          </Button>
         </div>
 
         <div class="flex flex-col gap-2">
           <label class="text-sm text-ink-muted">CSV file</label>
-          <label class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-accent-contrast font-medium rounded-md cursor-pointer hover:bg-accent-hover transition-colors w-fit">
+          <label class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-accent-contrast font-medium rounded-md hover:bg-accent-hover transition-colors w-fit">
             <span>Choose File</span>
             <input
               type="file"

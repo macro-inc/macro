@@ -34,6 +34,7 @@ axum = [
 ]
 default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
+markdown_init = ["dep:lexical_client"]
 outbound = [
   "dep:aws-sdk-s3",
   "dep:base64",

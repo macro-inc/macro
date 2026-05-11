@@ -1,10 +1,10 @@
+import type { EntityData } from '@entity';
 import type { ChatStream } from '@service-cognition/generated/schemas';
 import type { Accessor, Setter } from 'solid-js';
 import { createSignal } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { match } from 'ts-pattern';
 import { createConnectionWebsocketEffect } from './websocket';
-import type { EntityData } from '@entity';
 // entities that support streaming
 export type StreamType = {
   chat: ChatStream;

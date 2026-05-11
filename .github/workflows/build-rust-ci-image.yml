@@ -1,0 +1,99 @@
+name: Build Rust CI Image
+
+on:
+  workflow_dispatch: {}
+
+# Create a GitHub-hosted larger image-generation runner with this label before
+# running this workflow. Keep its CPU/RAM/disk size at or below the smallest
+# runner size that should be allowed to use the generated custom image.
+jobs:
+  build-rust-ci-image:
+    runs-on: linux-rust-ci-image-generation-small
+    snapshot:
+      image-name: macro-rust-ci-small
+      version: 1.*
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            curl \
+            postgresql-client \
+            unzip
+
+      - name: Install Nix
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
+            --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+            sh -s -- install linux --no-confirm --init systemd \
+            --extra-conf "experimental-features = nix-command flakes" \
+            --extra-conf "trusted-users = root runner"
+          # Daemon socket may be active but not reachable in this shell; ensure it.
+          sudo systemctl enable --now nix-daemon.socket nix-daemon.service
+          # Make nix discoverable in non-login shells (GHA default).
+          echo 'PATH="/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' \
+            | sudo tee /etc/environment >/dev/null
+
+      - name: Configure Cachix
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Materialize dev shell into /nix/store
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NIX_REMOTE=daemon
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          sudo mkdir -p /var/cache/nix
+          sudo chown runner:runner /var/cache/nix
+          cachix watch-store "$CACHIX_CACHE_NAME" &
+          cachix_pid=$!
+          trap 'kill "$cachix_pid" || true' EXIT
+          nix develop --profile /var/cache/nix/dev-shell --command true
+
+      - name: Write image markers
+        shell: bash
+        env:
+          BUILD_RUN_ID: ${{ github.run_id }}
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          marker="run_id=${BUILD_RUN_ID} sha=${BUILD_SHA} ts=$(date -u +%FT%TZ)"
+          # Write to multiple locations to learn which the snapshot preserves.
+          echo "$marker" | sudo tee /opt/macro-ami-marker.txt >/dev/null
+          echo "$marker" | sudo tee /etc/macro-ami-marker.txt >/dev/null
+          echo "$marker" | sudo tee /usr/local/share/macro-ami-marker.txt >/dev/null
+          echo "$marker" > /home/runner/macro-ami-marker.txt
+          # Also drop a sentinel inside /nix so we can tell if the whole tree was wiped.
+          echo "$marker" | sudo tee /nix/macro-ami-marker.txt >/dev/null
+
+      - name: Verify image contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NIX_REMOTE=daemon
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          cachix watch-store "$CACHIX_CACHE_NAME" &
+          cachix_pid=$!
+          trap 'kill "$cachix_pid" || true' EXIT
+          nix --version
+          test -L /var/cache/nix/dev-shell
+          nix develop --profile /var/cache/nix/dev-shell --command bash -lc '
+            set -euo pipefail
+            rustc --version
+            cargo --version
+            cargo clippy --version
+            cargo fmt --version
+            cargo nextest --version
+            just --version
+            sqlx --version
+            sccache --version
+            mold --version
+          '

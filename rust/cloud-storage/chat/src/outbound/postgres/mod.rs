@@ -49,13 +49,6 @@ impl PgChatRepo {
         queries::get_messages::get_messages(&self.pool, chat_id).await
     }
 
-    async fn get_web_citations(
-        &self,
-        chat_id: &str,
-    ) -> anyhow::Result<Vec<(String, Vec<WebCitation>)>> {
-        queries::get_web_citations::get_web_citations(&self.pool, chat_id).await
-    }
-
     /// Store a resolved message without going through the trait.
     pub async fn store_resolved_message_static(
         &self,
@@ -130,8 +123,6 @@ impl ChatRepo for PgChatRepo {
         let chat = self.get_metadata(chat_id).await?;
         let mut messages = self.get_messages(chat_id).await.map_err(to_chat_err)?;
         messages.retain(|m| m.role != ai::types::Role::System);
-        let web_citations = self.get_web_citations(chat_id).await.unwrap_or_default();
-
         Ok(ChatResponse {
             id: chat.id,
             user_id: chat.user_id,
@@ -141,11 +132,6 @@ impl ChatRepo for PgChatRepo {
             project_id: chat.project_id,
             created_at: chat.created_at,
             updated_at: chat.updated_at,
-            attachments: Vec::new(),
-            token_count: chat.token_count,
-            available_models: vec![FALLBACK_MODEL],
-            web_citations,
-            is_persistent: chat.is_persistent,
         })
     }
 
@@ -365,7 +351,7 @@ impl ChatRepo for PgChatRepo {
             .map_err(to_chat_err)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip(self))]
     async fn get_resolved_message(&self, message_id: &str) -> Result<FormattedParts> {
         queries::get_resolved_message::get_resolved_message(&self.pool, message_id)
             .await
@@ -460,7 +446,7 @@ impl MessageRepo for PgChatRepo {
             .map_err(to_chat_err)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip(self))]
     async fn get_resolved_message(&self, message_id: &str) -> Result<FormattedParts> {
         queries::get_resolved_message::get_resolved_message(&self.pool, message_id)
             .await

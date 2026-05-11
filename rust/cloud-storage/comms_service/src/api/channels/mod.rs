@@ -9,7 +9,6 @@ pub mod delete_channel;
 pub mod delete_message;
 pub mod get_channel;
 pub mod get_channel_metadata;
-pub mod get_channel_transcript;
 pub mod get_mentions;
 pub mod get_message_with_context;
 pub mod get_or_create_dm;
@@ -78,10 +77,6 @@ pub fn router() -> Router<AppState> {
         .route(
             "/{channel_id}/metadata",
             get(get_channel_metadata::handler_external),
-        )
-        .route(
-            "/{channel_id}/transcript",
-            get(get_channel_transcript::handler_external),
         )
         .route("/messages/context", get(get_message_with_context::handler))
 }

@@ -36,16 +36,16 @@ export default function PcNoiseGridDemo() {
   };
 
   return (
-    <div class="flex flex-col h-full w-full">
+    <div class="flex flex-col size-full">
       <Bar
         left={<div class="p-2 text-sm w-2xl truncate">PcNoiseGrid</div>}
         center={<div></div>}
       ></Bar>
-      <div class="flex flex-row h-full w-full">
+      <div class="flex flex-row size-full">
         {/* Left side - PcNoiseGrid preview */}
         <div class="flex-1 relative bg-panel flex items-center justify-center p-4">
-          <div class="w-full h-full flex items-center justify-center border border-edge">
-            <div class="w-full h-full relative bg-panel text-accent">
+          <div class="size-full flex items-center justify-center border border-edge">
+            <div class="size-full relative bg-panel text-accent">
               <PcNoiseGrid
                 cellSize={cellSize()}
                 warp={warp()}

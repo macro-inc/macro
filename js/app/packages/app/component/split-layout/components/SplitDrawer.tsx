@@ -1,7 +1,8 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@icon/regular/x.svg';
+import { Button, Layer } from '@ui';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { useSplitPanel } from '../layoutUtils';
@@ -31,7 +32,7 @@ function DrawerInner(props: ParentProps<{ id: string }>) {
   }
 
   return (
-    <div class="w-full h-full p-2 overflow-auto shrink" ref={ref}>
+    <div class="size-full p-2 overflow-auto shrink" ref={ref}>
       {props.children}
     </div>
   );
@@ -114,32 +115,35 @@ export function SplitDrawer(
   return (
     <Show when={drawerControl.isOpen()}>
       <ScopedPortal scope="split">
-        <div
-          class="inset-px bg-modal-overlay absolute"
-          style={{ top: `${contentOffsetTop()}px` }}
-          onClick={drawerControl.close}
-        />
-        <div class={getPositionClasses()} style={{ ...getSizeStyle() }}>
-          <div class={getGradientMaskClasses()} />
-          <div class="flex items-center justify-start gap-2 shrink-0 px-2">
-            <Show when={props.title}>
-              <h3 class="text-md font-medium text-content-secondary shrink truncate my-3">
-                {props.title}
-              </h3>
-            </Show>
-            <div class="grow" />
-            <DeprecatedIconButton
-              icon={CloseIcon}
-              theme="clear"
-              size="sm"
-              tooltip={{ label: 'Close' }}
-              onClick={drawerControl.close}
-            />
+        <Layer depth={2}>
+          <div
+            class="inset-px bg-modal-overlay absolute"
+            style={{ top: `${contentOffsetTop()}px` }}
+            onClick={drawerControl.close}
+          />
+          <div class={getPositionClasses()} style={{ ...getSizeStyle() }}>
+            <div class={getGradientMaskClasses()} />
+            <div class="flex items-center justify-start gap-2 shrink-0 px-2">
+              <Show when={props.title}>
+                <h3 class="text-md font-medium text-content-secondary shrink truncate my-3">
+                  {props.title}
+                </h3>
+              </Show>
+              <div class="grow" />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                tooltip={<LabelAndHotKey label="Close" />}
+                onClick={drawerControl.close}
+              >
+                <CloseIcon />
+              </Button>
+            </div>
+            <div class="size-full overflow-hidden">
+              <DrawerInner id={props.id}>{props.children}</DrawerInner>
+            </div>
           </div>
-          <div class="size-full overflow-hidden">
-            <DrawerInner id={props.id}>{props.children}</DrawerInner>
-          </div>
-        </div>
+        </Layer>
       </ScopedPortal>
     </Show>
   );

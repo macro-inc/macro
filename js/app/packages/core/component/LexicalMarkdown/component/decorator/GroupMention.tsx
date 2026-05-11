@@ -1,5 +1,5 @@
-import { cn } from '@ui/utils/classname';
 import type { GroupMentionDecoratorProps } from '@lexical-core';
+import { cn } from '@ui';
 import { useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
@@ -16,8 +16,8 @@ export function GroupMention(props: GroupMentionDecoratorProps) {
   return (
     <span
       class={cn(
-        'relative py-0.5 px-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink',
-        isSelectedAsNode() && 'bracket-offset-2'
+        'relative p-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink',
+        isSelectedAsNode() && 'bg-active'
       )}
     >
       <span data-group-alias={props.groupAlias} data-group-mention="true">

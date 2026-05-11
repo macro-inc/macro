@@ -67,12 +67,9 @@ async function runBinary(
 	binaryName: string,
 	rustCloudStorageDir = getRustCloudStorageDir(),
 ): Promise<string> {
-	const binaryPath = path.join(
-		rustCloudStorageDir,
-		"target",
-		"debug",
-		binaryName,
-	);
+	const binaryPath = process.env.OPENAPI_BINS_DIR
+		? path.join(process.env.OPENAPI_BINS_DIR, binaryName)
+		: path.join(rustCloudStorageDir, "target", "debug", binaryName);
 	const proc = Bun.spawn([binaryPath], { stdout: "pipe", stderr: "pipe" });
 	const TIMEOUT_SENTINEL = Symbol("timeout");
 	let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -224,10 +221,14 @@ async function main() {
 
 	console.log(`\nProcessing ${servicesToProcess.length} service(s)...\n`);
 
-	// Phase 1: Build all binaries in a single cargo invocation (parallelized by cargo)
+	// Phase 1: Build all binaries (skipped when OPENAPI_BINS_DIR is set)
 	const buildStart = performance.now();
-	await buildOpenApiBinaries(crateNames);
-	console.log(`Phase 1 (cargo build) total: ${elapsed(buildStart)}`);
+	if (process.env.OPENAPI_BINS_DIR) {
+		console.log(`Phase 1 (cargo build) skipped — using OPENAPI_BINS_DIR=${process.env.OPENAPI_BINS_DIR}`);
+	} else {
+		await buildOpenApiBinaries(crateNames);
+		console.log(`Phase 1 (cargo build) total: ${elapsed(buildStart)}`);
+	}
 
 	// Phase 2: Run binaries and generate TypeScript in parallel
 	console.log("\nGenerating TypeScript clients...\n");

@@ -80,8 +80,7 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button, cn } from '@ui';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -311,7 +310,7 @@ function TruncatedRecipientList(props: {
   return (
     <div
       use:observedSize={{ setSize: setContainerRect }}
-      class="flex items-center text-sm overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1 cursor-pointer"
+      class="flex items-center text-sm overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1"
       onclick={props.onClick}
     >
       {/* Hidden measurement element - must have same font styles */}
@@ -544,6 +543,11 @@ export function BaseInput(props: {
 
   const sendMutation = useSendMessageMutation({
     onSuccess: async ({ message }) => {
+      // Cancel the post-reset save scheduled by sendEmail's resetState() and
+      // re-enable autosave for any future edits in this BaseInput instance
+      // (covers new-message flows where replyingTo never changes).
+      if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+      pendingSend = false;
       const draftId = message.db_id;
       const toastId = toast.success(
         'Email sent',
@@ -574,6 +578,9 @@ export function BaseInput(props: {
       }
     },
     onError: () => {
+      // Restore autosave so the user can keep editing after a failed send.
+      if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+      pendingSend = false;
       toast.failure('Failed to send email');
     },
   });
@@ -629,6 +636,8 @@ export function BaseInput(props: {
   const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   let draftSaveTimer: number | undefined;
+  let pendingDeletion = false;
+  let pendingSend = false;
   const DRAFT_DEBOUNCE_MS = 500;
 
   function collectDraft() {
@@ -665,7 +674,7 @@ export function BaseInput(props: {
   }
 
   async function executeSaveDraft() {
-    if (sendMutation.isPending) {
+    if (sendMutation.isPending || pendingDeletion || pendingSend) {
       return;
     }
     const draftToSave = collectDraft();
@@ -760,6 +769,25 @@ export function BaseInput(props: {
       void executeSaveDraft();
     }, DRAFT_DEBOUNCE_MS);
   }
+
+  onCleanup(() => {
+    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+  });
+
+  // After a send, the bottom input stays mounted and its replyingTo flips to
+  // the just-sent message once the thread refetches. Cancel the inhibited
+  // post-send save and re-enable saves so a fresh edit under the new form
+  // context can be persisted.
+  createEffect(
+    on(
+      () => props.replyingTo()?.db_id,
+      () => {
+        if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+        pendingSend = false;
+      },
+      { defer: true }
+    )
+  );
 
   const handleChipDragStart = (
     field: 'to' | 'cc' | 'bcc',
@@ -970,6 +998,12 @@ export function BaseInput(props: {
       },
     });
 
+    // Block any save scheduled by reset side effects (form().reset() callDirty,
+    // clearEmailBody editor onChange firing on a microtask). Without this, the
+    // 500ms timer fires after the thread refetches, the form memo switches to
+    // the just-sent message's reply context, and we POST an empty draft
+    // replying to the message we just sent — flipping it back to is_draft=TRUE.
+    pendingSend = true;
     resetState();
     clearDraftState();
 
@@ -992,14 +1026,32 @@ export function BaseInput(props: {
   };
 
   const deleteDraftAndReset = async () => {
+    // Block any save scheduled by resetState's side effects (sync form.reset
+    // callDirty + async editor onChange listener). When clearDraftState() has
+    // a setShowReply, the BaseInput unmounts and the flag goes away with it;
+    // when it doesn't (e.g. the bottom-of-thread input), the component stays
+    // mounted and we must restore the flag so subsequent edits can autosave.
+    pendingDeletion = true;
+    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     const draftId = savedDraftId();
-    if (draftId) {
-      await deleteDraftMutation.mutateAsync({ draftId });
-      refetchThreadMessages();
+    try {
+      if (draftId) {
+        await deleteDraftMutation.mutateAsync({ draftId });
+        refetchThreadMessages();
+      }
+      resetState();
+      form().setReplyAppended(false);
+      clearDraftState();
+    } finally {
+      // Yield past any sync/microtask save scheduling triggered by resetState,
+      // then cancel the resulting timer and re-enable autosave. Runs on both
+      // success and error paths so a failed delete doesn't leave the user
+      // unable to save further edits.
+      setTimeout(() => {
+        if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+        pendingDeletion = false;
+      }, 0);
     }
-    resetState();
-    form().setReplyAppended(false);
-    clearDraftState();
   };
 
   const handleUserMention = (mention: UserMentionRecord) => {
@@ -1248,7 +1300,7 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] mb-[-7px] max-w-full"
+      class="relative flex flex-col flex-1 bg-input border border-edge rounded-md max-w-full"
     >
       {/* Top Bar */}
       <div class="relative flex items-start gap-2 p-2">
@@ -1446,12 +1498,11 @@ export function BaseInput(props: {
           placeholder="Subject"
         />
       </div>
-      <div class="w-full h-full flex flex-col">
+      <div class="size-full flex flex-col">
         <Show when={showFormatRibbon()}>
           <div class="flex flex-row w-full gap-2 items-center p-2">
             <FormatButtons
               selectionState={() => formatState}
-              includeQuote
               onInlineFormat={(format) => {
                 const editor_ = editor();
                 if (!editor_) return;
@@ -1597,7 +1648,7 @@ export function BaseInput(props: {
             </For>
           </div>
         </div>
-        <div class="flex flex-row w-full h-8 justify-between items-center py-2 px-2 mb-2 space-x-2 allow-css-brackets">
+        <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2">
           <div class="flex flex-row items-center gap-1">
             <div class="relative">
               <Button
@@ -1669,15 +1720,13 @@ export function BaseInput(props: {
                 disablePortal={isMobile()}
               />
             </Show>
-            <Show when={savedDraftId()}>
-              <Button
-                onclick={deleteDraftAndReset}
-                tooltip="Delete draft"
-                class="aspect-square p-1"
-              >
-                <Trash class="h-5" />
-              </Button>
-            </Show>
+            <Button
+              onclick={deleteDraftAndReset}
+              tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
+              class="aspect-square p-1"
+            >
+              <Trash class="h-5" />
+            </Button>
           </div>
 
           <Tooltip

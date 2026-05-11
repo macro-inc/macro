@@ -12,6 +12,17 @@ export function truncateString(str: string, maxLength: number) {
   return str.slice(0, maxLength) + '...';
 }
 
+export const DEFAULT_LABEL_MAX_CHARS = 30;
+
+/**
+ * Truncates a display label to a max character count, appending a single
+ * ellipsis character (`…`). Used for chip labels, display names, and other
+ * UI labels where character-based truncation is preferred over CSS truncation.
+ */
+export function truncateLabel(raw: string, max = DEFAULT_LABEL_MAX_CHARS) {
+  return raw.length > max ? `${raw.slice(0, max)}…` : raw;
+}
+
 let encoder: TextEncoder;
 /**
  * Encodes a string to UTF-8 bytes

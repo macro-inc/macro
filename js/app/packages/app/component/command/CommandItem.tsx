@@ -1,16 +1,24 @@
-import { Hotkey } from '@core/component/Hotkey';
-import { hasValidHotkey } from '@core/hotkey/utils';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { HotkeySequenceStep } from '@core/component/Tooltip';
-import { For, Match, Show, Switch } from 'solid-js';
+import { hasValidHotkey } from '@core/hotkey/utils';
+import { Entity, type EntityData } from '@entity';
+import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import {
+  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
+  enqueueDocumentWakeup,
+  isWakeableDocument,
+} from '@queries/preview';
+import { cn, Hotkey } from '@ui';
+import { createEffect, For, Match, Show, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import {
+  type CommandMenuItem,
   isCommandItem,
   isEntityItem,
-  type CommandMenuItem,
+  isSearchItem,
+  type SearchItem,
 } from './useCommandItems';
-import { Entity, type EntityData } from '@entity';
-import { cn } from '@ui/utils/classname';
-import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
-import { Dynamic } from 'solid-js/web';
 
 export interface CommandItemProps {
   item: CommandMenuItem;
@@ -106,6 +114,15 @@ function CommandDisplay(props: { item: CommandMenuItem }) {
 }
 
 function EntityDisplay(props: { entity: EntityData }) {
+  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
+
+  createEffect(() => {
+    if (!bulkWakeupEnabled().enabled) return;
+    if (!isWakeableDocument(props.entity)) return;
+
+    enqueueDocumentWakeup(props.entity);
+  });
+
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
       <div class="size-5 p-0.5 flex items-center justify-center text-ink-muted shrink-0">
@@ -116,9 +133,25 @@ function EntityDisplay(props: { entity: EntityData }) {
   );
 }
 
+function SearchDisplay(props: { item: SearchItem }) {
+  return (
+    <div class="flex items-center gap-2 flex-1 min-w-0">
+      <div class="size-5 flex items-center justify-center text-ink-muted shrink-0">
+        <SearchIcon class="size-4" />
+      </div>
+      <span class="truncate text-ink">
+        Search for <span class="text-ink">“{props.item.query}”</span>
+      </span>
+    </div>
+  );
+}
+
 function ItemDisplay(props: { item: CommandMenuItem }) {
   return (
     <Switch>
+      <Match when={isSearchItem(props.item) && props.item}>
+        {(item) => <SearchDisplay item={item()} />}
+      </Match>
       <Match when={isCommandItem(props.item) && props.item}>
         {(item) => <CommandDisplay item={item()} />}
       </Match>
@@ -149,7 +182,7 @@ export function CommandItem(props: CommandItemProps) {
     >
       {/* Accent bar indicator */}
       <div
-        class={cn('absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0', {
+        class={cn('absolute h-full w-0.75 left-0 top-0 bg-accent opacity-0', {
           'opacity-100': props.selected,
         })}
       />

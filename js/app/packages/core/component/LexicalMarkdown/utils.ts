@@ -1,5 +1,4 @@
 import { ENABLE_MARKDOWN_SEARCH_TEXT } from '@core/constant/featureFlags';
-import { SKIP_SCROLL_INTO_VIEW_TAG } from '@lexical-core/constants';
 import { $isCodeNode } from '@lexical/code';
 import { $generateNodesFromDOM } from '@lexical/html';
 import {
@@ -30,6 +29,11 @@ import {
   INITIALIZE_LOCAL_STATUS,
   INTERNAL_TRANSFORMERS,
 } from '@lexical-core';
+import { SKIP_SCROLL_INTO_VIEW_TAG } from '@lexical-core/constants';
+import {
+  $getId,
+  INITIALIZE_DOCUMENT_IDS,
+} from '@lexical-core/plugins/nodeIdPlugin';
 import {
   $addUpdateTag,
   $createParagraphNode,
@@ -70,16 +74,12 @@ import {
   type TextNode,
 } from 'lexical';
 import type { Setter } from 'solid-js';
-import {
-  $getId,
-  INITIALIZE_DOCUMENT_IDS,
-} from '@lexical-core/plugins/nodeIdPlugin';
 import { MarkdownEditorErrors } from './constants';
 import {
   $applyDocumentMetadataFromSerialized,
   $getDocumentMetadata,
 } from './plugins';
-import { MARKDOWN_VERSION_COUNTER, STAGING_TAG } from './version';
+import { MARKDOWN_VERSION_COUNTER } from './version';
 
 /**
  * Type guard to check if the object is a LexicalEditor
@@ -219,11 +219,7 @@ export function initializeEditorWithVersionedState(
       editor.dispatchCommand(INITIALIZE_LOCAL_STATUS, peerId);
     }
     if (metadata.version > MARKDOWN_VERSION_COUNTER) {
-      if (metadata.environmentTags?.includes(STAGING_TAG)) {
-        return MarkdownEditorErrors.STAGING_VERSION_MISMATCH_ERROR;
-      } else {
-        return MarkdownEditorErrors.VERSION_MISMATCH_ERROR;
-      }
+      return MarkdownEditorErrors.VERSION_MISMATCH_ERROR;
     }
     return null;
   } catch (e) {

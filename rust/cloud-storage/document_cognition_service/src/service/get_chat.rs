@@ -4,12 +4,7 @@ use crate::core::model::FALLBACK_MODEL;
 use crate::model::chats::ChatResponse;
 use ai::model_selection::ModelSelection;
 use anyhow::Context;
-use doppleganger::Mirror;
-use macro_db_client::dcs::get_chat::{
-    get_chat_db, get_messages, get_web_citations, raw_attachments,
-};
-use macro_db_client::dcs::get_document_name_and_type::get_document_name_and_type;
-use model::chat::{AttachmentMetadata, AttachmentType, ChatAttachmentWithName};
+use macro_db_client::dcs::get_chat::{get_chat_db, get_messages, get_web_citations};
 use unfurl_service::GetUnfurlResponse;
 
 #[tracing::instrument(err, skip(ctx))]
@@ -21,80 +16,8 @@ pub async fn get_chat(
     let chat = get_chat_db(&ctx.db, chat_id)
         .await
         .context("Failed to get chat from database")?;
-    let db = &ctx.db.clone();
-    let raw_attachments = raw_attachments(&ctx.db, chat_id)
-        .await
-        .context("Failed to get raw attachments")?;
-    // Get the document names for all the attachments
-    let mut attachments: Vec<ChatAttachmentWithName> = Vec::new();
-    for attachment in raw_attachments {
-        let metadata = match attachment.attachment_type {
-            AttachmentType::Image => {
-                get_document_name_and_type(db.clone(), &attachment.attachment_id)
-                    .await
-                    .map(|(image_name, image_extension)| AttachmentMetadata::Image {
-                        image_name,
-                        image_extension,
-                    })
-                    .ok()
-            }
-            AttachmentType::Project => {
-                get_document_name_and_type(db.clone(), &attachment.attachment_id)
-                    .await
-                    .map(|(name, _)| AttachmentMetadata::Project { project_name: name })
-                    .ok()
-            }
 
-            AttachmentType::Document => {
-                get_document_name_and_type(db.clone(), &attachment.attachment_id)
-                    .await
-                    .map(
-                        |(document_name, document_type)| AttachmentMetadata::Document {
-                            document_type,
-                            document_name,
-                        },
-                    )
-                    .ok()
-            }
-            AttachmentType::Channel => ctx
-                .scribe
-                .channel
-                .get_channel_metadata(attachment.attachment_id.as_str())
-                .await
-                .map(|channel_metadata| AttachmentMetadata::Channel {
-                    channel_name: channel_metadata.name,
-                    channel_type: model::comms::ChannelType::mirror(channel_metadata.channel_type),
-                })
-                .ok(),
-            AttachmentType::Email => {
-                let thread = ctx
-                    .scribe
-                    .email
-                    .get_email_messages_by_thread_id(&attachment.attachment_id, 0, 1)
-                    .await;
-
-                thread
-                    .map(|thread| {
-                        thread
-                            .first()
-                            .and_then(|first| first.subject.clone())
-                            .unwrap_or("No Subject".into())
-                    })
-                    .map(|subject| AttachmentMetadata::Email {
-                        email_subject: subject,
-                    })
-                    .ok()
-            }
-        };
-        attachments.push(ChatAttachmentWithName {
-            attachment_type: attachment.attachment_type,
-            attachment_id: attachment.attachment_id,
-            metadata,
-            id: attachment.id.clone(),
-        });
-    }
-
-    let messages = get_messages(&ctx.db, chat_id, attachments.as_slice())
+    let messages = get_messages(&ctx.db, chat_id)
         .await
         .context("Failed to get messages")?;
 
@@ -136,7 +59,7 @@ pub async fn get_chat(
         project_id: chat.project_id,
         created_at: chat.created_at,
         updated_at: chat.updated_at,
-        attachments,
+        attachments: vec![],
         token_count: chat.token_count,
         available_models: model_selection.available_models,
         web_citations,

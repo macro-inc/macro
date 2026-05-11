@@ -1,11 +1,12 @@
-use async_openai::types::{
-    ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage,
-    ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestAssistantMessageContentPart,
-    ChatCompletionRequestMessage, ChatCompletionRequestMessageContentPartImage,
-    ChatCompletionRequestMessageContentPartText, ChatCompletionRequestSystemMessage,
-    ChatCompletionRequestToolMessage, ChatCompletionRequestToolMessageContent,
-    ChatCompletionRequestUserMessage, ChatCompletionRequestUserMessageContent,
-    ChatCompletionRequestUserMessageContentPart, FunctionCall, ImageDetail, ImageUrl,
+use async_openai::types::chat::{
+    ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls,
+    ChatCompletionRequestAssistantMessage, ChatCompletionRequestAssistantMessageContent,
+    ChatCompletionRequestAssistantMessageContentPart, ChatCompletionRequestMessage,
+    ChatCompletionRequestMessageContentPartImage, ChatCompletionRequestMessageContentPartText,
+    ChatCompletionRequestSystemMessage, ChatCompletionRequestToolMessage,
+    ChatCompletionRequestToolMessageContent, ChatCompletionRequestUserMessage,
+    ChatCompletionRequestUserMessageContent, ChatCompletionRequestUserMessageContentPart,
+    FunctionCall, ImageDetail, ImageUrl,
 };
 
 use crate::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, ChatMessages, Role};
@@ -30,86 +31,84 @@ fn image_into_openai_image_url(image: ImageData) -> ImageUrl {
 impl From<ChatMessage> for Vec<ChatCompletionRequestMessage> {
     fn from(value: ChatMessage) -> Self {
         match value.content {
-            ChatMessageContent::Text(text) => {
-                match value.role {
-                    Role::Assistant => {
-                        vec![ChatCompletionRequestMessage::Assistant(
-                            ChatCompletionRequestAssistantMessage {
-                                content: Some(ChatCompletionRequestAssistantMessageContent::Text(
-                                    text.to_owned(),
-                                )),
-                                ..Default::default()
+            ChatMessageContent::Text(text) => match value.role {
+                Role::Assistant => {
+                    vec![ChatCompletionRequestMessage::Assistant(
+                        ChatCompletionRequestAssistantMessage {
+                            content: Some(ChatCompletionRequestAssistantMessageContent::Text(
+                                text.to_owned(),
+                            )),
+                            ..Default::default()
+                        },
+                    )]
+                }
+                Role::User => {
+                    if let Some(attachments) = value.attachments {
+                        let formatted = attachments.into_formatted_parts().compact();
+                        let mut user_message_content =
+                            vec![ChatCompletionRequestUserMessageContentPart::Text(
+                                ChatCompletionRequestMessageContentPartText { text },
+                            )];
+
+                        for part in formatted.into_parts().into_inner() {
+                            match part {
+                                TextOrImage::Text(attachment_text) => {
+                                    user_message_content.push(
+                                        ChatCompletionRequestUserMessageContentPart::Text(
+                                            ChatCompletionRequestMessageContentPartText {
+                                                text: attachment_text,
+                                            },
+                                        ),
+                                    );
+                                }
+                                TextOrImage::Image(image) => {
+                                    user_message_content.push(
+                                        ChatCompletionRequestUserMessageContentPart::ImageUrl(
+                                            ChatCompletionRequestMessageContentPartImage {
+                                                image_url: image_into_openai_image_url(image),
+                                            },
+                                        ),
+                                    );
+                                }
+                            }
+                        }
+
+                        vec![ChatCompletionRequestMessage::User(
+                            ChatCompletionRequestUserMessage {
+                                name: None,
+                                content: ChatCompletionRequestUserMessageContent::Array(
+                                    user_message_content,
+                                ),
+                            },
+                        )]
+                    } else {
+                        vec![ChatCompletionRequestMessage::User(
+                            ChatCompletionRequestUserMessage {
+                                name: None,
+                                content: ChatCompletionRequestUserMessageContent::Text(text),
                             },
                         )]
                     }
-                    Role::User => {
-                        if let Some(attachments) = value.attachments {
-                            let formatted = attachments.into_formatted_parts().compact();
-                            let mut user_message_content =
-                                vec![ChatCompletionRequestUserMessageContentPart::Text(
-                                    ChatCompletionRequestMessageContentPartText { text },
-                                )];
-
-                            for part in formatted.into_parts().into_inner() {
-                                match part {
-                                    TextOrImage::Text(attachment_text) => {
-                                        user_message_content.push(
-                                            ChatCompletionRequestUserMessageContentPart::Text(
-                                                ChatCompletionRequestMessageContentPartText {
-                                                    text: attachment_text,
-                                                },
-                                            ),
-                                        );
-                                    }
-                                    TextOrImage::Image(image) => {
-                                        user_message_content.push(
-                                            ChatCompletionRequestUserMessageContentPart::ImageUrl(
-                                                ChatCompletionRequestMessageContentPartImage {
-                                                    image_url: image_into_openai_image_url(image),
-                                                },
-                                            ),
-                                        );
-                                    }
-                                }
-                            }
-
-                            vec![ChatCompletionRequestMessage::User(
-                                ChatCompletionRequestUserMessage {
-                                    name: None,
-                                    content: ChatCompletionRequestUserMessageContent::Array(
-                                        user_message_content,
-                                    ),
-                                },
-                            )]
-                        } else {
-                            vec![ChatCompletionRequestMessage::User(
-                                ChatCompletionRequestUserMessage {
-                                    name: None,
-                                    content: ChatCompletionRequestUserMessageContent::Text(text),
-                                },
-                            )]
-                        }
-                    }
-                    Role::System => {
-                        vec![ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
+                }
+                Role::System => {
+                    vec![ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
                         content:
-                            async_openai::types::ChatCompletionRequestSystemMessageContent::Text(
+                            async_openai::types::chat::ChatCompletionRequestSystemMessageContent::Text(
                                 text,
                             ),
                         ..Default::default()
                     })]
-                    }
                 }
-            }
+            },
             ChatMessageContent::AssistantMessageParts(parts) => {
                 let mut messages = Vec::new();
                 let mut pending_text = None::<String>;
-                let mut pending_tool_calls: Vec<ChatCompletionMessageToolCall> = Vec::new();
+                let mut pending_tool_calls: Vec<ChatCompletionMessageToolCalls> = Vec::new();
 
                 fn flush_pending(
                     messages: &mut Vec<ChatCompletionRequestMessage>,
                     pending_text: &mut Option<String>,
-                    pending_tool_calls: &mut Vec<ChatCompletionMessageToolCall>,
+                    pending_tool_calls: &mut Vec<ChatCompletionMessageToolCalls>,
                 ) {
                     if pending_text.is_some() || !pending_tool_calls.is_empty() {
                         messages.push(ChatCompletionRequestMessage::Assistant(
@@ -146,15 +145,16 @@ impl From<ChatMessage> for Vec<ChatCompletionRequestMessage> {
                             }
                         }
                         AssistantMessagePart::ToolCall { name, json, id } => {
-                            let tool_call = ChatCompletionMessageToolCall {
-                                function: FunctionCall {
-                                    arguments: serde_json::to_string(&json)
-                                        .unwrap_or(String::new()),
-                                    name: name.clone(),
+                            let tool_call = ChatCompletionMessageToolCalls::Function(
+                                ChatCompletionMessageToolCall {
+                                    function: FunctionCall {
+                                        arguments: serde_json::to_string(&json)
+                                            .unwrap_or(String::new()),
+                                        name: name.clone(),
+                                    },
+                                    id: id.clone(),
                                 },
-                                id: id.clone(),
-                                r#type: async_openai::types::ChatCompletionToolType::Function,
-                            };
+                            );
                             pending_tool_calls.push(tool_call);
                         }
                         AssistantMessagePart::ToolCallResponseJson { json, id, .. } => {
@@ -215,12 +215,14 @@ pub fn convert_message(
         ChatCompletionRequestMessage::System(system_msg) => ChatMessage {
             role: Role::System,
             content: match system_msg.content {
-                async_openai::types::ChatCompletionRequestSystemMessageContent::Text(text) => {
-                    ChatMessageContent::Text(text)
-                }
-                async_openai::types::ChatCompletionRequestSystemMessageContent::Array(parts) => {
+                async_openai::types::chat::ChatCompletionRequestSystemMessageContent::Text(
+                    text,
+                ) => ChatMessageContent::Text(text),
+                async_openai::types::chat::ChatCompletionRequestSystemMessageContent::Array(
+                    parts,
+                ) => {
                     let text_parts: Vec<String> = parts.iter().map(|part| {
-                        let async_openai::types::ChatCompletionRequestSystemMessageContentPart::Text(text_part) = part;
+                        let async_openai::types::chat::ChatCompletionRequestSystemMessageContentPart::Text(text_part) = part;
                         text_part.text.clone()
                     }).collect();
                     ChatMessageContent::Text(text_parts.join(" "))
@@ -292,7 +294,11 @@ pub fn convert_message(
 
             if let Some(tool_calls) = assistant_msg.tool_calls {
                 for tool_call in tool_calls {
-                    if let Ok(json_value) = serde_json::from_str(&tool_call.function.arguments) {
+                    if let async_openai::types::chat::ChatCompletionMessageToolCalls::Function(
+                        tool_call,
+                    ) = tool_call
+                        && let Ok(json_value) = serde_json::from_str(&tool_call.function.arguments)
+                    {
                         parts.push(AssistantMessagePart::ToolCall {
                             name: tool_call.function.name,
                             json: json_value,

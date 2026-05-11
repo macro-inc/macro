@@ -1,10 +1,13 @@
 import { analytics } from '@app/lib/analytics';
+import { setAutomationComposerOpen } from '@block-automation/component';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
-import { Hotkey } from '@core/component/Hotkey';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import {
+  createHotkeyGroup,
+  registerHotkey,
+  useHotkeyDOMScope,
+} from '@core/hotkey/hotkeys';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type {
@@ -38,6 +41,7 @@ import WideFolder from '@macro-icons/wide/folder.svg';
 import WideStar from '@macro-icons/wide/star.svg';
 import WideTask from '@macro-icons/wide/task.svg';
 import { createProject } from '@queries/storage/projects';
+import { cn, Hotkey, Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -50,8 +54,6 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
-import { cn } from '@ui/utils/classname';
-import { setAutomationComposerOpen } from '@block-automation/component';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -358,8 +360,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
 ];
 
-const USE_ENTITY_COLORS = true;
-
 export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(
   false,
   { id: 'launcher' }
@@ -381,105 +381,82 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
     }
   });
 
-  const textFg = () =>
-    USE_ENTITY_COLORS
-      ? getIconConfig(props.creatableBlock.blockName).foreground
-      : 'text-accent';
+  const textFg = () => getIconConfig(props.creatableBlock.blockName).foreground;
 
   const StaticIcon = props.creatableBlock.icon;
   const AnimatedIcon = props.creatableBlock.animatedIcon;
 
   return (
-    <button
-      class={cn(
-        ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200',
-        `create-menu-${props.creatableBlock.label.toLowerCase()}`,
-        {
-          '-translate-y-2 text-ink bracket-offset-1': props.focused,
-          'text-ink-extra-muted': !props.focused,
-        }
-      )}
-      onClick={() => props.creatableBlock.keyDownHandler()}
-      onFocus={props.onFocus}
-      onMouseEnter={props.onMouseEnter}
-      tabindex={0}
-      ref={buttonRef}
-      onPointerEnter={() => {
-        buttonRef?.focus();
-      }}
-    >
-      {/** TODO (seamus): we need to pool/cache these canvases. they brick the color picker/or any other gl context
-                because they do not get garbage collected fast enough */}
-      {/*<div
-        class="inset-0 absolute bg-panel opacity-2 mask-b-from-0% mask-b-to-100%"
-        classList={{
-          'text-ink-extra-muted opacity-2': !props.focused,
-          [textFg() + ' opacity-50']: props.focused,
+    <Layer depth={2}>
+      <button
+        class={cn(
+          ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel ring ring-edge-muted transition-transform ease-click duration-200 rounded-sm',
+          `create-menu-${props.creatableBlock.label.toLowerCase()}`,
+          {
+            '-translate-y-2 text-ink bg-active': props.focused,
+            'text-ink-extra-muted': !props.focused,
+          }
+        )}
+        onClick={() => props.creatableBlock.keyDownHandler()}
+        onFocus={props.onFocus}
+        onMouseEnter={props.onMouseEnter}
+        tabindex={0}
+        ref={buttonRef}
+        onPointerEnter={() => {
+          buttonRef?.focus();
         }}
       >
-        <PcNoiseGrid
-          cellSize={21 / 2}
-          rounding={10}
-          warp={0}
-          freq={0.002}
-          crunch={0.4}
-          size={[0.0, 0.2]}
-          fill={1}
-          stroke={0}
-          speed={[props.focused ? 0.3 : 0, 0]}
-        />
-      </div>*/}
-
-      <div
-        class={cn(
-          'absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color',
-          getIconConfig(props.creatableBlock.blockName).background,
-          {
-            'scale-y-0': !props.focused,
-            'scale-y-100': props.focused,
-          }
-        )}
-      ></div>
-
-      <div class="absolute top-1.5 left-2 z-user-highlight p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
-        <Hotkey token={props.creatableBlock.hotkeyToken} />
-      </div>
-
-      <div
-        class={cn(
-          'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-click duration-200 transition-color border border-edge',
-          textFg()
-        )}
-        style={{ background: props.focused ? 'currentColor' : 'transparent' }}
-      />
-
-      <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-user-highlight">
-        <div class="text-sm font-bold">{props.creatableBlock.label}</div>
-        <div class="size-3">
-          <PixelArrowRight />
-        </div>
-      </div>
-
-      <div
-        class={cn(
-          'w-1/3 -translate-y-1 transition-all ease-click duration-200',
-          textFg(),
-          {
-            'text-edge': !props.focused,
-            'scale-110': props.focused,
-          }
-        )}
-      >
-        <Show
-          when={ENABLE_ANIMATED_ICONS && AnimatedIcon}
-          fallback={<Dynamic component={StaticIcon} />}
-        >
-          {(Icon) => (
-            <Dynamic component={Icon()} triggerAnimation={props.focused} />
+        <div
+          class={cn(
+            'absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color',
+            getIconConfig(props.creatableBlock.blockName).background,
+            {
+              'scale-y-0': !props.focused,
+              'scale-y-100': props.focused,
+            }
           )}
-        </Show>
-      </div>
-    </button>
+        ></div>
+
+        <div class="absolute top-1.5 left-2 z-user-highlight p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
+          <Hotkey token={props.creatableBlock.hotkeyToken} />
+        </div>
+
+        <div
+          class={cn(
+            'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-click duration-200 transition-color border border-edge',
+            textFg()
+          )}
+          style={{ background: props.focused ? 'currentColor' : 'transparent' }}
+        />
+
+        <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-user-highlight">
+          <div class="text-sm font-bold">{props.creatableBlock.label}</div>
+          <div class="size-3">
+            <PixelArrowRight />
+          </div>
+        </div>
+
+        <div
+          class={cn(
+            'w-1/3 -translate-y-1 transition-all ease-click duration-200',
+            textFg(),
+            {
+              'text-edge': !props.focused,
+              'scale-110': props.focused,
+            }
+          )}
+        >
+          <Show
+            when={ENABLE_ANIMATED_ICONS && AnimatedIcon}
+            fallback={<Dynamic component={StaticIcon} />}
+          >
+            {(Icon) => (
+              <Dynamic component={Icon()} triggerAnimation={props.focused} />
+            )}
+          </Show>
+        </div>
+      </button>
+    </Layer>
   );
 };
 
@@ -489,6 +466,7 @@ type LauncherInnerProps = {
 };
 
 export const LauncherInner = (props: LauncherInnerProps) => {
+  const hkGroup = createHotkeyGroup();
   const blocks = () => props.blocks ?? CREATABLE_BLOCKS;
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
@@ -560,20 +538,20 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         props.onClose(false);
         return true;
       },
-    });
+    }).withGroup(hkGroup);
 
     if (item.altHotkeyToken) {
       registerHotkey({
         hotkeyToken: item.altHotkeyToken,
         hotkey: `shift+${item.hotkey}` as ValidHotkey,
         scopeId: launcherScope,
-        description: `${item.description} in current split`,
+        description: `${item.description} in new split`,
         keyDownHandler: () => {
           item.keyDownHandler();
           props.onClose();
           return true;
         },
-      });
+      }).withGroup(hkGroup);
     }
   });
 
@@ -586,20 +564,21 @@ export const LauncherInner = (props: LauncherInnerProps) => {
       setCreateMenuOpen(false);
       return true;
     },
-  });
+  }).withGroup(hkGroup);
+
   registerHotkey({
     hotkey: ['arrowleft', 'h'],
     scopeId: launcherScope,
     description: 'Navigate Left',
     keyDownHandler: () => moveFocus(-1),
-  });
+  }).withGroup(hkGroup);
 
   registerHotkey({
     hotkey: ['arrowright', 'l'],
     scopeId: launcherScope,
     description: 'Navigate Right',
     keyDownHandler: () => moveFocus(1),
-  });
+  }).withGroup(hkGroup);
 
   registerHotkey({
     hotkey: ['arrowup', 'k'],
@@ -609,7 +588,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
       e?.preventDefault();
       return moveFocus(-getColumnCount());
     },
-  });
+  }).withGroup(hkGroup);
 
   registerHotkey({
     hotkey: ['arrowdown', 'j'],
@@ -619,7 +598,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
       e?.preventDefault();
       return moveFocus(getColumnCount());
     },
-  });
+  }).withGroup(hkGroup);
 
   registerHotkey({
     hotkey: 'escape',
@@ -629,10 +608,10 @@ export const LauncherInner = (props: LauncherInnerProps) => {
       props.onClose();
       return true;
     },
-  });
+  }).withGroup(hkGroup);
 
   registerHotkey({
-    hotkey: 'enter',
+    hotkey: 'shift+enter',
     scopeId: launcherScope,
     description: 'Open in new split',
     keyDownHandler: () => {
@@ -642,7 +621,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     },
     runWithInputFocused: true,
     displayPriority: 7,
-  });
+  }).withGroup(hkGroup);
 
   registerHotkey({
     hotkey: 'enter' as ValidHotkey,
@@ -655,7 +634,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     },
     runWithInputFocused: true,
     displayPriority: 8,
-  });
+  }).withGroup(hkGroup);
 
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -671,17 +650,16 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
   onMount(() => {
     if (!ref) return;
-
     attachHotkeys(ref);
-
     setTimeout(() => {
       const firstItem = blocks()[0];
-
       if (firstItem) {
         focusMenuItem(firstItem.label);
       }
-    }, 0);
+    });
   });
+
+  onCleanup(hkGroup.dispose);
 
   // horrible but tailwind requires the full strings
   const gridColsClass = () => {
@@ -755,49 +733,27 @@ type LauncherProps = {
 };
 
 export const Launcher = (props: LauncherProps) => {
-  const useJuicedScrim = false;
-
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
-        <Dialog.Overlay
-          class={cn(
-            'fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted',
-            {
-              'backdrop-filter-[blur(0.5px)]': useJuicedScrim,
-            }
-          )}
-        >
-          <Show when={useJuicedScrim}>
-            <div class="absolute pointer-events-none size-full inset-0 bg-modal-overlay text-ink opacity-5">
-              <PcNoiseGrid
-                cellSize={20}
-                crunch={0.379}
-                size={[0, 1]}
-                speed={[0.03, 0.4]}
-                circleMask={1}
-                stroke={1}
-                fill={0}
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"></Dialog.Overlay>
+        <Dialog.Content>
+          <Layer depth={1}>
+            <div
+              class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  props.onOpenChange(false);
+                }
+              }}
+            >
+              <LauncherInner
+                onClose={(shouldReturnFocus) =>
+                  props.onOpenChange(false, shouldReturnFocus)
+                }
               />
             </div>
-          </Show>
-        </Dialog.Overlay>
-
-        <Dialog.Content>
-          <div
-            class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                props.onOpenChange(false);
-              }
-            }}
-          >
-            <LauncherInner
-              onClose={(shouldReturnFocus) =>
-                props.onOpenChange(false, shouldReturnFocus)
-              }
-            />
-          </div>
+          </Layer>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>

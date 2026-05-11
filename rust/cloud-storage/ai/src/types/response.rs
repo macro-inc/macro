@@ -1,4 +1,4 @@
-use async_openai::{error::OpenAIError, types::CompletionUsage};
+use async_openai::{error::OpenAIError, types::chat::CompletionUsage};
 
 #[derive(Debug, Clone)]
 pub struct Usage {

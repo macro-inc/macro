@@ -1,4 +1,5 @@
 use super::list_entities::build_summary;
+#[allow(unused_imports)]
 use super::*;
 use ai::generate_tool_input_schema;
 use ai::tool::types::tool_object::validate_tool_schema;

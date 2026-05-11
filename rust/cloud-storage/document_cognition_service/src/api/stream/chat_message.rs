@@ -28,9 +28,8 @@ use macro_auth::headers::AccessTokenExtractor;
 use macro_db_client::dcs::create_chat;
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::domain::MemoryService;
-use model::chat::ChatAttachmentWithName;
 use model::user::UserContext;
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
@@ -80,7 +79,7 @@ pub struct HttpSendChatMessageRequest {
     pub additional_instructions: Option<String>,
     /// Attachments for the message
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attachments: Option<Vec<ChatAttachmentWithName>>,
+    pub attachments: Option<Vec<Entity<'static>>>,
     /// Which toolset to use. Defaults to `all`
     #[serde(default)]
     pub toolset: ToolSet,
@@ -135,7 +134,7 @@ impl IntoResponse for ChatMessageError {
         (status = 403, description = "Forbidden"),
     )
 )]
-#[tracing::instrument(skip(state, model_access, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.attachment_id.as_str()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
+#[tracing::instrument(skip(state, model_access, user_context, bearer, request), fields(chat_id=?request.chat_id, user_id = %user_context.user_id, attachment_ids=?request.attachments.as_ref().map(|a| a.iter().map(|att| att.entity_id.as_ref()).collect::<Vec<_>>()).unwrap_or_default()), ret, err)]
 pub async fn send_chat_message(
     State(state): State<ApiContext>,
     model_access: ChatModelAccess,
@@ -439,12 +438,11 @@ fn stream_and_save_message(
     now: std::time::Instant,
     user_message_content: String,
     user_message_id: String,
-    user_message_attachments: Vec<ChatAttachmentWithName>,
+    user_message_attachments: Vec<Entity<'static>>,
     durable_stream_id: StreamId,
     cancellation_sub: CancellationSubscription,
 ) {
     tracing::trace!(request=?request, "streaming chat request");
-    let model = Model::Claude45Haiku;
     let tool_context = ctx.tool_service_context.clone();
     let toolset = ctx.all_tools.clone();
 
@@ -497,7 +495,7 @@ fn stream_and_save_message(
                         stream_id: stream_id.clone(),
                     },
                 };
-                if let Ok(json) = serde_json::to_value(&stream_error) {
+                if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                     yield json;
                 }
                 return;
@@ -530,7 +528,7 @@ fn stream_and_save_message(
                             let stream_error = StreamError::InternalError {
                                 stream_id: stream_id.clone(),
                             };
-                            if let Ok(json) = serde_json::to_value(&stream_error) {
+                            if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                                 yield json;
                             }
                             None
@@ -597,7 +595,6 @@ fn stream_and_save_message(
                 }
                 Err(e) => {
                     tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "error in AI stream");
-                    // Map error type to appropriate StreamError
                     let stream_error = match e {
                         ai::types::AiError::ContextWindowExceeded => {
                             StreamError::ModelContextOverflow {
@@ -608,7 +605,7 @@ fn stream_and_save_message(
                             stream_id: stream_id.clone(),
                         },
                     };
-                    if let Ok(json) = serde_json::to_value(&stream_error) {
+                    if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                         yield json;
                     }
                     break;
@@ -632,26 +629,31 @@ fn stream_and_save_message(
         // into its own `self.messages`, so `get_new_conversation_messages`
         // returns the full assistant (+ any tool) messages. Use those.
         //
-        // Cancellation: the ToolLoop never flushed, so that call returns
-        // empty. Build a ChatMessage from the parts we actually yielded —
-        // that's exactly what the user saw in the chunks pushed to the
-        // durable stream, so the saved message matches the UI deterministically.
-        let new_messages = if was_cancelled {
-            // Any tool calls that didn't get a response before cancellation
-            // are closed out with a synthetic "cancelled" error so the saved
-            // message has no dangling tool_call_ids.
-            let resolved_parts = resolve_pending_tool_calls(yielded_parts);
-            if resolved_parts.is_empty() {
+        // Early termination (cancellation or mid-stream error): the ToolLoop
+        // never flushed, so that call returns empty. Build a ChatMessage from
+        // the parts we actually yielded — that's exactly what the user saw in
+        // the chunks pushed to the durable stream, so the saved message
+        // matches the UI deterministically.
+        let new_messages = {
+            let flushed = if was_cancelled {
                 vec![]
             } else {
-                vec![ai::types::ChatMessage {
-                    role: ai::types::Role::Assistant,
-                    content: ChatMessageContent::AssistantMessageParts(resolved_parts),
-                    attachments: None,
-                }]
+                chat.get_new_conversation_messages()
+            };
+            if !flushed.is_empty() {
+                flushed
+            } else {
+                let resolved_parts = resolve_pending_tool_calls(yielded_parts);
+                if resolved_parts.is_empty() {
+                    vec![]
+                } else {
+                    vec![ai::types::ChatMessage {
+                        role: ai::types::Role::Assistant,
+                        content: ChatMessageContent::AssistantMessageParts(resolved_parts),
+                        attachments: None,
+                    }]
+                }
             }
-        } else {
-            chat.get_new_conversation_messages()
         };
 
         // Extract assistant response text before moving new_messages into store

@@ -1,47 +1,47 @@
-import { useMaybeSoup } from '@app/component/next-soup/soup-context';
-import {
-  openEntityInSplitFromUnifiedList,
-  trashEmails,
-} from '@app/component/next-soup/utils';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
-import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import {
-  SplitHeaderBadge,
-  StaticSplitLabel,
-} from '@app/component/split-layout/components/SplitLabel';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-  useShareDialogContext,
-} from '@core/component/TopBar/ShareButton';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/component/ChatWithAgentButton';
+import { useMaybeSoup } from '@app/component/next-soup/soup-context';
+import {
+  openEntityInSplitFromUnifiedList,
+  trashEmails,
+} from '@app/component/next-soup/utils';
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderBadge,
+  StaticSplitLabel,
+} from '@app/component/split-layout/components/SplitLabel';
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  getShareDrawerRecipientInput,
+  ShareTrigger,
+  useShareDialogContext,
+} from '@core/component/TopBar/ShareButton';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
+import { isMobile } from '@core/mobile/isMobile';
 import CheckIcon from '@icon/regular/check.svg';
+import ProhibitIcon from '@icon/regular/prohibit.svg';
+import TagIcon from '@icon/regular/tag.svg';
+import TrashIcon from '@icon/regular/trash.svg';
+import { buildMentionMarkdownString } from '@lexical-core';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import IconShared from '@macro-icons/wide/share.svg';
-import TagIcon from '@icon/regular/tag.svg';
-import ProhibitIcon from '@icon/regular/prohibit.svg';
-import TrashIcon from '@icon/regular/trash.svg';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import { useEmailLinksQuery } from '@queries/email/link';
+import { createSignal } from 'solid-js';
+import { useEmailContext } from './EmailContext';
 import {
   EmailPropertiesButton,
   PROPERTIES_DRAWER_ID,
 } from './EmailPropertiesModal';
-import { createSignal } from 'solid-js';
-import { useEmailContext } from './EmailContext';
-import { buildMentionMarkdownString } from '@lexical-core';
-import { useEmailLinksQuery } from '@queries/email/link';
-import { isMobile } from '@core/mobile/isMobile';
 
 export function TopBar(props: {
   id: string;
@@ -56,7 +56,8 @@ export function TopBar(props: {
   const linksQuery = useEmailLinksQuery();
 
   const isInvite = () => {
-    const entity = soup?.items.get(props.id);
+    const row = soup?.items.get(props.id);
+    const entity = row?.original;
     return entity?.type === 'email' && entity.hasIcsAttachment === true;
   };
 
@@ -71,8 +72,8 @@ export function TopBar(props: {
     const thread = emailCtx.thread();
     if (!thread?.db_id) return;
 
-    // Calculate next entity before trashing so we can navigate to it
-    const nextEntity = (() => {
+    // Calculate next row before trashing so we can navigate to it
+    const nextRow = (() => {
       if (!soup) return undefined;
       const currentIndex = soup.focus.index();
       return soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
@@ -80,10 +81,10 @@ export function TopBar(props: {
 
     const handle = trashEmails([thread.db_id]);
 
-    if (soup && nextEntity) {
+    if (soup && nextRow) {
       soup.selection.clear();
-      soup.focus.set(nextEntity.id);
-      openEntityInSplitFromUnifiedList(nextEntity, {});
+      soup.focus.set(nextRow.id);
+      openEntityInSplitFromUnifiedList(nextRow.original, {});
     }
 
     const toastId = toast.success(

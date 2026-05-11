@@ -2624,6 +2624,77 @@
         }
       }
     },
+    "/documents/{document_id}/branch_name": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Handler for `GET /documents/{document_id}/branch_name`.",
+        "description": "Returns the short UUID and git branch name for a task document.\nReturns 400 if the document is not a task.",
+        "operationId": "get_document_branch_name",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BranchNameResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/copy": {
       "post": {
         "tags": ["document"],
@@ -5272,6 +5343,40 @@
         }
       }
     },
+    "/sync_service/wakeup": {
+      "post": {
+        "tags": ["sync_service"],
+        "operationId": "bulk_wakeup_sync_service_documents",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkWakeupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Wakeups accepted for fire-and-forget dispatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkWakeupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or missing internal auth header"
+          },
+          "401": {
+            "description": "Invalid internal auth header"
+          }
+        }
+      }
+    },
     "/threads/{thread_id}": {
       "patch": {
         "tags": ["threads"],
@@ -6362,6 +6467,43 @@
           }
         }
       },
+      "BranchNameResponse": {
+        "type": "object",
+        "description": "Branch name response.",
+        "required": ["shortId", "branchName"],
+        "properties": {
+          "branchName": {
+            "type": "string",
+            "description": "The git branch name for the task document."
+          },
+          "shortId": {
+            "type": "string",
+            "description": "The short id of the document."
+          }
+        }
+      },
+      "BulkWakeupRequest": {
+        "type": "object",
+        "required": ["document_ids"],
+        "properties": {
+          "document_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BulkWakeupResponse": {
+        "type": "object",
+        "required": ["dispatched"],
+        "properties": {
+          "dispatched": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
       "CallActiveResponse": {
         "type": "object",
         "description": "Response indicating whether an active call exists for a channel.",
@@ -6395,6 +6537,13 @@
           "attended": {
             "type": ["boolean", "null"],
             "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
+          },
+          "call_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Call record IDs to filter by. Empty to include all calls."
           },
           "channel_ids": {
             "type": "array",
@@ -11971,6 +12120,14 @@
             "type": ["string", "null"],
             "description": "Stable per-speaker identifier produced by the STT provider's diarization\npass. Namespaced upstream by audio track so values are unique across all\ntracks in a call. `None` when the provider didn't return a speaker label."
           },
+          "embedding": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "number",
+              "format": "float"
+            },
+            "description": "Speaker voice embedding computed by the transcription agent\n(e.g. a Resemblyzer 256-dim vector). When present, the server\nupserts a `voice` row and stores the resulting id on the transcript\nsegment so the call-finished pipeline can match it to enrolled users."
+          },
           "endedAt": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -11992,6 +12149,11 @@
             "type": "string",
             "format": "date-time",
             "description": "When the speaker started talking for this segment."
+          },
+          "streamStartedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Wall-clock when the transcriber's STT stream first received audio\nfor this participant. The server takes the earliest non-null value\nacross all participants and uses it to overwrite the\n`egress_started`-derived `recording_started_at`, which is too early\n(it stamps egress bootstrap, not first audio frame)."
           }
         }
       },

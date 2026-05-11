@@ -1,9 +1,9 @@
-import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
-import type { ThemeMentionDecoratorProps } from '@lexical-core';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { isThemeV2 } from '@theme/utils/themeValidation';
+import type { ThemeMentionDecoratorProps } from '@lexical-core';
+import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { applyTheme } from '@theme/utils/themeUtils';
+import { isThemeV2 } from '@theme/utils/themeValidation';
 
 export function ThemeMention(props: ThemeMentionDecoratorProps) {
   const { openSettings } = useSettingsState();

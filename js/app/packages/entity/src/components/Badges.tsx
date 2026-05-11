@@ -1,6 +1,9 @@
-import type { ParentProps } from 'solid-js';
+import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
-import { cn } from '@ui/utils/classname';
+import { tryMacroId, useDisplayName } from '@core/user';
+import UserPlus from '@icon/fill/user-plus-fill.svg';
+import { cn } from '@ui';
+import type { ParentProps } from 'solid-js';
 
 function Badge(props: ParentProps<{ class?: string }>) {
   return (
@@ -19,9 +22,41 @@ function Badge(props: ParentProps<{ class?: string }>) {
 export function SharedBadge(props: { ownerId: string }) {
   return (
     <Badge class="text-ink-extra-muted border-edge-muted pr-2">
-      <UserIcon id={props.ownerId} size="xs" />
+      <UserIcon id={props.ownerId} size="sm" />
       shared
     </Badge>
+  );
+}
+
+export function SharedBadgeSmall(props: { ownerId: string }) {
+  const id = () => tryMacroId(props.ownerId);
+  const name = () => {
+    const currentId = id();
+    if (currentId) {
+      let [name] = useDisplayName(currentId);
+      return name;
+    }
+    return () => undefined;
+  };
+
+  return (
+    <Tooltip
+      tooltip={
+        <div class="flex items-center gap-1.5 text-xs">
+          <UserIcon
+            id={props.ownerId}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+          <span>{name()()} shared this with you</span>
+        </div>
+      }
+    >
+      <div class="text-ink-extra-muted/50 p-1">
+        <UserPlus class="size-4" />
+      </div>
+    </Tooltip>
   );
 }
 

@@ -1,7 +1,7 @@
-import { DialogWrapper } from '@core/component/DialogWrapper';
+import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { Dialog } from '@kobalte/core/dialog';
+import { Dialog, Surface } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
@@ -12,7 +12,6 @@ import type {
   SplitId,
   SplitMount,
 } from '../layoutManager';
-import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 
 false && clickOutside;
 
@@ -126,22 +125,22 @@ function PopoverSplitModal(props: {
           props.onClose();
         }
       }}
-      modal={true}
+      contentRef={(r) => {
+        setPanelRef(r);
+        bindHotKeyDom(r);
+      }}
     >
-      <DialogWrapper
-        contentRef={(r) => {
-          setPanelRef(r);
-          bindHotKeyDom(r);
-        }}
-      >
-        <SplitPanelContext.Provider value={stubPanelContext}>
-          <SoupContextProvider>
-            <Show when={props.popover.mount}>
-              <Dynamic component={props.popover.mount.element} />
-            </Show>
-          </SoupContextProvider>
-        </SplitPanelContext.Provider>
-      </DialogWrapper>
+      <Surface depth={2} active>
+        <div class="*:max-h-[75vh]">
+          <SplitPanelContext.Provider value={stubPanelContext}>
+            <SoupContextProvider>
+              <Show when={props.popover.mount}>
+                <Dynamic component={props.popover.mount.element} />
+              </Show>
+            </SoupContextProvider>
+          </SplitPanelContext.Provider>
+        </div>
+      </Surface>
     </Dialog>
   );
 }

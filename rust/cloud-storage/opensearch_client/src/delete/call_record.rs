@@ -6,20 +6,30 @@ use crate::{Result, error::OpensearchClientError};
 pub async fn delete_call_record_by_id(
     client: &opensearch::OpenSearch,
     call_id: &str,
+    index_override: Option<&str>,
 ) -> Result<()> {
-    delete_by_term(client, "entity_id", call_id, "delete_call_record_by_id").await
+    delete_by_term(
+        client,
+        "entity_id",
+        call_id,
+        "delete_call_record_by_id",
+        index_override,
+    )
+    .await
 }
 
 #[tracing::instrument(skip(client))]
 pub async fn delete_call_records_by_channel_id(
     client: &opensearch::OpenSearch,
     channel_id: &str,
+    index_override: Option<&str>,
 ) -> Result<()> {
     delete_by_term(
         client,
         "channel_id",
         channel_id,
         "delete_call_records_by_channel_id",
+        index_override,
     )
     .await
 }
@@ -29,13 +39,13 @@ async fn delete_by_term(
     field: &str,
     value: &str,
     method: &str,
+    index_override: Option<&str>,
 ) -> Result<()> {
     let query = serde_json::json!({ "query": { "term": { field: value } } });
 
+    let index = index_override.unwrap_or(SearchIndex::CallRecords.as_ref());
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
-            SearchIndex::CallRecords.as_ref(),
-        ]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .body(query)
         .refresh(true)
         .send()

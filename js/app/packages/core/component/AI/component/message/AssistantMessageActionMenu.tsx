@@ -1,4 +1,3 @@
-import { generateTitle } from '@service-cognition/client';
 import {
   DEFAULT_MODEL,
   MODEL_PRETTYNAME,
@@ -10,11 +9,10 @@ import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid'
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import { generateTitle } from '@service-cognition/client';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
-import type { Model } from '@service-cognition/generated/schemas/model';
 import { createCallback } from '@solid-primitives/rootless';
 import { useSplitLayout } from 'app/component/split-layout/layout';
-import type { Component } from 'solid-js';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { extractMessageText } from './AssistantMessage';
@@ -25,17 +23,11 @@ type AssistantActionProps = {
 
 export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
   const modelName = () => {
-    const prettyName: string | undefined =
-      MODEL_PRETTYNAME[props.message?.model as Model];
-    if (!prettyName) return MODEL_PRETTYNAME[DEFAULT_MODEL];
-    return prettyName;
+    return MODEL_PRETTYNAME[DEFAULT_MODEL];
   };
 
   const modelIcon = () => {
-    const icon: Component | undefined =
-      MODEL_PROVIDER_ICON[props.message?.model as Model];
-    if (!icon) return MODEL_PROVIDER_ICON[DEFAULT_MODEL];
-    return icon;
+    return MODEL_PROVIDER_ICON[DEFAULT_MODEL];
   };
 
   const handleCopy = async () => {
@@ -94,7 +86,7 @@ export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
   });
 
   return (
-    <div class="flex flex-row w-full justify-start items-center h-[32px] px-2 space-x-2">
+    <div class="flex flex-row w-full justify-start items-center h-8 px-2 space-x-2">
       <div class="flex flex-row space-x-2 items-center text-xs text-ink-muted">
         <Dynamic component={modelIcon()} width={12} height={12} />
         <p>{modelName()}</p>
@@ -105,11 +97,11 @@ export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
               class="flex flex-row items-center space-x-1 hover:bg-hover hover-transition-bg rounded-md p-1 text-xs font-sans"
               onClick={handleEditInMarkdown}
             >
-              <NotesIcon class="w-3 h-3 text-note" />
+              <NotesIcon class="size-3 text-note" />
             </button>
           </Match>
           <Match when={isLoading()}>
-            <LoadingIcon class="w-3 h-3 animate-spin" />
+            <LoadingIcon class="size-3 animate-spin" />
           </Match>
         </Switch>
         <div class="w-fit">
@@ -119,9 +111,9 @@ export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
           >
             <Show
               when={!copied()}
-              fallback={<CheckIcon class="w-3 h-3 text-success" />}
+              fallback={<CheckIcon class="size-3 text-success" />}
             >
-              <ClipboardIcon class="w-3 h-3" />
+              <ClipboardIcon class="size-3" />
             </Show>
             <p>{copied() ? 'Copied!' : 'Copy'}</p>
           </button>
