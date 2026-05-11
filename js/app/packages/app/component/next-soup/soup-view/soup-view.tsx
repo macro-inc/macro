@@ -471,7 +471,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const [soupViewRef, setSoupViewRef] = createSignal<HTMLElement | undefined>();
 
   const focusFirstEntity = () => {
-    const next = soup.navigate.toFirst();
+    let next = soup.navigate.toFirst();
+
+    while (next?.row.getIsGrouped()) {
+      next = soup.navigate.down();
+    }
 
     if (next) {
       virtualizerHandle()?.scrollToIndex(next.index, { align: 'nearest' });
