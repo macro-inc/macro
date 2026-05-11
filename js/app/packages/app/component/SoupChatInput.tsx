@@ -1,5 +1,6 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { useSoup } from '@app/component/next-soup/soup-context';
+import { useHasPaidAccess } from '@core/auth/license';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import {
@@ -11,7 +12,6 @@ import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { Hotkey } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
-import { useHasPaidAccess } from '@core/auth/license';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -135,7 +135,7 @@ function SoupChatInputInner() {
   return (
     <div
       ref={containerRef}
-      class="absolute bottom-0 right-px left-px pb-2 px-2 flex justify-center pointer-events-none"
+      class="absolute bottom-0 inset-x-px pb-2 px-2 flex justify-center pointer-events-none"
       classList={{ hidden: !!soup.previewEntity() }}
       style={{
         'background-image': `linear-gradient(transparent, var(--color-panel) 85%)`,

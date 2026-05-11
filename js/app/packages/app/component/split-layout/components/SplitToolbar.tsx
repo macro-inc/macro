@@ -1,3 +1,4 @@
+import { cn } from '@ui';
 import {
   createRenderEffect,
   createSignal,
@@ -8,7 +9,6 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { cn } from '@ui/utils/classname';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 
 export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
@@ -46,7 +46,7 @@ export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
     <div
       class={cn(
         'relative w-full flex items-center justify-between shrink-0',
-        hasContent() && 'h-10 border-b border-edge-muted',
+        hasContent() && 'min-h-10.25 border-b border-edge-muted',
         preview() && 'hidden'
       )}
       data-split-toolbar

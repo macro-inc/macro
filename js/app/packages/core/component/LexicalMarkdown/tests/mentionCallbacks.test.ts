@@ -61,21 +61,21 @@ vi.mock('../plugins/shared', () => ({
   mapRegisterDelete: () => () => {},
 }));
 
+import { SupportedNodeTypes } from '@lexical-core/node-list';
 import {
-  $getRoot,
   $createParagraphNode,
+  $getRoot,
   createEditor,
   type LexicalEditor,
 } from 'lexical';
-import { SupportedNodeTypes } from '@lexical-core/node-list';
 import {
-  mentionsPlugin,
-  type ItemMention,
-  INSERT_DOCUMENT_MENTION_COMMAND,
-  INSERT_USER_MENTION_COMMAND,
   INSERT_CONTACT_MENTION_COMMAND,
   INSERT_DATE_MENTION_COMMAND,
+  INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_GROUP_MENTION_COMMAND,
+  INSERT_USER_MENTION_COMMAND,
+  type ItemMention,
+  mentionsPlugin,
 } from '../plugins/mentions/mentionsPlugin';
 
 function createTestEditor(): LexicalEditor {

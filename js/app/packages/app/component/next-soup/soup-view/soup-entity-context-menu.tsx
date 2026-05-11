@@ -1,12 +1,12 @@
 import { ContextMenuContent } from '@core/component/Menu';
-import { isMobile } from '@core/mobile/isMobile';
 import { longPressHighlight } from '@core/directive/longPressHighlight';
-import { ContextMenu } from '@kobalte/core/context-menu';
+import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
+import { ContextMenu } from '@kobalte/core/context-menu';
 import { type FlowComponent, Match, Show, Switch } from 'solid-js';
-import { useSoupView } from './soup-view-context';
-import { SoupEntityActionsMenu } from './soup-entity-actions-menu';
 import { useSoupEntityActionDrawer } from './soup-entity-action-drawer-context';
+import { SoupEntityActionsMenu } from './soup-entity-actions-menu';
+import { useSoupView } from './soup-view-context';
 
 interface SoupEntityContextMenuProps {
   entity: EntityData;

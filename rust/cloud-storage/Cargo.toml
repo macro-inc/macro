@@ -215,10 +215,11 @@ sha2 = "0.10.8"
 sqlx = { version = "0.8.6", features = [
   "chrono",
   "postgres",
-  "runtime-tokio-native-tls",
+  "runtime-tokio-rustls",
   "uuid",
 ] }
 sqlx-core = { version = "0.8.6" }
+pgvector = { version = "0.4", features = ["sqlx", "postgres"] }
 strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "2.0.0"
 time = "0.3.37"

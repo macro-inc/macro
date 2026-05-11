@@ -17,6 +17,7 @@ required-features = ["processing", "service"]
 
 [dependencies]
 anyhow = { workspace = true }
+aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
@@ -47,6 +48,7 @@ models_opensearch = { path = "../models_opensearch" }
 models_search = { path = "../models_search" }
 nom = { workspace = true }
 opensearch_client = { path = "../opensearch_client" }
+ensure_exists = { path = "../ensure_exists", features = ["dynamodb"] }
 pdfium-render = { workspace = true }
 rust-embed = "8.6.0"
 s3_client = { path = "../s3_client" }
@@ -60,7 +62,8 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
 sqs_worker = { path = "../sqs_worker" }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }

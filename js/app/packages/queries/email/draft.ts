@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/maybeResult';
+import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,
@@ -9,7 +10,6 @@ import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
-import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
 
 type CreateDraftParams = {
   draft: ApiDraftInput;

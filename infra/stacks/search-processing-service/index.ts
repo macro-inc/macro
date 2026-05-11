@@ -1,5 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { DynamoDBTable } from '../../packages/resources';
 import {
   config,
   getSearchEventQueue,
@@ -44,6 +45,14 @@ const opensearchStack = new pulumi.StackReference('opensearch-stack', {
   name: `macro-inc/opensearch/${stack}`,
 });
 
+const backfillJobsTable = new DynamoDBTable('search-processing-backfill-jobs', {
+  baseName: 'search-processing-backfill-jobs',
+  attributes: [{ name: 'id', type: 'S' }],
+  hashKey: 'id',
+  ttl: { attributeName: 'expires_at' },
+  tags,
+});
+
 const OPENSEARCH_URL: pulumi.Output<string> = opensearchStack
   .getOutput('domainEndpoint')
   .apply((domainEndpoint) => `https://${domainEndpoint}`);
@@ -74,11 +83,6 @@ const INTERNAL_AUTH_KEY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-const SYNC_SERVICE_AUTH_KEY = config.require(`sync_service_auth_key`);
-const syncServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY })
-  .apply((secret) => secret.arn);
-
 const searchProcessingService = new SearchProcessingService(
   `${BASE_NAME}-${stack}`,
   {
@@ -86,8 +90,8 @@ const searchProcessingService = new SearchProcessingService(
       databaseUrlArn,
       databaseUrlReadonlyArn,
       opensearchPasswordArn,
-      syncServiceAuthKeyArn,
     ],
+    extraManagedPolicyArns: [backfillJobsTable.policy.arn],
     searchEventQueueArn,
     ecsClusterArn: cloudStorageClusterArn,
     documentStorageBucketArn,
@@ -146,16 +150,16 @@ const searchProcessingService = new SearchProcessingService(
         value: INTERNAL_AUTH_KEY,
       },
       {
-        name: 'SYNC_SERVICE_AUTH_KEY',
-        value: SYNC_SERVICE_AUTH_KEY,
-      },
-      {
         name: 'WORKER_COUNT',
         value: '3', // 3 workers per instance
       },
       {
         name: ServiceUrl.LEXICAL_SERVICE_URL,
         value: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
+      },
+      {
+        name: 'BACKFILL_JOBS_TABLE',
+        value: backfillJobsTable.table.name,
       },
       // OpenTelemetry / Datadog tracing configuration
       {

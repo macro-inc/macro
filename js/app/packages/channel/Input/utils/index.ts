@@ -1,12 +1,12 @@
 export {
-  fileExtension,
-  iconTypeFromFilename,
-  getAttachmentKindFromFile,
   buildUploadedAttachment,
-  type UploadResult,
-  type UploadSuccess,
-  type UploadFailedResult,
-  type UploadStaticSuccessResult,
+  fileExtension,
+  getAttachmentKindFromFile,
+  iconTypeFromFilename,
   type UploadDocumentSuccessResult,
+  type UploadFailedResult,
+  type UploadResult,
+  type UploadStaticSuccessResult,
+  type UploadSuccess,
 } from './file-helpers';
 export { applyInlineFormat, applyNodeFormat } from './formatting';

@@ -1,16 +1,16 @@
-import { onMount } from 'solid-js';
-import type { LessonContentProps, LessonDefinition } from '../types';
+import ArrowUpIcon from '@icon/regular/arrow-up.svg';
+import CalendarBlankIcon from '@icon/regular/calendar-blank.svg';
 
 import CheckIcon from '@icon/regular/check.svg';
-import UsersIcon from '@icon/regular/users.svg';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
-import CalendarBlankIcon from '@icon/regular/calendar-blank.svg';
-import FlagIcon from '@icon/regular/flag.svg';
-import PlusIcon from '@icon/regular/plus.svg';
-import PaperclipIcon from '@icon/regular/paperclip.svg';
-import TextAaIcon from '@icon/regular/text-aa.svg';
 import ClockIcon from '@icon/regular/clock.svg';
-import ArrowUpIcon from '@icon/regular/arrow-up.svg';
+import FlagIcon from '@icon/regular/flag.svg';
+import PaperclipIcon from '@icon/regular/paperclip.svg';
+import PlusIcon from '@icon/regular/plus.svg';
+import TextAaIcon from '@icon/regular/text-aa.svg';
+import UsersIcon from '@icon/regular/users.svg';
+import { onMount } from 'solid-js';
+import type { LessonContentProps, LessonDefinition } from '../types';
 
 function ComposersPreviewContent(props: LessonContentProps) {
   onMount(() => setTimeout(() => props.onComplete('Got it')));
@@ -28,7 +28,7 @@ function ComposersPreviewContent(props: LessonContentProps) {
 
 function ComposersPreviewDemo() {
   return (
-    <div class="h-full w-full flex flex-col items-center justify-center gap-6 px-10 py-8">
+    <div class="size-full flex flex-col items-center justify-center gap-6 px-10 py-8">
       {/* Task composer */}
       <div class="w-full max-w-lg rounded-sm border border-edge-muted bg-panel flex flex-col overflow-hidden">
         <div class="px-4 pt-3 pb-1">
@@ -46,7 +46,7 @@ function ComposersPreviewDemo() {
           <div class="flex items-center gap-1.5">
             <UsersIcon class="size-3.5 text-ink/50" />
             <span class="text-ink/50">Assignees</span>
-            <span class="bg-accent/15 text-accent text-[10px] px-1.5 py-0.5 rounded-xs font-medium">
+            <span class="bg-accent/15 text-accent text-xxs px-1.5 py-0.5 rounded-xs font-medium">
               seam
             </span>
             <PlusIcon class="size-3 text-ink/30" />
@@ -113,7 +113,7 @@ function ComposersPreviewDemo() {
         <div class="mx-4 h-px bg-edge-muted" />
 
         {/* Body */}
-        <div class="px-4 py-4 flex-1 min-h-[80px]">
+        <div class="p-4 flex-1 min-h-20">
           <span class="text-sm text-ink/25">Use `@` to reference files</span>
         </div>
 

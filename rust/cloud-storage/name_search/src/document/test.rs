@@ -1,7 +1,7 @@
 //! Tests for document module
 
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_search_cursor::SearchCursorOption;
+use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -388,6 +388,41 @@ async fn test_search_document_names_user_isolation(pool: Pool<Postgres>) -> anyh
 
     // Should return 0 results (user2's documents are not owned by user1 and not shared)
     assert_eq!(response.items.len(), 0);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("document"))
+)]
+async fn test_search_document_names_rejects_thread_cursor(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let user_id = MacroUserId::parse_from_str("macro|user1@test.com")
+        .map(|l| l.lowercase())
+        .unwrap();
+
+    let cursor = SearchMethodCursor::Thread {
+        thread_id: Uuid::new_v4(),
+        message_id: Uuid::new_v4(),
+    };
+
+    let result = search_document_names(
+        &pool,
+        &user_id,
+        &[],
+        "test".to_string(),
+        false,
+        10,
+        Some(cursor),
+    )
+    .await;
+
+    assert!(matches!(
+        result.unwrap_err(),
+        NameSearchError::IncompatibleCursor
+    ));
 
     Ok(())
 }

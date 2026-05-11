@@ -1,6 +1,7 @@
 import { internalDrag } from '@core/directive/internalDragState';
+
 false && internalDrag;
-import { cn } from '@ui/utils/classname';
+
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { maybeThrow } from '@core/util/maybeResult';
@@ -9,19 +10,19 @@ import ClipboardIcon from '@icon/regular/clipboard.svg';
 import ThreeDotsIcon from '@icon/regular/dots-three-vertical.svg';
 import DownloadIcon from '@icon/regular/download-simple.svg';
 import TrashIcon from '@icon/regular/trash.svg';
-import { constrainImageDimensions } from '@lexical-core/utils/media';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { constrainImageDimensions } from '@lexical-core/utils/media';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { storageServiceClient } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
+import { Button, cn } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import {
   copyImageToClipboard,
   downloadImage as downloadImageAction,
 } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
-import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { Lightbox } from './Lightbox';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
 
@@ -86,7 +87,7 @@ function ImagePlaceholder(props: {
             }
       }
     >
-      <Spinner class="w-4 h-4 animate-spin" />
+      <Spinner class="size-4 animate-spin" />
     </div>
   );
 }
@@ -155,11 +156,15 @@ export function ImagePreview(props: ImagePreviewProps) {
         <Show when={props.variant !== 'small'}>
           <div class="group-hover:visible invisible absolute top-2 right-2 bg-button rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">
             <Dialog.Trigger disabled={props.isContext}>
-              <DeprecatedIconButton icon={ExpandIcon} theme="clear" />
+              <Button variant="ghost" size="icon-md">
+                <ExpandIcon />
+              </Button>
             </Dialog.Trigger>
             <DropdownMenu>
               <DropdownMenu.Trigger disabled={props.isContext}>
-                <DeprecatedIconButton icon={ThreeDotsIcon} theme="clear" />
+                <Button variant="ghost" size="icon-md">
+                  <ThreeDotsIcon />
+                </Button>
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>
                 <div class="fixed inset-0 z-modal-overlay bg-transparent" />

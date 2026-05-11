@@ -1,13 +1,13 @@
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { createEffect, createSignal } from 'solid-js';
+import { MockAppChrome } from '../components/MockAppChrome';
+import { ClickCallout, HotkeyCallout } from '../components-lib';
+import { OnboardingEntityList } from '../OnboardingEntityList';
 import {
   filteredSandboxEntities,
   sidebarFilter,
 } from '../sandbox/sandbox-store';
-import { createEffect, createSignal } from 'solid-js';
-import { OnboardingEntityList } from '../OnboardingEntityList';
-import { ClickCallout, HotkeyCallout } from '../components-lib';
-import { MockAppChrome } from '../components/MockAppChrome';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 function SidebarNavContent(props: LessonContentProps) {
@@ -48,13 +48,10 @@ function SidebarNavContent(props: LessonContentProps) {
 }
 
 function SidebarNavDemo() {
-  const soup = createSoupState({
-    initialData: filteredSandboxEntities(),
-    wrapNavigation: true,
-  });
+  const soup = createSoupState({ wrapNavigation: true });
 
   createEffect(() => {
-    soup.setData(filteredSandboxEntities());
+    soup.setRows(filteredSandboxEntities().map((e) => soup.buildRow(e)));
   });
 
   return (

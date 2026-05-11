@@ -1,7 +1,7 @@
-import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
-import type { InputAttachmentTracker as Tracker } from './attachment-tracker';
+import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import type { PersistenceKey } from '@queries/persistence';
+import type { InputAttachmentTracker as Tracker } from './attachment-tracker';
 
 export type InputAttachmentKind = 'video' | 'image' | 'document';
 

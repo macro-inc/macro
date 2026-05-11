@@ -307,7 +307,7 @@ impl DocumentSyncSession {
                         .peer_handler(document_id, matched.params.get("peer_id"))
                         .await;
                 }
-                path::WAKEUP => self.wakeup(),
+                path::WAKEUP => return self.wakeup(document_id).await,
                 // These need auth
                 rest => {
                     let claims = or_unauth!(decode_jwt(&req, &self.env, TokenFrom::Headers).ok());
@@ -489,9 +489,23 @@ impl DocumentSyncSession {
         ResponseBuilder::new().from_json(&PeerResponse { peer_id, user_id })
     }
 
-    fn wakeup(&self) -> Result<Response> {
+    async fn wakeup(&self, document_id: &str) -> Result<Response> {
+        let _ = self.warmup(document_id).await.inspect_err(
+            |error| warn!(document_id = document_id, error = ?error, "failed to warm up document"),
+        );
+
         let out = keepalive(DEFAULT_TIME_TO_LIVE);
         ResponseBuilder::new().from_json(&out)
+    }
+
+    async fn warmup(&self, document_id: &str) -> Result<()> {
+        if !self.exists(document_id).await? {
+            return Ok(());
+        }
+
+        self.session_storage().await?;
+        self.document_state().await?;
+        Ok(())
     }
 
     async fn metadata_handler(&self, document_id: &str) -> Result<Response> {

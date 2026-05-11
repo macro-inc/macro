@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { ParentProps } from 'solid-js';
 import { type FileListSize, TEXT_SIZE_CLASSES } from './constants';
 

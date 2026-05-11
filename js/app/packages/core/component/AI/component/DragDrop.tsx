@@ -1,9 +1,8 @@
 import { analytics } from '@app/lib/analytics';
-import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { fileDrop } from '@core/directive/fileDrop';
-
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
+import { FileDropOverlay } from '@core/component/FileDropOverlay';
+import { fileDrop } from '@core/directive/fileDrop';
 import type { Accessor, Component, ParentProps } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 

@@ -1,0 +1,8 @@
+node_modules
+app
+lexical-service/node_modules
+loro-mirror/node_modules
+loro-mirror/**/node_modules
+**/dist
+**/.turbo
+**/.vite

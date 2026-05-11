@@ -1,6 +1,6 @@
-import { catchToResult, throwOnErr } from '@core/util/maybeResult';
-import { hasLoginCookie } from '@core/util/cookies';
 import { enableUserInfoQuery } from '@core/context/user-info-gate';
+import { hasLoginCookie } from '@core/util/cookies';
+import { catchToResult, throwOnErr } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
 import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';

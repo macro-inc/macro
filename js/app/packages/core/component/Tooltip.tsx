@@ -1,17 +1,16 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import CorvuTooltip, { type FloatingOptions } from '@corvu/tooltip';
 import type { Placement } from '@floating-ui/dom';
-import { cn } from '@ui/utils/classname';
+import { cn, Layer } from '@ui';
 import {
+  createSignal,
   For,
   type JSX,
   mergeProps,
   type ParentProps,
   Show,
-  createSignal,
 } from 'solid-js';
 import { Hotkey } from './Hotkey';
-import { Layer } from '@ui';
 
 const TOOLTIP_DELAY = 250;
 
@@ -35,7 +34,7 @@ export type TooltipProps = ParentProps<{
  * @param props.unstyled - When true, removes default styling from the tooltip content.
  * @example
  * <Tooltip tooltip={<div class="text-xs">Hello</div>}>
- *     <DeprecatedButton>Hover over me</DeprecatedButton>
+ *     <Button>Hover over me</Button>
  * </Tooltip>
  */
 export function Tooltip(props: TooltipProps) {
@@ -89,7 +88,7 @@ export function Tooltip(props: TooltipProps) {
         ref={(el) => {
           props.ref?.(el);
         }}
-        class={props.class}
+        class={cn('inline-flex items-center', props.class)}
       >
         {props.children}
       </CorvuTooltip.Trigger>

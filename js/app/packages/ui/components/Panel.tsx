@@ -1,35 +1,105 @@
+import type { SurfaceProps } from './Surface';
+import type { ParentProps } from 'solid-js';
+import { Show, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
-import { splitProps, type JSX } from 'solid-js';
-import { Layer } from './Layer';
+import { Surface } from './Surface';
+import { Scroll } from './Scroll';
 
-export type PanelProps = JSX.HTMLAttributes<HTMLDivElement> & {
-  highlightColor?: string;
-  active?: boolean;
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
-  hidden?: boolean;
-};
+/*
+<Panel>
+  <Panel.Header></Panel.Header>
+  <Panel.Toolbar></Panel.Toolbar>
+  <Panel.Body></Panel.Body>
+  <Panel.Footer></Panel.Footer>
+</Panel>
+*/
 
-export function Panel(props: PanelProps) {
-  const [local, rest] = splitProps(props, ['highlightColor', 'active', 'depth', 'class', 'children', 'hidden']);
+type BodyProps = ParentProps<{ class?: string; scroll?: boolean }>;
+type SlotProps = ParentProps<{ class?: string }>;
+type PanelProps = SurfaceProps;
+
+function PanelRoot(props: PanelProps) {
+  const [local, surfaceProps] = splitProps(props, ['children', 'class']);
+
   return (
-    <Layer depth={local.depth ?? 0}>
-      <div
-        style={{
-          'background-image': `linear-gradient(${local.active ? `${local.highlightColor || 'var(--color-accent)'}, var(--color-edge) 80%` : 'var(--color-edge)'})`,
-          'display': local.hidden ? 'none' : 'block'
-        }}
-        class={cn("p-px h-full w-full box-border rounded-md overflow-clip min-h-0")}
-      >
-        <div
-          class={cn(
-            'h-full w-full box-border bg-panel rounded-[5px] overflow-clip',
-            local.class
-          )}
-          {...rest}
-        >
-          {local.children}
-        </div>
-      </div>
-    </Layer>
+    <Surface
+      style={{
+        'grid-template-areas': '"header" "toolbar" "body" "footer"',
+        'grid-template-rows': 'auto auto minmax(0, 1fr) auto',
+        'grid-template-columns': 'minmax(0, 1fr)',
+      }}
+      class={cn('grid min-h-0 min-w-0', local.class)}
+      {...surfaceProps}
+    >
+      {local.children}
+    </Surface>
   );
 }
+
+function PanelHeader(props: SlotProps) {
+  return (
+    <Show when={props.children}>
+      <div
+        class={cn('flex flex-none items-center min-h-10 px-2 overflow-x-hidden border-b border-edge-muted overflow-hidden', props.class)}
+        style={{ 'grid-area': 'header' }}
+      >
+        {props.children}
+      </div>
+    </Show>
+  );
+}
+
+function PanelToolbar(props: SlotProps) {
+  return (
+    <Show when={props.children}>
+      <div
+        class={cn('flex flex-none items-center min-h-10 px-2 overflow-x-hidden border-b border-edge-muted overflow-hidden', props.class)}
+        style={{ 'grid-area': 'toolbar' }}
+      >
+        {props.children}
+      </div>
+    </Show>
+  );
+}
+
+function PanelBody(props: BodyProps) {
+  return (
+    <Show when={props.children}>
+      <Show
+        when={props.scroll}
+        fallback={
+          <div
+            class={cn('relative min-h-0 min-w-0 overflow-hidden', props.class)}
+            style={{ 'grid-area': 'body' }}
+          >
+            {props.children}
+          </div>
+        }
+      >
+        <Scroll class={props.class} style={{ 'grid-area': 'body' }}>
+          {props.children}
+        </Scroll>
+      </Show>
+    </Show>
+  );
+}
+
+function PanelFooter(props: SlotProps) {
+  return (
+    <Show when={props.children}>
+      <div
+        class={cn('flex flex-none items-center min-h-10 px-2 overflow-x-hidden border-t border-edge-muted overflow-hidden', props.class)}
+        style={{ 'grid-area': 'footer' }}
+      >
+        {props.children}
+      </div>
+    </Show>
+  );
+}
+
+export const Panel = Object.assign(PanelRoot, {
+  Toolbar: PanelToolbar,
+  Header: PanelHeader,
+  Footer: PanelFooter,
+  Body: PanelBody,
+});

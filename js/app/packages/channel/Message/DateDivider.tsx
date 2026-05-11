@@ -1,5 +1,5 @@
 import { formatRelativeDate, isSameDay } from '@core/util/time';
-import { Show, createMemo } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import type { ChannelMessageListMeta } from './list-meta';
 import { MessageFlag } from './MessageFlag';
 

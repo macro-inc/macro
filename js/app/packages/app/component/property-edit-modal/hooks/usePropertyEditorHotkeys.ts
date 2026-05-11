@@ -1,15 +1,15 @@
-import { createHotkeyGroup, registerHotkey } from 'core/hotkey/hotkeys';
-import { openPropertyEditor } from '../state/propertyEditor';
+import type { SoupState } from '@app/component/next-soup/create-soup-state';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import type {
   Property,
   PropertyDefinitionDomain,
 } from '@core/component/Properties/types';
-import { isTaskEntity, type EntityData } from '@entity';
-import { TOKENS } from '@core/hotkey/tokens';
 import { HotkeyTags } from '@core/hotkey/constants';
+import { TOKENS } from '@core/hotkey/tokens';
+import { type EntityData, isTaskEntity } from '@entity';
+import { createHotkeyGroup, registerHotkey } from 'core/hotkey/hotkeys';
+import { openPropertyEditor } from '../state/propertyEditor';
 import { useAllProperties } from './useAllProperties';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import type { SoupState } from '@app/component/next-soup/create-soup-state';
 
 interface PropertyEditorHotkeyOptions {
   scopeId: string;

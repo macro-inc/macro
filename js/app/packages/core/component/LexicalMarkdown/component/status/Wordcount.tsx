@@ -1,7 +1,8 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import CaretUp from '@icon/regular/caret-up.svg';
 import Stats from '@icon/regular/chart-bar.svg';
 import { Popover } from '@kobalte/core/popover';
+import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { Store } from 'solid-js/store';
 import type { WordcountStats } from '../../plugins';
@@ -53,12 +54,14 @@ export function Wordcount(props: { stats: Store<WordcountStats> }) {
         classList={{ 'bg-active': menuOpen() }}
       >
         <Popover.Anchor>
-          <DeprecatedIconButton
-            icon={() => <Stats class=" size-5 opacity-50" />}
-            tooltip={{ label: 'Wordcount' }}
-            theme="clear"
+          <Button
+            variant="ghost"
+            size="icon-md"
+            tooltip={<LabelAndHotKey label="Wordcount" />}
             onClick={toggleExpanded}
-          />
+          >
+            <Stats class=" size-5 opacity-50" />
+          </Button>
         </Popover.Anchor>
 
         <Show when={isExpanded()}>

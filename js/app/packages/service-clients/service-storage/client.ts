@@ -34,8 +34,8 @@ import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
 import type {
   AccessLevel,
-  PostSoupAstRequest,
   CallRecordPreview,
+  PostSoupAstRequest,
   PostSoupRequest,
   SoupPage,
   View,
@@ -550,6 +550,28 @@ export const storageServiceClient = {
         method: 'GET',
       }),
       (result) => result.shortId
+    );
+  },
+
+  async getDocumentBranchName({
+    documentId,
+  }: {
+    documentId: string;
+  }): Promise<
+    MaybeResult<
+      FetchWithTokenErrorCode,
+      { shortId: string; branchName: string }
+    >
+  > {
+    return mapOk(
+      await dssFetch<{ shortId: string; branchName: string }>(
+        `/documents/${documentId}/branch_name`,
+        { method: 'GET' }
+      ),
+      (result) => ({
+        shortId: result.shortId,
+        branchName: result.branchName,
+      })
     );
   },
 

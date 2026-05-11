@@ -21,14 +21,77 @@ pub struct PaginatedResult<T> {
     pub cursor: SearchCursorOption,
 }
 
-/// Used to store individual cursor information for a given search method.
-/// This could be document names, email subject, content etc.
+/// Cursor for a single search method. Each variant matches the sort fields
+/// of the search it paginates, so the values can be passed straight to
+/// OpenSearch's `search_after` without re-purposing.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct SearchMethodCursor {
-    /// The id of the entity, used in tie breakers
-    pub entity_id: uuid::Uuid,
-    /// The updated at time of the entity
-    pub updated_at: chrono::DateTime<chrono::Utc>,
+pub enum SearchMethodCursor {
+    /// Sort: `[updated_at_ms desc, entity_id asc]`. Used by name searches and
+    /// the default channel content sort.
+    UpdatedAt {
+        /// Tiebreaker entity id.
+        entity_id: uuid::Uuid,
+        /// Primary sort timestamp.
+        updated_at: chrono::DateTime<chrono::Utc>,
+    },
+    /// Sort: `[thread_id desc, message_id desc]`. Used by channel content
+    /// search in thread-grouped mode.
+    Thread {
+        /// Primary sort key.
+        thread_id: uuid::Uuid,
+        /// Tiebreaker for replies within the same thread.
+        message_id: uuid::Uuid,
+    },
+}
+
+impl SearchMethodCursor {
+    /// Produces the values to pass as OpenSearch `search_after`.
+    pub fn search_after(&self) -> Vec<serde_json::Value> {
+        match self {
+            Self::UpdatedAt {
+                entity_id,
+                updated_at,
+            } => vec![
+                serde_json::json!(updated_at.timestamp_millis()),
+                serde_json::json!(entity_id.to_string()),
+            ],
+            Self::Thread {
+                thread_id,
+                message_id,
+            } => vec![
+                serde_json::json!(thread_id.to_string()),
+                serde_json::json!(message_id.to_string()),
+            ],
+        }
+    }
+
+    /// Returns `(entity_id, updated_at)` for the `UpdatedAt` variant.
+    /// Callers that only paginate by `(updated_at, entity_id)` use this to
+    /// avoid exhaustive matching; `Thread` cursors yield `None`.
+    pub fn as_updated_at(&self) -> Option<(uuid::Uuid, chrono::DateTime<chrono::Utc>)> {
+        match self {
+            Self::UpdatedAt {
+                entity_id,
+                updated_at,
+            } => Some((*entity_id, *updated_at)),
+            Self::Thread { .. } => None,
+        }
+    }
+
+    /// Encodes the cursor as a base64 string for client transport.
+    pub fn encode(&self) -> Option<String> {
+        serde_json::to_vec(self)
+            .ok()
+            .map(|bytes| BASE64.encode(bytes))
+    }
+
+    /// Decodes a base64-encoded cursor string.
+    pub fn decode(encoded: &str) -> Option<Self> {
+        BASE64
+            .decode(encoded)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+    }
 }
 
 /// Represents the state of a search cursor
@@ -72,7 +135,7 @@ impl SearchCursorOption {
 
         let cursor = if has_more {
             match items.last() {
-                Some(last) => SearchCursorOption::NotDone(Some(SearchMethodCursor {
+                Some(last) => SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
                     entity_id: last.entity_id(),
                     updated_at: last.updated_at(),
                 })),

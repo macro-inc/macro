@@ -3,11 +3,11 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
+import { Layer } from '@ui';
 import { type Accessor, createMemo, type Setter, Show } from 'solid-js';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
 import { plainTextToHtml } from '../util/plainTextToHtml';
 import { BaseInput } from './BaseInput';
-import { Layer } from '@ui';
 
 interface EmailInputProps {
   replyingTo: Accessor<ApiMessage | undefined>;
@@ -36,11 +36,14 @@ export function EmailInput(props: EmailInputProps) {
 
     // Set focus to new message if provided
     if (newMessageId) ctx.messages.setFocused(newMessageId);
+
+    // Collapse the input after sending (Gmail-style).
+    props.setShowReply?.(false);
   }
 
   return (
     <Show when={ctx.drafts.initialDraftsSettled()}>
-      <Layer depth={2}>
+      <Layer depth={1}>
         <BaseInput
           replyingTo={props.replyingTo}
           draft={props.draft}

@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import { describe, expect, it, vi } from 'vitest';
 import type { InputAttachmentData, InputSnapshot } from '../../Input/types';
 
 vi.mock('@core/store/cacheChannelInput', () => ({

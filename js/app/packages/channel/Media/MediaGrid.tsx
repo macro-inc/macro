@@ -1,8 +1,8 @@
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
-import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
-import { cn } from '@ui/utils/classname';
+import { Button, cn } from '@ui';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { MediaImage } from './MediaImage';
 import { MediaVideo } from './MediaVideo';
 import type { MediaItem } from './media-items';
@@ -123,15 +123,17 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
         />
       </Show>
       <div class="absolute right-2 top-2 z-10">
-        <DeprecatedIconButton
-          icon={ExpandIcon}
-          theme="clear"
+        <Button
+          variant="ghost"
+          size="icon-md"
           onClick={(event) => {
             event.stopPropagation();
             props.onOpen();
           }}
-          tooltip={{ label: 'Open video viewer' }}
-        />
+          tooltip={<LabelAndHotKey label="Open video viewer" />}
+        >
+          <ExpandIcon />
+        </Button>
       </div>
     </div>
   );

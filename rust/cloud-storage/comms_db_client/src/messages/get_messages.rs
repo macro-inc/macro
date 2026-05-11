@@ -67,6 +67,7 @@ pub async fn get_channel_messages(
     db: &Pool<Postgres>,
     limit: i64,
     offset: i64,
+    only_deleted: Option<bool>,
 ) -> Result<Vec<(Uuid, Uuid)>> {
     let messages = sqlx::query!(
         r#"
@@ -74,12 +75,17 @@ pub async fn get_channel_messages(
             channel_id,
             id
         FROM comms_messages
+        WHERE
+            $3::bool IS NULL
+            OR ($3 AND deleted_at IS NOT NULL)
+            OR (NOT $3 AND deleted_at IS NULL)
         ORDER BY created_at ASC
         LIMIT $1
         OFFSET $2
         "#,
         limit,
-        offset
+        offset,
+        only_deleted,
     )
     .map(|row| (row.channel_id, row.id))
     .fetch_all(db)

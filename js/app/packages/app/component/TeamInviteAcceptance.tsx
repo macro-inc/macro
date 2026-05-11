@@ -1,5 +1,11 @@
-import { useNavigate, useSearchParams, Navigate } from '@solidjs/router';
-import { createMemo, Match, Show, Switch } from 'solid-js';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { LoadingBlock } from '@core/component/LoadingBlock';
+import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
+import EnvelopeIcon from '@icon/regular/envelope.svg';
+import SpinnerIcon from '@icon/regular/spinner.svg';
+import UsersThreeIcon from '@icon/regular/users-three.svg';
+import LogoIcon from '@macro-icons/macro-logo.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   useJoinTeamMutation,
@@ -7,16 +13,9 @@ import {
   useUserInvitesQuery,
 } from '@queries/team/invitations';
 import { useTeamQuery } from '@queries/team/teams';
-import { LoadingBlock } from '@core/component/LoadingBlock';
-import { Panel } from '@ui';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import { Button } from '@ui/components/Button';
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
-import { ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import UsersThreeIcon from '@icon/regular/users-three.svg';
-import EnvelopeIcon from '@icon/regular/envelope.svg';
-import SpinnerIcon from '@icon/regular/spinner.svg';
+import { Navigate, useNavigate, useSearchParams } from '@solidjs/router';
+import { Button, Surface } from '@ui';
+import { createMemo, Match, Show, Switch } from 'solid-js';
 
 export function TeamInviteAcceptance() {
   return (
@@ -85,7 +84,7 @@ function TeamInviteAcceptanceContent() {
   );
 
   return (
-    <div class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative">
+    <div class="flex items-center justify-center size-full p-8 overflow-hidden relative">
       <style>
         {`
           @keyframes invite-fade-up {
@@ -112,8 +111,8 @@ function TeamInviteAcceptanceContent() {
       </div>
 
       <div class="w-full max-w-105 invite-card">
-        <Panel>
-          <div class="flex flex-col gap-6 py-6 px-6">
+        <Surface>
+          <div class="flex flex-col gap-6 p-6">
             <div class="flex justify-center">
               <LogoIcon class="size-10 text-accent" />
             </div>
@@ -149,13 +148,14 @@ function TeamInviteAcceptanceContent() {
               </Switch>
             </div>
           </div>
-        </Panel>
+        </Surface>
       </div>
     </div>
   );
 }
 
 function NoInviteId() {
+  const navigate = useNavigate();
   return (
     <div class="w-full flex flex-col items-center gap-4 text-center">
       <h2 class="text-lg font-medium text-ink">Invalid Invite Link</h2>
@@ -163,11 +163,10 @@ function NoInviteId() {
         This invite link appears to be invalid or incomplete.
       </p>
       <Button
-        as="a"
-        href="/"
-        variant="primary"
+        variant="base"
         size="md"
         class="w-full rounded-xs"
+        onClick={() => navigate('/')}
       >
         Go to Home
       </Button>
@@ -186,7 +185,7 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
         Sign in or create an account to view and accept this team invitation.
       </p>
       <Button
-        variant="primary"
+        variant="base"
         size="md"
         class="w-full rounded-xs"
         onClick={props.onLogin}
@@ -198,6 +197,7 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
 }
 
 function InviteNotFound() {
+  const navigate = useNavigate();
   return (
     <div class="w-full flex flex-col items-center gap-4 text-center">
       <h2 class="text-lg font-medium text-ink">Invite Not Found</h2>
@@ -206,11 +206,10 @@ function InviteNotFound() {
         a different email address.
       </p>
       <Button
-        as="a"
-        href="/"
-        variant="primary"
+        variant="base"
         size="md"
         class="w-full rounded-xs"
+        onClick={() => navigate('/')}
       >
         Go to Home
       </Button>
@@ -250,7 +249,7 @@ function InviteDetails(props: {
 
       <div class="flex flex-col gap-2 w-full">
         <Button
-          variant="primary"
+          variant="base"
           size="md"
           class="w-full rounded-xs"
           onClick={props.onAccept}

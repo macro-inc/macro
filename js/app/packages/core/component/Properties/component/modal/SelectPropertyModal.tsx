@@ -1,10 +1,10 @@
 import { useBlockId } from '@core/block';
 import { useListKeyBindings } from '@core/util/useListKeyBindings';
-import LoadingSpinner from '@icon/regular/spinner.svg';
 import PlusIcon from '@icon/regular/plus.svg';
-import { useAddEntityPropertyMutation } from '@queries/properties/entity';
+import LoadingSpinner from '@icon/regular/spinner.svg';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
-import { cn } from '@ui/utils/classname';
+import { useAddEntityPropertyMutation } from '@queries/properties/entity';
+import { cn, Dialog, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -25,7 +25,6 @@ import {
   toPropertyDefinitionDomain,
   useSearchInputFocus,
 } from '../../utils';
-import { Dialog, Panel } from '@ui';
 
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
@@ -157,7 +156,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
       }}
       contentRef={setDialogRef}
     >
-      <Panel depth={2} class="*:max-h-[75vh]">
+      <Surface depth={2} class="*:max-h-[75vh]">
         <div class="flex flex-col text-sm">
           <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
             <span class="pl-2 pointer-events-none text-ink-extra-muted">❯</span>
@@ -177,7 +176,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
               when={!listPropertiesQuery.isLoading}
               fallback={
                 <div class="flex items-center justify-center py-8">
-                  <div class="w-5 h-5 animate-spin">
+                  <div class="size-5 animate-spin">
                     <LoadingSpinner />
                   </div>
                   <span class="ml-2 text-ink-muted">Loading properties...</span>
@@ -233,7 +232,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
             </Show>
           </div>
         </div>
-      </Panel>
+      </Surface>
     </Dialog>
   );
 }

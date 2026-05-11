@@ -1,15 +1,14 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { cn } from '@ui/utils/classname';
 import { idToDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import Check from '@icon/regular/check.svg';
 import Link from '@icon/regular/link.svg';
 import NotePencil from '@icon/regular/note-pencil.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
+import { Button, cn } from '@ui';
 import { type ParentProps, Show, useContext } from 'solid-js';
 import { CommentsContext } from './Thread';
-import { Button } from '@ui/components/Button';
 
 // SCUFFED: how should we define these tag colors?
 const NewTag = () => {
@@ -71,7 +70,7 @@ export function MessageRowUI(
   };
   return (
     <div
-      class="flex w-full items-start justify-between group relative font-mono"
+      class="flex w-full items-start justify-between group relative text-ink-extra-muted"
       classList={{
         'mb-3': !props.hideBottomMargin,
       }}
@@ -84,16 +83,14 @@ export function MessageRowUI(
       >
         {!props.hideBubble && (
           <div
-            class={`w-4 h-4 relative flex items-center justify-center shrink-0 rounded-xs`}
+            class={`size-4 relative flex items-center justify-center shrink-0 rounded-xs`}
           >
-            <div class="absolute">
-              <UserIcon
-                size="xs"
-                suppressClick={true}
-                id={props.authorId}
-                isDeleted={false}
-              />
-            </div>
+            <UserIcon
+              size="sm"
+              suppressClick={true}
+              id={props.authorId}
+              isDeleted={false}
+            />
           </div>
         )}
         <div class="text-xs text-ink truncate grow">{displayName()}</div>

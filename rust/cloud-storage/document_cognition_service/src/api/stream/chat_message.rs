@@ -496,7 +496,7 @@ fn stream_and_save_message(
                         stream_id: stream_id.clone(),
                     },
                 };
-                if let Ok(json) = serde_json::to_value(&stream_error) {
+                if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                     yield json;
                 }
                 return;
@@ -529,7 +529,7 @@ fn stream_and_save_message(
                             let stream_error = StreamError::InternalError {
                                 stream_id: stream_id.clone(),
                             };
-                            if let Ok(json) = serde_json::to_value(&stream_error) {
+                            if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                                 yield json;
                             }
                             None
@@ -596,7 +596,6 @@ fn stream_and_save_message(
                 }
                 Err(e) => {
                     tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "error in AI stream");
-                    // Map error type to appropriate StreamError
                     let stream_error = match e {
                         ai::types::AiError::ContextWindowExceeded => {
                             StreamError::ModelContextOverflow {
@@ -607,7 +606,7 @@ fn stream_and_save_message(
                             stream_id: stream_id.clone(),
                         },
                     };
-                    if let Ok(json) = serde_json::to_value(&stream_error) {
+                    if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                         yield json;
                     }
                     break;
@@ -631,26 +630,31 @@ fn stream_and_save_message(
         // into its own `self.messages`, so `get_new_conversation_messages`
         // returns the full assistant (+ any tool) messages. Use those.
         //
-        // Cancellation: the ToolLoop never flushed, so that call returns
-        // empty. Build a ChatMessage from the parts we actually yielded —
-        // that's exactly what the user saw in the chunks pushed to the
-        // durable stream, so the saved message matches the UI deterministically.
-        let new_messages = if was_cancelled {
-            // Any tool calls that didn't get a response before cancellation
-            // are closed out with a synthetic "cancelled" error so the saved
-            // message has no dangling tool_call_ids.
-            let resolved_parts = resolve_pending_tool_calls(yielded_parts);
-            if resolved_parts.is_empty() {
+        // Early termination (cancellation or mid-stream error): the ToolLoop
+        // never flushed, so that call returns empty. Build a ChatMessage from
+        // the parts we actually yielded — that's exactly what the user saw in
+        // the chunks pushed to the durable stream, so the saved message
+        // matches the UI deterministically.
+        let new_messages = {
+            let flushed = if was_cancelled {
                 vec![]
             } else {
-                vec![ai::types::ChatMessage {
-                    role: ai::types::Role::Assistant,
-                    content: ChatMessageContent::AssistantMessageParts(resolved_parts),
-                    attachments: None,
-                }]
+                chat.get_new_conversation_messages()
+            };
+            if !flushed.is_empty() {
+                flushed
+            } else {
+                let resolved_parts = resolve_pending_tool_calls(yielded_parts);
+                if resolved_parts.is_empty() {
+                    vec![]
+                } else {
+                    vec![ai::types::ChatMessage {
+                        role: ai::types::Role::Assistant,
+                        content: ChatMessageContent::AssistantMessageParts(resolved_parts),
+                        attachments: None,
+                    }]
+                }
             }
-        } else {
-            chat.get_new_conversation_messages()
         };
 
         // Extract assistant response text before moving new_messages into store

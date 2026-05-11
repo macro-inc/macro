@@ -1,7 +1,7 @@
+import type { InputSnapshot } from '@channel/Input';
+import { batch, createSignal, type Setter } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ThreadState } from '../Thread';
-import { batch, createSignal, type Setter } from 'solid-js';
-import type { InputSnapshot } from '@channel/Input';
 
 type ThreadStore = Record<string, ThreadState>;
 export function createThreadManager() {
@@ -22,7 +22,12 @@ export function createThreadManager() {
       batch(() => {
         const next: boolean =
           typeof val === 'function' ? val(isReplying()) : val;
-        if (next) setIsExpanded(true);
+        if (next) {
+          setIsExpanded(true);
+          requestAnimationFrame(() =>
+            replyInputEl()?.scrollIntoView({ block: 'nearest' })
+          );
+        }
         setIsReplyingRaw(next);
       });
     };

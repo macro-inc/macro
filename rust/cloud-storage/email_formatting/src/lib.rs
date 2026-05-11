@@ -32,6 +32,23 @@ struct NotifPreview {
 }
 
 const TRUNCATE_LEN: usize = 15;
+const BODY_MAX_CHARS: usize = 500;
+
+fn truncate_body(s: String) -> String {
+    if s.chars().count() <= BODY_MAX_CHARS {
+        return s;
+    }
+    let byte_limit = s
+        .char_indices()
+        .nth(BODY_MAX_CHARS)
+        .map(|(i, _)| i)
+        .unwrap_or(s.len());
+    let truncated = &s[..byte_limit];
+    match truncated.rfind(' ') {
+        Some(pos) => format!("{}…", s[..pos].trim_end()),
+        None => format!("{}…", truncated),
+    }
+}
 
 impl NotifPreview {
     #[tracing::instrument(err)]
@@ -39,7 +56,7 @@ impl NotifPreview {
         let title = v
             .notification_metadata
             .format_title(v.sender_id.as_ref().map(CowLike::copied))?;
-        let body = v.notification_metadata.format_body(v.sender_id)?;
+        let body = truncate_body(v.notification_metadata.format_body(v.sender_id)?);
         Ok(NotifPreview {
             created_at: v.created_at,
             title,

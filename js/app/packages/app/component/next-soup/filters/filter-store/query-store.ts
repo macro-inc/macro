@@ -2,10 +2,10 @@ import { batch } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { compileToAst, type TargetAstMap } from './compile';
 import { addFieldValues, removeFieldValues } from './field-values';
-import type { FieldFilters, QueryState, Query } from './types';
+import type { FieldFilters, Query, QueryState } from './types';
 
 export type { TargetAstMap } from './compile';
-export type { FieldFilters, QueryState, Query, EmailView } from './types';
+export type { EmailView, FieldFilters, Query, QueryState } from './types';
 
 export type QueryStoreOptions = {
   readonly initial?: Query;

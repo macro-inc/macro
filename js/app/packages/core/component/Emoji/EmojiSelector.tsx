@@ -1,4 +1,4 @@
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import {
   createEffect,
@@ -146,7 +146,7 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
   return (
     <div
       ref={scrollEl}
-      class="w-full h-full overflow-y-auto [overflow-anchor:none]"
+      class="size-full overflow-y-auto [overflow-anchor:none]"
       role="listbox"
       aria-label="Emoji Selector"
     >

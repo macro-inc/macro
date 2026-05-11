@@ -1,7 +1,7 @@
-import { Show } from 'solid-js';
-import type { Notification } from '../types/notification';
 import type { NotificationStack } from '@notifications';
+import { Show } from 'solid-js';
 import { DisplayName } from '../components/DisplayName';
+import type { Notification } from '../types/notification';
 
 interface NotificationSenderProps {
   notification?: Notification;

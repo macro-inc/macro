@@ -1,3 +1,4 @@
+import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { updateUserAuth } from '@core/auth';
 import {
   authenticateWithEmailPermissions,
@@ -5,14 +6,13 @@ import {
 } from '@core/auth/channel';
 import { openEmailAuthPopup } from '@core/auth/email';
 import { isErr } from '@core/util/maybeResult';
+import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { emailClient } from '@service-email/client';
 import type { ListLinksResponse } from '@service-email/generated/schemas';
-import { invalidateUserInfo } from '@queries/auth/user-info';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 
 export const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
   number | undefined

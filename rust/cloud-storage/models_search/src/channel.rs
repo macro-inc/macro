@@ -5,6 +5,19 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+/// Sort key for channel content search results.
+#[derive(
+    Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq, ToSchema, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelSortTimestamp {
+    /// Sort by message created_at DESC, message_id DESC tiebreaker.
+    #[default]
+    Message,
+    /// Sort by thread_id DESC, message_id DESC tiebreaker.
+    Thread,
+}
+
 /// A channel message match for a given channel id
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChannelSearchResult {
@@ -99,6 +112,9 @@ impl From<SearchResponseItem<ChannelSearchResult, ChannelSearchMetadata>>
 pub struct ChannelSearchResponse {
     /// List containing results from email threads
     pub results: Vec<ChannelSearchResponseItemWithMetadata>,
+    /// Base64-encoded cursor for the next page; `None` when exhausted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, JsonSchema)]
@@ -118,6 +134,9 @@ pub struct ChannelSearchRequest {
     /// If true, returns only 1 result per entity. False by default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub collapse: Option<bool>,
+    /// Sort key for results. Defaults to `message`.
+    #[serde(default)]
+    pub sort: ChannelSortTimestamp,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]

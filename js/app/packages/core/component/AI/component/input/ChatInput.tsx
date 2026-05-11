@@ -2,12 +2,11 @@ import { useAnalytics } from '@app/component/analytics-context';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useChatInputContext } from '@core/component/AI/context';
 import type { Model, ToolSet } from '@core/component/AI/types';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey } from '@core/component/Hotkey';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -18,9 +17,7 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button } from '@ui';
-import { Panel } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { Button, cn, Surface } from '@ui';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
@@ -138,23 +135,26 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const LeftButton = () => (
     <div ref={setAttachMenuAnchorRef} class="shrink-0">
-      <DeprecatedIconButton
-        icon={showAttachMenu() ? XIcon : PlusIcon}
-        theme="base"
+      <Button
+        variant="ghost"
+        size="icon-md"
+        class="text-ink"
         onClick={() => setShowAttachMenu((prev) => !prev)}
-      />
+      >
+        {showAttachMenu() ? <XIcon /> : <PlusIcon />}
+      </Button>
     </div>
   );
 
   const StopButton = () => (
-    <DeprecatedIconButton
-      icon={Stop}
-      theme="base"
-      size="sm"
-      iconSize={14}
-      tooltip={{ label: 'Stop generating', shortcut: 'ctrl+c' }}
+    <Button
+      variant="base"
+      size="icon-sm"
+      tooltip={<LabelAndHotKey label="Stop generating" shortcut="ctrl+c" />}
       onClick={() => props.onStop?.()}
-    />
+    >
+      <Stop />
+    </Button>
   );
 
   const RightControls = () => (
@@ -200,7 +200,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   return (
-    <Panel depth={2}>
+    <Surface depth={2}>
       <div id="chat-input" ref={containerRef} class="relative flex flex-col">
         <Show when={hasAttachments()}>
           <div class="px-2 pt-2 w-full">
@@ -234,10 +234,10 @@ export function ChatInput(props: ChatInputComponentProps) {
             id="chat-input-text-area"
             class={cn('text-sm sm:text-sm text-ink')}
             classList={{
-              'pl-8': !isMultiline(),
-              'pr-[48px]': !isMultiline() && isTouchDevice(),
-              'pr-[130px]': !isMultiline() && !isTouchDevice(),
-              'pl-0 pr-0 pb-8': isMultiline(),
+              'pl-12': !isMultiline(),
+              'pr-12': !isMultiline() && isTouchDevice(),
+              'pr-32.5': !isMultiline() && !isTouchDevice(),
+              'px-0  pb-8': isMultiline(),
             }}
             ref={mdRef}
           >
@@ -275,6 +275,6 @@ export function ChatInput(props: ChatInputComponentProps) {
         </div>
         <ConsentDialog />
       </div>
-    </Panel>
+    </Surface>
   );
 }

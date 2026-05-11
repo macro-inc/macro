@@ -1,18 +1,15 @@
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { CommentsProvider } from '@block-md/comments/CommentsProvider';
+import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
-import { useUrlParams } from '@core/component/ParamsProvider';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
-import { useUserId } from '@core/context/user';
 import {
   type BlockName,
   useBlockId,
   useMaybeBlockAliasedName,
 } from '@core/block';
-import { IS_MAC } from '@core/constant/isMac';
-import { ENABLE_MARKDOWN_AI_GENERATE } from '@core/constant/featureFlags';
-import type { EntityDragEvent } from '@entity';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -32,8 +29,8 @@ import TableActionMenu, {
   menuButtonRefSignal,
   tableCellNodeKeySignal,
 } from '@core/component/LexicalMarkdown/component/menu/TableActionMenu';
-import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
 import { DraggableBlockMenu } from '@core/component/LexicalMarkdown/component/misc/DraggableBlockMenu';
+import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
 import { TableCellResizer } from '@core/component/LexicalMarkdown/component/misc/TableCellResizer';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import {
@@ -73,8 +70,8 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { actionsPlugin } from '@core/component/LexicalMarkdown/plugins/actions/actionsPlugin';
 import {
-  checkboxToTaskPlugin,
   CONVERT_CHECKBOXES_TO_TASKS,
+  checkboxToTaskPlugin,
 } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
 import { codePlugin } from '@core/component/LexicalMarkdown/plugins/code/codePlugin';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
@@ -85,6 +82,7 @@ import {
   type NodekeyOffset,
   SearchHighlight,
 } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
+import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import {
   GO_TO_LOCATION_COMMAND,
   GO_TO_NODE_ID_COMMAND,
@@ -113,17 +111,22 @@ import {
   createFilesReadyHandler,
   getDragDropPosition,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
-import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
+import { useUrlParams } from '@core/component/ParamsProvider';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import {
+  ENABLE_MARKDOWN_AI_GENERATE,
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
+import { IS_MAC } from '@core/constant/isMac';
+import { useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { blockElementSignal } from '@core/signal/blockElement';
 import {
   blockFileSignal,
@@ -137,18 +140,20 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
+import type { EntityDragEvent } from '@entity';
 import WarningIcon from '@icon/regular/warning.svg';
 import {
   $createDocumentMentionNode,
   $isInlineSearchNode,
+  AwaitNode,
   CommentNode,
   createPeerIdValidator,
   InlineSearchNode,
   type PeerIdValidator,
   peerIdPlugin,
-  AwaitNode,
 } from '@lexical-core';
 import { onElementConnect } from '@solid-primitives/lifecycle';
+import { isIOS } from '@solid-primitives/platform';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, throttle } from '@solid-primitives/scheduled';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -183,11 +188,6 @@ import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
-import { isMobile } from '@core/mobile/isMobile';
-import { isIOS } from '@solid-primitives/platform';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { URL_PARAMS } from '@block-md/constants';
 
 false && fileFolderDrop;
 
@@ -1045,7 +1045,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
         <ScopedPortal scope="block">
           <Show when={!isBlankMarkdown() && !isMobile()}>
-            <div class="absolute bottom-2 left-2 w-fit h-fit">
+            <div class="absolute bottom-2 left-2 size-fit">
               <Wordcount stats={wordcountStats} />
             </div>
           </Show>

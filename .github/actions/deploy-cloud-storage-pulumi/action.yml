@@ -40,6 +40,10 @@ inputs:
     description: 'Datadog host'
     required: false
     default: 'https://api.us5.datadoghq.com/'
+  prebuilt-binaries-artifact:
+    description: 'Optional GitHub artifact containing prebuilt service binaries to copy into Docker images'
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -48,6 +52,21 @@ runs:
     - uses: actions/checkout@v6
       with:
         lfs: ${{ inputs.use-lfs }}
+
+    - name: Download prebuilt service binaries
+      if: ${{ inputs.prebuilt-binaries-artifact != '' }}
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: ${{ inputs.prebuilt-binaries-artifact }}
+        path: rust/cloud-storage/prebuilt-artifact
+
+    - name: Extract prebuilt service binaries
+      if: ${{ inputs.prebuilt-binaries-artifact != '' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p rust/cloud-storage/prebuilt
+        tar -xzf rust/cloud-storage/prebuilt-artifact/prebuilt-binaries.tar.gz -C rust/cloud-storage/prebuilt
 
     # setup docker
     - uses: docker/setup-buildx-action@v3
@@ -90,3 +109,4 @@ runs:
         DD_APP_KEY: ${{ inputs.dd-app-key }}
         DD_API_KEY: ${{ inputs.dd-api-key }}
         DD_HOST: ${{ inputs.dd-host }}
+        USE_PREBUILT_SERVICE_BINARIES: ${{ inputs.prebuilt-binaries-artifact != '' && 'true' || 'false' }}

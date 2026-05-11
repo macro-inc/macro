@@ -1,9 +1,9 @@
-import { Input, ChannelInput, createInputAttachmentTracker } from '../Input';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { MessageEditor } from './create-message-editor';
+import { cn } from '@ui';
+import { ChannelInput, createInputAttachmentTracker, Input } from '../Input';
 import { useMessage } from '../Message';
-import { cn } from '@ui/utils/classname';
+import type { MessageEditor } from './create-message-editor';
 
 type MessageEditorContentProps = {
   channelId: string;

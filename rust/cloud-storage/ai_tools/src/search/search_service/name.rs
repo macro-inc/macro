@@ -14,12 +14,12 @@ use std::sync::Arc;
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. For call records, this searches the channel name the call took place in. This tool finds items based on what they're called, not their content.\n\nMulti-term behavior: every whitespace-separated term must match (AND). For emails, each term is matched with prefix semantics against the subject. Wrapping a value in double quotes (e.g. `\"deal review\"`) keeps it as a single term and forces exact-token matching for that term rather than a prefix. For all other entity types, the whole query is treated as a single phrase prefix, so 'release notes' looks for those words adjacent in that order in the name/title.\n\nPrefer searching all types by default — leave entityTypes empty unless the user's request clearly targets a specific type. Don't narrow the search just because the query mentions a noun like 'email' or 'doc'; only filter when the user has explicitly scoped the request to that type.",
+    description = "Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `\"deal review\"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.",
     title = "NameSearch"
 )]
 pub struct NameSearch {
     #[schemars(
-        description = "The name or title to search for. For emails, this is the subject line. For channels, this can be the channel name or participant names. For call records, this is the channel name the call belongs to. Whitespace-separated terms are ANDed (every term must match). For non-email types the whole query is matched as an adjacent phrase. For emails each term is matched independently against the subject; wrap a term in double quotes to force exact-token matching instead of prefix matching."
+        description = "The name or title to search. Pass 1-3 keywords drawn from words that would literally appear in the title, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched against the subject. Wrap a term in double quotes to force exact-token matching."
     )]
     pub name: String,
 
@@ -102,7 +102,7 @@ mod tests {
             "Tool name should match the schemars title"
         );
         assert!(
-            description.contains("Search for items by their name"),
+            description.contains("Search items by their name"),
             "Description should contain expected text"
         );
     }

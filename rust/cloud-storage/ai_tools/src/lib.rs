@@ -14,7 +14,7 @@ use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
 use documents::inbound::toolset::document_toolset;
-use email::inbound::toolset::email_toolset;
+use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
 use notification::inbound::ai_tool::notification_toolset;
 use properties::inbound::toolset::properties_toolset;
 use schemas::{anthropic_tools, read};
@@ -80,6 +80,17 @@ pub fn all_tool_combined_schema() -> CombinedToolSchemas {
         .merge(&anthropic_tools::text_editor_code_execution())
         .merge(&read::read_thread())
         .build()
+}
+
+/// Toolset for the MCP server — excludes SendEmail.
+pub fn mcp_tools() -> ToolSetWithPrompt {
+    let toolset = subagent_toolset()
+        .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
+        .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
+        .add_tool::<Subagent, ToolServiceContext>();
+    let prompt = prompts::TOOLS_PROMPT;
+    let toolset = Arc::new(toolset);
+    ToolSetWithPrompt { toolset, prompt }
 }
 
 pub fn no_tools() -> ToolSetWithPrompt {

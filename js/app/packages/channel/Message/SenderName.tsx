@@ -1,6 +1,5 @@
-import { cn } from '@ui/utils/classname';
-import { tryMacroId } from '@core/user';
-import { useDisplayName } from '@core/user';
+import { tryMacroId, useDisplayName } from '@core/user';
+import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { useMessage } from './context';
 

@@ -73,13 +73,38 @@ export class EcrImage extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const usePrebuiltServiceBinaries =
+      process.env.USE_PREBUILT_SERVICE_BINARIES === 'true';
+    const prebuiltDockerfiles: { [key: string]: string } = {
+      Dockerfile: 'Dockerfile.prebuilt',
+      'Dockerfile.convert_service': 'Dockerfile.convert_service.prebuilt',
+      'Dockerfile.search_processing_service':
+        'Dockerfile.search_processing_service.prebuilt',
+    };
+    const effectiveDockerfile = (() => {
+      if (!usePrebuiltServiceBinaries) {
+        return dockerfile;
+      }
+
+      const dockerfileKey = dockerfile ?? 'Dockerfile';
+      const prebuiltDockerfile = prebuiltDockerfiles[dockerfileKey];
+      if (!prebuiltDockerfile) {
+        throw new Error(
+          `No prebuilt Dockerfile mapping configured for ${dockerfileKey}`
+        );
+      }
+      return prebuiltDockerfile;
+    })();
+
     this.image = new awsx.ecr.Image(
       imageId,
       {
         imageTag: 'latest',
         context: imagePath,
         platform: `${platform.family}/${platform.architecture}`,
-        dockerfile: dockerfile ? `${imagePath}/${dockerfile}` : undefined,
+        dockerfile: effectiveDockerfile
+          ? `${imagePath}/${effectiveDockerfile}`
+          : undefined,
         repositoryUrl: this.ecr.url,
         args: buildArgs,
       },

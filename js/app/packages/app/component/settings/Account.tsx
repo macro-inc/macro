@@ -1,4 +1,3 @@
-import { uploadProfilePicture } from '@core/component/ProfilePicture';
 import EditableField from '@core/component/EditableField';
 import { capitalize } from '@block-pdf/util/StringUtils';
 import { useHasPaidAccess } from '@core/auth/license';
@@ -6,6 +5,8 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useLogout } from '@core/auth/logout';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { toast } from '@core/component/Toast/Toast';
+import { staticFileIdEndpoint } from '@core/constant/servers';
+import { createStaticFile } from '@core/util/create';
 import { Dialog, Button, Panel } from '@ui';
 import {
   blockNameToFileExtensions,
@@ -13,6 +14,7 @@ import {
 } from '@core/constant/allBlocks';
 import {
   DEV_MODE_ENV,
+  ENABLE_AUTO_UPDATE_UI,
   ENABLE_EMAIL,
   ENABLE_PROFILE_PICTURES,
 } from '@core/constant/featureFlags';
@@ -44,6 +46,26 @@ import { invoke } from '@tauri-apps/api/core';
 
 // NOTE: solid directives
 false && fileSelector;
+
+// 16 megabytes
+const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
+
+async function uploadProfilePicture(
+  file: File
+): Promise<{ id: string; url: string } | void> {
+  if (file.size > MAX_PROFILE_PICTURE_SIZE) {
+    return toast.failure('Image size too large');
+  }
+
+  try {
+    const id = await createStaticFile(file);
+    const url = staticFileIdEndpoint(id);
+    await authServiceClient.putProfilePicture({ url });
+    return { id, url };
+  } catch (_error) {
+    return toast.failure('Failed to upload profile picture');
+  }
+}
 
 function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
   switch (status.status) {
@@ -153,27 +175,27 @@ export function Account() {
   };
 
   return (
-    <div
-      class="h-full overflow-y-auto p-2"
-      style="scrollbar-width: none;"
-    >
-      <div class="max-w-200 w-full mx-auto">
-        <Panel depth={2}>
-          <div class="text-ink">
-            <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-muted after:content-['']">
-              <div class="text-sm font-semibold">Account</div>
-            </div>
-            <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
-              <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
-                <div class="bg-panel px-6 py-2">
-                  <PaywallComponent
-                    hideCloseButton
-                    cb={() => {}}
-                    handleGuest={() => toggleSettings()}
-                  />
-                </div>
-              </Show>
+      <div class="h-full overflow-hidden flex justify-center p-2">
+        <div class="max-w-200 size-full">
+          <Panel depth={2} class="h-full overflow-hidden text-ink">
+          <Panel.Header class="px-6">
+            <div class="text-sm font-semibold">Account</div>
+          </Panel.Header>
 
+          <Panel.Toolbar class="h-full w-full">
+            <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
+              <div class="bg-panel px-6 py-2 w-full">
+                <PaywallComponent
+                  hideCloseButton
+                  cb={() => {}}
+                  handleGuest={() => toggleSettings()}
+                />
+              </div>
+            </Show>
+          </Panel.Toolbar>
+
+          <Panel.Body scroll class="text-ink">
+            <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
               <Show when={ENABLE_PROFILE_PICTURES && userId()}>
                 <Row label="Profile Picture">
                   <div
@@ -218,7 +240,7 @@ export function Account() {
 
               <Row label="First Name">
                 <EditableField
-                  class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
+                  class="ph-no-capture [&_span]:text-sm/normal [&_span]:text-ink-muted"
                   value={firstName()}
                   onSave={(newValue: string) => {
                     setUpdatedFirstName(newValue);
@@ -231,7 +253,7 @@ export function Account() {
 
               <Row label="Last Name">
                 <EditableField
-                  class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
+                  class="ph-no-capture [&_span]:text-sm/normal [&_span]:text-ink-muted"
                   value={lastName()}
                   onSave={(newValue: string) => {
                     setUpdatedLastName(newValue);
@@ -249,7 +271,7 @@ export function Account() {
                   </span>
                   <Show when={!hasPaidAccess()}>
                     <Button
-                      variant="accent"
+                      variant="active"
                       size="sm"
                       depth={3}
                       onClick={() => showPaywall()}
@@ -260,7 +282,9 @@ export function Account() {
                 </div>
               </Row>
 
-              <BundleUpdateRow />
+              <Show when={ENABLE_AUTO_UPDATE_UI}>
+                <BundleUpdateRow />
+              </Show>
 
               <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
                 <Row label="Email">
@@ -268,7 +292,7 @@ export function Account() {
                     when={!emailActive()}
                     fallback={
                       <Button
-                        variant="secondary"
+                        variant="base"
                         size="sm"
                         depth={3}
                         onClick={() => setShowEmailModal(true)}
@@ -279,7 +303,7 @@ export function Account() {
                   >
                     <Show when={!showEnableEmailModal()}>
                       <Button
-                        variant="secondary"
+                        variant="base"
                         size="sm"
                         depth={3}
                         onClick={() => setShowEnableEmailModal(true)}
@@ -302,7 +326,7 @@ export function Account() {
                     when={!githubLinkExists()}
                     fallback={
                       <Button
-                        variant="secondary"
+                        variant="base"
                         size="sm"
                         depth={3}
                         onClick={handleGithubDisable}
@@ -312,7 +336,7 @@ export function Account() {
                     }
                   >
                     <Button
-                      variant="secondary"
+                      variant="base"
                       size="sm"
                       depth={3}
                       onClick={handleGithubEnable}
@@ -328,7 +352,7 @@ export function Account() {
 
             <div class="flex items-center justify-end h-10 px-6">
               <Button
-                variant="secondary"
+                variant="base"
                 size="sm"
                 depth={3}
                 onClick={logoutHandler}
@@ -405,67 +429,71 @@ export function Account() {
 
             <Show when={isNativeMobilePlatform()}>
               <div class="border-t border-edge pt-4">
-                <Button variant="destructive" depth={3} onClick={() => setShowDeleteModal(true)}>
+                <Button variant="danger" depth={3} onClick={() => setShowDeleteModal(true)}>
                   Delete Account
                 </Button>
                 <Dialog
                   open={showDeleteModal()}
                   onOpenChange={setShowDeleteModal}
                   position="center"
-                  class="w-[480px]"
+                  class="w-120"
                 >
                   <Panel active depth={2}>
-                    <div class="p-6 font-sans flex flex-col gap-3">
-                      <Dialog.Title class="text-ink text-lg font-semibold leading-7">
+                    <Panel.Header class="px-6">
+                      <Dialog.Title class="text-ink text-sm font-semibold">
                         Delete Account
                       </Dialog.Title>
-                      <Dialog.Description class="text-ink-muted text-sm font-normal leading-tight">
+                    </Panel.Header>
+                    <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+                      <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
                         Are you sure you want to delete your account? This action is
                         permanent and cannot be undone.
                       </Dialog.Description>
                       <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                        <Button variant="secondary" depth={3} onClick={() => setShowDeleteModal(false)}>
+                        <Button variant="base" depth={3} onClick={() => setShowDeleteModal(false)}>
                           Cancel
                         </Button>
-                        <Button variant="destructive" depth={3} onClick={() => {
+                        <Button variant="danger" depth={3} onClick={() => {
                           setShowDeleteModal(false);
                           setShowDeleteConfirmModal(true);
                         }}>
                           Delete
                         </Button>
                       </div>
-                    </div>
+                    </Panel.Body>
                   </Panel>
                 </Dialog>
                 <Dialog
                   open={showDeleteConfirmModal()}
                   onOpenChange={setShowDeleteConfirmModal}
                   position="center"
-                  class="w-[480px]"
+                  class="w-120"
                 >
                   <Panel active depth={2}>
-                    <div class="p-6 font-sans flex flex-col gap-3">
-                      <Dialog.Title class="text-ink text-lg font-semibold leading-7">
+                    <Panel.Header class="px-6">
+                      <Dialog.Title class="text-ink text-sm font-semibold">
                         Are you absolutely sure?
                       </Dialog.Title>
-                      <Dialog.Description class="text-ink-muted text-sm font-normal leading-tight">
+                    </Panel.Header>
+                    <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+                      <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
                         This will permanently delete your account and all associated
                         data. This cannot be undone.
                       </Dialog.Description>
                       <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                        <Button variant="secondary" depth={3} onClick={() => setShowDeleteConfirmModal(false)}>
+                        <Button variant="base" depth={3} onClick={() => setShowDeleteConfirmModal(false)}>
                           Cancel
                         </Button>
-                        <Button variant="destructive" depth={3} onClick={deleteAccountHandler}>
+                        <Button variant="danger" depth={3} onClick={deleteAccountHandler}>
                           Delete My Account
                         </Button>
                       </div>
-                    </div>
+                    </Panel.Body>
                   </Panel>
                 </Dialog>
               </div>
             </Show>
-          </div>
+          </Panel.Body>
         </Panel>
       </div>
     </div>
@@ -508,7 +536,7 @@ function NotificationSettings(props: {
   return (
     <Row label="Notifications">
       <Button
-        variant="secondary"
+        variant="base"
         size="sm"
         depth={3}
         onClick={handleToggle}
@@ -562,7 +590,7 @@ function BundleUpdateRow() {
               </span>
               <Show when={action()}>
                 {(a) => (
-                  <Button variant="accent" size="sm" depth={3} onClick={a().action}>
+                  <Button variant="active" size="sm" depth={3} onClick={a().action}>
                     {a().label}
                   </Button>
                 )}

@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
-import type { ContentHitData } from '../types/search';
 import { DisplayName } from '../components/DisplayName';
+import type { ContentHitData } from '../types/search';
 import { getSenderId } from './search-helpers';
 
 interface SearchSenderProps {

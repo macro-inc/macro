@@ -2,8 +2,8 @@
  * @vitest-environment jsdom
  */
 
-import userEvent from '@testing-library/user-event';
 import { render, screen } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DateDivider } from '../DateDivider';
 import { NewDivider } from '../NewDivider';

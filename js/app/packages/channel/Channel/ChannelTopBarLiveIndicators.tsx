@@ -35,7 +35,9 @@ export function ChannelTopBarLiveIndicators() {
 
   return (
     <SplitHeaderRight>
-      <BlockLiveIndicators />
+      <div class="-order-1">
+        <BlockLiveIndicators />
+      </div>
     </SplitHeaderRight>
   );
 }

@@ -1,6 +1,6 @@
+import { getChannelParams } from '@channel/Channel/link';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import type { MessageData } from '../../Message';
-import { getChannelParams } from '@channel/Channel/link';
 
 export const DEFAULT_REACTION_EMOJI = '👍';
 

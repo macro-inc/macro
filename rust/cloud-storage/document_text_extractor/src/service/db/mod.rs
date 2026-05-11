@@ -15,12 +15,14 @@ pub use MockDBClient as DB;
 
 use model::citations::TextReference;
 
+#[cfg_attr(test, allow(dead_code))]
 #[derive(Clone)]
 pub struct DBClient {
     inner: sqlx::Pool<sqlx::Postgres>,
 }
 
 #[cfg_attr(test, automock)]
+#[cfg_attr(test, allow(dead_code))]
 impl DBClient {
     pub fn new(inner: sqlx::Pool<sqlx::Postgres>) -> Self {
         Self { inner }

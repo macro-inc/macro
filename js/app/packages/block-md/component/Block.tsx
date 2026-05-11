@@ -1,7 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { useBlockId } from '@core/block';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
@@ -32,7 +32,7 @@ export default function BlockMarkdown() {
   return (
     <DocumentBlockContainer>
       <div
-        class="w-full h-full select-none overscroll-none overflow-hidden flex flex-col relative"
+        class="size-full select-none overscroll-none overflow-hidden flex flex-col relative"
         tabIndex={-1}
       >
         <ModalsProvider>
@@ -60,7 +60,7 @@ export default function BlockMarkdown() {
           />
           <div class="w-full grow overflow-hidden relative" data-block-content>
             <div
-              class="w-full h-full relative overflow-auto portal-scope scrollbar-hidden"
+              class="size-full relative overflow-auto portal-scope scrollbar-hidden"
               ref={setScrollRef}
             >
               <Suspense>

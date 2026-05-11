@@ -3,8 +3,8 @@ import type { Component } from 'solid-js';
 import { Dynamic, Show } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import {
-  usePropertiesContext,
   type PropertySaveHandler,
+  usePropertiesContext,
 } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import { BooleanValue } from './BooleanValue';

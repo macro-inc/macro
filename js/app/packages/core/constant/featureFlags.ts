@@ -337,3 +337,10 @@ export const ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE = DEV_MODE_ENV
 export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;
+
+export const ENABLE_AUTO_UPDATE_UI = resolveFeatureFlag(
+  'ENABLE_AUTO_UPDATE_UI',
+  false
+);
+
+export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', false);

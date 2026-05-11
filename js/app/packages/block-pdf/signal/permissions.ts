@@ -2,8 +2,8 @@ import { commentsStore } from '@block-pdf/store/comments/commentStore';
 import { commentPlaceables } from '@block-pdf/store/comments/freeComments';
 import { highlightsUuidMap } from '@block-pdf/store/highlight';
 import { createBlockMemo } from '@core/block';
-import { useCanEdit } from '@core/signal/permissions';
 import { useUserId } from '@core/context/user';
+import { useCanEdit } from '@core/signal/permissions';
 import { createSelector } from 'solid-js';
 
 export const useCanEditModificationData = useCanEdit;

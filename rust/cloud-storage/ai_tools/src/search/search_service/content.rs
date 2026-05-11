@@ -14,12 +14,12 @@ use std::sync::Arc;
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Search for items by their content. For documents, this searches the document body text. For emails, this searches across many fields at once — subject, body, sender/recipient/cc/bcc addresses, and the display names on those addresses — so a query like 'alice budget' matches emails where alice appears as sender/recipient (by address or display name) and the subject or body mentions budget. For chats, this searches the message content. For call records, this searches the call transcript text. This tool finds items based on what's inside them, not their titles or names.\n\nMulti-term behavior: every whitespace-separated term must match (AND). For emails, each term is tested with prefix matching against the text fields (subject, body, display names) and against the local-part of email-address fields, with the two field groups OR'd — so 'alice review' matches an email where alice appears in the To: line and 'review' appears in the body. Wrapping a value in double quotes (e.g. `\"alice@example.com\"` or `\"deal review\"`) keeps it as a single term and forces exact-token matching for that term — useful when you need a full email address or an exact phrase rather than a prefix. For all other entity types, the whole query is treated as a single phrase prefix, so 'release notes' looks for those words adjacent in that order.\n\nPrefer searching all types by default — leave entityTypes empty unless the user's request clearly targets a specific type. Don't narrow the search just because the query mentions a noun like 'email' or 'doc'; only filter when the user has explicitly scoped the request to that type.",
+    description = "Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. For emails, whitespace-separated terms are ANDed and each term is matched independently across the text fields and the local-part of address fields, with the two groups OR'd. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `\"deal review\"` or `\"alice@example.com\"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.",
     title = "ContentSearch"
 )]
 pub struct ContentSearch {
     #[schemars(
-        description = "The text content to search for. This searches within the body of documents, emails, messages, and call transcripts. Whitespace-separated terms are ANDed (every term must match). For non-email types the whole query is matched as an adjacent phrase. For emails each term is matched independently across subject/body/sender/recipient fields; wrap a term in double quotes to force exact-token (or full-email-address) matching instead of prefix matching."
+        description = "The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched across subject/body/sender/recipient. Wrap a term in double quotes to force exact-token (or full-email-address) matching."
     )]
     pub query: String,
 
@@ -102,7 +102,7 @@ mod tests {
             "Tool name should match the schemars title"
         );
         assert!(
-            description.contains("Search for items by their content"),
+            description.contains("Search items by their content"),
             "Description should contain expected text"
         );
     }

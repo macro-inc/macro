@@ -1,12 +1,12 @@
+import { useQuickAccessEntities } from '@core/component/Properties/component/modal';
+import type { EntityTypeItemMap } from '@core/component/Properties/component/modal/shared/entityUtils';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
   type Accessor,
   createContext,
   type FlowComponent,
   useContext,
 } from 'solid-js';
-import { useQuickAccessEntities } from '@core/component/Properties/component/modal';
-import { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { EntityTypeItemMap } from '@core/component/Properties/component/modal/shared/entityUtils';
 
 const SEARCH_ENTITY_TYPES = [
   EntityType.CHANNEL,

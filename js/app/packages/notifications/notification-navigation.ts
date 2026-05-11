@@ -1,4 +1,10 @@
 import type { SplitManager } from '@app/component/split-layout/layoutManager';
+import {
+  getChannelParams,
+  navigateToChannelMessage,
+} from '@block-channel/utils/link';
+import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
+import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/signal/location';
 import type { BlockAlias, BlockName } from '@core/block';
 import {
   type ItemLike,
@@ -6,23 +12,17 @@ import {
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
 import type { NotificationType } from '@core/types';
-import type { UnifiedNotification } from './types';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
-import type { NotificationSource } from './notification-source';
-import {
-  getChannelParams,
-  navigateToChannelMessage,
-} from '@block-channel/utils/link';
 import { isChannelNotification } from './notification-helpers';
+import type { NotificationSource } from './notification-source';
 import { CHANNEL_EVENT_TYPES } from './notification-source';
-import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/signal/location';
-import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import {
-  stackNotifications,
   getMostRecentNotification,
+  stackNotifications,
 } from './notification-stacking';
+import type { UnifiedNotification } from './types';
 
 /**
  * Go to location via global block orchestrator.

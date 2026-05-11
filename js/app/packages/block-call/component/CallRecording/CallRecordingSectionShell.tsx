@@ -2,14 +2,14 @@ import Eye from '@phosphor-icons/core/assets/regular/eye.svg';
 import EyeSlash from '@phosphor-icons/core/assets/regular/eye-slash.svg';
 import UserCircle from '@phosphor-icons/core/assets/regular/user-circle.svg';
 import UserCircleMinus from '@phosphor-icons/core/assets/regular/user-circle-minus.svg';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import {
-  Show,
   createEffect,
   createMemo,
   createSignal,
   onCleanup,
+  Show,
 } from 'solid-js';
 
 export function CallRecordingSectionShell(props: {

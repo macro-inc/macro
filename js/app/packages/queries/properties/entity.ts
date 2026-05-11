@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/maybeResult';
 import { useMutation, useQuery } from '@tanstack/solid-query';
-import { batch, type Accessor } from 'solid-js';
+import { type Accessor, batch } from 'solid-js';
 import {
   entityPropertyFromApi,
   propertyValueToApi,
@@ -19,14 +19,14 @@ import {
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { queryClient } from '../client';
-import { type MutationCallbacks, withCallbacks } from '../utils';
-import { propertiesKeys } from './keys';
 import {
   getSoupEntityById,
-  optimisticUpdateSoupEntity,
   invalidateSoupEntity,
+  optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '../soup/cache';
+import { type MutationCallbacks, withCallbacks } from '../utils';
+import { propertiesKeys } from './keys';
 
 export function useEntityPropertiesQuery(
   entityType: Accessor<EntityType>,

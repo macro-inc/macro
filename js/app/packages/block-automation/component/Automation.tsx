@@ -4,6 +4,7 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { whenSettled } from '@core/util/whenSettled';
 import { formatDateAndTime } from '@entity';
 import {
@@ -15,8 +16,7 @@ import {
 } from '@queries/agent-schedule/schedules';
 import { useChatQuery } from '@queries/chat';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
 import { AutomationRenameModal } from './AutomationRenameModal';
@@ -33,7 +33,6 @@ import {
   WEEKDAY_OPTIONS,
 } from './automationUtils';
 import type { ScheduleDraft } from './types';
-import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 
 type HistoryRecord = {
   id?: string | null;
@@ -260,7 +259,7 @@ export function Automation() {
             <div class="flex shrink-0 flex-col gap-3 p-3">
               <div class="flex items-center gap-2">
                 <Button
-                  variant="accent"
+                  variant="active"
                   size="sm"
                   class="cursor-default"
                   disabled={runNowMutation.isPending || isRunning()}
@@ -269,7 +268,7 @@ export function Automation() {
                   Run Now
                 </Button>
                 <Button
-                  variant="secondary"
+                  variant="base"
                   size="sm"
                   class="cursor-default"
                   onClick={() =>

@@ -29,6 +29,7 @@ const isContainsAction = (a: FilterAction): a is ContainsAction =>
   a === ContainsAction.HAS_ANY ||
   a === ContainsAction.HAS_ALL ||
   a === ContainsAction.DOES_NOT_HAVE;
+
 import { FilterActionSelect } from './FilterAction';
 import { FilterPropertySelect } from './FilterProperty';
 import { FilterValueBoolean } from './FilterValueBoolean';
@@ -463,7 +464,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
           <button
             type="button"
             onClick={props.onCancel}
-            class="h-6 w-6 flex items-center justify-center text-ink hover:text-failure-ink hover:bg-hover"
+            class="size-6 flex items-center justify-center text-ink hover:text-failure-ink hover:bg-hover"
           >
             <XIcon class="size-3" />
           </button>
@@ -481,7 +482,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             property={selectedProperty()!}
             class="size-3.5 shrink-0"
           />
-          <span class="truncate max-w-[120px]">
+          <span class="truncate max-w-30">
             {selectedProperty()!.displayName}
           </span>
         </button>
@@ -501,7 +502,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             fallback={
               <button
                 type="button"
-                class="h-6  px-2 w-fit text-xxs text-ink-muted font-mono border border-edge hover:bg-hover text-left flex items-center"
+                class="h-6 px-2 w-fit text-xxs text-ink-muted font-mono border border-edge hover:bg-hover text-left flex items-center"
               >
                 {values().length > 0 ? values().join(', ') : '...'}
               </button>
@@ -609,7 +610,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             type="button"
             onClick={handleConfirm}
             disabled={!canConfirm()}
-            class="h-6 w-6 flex items-center justify-center text-ink hover:bg-hover border border-edge disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            class="size-6 flex items-center justify-center text-ink hover:bg-hover border border-edge disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
           >
             <CheckIcon class="size-4" />
           </button>
@@ -619,7 +620,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
         <button
           type="button"
           onClick={props.onCancel}
-          class="h-6 w-6 flex items-center justify-center text-ink hover:text-failure-ink hover:bg-hover shrink-0"
+          class="size-6 flex items-center justify-center text-ink hover:text-failure-ink hover:bg-hover shrink-0"
         >
           <XIcon class="size-3" />
         </button>

@@ -1,3 +1,4 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-call/constants';
 import { useBlockId } from '@core/block';
 import Unauthorized from '@core/component/AccessErrorViews/Unauthorized';
@@ -5,7 +6,6 @@ import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { MaybeResultError } from '@core/util/maybeResult';
 import { useCallRecordQuery } from '@queries/call/call';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSearchParams } from '@solidjs/router';
 import { createSignal, Match, Switch } from 'solid-js';
 import { CallRecordingBody } from './CallRecording/CallRecordingBody';

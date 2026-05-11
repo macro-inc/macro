@@ -1,4 +1,5 @@
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
+import type { EntityDragData } from '@entity';
 import {
   DragDropProvider,
   DragDropSensors,
@@ -7,15 +8,14 @@ import {
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
 import { EntityIcon, getEntityIconType } from 'core/component/EntityIcon';
-import type { EntityDragData } from '@entity';
 import {
+  type Accessor,
   createContext,
   createMemo,
   createSignal,
   type JSXElement,
   onCleanup,
   useContext,
-  type Accessor,
 } from 'solid-js';
 
 type DragOperationContextValue = {
@@ -45,7 +45,7 @@ export function ItemDragOverlay() {
   });
 
   return (
-    <div class="w-auto max-w-[300px] flex flex-col gap-2 bg-active p-2 rounded-md z-drag shadow-sm pointer-events-none">
+    <div class="w-auto max-w-75 flex flex-col gap-2 bg-active p-2 rounded-md z-drag shadow-sm pointer-events-none">
       <div class="flex flex-row items-center gap-2">
         <EntityIcon size="sm" targetType={iconType()} />
         <TruncatedText size="sm">{activeDraggable()?.data.name}</TruncatedText>

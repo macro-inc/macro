@@ -1,12 +1,13 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { BlockName } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import TagIcon from '@icon/regular/tag.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { Button } from '@ui';
 import { Suspense } from 'solid-js';
 
 export const PROPERTIES_DRAWER_ID = 'properties';
@@ -34,16 +35,17 @@ export function DocumentPropertiesButton(props: {
 }) {
   const drawerControl = useDrawerControl(DRAWER_ID);
   return (
-    <DeprecatedIconButton
-      icon={TagIcon}
-      theme={drawerControl.isOpen() ? 'accent' : 'clear'}
-      size={props.buttonSize ?? 'base'}
-      tooltip={{ label: 'Properties' }}
+    <Button
+      variant={drawerControl.isOpen() ? 'active' : 'ghost'}
+      size={props.buttonSize === 'sm' ? 'icon-sm' : 'icon-md'}
+      tooltip={<LabelAndHotKey label="Properties" />}
       onClick={() => {
         props.onOpenChange?.(!drawerControl.isOpen());
         drawerControl.toggle();
       }}
-    />
+    >
+      <TagIcon />
+    </Button>
   );
 }
 
@@ -64,7 +66,7 @@ export function DocumentPropertiesDrawer(props: { blockType: BlockName }) {
 function LoadingFallback() {
   return (
     <div class="flex justify-center items-center py-8">
-      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-ink-muted"></div>
+      <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted"></div>
     </div>
   );
 }

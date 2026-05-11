@@ -1,7 +1,22 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { isShareableEntityType } from '@app/component/global-share-modal/GlobalShareModal';
+import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { useAllProperties } from '@app/component/property-edit-modal/hooks/useAllProperties';
+import { openPropertyEditor } from '@app/component/property-edit-modal/state/propertyEditor';
+import type { SplitHandle } from '@app/component/split-layout/layoutManager';
+import { isListViewID } from '@app/constants/list-views';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import type {
+  Property,
+  PropertyDefinitionDomain,
+} from '@core/component/Properties/types';
+import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isTaskEntity, type EntityData } from '@entity';
+import { type EntityData, isTaskEntity } from '@entity';
+import { onCleanup } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import {
   makeCopyAction,
@@ -14,21 +29,6 @@ import {
   makeRenameAction,
   makeShareAction,
 } from './index';
-import { isShareableEntityType } from '@app/component/global-share-modal/GlobalShareModal';
-import { useUserId } from '@core/context/user';
-import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { useAllProperties } from '@app/component/property-edit-modal/hooks/useAllProperties';
-import { openPropertyEditor } from '@app/component/property-edit-modal/state/propertyEditor';
-import type {
-  Property,
-  PropertyDefinitionDomain,
-} from '@core/component/Properties/types';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import type { SplitHandle } from '@app/component/split-layout/layoutManager';
-import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
-import { onCleanup } from 'solid-js';
-import { isListViewID } from '@app/constants/list-views';
-import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;

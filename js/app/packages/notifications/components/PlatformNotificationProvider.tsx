@@ -13,6 +13,7 @@ import type {
   PlatformNotificationData,
   PlatformNotificationHandle,
 } from '../notification-platform';
+
 type NotGranted = 'not-granted';
 
 /// the context provider value which provides an interface wherein downstream consumers can interact with
@@ -78,6 +79,9 @@ function createBrowserNotication(
   return {
     onClick: (cb) => {
       notif.addEventListener('click', cb);
+    },
+    onDismiss: (cb) => {
+      notif.addEventListener('close', cb);
     },
     close: () => {
       notif.close();

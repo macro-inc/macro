@@ -1,12 +1,12 @@
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import type { Model } from '@core/component/AI/types';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
-import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
+import { Button } from '@ui';
 import { createEffect, createSignal } from 'solid-js';
 import {
   ChatInputProvider,
@@ -35,8 +35,8 @@ import { Item } from './util';
 
 export default function Debug() {
   return (
-    <div class="h-full w-full overflow-auto py-2">
-      <div class="flex flex-1 justify-center w-full ">
+    <div class="size-full overflow-auto py-2">
+      <div class="flex flex-1 justify-center w-full">
         <div class="w-4/5 grid grid-cols-2 border border-accent divide-accent divide-y divide-x">
           <ChatMarkdownArea />
           <ChatModelSelector />
@@ -70,7 +70,7 @@ function ChatModelSelector() {
 
   return (
     <Item label={'model selector'}>
-      <div class="w-full p-4 items-center gap-4 ">
+      <div class="w-full p-4 items-center gap-4">
         <div class="text-xs"> {model() ?? 'No Selection'}</div>
         <ModelSelector
           selectedModel={model()}
@@ -95,18 +95,14 @@ function ChatInputBoxInner() {
 
   return (
     <Item label="Chat input - not connected to backend">
-      <div class="w-full h-full">
+      <div class="size-full">
         <div class="flex gap-2 py-2">
-          <DeprecatedTextButton
-            onClick={() => input.setIsGenerating(true)}
-            theme="accent"
-            text="Generate"
-          />
-          <DeprecatedTextButton
-            onClick={() => input.setIsGenerating(false)}
-            theme="accent"
-            text="Stop"
-          />
+          <Button onClick={() => input.setIsGenerating(true)} variant="active">
+            Generate
+          </Button>
+          <Button onClick={() => input.setIsGenerating(false)} variant="active">
+            Stop
+          </Button>
         </div>
         <ChatInput
           editor={editor}
@@ -157,7 +153,7 @@ function ChatInputBoxConnectedInner() {
 
   return (
     <Item label="Chat input - connected (console)">
-      <div class="w-full h-full">
+      <div class="size-full">
         <ChatInput editor={editor} onSend={onSend} />
       </div>
     </Item>
@@ -206,7 +202,7 @@ function StaticMessages() {
     <ChatInputProvider>
       <ChatProvider chatId="debug" messages={messages}>
         <Item col label="Chat messages - static render">
-          <div data-chat-scroll class="min-h-0 max-h-[400px] overflow-y-auto">
+          <div data-chat-scroll class="min-h-0 max-h-100 overflow-y-auto">
             <ChatMessages />
           </div>
         </Item>
@@ -279,10 +275,7 @@ function FullChatInner() {
 
   return (
     <Item label="Input and messages - connected">
-      <div
-        data-chat-scroll
-        class="size-full min-h-0 max-h-[400px] overflow-y-auto"
-      >
+      <div data-chat-scroll class="size-full min-h-0 max-h-100 overflow-y-auto">
         <StreamStatus stream={debugStream} />
         <ChatMessages />
         <ChatInput
@@ -319,7 +312,7 @@ function ToolCallRenderInner(props: { stream: ChatMessageStream }) {
     <Item label="Tool call - static">
       <div
         data-chat-scroll
-        class="size-full flex space-y-1 flex-col overflow-y-auto max-h-[400px]"
+        class="size-full flex space-y-1 flex-col overflow-y-auto max-h-100"
       >
         <StreamStatus stream={() => props.stream} />
         <ChatMessages />
@@ -416,7 +409,7 @@ function LoadingMessageScroll() {
 
   return (
     <Item label="Loading stream scroll state">
-      <div class="max-h-[400px] overflow-y-auto">
+      <div class="max-h-100 overflow-y-auto">
         <StreamDebuggerWithControls
           stream={stream}
           messages={messages}
@@ -469,16 +462,12 @@ function TableStreamInner() {
   return (
     <Item col label="Table stream with controls">
       <div class="flex gap-x-2 items-center">
-        <DeprecatedTextButton
-          text="Stream"
-          onClick={startStream}
-          theme="accent"
-        />
-        <DeprecatedTextButton
-          text={isPaused() ? 'Resume' : 'Pause'}
-          onClick={() => setIsPaused((p) => !p)}
-          theme="accent"
-        />
+        <Button onClick={startStream} variant="active">
+          Stream
+        </Button>
+        <Button onClick={() => setIsPaused((p) => !p)} variant="active">
+          {isPaused() ? 'Resume' : 'Pause'}
+        </Button>
         <label class="flex items-center gap-x-1 text-xs">
           <input
             type="checkbox"
@@ -495,26 +484,27 @@ function TableStreamInner() {
           />
           Raw
         </label>
-        <DeprecatedTextButton
-          text="Reset"
-          theme="accent"
+        <Button
+          variant="active"
           onClick={() => {
             setStream(undefined);
             setRawText('');
             chat.setMessages([]);
             chat.setStream(undefined);
           }}
-        />
+        >
+          Reset
+        </Button>
       </div>
       <StreamStatus stream={stream} />
       {showRaw() ? (
-        <div class="min-h-0 max-h-[400px] overflow-y-auto select-text">
+        <div class="min-h-0 max-h-100 overflow-y-auto select-text">
           <pre class="text-xs whitespace-pre-wrap font-mono break-all select-text cursor-text">
             {rawText()}
           </pre>
         </div>
       ) : (
-        <div data-chat-scroll class="min-h-0 max-h-[400px] overflow-y-auto">
+        <div data-chat-scroll class="min-h-0 max-h-100 overflow-y-auto">
           <ChatMessages />
         </div>
       )}

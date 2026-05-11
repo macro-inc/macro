@@ -1,5 +1,5 @@
-import { createSignal } from 'solid-js';
 import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
+import { createSignal } from 'solid-js';
 
 export const tabTitleSignal = createSignal<string | undefined>();
 

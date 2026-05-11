@@ -1,5 +1,5 @@
-import { createEffect, on, type Accessor } from 'solid-js';
 import type { ApiChannelMessage } from '@service-comms/client';
+import { type Accessor, createEffect, on } from 'solid-js';
 
 function isNearTrueBottom(
   isNearBottom: boolean,

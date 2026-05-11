@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::DocumentToolContext;
+use crate::domain::branch_name::build_task_branch_name;
 
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -94,10 +95,10 @@ where
                             internal_error: e.into(),
                         })?;
 
-                    let name = result.document_metadata.document_name.clone();
-                    let slugified_name = name.replace(" ", "-").to_lowercase();
-
-                    Some(format!("macro-{short_id}-{slugified_name}"))
+                    Some(build_task_branch_name(
+                        &short_id,
+                        &result.document_metadata.document_name,
+                    ))
                 }
             }
         } else {

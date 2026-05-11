@@ -2,8 +2,8 @@ import { throwOnErr } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { soupKeys } from './keys';
 import type { SoupItemsQueryArgs } from './items';
+import { soupKeys } from './keys';
 
 // NOTE: we only use this for merging viewedAt into history items.
 // This narrower type makes optimistic updates simpler if the item is not already in the normy cache.

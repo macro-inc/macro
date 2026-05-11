@@ -1,7 +1,7 @@
-import { useMutation } from '@tanstack/solid-query';
-import { stripeServiceClient } from '@service-stripe/client';
 import type { PaidPlanTier } from '@app/component/paywall/plans';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { stripeServiceClient } from '@service-stripe/client';
+import { useMutation } from '@tanstack/solid-query';
 
 const PENDING_TEAM_KEY = 'onboarding_pending_team';
 

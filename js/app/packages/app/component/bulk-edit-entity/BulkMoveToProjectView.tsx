@@ -1,7 +1,12 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
+import { type EntityData, InlineEntity } from '@entity';
+import { Dialog } from '@kobalte/core/dialog';
+import { createBulkMoveToProjectDssEntityMutation } from '@macro-entity';
+import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { useProjectsQuery } from '@queries/storage/projects';
 import type { Project } from '@service-storage/generated/schemas';
+import { Button, cn } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
@@ -12,12 +17,6 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { createBulkMoveToProjectDssEntityMutation } from '@macro-entity';
-import { type EntityData, InlineEntity } from '@entity';
-import { Dialog } from '@kobalte/core/dialog';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
-import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 
 type ProjectWithDepth = Project & { depth?: number; path?: string };
 
@@ -472,7 +471,7 @@ export const BulkMoveToProjectView = (props: {
                   >
                     <div
                       class={cn(
-                        'mr-2 w-4 h-4 flex items-center justify-center text-xs',
+                        'mr-2 size-4 flex items-center justify-center text-xs',
                         !hasChildren() && 'opacity-20'
                       )}
                       onClick={(e) => {
@@ -506,7 +505,7 @@ export const BulkMoveToProjectView = (props: {
           </Button>
           <Button
             type="button"
-            variant="secondary"
+            variant="base"
             class="rounded-xs"
             onClick={finishEditing}
             disabled={!selectedProject()}

@@ -5,7 +5,7 @@ const config: KnipConfig = {
   ignore: [
     '**/generated/**',
     'scripts/**',
-    'packages/loro-mirror/**',
+    '../loro-mirror/**',
     'packages/service-storage/**',
   ],
 
@@ -34,7 +34,7 @@ const config: KnipConfig = {
   ],
 
   // Ignore workspaces that are not real app code
-  ignoreWorkspaces: ['packages/loro-mirror'],
+  ignoreWorkspaces: ['../loro-mirror'],
 
   // Workspace configurations
   workspaces: {

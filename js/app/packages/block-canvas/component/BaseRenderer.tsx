@@ -18,8 +18,8 @@ import {
   type VideoNode,
 } from '../model/CanvasModel';
 import { Line } from './edges/Line';
-import { File } from './nodes/EntityMention';
 import { DSSMedia } from './nodes/DSSMedia';
+import { File } from './nodes/EntityMention';
 import { Pencil } from './nodes/Pencil';
 import { Shape } from './nodes/Shape';
 import { TextBox } from './nodes/TextBox';

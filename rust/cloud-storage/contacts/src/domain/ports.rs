@@ -66,7 +66,7 @@ pub trait ContactsOutboxService: Send + Sync + 'static {
 
 pub(crate) struct ContactsBackfillOutboxMessage {
     pub(crate) id: u64,
-    #[expect(dead_code)]
+    #[allow(dead_code)]
     pub(crate) channel_id: Uuid,
     pub(crate) channel_participants: HashSet<MacroUserIdStr<'static>>,
 }

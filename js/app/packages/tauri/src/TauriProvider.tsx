@@ -1,6 +1,9 @@
-import { isTauri } from '@core/util/platform';
+import { useCallKitSetup } from '@channel/Call';
+import { isPlatform, isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';
 import type { RouteSectionProps } from '@solidjs/router';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
 import {
   type Accessor,
@@ -15,8 +18,6 @@ import {
 } from 'solid-js';
 import { getNetworkInfo } from 'tauri-plugin-device-info-api';
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 import { ShareTargetProvider } from './ShareTargetProvider';
@@ -65,6 +66,8 @@ function TauriProvider(props: { children: JSX.Element }) {
     });
     grantBundleUpdate();
   }
+
+  if (isTauri() && isPlatform('ios')) useCallKitSetup();
 
   const value: TauriContextValue = {
     runtimeInsets: insets,

@@ -1,5 +1,9 @@
+import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
+import { useMaybeBlockAliasedName } from '@core/block';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { toast } from '@core/component/Toast/Toast';
 import { useAuthor } from '@core/context/user';
+import { buildSimpleEntityUrl } from '@core/util/url';
 import {
   createEffect,
   createMemo,
@@ -14,10 +18,6 @@ import type { Root } from './commentType';
 import { EditInput } from './Inputs';
 import { MessageTopRow } from './MessageTopRow';
 import { CommentsContext, ThreadContext } from './Thread';
-import { useMaybeBlockAliasedName } from '@core/block';
-import { buildSimpleEntityUrl } from '@core/util/url';
-import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
-import { toast } from '@core/component/Toast/Toast';
 
 const ThreadLine = () => {
   return (

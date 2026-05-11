@@ -79,9 +79,14 @@ We have 3 environments "test", "dev", and "prod". When developing we typically u
 Run:
 
 ```bash
-npx wrangler dev
-# or
 just dev
+```
+
+`just dev` applies the local D1 migrations before starting Wrangler. If you run Wrangler directly, apply the migrations first:
+
+```bash
+CI=true npx wrangler d1 migrations apply USER_PEER_MAPPING --local
+npx wrangler dev
 ```
 
 If you run into build errors related to clang, follow [this fix](https://github.com/briansmith/ring/issues/1824#issuecomment-2059955073):

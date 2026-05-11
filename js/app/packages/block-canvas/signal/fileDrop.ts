@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { Tools } from '@block-canvas/constants';
 import type {
   CanvasEntityStyle,
@@ -24,7 +25,6 @@ import { getTextNodeHeight } from '../util/style';
 import { useCachedStyle } from './cachedStyle';
 import { useCanvasHistory } from './canvasHistory';
 import { useToolManager } from './toolManager';
-import { analytics } from '@app/lib/analytics';
 
 export const canvasDraggingSignal = createBlockSignal(false);
 

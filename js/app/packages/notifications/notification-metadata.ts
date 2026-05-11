@@ -1,5 +1,5 @@
-import type { UnifiedNotification } from './types';
 import { match } from 'ts-pattern';
+import type { UnifiedNotification } from './types';
 
 // Helper functions for derived notification data
 

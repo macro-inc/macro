@@ -1,6 +1,6 @@
+import { createFreshSearch } from '@core/util/freshSort';
 import { fuzzyMatch } from '@core/util/fuzzy';
 import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
-import { createFreshSearch } from '@core/util/freshSort';
 import type { EntityData, WithSearch } from '@entity';
 import type { PredicateConfig } from './filters/filter-store/predicates-store';
 import type { SearchPoolItem } from './search-context';

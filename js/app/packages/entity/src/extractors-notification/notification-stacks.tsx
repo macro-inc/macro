@@ -5,6 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import CheckIcon from '@icon/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import type { UnifiedNotification } from '@notifications';
 import {
   getChannelNotificationParams,
   getMostRecentNotification,
@@ -12,9 +13,7 @@ import {
   openNotification,
   stackNotifications,
 } from '@notifications';
-import type { UnifiedNotification } from '@notifications';
-import { Button } from '@ui/components/Button';
-import { cn } from '@ui/utils/classname';
+import { Button, cn } from '@ui';
 import { createEffect, type JSX, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { CollapsibleList } from '../components/CollapsibleList';
@@ -141,7 +140,7 @@ export function NotificationStackRow(props: {
                 <UnreadIndicator active />
               </span>
               <div class="shrink-0">
-                <NotificationSenderIcon stack={props.stack} size="xs" />
+                <NotificationSenderIcon stack={props.stack} size="sm" />
               </div>
               <span class="ph-no-capture truncate min-w-0">
                 <NotificationDescription stack={props.stack} />

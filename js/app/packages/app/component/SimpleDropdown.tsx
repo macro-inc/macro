@@ -8,7 +8,7 @@ import {
   shift,
 } from '@floating-ui/dom';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
 import {
   type Accessor,
   type Component,
@@ -142,7 +142,7 @@ function ItemInner(props: Pick<DropdownItemProps, 'icon' | 'text'>) {
       <Show when={props.icon}>
         <Dynamic
           component={props.icon}
-          class={cn('shrink-0', isMobile() ? 'w-5 h-5' : 'w-4 h-4')}
+          class={cn('shrink-0', isMobile() ? 'size-5' : 'size-4')}
         />
       </Show>
       <Show when={props.text}>

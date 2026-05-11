@@ -1,9 +1,9 @@
+import type { ApiChannelMessage } from '@service-comms/client';
 import { describe, expect, it } from 'vitest';
 import {
   MESSAGE_GROUPING_WINDOW_MS,
   shouldGroupWithPreviousMessage,
 } from '../message-grouping-meta';
-import type { ApiChannelMessage } from '@service-comms/client';
 
 function createMessage(
   id: string,

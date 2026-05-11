@@ -1,8 +1,6 @@
 import { useAlign } from '@block-canvas/signal/align';
 import { clamp } from '@block-canvas/util/math';
-import { cn } from '@ui/utils/classname';
 import { vec2 } from '@block-canvas/util/vector2';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import {
   type DropdownPreset,
   SlidableNumberInput,
@@ -20,6 +18,7 @@ import Reverse from '@phosphor-icons/core/regular/arrows-horizontal.svg?componen
 import CornersOut from '@phosphor-icons/core/regular/corners-out.svg?component-solid';
 import TextAa from '@phosphor-icons/core/regular/text-aa.svg?component-solid';
 import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
+import { Button, cn } from '@ui';
 import type { JSX } from 'solid-js';
 import {
   batch,
@@ -185,7 +184,7 @@ function ReverseEdgeButton() {
         class={cn(
           themeColors['base'],
           themeStyles['base'],
-          'h-6 w-6 flex border-0 rounded-md justify-center items-center'
+          'size-6 flex border-0 rounded-md justify-center items-center'
         )}
         onClick={() => {
           edges.batchUpdate(
@@ -231,11 +230,14 @@ function MobileDeleteButton() {
   return (
     <Show when={selection.active() && isMobileWidth()}>
       <div class="max-h-12 flex p-2 bg-menu cursor-auto justify-center items-center rounded shadow-md ring ring-edge">
-        <DeprecatedIconButton
-          icon={TrashSimple}
+        <Button
+          variant="ghost"
+          size="icon-md"
           onClick={deleteSelection}
           class="text-failure"
-        />
+        >
+          <TrashSimple />
+        </Button>
       </div>
     </Show>
   );

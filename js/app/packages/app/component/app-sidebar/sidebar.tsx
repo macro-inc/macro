@@ -1,5 +1,55 @@
-import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
+import { useAnalytics } from '@app/component/analytics-context';
+import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
+import {
+  InviteModal,
+  setInviteModalOpen,
+} from '@app/component/app-sidebar/invite-modal';
+import { CommandState } from '@app/component/command';
+import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
+import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import {
+  LIST_VIEW_ID,
+  LIST_VIEW_PATHS,
+  type ListView,
+} from '@app/constants/list-views';
+import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { InCallPanel } from '@channel/Call';
+import { useCallContextOptional } from '@channel/Call/CallContext';
+import { Hotkey } from '@core/component/Hotkey';
+import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { LabelAndHotKey } from '@core/component/Tooltip';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { clearPressedKeys } from '@core/hotkey/state';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
+import { activateClosestDOMScope } from '@core/hotkey/utils';
+import BellIcon from '@icon/regular/bell.svg';
+import { ContextMenu } from '@kobalte/core/context-menu';
+import LogoIcon from '@macro-icons/macro-logo.svg';
+import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
+import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
+import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
+import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
+import { AnimatedNewSplitIcon } from '@macro-icons/wide/animating/newSplit';
+import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
+import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
+import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
+import { useNotificationSettings } from '@notifications';
+import { debounce } from '@solid-primitives/scheduled';
+import { useLocation } from '@solidjs/router';
+import { Button, cn } from '@ui';
 import {
   type Component,
   createMemo,
@@ -10,57 +60,6 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
-import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
-import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
-import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
-import { AnimatedInboxIcon } from '@macro-icons/wide/animating/inbox';
-import { AnimatedSearchIcon } from '@macro-icons/wide/animating/search';
-import { AnimatedSidebarIcon } from '@macro-icons/wide/animating/sidebar';
-import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
-import { AnimatedNewSplitIcon } from '@macro-icons/wide/animating/newSplit';
-import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
-import { useLocation } from '@solidjs/router';
-import LogoIcon from '@macro-icons/macro-logo.svg';
-import {
-  LIST_VIEW_ID,
-  LIST_VIEW_PATHS,
-  type ListView,
-} from '@app/constants/list-views';
-import { LabelAndHotKey } from '@core/component/Tooltip';
-import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
-import { CommandState } from '@app/component/command';
-import { cn } from '@ui/utils/classname';
-import { Button } from '@ui/components/Button';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { useSettingsState } from '@core/constant/SettingsState';
-import type { ValidHotkey } from '@core/hotkey/types';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { debounce } from '@solid-primitives/scheduled';
-import { Hotkey } from '@core/component/Hotkey';
-import { clearPressedKeys } from '@core/hotkey/state';
-import { activateClosestDOMScope } from '@core/hotkey/utils';
-import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
-import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-import { ContextMenu } from '@kobalte/core/context-menu';
-import { useAnalytics } from '@app/component/analytics-context';
-import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
-import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
-import {
-  InviteModal,
-  setInviteModalOpen,
-} from '@app/component/app-sidebar/invite-modal';
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
-import BellIcon from '@icon/regular/bell.svg';
-import { useCallContextOptional } from '@channel/Call/CallContext';
-import { InCallPanel } from '@channel/Call';
-import { useNotificationSettings } from '@notifications';
 
 interface SidebarItem {
   id: ListView;
@@ -413,7 +412,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
         {props.label}
       </span>
-      <Show when={props.hotkeyToken}>
+      <Show when={hovering() && props.hotkeyToken}>
         {(token) => (
           <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:invisible">
             <Hotkey token={token()} class="flex gap-1" />
@@ -546,9 +545,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
       data-slim={isSlim()}
       style={{ transition: SIDEBAR_MAX_WIDTH_TRANSITION_STYLE }}
     >
-      <div class="flex items-center justify-between py-2 pl-2 pr-2 relative">
+      <div class="flex items-center justify-between p-2 relative">
         <div class="flex items-center group/logo-area w-full">
-          <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 ">
+          <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0">
             <LogoIcon class="size-6" />
           </div>
           <div class="grow shrink-10 min-w-0" />
@@ -570,7 +569,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-edge-muted" />
+        <hr class="border-transparent" />
       </div>
 
       <div class="w-full px-2 my-[4.5px]">
@@ -584,11 +583,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-edge-muted mb-2" />
+        <hr class="border-transparent mb-2" />
       </div>
 
       <nav>
-        <ul class="w-full h-full px-2 flex flex-col gap-1">
+        <ul class="size-full px-2 flex flex-col gap-1">
           <For each={visibleLinks()}>
             {(link) => (
               <li class="flex items-center justify-center">
@@ -604,7 +603,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </nav>
 
       <div class="px-2">
-        <hr class="border-edge-muted my-2" />
+        <hr class="border-transparent my-2" />
       </div>
 
       <div class="block max-h-[clamp(10%,60%,20rem)]">
@@ -618,7 +617,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </Show>
 
       <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
-        <hr class="border-edge-muted mb-2" />
+        <hr class="border-transparent mb-2" />
       </div>
 
       <div class="w-full px-2 flex flex-col">
@@ -733,7 +732,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
     <ContextMenu>
       <ContextMenu.Trigger class="w-full">
         <Button
-          as="button"
           draggable={false}
           variant="ghost"
           class={cn(
@@ -823,12 +821,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
           <Show when={props.hotkeyVisible}>
             <div
               class={cn(
-                'text-xs size-4 outline-1 outline-accent/50 rounded-xs bg-page text-ink flex items-center justify-center overflow-hidden',
+                'text-xs size-4 rounded-xs flex items-center justify-center overflow-hidden bg-accent/10 border border-accent/30 text-accent',
                 props.sidebarState === 'slim' && 'absolute -bottom-1 -right-1',
                 props.sidebarState !== 'slim' && 'relative p-1 ml-auto'
               )}
             >
-              <div class="absolute inset-0 size-full bg-accent/20" />
               <Hotkey shortcut={props.hotkey} />
             </div>
           </Show>

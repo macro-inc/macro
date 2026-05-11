@@ -3,7 +3,6 @@ import { ROUTER_BASE } from '@app/constants/routerBase';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
@@ -61,6 +60,7 @@ import {
   createEffect,
   createSignal,
   type JSX,
+  lazy,
   Match,
   on,
   onCleanup,
@@ -69,29 +69,28 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { currentThemeId } from '../../theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
   systemThemeEffect,
 } from '../../theme/utils/themeUtils';
-import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { Login } from './auth/Login';
-import { Signup } from './auth/Signup';
-import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 import { setCookie } from './auth/Shared';
+import { Signup } from './auth/Signup';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
-import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
+import { SearchProvider } from './next-soup/search-context';
 import { ReactiveFavicon } from './ReactiveFavicon';
-import { lazy } from 'solid-js';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 
 const InteractiveOnboarding = lazy(
   () => import('./interactive-onboarding/InteractiveOnboarding')
 );
-import { QuickAccessProvider } from '@core/context/quickAccess';
+
 import {
   AnalyticsContextProvider,
   useAnalytics,
@@ -99,6 +98,7 @@ import {
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { QuickAccessProvider } from '@core/context/quickAccess';
 import { Button } from '@ui';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
@@ -167,13 +167,13 @@ function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
   };
 
   return (
-    <div class="flex flex-col items-center justify-center gap-4 h-full w-full text-ink-muted">
+    <div class="flex flex-col items-center justify-center gap-4 size-full text-ink-muted">
       <p class="text-sm">Unable to connect. Please check your network.</p>
       <Button
         class="mt-2"
         disabled={retrying()}
         onClick={handleRetry}
-        variant="primary"
+        variant="base"
       >
         {retrying() ? 'Retrying…' : 'Retry'}
       </Button>
@@ -321,15 +321,16 @@ const ROUTES: RouteDefinition[] = [
       return (
         <div class="h-full overflow-y-hidden">
           <div class="relative flex flex-row items-center pt-4 h-full">
-            <DeprecatedTextButton
-              theme="base"
-              text="Close"
+            <Button
+              variant="base"
               onClick={() => {
                 channel.postMessage({ type: 'login-success' });
                 channel.close();
                 window.close();
               }}
-            />
+            >
+              Close
+            </Button>
           </div>
         </div>
       );
@@ -342,7 +343,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/welcome',
     component: () => (
-      <div class="flex *:flex-1 w-full h-full overflow-y-hidden">
+      <div class="flex *:flex-1 size-full overflow-y-hidden">
         <InteractiveOnboarding />
       </div>
     ),

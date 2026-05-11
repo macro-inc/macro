@@ -1,6 +1,6 @@
-import type { ParentProps } from 'solid-js';
 import { UserIcon } from '@core/component/UserIcon';
-import { cn } from '@ui/utils/classname';
+import { cn } from '@ui';
+import type { ParentProps } from 'solid-js';
 
 function Badge(props: ParentProps<{ class?: string }>) {
   return (
@@ -19,7 +19,7 @@ function Badge(props: ParentProps<{ class?: string }>) {
 export function SharedBadge(props: { ownerId: string }) {
   return (
     <Badge class="text-ink-extra-muted border-edge-muted pr-2">
-      <UserIcon id={props.ownerId} size="xs" />
+      <UserIcon id={props.ownerId} size="sm" />
       shared
     </Badge>
   );

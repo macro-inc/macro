@@ -8,6 +8,7 @@ use model::document::{BackfillSearchDocumentInformation, FileType};
 /// Used to get all documents in a paginated format
 /// This will get the latest version of the document for non-pdf documents
 /// For pdf documents, this will get the oldest version of the document
+#[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip(db))]
 pub async fn get_documents_for_search(
     db: &Pool<Postgres>,
@@ -17,6 +18,7 @@ pub async fn get_documents_for_search(
     sub_type: &Option<String>,
     created_after: &Option<DateTime<Utc>>,
     created_before: &Option<DateTime<Utc>>,
+    only_deleted: Option<bool>,
 ) -> anyhow::Result<Vec<BackfillSearchDocumentInformation>> {
     let result = sqlx::query!(
         r#"
@@ -68,6 +70,11 @@ pub async fn get_documents_for_search(
             AND ($4::text IS NULL OR dst.sub_type::text = $4)
             AND ($5::timestamptz IS NULL OR d."createdAt" >= $5)
             AND ($6::timestamptz IS NULL OR d."createdAt" < $6)
+            AND (
+                $7::bool IS NULL
+                OR ($7 AND d."deletedAt" IS NOT NULL)
+                OR (NOT $7 AND d."deletedAt" IS NULL)
+            )
         ORDER BY d."createdAt" ASC, d.id ASC
         LIMIT $1 OFFSET $2
     "#,
@@ -77,6 +84,7 @@ pub async fn get_documents_for_search(
         sub_type.as_deref() as Option<&str>,
         *created_after as Option<DateTime<Utc>>,
         *created_before as Option<DateTime<Utc>>,
+        only_deleted,
     )
     .try_map(|row| {
         Ok(BackfillSearchDocumentInformation {

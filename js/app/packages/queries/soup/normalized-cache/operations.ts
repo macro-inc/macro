@@ -6,8 +6,8 @@ import type {
 } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import {
-  partialMatchKey,
   type InfiniteData,
+  partialMatchKey,
   type QueryKey,
 } from '@tanstack/solid-query';
 import { isAfter } from 'date-fns';

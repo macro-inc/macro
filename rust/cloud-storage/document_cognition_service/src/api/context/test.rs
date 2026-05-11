@@ -199,6 +199,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         PlatformArnConfig {
             apns_platform_arn: String::new(),
             fcm_platform_arn: String::new(),
+            apns_voip_platform_arn: String::new(),
         },
     );
     let notification_tool_context =

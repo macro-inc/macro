@@ -1,33 +1,32 @@
 import {
-  useMessage,
-  useMessageActions,
   MessageActionsProvider,
   MessageSelectionProvider,
+  useMessage,
+  useMessageActions,
   useMessageSelection,
 } from './context';
 
-export { Message } from './Message';
-
-export { ChannelMessage } from './ChannelMessage';
-export { Attachments } from './Attachments';
-export { MediaPreview } from './MediaPreview';
-export { DateDivider } from './DateDivider';
-export { NewDivider } from './NewDivider';
-export { MessageFlag } from './MessageFlag';
 export { ActionMenu } from './ActionMenu';
-export {
-  useMessage,
-  useMessageActions,
-  MessageActionsProvider,
-  MessageSelectionProvider,
-  useMessageSelection,
-};
+export { Attachments } from './Attachments';
+export { ChannelMessage } from './ChannelMessage';
 export type { MessageSelectionState } from './context';
-export type { MessageData } from './types';
+export { DateDivider } from './DateDivider';
+export type { ChannelMessageListMeta } from './list-meta';
+export { MediaPreview } from './MediaPreview';
+export { Message } from './Message';
+export { MessageFlag } from './MessageFlag';
+export { NewDivider } from './NewDivider';
 export type {
   MessageActionContext,
   MessageActionEvent,
   MessageActionHandler,
   MessageActions,
+  MessageData,
 } from './types';
-export type { ChannelMessageListMeta } from './list-meta';
+export {
+  MessageActionsProvider,
+  MessageSelectionProvider,
+  useMessage,
+  useMessageActions,
+  useMessageSelection,
+};

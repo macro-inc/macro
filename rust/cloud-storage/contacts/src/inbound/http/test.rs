@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use super::*;
 use axum::{Extension, body::Body, http::Request};
 use http_body_util::BodyExt;

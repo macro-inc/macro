@@ -1,9 +1,9 @@
 import { throwOnErr } from '@core/util/maybeResult';
 import {
-  commsServiceClient,
   type ApiChannelAttachment,
-  type ChannelAttachmentType,
   type ChannelAttachmentsPage,
+  type ChannelAttachmentType,
+  commsServiceClient,
 } from '@service-comms/client';
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';

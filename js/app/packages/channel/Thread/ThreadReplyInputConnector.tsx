@@ -11,7 +11,7 @@ export function ThreadReplyInputConnector() {
     <>
       {/* Short vertical rail segment from wrapper top to connector start */}
       <div
-        class="absolute border-l border-edge-muted top-0"
+        class="absolute border-l border-rail top-0"
         style={{
           left: 'calc((var(--user-icon-width) / 2) * -1)',
           height:
@@ -20,7 +20,7 @@ export function ThreadReplyInputConnector() {
       />
       {/* Curved connector from rail to vertical center of the input area */}
       <div
-        class="absolute text-edge-muted -z-1"
+        class="absolute text-rail -z-1"
         style={{
           left: 'calc((var(--user-icon-width) / 2) * -1)',
           bottom: '50%',

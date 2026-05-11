@@ -1,12 +1,7 @@
-import { cn } from '@ui/utils/classname';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import {
-  fetchImagesViaPlatform,
-  resolveCidImages,
-} from '../util/resolveEmailImages';
+import { useEmail } from '@core/context/user';
 import {
   parseEmailContent,
   processEmailColors,
@@ -14,7 +9,7 @@ import {
 } from '@core/email';
 import DotsThree from '@icon/light/dots-three-light.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
-import { useEmail } from '@core/context/user';
+import { Button, cn } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -28,6 +23,10 @@ import {
 } from 'solid-js';
 import { themeReactive } from '../../theme/signals/themeReactive';
 import { themeUpdate } from '../../theme/signals/themeSignals';
+import {
+  fetchImagesViaPlatform,
+  resolveCidImages,
+} from '../util/resolveEmailImages';
 
 interface EmailMessageBodyProps {
   message: ApiMessage;
@@ -337,14 +336,14 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         </Switch>
         <Show when={!showFullHTML() && hasHiddenReplyStructure()}>
           <div class="flex items-center gap-2 mt-2">
-            <DeprecatedIconButton
-              theme="clear"
-              icon={DotsThree}
-              onclick={() => setShowFullHTML(true)}
-              iconSize={15}
-              size="xxs"
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setShowFullHTML(true)}
               class={cn(props.isFocused ? 'hover:bg-panel' : 'hover:bg-active')}
-            />
+            >
+              <DotsThree />
+            </Button>
           </div>
         </Show>
       </div>

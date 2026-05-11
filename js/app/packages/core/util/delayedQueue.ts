@@ -1,5 +1,5 @@
-import { type Accessor, createSignal, createEffect } from 'solid-js';
 import { Queuer } from '@tanstack/pacer/queuer';
+import { type Accessor, createEffect, createSignal } from 'solid-js';
 
 /**
  * Creates a derived signal that returns `null` until `startFn` returns true,

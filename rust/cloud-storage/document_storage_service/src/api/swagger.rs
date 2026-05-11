@@ -69,7 +69,7 @@ use channels::inbound::axum_router::{
     ChannelMessageFilters,
 };
 use document_sub_type::DocumentSubType;
-use documents_hex::inbound::axum_router::ShortIdResponse;
+use documents_hex::inbound::axum_router::{BranchNameResponse, ShortIdResponse};
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -153,6 +153,7 @@ use utoipa::OpenApi;
         documents::get_document_views::get_document_views_handler,
         documents::location::get_location_handler,
         documents_hex::inbound::axum_router::get_location_v3_handler,
+        documents_hex::inbound::axum_router::get_branch_name_handler,
         documents_hex::inbound::axum_router::get_short_id_handler,
         documents::simple_save::handler,
         documents::initialize_user_documents::handler,
@@ -420,6 +421,7 @@ use utoipa::OpenApi;
 
             CreateViewRequest,
             ExcludeDefaultViewRequest,
+            BranchNameResponse,
             ShortIdResponse,
 
             // Sync service

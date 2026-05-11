@@ -1,4 +1,5 @@
 import { isOk } from '@core/util/maybeResult';
+import { whenSettled } from '@core/util/whenSettled';
 import {
   checkPermissions,
   type NotificationEvent,
@@ -24,7 +25,6 @@ import {
 import { triggerNavigation } from './navigation';
 import { createTauriNotificationInterface } from './notification';
 import { useExpectTauri } from './TauriProvider';
-import { whenSettled } from '@core/util/whenSettled';
 
 function usePushNotifications(
   deviceType: 'android' | 'ios',

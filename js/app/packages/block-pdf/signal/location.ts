@@ -12,11 +12,11 @@ import {
   createBlockStore,
   useBlockId,
 } from '@core/block';
+import { useReferralCode } from '@core/context/user';
 import {
   setTempRedirectLocation,
   type TempRedirectLocation,
 } from '@core/signal/location';
-import { useReferralCode } from '@core/context/user';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { waitForSignal } from '@core/util/waitForSignal';
 import { createCallback } from '@solid-primitives/rootless';

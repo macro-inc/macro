@@ -21,12 +21,14 @@ use models_email::email::service;
 use models_permissions::share_permission::access_level::AccessLevel;
 
 /// Wrapper around the database connection pool.
+#[cfg_attr(test, allow(dead_code))]
 pub struct SeedDb {
     /// The macrodb pool
     inner: sqlx::PgPool,
 }
 
 #[cfg_attr(test, automock)]
+#[cfg_attr(test, allow(dead_code))]
 impl SeedDb {
     /// Create a new database wrapper.
     pub fn new(inner: sqlx::PgPool) -> Self {

@@ -1,11 +1,11 @@
+import { MaybeResultError } from '@core/util/maybeResult';
 import { useEntityPermissions } from '@queries/entity/permissions';
 import { hasEntityAccess } from '@queries/entity/permissionUtils';
-import { MaybeResultError } from '@core/util/maybeResult';
 import { type FlowProps, Match, Show, Suspense, Switch } from 'solid-js';
-import { LoadingBlock } from './LoadingBlock';
 import Gone from './AccessErrorViews/Gone';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
+import { LoadingBlock } from './LoadingBlock';
 
 function getErrorCode(error: Error | null): string | null {
   if (error instanceof MaybeResultError) {

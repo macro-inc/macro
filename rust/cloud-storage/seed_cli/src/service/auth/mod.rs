@@ -12,12 +12,14 @@ use fusionauth::FusionAuthClient;
 use mockall::automock;
 
 /// Wrapper around the FusionAuth client.
+#[cfg_attr(test, allow(dead_code))]
 pub struct SeedAuth {
     /// Fusionauth client
     inner: FusionAuthClient,
 }
 
 #[cfg_attr(test, automock)]
+#[cfg_attr(test, allow(dead_code))]
 impl SeedAuth {
     /// Create a new auth wrapper.
     pub fn new(inner: FusionAuthClient) -> Self {

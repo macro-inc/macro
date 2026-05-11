@@ -1,12 +1,11 @@
-import { cn } from '@ui/utils/classname';
 import { searchLocationPendingSignal } from '@block-pdf/signal/location';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { IS_MAC } from '@core/constant/isMac';
 import { blockElementSignal } from '@core/signal/blockElement';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
 import MagnifyingGlass from '@icon/regular/magnifying-glass.svg';
 import X from '@icon/regular/x.svg';
+import { Button, cn } from '@ui';
 import {
   createEffect,
   createSignal,
@@ -176,17 +175,15 @@ export function SimpleSearch() {
             }}
           </Show>
         </div>
-        <DeprecatedIconButton
-          icon={CaretUp}
-          theme="clear"
-          onClick={() => jumpTo('prev')}
-        />
-        <DeprecatedIconButton
-          icon={CaretDown}
-          theme="clear"
-          onClick={() => jumpTo('next')}
-        />
-        <DeprecatedIconButton icon={X} theme="clear" onClick={closeSearch} />
+        <Button variant="ghost" size="icon-md" onClick={() => jumpTo('prev')}>
+          <CaretUp />
+        </Button>
+        <Button variant="ghost" size="icon-md" onClick={() => jumpTo('next')}>
+          <CaretDown />
+        </Button>
+        <Button variant="ghost" size="icon-md" onClick={closeSearch}>
+          <X />
+        </Button>
       </div>
     </Show>
   );

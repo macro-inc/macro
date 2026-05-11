@@ -1,4 +1,3 @@
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useShareDialogContext } from '@core/component/TopBar/ShareButton';
 import {
@@ -9,6 +8,7 @@ import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
 import ShareFat from '@macro-icons/wide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { Button } from '@ui';
 import { toast } from 'core/component/Toast/Toast';
 import { useGetFileBlob } from '../signal/blockData';
 import { ModalsProvider } from './ModalsProvider';
@@ -17,7 +17,7 @@ import { TopBar } from './TopBar';
 export default function BlockUnknown() {
   return (
     <DocumentBlockContainer>
-      <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
+      <div class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
         <ModalsProvider>
           <div class="relative">
             <TopBar />
@@ -56,19 +56,13 @@ const Unknown = () => {
         </div>
 
         <div class="flex flex-row gap-2 items-center">
-          <DeprecatedTextButton
-            text="Share"
-            theme="accent"
-            icon={ShareFat}
-            onClick={shareCtx.open}
-          />
+          <Button variant="active" onClick={shareCtx.open}>
+            <ShareFat /> Share
+          </Button>
 
-          <DeprecatedTextButton
-            text="Download"
-            theme="accent"
-            icon={DownloadSimple}
-            onClick={downloadDocument}
-          />
+          <Button variant="active" onClick={downloadDocument}>
+            <DownloadSimple /> Download
+          </Button>
         </div>
       </div>
     </div>

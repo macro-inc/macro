@@ -1,18 +1,18 @@
 import type { EntityItem } from '@core/context/quickAccess';
-import type { ChannelEntity, EmailEntity } from '@entity';
 import { trackMention } from '@core/signal/mention';
+import type { DateOption } from '@core/util/dateSearch/useDateSearch';
+import type { ChannelEntity, EmailEntity } from '@entity';
+import { REMOVE_INLINE_SEARCH_COMMAND } from '../../../../plugins';
 import {
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_GROUP_MENTION_COMMAND,
 } from '../../../../plugins/mentions';
-import { REMOVE_INLINE_SEARCH_COMMAND } from '../../../../plugins';
 import type {
   HandlerDependencies,
   MentionItem,
 } from '../../../../utils/mentionsUtils';
 import { handleUserMention } from '../../../../utils/mentionsUtils';
-import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import { getBlockNameFromEntity } from './entityUtils';
 
 /**

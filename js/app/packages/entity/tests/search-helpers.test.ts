@@ -1,13 +1,13 @@
+import EnvelopeIcon from '@icon/regular/envelope.svg';
+import FilePdfIcon from '@icon/regular/file-pdf.svg';
+import FileTextIcon from '@icon/regular/file-text.svg';
+import HashIcon from '@icon/regular/hash.svg';
 import { describe, expect, it } from 'vitest';
 import {
-  getSenderId,
   getSearchIcon,
+  getSenderId,
 } from '../src/extractors-search/search-helpers';
 import type { ContentHitData } from '../src/types/search';
-import FileTextIcon from '@icon/regular/file-text.svg';
-import FilePdfIcon from '@icon/regular/file-pdf.svg';
-import HashIcon from '@icon/regular/hash.svg';
-import EnvelopeIcon from '@icon/regular/envelope.svg';
 
 describe('search-helpers', () => {
   describe('getSenderId', () => {

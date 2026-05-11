@@ -1,31 +1,38 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
+import { focusInput } from '@core/directive/focusInput';
 import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
+import CheckSquareIcon from '@icon/regular/check-square.svg';
 import CopyIcon from '@icon/regular/copy.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
 import SmileyIcon from '@icon/regular/smiley.svg';
 import TrashIcon from '@icon/regular/trash.svg';
-import { focusInput } from '@core/directive/focusInput';
 import {
+  type Component,
   createSignal,
   For,
+  type JSX,
   onMount,
   Show,
-  type Component,
-  type JSX,
 } from 'solid-js';
-import { useMessageActionDrawer } from './message-action-drawer-context';
 import { renderIcon } from '../Message/render-icon';
 import type {
   MessageActionEvent,
   MessageActionHandler,
   MessageActions,
 } from '../Message/types';
+import { useMessageActionDrawer } from './message-action-drawer-context';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '😡'] as const;
 
-type ActionId = 'reply' | 'copy-link' | 'copy-message-text' | 'edit' | 'delete';
+type ActionId =
+  | 'reply'
+  | 'copy-link'
+  | 'copy-message-text'
+  | 'edit'
+  | 'delete'
+  | 'create-task';
 
 type ActionItem = {
   id: ActionId;
@@ -64,6 +71,12 @@ function buildActionItems(
       label: 'Copy link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
+    },
+    {
+      id: 'create-task',
+      label: 'Create task',
+      icon: CheckSquareIcon,
+      onClick: actions?.onCreateTask,
     },
     {
       id: 'edit',

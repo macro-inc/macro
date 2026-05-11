@@ -1,11 +1,11 @@
 import {
   catchToResult,
   isErr,
-  ok,
   type MaybeResult,
+  ok,
 } from '@core/util/maybeResult';
-import type { ProjectPreviewData } from '@service-storage/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
+import type { ProjectPreviewData } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';

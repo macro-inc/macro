@@ -1,16 +1,16 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { invalidateListChannels } from '@queries/channel/channels';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { toast } from '@core/component/Toast/Toast';
 import { invalidateContacts } from '@core/user/contactService';
 import { isErr } from '@core/util/maybeResult';
+import { invalidateListChannels } from '@queries/channel/channels';
 import { commsServiceClient, type IdResponse } from '@service-comms/client';
 import type {
   NewAttachment,
   SimpleMention,
 } from '@service-comms/generated/models';
 import { createCallback } from '@solid-primitives/rootless';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 
 type SendContent = {
   content: string;

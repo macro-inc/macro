@@ -1,10 +1,10 @@
-import { invalidateContacts } from '@queries/contacts/contacts';
 import {
   handleCommsAttachment,
   handleCommsMessage,
   handleCommsReaction,
 } from '@queries/channel/sync';
 import { handleCommsTyping } from '@queries/channel/typing';
+import { invalidateContacts } from '@queries/contacts/contacts';
 // Side-effect import: registers the scheduled-action live-update websocket
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.

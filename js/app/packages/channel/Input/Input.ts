@@ -1,19 +1,19 @@
-import { Root } from './Root';
-import { Layout } from './Layout';
+import { Actions } from './Actions';
+import { Attachments } from './Attachments';
 import { DropOverlay } from './DropOverlay';
 import { DropZone } from './DropZone';
-import { FormatRibbon } from './FormatRibbon';
-import { EditorShell } from './EditorShell';
 import { Editor } from './Editor';
-import { Attachments } from './Attachments';
+import { EditorShell } from './EditorShell';
 import { Footer } from './Footer';
-import { Actions } from './Actions';
+import { FormatRibbon } from './FormatRibbon';
 import {
   AttachFilesAction,
   CloseReplyAction,
   DiscardDraftAction,
   ToggleFormatAction,
 } from './InputActions';
+import { Layout } from './Layout';
+import { Root } from './Root';
 import { SendAction } from './SendAction';
 
 export const Input = {

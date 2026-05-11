@@ -1,3 +1,4 @@
 python-dotenv
 livekit-agents[silero]==1.5.7
 httpx
+resemblyzer==0.1.4

@@ -2,12 +2,12 @@
  * @vitest-environment jsdom
  */
 
-import userEvent from '@testing-library/user-event';
 import { render, screen } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { Root } from '../Root';
-import { Reactions } from '../Reactions';
 import { formatReactorNames } from '../ReactionChip';
+import { Reactions } from '../Reactions';
+import { Root } from '../Root';
 import type { MessageData } from '../types';
 
 vi.mock('@core/context/user', () => ({

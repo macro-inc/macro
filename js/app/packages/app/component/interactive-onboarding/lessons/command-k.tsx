@@ -1,13 +1,10 @@
-import { CommandMenuInner, CommandState } from '@app/component/command';
 import type { CategoryFilter } from '@app/component/command';
+import { CommandMenuInner, CommandState } from '@app/component/command';
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
-import { Panel } from '@ui';
+import { IS_MAC } from '@core/constant/isMac';
 import { createFreshSearch } from '@core/util/freshSort';
 import { Dialog } from '@kobalte/core/dialog';
-import {
-  filteredSandboxEntities,
-  sandboxToCommandItems,
-} from '../sandbox/sandbox-store';
+import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
 import {
   createEffect,
   createMemo,
@@ -15,11 +12,13 @@ import {
   onCleanup,
   onMount,
 } from 'solid-js';
-import { ClickCallout, HotkeyCallout } from '../components-lib';
 import { MockAppChrome } from '../components/MockAppChrome';
-import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
-import { IS_MAC } from '@core/constant/isMac';
+import { ClickCallout, HotkeyCallout } from '../components-lib';
 import { OnboardingEntityList } from '../OnboardingEntityList';
+import {
+  filteredSandboxEntities,
+  sandboxToCommandItems,
+} from '../sandbox/sandbox-store';
 import type { LessonContentProps, LessonDefinition } from '../types';
 
 /** Module-level signal toggled by the onboarding shell's cmd+k handler. */
@@ -71,8 +70,6 @@ function CommandKContent(_props: LessonContentProps) {
 }
 
 function CommandKDemo(props: LessonContentProps) {
-  const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
-
   const [hasOpened, setHasOpened] = createSignal(false);
 
   onMount(() => {
@@ -136,13 +133,10 @@ function CommandKDemo(props: LessonContentProps) {
 
   let contentEl: HTMLDivElement | undefined;
 
-  const soup = createSoupState({
-    initialData: filteredSandboxEntities(),
-    wrapNavigation: true,
-  });
+  const soup = createSoupState({ wrapNavigation: true });
 
   createEffect(() => {
-    soup.setData(filteredSandboxEntities());
+    soup.setRows(filteredSandboxEntities().map((e) => soup.buildRow(e)));
   });
 
   return (
@@ -164,18 +158,13 @@ function CommandKDemo(props: LessonContentProps) {
               class="max-w-[calc(100vw-16px)] overflow-hidden portal-scope"
               style={{ width: '800px' }}
             >
-              <Panel active>
-                <div class="*:max-h-[75vh]" ref={setCommandMenuRef}>
-                  <CommandMenuInner
-                    commandMenuRef={commandMenuRef}
-                    items={filteredItems}
-                    onSelect={() => {
-                      setCompleted(true);
-                      props.onComplete();
-                    }}
-                  />
-                </div>
-              </Panel>
+              <CommandMenuInner
+                items={filteredItems}
+                onSelect={() => {
+                  setCompleted(true);
+                  props.onComplete();
+                }}
+              />
             </Dialog.Content>
           </div>
         </Dialog.Portal>

@@ -1,9 +1,9 @@
 import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
 import {
-  createContext,
-  useContext,
   type Accessor,
+  createContext,
   type Setter,
+  useContext,
 } from 'solid-js';
 
 export type StandaloneThreadContextValue = {
