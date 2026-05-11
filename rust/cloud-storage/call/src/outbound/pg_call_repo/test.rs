@@ -6,7 +6,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
-use chrono::{Duration, Utc};
+use chrono::{Duration, SubsecRound, Utc};
 use filter_ast::Expr;
 use item_filters::ast::{LiteralTree, call::CallLiteral};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -816,7 +816,10 @@ async fn archive_call_rolls_up_consecutive_same_speaker_transcripts(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
-    let t0 = Utc::now();
+    // Truncate to microseconds to match Postgres TIMESTAMPTZ precision,
+    // otherwise the round-trip drops sub-microsecond nanoseconds and the
+    // timestamp comparison below is flaky.
+    let t0 = Utc::now().trunc_subsecs(6);
 
     // Row 1: USER_A / spk-a0, ends at t0+3s.
     // Row 2: USER_A / spk-a0, starts at t0+5s (gap=2s) -> merges with row 1.
