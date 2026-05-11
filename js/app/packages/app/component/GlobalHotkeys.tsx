@@ -7,7 +7,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ValidHotkey } from '@core/hotkey/types';
 import {
   handleFolderSelect,
   openFilePicker,
@@ -34,11 +33,7 @@ import {
 import { applyTheme } from '../../theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
 import { CommandState } from './command';
-import {
-  CREATABLE_BLOCKS,
-  createMenuOpen,
-  setCreateMenuOpen,
-} from './Launcher';
+import { createMenuOpen, setCreateMenuOpen } from './Launcher';
 import { openMacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
 import { useSplitLayout } from './split-layout/layout';
 
@@ -111,7 +106,7 @@ export default function GlobalShortcuts() {
     CommandState.toggle();
   };
 
-  const createCommandScope = registerHotkey({
+  registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',

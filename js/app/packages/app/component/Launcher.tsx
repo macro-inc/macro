@@ -3,9 +3,12 @@ import { setAutomationComposerOpen } from '@block-automation/component';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
-import { createHotkeyGroup, registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import {
+  createHotkeyGroup,
+  registerHotkey,
+  useHotkeyDOMScope,
+} from '@core/hotkey/hotkeys';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type {
@@ -358,8 +361,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
 ];
 
-const USE_ENTITY_COLORS = true;
-
 export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(
   false,
   { id: 'launcher' }
@@ -659,7 +660,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     });
   });
 
-  onCleanup(hkGroup.dispose)
+  onCleanup(hkGroup.dispose);
 
   // horrible but tailwind requires the full strings
   const gridColsClass = () => {
@@ -733,35 +734,10 @@ type LauncherProps = {
 };
 
 export const Launcher = (props: LauncherProps) => {
-  const useJuicedScrim = false;
-  console.log('### LAUNCHER CREATED');
-
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
-        <Dialog.Overlay
-          class={cn(
-            'fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted',
-            {
-              'backdrop-filter-[blur(0.5px)]': useJuicedScrim,
-            }
-          )}
-        >
-          <Show when={useJuicedScrim}>
-            <div class="absolute pointer-events-none size-full inset-0 bg-modal-overlay text-ink opacity-5">
-              <PcNoiseGrid
-                cellSize={20}
-                crunch={0.379}
-                size={[0, 1]}
-                speed={[0.03, 0.4]}
-                circleMask={1}
-                stroke={1}
-                fill={0}
-              />
-            </div>
-          </Show>
-        </Dialog.Overlay>
-
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"></Dialog.Overlay>
         <Dialog.Content>
           <Layer depth={1}>
             <div
