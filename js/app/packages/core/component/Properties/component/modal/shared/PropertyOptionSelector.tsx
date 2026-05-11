@@ -1,9 +1,8 @@
-import { Hotkey } from '@ui';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
-import { cn } from '@ui';
+import { cn, Hotkey } from '@ui';
 import type { JSX, ParentComponent } from 'solid-js';
 import {
   type Accessor,
