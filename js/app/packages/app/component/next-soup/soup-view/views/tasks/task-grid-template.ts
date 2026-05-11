@@ -10,7 +10,8 @@ export const TASK_GRID_COLUMNS = [
     dataType: DataType.SELECT_STRING,
     isMultiSelect: false,
     specificEntityType: null,
-    width: 'minmax(9rem, 9rem)',
+    // CSS variable with fallback - updated by container queries in task-grid.css
+    width: 'var(--task-col-status, 7rem)',
   },
   {
     id: 'priority',
@@ -19,7 +20,7 @@ export const TASK_GRID_COLUMNS = [
     dataType: DataType.SELECT_STRING,
     isMultiSelect: false,
     specificEntityType: null,
-    width: 'minmax(9rem, 9rem)',
+    width: 'var(--task-col-priority, 7rem)',
   },
   {
     id: 'assignees',
@@ -28,7 +29,7 @@ export const TASK_GRID_COLUMNS = [
     dataType: DataType.ENTITY,
     isMultiSelect: true,
     specificEntityType: EntityType.USER,
-    width: '6rem',
+    width: 'var(--task-col-assignees, 7rem)',
   },
 ] as const;
 
@@ -36,7 +37,7 @@ export type TaskGridColumn = (typeof TASK_GRID_COLUMNS)[number];
 
 export const TASK_GRID_TEMPLATE_COLUMNS = `1rem minmax(0, 100%) ${TASK_GRID_COLUMNS.map(
   (c) => c.width
-).join(' ')} 5rem`;
+).join(' ')} var(--task-col-timestamp, 5rem)`;
 
 export const TASK_GRID_TEMPLATE_AREAS = `"indicator content ${TASK_GRID_COLUMNS.map(
   (c) => c.id

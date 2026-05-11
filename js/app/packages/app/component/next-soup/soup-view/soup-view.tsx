@@ -75,7 +75,7 @@ import {
   type SearchLocation,
 } from '@entity';
 import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
-import { TaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
+import { ResponsiveTaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
@@ -904,10 +904,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
                     />
                   </Match>
                   <Match when={rows().length}>
-                    <Show when={currentView() === 'tasks'}>
-                      <TaskListHeader class="shrink-0" />
-                    </Show>
                     <ListLayoutProvider ref={localEntityListRef}>
+                                          <Show when={currentView() === 'tasks' && !isMobile()}>
+                                            <ResponsiveTaskListHeader class="shrink-0" />
+                                          </Show>
                       <EntityRowProvider
                         container={localEntityListRef}
                         canSwipeLeft={(entityId) => {

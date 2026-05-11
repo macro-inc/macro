@@ -14,6 +14,7 @@ import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
 import { cn } from '@ui/utils/classname';
 import { type Component, Show } from 'solid-js';
+import './list-property-value.css';
 
 type ListPropertyValueProps = {
   property: Property;
@@ -97,30 +98,35 @@ const ListSelectValue: Component<{ property: Property }> = (props) => {
     <Tooltip
       unstyled
       tooltip={<PropertyTooltip property={props.property} />}
-      class="flex items-center min-w-0"
+      class="list-property-cell flex items-center min-w-0"
     >
       <button
         type="button"
         onClick={handleClick}
-        class={buttonClass(isReadOnly())}
+        class={cn(buttonClass(isReadOnly()), {
+          'text-ink-extra-muted/50': !firstValue(),
+        })}
       >
         <Show
           when={firstValue()}
-          fallback={
-            <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted opacity-50" />
-          }
+          fallback={<CircleDashedEmpty class="size-3 shrink-0" />}
         >
           {(value) => <PropertyValueIcon optionId={value()} />}
         </Show>
+        {/* Label hidden when container is narrow via CSS */}
         <span
-          class={cn('truncate flex-1', {
-            'text-ink-extra-muted opacity-50': firstValue() === undefined,
-          })}
+          class={cn(
+            'list-property-label truncate flex-1 @max-[840px]/uList:hidden',
+            {
+              'text-ink-extra-muted opacity-50': firstValue() === undefined,
+            }
+          )}
         >
           {displayText()}
         </span>
+        {/* Caret hidden when container is narrow */}
         <Show when={!isReadOnly()}>
-          <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+          <CaretDownIcon class="size-3 shrink-0 @max-[840px]/uList:hidden" />
         </Show>
       </button>
     </Tooltip>
@@ -146,45 +152,58 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
     <Tooltip
       unstyled
       tooltip={<PropertyTooltip property={props.property} />}
-      class="flex items-center min-w-0"
+      class="list-property-cell flex items-center min-w-0"
     >
       <button
         type="button"
         onClick={handleClick}
-        class={buttonClass(isReadOnly())}
+        class={cn(buttonClass(isReadOnly()), {
+          'text-ink-extra-muted/50': !hasValues(),
+        })}
       >
         <Show
           when={hasValues()}
           fallback={
             <>
-              <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted opacity-50" />
-              <span class="truncate flex-1 text-ink-extra-muted opacity-50">
-                None
-              </span>
+              <CircleDashedEmpty class="size-3 shrink-0" />
+              <span class="truncate flex-1 @max-[840px]/uList:hidden">None</span>
             </>
           }
         >
           <Show
             when={isUser()}
             fallback={
-              <span class="truncate flex-1">
-                {entities().length === 1
-                  ? '1 item'
-                  : `${entities().length} items`}
-              </span>
+              <span class="truncate flex-1 @max-[840px]/uList:hidden">
+                  {entities().length === 1
+                    ? '1 item'
+                    : `${entities().length} items`}
+                </span>
             }
           >
-            <UserGroup
-              userIds={entities().map((e) => e.entity_id)}
-              size="sm"
-              suppressClick
-              showTooltip
-              maxUsers={2}
-            />
+            {/* Wide mode: show up to 2 users. Narrow mode: show 1 user */}
+            <div class="flex @max-[840px]/uList:hidden">
+              <UserGroup
+                userIds={entities().map((e) => e.entity_id)}
+                size="sm"
+                suppressClick
+                showTooltip
+                maxUsers={2}
+              />
+            </div>
+            <div class="hidden @max-[840px]/uList:flex">
+              <UserGroup
+                userIds={entities().map((e) => e.entity_id)}
+                size="sm"
+                suppressClick
+                showTooltip
+                maxUsers={1}
+              />
+            </div>
           </Show>
         </Show>
+        {/* Caret hidden when container is narrow */}
         <Show when={!isReadOnly()}>
-          <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+          <CaretDownIcon class="size-3 shrink-0 @max-[840px]/uList:hidden" />
         </Show>
       </button>
     </Tooltip>
