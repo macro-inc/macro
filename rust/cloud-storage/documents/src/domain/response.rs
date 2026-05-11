@@ -9,6 +9,49 @@ use models_permissions::share_permission::access_level::AccessLevel;
 
 use super::content::DocumentContent;
 
+/// Peer/user mapping returned by sync-service metadata.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub struct SyncServicePeerWithUserId {
+    /// Sync-service peer id.
+    pub peer_id: String,
+    /// Macro user id.
+    pub user_id: String,
+}
+
+impl From<model::sync_service::PeerWithUserId> for SyncServicePeerWithUserId {
+    fn from(peer: model::sync_service::PeerWithUserId) -> Self {
+        Self {
+            peer_id: peer.peer_id,
+            user_id: peer.user_id,
+        }
+    }
+}
+
+/// Sync-service document metadata exposed through document location responses.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub struct SyncServiceDocumentMetadata {
+    /// Sync-service document id.
+    pub id: String,
+    /// Known peers for the sync document.
+    pub peers: Vec<SyncServicePeerWithUserId>,
+    /// Current sync-service version id.
+    pub version_id: String,
+}
+
+impl From<model::sync_service::DocumentMetadata> for SyncServiceDocumentMetadata {
+    fn from(metadata: model::sync_service::DocumentMetadata) -> Self {
+        Self {
+            id: metadata.id,
+            peers: metadata.peers.into_iter().map(Into::into).collect(),
+            version_id: metadata.version_id,
+        }
+    }
+}
+
 /// Full document metadata plus content lifecycle metadata.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -141,7 +184,7 @@ pub enum LocationResponseV3 {
         /// Basic document metadata.
         metadata: DocumentBasic,
         /// Sync-service metadata.
-        sync_service_metadata: model::sync_service::DocumentMetadata,
+        sync_service_metadata: SyncServiceDocumentMetadata,
         /// Content lifecycle and location metadata.
         content: DocumentContent,
     },
@@ -167,7 +210,7 @@ impl LocationResponseV3 {
     }
 
     /// Sync-service metadata, when this location is sync-backed.
-    pub fn sync_service_metadata(&self) -> Option<&model::sync_service::DocumentMetadata> {
+    pub fn sync_service_metadata(&self) -> Option<&SyncServiceDocumentMetadata> {
         if let Self::SyncServiceContent {
             sync_service_metadata,
             ..

@@ -1861,7 +1861,8 @@
                         {
                           "allOf": [
                             {
-                              "$ref": "#/components/schemas/DocumentResponse"
+                              "$ref": "#/components/schemas/DocumentResponse",
+                              "description": "Document metadata and upload URL."
                             },
                             {
                               "type": "object",
@@ -1869,15 +1870,16 @@
                               "properties": {
                                 "contentType": {
                                   "type": "string",
-                                  "description": "Content type of the document converted from file type"
+                                  "description": "Content type of the document converted from file type."
                                 },
                                 "fileType": {
                                   "type": ["string", "null"],
-                                  "description": "The file type of the document"
+                                  "description": "The file type of the document."
                                 }
                               }
                             }
-                          ]
+                          ],
+                          "description": "Create document response data with content lifecycle metadata."
                         }
                       ],
                       "description": "Data to be returned"
@@ -1934,11 +1936,87 @@
         }
       }
     },
+    "/documents/create_markdown": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Creates and initializes a markdown document in one backend-owned lifecycle.",
+        "operationId": "create_markdown_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMarkdownDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response for creating a markdown document.",
+                  "required": ["documentId"],
+                  "properties": {
+                    "documentId": {
+                      "type": "string",
+                      "description": "The document ID of the created markdown document."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/create_task": {
       "post": {
         "tags": ["document"],
-        "summary": "Creates a task document with properties in a single call.",
-        "description": "This endpoint creates task metadata and sets properties atomically.\nTask content should be set separately via the sync service.",
+        "summary": "Creates a task document with properties and initialized markdown content in\none backend-owned lifecycle.",
         "operationId": "create_task_handler",
         "requestBody": {
           "content": {
@@ -2370,7 +2448,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GetDocumentResponse"
+                  "$ref": "#/components/schemas/TypedSuccessResponse"
                 }
               }
             }
@@ -2983,7 +3061,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationResponseV3"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
@@ -7472,6 +7557,41 @@
           }
         }
       },
+      "CreateMarkdownDocumentRequest": {
+        "type": "object",
+        "description": "Request body for creating a markdown document whose content is initialized\nby the backend.",
+        "required": ["documentName"],
+        "properties": {
+          "documentName": {
+            "type": "string",
+            "description": "The document name."
+          },
+          "markdown": {
+            "type": ["string", "null"],
+            "description": "Markdown source text. Defaults to an empty document."
+          },
+          "projectId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional project ID to associate the document with."
+          },
+          "skipHistory": {
+            "type": "boolean",
+            "description": "Whether to add a viewed_at record for this document upon creation."
+          }
+        }
+      },
+      "CreateMarkdownDocumentResponse": {
+        "type": "object",
+        "description": "Response for creating a markdown document.",
+        "required": ["documentId"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The document ID of the created markdown document."
+          }
+        }
+      },
       "CreateProjectRequest": {
         "type": "object",
         "required": ["name"],
@@ -7506,6 +7626,10 @@
         "description": "Request body for creating a task.",
         "required": ["taskName"],
         "properties": {
+          "markdown": {
+            "type": ["string", "null"],
+            "description": "Markdown source text. Defaults to an empty task document."
+          },
           "projectId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -7759,6 +7883,81 @@
           }
         ]
       },
+      "DocumentBasic": {
+        "type": "object",
+        "description": "Returns basic information of a document used for some db queries",
+        "required": ["documentId", "documentName", "owner"],
+        "properties": {
+          "branchedFromId": {
+            "type": ["string", "null"]
+          },
+          "branchedFromVersionId": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "deletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "documentFamilyId": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "documentName": {
+            "type": "string"
+          },
+          "fileType": {
+            "type": ["string", "null"]
+          },
+          "owner": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "DocumentContent": {
+        "type": "object",
+        "description": "API-visible content lifecycle and location metadata.",
+        "required": ["state"],
+        "properties": {
+          "location": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DocumentContentLocation",
+                "description": "The content location, when known."
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/DocumentContentState",
+            "description": "The current lifecycle state of the content."
+          }
+        }
+      },
+      "DocumentContentLocation": {
+        "type": "string",
+        "description": "Where document content is, or is expected to be, read from.",
+        "enum": [
+          "object_storage",
+          "sync_service",
+          "docx_bom_parts",
+          "converted_pdf",
+          "unknown"
+        ]
+      },
+      "DocumentContentState": {
+        "type": "string",
+        "description": "API-visible content lifecycle state derived from current document metadata.",
+        "enum": ["unknown", "pending", "ready"]
+      },
       "DocumentFilters": {
         "type": "object",
         "description": "The document filters used to filter down what documents you search over.",
@@ -7909,6 +8108,25 @@
             "description": "The time the document instance / document BOM was updated"
           }
         }
+      },
+      "DocumentMetadataWithContent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DocumentMetadata",
+            "description": "Legacy document metadata."
+          },
+          {
+            "type": "object",
+            "required": ["content"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/DocumentContent",
+                "description": "Content lifecycle and location metadata."
+              }
+            }
+          }
+        ],
+        "description": "Full document metadata plus content lifecycle metadata."
       },
       "DocumentPermissionsToken": {
         "type": "object",
@@ -8072,13 +8290,16 @@
       },
       "DocumentResponse": {
         "type": "object",
+        "description": "Document response with content lifecycle metadata.",
         "required": ["documentMetadata"],
         "properties": {
           "documentMetadata": {
-            "$ref": "#/components/schemas/DocumentResponseMetadata"
+            "$ref": "#/components/schemas/DocumentResponseMetadataWithContent",
+            "description": "The document metadata."
           },
           "presignedUrl": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Presigned upload URL, when the caller still needs to upload bytes."
           }
         }
       },
@@ -8162,6 +8383,25 @@
             "description": "The time the document instance / document BOM was updated"
           }
         }
+      },
+      "DocumentResponseMetadataWithContent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DocumentResponseMetadata",
+            "description": "Legacy create/copy response metadata."
+          },
+          {
+            "type": "object",
+            "required": ["content"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/DocumentContent",
+                "description": "Content lifecycle and location metadata."
+              }
+            }
+          }
+        ],
+        "description": "Create/copy response metadata plus content lifecycle metadata."
       },
       "DocumentStorageServiceApiVersion": {
         "type": "string",
@@ -9826,6 +10066,92 @@
             }
           }
         ]
+      },
+      "LocationResponseV3": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A single document-storage URL.",
+            "required": ["presignedUrl"],
+            "properties": {
+              "presignedUrl": {
+                "type": "object",
+                "description": "A single document-storage URL.",
+                "required": ["presigned_url", "metadata", "content"],
+                "properties": {
+                  "content": {
+                    "$ref": "#/components/schemas/DocumentContent",
+                    "description": "Content lifecycle and location metadata."
+                  },
+                  "metadata": {
+                    "$ref": "#/components/schemas/DocumentBasic",
+                    "description": "Basic document metadata."
+                  },
+                  "presigned_url": {
+                    "type": "string",
+                    "description": "Presigned URL."
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Multiple document-storage URLs, currently for DOCX BOM parts.",
+            "required": ["presignedUrls"],
+            "properties": {
+              "presignedUrls": {
+                "type": "object",
+                "description": "Multiple document-storage URLs, currently for DOCX BOM parts.",
+                "required": ["presigned_urls", "metadata", "content"],
+                "properties": {
+                  "content": {
+                    "$ref": "#/components/schemas/DocumentContent",
+                    "description": "Content lifecycle and location metadata."
+                  },
+                  "metadata": {
+                    "$ref": "#/components/schemas/DocumentBasic",
+                    "description": "Basic document metadata."
+                  },
+                  "presigned_urls": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/PresignedUrl"
+                    },
+                    "description": "Presigned URLs."
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Sync-service backed content.",
+            "required": ["syncServiceContent"],
+            "properties": {
+              "syncServiceContent": {
+                "type": "object",
+                "description": "Sync-service backed content.",
+                "required": ["metadata", "sync_service_metadata", "content"],
+                "properties": {
+                  "content": {
+                    "$ref": "#/components/schemas/DocumentContent",
+                    "description": "Content lifecycle and location metadata."
+                  },
+                  "metadata": {
+                    "$ref": "#/components/schemas/DocumentBasic",
+                    "description": "Basic document metadata."
+                  },
+                  "sync_service_metadata": {
+                    "$ref": "#/components/schemas/SyncServiceDocumentMetadata",
+                    "description": "Sync-service metadata."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "description": "Location response with content lifecycle metadata."
       },
       "Mentions": {
         "type": "object",
@@ -12031,6 +12357,43 @@
           "error": {
             "type": "boolean",
             "description": "Indicates if an error occurred"
+          }
+        }
+      },
+      "SyncServiceDocumentMetadata": {
+        "type": "object",
+        "description": "Sync-service document metadata exposed through document location responses.",
+        "required": ["id", "peers", "version_id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Sync-service document id."
+          },
+          "peers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncServicePeerWithUserId"
+            },
+            "description": "Known peers for the sync document."
+          },
+          "version_id": {
+            "type": "string",
+            "description": "Current sync-service version id."
+          }
+        }
+      },
+      "SyncServicePeerWithUserId": {
+        "type": "object",
+        "description": "Peer/user mapping returned by sync-service metadata.",
+        "required": ["peer_id", "user_id"],
+        "properties": {
+          "peer_id": {
+            "type": "string",
+            "description": "Sync-service peer id."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Macro user id."
           }
         }
       },

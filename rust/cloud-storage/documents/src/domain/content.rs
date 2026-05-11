@@ -73,6 +73,15 @@ impl DocumentContent {
         }
     }
 
+    /// Metadata exists, content is not ready yet, and the expected canonical
+    /// location is known.
+    pub fn pending_at(location: DocumentContentLocation) -> Self {
+        Self {
+            state: DocumentContentState::Pending,
+            location: Some(location),
+        }
+    }
+
     /// Content is finalized at a known location.
     pub fn ready(location: DocumentContentLocation) -> Self {
         Self {
@@ -106,6 +115,66 @@ impl DocumentContent {
             uploaded,
             file_type.and_then(|file_type| FileType::from_str(file_type).ok()),
         )
+    }
+
+    /// Convert database column values into content metadata.
+    pub fn from_db_columns(state: &str, location: Option<&str>) -> Option<Self> {
+        Some(Self {
+            state: DocumentContentState::from_db_value(state)?,
+            location: location.and_then(DocumentContentLocation::from_db_value),
+        })
+    }
+
+    /// Database value for the state column.
+    pub fn state_db_value(&self) -> &'static str {
+        self.state.db_value()
+    }
+
+    /// Database value for the location column.
+    pub fn location_db_value(&self) -> Option<&'static str> {
+        self.location.map(|location| location.db_value())
+    }
+}
+
+impl DocumentContentState {
+    fn db_value(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Pending => "pending",
+            Self::Ready => "ready",
+        }
+    }
+
+    fn from_db_value(value: &str) -> Option<Self> {
+        match value {
+            "unknown" => Some(Self::Unknown),
+            "pending" => Some(Self::Pending),
+            "ready" => Some(Self::Ready),
+            _ => None,
+        }
+    }
+}
+
+impl DocumentContentLocation {
+    fn db_value(self) -> &'static str {
+        match self {
+            Self::ObjectStorage => "object_storage",
+            Self::SyncService => "sync_service",
+            Self::DocxBomParts => "docx_bom_parts",
+            Self::ConvertedPdf => "converted_pdf",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    fn from_db_value(value: &str) -> Option<Self> {
+        match value {
+            "object_storage" => Some(Self::ObjectStorage),
+            "sync_service" => Some(Self::SyncService),
+            "docx_bom_parts" => Some(Self::DocxBomParts),
+            "converted_pdf" => Some(Self::ConvertedPdf),
+            "unknown" => Some(Self::Unknown),
+            _ => None,
+        }
     }
 }
 

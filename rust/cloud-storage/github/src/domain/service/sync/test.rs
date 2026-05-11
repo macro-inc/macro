@@ -214,15 +214,6 @@ impl DocumentService for StubDocumentService {
         unimplemented!()
     }
 
-    async fn create_task(
-        &self,
-        _user_id: MacroUserIdStr<'static>,
-        _plain_user_id: String,
-        _request: documents::domain::models::CreateTaskRequest,
-    ) -> Result<documents::domain::models::CreateTaskResponse, DocumentError> {
-        unimplemented!()
-    }
-
     async fn get_document_comments(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,

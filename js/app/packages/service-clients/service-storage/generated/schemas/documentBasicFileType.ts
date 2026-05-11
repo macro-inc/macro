@@ -5,7 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * The file type of the document.
- */
-export type CreateDocument200DataOneOfAllOfFileType = string | null;
+export type DocumentBasicFileType = string | null;

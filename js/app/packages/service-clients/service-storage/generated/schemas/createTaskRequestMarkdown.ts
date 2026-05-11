@@ -6,6 +6,6 @@
  */
 
 /**
- * Presigned upload URL, when the caller still needs to upload bytes.
+ * Markdown source text. Defaults to an empty task document.
  */
-export type DocumentResponsePresignedUrl = string | null;
+export type CreateTaskRequestMarkdown = string | null;

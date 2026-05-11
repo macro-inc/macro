@@ -29,7 +29,7 @@ use crate::domain::response::LocationResponseV3;
         ("get_converted_docx_url" = Option<bool>, Query, description = "If true, this will return the converted docx url.")
     ),
     responses(
-        (status = 200),
+        (status = 200, body = LocationResponseV3),
         (status = 401, body = model_error_response::ErrorResponse),
         (status = 404, body = model_error_response::ErrorResponse),
         (status = 410, body = model_error_response::ErrorResponse),
@@ -51,7 +51,7 @@ pub async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessServic
 
     let mut header_map = HeaderMap::new();
     header_map.append("content-type", "application/json".parse().unwrap());
-    header_map.append("Cache-Control", "max-age-300".parse().unwrap());
+    header_map.append("Cache-Control", "max-age=300".parse().unwrap());
 
     Ok((header_map, Json(response_data)))
 }

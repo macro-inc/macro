@@ -37,8 +37,8 @@ use crate::domain::models::{
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    CreateTaskRequest, CreateTaskResponse, DocumentError, EMPTY_SHA256, EditDocumentRepoArgs,
-    EditDocumentServiceArgs, FileTypeUpdate, LocationQueryParams,
+    CreateTaskRequest, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
+    FileTypeUpdate, LocationQueryParams,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -96,6 +96,13 @@ fn presigned_location_content(
     };
 
     content_at_location(state, location)
+}
+
+fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
+    match file_type {
+        Some(FileType::Docx) => DocumentContent::pending_at(DocumentContentLocation::DocxBomParts),
+        _ => DocumentContent::pending_at(DocumentContentLocation::ObjectStorage),
+    }
 }
 
 impl<
@@ -294,6 +301,15 @@ impl<
         document_id: &str,
         file_type: Option<FileType>,
     ) -> Result<DocumentContent, DocumentError> {
+        if let Some(content) = self
+            .repo
+            .get_persisted_document_content(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?
+        {
+            return Ok(content);
+        }
+
         let (_, uploaded) = if file_type
             .is_none_or(|file_type| file_type == FileType::Docx || file_type.is_static())
         {
@@ -309,40 +325,6 @@ impl<
         };
 
         Ok(DocumentContent::from_legacy_uploaded(uploaded, file_type))
-    }
-
-    async fn try_get_from_sync_service(
-        &self,
-        document_id: &str,
-    ) -> Result<Option<model::sync_service::DocumentMetadata>, anyhow::Error> {
-        use futures::{FutureExt, pin_mut, select};
-
-        let exists_fut = self.sync_service_client.exists(document_id).fuse();
-        let metadata_fut = self.sync_service_client.get_metadata(document_id).fuse();
-
-        pin_mut!(exists_fut, metadata_fut);
-
-        select! {
-            exists_result = exists_fut => {
-                match exists_result {
-                    Ok(false) => Ok(None),
-                    Ok(true) | Err(_) => {
-                        metadata_fut.await.map(Some)
-                    }
-                }
-            },
-            metadata_result = metadata_fut => {
-                match metadata_result {
-                    Ok(metadata) => Ok(Some(metadata)),
-                    Err(e) => {
-                        match exists_fut.await {
-                            Ok(false) => Ok(None),
-                            _ => Err(e),
-                        }
-                    }
-                }
-            }
-        }
     }
 
     /// Clean up a document on creation error.
@@ -384,6 +366,18 @@ impl<
     async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), DocumentError> {
         self.repo
             .mark_document_uploaded(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, content))]
+    async fn set_document_content(
+        &self,
+        document_id: &str,
+        content: DocumentContent,
+    ) -> Result<(), DocumentError> {
+        self.repo
+            .set_document_content(document_id, content)
             .await
             .map_err(|e| DocumentError::Internal(e.into()))
     }
@@ -470,26 +464,55 @@ impl<
         let document_id = entity_access_receipt.entity().entity_id.clone();
         let content = self.content_for_document(&document_id, file_type).await?;
 
-        // Ready markdown documents should resolve from sync-service when available.
-        // Pending markdown uploads still live in object storage and should not
-        // probe sync-service on the finalize path.
-        if matches!(file_type, Some(FileType::Md)) && content.state == DocumentContentState::Ready {
-            match self.try_get_from_sync_service(&document_id).await {
-                Ok(Some(sync_service_metadata)) => {
-                    return Ok(LocationResponseV3::SyncServiceContent {
-                        metadata: document_context.clone(),
-                        sync_service_metadata,
-                        content: DocumentContent::ready(DocumentContentLocation::SyncService),
-                    });
-                }
-                Ok(None) => {
-                    // Continue to S3 check
-                }
-                Err(e) => {
-                    tracing::error!(error=?e, "sync service failed");
-                    return Err(DocumentError::Internal(e));
-                }
-            }
+        if matches!(
+            (file_type, content.state, content.location),
+            (
+                Some(FileType::Md),
+                DocumentContentState::Ready,
+                Some(DocumentContentLocation::SyncService)
+            )
+        ) {
+            let sync_service_metadata = self
+                .sync_service_client
+                .get_metadata(&document_id)
+                .await
+                .map_err(DocumentError::Internal)?;
+
+            return Ok(LocationResponseV3::SyncServiceContent {
+                metadata: document_context.clone(),
+                sync_service_metadata: sync_service_metadata.into(),
+                content: DocumentContent::ready(DocumentContentLocation::SyncService),
+            });
+        }
+
+        if matches!(
+            (file_type, content.state, content.location),
+            (
+                Some(FileType::Md),
+                DocumentContentState::Ready,
+                Some(DocumentContentLocation::Unknown)
+            )
+        ) && let Ok(sync_service_metadata) =
+            self.sync_service_client.get_metadata(&document_id).await
+        {
+            let sync_content = DocumentContent::ready(DocumentContentLocation::SyncService);
+            let _ = self
+                .repo
+                .set_document_content(&document_id, sync_content.clone())
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        error=?error,
+                        document_id=?document_id,
+                        "failed to persist discovered markdown sync-service location"
+                    )
+                });
+
+            return Ok(LocationResponseV3::SyncServiceContent {
+                metadata: document_context.clone(),
+                sync_service_metadata: sync_service_metadata.into(),
+                content: sync_content,
+            });
         }
 
         let owner = document_context.owner.as_ref();
@@ -681,6 +704,17 @@ impl<
 
         let document_id = document_metadata.document_id.clone();
 
+        let initial_content = pending_content_for_file_type(file_type);
+        if let Err(e) = self
+            .repo
+            .set_document_content(&document_id, initial_content.clone())
+            .await
+        {
+            tracing::error!(error=?e, document_id=?document_id, "failed to initialize document content metadata");
+            self.cleanup_document(&document_id).await;
+            return Err(DocumentError::Internal(e.into()));
+        }
+
         // Update upload job if job_id provided (outside the main transaction)
         if let Some(job_id) = &job_id
             && let Err(e) = self.repo.update_upload_job(&document_id, job_id).await
@@ -766,7 +800,7 @@ impl<
             document_response: DocumentResponse {
                 document_metadata: DocumentResponseMetadataWithContent::new(
                     document_response_metadata,
-                    DocumentContent::pending(),
+                    initial_content,
                 ),
                 presigned_url: Some(presigned_url),
             },
@@ -1101,12 +1135,16 @@ impl<
             return Err(DocumentError::Internal(e));
         }
 
-        if let Err(e) = self.repo.mark_document_uploaded(&new_document_id).await {
-            tracing::error!(error=?e, document_id=?new_document_id, "failed to mark copied document uploaded");
+        let content = ready_content_for_file_type(file_type);
+        if let Err(e) = self
+            .repo
+            .set_document_content(&new_document_id, content.clone())
+            .await
+        {
+            tracing::error!(error=?e, document_id=?new_document_id, "failed to mark copied document content ready");
             self.cleanup_document(&new_document_id).await;
             return Err(DocumentError::Internal(e.into()));
         }
-        let content = ready_content_for_file_type(file_type);
 
         let document_response_metadata =
             DocumentResponseMetadata::from_document_metadata(&new_metadata).map_err(|e| {
@@ -1149,57 +1187,6 @@ impl<
             });
 
         Ok(())
-    }
-
-    #[tracing::instrument(err, skip(self, request))]
-    async fn create_task(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        plain_user_id: String,
-        request: CreateTaskRequest,
-    ) -> Result<CreateTaskResponse, DocumentError> {
-        let response_data = <Self as DocumentService>::create_document(
-            self,
-            user_id.clone(),
-            CreateDocumentRepoArgs {
-                id: None,
-                sha: EMPTY_SHA256.to_string(),
-                document_name: request.task_name.clone(),
-                user_id: user_id.clone(),
-                file_type: Some(FileType::Md),
-                project_id: request.project_id,
-                email_attachment_id: None,
-                created_at: None,
-                is_task: true,
-                skip_history: false,
-            },
-            None,
-        )
-        .await?;
-
-        let document_id = response_data
-            .document_response
-            .document_metadata
-            .metadata
-            .document_id
-            .clone();
-
-        let _ = <Self as DocumentService>::handle_task_properties(
-            self,
-            user_id,
-            &document_id,
-            &request,
-        )
-        .await
-        .inspect_err(|e| {
-            tracing::error!(
-                error=?e,
-                document_id=?document_id,
-                "failed to assign task properties",
-            );
-        });
-
-        Ok(CreateTaskResponse { document_id })
     }
 
     /// Assigns the task properties to a document

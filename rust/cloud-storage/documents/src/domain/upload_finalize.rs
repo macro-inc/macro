@@ -4,7 +4,7 @@ use std::future::Future;
 
 use model::document::{DocumentBasic, FileType, FileTypeExt};
 
-use super::content::{DocumentContent, DocumentContentState};
+use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::models::DocumentError;
 use super::ports::DocumentRepo;
 use super::ports::markdown::MarkdownInitializationPort;
@@ -21,6 +21,13 @@ pub trait UploadFinalizeDocumentPort: Send + Sync {
     fn mark_document_uploaded(
         &self,
         document_id: &str,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Persist content lifecycle metadata.
+    fn set_document_content(
+        &self,
+        document_id: &str,
+        content: DocumentContent,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }
 
@@ -65,6 +72,17 @@ where
     async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), DocumentError> {
         self.repo
             .mark_document_uploaded(document_id)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))
+    }
+
+    async fn set_document_content(
+        &self,
+        document_id: &str,
+        content: DocumentContent,
+    ) -> Result<(), DocumentError> {
+        self.repo
+            .set_document_content(document_id, content)
             .await
             .map_err(|error| DocumentError::Internal(error.into()))
     }
@@ -132,8 +150,17 @@ where
             }
         }
 
+        let location = if matches!(file_type, Some(FileType::Md)) {
+            DocumentContentLocation::SyncService
+        } else {
+            DocumentContentLocation::ObjectStorage
+        };
+
         self.document_port
-            .mark_document_uploaded(&document_context.document_id)
+            .set_document_content(
+                &document_context.document_id,
+                DocumentContent::ready(location),
+            )
             .await
     }
 }

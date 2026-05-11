@@ -6,6 +6,6 @@
  */
 
 /**
- * Presigned upload URL, when the caller still needs to upload bytes.
+ * Markdown source text. Defaults to an empty document.
  */
-export type DocumentResponsePresignedUrl = string | null;
+export type CreateMarkdownDocumentRequestMarkdown = string | null;

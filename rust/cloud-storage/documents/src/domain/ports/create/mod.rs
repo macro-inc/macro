@@ -4,6 +4,7 @@ use std::future::Future;
 
 use macro_user_id::user_id::MacroUserIdStr;
 
+use crate::domain::content::DocumentContent;
 use crate::domain::models::{CreateDocumentRepoArgs, CreateTaskRequest, DocumentError};
 use crate::domain::response::CreateDocumentResponseData;
 
@@ -50,6 +51,13 @@ pub trait DocumentCreationService: Send + Sync {
     fn mark_document_uploaded(
         &self,
         document_id: &str,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Set a created document's persisted content lifecycle metadata.
+    fn set_document_content(
+        &self,
+        document_id: &str,
+        content: DocumentContent,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Clean up a document that failed after its database row was created.

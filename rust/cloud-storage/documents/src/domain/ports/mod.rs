@@ -24,9 +24,8 @@ use model::sync_service::SyncServiceVersionID;
 use model_entity::Entity;
 
 use super::models::{
-    CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
-    CreateTaskResponse, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    LocationQueryParams,
+    CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
+    EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
 };
 
 /// Repository for accessing document data from the database.
@@ -67,6 +66,22 @@ pub trait DocumentRepo: Send + Sync + 'static {
     fn mark_document_uploaded(
         &self,
         document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get persisted content lifecycle metadata for a document.
+    fn get_persisted_document_content(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<DocumentContent>, Self::Err>> + Send;
+
+    /// Set persisted content lifecycle metadata for a document.
+    ///
+    /// Implementations should keep legacy upload state in sync with the new
+    /// lifecycle metadata while legacy consumers still read that column.
+    fn set_document_content(
+        &self,
+        document_id: &str,
+        content: DocumentContent,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Get the latest document version ID (for editable files: js, py).
@@ -355,14 +370,6 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         project_id: &str,
     ) -> impl Future<Output = Result<Vec<Entity<'static>>, DocumentError>> + Send;
-
-    /// Create a task document and optionally set property values on it.
-    fn create_task(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        plain_user_id: String,
-        request: CreateTaskRequest,
-    ) -> impl Future<Output = Result<CreateTaskResponse, DocumentError>> + Send;
 
     /// Assigns the task properties to a document
     fn handle_task_properties(

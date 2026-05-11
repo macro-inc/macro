@@ -40,10 +40,16 @@ pub async fn update_uploaded_status(
     db: &sqlx::Pool<sqlx::Postgres>,
     document_id: &str,
 ) -> anyhow::Result<()> {
-    sqlx::query!(
-        r#"UPDATE "Document" SET "uploaded" = true WHERE id = $1"#,
-        document_id
+    sqlx::query(
+        r#"
+        UPDATE "Document"
+        SET "uploaded" = true,
+            "contentState" = 'ready',
+            "contentLocation" = 'docx_bom_parts'
+        WHERE id = $1
+        "#,
     )
+    .bind(document_id)
     .execute(db)
     .await?;
 

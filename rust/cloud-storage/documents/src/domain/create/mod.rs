@@ -545,7 +545,10 @@ where
                 .await?;
 
             self.document_service
-                .mark_document_uploaded(&document_id)
+                .set_document_content(
+                    &document_id,
+                    DocumentContent::ready(DocumentContentLocation::SyncService),
+                )
                 .await?;
 
             Ok(())
@@ -617,7 +620,10 @@ where
                 .await?;
 
             self.document_service
-                .mark_document_uploaded(&document_id)
+                .set_document_content(
+                    &document_id,
+                    DocumentContent::ready(DocumentContentLocation::ObjectStorage),
+                )
                 .await?;
 
             Ok(())

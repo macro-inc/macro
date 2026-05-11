@@ -6,6 +6,6 @@
  */
 
 /**
- * Presigned upload URL, when the caller still needs to upload bytes.
+ * Optional project ID to associate the document with.
  */
-export type DocumentResponsePresignedUrl = string | null;
+export type CreateMarkdownDocumentRequestProjectId = string | null;
