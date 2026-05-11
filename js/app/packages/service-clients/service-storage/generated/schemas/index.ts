@@ -657,6 +657,7 @@ export * from './threadResponse';
 export * from './threadUpdatedAt';
 export * from './transcriptSegmentRequest';
 export * from './transcriptSegmentRequestDiarizedSpeakerId';
+export * from './transcriptSegmentRequestEmbedding';
 export * from './transcriptSegmentRequestEndedAt';
 export * from './transcriptSegmentRequestStreamStartedAt';
 export * from './typedSuccessResponse';
