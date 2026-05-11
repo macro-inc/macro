@@ -361,10 +361,6 @@ export const registerSidebarHotkeys = ({
   }
 };
 
-// ---------------------------------------------------------------------------
-// SidebarActionButton
-// ---------------------------------------------------------------------------
-
 type SidebarActionButtonProps = {
   label: string;
   hotkeyToken?: HotkeyToken;
