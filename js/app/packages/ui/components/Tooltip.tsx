@@ -6,28 +6,35 @@ import type { Placement } from '@floating-ui/dom';
 import type { JSX, ParentProps }  from 'solid-js';
 import { cn, Layer } from '@ui';
 
-const TOOLTIP_DELAY = 250;
-
 export type TooltipProps = ParentProps<{
   tooltip?: JSX.Element | ((close: () => void) => JSX.Element);
   ref?: (el: HTMLDivElement | HTMLSpanElement) => void;
-  /** Distance in px between the trigger and the tooltip content. */
-  gutter?: number;
-  /** Whether the tooltip should flip to stay in the viewport. */
-  flip?: boolean | string;
-  /** Padding (px) kept between the tooltip and the viewport edge. */
   overflowPadding?: number;
-  /** Constrain the tooltip size to fit within the viewport. */
-  fitViewport?: boolean;
-  /** Padding (px) used when computing the tooltip's max-width. */
   viewportPadding?: number;
+  flip?: boolean | string;
   delayOverride?: number;
+  fitViewport?: boolean;
   placement?: Placement;
   spanMode?: boolean;
   unstyled?: boolean;
+  gutter?: number;
   class?: string;
   hide?: boolean;
 }>;
+
+export type HotkeySequenceStep = {
+  token?: HotkeyToken;
+  shortcut?: string;
+};
+
+export type LabelAndHotKeyProps = {
+  hotkeySequence?: HotkeySequenceStep[];
+  hotkeyToken?: HotkeyToken;
+  shortcut?: string;
+  label: string;
+};
+
+const TOOLTIP_DELAY = 250;
 
 /**
  * Tooltip component to wrap some piece of UI with a tooltip.
@@ -47,12 +54,12 @@ export type TooltipProps = ParentProps<{
 export function Tooltip(props: TooltipProps) {
   props = mergeProps(
     {
-      gutter: 12,
+      placement: 'bottom' as Placement,
       flip: true as boolean | string,
       overflowPadding: 16,
-      fitViewport: true,
       viewportPadding: 16,
-      placement: 'bottom' as Placement,
+      fitViewport: true,
+      gutter: 4,
     },
     props
   );
@@ -61,38 +68,32 @@ export function Tooltip(props: TooltipProps) {
   const close = () => setOpen(false);
 
   function tooltipContent() {
-    if (typeof props.tooltip === 'function') {
-      return props.tooltip(close);
-    }
+    if (typeof props.tooltip === 'function') { return props.tooltip(close); }
     return props.tooltip;
   }
 
   return (
     <KobalteTooltip
-      openDelay={TOOLTIP_DELAY}
       closeDelay={props.delayOverride ?? TOOLTIP_DELAY}
-      open={open()}
-      onOpenChange={setOpen}
-      placement={props.placement}
-      gutter={props.gutter}
-      flip={props.flip}
       overflowPadding={props.overflowPadding}
       fitViewport={props.fitViewport}
+      placement={props.placement}
+      openDelay={TOOLTIP_DELAY}
+      onOpenChange={setOpen}
+      gutter={props.gutter}
+      flip={props.flip}
+      open={open()}
     >
       <KobalteTooltip.Trigger
-        as={props.spanMode ? 'span' : 'div'}
+        ref={(el: HTMLDivElement | HTMLSpanElement) => { props.ref?.(el); }}
         class={cn('inline-flex items-center', props.class)}
-        ref={(el: HTMLDivElement | HTMLSpanElement) => {
-          props.ref?.(el);
-        }}
+        as={props.spanMode ? 'span' : 'div'}
       >
         {props.children}
       </KobalteTooltip.Trigger>
       <KobalteTooltip.Portal>
         <KobalteTooltip.Content
-          style={{
-            'max-width': `calc(100vw - ${2 * (props.viewportPadding ?? 0)}px)`,
-          }}
+          style={{ 'max-width': `calc(100vw - ${2 * (props.viewportPadding ?? 0)}px)` }}
           hidden={props.hide}
           class="z-tool-tip"
         >
@@ -103,8 +104,6 @@ export function Tooltip(props: TooltipProps) {
               </div>
             </Layer>
           </Show>
-          {/* Note disabling arrows for now. I think its more on-brand - seamus */}
-          {/*<KobalteTooltip.Arrow />*/}
         </KobalteTooltip.Content>
       </KobalteTooltip.Portal>
     </KobalteTooltip>
@@ -121,18 +120,6 @@ export function NullTooltip(props: ParentProps<{}>) {
     </KobalteTooltip>
   );
 }
-
-export type HotkeySequenceStep = {
-  token?: HotkeyToken;
-  shortcut?: string;
-};
-
-export type LabelAndHotKeyProps = {
-  hotkeySequence?: HotkeySequenceStep[];
-  hotkeyToken?: HotkeyToken;
-  shortcut?: string;
-  label: string;
-};
 
 export function LabelAndHotKey(props: LabelAndHotKeyProps) {
   const hasSingleHotkey = () =>
