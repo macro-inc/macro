@@ -75,7 +75,6 @@ export function EmailComposeToolbar(props: {
         <div class="flex flex-row w-full gap-2 items-center p-2 -ml-3">
           <FormatButtons
             selectionState={() => defaultSelectionData}
-            includeQuote
             onInlineFormat={(format) => {
               props.editor?.()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
             }}

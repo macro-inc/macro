@@ -2,6 +2,7 @@ import type {
   NodeTransformType,
   SelectionData,
 } from '@core/component/LexicalMarkdown/plugins';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import TextBoldIcon from '@icon/bold/text-b-bold.svg';
 import TextCodeIcon from '@icon/regular/code.svg';
 import ListBulletsIcon from '@icon/regular/list-bullets.svg';
@@ -10,79 +11,113 @@ import ListNumbersIcon from '@icon/regular/list-numbers.svg';
 import TextQuoteIcon from '@icon/regular/quotes.svg';
 import TextItalicIcon from '@icon/regular/text-italic.svg';
 import TextStrikethroughIcon from '@icon/regular/text-strikethrough.svg';
+import { Button } from '@ui';
 import type { TextFormatType } from 'lexical';
-import type { Accessor } from 'solid-js';
-import { RibbonButton } from './RibbonButton';
+import type { Accessor, JSX } from 'solid-js';
+
+type HotkeyToken = Parameters<typeof LabelAndHotKey>[0]['hotkeyToken'];
 
 type FormatButtonsProps = {
   selectionState: Accessor<SelectionData | undefined>;
   onInlineFormat: (format: TextFormatType) => void;
   onNodeFormat: (format: NodeTransformType) => void;
-  includeQuote?: boolean;
 };
 
 export function FormatButtons(props: FormatButtonsProps) {
+  const selection = () => props.selectionState();
+  const elementsInRange = () => selection()?.elementsInRange;
+
+  const toggleNodeFormat = (format: NodeTransformType) => {
+    const isActive = elementsInRange()?.has(format);
+    props.onNodeFormat(isActive ? 'paragraph' : format);
+  };
+
   return (
     <>
-      <RibbonButton
+      <FormatButton
         label="Bold"
-        active={props.selectionState()?.bold}
+        active={selection()?.bold}
         onClick={() => props.onInlineFormat('bold')}
       >
-        <TextBoldIcon class="size-5" />
-      </RibbonButton>
-      <RibbonButton
+        <TextBoldIcon />
+      </FormatButton>
+      <FormatButton
         label="Italic"
-        active={props.selectionState()?.italic}
+        active={selection()?.italic}
         onClick={() => props.onInlineFormat('italic')}
       >
-        <TextItalicIcon class="size-5" />
-      </RibbonButton>
-      <RibbonButton
+        <TextItalicIcon />
+      </FormatButton>
+      <FormatButton
         label="Strikethrough"
-        active={props.selectionState()?.strikethrough}
+        active={selection()?.strikethrough}
         onClick={() => props.onInlineFormat('strikethrough')}
       >
-        <TextStrikethroughIcon class="size-5" />
-      </RibbonButton>
-      <RibbonButton
-        label="Code"
-        active={props.selectionState()?.code}
+        <TextStrikethroughIcon />
+      </FormatButton>
+      <FormatButton
+        label="Inline code"
+        active={selection()?.code}
         onClick={() => props.onInlineFormat('code')}
       >
-        <TextCodeIcon class="size-5" />
-      </RibbonButton>
+        <TextCodeIcon />
+      </FormatButton>
       <div class="w-px h-5 bg-edge-muted" />
-      <RibbonButton
-        label="Bullet list"
-        active={props.selectionState()?.elementsInRange.has('list-bullet')}
-        onClick={() => props.onNodeFormat('list-bullet')}
+      <FormatButton
+        label="Bulleted list"
+        active={elementsInRange()?.has('list-bullet')}
+        onClick={() => toggleNodeFormat('list-bullet')}
       >
-        <ListBulletsIcon class="size-5" />
-      </RibbonButton>
-      <RibbonButton
+        <ListBulletsIcon />
+      </FormatButton>
+      <FormatButton
         label="Numbered list"
-        active={props.selectionState()?.elementsInRange.has('list-number')}
-        onClick={() => props.onNodeFormat('list-number')}
+        active={elementsInRange()?.has('list-number')}
+        onClick={() => toggleNodeFormat('list-number')}
       >
-        <ListNumbersIcon class="size-5" />
-      </RibbonButton>
-      <RibbonButton
+        <ListNumbersIcon />
+      </FormatButton>
+      <FormatButton
         label="Checklist"
-        active={props.selectionState()?.elementsInRange.has('list-check')}
-        onClick={() => props.onNodeFormat('list-check')}
+        active={elementsInRange()?.has('list-check')}
+        onClick={() => toggleNodeFormat('list-check')}
       >
-        <ListChecksIcon class="size-5" />
-      </RibbonButton>
-      {props.includeQuote && (
-        <RibbonButton
-          label="Blockquote"
-          active={props.selectionState()?.elementsInRange.has('quote')}
-          onClick={() => props.onNodeFormat('quote')}
-        >
-          <TextQuoteIcon class="size-5" />
-        </RibbonButton>
-      )}
+        <ListChecksIcon />
+      </FormatButton>
+      <FormatButton
+        label="Blockquote"
+        active={elementsInRange()?.has('quote')}
+        onClick={() => toggleNodeFormat('quote')}
+      >
+        <TextQuoteIcon />
+      </FormatButton>
     </>
+  );
+}
+
+type FormatButtonProps = {
+  label: string;
+  hotkeyToken?: HotkeyToken;
+  active?: boolean;
+  onClick: () => void;
+  children: JSX.Element;
+};
+
+function FormatButton(props: FormatButtonProps) {
+  return (
+    <Button
+      aria-label={props.label}
+      title={props.label}
+      tooltip={
+        <LabelAndHotKey label={props.label} hotkeyToken={props.hotkeyToken} />
+      }
+      variant="ghost"
+      size="icon-sm"
+      class={props.active ? 'bg-active text-ink' : ''}
+      onPointerDown={(event: PointerEvent) => event.preventDefault()}
+      onClick={() => props.onClick()}
+    >
+      {props.children}
+    </Button>
   );
 }
