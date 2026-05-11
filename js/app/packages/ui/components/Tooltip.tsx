@@ -8,23 +8,19 @@ import { cn, Layer } from '@ui';
 
 const TOOLTIP_DELAY = 250;
 
-/**
- * Floating UI options retained from the previous `@corvu/tooltip` API so callers
- * don't have to change their usage. Internally these get translated to the
- * matching Kobalte popper props.
- */
-export type FloatingOptions = {
-  size?: { padding?: number; fitViewPort?: boolean };
-  shift?: { padding?: number };
-  flip?: boolean | string;
-  boundary?: string;
-  offset?: number;
-};
-
 export type TooltipProps = ParentProps<{
   tooltip?: JSX.Element | ((close: () => void) => JSX.Element);
   ref?: (el: HTMLDivElement | HTMLSpanElement) => void;
-  floatingOptions?: FloatingOptions;
+  /** Distance in px between the trigger and the tooltip content. */
+  gutter?: number;
+  /** Whether the tooltip should flip to stay in the viewport. */
+  flip?: boolean | string;
+  /** Padding (px) kept between the tooltip and the viewport edge. */
+  overflowPadding?: number;
+  /** Constrain the tooltip size to fit within the viewport. */
+  fitViewport?: boolean;
+  /** Padding (px) used when computing the tooltip's max-width. */
+  viewportPadding?: number;
   delayOverride?: number;
   placement?: Placement;
   spanMode?: boolean;
@@ -35,8 +31,12 @@ export type TooltipProps = ParentProps<{
 
 /**
  * Tooltip component to wrap some piece of UI with a tooltip.
- * @param props.floatingOptions - A optional floating ui options object.
- * @param props.placement - A optional floating ui placement string.
+ * @param props.placement - An optional Kobalte popper placement string.
+ * @param props.gutter - Distance between the trigger and the tooltip.
+ * @param props.flip - Whether the tooltip should flip to stay in view.
+ * @param props.overflowPadding - Padding kept between the tooltip and the viewport.
+ * @param props.fitViewport - Constrain the tooltip size to the viewport.
+ * @param props.viewportPadding - Padding used when computing max-width.
  * @param props.unstyled - When true, removes default styling from the tooltip content.
  * @param props.tooltip - The JSX element to render in the tooltip.
  * @example
@@ -47,23 +47,15 @@ export type TooltipProps = ParentProps<{
 export function Tooltip(props: TooltipProps) {
   props = mergeProps(
     {
-      floatingOptions: {
-        size: { padding: 16, fitViewPort: true },
-        shift: { padding: 16 },
-        boundary: 'viewport',
-        offset: 12,
-        flip: true,
-      } as FloatingOptions,
+      gutter: 12,
+      flip: true as boolean | string,
+      overflowPadding: 16,
+      fitViewport: true,
+      viewportPadding: 16,
       placement: 'bottom' as Placement,
     },
     props
   );
-
-  function padding() {
-    const padding = props.floatingOptions?.size?.padding;
-    if (typeof padding === 'number') return padding;
-    return 0;
-  }
 
   const [open, setOpen] = createSignal(false);
   const close = () => setOpen(false);
@@ -82,10 +74,10 @@ export function Tooltip(props: TooltipProps) {
       open={open()}
       onOpenChange={setOpen}
       placement={props.placement}
-      gutter={props.floatingOptions?.offset}
-      flip={props.floatingOptions?.flip}
-      overflowPadding={props.floatingOptions?.shift?.padding}
-      fitViewport={props.floatingOptions?.size?.fitViewPort}
+      gutter={props.gutter}
+      flip={props.flip}
+      overflowPadding={props.overflowPadding}
+      fitViewport={props.fitViewport}
     >
       <KobalteTooltip.Trigger
         as={props.spanMode ? 'span' : 'div'}
@@ -98,7 +90,9 @@ export function Tooltip(props: TooltipProps) {
       </KobalteTooltip.Trigger>
       <KobalteTooltip.Portal>
         <KobalteTooltip.Content
-          style={{ 'max-width': `calc(100vw - ${2 * padding()}px)` }}
+          style={{
+            'max-width': `calc(100vw - ${2 * (props.viewportPadding ?? 0)}px)`,
+          }}
           hidden={props.hide}
           class="z-tool-tip"
         >
