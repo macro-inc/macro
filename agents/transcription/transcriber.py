@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import uuid
+import warnings
 from collections import Counter, deque
 from datetime import datetime, timedelta, timezone
 
@@ -26,6 +27,16 @@ from livekit.agents import (
     WorkerOptions,
 )
 from livekit.plugins import silero
+
+# `resemblyzer` imports `webrtcvad`, which currently emits a noisy setuptools
+# `pkg_resources` deprecation warning once per worker process. It is not
+# actionable for the agent, so keep production logs focused on runtime issues.
+warnings.filterwarnings(
+    "ignore",
+    message=r"pkg_resources is deprecated as an API.*",
+    category=UserWarning,
+    module=r"webrtcvad",
+)
 from resemblyzer import VoiceEncoder, preprocess_wav
 
 load_dotenv()
@@ -471,4 +482,15 @@ def prewarm(proc: JobProcess):
 
 
 if __name__ == "__main__":
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=prewarm, agent_name="macro-transcriber"))
+    cli.run_app(
+        WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            prewarm_fnc=prewarm,
+            agent_name="macro-transcriber",
+            # Each prewarmed process loads Silero + Resemblyzer and is expected
+            # to sit around ~3 GiB RSS. Keep fewer warm processes and raise the
+            # warning threshold so healthy workers do not spam logs every 5s.
+            num_idle_processes=1,
+            job_memory_warn_mb=4096,
+        )
+    )
