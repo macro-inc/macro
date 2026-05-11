@@ -5,7 +5,7 @@ import { deferredGate } from '@core/util/debounce';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import type { ApiThreadReply } from '@service-comms/client';
-import { createEffect, createSignal, on, Show } from 'solid-js';
+import { createEffect, createSignal, on, Show, untrack } from 'solid-js';
 import { createMessageSelection } from '../Channel/create-message-selection';
 import { ChannelMessage } from '../Message';
 import { createThreadHotkeys } from './create-thread-hotkeys';
@@ -159,55 +159,62 @@ export function ChannelThread(props: ThreadProps) {
 
   createEffect(
     on(
+      [() => props.selectedReplyId, loadedReplies],
+      ([selectedReplyId, replies]) => {
+        if (!selectedReplyId) {
+          if (replySelection.selectedId()) replySelection.clear();
+          return;
+        }
+        const found = replies.some((r) => r.id === selectedReplyId);
+        if (!found) {
+          if (replySelection.selectedId()) replySelection.clear();
+          return;
+        }
+        props.onSelectMessage?.(props.data().id);
+        replySelection.select(selectedReplyId);
+      }
+    )
+  );
+
+  createEffect(
+    on(
+      [() => props.targetReplyId, displayReplies, props.isExpanded],
+      ([targetReplyId, rendered, isExpanded]) => {
+        if (!targetReplyId || isExpanded) return;
+        if (rendered.some((r) => r.id === targetReplyId)) return;
+        props.setIsExpanded(true);
+      }
+    )
+  );
+
+  // Within-mount guard: `targetReplyId` clearing handles re-fire across
+  // mounts; this stops noise re-runs from re-scrolling the same target.
+  let lastScrolledReplyId: string | undefined;
+  createEffect(
+    on(
       [
         () => props.targetReplyId,
-        canScrollToTargetReply,
-        loadedReplies,
-        displayReplies,
-        props.isExpanded,
         replyListHandle,
+        canScrollToTargetReply,
+        props.isExpanded,
       ],
-      ([
-        targetReplyId,
-        canScroll,
-        replies,
-        renderedReplies,
-        isExpanded,
-        handle,
-      ]) => {
+      ([targetReplyId, handle, canScroll, isExpanded]) => {
         if (!targetReplyId) {
-          if (replySelection.selectedId()) replySelection.clear();
+          lastScrolledReplyId = undefined;
           return;
         }
-        if (!canScroll) return;
+        if (lastScrolledReplyId === targetReplyId) return;
+        if (!canScroll || !handle) return;
 
-        const targetReplyIndex = replies.findIndex(
-          (reply) => reply.id === targetReplyId
-        );
-        if (targetReplyIndex === -1) {
-          if (replySelection.selectedId()) replySelection.clear();
-          return;
-        }
+        // Untracked: channel-message reconciles must not re-fire scroll.
+        const replies = isExpanded
+          ? untrack(loadedReplies)
+          : untrack(displayReplies);
+        const index = replies.findIndex((r) => r.id === targetReplyId);
+        if (index === -1) return;
 
-        props.onSelectMessage?.(props.data().id);
-        replySelection.select(targetReplyId);
-
-        if (!isExpanded) {
-          const renderedTargetReplyIndex = renderedReplies.findIndex(
-            (reply) => reply.id === targetReplyId
-          );
-          if (renderedTargetReplyIndex === -1) {
-            props.setIsExpanded(true);
-            return;
-          }
-
-          if (!handle?.scrollToIndex(renderedTargetReplyIndex)) return;
-          props.onTargetReplyScrolled?.(targetReplyId);
-          return;
-        }
-
-        // TODO: we need a stable fix for deeply nested threads
-        if (!handle?.scrollToIndex(targetReplyIndex)) return;
+        if (!handle.scrollToIndex(index)) return;
+        lastScrolledReplyId = targetReplyId;
         props.onTargetReplyScrolled?.(targetReplyId);
       }
     )

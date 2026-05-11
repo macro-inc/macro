@@ -40,14 +40,12 @@ export function ThreadReplyList(props: {
   );
   const replyElements: Array<HTMLElement | undefined> = [];
 
+  // rAF: defer past the current reactive cascade so virtua's reconciliation
+  // settles before scrollIntoView reads the element's bounding rect.
   const scrollToIndex = (index: number): boolean => {
     const element = getReplyElementAtIndex(replyElements, index);
     if (!element) return false;
-    // NOTE: this rAF helps a little but there are still rendering
-    // problems for deeply nested threads
-    requestAnimationFrame(() => {
-      element.scrollIntoView({ block: 'center' });
-    });
+    requestAnimationFrame(() => element.scrollIntoView({ block: 'center' }));
     return true;
   };
 

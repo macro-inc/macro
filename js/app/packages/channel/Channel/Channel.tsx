@@ -458,7 +458,8 @@ export function Channel(props: ChannelProps) {
                               channelId={() => props.channelId}
                               isNewestThread={isNewestThread()}
                               getMessageActions={getMessageActions}
-                              targetReplyId={targetMessageController.activeTargetMessageReplyId()}
+                              targetReplyId={targetMessageController.pendingTargetReplyId()}
+                              selectedReplyId={targetMessageController.activeTargetMessageReplyId()}
                               onTargetReplyScrolled={(replyId) => {
                                 targetMessageController.completePendingReplyScroll(
                                   m().id,
