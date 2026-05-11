@@ -1183,6 +1183,32 @@ impl<
 
         Ok(())
     }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_voices(&self, macro_user_id: &Uuid) -> Result<Vec<Uuid>, CallError> {
+        self.voice_repo
+            .get_user_voices(macro_user_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, embedding))]
+    async fn set_user_voice(
+        &self,
+        macro_user_id: &Uuid,
+        embedding: &[f32],
+    ) -> Result<Uuid, CallError> {
+        let voice_id = self
+            .voice_repo
+            .upsert_voice(embedding)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        self.voice_repo
+            .link_user_voice(macro_user_id, &voice_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        Ok(voice_id)
+    }
 }
 
 impl<

@@ -513,6 +513,21 @@ pub trait CallService: Send + Sync + 'static {
     /// and empty transcripts are also no-ops — no AI call is made in those
     /// cases.
     fn summarize_call(&self, call_id: &Uuid) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// List the voice ids currently enrolled for `macro_user_id`.
+    fn get_user_voices(
+        &self,
+        macro_user_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<Uuid>, CallError>> + Send;
+
+    /// Enroll a new voice embedding for `macro_user_id`. Inserts a row into
+    /// the `voice` table and links it to the user via `macro_user_voice`.
+    /// Returns the new `voice.id`.
+    fn set_user_voice(
+        &self,
+        macro_user_id: &Uuid,
+        embedding: &[f32],
+    ) -> impl Future<Output = Result<Uuid, CallError>> + Send;
 }
 
 /// Lightweight read-only port for querying call records in Soup.
