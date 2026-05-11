@@ -1383,9 +1383,9 @@ impl CallRepository for PgCallRepo {
         sqlx::query!(
             r#"
             UPDATE call_record_transcripts AS t
-            SET custom_speaker = 'macro|' || mu.email
+            SET custom_speaker = u.id
             FROM UNNEST($2::text[], $3::uuid[]) AS a(diarized_speaker_id, macro_user_id)
-            JOIN macro_user mu ON mu.id = a.macro_user_id
+            JOIN "User" u ON u.macro_user_id = a.macro_user_id
             WHERE t.call_record_id = $1
               AND t.diarized_speaker_id = a.diarized_speaker_id
               AND t.custom_speaker IS NULL
