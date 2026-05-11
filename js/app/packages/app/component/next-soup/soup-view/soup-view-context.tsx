@@ -1,10 +1,10 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   createSoupState,
+  type GroupMeta,
   type SoupEntity,
   type SoupRow,
   type SoupState,
-  type GroupMeta as UiGroupMeta,
 } from '@app/component/next-soup/create-soup-state';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
 import {
@@ -503,7 +503,7 @@ export const SoupViewContextProvider: FlowComponent<
     return query?.hasNextPage() ?? false;
   };
 
-  const buildGroupMeta = (group: ApiGroupMeta): UiGroupMeta => {
+  const buildGroupMeta = (group: ApiGroupMeta): GroupMeta => {
     const resolvedLabel = getPropertyOptionLabel(group.key) ?? group.label;
     return {
       key: group.key,
