@@ -1,15 +1,15 @@
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import type { ListView } from '@app/constants/list-views';
 import { GroupDropdown } from '@app/component/next-soup/soup-view/filters-bar/group-dropdown';
 import {
   DEFAULT_GROUP_OPTIONS,
-  TASK_GROUP_OPTIONS,
   type GroupOption,
   type GroupOptionId,
+  TASK_GROUP_OPTIONS,
 } from '@app/component/next-soup/soup-view/group-options';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { createMemo, createSignal, Switch, Match } from 'solid-js';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import type { ListView } from '@app/constants/list-views';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { createMemo, createSignal, Match, Switch } from 'solid-js';
 
 type GroupOpenProps = {
   open: boolean;
@@ -73,7 +73,8 @@ const useGroupDropdown = (options: GroupOption[] = DEFAULT_GROUP_OPTIONS) => {
   const { soup } = useSoupView();
 
   const value = createMemo(
-    (): GroupOptionId => (soup.grouping.activeGroupId() as GroupOptionId) ?? 'none'
+    (): GroupOptionId =>
+      (soup.grouping.activeGroupId() as GroupOptionId) ?? 'none'
   );
 
   const onChange = (groupOption: GroupOptionId) => {

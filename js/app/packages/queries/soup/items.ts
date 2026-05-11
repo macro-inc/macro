@@ -2,8 +2,8 @@ import { filterSoupItemByRequestBody } from '@app/component/next-soup/filters/qu
 import { throwOnErr } from '@core/util/maybeResult';
 import type { EntityData } from '@entity';
 import {
-  serializeGroupByField,
   parseGroupMeta,
+  serializeGroupByField,
 } from '@queries/soup/grouped/api';
 import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
 import { soupKeys } from '@queries/soup/keys';

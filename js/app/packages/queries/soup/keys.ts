@@ -1,7 +1,7 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
+import type { GroupByField } from './grouped/types';
 import type { SoupAstItemsQueryArgs, SoupItemsQueryArgs } from './items';
 import type { SearchSoupQueryArgs } from './search';
-import type { GroupByField } from './grouped/types';
 
 export const soupKeys = createQueryKeys('soup', {
   items: (args: SoupItemsQueryArgs) => ({

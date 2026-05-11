@@ -15,23 +15,23 @@ import {
 import { createInfiniteQueries } from '@app/component/next-soup/soup-view/create-infinite-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
-import { throwOnErr } from '@core/util/maybeResult';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { throwOnErr } from '@core/util/maybeResult';
 import {
   type EntityData,
-  isWithNotification,
   getPropertyOptionLabel,
+  isWithNotification,
 } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import { useQueryClient } from '@queries/client';
 import {
-  serializeGroupByField,
   parseGroupedSoupPage,
+  serializeGroupByField,
 } from '@queries/soup/grouped/api';
 import type {
-  GroupByField,
   GroupMeta as ApiGroupMeta,
+  GroupByField,
   GroupedSoupPage,
 } from '@queries/soup/grouped/types';
 import { type SoupParams, useSoupAstItemsQuery } from '@queries/soup/items';
