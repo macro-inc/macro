@@ -5,7 +5,7 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { createHotkeyGroup, registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type {
@@ -381,10 +381,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
     }
   });
 
-  const textFg = () =>
-    USE_ENTITY_COLORS
-      ? getIconConfig(props.creatableBlock.blockName).foreground
-      : 'text-accent';
+  const textFg = () => getIconConfig(props.creatableBlock.blockName).foreground;
 
   const StaticIcon = props.creatableBlock.icon;
   const AnimatedIcon = props.creatableBlock.animatedIcon;
@@ -393,7 +390,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
     <Layer depth={2}>
       <button
         class={cn(
-          ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200',
+          ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel ring ring-edge-muted transition-transform ease-click duration-200 rounded-sm',
           `create-menu-${props.creatableBlock.label.toLowerCase()}`,
           {
             '-translate-y-2 text-ink bg-active': props.focused,
@@ -409,28 +406,6 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
           buttonRef?.focus();
         }}
       >
-        {/** TODO (seamus): we need to pool/cache these canvases. they brick the color picker/or any other gl context
-                because they do not get garbage collected fast enough */}
-        {/*<div
-        class="inset-0 absolute bg-panel opacity-2 mask-b-from-0% mask-b-to-100%"
-        classList={{
-          'text-ink-extra-muted opacity-2': !props.focused,
-          [textFg() + ' opacity-50']: props.focused,
-        }}
-      >
-        <PcNoiseGrid
-          cellSize={21 / 2}
-          rounding={10}
-          warp={0}
-          freq={0.002}
-          crunch={0.4}
-          size={[0.0, 0.2]}
-          fill={1}
-          stroke={0}
-          speed={[props.focused ? 0.3 : 0, 0]}
-        />
-      </div>*/}
-
         <div
           class={cn(
             'absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color',
@@ -491,6 +466,7 @@ type LauncherInnerProps = {
 };
 
 export const LauncherInner = (props: LauncherInnerProps) => {
+  const hkGroup = createHotkeyGroup();
   const blocks = () => props.blocks ?? CREATABLE_BLOCKS;
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
@@ -562,20 +538,20 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         props.onClose(false);
         return true;
       },
-    });
+    }).withGroup(hkGroup);
 
     if (item.altHotkeyToken) {
       registerHotkey({
         hotkeyToken: item.altHotkeyToken,
         hotkey: `shift+${item.hotkey}` as ValidHotkey,
         scopeId: launcherScope,
-        description: `${item.description} in current split`,
+        description: `${item.description} in new split`,
         keyDownHandler: () => {
           item.keyDownHandler();
           props.onClose();
           return true;
         },
-      });
+      }).withGroup(hkGroup);
     }
   });
 
@@ -588,20 +564,21 @@ export const LauncherInner = (props: LauncherInnerProps) => {
       setCreateMenuOpen(false);
       return true;
     },
-  });
+  }).withGroup(hkGroup);
+
   registerHotkey({
     hotkey: ['arrowleft', 'h'],
     scopeId: launcherScope,
     description: 'Navigate Left',
     keyDownHandler: () => moveFocus(-1),
-  });
+  }).withGroup(hkGroup);
 
   registerHotkey({
     hotkey: ['arrowright', 'l'],
     scopeId: launcherScope,
     description: 'Navigate Right',
     keyDownHandler: () => moveFocus(1),
-  });
+  }).withGroup(hkGroup);
 
   registerHotkey({
     hotkey: ['arrowup', 'k'],
@@ -611,7 +588,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
       e?.preventDefault();
       return moveFocus(-getColumnCount());
     },
-  });
+  }).withGroup(hkGroup);
 
   registerHotkey({
     hotkey: ['arrowdown', 'j'],
@@ -621,7 +598,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
       e?.preventDefault();
       return moveFocus(getColumnCount());
     },
-  });
+  }).withGroup(hkGroup);
 
   registerHotkey({
     hotkey: 'escape',
@@ -631,10 +608,10 @@ export const LauncherInner = (props: LauncherInnerProps) => {
       props.onClose();
       return true;
     },
-  });
+  }).withGroup(hkGroup);
 
   registerHotkey({
-    hotkey: 'enter',
+    hotkey: 'shift+enter',
     scopeId: launcherScope,
     description: 'Open in new split',
     keyDownHandler: () => {
@@ -644,7 +621,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     },
     runWithInputFocused: true,
     displayPriority: 7,
-  });
+  }).withGroup(hkGroup);
 
   registerHotkey({
     hotkey: 'enter' as ValidHotkey,
@@ -657,7 +634,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     },
     runWithInputFocused: true,
     displayPriority: 8,
-  });
+  }).withGroup(hkGroup);
 
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -673,17 +650,16 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
   onMount(() => {
     if (!ref) return;
-
     attachHotkeys(ref);
-
     setTimeout(() => {
       const firstItem = blocks()[0];
-
       if (firstItem) {
         focusMenuItem(firstItem.label);
       }
-    }, 0);
+    });
   });
+
+  onCleanup(hkGroup.dispose)
 
   // horrible but tailwind requires the full strings
   const gridColsClass = () => {
@@ -758,6 +734,7 @@ type LauncherProps = {
 
 export const Launcher = (props: LauncherProps) => {
   const useJuicedScrim = false;
+  console.log('### LAUNCHER CREATED');
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>

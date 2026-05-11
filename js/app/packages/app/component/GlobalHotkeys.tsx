@@ -130,34 +130,6 @@ export default function GlobalShortcuts() {
     activateCommandScope: true,
   });
 
-  for (const block of CREATABLE_BLOCKS) {
-    registerHotkey({
-      hotkeyToken: block.hotkeyToken,
-      hotkey: block.hotkey,
-      scopeId: createCommandScope.commandScopeId,
-      description: block.description,
-      runWithInputFocused: true,
-      keyDownHandler: () => {
-        block.keyDownHandler();
-        return true;
-      },
-    });
-
-    if (block.altHotkeyToken) {
-      registerHotkey({
-        hotkeyToken: block.altHotkeyToken,
-        hotkey: `opt+${block.hotkey}` as ValidHotkey,
-        scopeId: createCommandScope.commandScopeId,
-        description: `${block.description} in new split`,
-        runWithInputFocused: true,
-        keyDownHandler: () => {
-          block.keyDownHandler();
-          return true;
-        },
-      });
-    }
-  }
-
   registerHotkey({
     hotkeyToken: TOKENS.global.commandMenu,
     hotkey: 'cmd+k',
