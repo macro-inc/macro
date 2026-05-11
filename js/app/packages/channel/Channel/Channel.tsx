@@ -10,6 +10,7 @@ import {
 } from '@channel/Input/utils/persistence';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
 import { useChannelParticipants } from '@channel/use-channel-participants';
+import { FindBar } from '@core/component/FindBar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { useChannelActivity, useChannelName } from '@core/context/channels';
@@ -64,6 +65,7 @@ import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ChannelThread } from '../Thread';
 import { ChannelDropZone } from './ChannelDropZone';
 import { createChannelDragState } from './create-channel-drag-state';
+import { createChannelFindBar } from './create-channel-find-bar';
 import { createChannelHotkeys } from './create-channel-hotkeys';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createInlineInputKeyboardHandler } from './create-inline-input-keyboard-handler';
@@ -87,8 +89,6 @@ import {
 } from './ThreadList';
 import { createThreadManager } from './thread-manager';
 import { createThreadPaginator } from './thread-paginator';
-import { FindBar } from '@core/component/FindBar';
-import { createChannelFindBar } from './create-channel-find-bar';
 
 export type ChannelProps = {
   channelId: string;

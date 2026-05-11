@@ -1,5 +1,5 @@
-import { useChannelsContext } from '@core/context/channels';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
+import { useChannelsContext } from '@core/context/channels';
 import { throwOnErr } from '@core/util/maybeResult';
 import type { ChannelMessageEntity, EntityData, WithSearch } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
@@ -8,8 +8,8 @@ import {
   useSearchResponseItemMapper,
 } from '@queries/soup/transform-utils';
 import {
-  searchClient,
   type ChannelSearchRequest,
+  searchClient,
 } from '@service-search/client';
 import type { UnifiedSearchRequest } from '@service-search/generated/models';
 import { useInfiniteQuery } from '@tanstack/solid-query';
@@ -137,11 +137,7 @@ export const useSearchChannelQuery = (
   });
 
   return useInfiniteQuery(() => ({
-    queryKey: [
-      'search-channel',
-      args().params,
-      request(),
-    ] as const,
+    queryKey: ['search-channel', args().params, request()] as const,
     queryFn: async (ctx) => {
       return throwOnErr(
         async () =>
