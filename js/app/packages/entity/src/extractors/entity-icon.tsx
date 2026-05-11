@@ -38,7 +38,7 @@ function DirectMessageIcon(props: {
   };
 
   return (
-    <div class='size-full flex'>
+    <div class="size-full flex">
       <Show
         when={participantId()}
         fallback={
