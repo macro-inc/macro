@@ -18,6 +18,7 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from './split-layout/context';
+import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(
@@ -40,6 +41,11 @@ type PreviewPanel = {
 const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   props
 ) => {
+  let scopedSplitPanelContextType: SplitPanelContextType = {} as any;
+  const splitPanelContext = useSplitPanelOrThrow();
+  const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {
+    ...props.splitPanelContext.layoutRefs,
+  };
   // In preview we intentionally do NOT render the split header/title row.
   // We only provide toolbar slots (Share, etc).
   scopedLayoutRefs.headerLeft = undefined;
