@@ -13,7 +13,7 @@ import { mergeRegister } from '@lexical/utils';
 import { $isImageNode, type ImageDecoratorProps } from '@lexical-core';
 import { calculateEffectiveDimensions } from '@lexical-core/utils/media';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn } from '@ui';
+import { Button, cn, Layer } from '@ui';
 import {
   $createNodeSelection,
   $getNodeByKey,
@@ -357,6 +357,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
             (state() === 'ok' || state() === 'error')
           }
         >
+          <Layer depth={3}>
           <div class="size-full absolute top-0 left-0 pointer-events-none bg-edge/10" />
           <MediaButtons
             delete={interactable() ? deleteImage : undefined}
@@ -370,6 +371,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
             }
             containerRef={containerRef}
           />
+          </Layer>
         </Show>
       </div>
 
