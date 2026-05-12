@@ -43,14 +43,12 @@ const variantStyles: Record<SearchbarVariant, string> = {
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const { setSearchText, setSearchPaused, setSearchMentions, queryFilters } =
-    useSoupView();
+  const { setSearchText, setSearchPaused, queryFilters } = useSoupView();
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
 
   const [hasContent, setHasContent] = createSignal(false);
   const [latestMarkdown, setLatestMarkdown] = createSignal('');
-  const [mentions, setMentions] = createSignal<string[]>([]);
 
   const editor = buildConfig('chat')
     .namespace('soup-search-bar')
@@ -58,16 +56,6 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     .withMentions({
       sources: ['users'],
       disableMentionTracking: true,
-      onCreate: (mention) => {
-        if (mention.itemType !== 'user') return;
-        setMentions((prev) =>
-          prev.includes(mention.itemId) ? prev : [...prev, mention.itemId]
-        );
-      },
-      onRemove: (mention) => {
-        if (mention.itemType !== 'user') return;
-        setMentions((prev) => prev.filter((m) => m !== mention.itemId));
-      },
     })
     .withHistory({ timeGap: 400 })
     .onChange((markdown) => {
@@ -100,9 +88,9 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       )
     );
 
-  // Sync search text + mention filters only when the mention menu is closed.
-  // This avoids cascading reactive updates during mention insertion and
-  // prevents search from firing while typing @partial.
+  // Sync search text only when the mention menu is closed. This avoids
+  // cascading reactive updates during mention insertion and prevents search
+  // from firing while typing @partial.
   const menuIsOpen = () => editor.controls.isInlineMenuOpen();
 
   createEffect(() => setSearchPaused(menuIsOpen()));
@@ -113,8 +101,6 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       setSearchText(markdownToPlainText(markdown).trim());
     })
   );
-
-  createEffect(() => setSearchMentions(mentions()));
 
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],
@@ -195,8 +181,6 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
               editor.controls.clear();
               setSearchText('');
               setHasContent(false);
-              setMentions([]);
-              setSearchMentions([]);
               props.onDismiss?.();
             }}
           >
