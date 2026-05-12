@@ -1,10 +1,10 @@
 import { Button as KobalteButton, type ButtonRootProps } from '@kobalte/core/button';
-import { type ComponentProps, type JSX, Match, Switch, splitProps } from 'solid-js';
-import type { Placement } from '@floating-ui/dom';
+import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
+import { Tooltip, type HotkeySequenceStep } from './Tooltip';
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import type { Placement } from '@floating-ui/dom';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
-import { Tooltip, type HotkeySequenceStep } from './Tooltip';
 
 export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
@@ -12,15 +12,10 @@ export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> &
   noTouchResize?: boolean;
   variant?: ButtonVariant;
   children?: JSX.Element;
-  /** Custom JSX content for the tooltip body (escape hatch). */
-  tooltip?: JSX.Element;
-  /** Label for a single-row tooltip. */
+  tooltip?: string;
   label?: string;
-  /** Hotkey token; renders as a key-cap badge next to `label`. */
   hotkeyToken?: HotkeyToken;
-  /** Raw shortcut string; renders as a key-cap badge next to `label`. */
   shortcut?: string;
-  /** Multi-step hotkey sequence. */
   hotkeySequence?: HotkeySequenceStep[];
   size?: ButtonSize;
   class?: string;
@@ -49,15 +44,15 @@ const sizeStyles: Record<ButtonSize, string> = {
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
     'tooltipPlacement',
-    'children',
-    'variant',
-    'tooltip',
-    'label',
-    'hotkeyToken',
-    'shortcut',
     'hotkeySequence',
+    'hotkeyToken',
+    'children',
+    'shortcut',
+    'tooltip',
+    'variant',
     'class',
     'depth',
+    'label',
     'size',
   ]);
 
@@ -80,30 +75,23 @@ export const Button = (props: ButtonProps) => {
     </KobalteButton>
   );
 
+  const tooltipLabel = () => local.label ?? local.tooltip;
+
   return (
     <Layer depth={local.depth ?? 0}>
-      <Switch fallback={button()}>
-        <Match when={local.label !== undefined ? local.label : false}>
-          {(label) => (
-            <Tooltip
-              placement={placement()}
-              label={label()}
-              hotkeyToken={local.hotkeyToken}
-              shortcut={local.shortcut}
-              hotkeySequence={local.hotkeySequence}
-            >
-              {button()}
-            </Tooltip>
-          )}
-        </Match>
-        <Match when={local.tooltip !== undefined ? local.tooltip : false}>
-          {(tooltip) => (
-            <Tooltip placement={placement()} tooltip={tooltip()}>
-              {button()}
-            </Tooltip>
-          )}
-        </Match>
-      </Switch>
+      <Show when={tooltipLabel() !== undefined ? tooltipLabel() : false} fallback={button()}>
+        {(label) => (
+          <Tooltip
+            hotkeySequence={local.hotkeySequence}
+            hotkeyToken={local.hotkeyToken}
+            shortcut={local.shortcut}
+            placement={placement()}
+            label={label()}
+          >
+            {button()}
+          </Tooltip>
+        )}
+      </Show>
     </Layer>
   );
 };

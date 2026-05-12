@@ -1,5 +1,5 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { Tooltip } from '@ui';
+import { HoverCard } from '@ui';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import MacroIcon from '@macro-icons/macro-logo.svg';
@@ -227,8 +227,8 @@ export function MockAppChrome(props: MockAppChromeProps) {
                 return 'text-ink opacity-50 hover:opacity-80 hover:bg-ink/10';
               };
               return (
-                <Tooltip
-                  tooltip={
+                <HoverCard
+                  content={
                     <span class="flex items-center gap-1.5 text-xs">
                       {link.label}
                       <span class="flex items-center gap-1 text-ink/40">
@@ -259,7 +259,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
                       <Dynamic component={link.icon} class="size-4" />
                     )}
                   </button>
-                </Tooltip>
+                </HoverCard>
               );
             }}
           </For>

@@ -2,19 +2,13 @@ import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { Hotkey } from '../../ui/components/Hotkey';
 import type { Placement } from '@floating-ui/dom';
-import type { JSX, ParentProps } from 'solid-js';
+import type { ParentProps } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { cn, Surface } from '@ui';
 
-export type TooltipProps = ParentProps<SharedTooltipProps & (LabelVariantProps | TooltipVariantProps)>;
-
-type SharedTooltipProps = {
-  onOpenChange?: (open: boolean) => void;
-  ref?: (el: HTMLElement) => void;
-  placement?: Placement;
-  as?: 'div' | 'span';
-  open?: boolean;
-  class?: string;
+export type HotkeySequenceStep = {
+  token?: HotkeyToken;
+  shortcut?: string;
 };
 
 export type LabelAndHotKeyProps = {
@@ -24,26 +18,18 @@ export type LabelAndHotKeyProps = {
   label: string;
 };
 
-type LabelVariantProps = {
+export type TooltipProps = ParentProps<{
   hotkeySequence?: HotkeySequenceStep[];
   hotkeyToken?: HotkeyToken;
   shortcut?: string;
-  tooltip?: never;
   label: string;
-};
-
-export type HotkeySequenceStep = {
-  token?: HotkeyToken;
-  shortcut?: string;
-};
-
-type TooltipVariantProps = {
-  hotkeySequence?: never;
-  tooltip: JSX.Element;
-  hotkeyToken?: never;
-  shortcut?: never;
-  label?: never;
-};
+  onOpenChange?: (open: boolean) => void;
+  ref?: (el: HTMLElement) => void;
+  placement?: Placement;
+  as?: 'div' | 'span';
+  open?: boolean;
+  class?: string;
+}>;
 
 const DEFAULT_PLACEMENT: Placement = 'bottom';
 const TOOLTIP_OVERFLOW_PADDING = 16;
@@ -93,38 +79,20 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
 /**
  * A hover-engaged tooltip with built-in chrome.
  *
- * Pick the content shape that fits:
- * - `tooltip`: arbitrary JSX/string content. For multi-row hotkey lists,
- *   compose `<LabelAndHotKey />` rows inside a `<div class="flex flex-col">`.
- * - `label` (+ optional `hotkeyToken` / `shortcut` / `hotkeySequence`):
- *   single row with an optional hotkey badge.
+ * Renders a single label row with an optional hotkey badge (driven by
+ * `hotkeyToken`, `shortcut`, or `hotkeySequence`).
  *
- * For rich, interactive hover content (e.g. user cards with click
- * affordances), reach for `HoverCard`. For click-engaged surfaces, use
- * `Popover`.
+ * For rich JSX hover content (icons, lists, structured info, selectable
+ * text), use `HoverCard`. For click-engaged surfaces, use `Popover`.
  *
  * @example
- * <Tooltip tooltip="Close"><Button>X</Button></Tooltip>
+ * <Tooltip label="Close"><Button>X</Button></Tooltip>
  *
  * <Tooltip label="Zoom" hotkeyToken={TOKENS.canvas.zoomInTool}>
  *   <Button>Zoom</Button>
  * </Tooltip>
  */
 export function Tooltip(props: TooltipProps) {
-  const content = (): JSX.Element | undefined => {
-    if (props.label !== undefined) {
-      return (
-        <LabelAndHotKey
-          hotkeySequence={props.hotkeySequence}
-          hotkeyToken={props.hotkeyToken}
-          shortcut={props.shortcut}
-          label={props.label}
-        />
-      );
-    }
-    return props.tooltip;
-  };
-
   return (
     <KobalteTooltip
       placement={props.placement ?? DEFAULT_PLACEMENT}
@@ -153,7 +121,12 @@ export function Tooltip(props: TooltipProps) {
             class="flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word"
             depth={3}
           >
-            {content()}
+            <LabelAndHotKey
+              hotkeySequence={props.hotkeySequence}
+              hotkeyToken={props.hotkeyToken}
+              shortcut={props.shortcut}
+              label={props.label}
+            />
           </Surface>
         </KobalteTooltip.Content>
       </KobalteTooltip.Portal>

@@ -2,7 +2,7 @@ import { formatCallDuration } from '@block-call/utils';
 import { UserGroup } from '@core/component/Properties/component/propertyValue/UserGroup';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
 import type { EntityReference } from '@core/component/Properties/types';
-import { Tooltip } from '@ui';
+import { HoverCard } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { matches } from '@core/util/match';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
@@ -57,13 +57,13 @@ export function CallParticipants(props: { participantIds: string[] }) {
     }));
   return (
     <Show when={props.participantIds.length > 0}>
-      <Tooltip
+      <HoverCard
         unstyled
-        tooltip={<ParticipantsTooltip participantIds={props.participantIds} />}
+        content={<ParticipantsTooltip participantIds={props.participantIds} />}
         class="flex items-center"
       >
         <UserGroup entities={entities()} maxUsers={2} />
-      </Tooltip>
+      </HoverCard>
     </Show>
   );
 }

@@ -12,7 +12,7 @@ import {
   ENABLE_CANVAS_IMAGES,
   ENABLE_CANVAS_TEXT,
 } from '@core/constant/featureFlags';
-import { IS_MAC } from '@core/constant/isMac';
+
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
@@ -26,7 +26,7 @@ import PencilSimple from '@icon/regular/pencil-simple.svg';
 import Rectangle from '@icon/regular/rectangle.svg';
 import Text from '@icon/regular/text-t.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Button, cn, LabelAndHotKey } from '@ui';
+import { Button, cn } from '@ui';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createSignal, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -195,18 +195,11 @@ export function ToolBar() {
                   : 'ghost'
               }
               size="icon-md"
-              tooltip={
-                <div class="flex flex-col">
-                  <LabelAndHotKey
-                    label="Zoom"
-                    hotkeyToken={TOKENS.canvas.zoomInTool}
-                  />
-                  <LabelAndHotKey
-                    label="Zoom out"
-                    shortcut={`hold ${IS_MAC ? 'option' : 'alt'}`}
-                  />
-                </div>
-              }
+              label="Zoom"
+              hotkeyToken={TOKENS.canvas.zoomInTool}
+              /* scuffed: previously also showed a second row
+                 "Zoom out — hold ${IS_MAC ? 'option' : 'alt'}"
+                 but multi-row tooltips were dropped. */
               onClick={() => {
                 toolManager.setSelectedTool(Tools.ZoomIn);
               }}

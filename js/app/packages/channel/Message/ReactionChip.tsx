@@ -1,4 +1,4 @@
-import { Tooltip } from '@ui';
+import { HoverCard } from '@ui';
 import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
 import { Popover } from '@kobalte/core/popover';
@@ -66,8 +66,8 @@ export function ReactionChip(props: ReactionChipProps) {
       placement="top"
     >
       <Popover.Anchor>
-        <Tooltip
-          tooltip={
+        <HoverCard
+          content={
             <ReactionTooltipContent
               users={props.users}
               currentUserId={props.currentUserId}
@@ -112,7 +112,7 @@ export function ReactionChip(props: ReactionChipProps) {
               <span class="text-xs">{props.count}</span>
             </Show>
           </Button>
-        </Tooltip>
+        </HoverCard>
       </Popover.Anchor>
       <Popover.Portal>
         <Popover.Content class="z-modal bg-panel p-1.5 text-ink-muted text-xs rounded-sm border border-edge-muted">
