@@ -42,7 +42,7 @@ const NewFormPrimitivesDemo = () => {
         <Button
           size="sm"
           label="Console"
-          hotkeyToken={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */}
+          hotkey={TOKENS.global.commandMenu}
         >
           Console
         </Button>
@@ -185,7 +185,7 @@ const NewFormPrimitivesDemo = () => {
         <Button
           size="md"
           label="Console"
-          hotkeyToken={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */}
+          hotkey={TOKENS.global.commandMenu}
         >
           Console
         </Button>

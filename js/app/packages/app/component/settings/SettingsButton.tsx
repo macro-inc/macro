@@ -20,7 +20,7 @@ export function SettingsButton() {
       <Button
         class="px-0"
         label={settingsOpen() ? 'Close Settings' : 'Open Settings'}
-        hotkeyToken={TOKENS.global.toggleSettings}
+        hotkey={TOKENS.global.toggleSettings}
         onClick={() => toggleSettings()}
       >
         <IconGear class={cn("size-4.5 box-content rounded-full hover:bg-transparent p-1", settingsOpen() && 'bg-accent/20 text-accent hover:text-ink hover:bg-hover',

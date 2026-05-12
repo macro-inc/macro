@@ -17,7 +17,6 @@ export { Layer } from './components/Layer';
 
 /* types */
 export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
-export type { HotkeySequenceStep } from './components/Tooltip';
 export type { HoverCardProps } from './components/HoverCard';
 export type { ButtonProps } from './components/Button';
 export type { DialogProps } from './components/Dialog';

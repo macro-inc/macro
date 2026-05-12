@@ -108,6 +108,7 @@ function breakApartHotkeyString(hotkey: string) {
 interface HotkeyProps extends JSX.HTMLAttributes<HTMLDivElement> {
   lowercase?: boolean;
   token?: HotkeyToken;
+  shortcut?: string;
   showPlus?: boolean;
   theme?: Theme;
 }
@@ -122,16 +123,22 @@ export function Hotkey(props: HotkeyProps){
   const [local, rest] = splitProps(props, [
     'lowercase',
     'children',
+    'shortcut',
     'showPlus',
     'token',
     'theme',
     'class',
   ]);
-  const tokenShortcut = createMemo(() => { return local.token ? getPrettyHotkeyStringByToken(local.token) : undefined });
+
+  const resolvedShortcut = createMemo(() => {
+    if (local.token) return getPrettyHotkeyStringByToken(local.token);
+    return local.shortcut;
+  });
 
   const hotkey = createMemo(() => {
-    if (!tokenShortcut()) { return { key: '', modifiers: [] }; }
-    return breakApartHotkeyString(tokenShortcut() ?? '');
+    const s = resolvedShortcut();
+    if (!s) { return { key: '', modifiers: [] }; }
+    return breakApartHotkeyString(s);
   });
 
   function normalizedKey(){
@@ -145,7 +152,6 @@ export function Hotkey(props: HotkeyProps){
         : key.map((k) => k.toUpperCase());
   };
 
-  // Don't render anything if there are no modifiers and no key
   function hasContent(){
     const h = hotkey();
     const key = normalizedKey();

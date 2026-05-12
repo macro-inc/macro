@@ -151,7 +151,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       variant="base"
       size="icon-sm"
       label="Stop generating"
-      hotkeyToken={TOKENS.chat.stop}
+      hotkey={TOKENS.chat.stop}
       onClick={() => props.onStop?.()}
     >
       <Stop />

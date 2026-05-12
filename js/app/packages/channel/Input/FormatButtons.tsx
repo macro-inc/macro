@@ -107,7 +107,7 @@ function FormatButton(props: FormatButtonProps) {
       aria-label={props.label}
       title={props.label}
       label={props.label}
-      hotkeyToken={props.hotkeyToken}
+      hotkey={props.hotkeyToken}
       variant="ghost"
       size="icon-sm"
       class={props.active ? 'bg-active text-ink' : ''}

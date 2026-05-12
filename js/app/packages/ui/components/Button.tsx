@@ -1,6 +1,6 @@
 import { Button as KobalteButton, type ButtonRootProps } from '@kobalte/core/button';
 import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
-import { Tooltip, type HotkeySequenceStep } from './Tooltip';
+import { Tooltip } from './Tooltip';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { Placement } from '@floating-ui/dom';
 import { cn } from '../utils/classname';
@@ -14,8 +14,7 @@ export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> &
   children?: JSX.Element;
   tooltip?: string;
   label?: string;
-  hotkeyToken?: HotkeyToken;
-  hotkeySequence?: HotkeySequenceStep[];
+  hotkey?: HotkeyToken | HotkeyToken[];
   size?: ButtonSize;
   class?: string;
 };
@@ -43,8 +42,7 @@ const sizeStyles: Record<ButtonSize, string> = {
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
     'tooltipPlacement',
-    'hotkeySequence',
-    'hotkeyToken',
+    'hotkey',
     'children',
     'tooltip',
     'variant',
@@ -80,8 +78,7 @@ export const Button = (props: ButtonProps) => {
       <Show when={tooltipLabel() !== undefined ? tooltipLabel() : false} fallback={button()}>
         {(label) => (
           <Tooltip
-            hotkeySequence={local.hotkeySequence}
-            hotkeyToken={local.hotkeyToken}
+            hotkey={local.hotkey}
             placement={placement()}
             label={label()}
           >

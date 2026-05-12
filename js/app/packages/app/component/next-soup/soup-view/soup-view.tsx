@@ -359,7 +359,7 @@ export const SoupView = (props: SoupViewProps) => {
                   )}
                   collapsed={() => (
                     <Show when={!narrowSearchExpanded()}>
-                      <Tooltip label="Search" hotkeyToken={TOKENS.soup.openSearch}>
+                      <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                         <Button
                           variant="ghost"
                           class="p-1 rounded-xs"

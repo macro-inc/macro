@@ -32,7 +32,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       placement="bottom-start"
       gutter={4}
     >
-      <Tooltip label="Sort" hotkeyToken={TOKENS.soup.sort}>
+      <Tooltip label="Sort" hotkey={TOKENS.soup.sort}>
         <Dropdown.Trigger>
           <SortIcon />
           <span>Sort</span>

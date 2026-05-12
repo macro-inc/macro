@@ -1,5 +1,4 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import type { HotkeySequenceStep } from '@ui';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { Entity, type EntityData } from '@entity';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
@@ -12,6 +11,7 @@ import {
 import { cn, Hotkey } from '@ui';
 import { createEffect, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import type { DisplayHotkeyStep } from './types';
 import {
   type CommandMenuItem,
   isCommandItem,
@@ -47,7 +47,7 @@ function CommandItemHotkey(props: { item: CommandMenuItem }) {
     Boolean(shortcut()) ||
     Boolean(sequence()?.length);
 
-  const StepHotkey = (step: HotkeySequenceStep) => (
+  const StepHotkey = (step: DisplayHotkeyStep) => (
     <div class="p-2 py-0.5 border border-edge-muted rounded-xs">
       <Hotkey
         token={step.token}

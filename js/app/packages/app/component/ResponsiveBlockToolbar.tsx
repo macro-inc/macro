@@ -41,7 +41,7 @@ export function ToolButton(props: { tool: BlockTool }) {
     <Button
       onClick={props.tool.action}
       label={label()}
-      hotkeyToken={props.tool.hotkeyToken}
+      hotkey={props.tool.hotkeyToken}
       class={cn(
         'px-1',
         props.tool.isActive?.() &&

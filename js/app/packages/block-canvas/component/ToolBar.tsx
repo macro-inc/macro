@@ -179,7 +179,7 @@ export function ToolBar() {
             variant={activeTool() === Tools.Grab ? 'active' : 'ghost'}
             size="icon-md"
             label="Hand tool"
-            hotkeyToken={TOKENS.canvas.handTool}
+            hotkey={TOKENS.canvas.handTool}
             onClick={() => {
               toolManager.setSelectedTool(Tools.Grab);
             }}
@@ -196,7 +196,7 @@ export function ToolBar() {
               }
               size="icon-md"
               label="Zoom"
-              hotkeyToken={TOKENS.canvas.zoomInTool}
+              hotkey={TOKENS.canvas.zoomInTool}
               /* scuffed: previously also showed a second row
                  "Zoom out — hold ${IS_MAC ? 'option' : 'alt'}"
                  but multi-row tooltips were dropped. */
@@ -219,7 +219,7 @@ export function ToolBar() {
               }
               size="icon-md"
               label="Move"
-              hotkeyToken={TOKENS.canvas.selectTool}
+              hotkey={TOKENS.canvas.selectTool}
               onClick={() => {
                 toolManager.setSelectedTool(Tools.Select);
               }}
@@ -234,7 +234,7 @@ export function ToolBar() {
               variant={activeTool() === Tools.Shape ? 'active' : 'ghost'}
               size="icon-md"
               label="Rectangle"
-              hotkeyToken={TOKENS.canvas.shapeTool}
+              hotkey={TOKENS.canvas.shapeTool}
               onClick={() => {
                 toolManager.setSelectedTool(Tools.Shape);
               }}
@@ -246,7 +246,7 @@ export function ToolBar() {
               variant={activeTool() === Tools.Pencil ? 'active' : 'ghost'}
               size="icon-md"
               label="Pencil"
-              hotkeyToken={TOKENS.canvas.pencilTool}
+              hotkey={TOKENS.canvas.pencilTool}
               onClick={() => {
                 toolManager.setSelectedTool(Tools.Pencil);
               }}
@@ -258,7 +258,7 @@ export function ToolBar() {
               variant={activeTool() === Tools.Line ? 'active' : 'ghost'}
               size="icon-md"
               label="Connector"
-              hotkeyToken={TOKENS.canvas.lineTool}
+              hotkey={TOKENS.canvas.lineTool}
               onClick={() => {
                 toolManager.setSelectedTool(Tools.Line);
               }}
@@ -276,7 +276,7 @@ export function ToolBar() {
                 }
                 size="icon-md"
                 label="Text"
-                hotkeyToken={TOKENS.canvas.textTool}
+                hotkey={TOKENS.canvas.textTool}
                 onClick={() => {
                   toolManager.setSelectedTool(Tools.Text);
                 }}

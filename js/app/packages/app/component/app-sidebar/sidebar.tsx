@@ -392,7 +392,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       variant="ghost"
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
-      hotkeyToken={props.isSlim() ? props.hotkeyToken : undefined}
+      hotkey={props.isSlim() ? props.hotkeyToken : undefined}
       onClick={props.onClick}
       disabled={isDisabled()}
       onMouseEnter={() => setHovering(true)}
@@ -549,7 +549,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             onMouseEnter={() => setSidebarBtnHovering(true)}
             onMouseLeave={() => setSidebarBtnHovering(false)}
             label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
-            hotkeyToken={TOKENS.global.toggleSidebar}
+            hotkey={TOKENS.global.toggleSidebar}
           >
             <AnimatedSidebarIcon triggerAnimation={sidebarBtnHovering()} />
           </Button>
@@ -731,13 +731,13 @@ const SidebarLink = (props: SidebarLinkProps) => {
           label={
             props.sidebarState === 'slim' ? `Go to ${props.label}` : undefined
           }
-          hotkeySequence={
+          hotkey={
             props.sidebarState === 'slim'
               ? props.standaloneHotkey
-                ? [{ token: TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }]
+                ? TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
                 : [
-                    { token: TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ },
-                    { token: TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ },
+                    TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */,
+                    TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */,
                   ]
               : undefined
           }

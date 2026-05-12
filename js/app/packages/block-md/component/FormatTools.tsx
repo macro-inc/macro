@@ -193,7 +193,7 @@ const InlineFormatButton = (props: {
   return (
     <Button
       label={props.format}
-      hotkeyToken={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */}
+      hotkey={TOKENS.global.commandMenu}
       size="icon-sm"
       variant="ghost"
       classList={{
@@ -221,7 +221,7 @@ const InlineFormatMenuItem = (props: {
       <span class="capitalize">{props.format}</span>
       <Show when={InlineShortcuts[props.format]}>
         {(_shortcut) => {
-          return <Hotkey token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} />;
+          return <Hotkey token={TOKENS.global.commandMenu} />;
         }}
       </Show>
     </div>

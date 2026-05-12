@@ -70,7 +70,7 @@ export const SoupFiltersBar = () => {
           isOptionActive={isOptionActive}
         />
         <div class="flex-1" />
-        <Tooltip label="Preview" hotkeyToken={TOKENS.unifiedList.togglePreview}>
+        <Tooltip label="Preview" hotkey={TOKENS.unifiedList.togglePreview}>
           <Button variant="ghost" size="icon-sm" onClick={togglePreview}>
             <EyeIcon />
           </Button>

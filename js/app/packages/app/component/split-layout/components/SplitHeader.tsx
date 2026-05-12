@@ -32,7 +32,7 @@ function SplitBackButton() {
     <Button
       class="p-1"
       label="Go Back"
-      hotkeyToken={TOKENS.split.go.back}
+      hotkey={TOKENS.split.go.back}
       disabled={!context.handle.canGoBack()}
       onClick={context.handle.goBack}
     >
@@ -47,7 +47,7 @@ function SplitForwardButton() {
   return (
     <Button
       label="Go Forward"
-      hotkeyToken={TOKENS.split.go.forward}
+      hotkey={TOKENS.split.go.forward}
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
       class={cn(
@@ -71,7 +71,7 @@ function SplitSpotlightButton() {
         label={
           context.handle.isSpotLight() ? 'Minimize Split' : 'Spotlight Split'
         }
-        hotkeyToken={TOKENS.window.spotlight.toggle}
+        hotkey={TOKENS.window.spotlight.toggle}
         onClick={() => context.handle.toggleSpotlight()}
       >
         {context.handle.isSpotLight() ? (
@@ -100,7 +100,7 @@ function SplitCloseButton() {
       <Button
         class="p-1"
         label={label()}
-        hotkeyToken={TOKENS.split.close}
+        hotkey={TOKENS.split.close}
         onClick={context.handle.close}
       >
         <CloseIcon class="size-4" />
@@ -131,7 +131,7 @@ function _SplitPreviewToggle() {
             'bg-accent/20 text-accent': preview(),
           }}
           label={!preview() ? 'Split View (Preview)' : 'Full View (List)'}
-          hotkeyToken={TOKENS.unifiedList.togglePreview}
+          hotkey={TOKENS.unifiedList.togglePreview}
           tabIndex={-1}
           onClick={() => setPreview((prev) => !prev)}
         >

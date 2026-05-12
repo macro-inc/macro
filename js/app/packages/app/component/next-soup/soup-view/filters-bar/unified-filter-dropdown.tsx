@@ -797,7 +797,7 @@ export const UnifiedFilterDropdown = () => {
   return (
     <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
       <Dropdown open={open()} onOpenChange={setOpen}>
-        <Tooltip label="Filter" hotkeyToken={TOKENS.soup.filter}>
+        <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
           <Dropdown.Trigger>
             <SlidersHorizontalIcon />
             <span>Filter</span>

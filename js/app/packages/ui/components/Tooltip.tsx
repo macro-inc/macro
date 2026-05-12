@@ -6,13 +6,11 @@ import type { ParentProps } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { Surface } from '@ui';
 
-export type HotkeySequenceStep = {
-  token?: HotkeyToken;
-};
-
 export type TooltipProps = ParentProps<{
-  hotkeySequence?: HotkeySequenceStep[];
-  hotkeyToken?: HotkeyToken;
+  /**
+   * A single hotkey token, or a sequence of tokens (rendered as "X then Y").
+   */
+  hotkey?: HotkeyToken | HotkeyToken[];
   placement?: Placement;
   as?: 'div' | 'span';
   label: string;
@@ -20,15 +18,20 @@ export type TooltipProps = ParentProps<{
 
 /**
  * @example
- * <Tooltip label="Zoom" hotkeyToken={TOKENS.canvas.zoomInTool}>
+ * <Tooltip label="Zoom" hotkey={TOKENS.canvas.zoomInTool}>
  *   <Button>Zoom</Button>
+ * </Tooltip>
+ *
+ * @example
+ * <Tooltip label="Open command menu" hotkey={[TOKENS.global.commandMenu, TOKENS.global.commandMenu]}>
+ *   <Button>Command</Button>
  * </Tooltip>
  */
 export function Tooltip(props: TooltipProps) {
-  const steps = (): HotkeySequenceStep[] => {
-    if (props.hotkeySequence?.length) { return props.hotkeySequence; }
-    if (props.hotkeyToken) { return [{ token: props.hotkeyToken }]; }
-    return [];
+  const tokens = (): HotkeyToken[] => {
+    const h = props.hotkey;
+    if (!h) return [];
+    return Array.isArray(h) ? h : [h];
   };
 
   return (
@@ -55,16 +58,16 @@ export function Tooltip(props: TooltipProps) {
           >
             <div class="flex flex-row items-center gap-2">
               <div class="text-xs capitalize">{props.label}</div>
-              <Show when={steps().length > 0}>
+              <Show when={tokens().length > 0}>
                 <div class="flex items-center gap-1 ml-auto">
-                  <For each={steps()}>
-                    {(step, ndx) => (
+                  <For each={tokens()}>
+                    {(token, ndx) => (
                       <>
                         <Hotkey
-                          token={step.token}
+                          token={token}
                           theme="subtle"
                         />
-                        <Show when={ndx() < steps().length - 1}>
+                        <Show when={ndx() < tokens().length - 1}>
                           <span class="text-ink-extra-muted">then</span>
                         </Show>
                       </>
