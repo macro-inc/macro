@@ -18,8 +18,6 @@ pub struct AppContext {
 impl AppContext {
     /// Build the shared finalizer context from environment variables.
     pub async fn from_env() -> Result<Self, anyhow::Error> {
-        let document_storage_bucket = std::env::var("DOCUMENT_STORAGE_BUCKET")
-            .context("DOCUMENT_STORAGE_BUCKET must be provided")?;
         let database_url =
             std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
         let internal_api_secret = std::env::var("INTERNAL_API_SECRET_KEY")
@@ -40,8 +38,7 @@ impl AppContext {
         let repo = PgDocumentRepo::new(db_pool);
         let document_port = PgDocumentUploadPort::new(repo);
         let object_reader = S3DocumentObjectReader::new(macro_aws_config::s3_client().await);
-        let finalizer =
-            DocumentUploadFinalizer::new(document_storage_bucket, document_port, object_reader);
+        let finalizer = DocumentUploadFinalizer::new(document_port, object_reader);
 
         Ok(Self {
             finalizer,

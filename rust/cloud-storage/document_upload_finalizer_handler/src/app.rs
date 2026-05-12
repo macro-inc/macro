@@ -17,16 +17,14 @@ pub struct ObjectCreated {
 
 /// Application use case for finalizing document uploads from object-created events.
 pub struct DocumentUploadFinalizer<P, O> {
-    document_storage_bucket: String,
     document_port: P,
     object_reader: O,
 }
 
 impl<P, O> DocumentUploadFinalizer<P, O> {
     /// Construct the upload finalization use case.
-    pub fn new(document_storage_bucket: String, document_port: P, object_reader: O) -> Self {
+    pub fn new(document_port: P, object_reader: O) -> Self {
         Self {
-            document_storage_bucket,
             document_port,
             object_reader,
         }
@@ -48,16 +46,6 @@ where
     where
         M: MarkdownInitializationPort,
     {
-        if event.bucket != self.document_storage_bucket {
-            tracing::trace!(
-                bucket=%event.bucket,
-                expected=%self.document_storage_bucket,
-                key=%event.key,
-                "skipping S3 event for another bucket"
-            );
-            return Ok(());
-        }
-
         let document_key = match DocumentKey::from_s3_key(&event.key) {
             Ok(document_key) => document_key,
             Err(error) => {

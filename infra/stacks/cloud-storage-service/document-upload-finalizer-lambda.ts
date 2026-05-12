@@ -10,7 +10,6 @@ const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${ZIP_FOLDER_NAME}/boo
 
 export type DocumentUploadFinalizerLambdaEnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
-  DOCUMENT_STORAGE_BUCKET: pulumi.Output<string> | string;
   INTERNAL_API_SECRET_KEY: pulumi.Output<string> | string;
   SYNC_SERVICE_AUTH_KEY: pulumi.Output<string> | string;
   LEXICAL_SERVICE_URL: pulumi.Output<string> | string;

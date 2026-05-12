@@ -700,7 +700,6 @@ export const docxUnzipHandlerName = docxUnzipHandler.lambda.name;
 // ------------------------------------------- Document Upload Finalizer -------------------------------------------
 const documentUploadFinalizerEnvVars: DocumentUploadFinalizerLambdaEnvVars = {
   DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
-  DOCUMENT_STORAGE_BUCKET: pulumi.interpolate`${documentStorageBucketId}`,
   INTERNAL_API_SECRET_KEY: pulumi.interpolate`${internalApiSecretValue}`,
   SYNC_SERVICE_AUTH_KEY: pulumi.interpolate`${syncServiceAuthKeyValue}`,
   LEXICAL_SERVICE_URL: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
