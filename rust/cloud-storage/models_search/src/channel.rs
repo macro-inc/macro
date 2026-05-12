@@ -115,6 +115,8 @@ pub struct ChannelSearchResponse {
     /// Base64-encoded cursor for the next page; `None` when exhausted.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+    /// Total number of matching channel messages across all pages.
+    pub total_count: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, JsonSchema)]
