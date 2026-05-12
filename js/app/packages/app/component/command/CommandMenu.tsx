@@ -261,7 +261,6 @@ export function CommandMenuInner(props: {
     CommandState.setQuery('');
   }
 
-
   const navDownHotkey = registerHotkey({
     hotkey: ['arrowdown', 'ctrl+j'],
     scopeId: hotkeyScope,
@@ -671,10 +670,7 @@ function VirtualizedCommandList(props: {
   );
 }
 
-function HotkeyHint(props: {
-  command: RegisterHotkeyReturn;
-  label: string;
-}) {
+function HotkeyHint(props: { command: RegisterHotkeyReturn; label: string }) {
   return (
     <span class="flex items-center gap-1">
       <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
