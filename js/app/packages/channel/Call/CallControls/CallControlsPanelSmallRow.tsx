@@ -1,16 +1,18 @@
+import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { DropdownMenuContent, MENU_ITEM_CLASS } from '@core/component/Menu';
 import CheckIcon from '@icon/bold/check-bold.svg';
+import Info from '@icon/regular/info.svg';
 import Microphone from '@icon/regular/microphone.svg';
 import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
 import Screencast from '@icon/regular/screencast.svg';
-import Users from '@icon/regular/users.svg';
 import VideoCamera from '@icon/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
 import VideoConference from '@icon/regular/video-conference.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
+import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
 import { useCallContext } from '../CallContext';
 
@@ -56,8 +58,7 @@ export function CallControlsPanelSmallRow(
           disabled={isConnecting()}
           class={cn(
             'flex items-center justify-center size-4 shrink-0 rounded-md border-0 bg-transparent transition-colors',
-            isConnecting() &&
-              'opacity-50 pointer-events-none cursor-not-allowed',
+            isConnecting() && 'opacity-50 pointer-events-none',
             !isConnecting() &&
               (!callCtx.isAudioMuted() ||
                 !callCtx.isVideoMuted() ||
@@ -241,12 +242,27 @@ export function CallControlsPanelSmallRow(
               onSelect={() => void handleToggleShareWithTeam()}
             >
               <div class="flex min-w-0 flex-1 items-center gap-2">
-                <Users class="size-4 shrink-0" />
+                <ShareNetwork class="size-4 shrink-0" />
                 <span class="min-w-0 flex-1">
                   {callCtx.isSharedWithTeam()
                     ? 'Shared with team'
                     : 'Share with team'}
                 </span>
+                <div class="ml-auto flex items-center gap-1.5 shrink-0">
+                  <MiniToggleSwitch
+                    checked={callCtx.isSharedWithTeam()}
+                    size="SM"
+                    compact
+                    activeTrackClass="bg-ink-muted"
+                    switchRootClass="pointer-events-none"
+                  />
+                  <Tooltip
+                    placement="left"
+                    label="When on, all team members can view and search this call's transcript and AI summary."
+                  >
+                    <Info class="size-3 text-ink-subtle" />
+                  </Tooltip>
+                </div>
               </div>
             </DropdownMenu.Item>
 

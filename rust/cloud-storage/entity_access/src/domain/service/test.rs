@@ -4,7 +4,7 @@
 use super::*;
 use crate::domain::models::{
     AdminParticipantRole, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
-    MemberParticipantRole, OwnerParticipantRole, ParticipantRole, ViewAccessLevel,
+    MemberParticipantRole, OwnerParticipantRole, ParticipantRole, UserTeamInfo, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
@@ -27,6 +27,7 @@ struct MockRepo {
     thread_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     channel_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
+    user_team: Arc<Mutex<Option<UserTeamInfo>>>,
 }
 
 impl MockRepo {
@@ -45,6 +46,7 @@ impl MockRepo {
             thread_users: Arc::new(Mutex::new(vec![])),
             channel_users: Arc::new(Mutex::new(vec![])),
             call_channel: Arc::new(Mutex::new(None)),
+            user_team: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -196,6 +198,13 @@ impl AccessRepository for MockRepo {
         _channel_id: &Uuid,
     ) -> Result<Option<CallChannelInfo>, AccessError> {
         Ok(self.call_channel.lock().await.clone())
+    }
+
+    async fn get_user_team(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Option<UserTeamInfo>, AccessError> {
+        Ok(*self.user_team.lock().await)
     }
 }
 

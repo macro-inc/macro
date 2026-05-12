@@ -7,6 +7,9 @@ use std::{
     },
 };
 
+use entity_access::domain::models::{
+    AdminTeamRole, EntityAccessReceipt, EntityType, OwnerTeamRole, RequiredPermission,
+};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use notification::domain::{
     models::{Notification, NotificationResult, request::SendNotificationRequest},
@@ -16,6 +19,17 @@ use roles_and_permissions::domain::{
     model::{PermissionId, RoleId, UserRolesAndPermissionsError},
     port::UserRolesAndPermissionsService,
 };
+
+fn test_team_receipt<T: RequiredPermission>(
+    team_id: uuid::Uuid,
+    user_id: &MacroUserIdStr<'_>,
+) -> EntityAccessReceipt<T> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user_id.clone().into_owned(),
+        &team_id.to_string(),
+        EntityType::Team,
+    )
+}
 
 use super::*;
 use crate::domain::{
@@ -783,8 +797,9 @@ async fn test_invite_marks_sent_only_for_successful_notifications() {
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
 
+    let receipt = test_team_receipt::<OwnerTeamRole>(team_id, &invited_by);
     let result = service
-        .invite_users_to_team(&team_id, &invited_by, invites)
+        .invite_users_to_team(receipt, invites)
         .await
         .unwrap();
 
@@ -825,8 +840,9 @@ async fn test_invite_does_not_call_mark_sent_when_all_notifications_fail() {
     )];
     let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
 
+    let receipt = test_team_receipt::<OwnerTeamRole>(team_id, &invited_by);
     service
-        .invite_users_to_team(&team_id, &invited_by, invites)
+        .invite_users_to_team(receipt, invites)
         .await
         .unwrap();
 
@@ -871,8 +887,9 @@ async fn test_invite_marks_all_sent_when_all_notifications_succeed() {
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
 
+    let receipt = test_team_receipt::<OwnerTeamRole>(team_id, &invited_by);
     service
-        .invite_users_to_team(&team_id, &invited_by, invites)
+        .invite_users_to_team(receipt, invites)
         .await
         .unwrap();
 
@@ -928,7 +945,11 @@ async fn test_patch_team_rejects_owner_role_assignment() {
         }]),
     };
 
-    let err = service.patch_team(&team_id, &req).await.err().unwrap();
+    let receipt = test_team_receipt::<AdminTeamRole>(
+        team_id,
+        &MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap(),
+    );
+    let err = service.patch_team(receipt, &req).await.err().unwrap();
     assert!(matches!(err, TeamError::BadRequest(_)));
     assert!(role_calls.lock().unwrap().is_empty());
     assert!(name_calls.lock().unwrap().is_empty());
@@ -948,12 +969,13 @@ async fn test_patch_team_rejects_owner_downgrade() {
     let req = PatchTeamRequest {
         name: None,
         user_role_updates: Some(vec![PatchTeamUserRole {
-            team_user_id: owner_id,
+            team_user_id: owner_id.clone(),
             role: TeamRole::Member,
         }]),
     };
 
-    let err = service.patch_team(&team_id, &req).await.err().unwrap();
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
+    let err = service.patch_team(receipt, &req).await.err().unwrap();
     assert!(matches!(err, TeamError::BadRequest(_)));
     assert!(role_calls.lock().unwrap().is_empty());
     assert!(name_calls.lock().unwrap().is_empty());
@@ -972,7 +994,7 @@ async fn test_patch_team_applies_role_updates_and_name() {
     let admin_id = MacroUserIdStr::parse_from_str("macro|admin@example.com")
         .unwrap()
         .into_owned();
-    let team = Team::new(team_id, "Old Name".to_string(), owner_id);
+    let team = Team::new(team_id, "Old Name".to_string(), owner_id.clone());
 
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
@@ -990,7 +1012,8 @@ async fn test_patch_team_applies_role_updates_and_name() {
         ]),
     };
 
-    service.patch_team(&team_id, &req).await.unwrap();
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
+    service.patch_team(receipt, &req).await.unwrap();
 
     let role_calls = role_calls.lock().unwrap();
     assert_eq!(role_calls.len(), 2);
@@ -1015,7 +1038,7 @@ async fn test_patch_team_empty_role_updates() {
     let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com")
         .unwrap()
         .into_owned();
-    let team = Team::new(team_id, "Old Name".to_string(), owner_id);
+    let team = Team::new(team_id, "Old Name".to_string(), owner_id.clone());
 
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
@@ -1024,7 +1047,8 @@ async fn test_patch_team_empty_role_updates() {
         user_role_updates: Some(Vec::new()),
     };
 
-    service.patch_team(&team_id, &req).await.unwrap();
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
+    service.patch_team(receipt, &req).await.unwrap();
 
     assert!(role_calls.lock().unwrap().is_empty());
     let name_calls = name_calls.lock().unwrap();
@@ -1193,8 +1217,9 @@ async fn test_remove_user_from_team_rolls_back_when_decrease_subscription_quanti
             },
         );
 
+    let receipt = test_team_receipt::<OwnerTeamRole>(team_id, &user_id);
     let err = service
-        .remove_user_from_team(&team_id, &user_id)
+        .remove_user_from_team(receipt, &user_id)
         .await
         .err()
         .unwrap();
@@ -1231,8 +1256,9 @@ async fn test_remove_user_from_team_rolls_back_when_get_team_subscription_custom
             },
         );
 
+    let receipt = test_team_receipt::<OwnerTeamRole>(team_id, &user_id);
     let err = service
-        .remove_user_from_team(&team_id, &user_id)
+        .remove_user_from_team(receipt, &user_id)
         .await
         .err()
         .unwrap();

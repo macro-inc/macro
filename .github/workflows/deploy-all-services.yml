@@ -29,6 +29,10 @@ on:
         required: true
       CACHIX_AUTH_TOKEN:
         required: true
+      AWS_ACCESS_KEY_ID:
+        required: false
+      SCCACHE_BUCKET:
+        required: false
 
 # Only run 1 deploy-all workflow at a time per environment
 concurrency:
@@ -51,6 +55,61 @@ jobs:
           echo "matrix=${services}" >> $GITHUB_OUTPUT
           echo "Deploying services: ${services}"
 
+  build-service-binaries:
+    name: Build ${{ matrix.service }} binaries
+    needs: setup
+    if: ${{ needs.setup.outputs.matrix != '[]' }}
+    runs-on: linux-extra-beefy
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        service: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          clean: false
+
+      - name: Configure Cachix
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
+
+      - name: Build prebuilt binaries
+        shell: bash
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          mkdir -p prebuilt
+
+          binaries=$(jq -r --arg service "$SERVICE" '.services[$service].deploy_binaries // [] | @tsv' .github/services-config.json)
+          if [[ -n "$binaries" ]]; then
+            cachix watch-store "$CACHIX_CACHE_NAME" &
+            cachix_pid=$!
+            trap 'kill "$cachix_pid" || true' EXIT
+
+            nix build ".#deploy-service-binaries-${SERVICE}"
+            cp -r result/bin/* prebuilt/
+            mkdir -p prebuilt/nix-store
+            while IFS= read -r store_path; do
+              cp -a "$store_path" prebuilt/nix-store/
+            done < <(nix-store -qR result)
+          else
+            echo "No deploy binaries configured for $SERVICE; uploading an empty artifact"
+          fi
+
+          touch prebuilt/.keep
+          tar -C prebuilt -czf prebuilt-binaries.tar.gz .
+
+      - name: Upload prebuilt binaries
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cloud-storage-service-binaries-${{ matrix.service }}-${{ github.sha }}
+          path: prebuilt-binaries.tar.gz
+          retention-days: 7
+
   build-lambda-artifacts:
     name: Build ${{ matrix.service }} Lambda artifacts
     needs: setup
@@ -70,6 +129,7 @@ jobs:
         uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
 
       - name: Check Lambda config
         id: check-lambdas
@@ -83,6 +143,8 @@ jobs:
         if: ${{ steps.check-lambdas.outputs.has_lambdas == 'true' }}
         env:
           SERVICE: ${{ matrix.service }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: .github/scripts/build-cloud-storage-lambdas.sh
 
       - name: Upload Lambda artifacts
@@ -95,7 +157,7 @@ jobs:
 
   deploy-services:
     name: Deploy ${{ matrix.service }}
-    needs: [setup, build-lambda-artifacts]
+    needs: [setup, build-service-binaries, build-lambda-artifacts]
     if: ${{ needs.setup.outputs.matrix != '[]' }}
     runs-on:
       [
@@ -125,7 +187,9 @@ jobs:
         env:
           SERVICE: ${{ matrix.service }}
         run: |
+          has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' .github/services-config.json)
           has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
+          echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
           echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
 
       - name: Deploy ${{ matrix.service }}
@@ -136,6 +200,7 @@ jobs:
           aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
+          prebuilt-binaries-artifact: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && format('cloud-storage-service-binaries-{0}-{1}', matrix.service, github.sha) || '' }}
           lambda-artifacts: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && format('cloud-storage-lambdas-{0}-{1}', matrix.service, github.sha) || '' }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}
@@ -143,7 +208,7 @@ jobs:
   deployment-summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
-    needs: [setup, build-lambda-artifacts, deploy-services]
+    needs: [setup, build-service-binaries, build-lambda-artifacts, deploy-services]
     if: always()
     steps:
       - name: Check deployment results
@@ -153,6 +218,9 @@ jobs:
             exit 1
           elif [[ "${{ needs.setup.result }}" == "skipped" ]]; then
             echo "⏭️ Deployment setup was skipped"
+          elif [[ "${{ needs.build-service-binaries.result }}" == "failure" ]]; then
+            echo "❌ One or more service binary builds failed"
+            exit 1
           elif [[ "${{ needs.build-lambda-artifacts.result }}" == "failure" ]]; then
             echo "❌ One or more Lambda artifact builds failed"
             exit 1

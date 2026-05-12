@@ -2,7 +2,7 @@ import type {
   NodeTransformType,
   SelectionData,
 } from '@core/component/LexicalMarkdown/plugins';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+import type { HotkeyToken } from '@core/hotkey/tokens';
 import TextBoldIcon from '@icon/bold/text-b-bold.svg';
 import TextCodeIcon from '@icon/regular/code.svg';
 import ListBulletsIcon from '@icon/regular/list-bullets.svg';
@@ -14,8 +14,6 @@ import TextStrikethroughIcon from '@icon/regular/text-strikethrough.svg';
 import { Button } from '@ui';
 import type { TextFormatType } from 'lexical';
 import type { Accessor, JSX } from 'solid-js';
-
-type HotkeyToken = Parameters<typeof LabelAndHotKey>[0]['hotkeyToken'];
 
 type FormatButtonsProps = {
   selectionState: Accessor<SelectionData | undefined>;
@@ -108,9 +106,8 @@ function FormatButton(props: FormatButtonProps) {
     <Button
       aria-label={props.label}
       title={props.label}
-      tooltip={
-        <LabelAndHotKey label={props.label} hotkeyToken={props.hotkeyToken} />
-      }
+      label={props.label}
+      hotkey={props.hotkeyToken}
       variant="ghost"
       size="icon-sm"
       class={props.active ? 'bg-active text-ink' : ''}

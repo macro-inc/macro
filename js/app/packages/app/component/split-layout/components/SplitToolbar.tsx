@@ -46,20 +46,20 @@ export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
     <div
       class={cn(
         'relative w-full flex items-center justify-between shrink-0',
-        hasContent() && 'min-h-10.25 border-b border-edge-muted',
+        hasContent() && 'min-h-10 border-b border-edge-muted',
         preview() && 'hidden'
       )}
       data-split-toolbar
       ref={props.ref}
     >
       <div
-        class="flex-1 h-full flex items-center gap-0.5 px-1"
+        class="flex-1 h-full flex items-center gap-0.5 px-2"
         ref={(ref) => {
           panel.layoutRefs.toolbarLeft = ref;
         }}
       />
       <div
-        class="flex h-full items-center gap-0.5 px-1.25"
+        class="flex h-full items-center gap-0.5 px-2"
         ref={(ref) => {
           panel.layoutRefs.toolbarRight = ref;
         }}

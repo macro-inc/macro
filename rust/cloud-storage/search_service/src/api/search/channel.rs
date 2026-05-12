@@ -245,7 +245,11 @@ pub async fn handler(
         sort_mode,
     };
 
-    let (hits, next_cursor) = ctx
+    let opensearch_client::search::channels::ChannelSearchResults {
+        hits,
+        next_cursor,
+        total: total_count,
+    } = ctx
         .opensearch_client
         .search_channel(args)
         .await
@@ -261,6 +265,7 @@ pub async fn handler(
     Ok(Json(ChannelSearchResponse {
         results,
         next_cursor,
+        total_count,
     }))
 }
 

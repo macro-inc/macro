@@ -14,16 +14,16 @@ import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import CaretRightIcon from '@icon/regular/caret-right.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useContacts } from '@queries/contacts/contacts';
-import { cn, Dropdown, Layer } from '@ui';
+import { cn, Dropdown, Layer, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -786,6 +786,7 @@ export const UnifiedFilterDropdown = () => {
     hotkey: 'f',
     scopeId: panel.splitHotkeyScope,
     description: 'Open filter menu',
+    hotkeyToken: TOKENS.soup.filter,
     keyDownHandler: () => {
       setOpen(true);
       return true;
@@ -795,7 +796,7 @@ export const UnifiedFilterDropdown = () => {
   return (
     <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
       <Dropdown open={open()} onOpenChange={setOpen}>
-        <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="F" />}>
+        <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
           <Dropdown.Trigger>
             <SlidersHorizontalIcon />
             <span>Filter</span>

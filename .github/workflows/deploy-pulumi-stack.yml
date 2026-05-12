@@ -47,5 +47,6 @@ jobs:
           pulumi-service-name: ${{ inputs.pulumi-service-name }} # TODO: we should have validation that this is a valid pulumi service name before we allow it to be set here
           cloud-storage-service-name: ${{ inputs.cloud-storage-service-name }}
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}

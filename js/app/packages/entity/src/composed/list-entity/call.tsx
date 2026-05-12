@@ -2,11 +2,11 @@ import { formatCallDuration } from '@block-call/utils';
 import { UserGroup } from '@core/component/Properties/component/propertyValue/UserGroup';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
 import type { EntityReference } from '@core/component/Properties/types';
-import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { matches } from '@core/util/match';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import { HoverCard } from '@ui';
 import { For, Show } from 'solid-js';
 import { AttendanceBadge } from '../../components/Badges';
 import { CallRecordName } from '../../components/CallRecordName';
@@ -35,7 +35,7 @@ function ParticipantItem(props: { userId: string }) {
 
 function ParticipantsTooltip(props: { participantIds: string[] }) {
   return (
-    <div class="p-2 border border-edge-muted bg-panel min-w-48 max-w-72">
+    <div class="min-w-48 max-w-72">
       <div class="flex items-center gap-2 text-ink-muted border-b border-edge-muted/50 pb-1.5 mb-1.5">
         <UserCircleIcon class="size-3.5 text-ink-muted" />
         <span class="text-xs">Participants</span>
@@ -57,13 +57,14 @@ export function CallParticipants(props: { participantIds: string[] }) {
     }));
   return (
     <Show when={props.participantIds.length > 0}>
-      <Tooltip
-        unstyled
-        tooltip={<ParticipantsTooltip participantIds={props.participantIds} />}
-        class="flex items-center"
-      >
-        <UserGroup entities={entities()} maxUsers={2} />
-      </Tooltip>
+      <HoverCard>
+        <HoverCard.Trigger>
+          <UserGroup entities={entities()} maxUsers={2} />
+        </HoverCard.Trigger>
+        <HoverCard.Content>
+          <ParticipantsTooltip participantIds={props.participantIds} />
+        </HoverCard.Content>
+      </HoverCard>
     </Show>
   );
 }

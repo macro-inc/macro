@@ -5,7 +5,7 @@ import type { Model, ToolSet } from '@core/component/AI/types';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -16,7 +16,7 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button, cn, Hotkey, Surface } from '@ui';
+import { Button, cn, Hotkey, Surface, Tooltip } from '@ui';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
@@ -149,7 +149,8 @@ export function ChatInput(props: ChatInputComponentProps) {
     <Button
       variant="base"
       size="icon-sm"
-      tooltip={<LabelAndHotKey label="Stop generating" shortcut="ctrl+c" />}
+      label="Stop generating"
+      hotkey={TOKENS.chat.stop}
       onClick={() => props.onStop?.()}
     >
       <Stop />
@@ -164,10 +165,10 @@ export function ChatInput(props: ChatInputComponentProps) {
           fallback={
             <div class="flex flex-row items-center gap-3 text-xs text-ink-disabled opacity-70 shrink-0">
               {props.extraRightControls?.()}
-              <Tooltip tooltip="Enter to send" placement="top">
+              <Tooltip label="Enter to send" placement="top">
                 <div class="flex items-center">
                   <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1 py-0.5">
-                    <Hotkey shortcut="Enter" />
+                    <Hotkey token={TOKENS.chat.send} />
                   </div>
                 </div>
               </Tooltip>

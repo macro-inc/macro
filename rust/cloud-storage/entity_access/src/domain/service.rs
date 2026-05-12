@@ -6,7 +6,7 @@ use std::str::FromStr;
 use crate::domain::{
     models::{
         AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, Entity, EntityAccessAuth,
-        EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
+        EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission, UserTeamInfo,
     },
     ports::{AccessRepository, EntityAccessService},
 };
@@ -270,6 +270,14 @@ where
         channel_id: &Uuid,
     ) -> Result<Option<CallChannelInfo>, AccessError> {
         self.repo.get_call_channel_by_channel_id(channel_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_team(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Option<UserTeamInfo>, AccessError> {
+        self.repo.get_user_team(user_id).await
     }
 }
 

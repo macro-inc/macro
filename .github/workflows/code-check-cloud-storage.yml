@@ -177,29 +177,13 @@ jobs:
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
           dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
         with:
           workspaces: rust/cloud-storage
           shared-key: cloud-storage-check
           cache-on-failure: true
           cache-targets: false
-      - name: Configure sccache S3 backend
-        env:
-          SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.cache/sccache"
-          {
-            echo "SCCACHE_DIR=$HOME/.cache/sccache"
-            echo "SCCACHE_CACHE_SIZE=5G"
-            echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
-            if [ -n "${SCCACHE_BUCKET:-}" ]; then
-              echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
-              echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
-              echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
-            fi
-          } >> "$GITHUB_ENV"
-          sccache --version
       - name: fmt
         run: cd rust/cloud-storage && cargo fmt --check
       - name: clippy
@@ -252,29 +236,13 @@ jobs:
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
           dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
         with:
           workspaces: rust/cloud-storage
           shared-key: cloud-storage-test
           cache-on-failure: true
           cache-targets: false
-      - name: Configure sccache S3 backend
-        env:
-          SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.cache/sccache"
-          {
-            echo "SCCACHE_DIR=$HOME/.cache/sccache"
-            echo "SCCACHE_CACHE_SIZE=5G"
-            echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
-            if [ -n "${SCCACHE_BUCKET:-}" ]; then
-              echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
-              echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
-              echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
-            fi
-          } >> "$GITHUB_ENV"
-          sccache --version
       - name: configure postgres for concurrent tests
         run: |
           postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg16" { print $1; exit }')"

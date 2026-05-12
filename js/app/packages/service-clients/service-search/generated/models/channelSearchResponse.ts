@@ -16,4 +16,6 @@ export interface ChannelSearchResponse {
   next_cursor?: ChannelSearchResponseNextCursor;
   /** List containing results from email threads */
   results: ChannelSearchResponseItemWithMetadata[];
+  /** Total number of matching channel messages across all pages. */
+  total_count: number;
 }

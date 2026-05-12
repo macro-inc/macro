@@ -92,7 +92,7 @@ export function NarrowLayout(props: LayoutProps) {
       >
         <Entity.Slot
           placement="timestamp"
-          class="text-xs font-mono text-right text-ink-extra-muted uppercase font-light"
+          class="text-xs text-right text-ink-extra-muted font-light"
         >
           <Show
             when={!isTaskEntity(props.entity)}

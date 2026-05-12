@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EntityPermissionOneOf } from './entityPermissionOneOf';
+import type { EntityPermissionOneOfFive } from './entityPermissionOneOfFive';
 import type { EntityPermissionOneOfThree } from './entityPermissionOneOfThree';
 
 /**
@@ -15,4 +16,5 @@ Channels use participant roles.
  */
 export type EntityPermission =
   | EntityPermissionOneOf
-  | EntityPermissionOneOfThree;
+  | EntityPermissionOneOfThree
+  | EntityPermissionOneOfFive;
