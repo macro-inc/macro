@@ -699,11 +699,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
                   : 'ring-edge-muted'
               )}
             >
-              <Hotkey
-                token={
-                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-                }
-              />
+              <Hotkey shortcut="shift" />
             </span>
           </span>
           to launch in new split
