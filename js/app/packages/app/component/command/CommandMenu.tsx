@@ -476,7 +476,7 @@ export function CommandMenuInner(props: {
         </Show>
         <input
           type="text"
-          class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder/50"
+          class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder"
           placeholder={isEntityActionMode() ? 'Search actions...' : 'Search...'}
           value={CommandState.query()}
           onInput={(e) => CommandState.setQuery(e.currentTarget.value)}

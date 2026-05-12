@@ -28,7 +28,7 @@ export function AttachmentEntityRow(props: {
           </div>
         )}
       </Show>
-      <span class="text-xs font-mono text-ink-extra-muted uppercase font-light shrink-0">
+      <span class="text-xs text-ink-extra-muted font-light shrink-0">
         <Entity.Timestamp
           entity={props.entity}
           overrideTimeStamp={props.timestamp ?? undefined}

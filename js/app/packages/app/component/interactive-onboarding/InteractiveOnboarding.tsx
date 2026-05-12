@@ -265,11 +265,11 @@ function InteractiveOnboardingInner() {
         )
       : undefined;
 
-  // Detect a return-from-OAuth param synchronously so we can pre-populate
+  // Detect a return-from-external-flow param synchronously so we can pre-populate
   // completed lessons before the first render, avoiding a flash of the first slide.
   // Search the unfiltered LESSONS list — the returning lesson (e.g. about-us) may
   // have been filtered out now that the user is authenticated.
-  const returningLesson = LESSONS.find(
+  const returningLesson = LESSONS.findLast(
     (l) => l.completeOnParam && params.has(l.completeOnParam)
   );
   const returnCompleted = returningLesson
@@ -304,8 +304,8 @@ function InteractiveOnboardingInner() {
   };
 
   // Redirect away if the backend already marks the tutorial as complete.
-  // Skip the redirect when returning from OAuth — we just marked it complete
-  // ourselves and still have remaining lessons to show.
+  // Skip the redirect when returning from external flow — we just marked it
+  // complete ourselves and still have remaining lessons to show.
   createEffect(() => {
     if (tutorialCompleted() && !returningLesson && !testMode) {
       navigateAway();
@@ -426,12 +426,11 @@ function InteractiveOnboardingInner() {
       shellRef.focus();
     }
 
-    // When returning from an external auth flow (e.g. Google OAuth), clean the
-    // return param from the URL and run side-effects. The lessons are already
-    // pre-completed synchronously via returnCompleted above.
-    if (returningLesson) {
+    // When returning from an external flow, clean the return param from the URL
+    // and run side-effects. The lessons are already pre-completed synchronously.
+    if (returningLesson?.completeOnParam) {
       const cleanParams = new URLSearchParams(window.location.search);
-      cleanParams.delete(returningLesson.completeOnParam!);
+      cleanParams.delete(returningLesson.completeOnParam);
       const qs = cleanParams.toString();
       window.history.replaceState(
         null,

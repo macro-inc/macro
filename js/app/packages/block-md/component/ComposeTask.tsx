@@ -653,7 +653,7 @@ export function ComposeTask(props: ComposeTaskProps) {
               }
             }}
             disabled={isCreating()}
-            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50 disabled:opacity-50"
+            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder disabled:opacity-50"
             on:keydown={(e) => {
               if (e.key === 'Escape') {
                 const container = containerRef();

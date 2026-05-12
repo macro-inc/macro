@@ -406,6 +406,7 @@ export const inviteTeamLesson: LessonDefinition = {
   content: InviteTeamContent,
   demo: InviteTeamDemo,
   order: 90,
+  completeOnParam: 'subscriptionSuccess',
   previousLesson: 'team-choice',
   onBack: ({ onboarding }) => {
     onboarding.setTeamName('');

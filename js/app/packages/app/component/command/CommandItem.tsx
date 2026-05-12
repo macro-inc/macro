@@ -108,7 +108,12 @@ function CommandDisplay(props: { item: CommandMenuItem }) {
           {(icon) => <Dynamic component={icon()} class="size-4" />}
         </Show>
       </div>
-      <span class="truncate text-ink">{description()}</span>
+      <Show
+        when={command()?.displayComponent}
+        fallback={<span class="truncate">{description()}</span>}
+      >
+        {(comp) => <Dynamic component={comp()} />}
+      </Show>
     </div>
   );
 }

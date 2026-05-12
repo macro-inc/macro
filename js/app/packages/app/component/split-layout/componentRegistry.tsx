@@ -299,6 +299,10 @@ registerComponent(
 
 if (LOCAL_ONLY) {
   registerComponent(
+    'theme-debug',
+    lazy(() => import('@core/internal/ThemeDebug'))
+  );
+  registerComponent(
     'core',
     lazy(() => import('@core/internal/App'))
   );

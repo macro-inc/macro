@@ -58,7 +58,7 @@ export function ProjectBreadCrumb(props: {
     >
       <FolderIcon class="size-[1em]" />
       <Suspense
-        fallback={<div class="h-1 w-10 bg-ink-placeholder/20 animate-pulse" />}
+        fallback={<div class="h-1 w-10 bg-ink-placeholder animate-pulse" />}
       >
         <Show when={projectQuery.data}>
           {(data) => <Path path={data().path} />}
