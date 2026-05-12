@@ -53,14 +53,18 @@ where
             }
         };
 
-        if !matches!(document_key, DocumentKey::Versioned { .. }) {
-            tracing::trace!(key=%event.key, ?document_key, "skipping non-versioned document storage key");
+        let is_finalizable_key = matches!(
+            document_key,
+            DocumentKey::Versioned { .. } | DocumentKey::ConvertedPdf { .. }
+        );
+        if !is_finalizable_key {
+            tracing::trace!(key=%event.key, ?document_key, "skipping non-finalizable document storage key");
             return Ok(());
         }
 
         let document_id = document_key.document_id().ok_or_else(|| {
             anyhow::anyhow!(
-                "versioned document key did not include a document id: {}",
+                "finalizable document key did not include a document id: {}",
                 event.key
             )
         })?;
@@ -82,10 +86,21 @@ where
         };
 
         let finalizer = UploadedDocumentFinalizer::new(&self.document_port, markdown_initializer);
-        match finalizer
-            .finalize_uploaded_document(&document_context, markdown.as_deref())
-            .await
-        {
+        let result = match document_key {
+            DocumentKey::ConvertedPdf { .. } => {
+                finalizer
+                    .finalize_converted_pdf_document(&document_context)
+                    .await
+            }
+            DocumentKey::Versioned { .. } => {
+                finalizer
+                    .finalize_uploaded_document(&document_context, markdown.as_deref())
+                    .await
+            }
+            _ => unreachable!("non-finalizable keys returned earlier"),
+        };
+
+        match result {
             Ok(()) => {
                 tracing::info!(%document_id, key=%event.key, "finalized document upload");
                 Ok(())

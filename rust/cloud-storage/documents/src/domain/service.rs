@@ -69,7 +69,7 @@ pub struct DocumentServiceImpl<
 fn ready_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
     match file_type {
         Some(FileType::Md) => DocumentContent::ready(DocumentContentLocation::SyncService),
-        Some(FileType::Docx) => DocumentContent::ready(DocumentContentLocation::DocxBomParts),
+        Some(FileType::Docx) => DocumentContent::ready(DocumentContentLocation::ConvertedPdf),
         _ => DocumentContent::ready(DocumentContentLocation::ObjectStorage),
     }
 }
@@ -100,7 +100,7 @@ fn presigned_location_content(
 
 fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
     match file_type {
-        Some(FileType::Docx) => DocumentContent::pending_at(DocumentContentLocation::DocxBomParts),
+        Some(FileType::Docx) => DocumentContent::pending_at(DocumentContentLocation::ConvertedPdf),
         _ => DocumentContent::pending_at(DocumentContentLocation::ObjectStorage),
     }
 }

@@ -44,8 +44,12 @@ pub async fn update_uploaded_status(
         r#"
         UPDATE "Document"
         SET "uploaded" = true,
-            "contentState" = 'ready',
-            "contentLocation" = 'docx_bom_parts'
+            "contentState" = CASE
+                WHEN "contentState" = 'ready' AND "contentLocation" = 'converted_pdf'
+                    THEN 'ready'
+                ELSE 'pending'
+            END,
+            "contentLocation" = 'converted_pdf'
         WHERE id = $1
         "#,
     )
@@ -136,7 +140,7 @@ mod tests {
 
         let uploaded = sqlx::query!(
             r#"
-            SELECT uploaded
+            SELECT uploaded, "contentState", "contentLocation"
             FROM "Document"
             WHERE id = $1
             "#,
@@ -146,7 +150,9 @@ mod tests {
         .fetch_one(&pool)
         .await?;
 
-        assert!(uploaded);
+        assert!(uploaded.uploaded);
+        assert_eq!(uploaded.contentState, "pending");
+        assert_eq!(uploaded.contentLocation.as_deref(), Some("converted_pdf"));
 
         Ok(())
     }

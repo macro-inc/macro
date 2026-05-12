@@ -111,7 +111,8 @@ where
     ///
     /// Markdown uploads require the uploaded markdown body so sync-service can
     /// be initialized. Non-markdown uploads are finalized by marking them
-    /// uploaded. DOCX is finalized by its unzip/conversion pipeline.
+    /// uploaded. DOCX upload objects are finalized by their conversion pipeline;
+    /// the converted PDF object finalizes DOCX user-readable content.
     #[tracing::instrument(skip(self, document_context, markdown), err)]
     pub async fn finalize_uploaded_document(
         &self,
@@ -123,6 +124,50 @@ where
         if matches!(file_type, Some(FileType::Docx)) {
             return Ok(());
         }
+
+        self.finalize_ready_content(
+            document_context,
+            markdown,
+            DocumentContentLocation::ObjectStorage,
+        )
+        .await
+    }
+
+    /// Finalize the converted PDF representation of a DOCX document.
+    #[tracing::instrument(skip(self, document_context), err)]
+    pub async fn finalize_converted_pdf_document(
+        &self,
+        document_context: &DocumentBasic,
+    ) -> Result<(), DocumentError> {
+        if !matches!(document_context.try_file_type(), Some(FileType::Docx)) {
+            return Ok(());
+        }
+
+        let content = self
+            .document_port
+            .get_document_content(document_context)
+            .await?;
+        if content.state == DocumentContentState::Ready
+            && content.location == Some(DocumentContentLocation::ConvertedPdf)
+        {
+            return Ok(());
+        }
+
+        self.document_port
+            .set_document_content(
+                &document_context.document_id,
+                DocumentContent::ready(DocumentContentLocation::ConvertedPdf),
+            )
+            .await
+    }
+
+    async fn finalize_ready_content(
+        &self,
+        document_context: &DocumentBasic,
+        markdown: Option<&str>,
+        ready_location: DocumentContentLocation,
+    ) -> Result<(), DocumentError> {
+        let file_type = document_context.try_file_type();
 
         let content = self
             .document_port
@@ -153,7 +198,7 @@ where
         let location = if matches!(file_type, Some(FileType::Md)) {
             DocumentContentLocation::SyncService
         } else {
-            DocumentContentLocation::ObjectStorage
+            ready_location
         };
 
         self.document_port

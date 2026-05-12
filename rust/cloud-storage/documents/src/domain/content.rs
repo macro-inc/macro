@@ -98,7 +98,7 @@ impl DocumentContent {
         }
 
         let location = match file_type {
-            Some(FileType::Docx) => DocumentContentLocation::DocxBomParts,
+            Some(FileType::Docx) => DocumentContentLocation::ConvertedPdf,
             // Historical markdown documents may be in sync-service, S3, or both.
             // A backfill can replace this legacy ambiguity with SyncService.
             Some(FileType::Md) => DocumentContentLocation::Unknown,

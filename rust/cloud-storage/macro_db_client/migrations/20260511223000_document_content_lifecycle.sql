@@ -14,10 +14,10 @@ SET
         ELSE 'pending'
     END,
     "contentLocation" = CASE
-        WHEN uploaded AND "fileType" = 'docx' THEN 'docx_bom_parts'
+        WHEN uploaded AND "fileType" = 'docx' THEN 'converted_pdf'
         WHEN uploaded AND "fileType" = 'md' THEN 'unknown'
         WHEN uploaded THEN 'object_storage'
-        WHEN "fileType" = 'docx' THEN 'docx_bom_parts'
+        WHEN "fileType" = 'docx' THEN 'converted_pdf'
         ELSE 'object_storage'
     END;
 
