@@ -358,9 +358,7 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
       .map((m) => ({ email: m.email, tier: toTeamUserTier(m.tier) }));
 
     if (invites.length > 0) {
-      await throwOnErr(() =>
-        authServiceClient.inviteToTeam({ invites })
-      );
+      await throwOnErr(() => authServiceClient.inviteToTeam({ invites }));
     }
 
     await invalidateUserTeams();

@@ -78,9 +78,7 @@ const TooltipWrapper = (props: {
   return (
     <Show
       when={hasValue()}
-      fallback={
-        <div class="text-xs">No {props.property.displayName} set</div>
-      }
+      fallback={<div class="text-xs">No {props.property.displayName} set</div>}
     >
       <div
         classList={{

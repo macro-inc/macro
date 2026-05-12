@@ -102,11 +102,9 @@ const ListSelectValue: Component<{ property: Property }> = (props) => {
         <button
           type="button"
           onClick={handleClick}
-          class={cn(
-            'list-property-cell min-w-0',
-            buttonClass(isReadOnly()),
-            { 'text-ink-extra-muted/50': !firstValue() },
-          )}
+          class={cn('list-property-cell min-w-0', buttonClass(isReadOnly()), {
+            'text-ink-extra-muted/50': !firstValue(),
+          })}
         >
           <Show
             when={firstValue()}
@@ -202,11 +200,9 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
         <button
           type="button"
           onClick={handleClick}
-          class={cn(
-            'list-property-cell min-w-0',
-            buttonClass(isReadOnly()),
-            { 'text-ink-extra-muted/50': !hasValues() },
-          )}
+          class={cn('list-property-cell min-w-0', buttonClass(isReadOnly()), {
+            'text-ink-extra-muted/50': !hasValues(),
+          })}
         >
           <Show
             when={hasValues()}
@@ -233,7 +229,9 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
               <Show
                 when={isSingleUser()}
                 fallback={
-                  <MultiUserValue userIds={entities().map((e) => e.entity_id)} />
+                  <MultiUserValue
+                    userIds={entities().map((e) => e.entity_id)}
+                  />
                 }
               >
                 <SingleUserValue userId={entities()[0].entity_id} />

@@ -68,41 +68,41 @@ export function ReactionChip(props: ReactionChipProps) {
         <HoverCard placement="top">
           <HoverCard.Trigger>
             <Button
-            data-message-reaction-chip
-            data-emoji={props.emoji}
-            noTouchResize
-            ref={(el) =>
-              touchHandler(el, () => ({
-                onLongPress: () => {
-                  setShowReactors(true);
-                },
-                stopTouchStartPropagation: true,
-              }))
-            }
-            size="sm"
-            variant="base"
-            class={cn(
-              'flex flex-row items-center h-7 min-w-7 gap-2 rounded-sm',
-              {
-                'border-edge-muted hover:bg-hover hover:scale-105':
-                  props.interactive,
-                'border-edge-muted': !props.selected && !props.interactive,
-                'text-accent border-accent hover:bg-accent-hover':
-                  props.selected,
-                'pointer-events-auto': !props.interactive,
+              data-message-reaction-chip
+              data-emoji={props.emoji}
+              noTouchResize
+              ref={(el) =>
+                touchHandler(el, () => ({
+                  onLongPress: () => {
+                    setShowReactors(true);
+                  },
+                  stopTouchStartPropagation: true,
+                }))
               }
-            )}
-            disabled={!props.interactive}
-            onClick={(event) => {
-              event.stopPropagation();
-              props.onClick?.(event);
-            }}
-          >
-            <span class="text-lg leading-0">{props.emoji}</span>
-            <Show when={props.count > 1}>
-              <span class="text-xs">{props.count}</span>
-            </Show>
-          </Button>
+              size="sm"
+              variant="base"
+              class={cn(
+                'flex flex-row items-center h-7 min-w-7 gap-2 rounded-sm',
+                {
+                  'border-edge-muted hover:bg-hover hover:scale-105':
+                    props.interactive,
+                  'border-edge-muted': !props.selected && !props.interactive,
+                  'text-accent border-accent hover:bg-accent-hover':
+                    props.selected,
+                  'pointer-events-auto': !props.interactive,
+                }
+              )}
+              disabled={!props.interactive}
+              onClick={(event) => {
+                event.stopPropagation();
+                props.onClick?.(event);
+              }}
+            >
+              <span class="text-lg leading-0">{props.emoji}</span>
+              <Show when={props.count > 1}>
+                <span class="text-xs">{props.count}</span>
+              </Show>
+            </Button>
           </HoverCard.Trigger>
           <HoverCard.Content>
             <ReactionTooltipContent
