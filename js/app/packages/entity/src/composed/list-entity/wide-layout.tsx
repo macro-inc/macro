@@ -17,7 +17,8 @@ import {
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
 import { AutomationWideContent } from './automation';
-import { CallListAgainButton, CallParticipants, CallWideContent } from './call';
+import { CallAgainButton } from '@channel/Call/CallAgainButton';
+import { CallParticipants, CallWideContent } from './call';
 import { ChannelMessageWideContent, ChannelWideContent } from './channel';
 import { EmailWideContent } from './email';
 import type { LayoutProps } from './shared';
@@ -118,7 +119,10 @@ export function WideLayout(props: LayoutProps) {
           {(entity) => (
             <>
               <Show when={!entity().isActive}>
-                <CallListAgainButton channelId={entity().channelId} />
+                <CallAgainButton
+                  channelId={entity().channelId}
+                  class="opacity-0 group-hover/narrow:opacity-100 transition-opacity flex shrink-0 items-center gap-1 rounded-xs border border-edge-muted px-1.5 py-1 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none"
+                />
               </Show>
               <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
                 <AttendanceBadge attended={entity().attended} />
