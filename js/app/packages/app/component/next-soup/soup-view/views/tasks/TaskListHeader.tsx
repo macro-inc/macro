@@ -1,6 +1,5 @@
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { Tooltip } from '@core/component/Tooltip';
 import { useListLayout } from '@entity/composed/list-entity/shared';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
 import UsersIcon from '@icon/regular/users.svg';
@@ -14,6 +13,7 @@ import {
   TASK_GRID_TEMPLATE_COLUMNS_WIDE,
 } from './task-grid-template';
 import './list-property-value.css';
+import { Tooltip } from '@ui';
 
 const HEADER_ICON_CLASS = 'size-3 text-ink-muted';
 
@@ -154,12 +154,7 @@ function HeaderCell(props: {
             )}
           >
             <Show when={props.narrowIcon}>
-              <Tooltip
-                tooltip={props.label}
-                class="hidden @max-[840px]/u-list:flex @max-[840px]/u-list:px-1.5"
-              >
-                {props.narrowIcon?.()}
-              </Tooltip>
+              <Tooltip label={props.label}>{props.narrowIcon?.()}</Tooltip>
             </Show>
             <span class="truncate @max-[840px]/u-list:hidden">
               {props.label}
