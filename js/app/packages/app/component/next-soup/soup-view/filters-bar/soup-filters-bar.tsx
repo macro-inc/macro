@@ -46,6 +46,7 @@ export const SoupFiltersBar = () => {
     hotkey: 'space',
     scopeId: panel.splitHotkeyScope,
     description: 'Toggle preview',
+    hotkeyToken: TOKENS.unifiedList.togglePreview,
     keyDownHandler: () => {
       togglePreview();
       return true;

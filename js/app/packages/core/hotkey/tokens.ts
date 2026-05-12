@@ -2,6 +2,8 @@ export const TOKENS = {
   // soup
   soup: {
     openSearch: 'soup.openSearch',
+    sort: 'soup.sort',
+    filter: 'soup.filter',
     tabs: {
       '0': 'soup.tabs.0',
       '1': 'soup.tabs.1',
@@ -262,7 +264,7 @@ export const TOKENS = {
     close: 'drawer.close',
   },
 
-  // chat input (currently display-only)
+  // chat input
   chat: {
     input: {
       focus: 'chat-input-focus',
@@ -273,6 +275,7 @@ export const TOKENS = {
     },
     new: 'chat-new',
     stop: 'chat-stop',
+    send: 'chat-send',
   },
 } as const;
 

@@ -18,6 +18,7 @@ import { Tooltip } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import CaretRightIcon from '@icon/regular/caret-right.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
@@ -786,6 +787,7 @@ export const UnifiedFilterDropdown = () => {
     hotkey: 'f',
     scopeId: panel.splitHotkeyScope,
     description: 'Open filter menu',
+    hotkeyToken: TOKENS.soup.filter,
     keyDownHandler: () => {
       setOpen(true);
       return true;
@@ -795,7 +797,7 @@ export const UnifiedFilterDropdown = () => {
   return (
     <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
       <Dropdown open={open()} onOpenChange={setOpen}>
-        <Tooltip label="Filter" shortcut="F">
+        <Tooltip label="Filter" hotkeyToken={TOKENS.soup.filter}>
           <Dropdown.Trigger>
             <SlidersHorizontalIcon />
             <span>Filter</span>
