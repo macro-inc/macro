@@ -22,7 +22,7 @@ pub use entity_permission::EntityPermissionExtractor;
 pub use history::HistoryAccessExtractor;
 pub use pin::PinAccessLevelExtractor;
 pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor};
-pub use team::OptionalMacroUserTeamExtractor;
+pub use team::{MacroUserTeamExtractor, OptionalMacroUserTeamExtractor};
 pub use thread::ThreadAccessLevelExtractor;
 
 use crate::domain::models::{AccessError, AccessLevel};
