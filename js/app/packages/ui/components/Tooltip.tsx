@@ -20,8 +20,6 @@ export type TooltipProps = ParentProps<{
 
 /**
  * @example
- * <Tooltip label="Close"><Button>X</Button></Tooltip>
- *
  * <Tooltip label="Zoom" hotkeyToken={TOKENS.canvas.zoomInTool}>
  *   <Button>Zoom</Button>
  * </Tooltip>
@@ -50,12 +48,9 @@ export function Tooltip(props: TooltipProps) {
         {props.children}
       </KobalteTooltip.Trigger>
       <KobalteTooltip.Portal>
-        <KobalteTooltip.Content
-          style={{ 'max-width': `calc(100vw - ${2 * 16}px)` }}
-          class="z-tool-tip"
-        >
+        <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)]">
           <Surface
-            class="flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word"
+            class="flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word"
             depth={3}
           >
             <div class="flex flex-row items-center gap-2">
