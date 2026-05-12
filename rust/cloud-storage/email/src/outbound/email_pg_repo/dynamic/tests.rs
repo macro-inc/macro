@@ -906,7 +906,9 @@ fn test_build_thread_email_filter_created_at_less_than_or_equal() {
     use chrono::TimeZone;
     use item_filters::ast::date::DateLiteral;
 
-    let dt = chrono::Utc.with_ymd_and_hms(2024, 6, 30, 23, 59, 59).unwrap();
+    let dt = chrono::Utc
+        .with_ymd_and_hms(2024, 6, 30, 23, 59, 59)
+        .unwrap();
     let expr = Expr::Literal(EmailLiteral::CreatedAt(DateLiteral::LessThanOrEqual(dt)));
     let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
     let debug = result.to_debug_sql();
