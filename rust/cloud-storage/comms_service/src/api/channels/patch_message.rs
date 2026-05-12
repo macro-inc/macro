@@ -66,7 +66,7 @@ pub async fn patch_message_handler(
     Cached(MessageId(message_id)): Cached<MessageId>,
     Cached(ChannelParticipants(participants)): Cached<ChannelParticipants>,
     Path(params): Path<PatchMessageParams>,
-    extract::Json(req): extract::Json<PatchMessageRequest>,
+    extract::Json(mut req): extract::Json<PatchMessageRequest>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
     tracing::info!("patch_message");
 
@@ -99,7 +99,7 @@ pub async fn patch_message_handler(
                 )
             })?;
 
-        if let Some(mentions) = req.mentions.clone() {
+        if let Some(mentions) = req.mentions.take() {
             sync_message_mentions(
                 &app_state,
                 message_id,
