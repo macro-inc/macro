@@ -15,7 +15,6 @@ export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> &
   tooltip?: string;
   label?: string;
   hotkeyToken?: HotkeyToken;
-  shortcut?: string;
   hotkeySequence?: HotkeySequenceStep[];
   size?: ButtonSize;
   class?: string;
@@ -47,7 +46,6 @@ export const Button = (props: ButtonProps) => {
     'hotkeySequence',
     'hotkeyToken',
     'children',
-    'shortcut',
     'tooltip',
     'variant',
     'class',
@@ -84,7 +82,6 @@ export const Button = (props: ButtonProps) => {
           <Tooltip
             hotkeySequence={local.hotkeySequence}
             hotkeyToken={local.hotkeyToken}
-            shortcut={local.shortcut}
             placement={placement()}
             label={label()}
           >

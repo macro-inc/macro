@@ -109,22 +109,19 @@ interface HotkeyProps extends JSX.HTMLAttributes<HTMLDivElement> {
   lowercase?: boolean;
   token?: HotkeyToken;
   showPlus?: boolean;
-  shortcut?: string;
   theme?: Theme;
 }
 
 /**
- * A component that displays a hotkey for either: 1) a given hotkey token, as registered in the hotkey registry or 2) a shortcut string (e.g. 'cmd+c').
+ * A component that displays a hotkey for a given hotkey token, as registered in the hotkey registry.
  * @param props.token - The hotkey registry token to display the hotkey for.
- * @param props.shortcut - The shortcut string to display the hotkey for.
  * @example
- * <Hotkey token="canvas.cut" />
+ * <Hotkey token={TOKENS.canvas.cut} />
  */
 export function Hotkey(props: HotkeyProps){
   const [local, rest] = splitProps(props, [
     'lowercase',
     'children',
-    'shortcut',
     'showPlus',
     'token',
     'theme',
@@ -133,8 +130,6 @@ export function Hotkey(props: HotkeyProps){
   const tokenShortcut = createMemo(() => { return local.token ? getPrettyHotkeyStringByToken(local.token) : undefined });
 
   const hotkey = createMemo(() => {
-    // fallback for when we specify a shortcut directly instead of a hotkey token
-    if (local.shortcut && !tokenShortcut()) { return breakApartHotkeyString(local.shortcut); }
     if (!tokenShortcut()) { return { key: '', modifiers: [] }; }
     return breakApartHotkeyString(tokenShortcut() ?? '');
   });

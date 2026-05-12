@@ -31,6 +31,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
@@ -740,7 +741,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           </Show>
           Create Task
           <div class="text-xxs text-ink-extra-muted ml-auto border border-edge-muted px-1.5 py-1 font-sans rounded-xs">
-            <Hotkey shortcut="cmd+enter" />
+            <Hotkey token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} />
           </div>
         </Button>
       </div>

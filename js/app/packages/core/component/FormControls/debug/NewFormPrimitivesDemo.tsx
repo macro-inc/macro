@@ -1,3 +1,4 @@
+import { TOKENS } from '@core/hotkey/tokens';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -41,7 +42,7 @@ const NewFormPrimitivesDemo = () => {
         <Button
           size="sm"
           label="Console"
-          shortcut="cmd+k"
+          hotkeyToken={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */}
         >
           Console
         </Button>
@@ -184,7 +185,7 @@ const NewFormPrimitivesDemo = () => {
         <Button
           size="md"
           label="Console"
-          shortcut="cmd+k"
+          hotkeyToken={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */}
         >
           Console
         </Button>

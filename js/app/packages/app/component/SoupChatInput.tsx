@@ -167,7 +167,7 @@ function SoupChatInputInner() {
                       'border-edge-muted': !metaHeld(),
                     }}
                   >
-                    <Hotkey shortcut="cmd+Enter" />
+                    <Hotkey token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} />
                   </div>
                   <span>Background</span>
                 </div>

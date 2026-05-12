@@ -48,6 +48,7 @@ import TextT from '@icon/regular/text-t.svg';
 import TextUnderline from '@icon/regular/text-underline.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { ElementName } from '@lexical-core';
+import { TOKENS } from '@core/hotkey/tokens';
 import { Button, Hotkey, Layer } from '@ui';
 import { toast } from 'core/component/Toast/Toast';
 import type { ValidHotkey } from 'core/hotkey/types';
@@ -192,7 +193,7 @@ const InlineFormatButton = (props: {
   return (
     <Button
       label={props.format}
-      shortcut={InlineShortcuts[props.format]}
+      hotkeyToken={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */}
       size="icon-sm"
       variant="ghost"
       classList={{
@@ -219,8 +220,8 @@ const InlineFormatMenuItem = (props: {
     <div class="flex justify-between">
       <span class="capitalize">{props.format}</span>
       <Show when={InlineShortcuts[props.format]}>
-        {(shortcut) => {
-          return <Hotkey shortcut={shortcut()} />;
+        {(_shortcut) => {
+          return <Hotkey token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} />;
         }}
       </Show>
     </div>

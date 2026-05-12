@@ -8,7 +8,6 @@ import { cn, Surface } from '@ui';
 
 export type HotkeySequenceStep = {
   token?: HotkeyToken;
-  shortcut?: string;
 };
 
 export type TooltipProps = ParentProps<{
@@ -16,7 +15,6 @@ export type TooltipProps = ParentProps<{
   hotkeyToken?: HotkeyToken;
   placement?: Placement;
   as?: 'div' | 'span';
-  shortcut?: string;
   label: string;
 }>;
 
@@ -39,7 +37,7 @@ const TOOLTIP_FLIP = true;
 export function Tooltip(props: TooltipProps) {
   const steps = (): HotkeySequenceStep[] => {
     if (props.hotkeySequence?.length) { return props.hotkeySequence; }
-    if (props.hotkeyToken || props.shortcut) { return [{ token: props.hotkeyToken, shortcut: props.shortcut }]; }
+    if (props.hotkeyToken) { return [{ token: props.hotkeyToken }]; }
     return [];
   };
 
@@ -81,7 +79,6 @@ export function Tooltip(props: TooltipProps) {
                     {(step, ndx) => (
                       <>
                         <Hotkey
-                          shortcut={step.shortcut}
                           token={step.token}
                           theme="subtle"
                         />
