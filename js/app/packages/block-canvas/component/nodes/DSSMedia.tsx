@@ -3,12 +3,12 @@ import { LoadErrors } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { isErr } from '@core/util/maybeResult';
-import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import PauseIcon from '@icon/regular/pause.svg';
 import PlayIcon from '@icon/regular/play.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import LockKey from '@phosphor-icons/core/regular/lock-key.svg?component-solid';
 import Question from '@phosphor-icons/core/regular/question.svg?component-solid';
+import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import {
   createEffect,

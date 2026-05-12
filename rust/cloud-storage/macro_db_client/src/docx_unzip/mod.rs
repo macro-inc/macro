@@ -146,7 +146,6 @@ mod tests {
             "#,
             "document-one"
         )
-        .map(|row| row.uploaded)
         .fetch_one(&pool)
         .await?;
 

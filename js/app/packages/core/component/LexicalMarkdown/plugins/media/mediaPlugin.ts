@@ -5,7 +5,6 @@ import type { FetchError } from '@core/service';
 import { createStaticFile } from '@core/util/create';
 import { contentHash } from '@core/util/hash';
 import { type MaybeResult, mapOk } from '@core/util/maybeResult';
-import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { mergeRegister } from '@lexical/utils';
 import {
   $createImageNode,
@@ -16,7 +15,7 @@ import {
   type MediaType,
   type VideoNode,
 } from '@lexical-core';
-import { storageServiceClient } from '@service-storage/client';
+import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fileExtension } from '@service-storage/util/filename';
 import {
   $createNodeSelection,

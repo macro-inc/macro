@@ -107,7 +107,5 @@ async fn put_presigned_url(
         .presigned(PresigningConfig::expires_in(expiry_duration)?)
         .await?;
 
-    Ok(macro_aws_config::transform_aws_url(
-        &presigned_url.uri().to_string(),
-    ))
+    Ok(macro_aws_config::transform_aws_url(presigned_url.uri()))
 }

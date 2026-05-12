@@ -11,12 +11,13 @@ use crate::domain::{
 use document_sub_type::DocumentSubType;
 use documents::domain::models::EditDocumentServiceArgs;
 use documents::domain::{
-    content::{
-        CreateDocumentResponseData, DocumentContent, DocumentContentLocation,
-        DocumentMetadataWithContent, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
-    },
+    content::{DocumentContent, DocumentContentLocation},
     models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams},
     ports::DocumentService,
+    response::{
+        CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
+        GetDocumentResponseData, LocationResponseV3,
+    },
 };
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,

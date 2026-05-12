@@ -1,9 +1,9 @@
 import type { FetchError } from '@core/service';
 import {
   isErr,
+  type MaybeResult,
   maybeThrow,
   ok,
-  type MaybeResult,
 } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
 import type { GetDocumentResponseData } from '@service-storage/generated/schemas';
