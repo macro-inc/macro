@@ -1,5 +1,6 @@
 import { searchLocationPendingSignal } from '@block-pdf/signal/location';
 import { FindBar } from '@core/component/FindBar';
+import type { FindBarController } from '@core/component/createFindBarController';
 import { IS_MAC } from '@core/constant/isMac';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { createEffect, createSignal, onCleanup, Show, untrack } from 'solid-js';
@@ -75,6 +76,25 @@ export function SimpleSearch() {
     setIsOpen(false);
   };
 
+  // PDF.js owns the search state (queries, results, cursor). Expose it as a
+  // FindBarController so it can drive the shared <FindBar> UI.
+  const controller: FindBarController = {
+    isOpen,
+    query: searchText,
+    setQuery: setSearchText,
+    submittedQuery,
+    activeIndex: current,
+    hasUnsubmittedChanges: () => searchText() !== submittedQuery(),
+    isPending,
+    resultsCount: total,
+    open: () => setIsOpen(true),
+    close,
+    submit,
+    next,
+    previous,
+    setInputEl: (el) => setInputEl(el),
+  };
+
   const handleHotkey = (e: KeyboardEvent) => {
     if (!((IS_MAC ? e.metaKey : e.ctrlKey) && e.key === 'f')) return;
     e.stopPropagation();
@@ -107,19 +127,7 @@ export function SimpleSearch() {
 
   return (
     <Show when={isOpen()}>
-      <FindBar
-        query={searchText()}
-        onQueryChange={setSearchText}
-        onSubmit={submit}
-        onClose={close}
-        onPrevious={previous}
-        onNext={next}
-        index={current()}
-        total={total()}
-        hasUnsubmittedChanges={searchText() !== submittedQuery()}
-        isPending={isPending()}
-        inputRef={setInputEl}
-      />
+      <FindBar controller={controller} />
     </Show>
   );
 }
