@@ -83,7 +83,7 @@ pub fn group_select_expr(field: &GroupByField) -> String {
         GroupByField::EntityType => "item_type".to_string(),
         GroupByField::Project => "COALESCE(project_id::text, '')".to_string(),
         GroupByField::Property { .. } => {
-            // For select options, value is an array of option IDs like ["uuid1", "uuid2"]
+            // For select options, value is an array of UUIDs like ["uuid1", "uuid2"]
             // Extract the first element as text
             "COALESCE(ep_group.values->'value'->>0, '')".to_string()
         }
@@ -97,7 +97,8 @@ pub fn group_order_expr(field: &GroupByField) -> String {
         GroupByField::EntityType => "item_type".to_string(),
         GroupByField::Project => "project_id NULLS LAST".to_string(),
         GroupByField::Property { .. } => {
-            "COALESCE((SELECT po.display_order FROM property_options po WHERE po.id::text = (ep_group.values->'value'->0->>'id')), 999999)".to_string()
+            // values->'value' is an array of UUID strings, extract first and lookup display_order
+            "COALESCE((SELECT po.display_order FROM property_options po WHERE po.id::text = (ep_group.values->'value'->>0)), 999999)".to_string()
         }
     }
 }
