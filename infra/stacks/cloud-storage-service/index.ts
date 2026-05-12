@@ -80,12 +80,10 @@ const SYNC_SERVICE_AUTH_KEY = config.require(`sync_service_auth_key`);
 const syncServiceAuthSecret = aws.secretsmanager.getSecretVersionOutput({
   secretId: SYNC_SERVICE_AUTH_KEY,
 });
-const syncServiceAuthKeyArn: pulumi.Output<string> = syncServiceAuthSecret.apply(
-  (secret) => secret.arn
-);
-const syncServiceAuthKeyValue: pulumi.Output<string> = syncServiceAuthSecret.apply(
-  (secret) => secret.secretString
-);
+const syncServiceAuthKeyArn: pulumi.Output<string> =
+  syncServiceAuthSecret.apply((secret) => secret.arn);
+const syncServiceAuthKeyValue: pulumi.Output<string> =
+  syncServiceAuthSecret.apply((secret) => secret.secretString);
 
 const AUTHENTICATION_SERVICE_SECRET_KEY = config.require(
   `authentication_service_secret_key`
