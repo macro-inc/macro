@@ -1,8 +1,8 @@
-import { Tooltip } from '@ui';
 import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
+import { Tooltip } from '@ui';
 import {
   createEffect,
   createSignal,

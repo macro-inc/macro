@@ -6,7 +6,6 @@ import {
   DO_SEARCH_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import type { FloatingStyle } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
-import { Tooltip } from '@ui';
 import { IS_MAC } from '@core/constant/isMac';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { useCanEdit } from '@core/signal/permissions';
@@ -18,7 +17,7 @@ import CaretUp from '@icon/regular/caret-up.svg';
 import MagnifyingGlass from '@icon/regular/magnifying-glass.svg';
 import X from '@icon/regular/x.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 

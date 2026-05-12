@@ -5,7 +5,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { Tabs } from '@core/component/Tabs';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
-import { TOKENS, type HotkeyToken } from '@core/hotkey/tokens';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { type EntityData, InlineEntity } from '@entity';
@@ -536,10 +536,20 @@ export function CommandMenuInner(props: {
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} class="space-x-1" />
+              <Hotkey
+                token={
+                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+                }
+                class="space-x-1"
+              />
             </div>
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} class="space-x-1" />
+              <Hotkey
+                token={
+                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+                }
+                class="space-x-1"
+              />
             </div>
           </div>
           Navigate
@@ -547,34 +557,86 @@ export function CommandMenuInner(props: {
 
         <Switch>
           <Match when={isInCommandScope()}>
-            <HotkeyHint token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} label="Run action" />
-            <HotkeyHint token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} label="Back" />
+            <HotkeyHint
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+              label="Run action"
+            />
+            <HotkeyHint
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+              label="Back"
+            />
           </Match>
           <Match when={selectedIsCommand() || isEntityActionMode()}>
-            <HotkeyHint token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} label="Run action" />
+            <HotkeyHint
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+              label="Run action"
+            />
           </Match>
           <Match when={selectedIsSearch()}>
-            <HotkeyHint token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} label="Search" />
+            <HotkeyHint
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+              label="Search"
+            />
             <Show when={canOpenInNewSplit()}>
-              <HotkeyHint token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} label="Search in new split" />
+              <HotkeyHint
+                token={
+                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+                }
+                label="Search in new split"
+              />
             </Show>
           </Match>
           <Match when={selectedIsEntity()}>
-            <HotkeyHint token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} label="Open" />
+            <HotkeyHint
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+              label="Open"
+            />
             <Show when={canOpenInNewSplit()}>
-              <HotkeyHint token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} label="Open in new split" />
+              <HotkeyHint
+                token={
+                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+                }
+                label="Open in new split"
+              />
             </Show>
           </Match>
         </Switch>
 
         <Show when={!isInCommandScope() && !isEntityActionMode()}>
-          <HotkeyHint token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} label="Category" />
+          <HotkeyHint
+            token={
+              TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+            }
+            label="Category"
+          />
         </Show>
         <Show
           when={isInCommandScope()}
-          fallback={<HotkeyHint token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} label="Close" />}
+          fallback={
+            <HotkeyHint
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+              label="Close"
+            />
+          }
         >
-          <HotkeyHint token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} label="Back" />
+          <HotkeyHint
+            token={
+              TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+            }
+            label="Back"
+          />
         </Show>
       </Panel.Footer>
     </Panel>

@@ -136,12 +136,7 @@ export function MediaSelector() {
       onOpenChange={setImageSelectorOpen}
     >
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <Button
-          variant="ghost"
-          size="icon-md"
-          label="Media"
-          tabIndex={-1}
-        >
+        <Button variant="ghost" size="icon-md" label="Media" tabIndex={-1}>
           <Image />
         </Button>
       </DropdownMenu.Trigger>

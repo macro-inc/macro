@@ -6,10 +6,9 @@ import Quotes from '@icon/regular/quotes.svg';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import { commsServiceClient } from '@service-comms/client';
 import type { ItemType } from '@service-storage/client';
-import { Button } from '@ui';
+import { Button, Tooltip } from '@ui';
 import { createResource, Suspense } from 'solid-js';
 import { References } from './References';
-import { Tooltip } from '@ui';
 
 false && clickOutside;
 export const REFERENCES_DRAWER_ID = 'references';

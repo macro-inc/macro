@@ -75,11 +75,7 @@ function VideoViewerContent(props: {
       <Dialog.Content class="flex items-center justify-center bg-panel">
         <LightboxToolbar isVisible={true}>
           <Dialog.CloseButton>
-            <Button
-              variant="ghost"
-              size="icon-md"
-              label="Close"
-            >
+            <Button variant="ghost" size="icon-md" label="Close">
               <XIcon />
             </Button>
           </Dialog.CloseButton>

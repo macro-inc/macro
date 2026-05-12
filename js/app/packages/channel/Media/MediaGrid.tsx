@@ -1,4 +1,3 @@
-
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
 import { Button, cn } from '@ui';

@@ -6,7 +6,6 @@ import {
   isArchiveType,
 } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@ui';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
   useCanComment,
@@ -16,7 +15,7 @@ import {
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { type BuildEntityDataArgs, buildEntityData } from '@entity';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import { createEffect, type JSX, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 

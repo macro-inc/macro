@@ -12,7 +12,6 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/Menu';
-import { Tooltip } from '@ui';
 import ArrowLineDown from '@icon/regular/arrow-line-down.svg';
 import ArrowLineLeft from '@icon/regular/arrow-line-left.svg';
 import ArrowLineRight from '@icon/regular/arrow-line-right.svg';
@@ -40,6 +39,7 @@ import {
   type TableSelection,
 } from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
+import { Tooltip } from '@ui';
 import type { ElementNode, LexicalEditor } from 'lexical';
 import {
   $createParagraphNode,

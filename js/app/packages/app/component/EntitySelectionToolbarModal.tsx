@@ -44,7 +44,11 @@ export const EntitySelectionToolbarModal = (
             class="p-1 px-2 flex gap-1 border-edge-muted rounded-xs border items-center size-full hover:bg-hover hover-transition-bg"
           >
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} />
+              <Hotkey
+                token={
+                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+                }
+              />
             </div>
             <span>Clear</span>
           </button>

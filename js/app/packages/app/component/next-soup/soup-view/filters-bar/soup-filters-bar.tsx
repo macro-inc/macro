@@ -4,12 +4,11 @@ import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { Tooltip } from '@ui';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
-import { Button } from '@ui';
+import { Button, Tooltip } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { useSoup } from '../../soup-context';
 

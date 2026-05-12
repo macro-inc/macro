@@ -1,7 +1,6 @@
-import { Tooltip } from '@ui';
 import FolderIcon from '@icon/regular/folder-simple.svg';
 import { useProjectPreviewQuery } from '@queries/storage/project-preview';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import { Show, Suspense } from 'solid-js';
 import type { ProjectContainedEntity, ProjectEntity } from '../types/entity';
 import { truncatedPath } from '../utils/path';

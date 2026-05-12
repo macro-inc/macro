@@ -39,11 +39,7 @@ const NewFormPrimitivesDemo = () => {
         />
         <ToggleButton size="SM">Select Btn</ToggleButton>
 
-        <Button
-          size="sm"
-          label="Console"
-          hotkey={TOKENS.global.commandMenu}
-        >
+        <Button size="sm" label="Console" hotkey={TOKENS.global.commandMenu}>
           Console
         </Button>
 
@@ -182,11 +178,7 @@ const NewFormPrimitivesDemo = () => {
           </div>
         </DropdownMenu>
         <ToggleButton size="Base">Select Btn</ToggleButton>
-        <Button
-          size="md"
-          label="Console"
-          hotkey={TOKENS.global.commandMenu}
-        >
+        <Button size="md" label="Console" hotkey={TOKENS.global.commandMenu}>
           Console
         </Button>
       </div>

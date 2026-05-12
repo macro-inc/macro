@@ -2,7 +2,6 @@ import { HoverCard } from '@core/component/HoverCard';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { toast } from '@core/component/Toast/Toast';
-import { Surface } from '@ui';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { useEmail } from '@core/context/user';
 import { emailToMacroId, useDisplayName } from '@core/user';
@@ -11,6 +10,7 @@ import {
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import WideCopy from '@macro-icons/wide/copy.svg';
+import { Surface } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
 import { isSearchEntity } from '../types/search';

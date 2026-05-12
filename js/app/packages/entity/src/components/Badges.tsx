@@ -1,8 +1,7 @@
-import { HoverCard } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
 import UserPlus from '@icon/fill/user-plus-fill.svg';
-import { cn } from '@ui';
+import { cn, HoverCard } from '@ui';
 import type { ParentProps } from 'solid-js';
 
 function Badge(props: ParentProps<{ class?: string }>) {

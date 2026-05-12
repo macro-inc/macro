@@ -1,8 +1,7 @@
-import { HoverCard } from '@ui';
 import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
 import { Popover } from '@kobalte/core/popover';
-import { Button, cn } from '@ui';
+import { Button, cn, HoverCard } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 
 type ReactionChipProps = {

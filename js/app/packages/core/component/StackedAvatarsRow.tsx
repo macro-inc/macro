@@ -1,5 +1,5 @@
 import User from '@phosphor-icons/core/regular/user.svg?component-solid';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -10,7 +10,6 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { Tooltip } from '@ui';
 import { HoverCard } from './HoverCard';
 import type { UserIconProps } from './UserIcon';
 
@@ -364,9 +363,7 @@ export function StackedAvatarsRow<T = unknown>(
       );
     }
 
-    return faceShell(
-      <Tooltip label={plainOverflowTooltip()}>{chip}</Tooltip>
-    );
+    return faceShell(<Tooltip label={plainOverflowTooltip()}>{chip}</Tooltip>);
   };
 
   return (

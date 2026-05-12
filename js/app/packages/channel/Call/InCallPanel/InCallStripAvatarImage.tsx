@@ -4,9 +4,9 @@ import {
   type StackedAvatarsSize,
   stackedAvatarInnerClass,
 } from '@core/component/StackedAvatarsRow';
-import { Tooltip } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { Tooltip } from '@ui';
 import { type Component, Show } from 'solid-js';
 
 /** Matches {@link UserIcon} `lg` (`size-10`) for the in-call strip. */

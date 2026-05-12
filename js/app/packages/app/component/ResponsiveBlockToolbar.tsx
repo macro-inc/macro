@@ -1,4 +1,3 @@
-
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ItemType } from '@service-storage/client';

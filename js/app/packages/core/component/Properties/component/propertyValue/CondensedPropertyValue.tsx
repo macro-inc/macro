@@ -1,7 +1,6 @@
 import { getSelectValues } from '@core/component/Properties/utils';
-import { HoverCard } from '@ui';
 import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
-import { cn } from '@ui';
+import { cn, HoverCard } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import { Show } from 'solid-js';
 import type { Property } from '../../types';

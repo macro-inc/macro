@@ -93,12 +93,7 @@ export function FileSelector() {
   return (
     <DropdownMenu open={fileSelectorOpen()} onOpenChange={setFileSelectorOpen}>
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <Button
-          variant="ghost"
-          size="icon-md"
-          label="File"
-          tabIndex={-1}
-        >
+        <Button variant="ghost" size="icon-md" label="File" tabIndex={-1}>
           <FileText />
         </Button>
       </DropdownMenu.Trigger>

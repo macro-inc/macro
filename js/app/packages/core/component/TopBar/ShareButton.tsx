@@ -65,7 +65,7 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Button, ButtonGroup, cn, Panel } from '@ui';
+import { Button, ButtonGroup, cn, Panel, Tooltip } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -87,7 +87,6 @@ import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
-import { Tooltip } from '@ui';
 import { ScrollIndicators } from '../VerticalScrollIndicators';
 import { openLoginModal } from './LoginButton';
 

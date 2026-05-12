@@ -1,4 +1,3 @@
-
 import FormatIcon from '@icon/regular/text-aa.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';

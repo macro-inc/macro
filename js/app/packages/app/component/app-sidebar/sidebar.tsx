@@ -736,8 +736,10 @@ const SidebarLink = (props: SidebarLinkProps) => {
               ? props.standaloneHotkey
                 ? TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
                 : [
-                    TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */,
-                    TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */,
+                    TOKENS.global
+                      .commandMenu /* scuffed, should use TOKENS.ts */,
+                    TOKENS.global
+                      .commandMenu /* scuffed, should use TOKENS.ts */,
                   ]
               : undefined
           }
@@ -790,15 +792,30 @@ const SidebarLink = (props: SidebarLinkProps) => {
               <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
                 <Show when={!props.standaloneHotkey}>
                   <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
-                    <Hotkey token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} />
+                    <Hotkey
+                      token={
+                        TOKENS.global
+                          .commandMenu /* scuffed, should use TOKENS.ts */
+                      }
+                    />
                   </div>
                   <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
-                    <Hotkey token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} />
+                    <Hotkey
+                      token={
+                        TOKENS.global
+                          .commandMenu /* scuffed, should use TOKENS.ts */
+                      }
+                    />
                   </div>
                 </Show>
                 <Show when={props.standaloneHotkey}>
                   <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
-                    <Hotkey token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} />
+                    <Hotkey
+                      token={
+                        TOKENS.global
+                          .commandMenu /* scuffed, should use TOKENS.ts */
+                      }
+                    />
                   </div>
                 </Show>
               </div>
@@ -812,7 +829,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
                 props.sidebarState !== 'slim' && 'relative p-1 ml-auto'
               )}
             >
-              <Hotkey token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} />
+              <Hotkey
+                token={
+                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+                }
+              />
             </div>
           </Show>
         </Button>

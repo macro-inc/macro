@@ -16,6 +16,7 @@ import {
   SubTrigger,
 } from '@core/component/Menu';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
+import { TOKENS } from '@core/hotkey/tokens';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import ThreeDots from '@icon/bold/dots-three-bold.svg';
 import TextBold from '@icon/bold/text-b-bold.svg';
@@ -48,7 +49,6 @@ import TextT from '@icon/regular/text-t.svg';
 import TextUnderline from '@icon/regular/text-underline.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { ElementName } from '@lexical-core';
-import { TOKENS } from '@core/hotkey/tokens';
 import { Button, Hotkey, Layer } from '@ui';
 import { toast } from 'core/component/Toast/Toast';
 import type { ValidHotkey } from 'core/hotkey/types';

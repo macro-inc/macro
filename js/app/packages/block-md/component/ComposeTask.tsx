@@ -741,7 +741,11 @@ export function ComposeTask(props: ComposeTaskProps) {
           </Show>
           Create Task
           <div class="text-xxs text-ink-extra-muted ml-auto border border-edge-muted px-1.5 py-1 font-sans rounded-xs">
-            <Hotkey token={TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */} />
+            <Hotkey
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+            />
           </div>
         </Button>
       </div>

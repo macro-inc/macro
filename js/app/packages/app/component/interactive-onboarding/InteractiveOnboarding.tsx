@@ -8,7 +8,6 @@ import { useHasPaidAccess } from '@core/auth/license';
 import MacroLogo from '@core/component/MacroLogo';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@ui';
 import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 import { useTutorialCompleted } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -23,7 +22,7 @@ import { useSendMobileWelcomeEmail } from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserTeamsQuery } from '@queries/team';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Button, cn, Surface } from '@ui';
+import { Button, cn, Surface, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,

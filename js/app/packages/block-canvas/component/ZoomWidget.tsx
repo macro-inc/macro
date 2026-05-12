@@ -2,8 +2,8 @@ import { ZOOM_TARGETS } from '@block-canvas/constants';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import Minus from '@icon/regular/minus.svg';
 import Plus from '@icon/regular/plus.svg';
-import { onMount, Show } from 'solid-js';
 import { Tooltip } from '@ui';
+import { onMount, Show } from 'solid-js';
 import { useToolManager } from '../signal/toolManager';
 import { useRenderState } from '../store/RenderState';
 

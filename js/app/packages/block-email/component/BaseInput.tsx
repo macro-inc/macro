@@ -25,7 +25,6 @@ import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/me
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
-import { HoverCard, Tooltip } from '@ui';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -80,7 +79,7 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
-import { Button, cn } from '@ui';
+import { Button, cn, HoverCard, Tooltip } from '@ui';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -1729,9 +1728,7 @@ export function BaseInput(props: {
             </Button>
           </div>
 
-          <Tooltip
-            label={form().sendTime() ? 'Send time is scheduled' : ''}
-          >
+          <Tooltip label={form().sendTime() ? 'Send time is scheduled' : ''}>
             <button
               disabled={
                 uploadAttachmentMutation.isPending ||

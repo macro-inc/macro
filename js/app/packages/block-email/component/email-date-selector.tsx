@@ -1,9 +1,8 @@
 import { DateSelector } from '@block-email/component/date-selector';
-import { Tooltip } from '@ui';
 import { isMobile } from '@core/mobile/isMobile';
 import IconX from '@icon/regular/x.svg';
 import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
-import { Button } from '@ui';
+import { Button, Tooltip } from '@ui';
 import { addYears } from 'date-fns/addYears';
 import { format } from 'date-fns/format';
 import { Show, type VoidComponent } from 'solid-js';
@@ -50,9 +49,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
                 }
               >
                 <Button size="icon-sm" disabled={props.disabled}>
-                  <ClockIcon
-                    class={state.selectedDate ? 'text-accent' : ''}
-                  />
+                  <ClockIcon class={state.selectedDate ? 'text-accent' : ''} />
                 </Button>
               </Tooltip>
             }

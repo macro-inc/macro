@@ -303,11 +303,7 @@ export function Lightbox(props: LightboxProps) {
             {isDownloading() ? <SpinnerIcon /> : <DownloadIcon />}
           </Button>
           <Dialog.CloseButton>
-            <Button
-              variant="ghost"
-              size="icon-md"
-              label="Close"
-            >
+            <Button variant="ghost" size="icon-md" label="Close">
               <XIcon />
             </Button>
           </Dialog.CloseButton>

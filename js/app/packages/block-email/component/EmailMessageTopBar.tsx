@@ -1,10 +1,9 @@
-import { Tooltip } from '@ui';
 import { useEmail } from '@core/context/user';
 import type { DateValue } from '@core/util/date';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
-import { Button } from '@ui';
+import { Button, Tooltip } from '@ui';
 import {
   type Accessor,
   createMemo,

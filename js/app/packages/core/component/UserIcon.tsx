@@ -12,7 +12,14 @@ import { isOk } from '@core/util/maybeResult';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { Avatar, type AvatarSize } from '@ui';
-import { createMemo, createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { HoverCard } from './HoverCard';
 import { UserTooltip } from './UserTooltip';

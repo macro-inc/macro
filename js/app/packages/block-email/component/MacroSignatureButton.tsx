@@ -1,8 +1,8 @@
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
-import { Tooltip } from '@ui';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useUserContext } from '@core/context/user';
+import { Tooltip } from '@ui';
 import { Show } from 'solid-js';
 
 interface MacroSignatureButtonProps {

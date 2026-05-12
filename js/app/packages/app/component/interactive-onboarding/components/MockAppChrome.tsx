@@ -1,5 +1,4 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { HoverCard } from '@ui';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import MacroIcon from '@macro-icons/macro-logo.svg';
@@ -12,7 +11,7 @@ import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
 import { AnimatedPlusIcon } from '@macro-icons/wide/animating/plus';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
-import { cn } from '@ui';
+import { cn, HoverCard } from '@ui';
 import {
   createSignal,
   For,

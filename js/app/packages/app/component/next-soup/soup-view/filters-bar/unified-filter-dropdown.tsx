@@ -14,7 +14,6 @@ import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
-import { Tooltip } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -24,7 +23,7 @@ import CheckIcon from '@icon/regular/check.svg';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useContacts } from '@queries/contacts/contacts';
-import { cn, Dropdown, Layer } from '@ui';
+import { cn, Dropdown, Layer, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
