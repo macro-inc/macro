@@ -5,7 +5,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { Tabs } from '@core/component/Tabs';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
-import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { type EntityData, InlineEntity } from '@entity';
@@ -261,7 +261,8 @@ export function CommandMenuInner(props: {
     CommandState.setQuery('');
   }
 
-  registerHotkey({
+
+  const navDownHotkey = registerHotkey({
     hotkey: ['arrowdown', 'ctrl+j'],
     scopeId: hotkeyScope,
     description: 'Move selection down',
@@ -275,7 +276,7 @@ export function CommandMenuInner(props: {
     hide: true,
   });
 
-  registerHotkey({
+  const navUpHotkey = registerHotkey({
     hotkey: ['arrowup', 'ctrl+k'],
     scopeId: hotkeyScope,
     description: 'Move selection up',
@@ -291,7 +292,7 @@ export function CommandMenuInner(props: {
     hide: true,
   });
 
-  registerHotkey({
+  const confirmHotkey = registerHotkey({
     hotkey: 'enter',
     scopeId: hotkeyScope,
     description: 'Select item',
@@ -306,7 +307,7 @@ export function CommandMenuInner(props: {
     runWithInputFocused: true,
   });
 
-  registerHotkey({
+  const confirmSplitHotkey = registerHotkey({
     hotkey: 'shift+enter',
     scopeId: hotkeyScope,
     description: 'Open in new split',
@@ -321,7 +322,7 @@ export function CommandMenuInner(props: {
     runWithInputFocused: true,
   });
 
-  registerHotkey({
+  const escapeHotkey = registerHotkey({
     hotkey: 'escape',
     scopeId: hotkeyScope,
     description: 'Close command menu',
@@ -341,7 +342,7 @@ export function CommandMenuInner(props: {
   });
 
   // Backspace when query is empty goes back from command scope
-  registerHotkey({
+  const backspaceHotkey = registerHotkey({
     hotkey: 'backspace',
     scopeId: hotkeyScope,
     description: 'Go back',
@@ -363,7 +364,7 @@ export function CommandMenuInner(props: {
     hide: true,
   });
 
-  registerHotkey({
+  const tabHotkey = registerHotkey({
     hotkey: 'tab',
     scopeId: hotkeyScope,
     description: 'Next category',
@@ -536,16 +537,10 @@ export function CommandMenuInner(props: {
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey
-                token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
-                class="space-x-1"
-              />
+              <Hotkey shortcut={navUpHotkey.hotkey()} class="space-x-1" />
             </div>
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey
-                token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
-                class="space-x-1"
-              />
+              <Hotkey shortcut={navDownHotkey.hotkey()} class="space-x-1" />
             </div>
           </div>
           Navigate
@@ -553,41 +548,26 @@ export function CommandMenuInner(props: {
 
         <Switch>
           <Match when={isInCommandScope()}>
-            <HotkeyHint
-              token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
-              label="Run action"
-            />
-            <HotkeyHint
-              token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
-              label="Back"
-            />
+            <HotkeyHint command={confirmHotkey} label="Run action" />
+            <HotkeyHint command={backspaceHotkey} label="Back" />
           </Match>
           <Match when={selectedIsCommand() || isEntityActionMode()}>
-            <HotkeyHint
-              token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
-              label="Run action"
-            />
+            <HotkeyHint command={confirmHotkey} label="Run action" />
           </Match>
           <Match when={selectedIsSearch()}>
-            <HotkeyHint
-              token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
-              label="Search"
-            />
+            <HotkeyHint command={confirmHotkey} label="Search" />
             <Show when={canOpenInNewSplit()}>
               <HotkeyHint
-                token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
+                command={confirmSplitHotkey}
                 label="Search in new split"
               />
             </Show>
           </Match>
           <Match when={selectedIsEntity()}>
-            <HotkeyHint
-              token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
-              label="Open"
-            />
+            <HotkeyHint command={confirmHotkey} label="Open" />
             <Show when={canOpenInNewSplit()}>
               <HotkeyHint
-                token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
+                command={confirmSplitHotkey}
                 label="Open in new split"
               />
             </Show>
@@ -595,24 +575,13 @@ export function CommandMenuInner(props: {
         </Switch>
 
         <Show when={!isInCommandScope() && !isEntityActionMode()}>
-          <HotkeyHint
-            token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
-            label="Category"
-          />
+          <HotkeyHint command={tabHotkey} label="Category" />
         </Show>
         <Show
           when={isInCommandScope()}
-          fallback={
-            <HotkeyHint
-              token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
-              label="Close"
-            />
-          }
+          fallback={<HotkeyHint command={escapeHotkey} label="Close" />}
         >
-          <HotkeyHint
-            token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
-            label="Back"
-          />
+          <HotkeyHint command={escapeHotkey} label="Back" />
         </Show>
       </Panel.Footer>
     </Panel>
@@ -702,11 +671,14 @@ function VirtualizedCommandList(props: {
   );
 }
 
-function HotkeyHint(props: { token: HotkeyToken; label: string }) {
+function HotkeyHint(props: {
+  command: RegisterHotkeyReturn;
+  label: string;
+}) {
   return (
     <span class="flex items-center gap-1">
       <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-        <Hotkey token={props.token} class="space-x-1" />
+        <Hotkey shortcut={props.command.hotkey()} class="space-x-1" />
       </div>
       {props.label}
     </span>

@@ -39,6 +39,7 @@ import {
   getKeyString,
   getScopeId,
   normalizeEventKeyPress,
+  prettyPrintHotkeyString,
   registerScope,
   removeCommandsFromTokenMap,
   removeScope,
@@ -131,6 +132,7 @@ export function registerHotkey(
 
   const noopDisposer: RegisterHotkeyReturn = {
     dispose: () => {},
+    hotkey: () => undefined,
     withGroup: (group) => {
       group.add(noopDisposer);
       return noopDisposer;
@@ -275,8 +277,14 @@ export function registerHotkey(
     }
   }
 
+  const primaryHotkey = hotkeys?.[0];
+  const prettyHotkey = primaryHotkey
+    ? prettyPrintHotkeyString(primaryHotkey)
+    : undefined;
+
   // Create disposer object
   const disposer: RegisterHotkeyReturn = {
+    hotkey: () => prettyHotkey,
     dispose: () => {
       // Remove from hotkey token map if it exists
       if (hotkeyToken) {

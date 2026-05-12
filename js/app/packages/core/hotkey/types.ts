@@ -198,6 +198,7 @@ export type HotkeyGroup = {
 export type RegisterHotkeyReturn = {
   dispose: () => void;
   commandScopeId?: string;
+  hotkey: () => string | undefined;
   /** Add this registration to a group for grouped disposal */
   withGroup: (group: HotkeyGroup) => RegisterHotkeyReturn;
 };
