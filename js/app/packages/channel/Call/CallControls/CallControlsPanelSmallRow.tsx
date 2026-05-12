@@ -1,3 +1,4 @@
+import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { DropdownMenuContent, MENU_ITEM_CLASS } from '@core/component/Menu';
 import { Tooltip } from '@core/component/Tooltip';
 import CheckIcon from '@icon/bold/check-bold.svg';
@@ -249,22 +250,13 @@ export function CallControlsPanelSmallRow(
                     : 'Share with team'}
                 </span>
                 <div class="ml-auto flex items-center gap-1.5 shrink-0">
-                  <div
-                    class="relative w-7 h-3 rounded-full transition-colors duration-80"
-                    classList={{
-                      'bg-edge': !callCtx.isSharedWithTeam(),
-                      'bg-ink-muted': callCtx.isSharedWithTeam(),
-                    }}
-                    aria-hidden
-                  >
-                    <div
-                      class="absolute top-0.5 size-2 rounded-full bg-panel transition-transform duration-200 ease-click"
-                      classList={{
-                        'translate-x-0.5': !callCtx.isSharedWithTeam(),
-                        'translate-x-4.5': callCtx.isSharedWithTeam(),
-                      }}
-                    />
-                  </div>
+                  <MiniToggleSwitch
+                    checked={callCtx.isSharedWithTeam()}
+                    size="SM"
+                    compact
+                    activeTrackClass="bg-ink-muted"
+                    switchRootClass="pointer-events-none"
+                  />
                   <Tooltip
                     placement="left"
                     tooltip="When on, all team members can view and search this call's transcript and AI summary."
