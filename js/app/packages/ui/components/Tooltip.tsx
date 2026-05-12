@@ -11,24 +11,17 @@ export type HotkeySequenceStep = {
   shortcut?: string;
 };
 
-export type LabelAndHotKeyProps = {
-  hotkeySequence?: HotkeySequenceStep[];
-  hotkeyToken?: HotkeyToken;
-  shortcut?: string;
-  label: string;
-};
-
 export type TooltipProps = ParentProps<{
-  hotkeySequence?: HotkeySequenceStep[];
-  hotkeyToken?: HotkeyToken;
-  shortcut?: string;
-  label: string;
   onOpenChange?: (open: boolean) => void;
+  hotkeySequence?: HotkeySequenceStep[];
   ref?: (el: HTMLElement) => void;
+  hotkeyToken?: HotkeyToken;
   placement?: Placement;
   as?: 'div' | 'span';
+  shortcut?: string;
   open?: boolean;
   class?: string;
+  label: string;
 }>;
 
 const DEFAULT_PLACEMENT: Placement = 'bottom';
@@ -39,52 +32,7 @@ const TOOLTIP_GUTTER = 4;
 const TOOLTIP_DELAY = 250;
 const TOOLTIP_FLIP = true;
 
-export function LabelAndHotKey(props: LabelAndHotKeyProps) {
-  const steps = (): HotkeySequenceStep[] => {
-    if (props.hotkeySequence?.length) { return props.hotkeySequence; }
-    if (props.hotkeyToken || props.shortcut) { return [{ token: props.hotkeyToken, shortcut: props.shortcut }]; }
-    return [];
-  };
-
-  return (
-    <div
-      class={cn(
-        'flex flex-row items-center space-x-2',
-        steps().length === 0 ? 'px-1' : 'px-0'
-      )}
-    >
-      <div class="text-xs capitalize">{props.label}</div>
-      <Show when={steps().length > 0}>
-        <div class="flex items-center gap-1 ml-auto">
-          <For each={steps()}>
-            {(step, ndx) => (
-              <>
-                <Hotkey
-                  shortcut={step.shortcut}
-                  token={step.token}
-                  theme="subtle"
-                />
-                <Show when={ndx() < steps().length - 1}>
-                  <span class="text-ink-extra-muted">then</span>
-                </Show>
-              </>
-            )}
-          </For>
-        </div>
-      </Show>
-    </div>
-  );
-}
-
 /**
- * A hover-engaged tooltip with built-in chrome.
- *
- * Renders a single label row with an optional hotkey badge (driven by
- * `hotkeyToken`, `shortcut`, or `hotkeySequence`).
- *
- * For rich JSX hover content (icons, lists, structured info, selectable
- * text), use `HoverCard`. For click-engaged surfaces, use `Popover`.
- *
  * @example
  * <Tooltip label="Close"><Button>X</Button></Tooltip>
  *
@@ -93,6 +41,12 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
  * </Tooltip>
  */
 export function Tooltip(props: TooltipProps) {
+  const steps = (): HotkeySequenceStep[] => {
+    if (props.hotkeySequence?.length) { return props.hotkeySequence; }
+    if (props.hotkeyToken || props.shortcut) { return [{ token: props.hotkeyToken, shortcut: props.shortcut }]; }
+    return [];
+  };
+
   return (
     <KobalteTooltip
       placement={props.placement ?? DEFAULT_PLACEMENT}
@@ -121,12 +75,32 @@ export function Tooltip(props: TooltipProps) {
             class="flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word"
             depth={3}
           >
-            <LabelAndHotKey
-              hotkeySequence={props.hotkeySequence}
-              hotkeyToken={props.hotkeyToken}
-              shortcut={props.shortcut}
-              label={props.label}
-            />
+            <div
+              class={cn(
+                'flex flex-row items-center space-x-2',
+                steps().length === 0 ? 'px-1' : 'px-0'
+              )}
+            >
+              <div class="text-xs capitalize">{props.label}</div>
+              <Show when={steps().length > 0}>
+                <div class="flex items-center gap-1 ml-auto">
+                  <For each={steps()}>
+                    {(step, ndx) => (
+                      <>
+                        <Hotkey
+                          shortcut={step.shortcut}
+                          token={step.token}
+                          theme="subtle"
+                        />
+                        <Show when={ndx() < steps().length - 1}>
+                          <span class="text-ink-extra-muted">then</span>
+                        </Show>
+                      </>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </div>
           </Surface>
         </KobalteTooltip.Content>
       </KobalteTooltip.Portal>

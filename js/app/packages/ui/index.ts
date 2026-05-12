@@ -1,5 +1,5 @@
 /* components */
-export { Tooltip, LabelAndHotKey } from './components/Tooltip';
+export { Tooltip } from './components/Tooltip';
 export { HoverCard } from './components/HoverCard';
 export { Popover } from './components/Popover';
 export { SegmentedControl } from './components/SegmentedControl';
@@ -17,7 +17,7 @@ export { Layer } from './components/Layer';
 
 /* types */
 export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
-export type { HotkeySequenceStep, LabelAndHotKeyProps } from './components/Tooltip';
+export type { HotkeySequenceStep } from './components/Tooltip';
 export type { HoverCardProps } from './components/HoverCard';
 export type { ButtonProps } from './components/Button';
 export type { DialogProps } from './components/Dialog';
