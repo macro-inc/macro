@@ -207,11 +207,17 @@ fn build_channel_search_request(
     Ok(request_builder.build())
 }
 
+pub struct ChannelSearchResults {
+    pub hits: Vec<SearchHit>,
+    pub next_cursor: SearchCursorOption,
+    pub total: i64,
+}
+
 #[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_channel(
     client: &opensearch::OpenSearch,
     args: ChannelSearchArgs,
-) -> Result<(Vec<SearchHit>, SearchCursorOption)> {
+) -> Result<ChannelSearchResults> {
     let mut search_request = build_channel_search_request(&args)?.to_json();
     inject_fragment_size(&mut search_request, 1000);
     exclude_source_content(&mut search_request);
@@ -246,20 +252,22 @@ pub(crate) async fn search_channel(
             raw_body: String::from_utf8_lossy(&bytes).to_string(),
         })?;
 
-    let mut results: Vec<SearchHit> = result
+    let total = result.hits.total.value;
+
+    let mut hits: Vec<SearchHit> = result
         .hits
         .hits
         .into_iter()
         .map(channel_hit_to_search_hit)
         .collect();
 
-    let has_more = results.len() > args.page_size as usize;
+    let has_more = hits.len() > args.page_size as usize;
     if has_more {
-        results.pop();
+        hits.pop();
     }
 
-    let cursor = if has_more {
-        let last_cursor = results
+    let next_cursor = if has_more {
+        let last_cursor = hits
             .last()
             .and_then(|last| build_channel_cursor(last, args.sort_mode));
         SearchCursorOption::NotDone(last_cursor)
@@ -267,7 +275,11 @@ pub(crate) async fn search_channel(
         SearchCursorOption::Done
     };
 
-    Ok((results, cursor))
+    Ok(ChannelSearchResults {
+        hits,
+        next_cursor,
+        total,
+    })
 }
 
 fn channel_hit_to_search_hit(hit: Hit<ChannelMessageIndex>) -> SearchHit {
