@@ -364,6 +364,7 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
     }
 
     await invalidateUserTeams();
+
     clearPendingTeam();
 
     analytics.track('onboarding_team_created', {
