@@ -399,7 +399,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
 
   return (
     <Button
-      class="flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1"
+      class="flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-xs py-1"
       variant="ghost"
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
@@ -412,12 +412,12 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       <div class="size-4 shrink-0">
         <Dynamic component={props.icon} triggerAnimation={hovering()} />
       </div>
-      <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+      <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
         {props.label}
       </span>
       <Show when={hovering() && props.hotkeyToken}>
         {(token) => (
-          <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:invisible">
+          <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:hidden">
             <Hotkey token={token()} class="flex gap-1" />
           </div>
         )}
@@ -735,7 +735,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           draggable={false}
           variant="ghost"
           class={cn(
-            'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-xs py-1 text-ink-extra-muted',
+            'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-xs py-1 text-ink-extra-muted',
             isActive() && 'bg-ink/5 not-disabled:hover:bg-ink/10 text-ink'
           )}
           tooltipPlacement="right"
@@ -788,14 +788,14 @@ const SidebarLink = (props: SidebarLinkProps) => {
             </div>
           </Show>
 
-          <div class="flex items-center gap-1">
-            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+          <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
+            <span class="whitespace-nowrap">
               {props.label}
             </span>
           </div>
 
           <Show when={isHovering() && !props.hotkeyVisible}>
-            <div class="group-data-[slim=true]/sidebar:invisible ml-auto">
+            <div class="group-data-[slim=true]/sidebar:hidden ml-auto">
               <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
                 <Show when={!props.standaloneHotkey}>
                   <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
