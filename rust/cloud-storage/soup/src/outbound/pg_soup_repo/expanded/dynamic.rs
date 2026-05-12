@@ -55,15 +55,6 @@ static DOCUMENT_TOP_CLAUSE: &str = r#"
                     END::timestamptz as sort_ts
                 FROM "Document" d
                 LEFT JOIN document_sub_type dt ON dt.document_id = d.id
-                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
-                WHERE d."deletedAt" IS NULL
-                  AND EXISTS (
-                      SELECT 1
-                      FROM entity_access ea
-                      WHERE ea.entity_id::text = d.id
-                        AND ea.entity_type = 'document'
-                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
-                  )
 "#;
 
 static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
@@ -77,6 +68,18 @@ static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
                     AND ep_status.entity_id = d.id
                     AND ep_status.entity_type = 'TASK'
                     AND ep_status.property_definition_id = $7
+"#;
+
+static DOCUMENT_TOP_WHERE_CLAUSE: &str = r#"
+                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
+                WHERE d."deletedAt" IS NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM entity_access ea
+                      WHERE ea.entity_id::text = d.id
+                        AND ea.entity_type = 'document'
+                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+                  )
 "#;
 
 static CHAT_TOP_CLAUSE: &str = r#"
@@ -611,6 +614,7 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
         if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
+        builder.push(DOCUMENT_TOP_WHERE_CLAUSE);
         builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
