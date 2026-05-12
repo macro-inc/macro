@@ -886,3 +886,98 @@ fn test_has_message_literals_false_when_only_calendar_only() {
     let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
     assert!(!has_message_literals(&expr));
 }
+
+#[test]
+fn test_build_thread_email_filter_created_at_greater_than() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let dt = chrono::Utc.with_ymd_and_hms(2024, 1, 15, 12, 0, 0).unwrap();
+    let expr = Expr::Literal(EmailLiteral::CreatedAt(DateLiteral::GreaterThan(dt)));
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("t.created_at >"));
+    assert!(debug.contains("2024-01-15"));
+}
+
+#[test]
+fn test_build_thread_email_filter_created_at_less_than_or_equal() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let dt = chrono::Utc.with_ymd_and_hms(2024, 6, 30, 23, 59, 59).unwrap();
+    let expr = Expr::Literal(EmailLiteral::CreatedAt(DateLiteral::LessThanOrEqual(dt)));
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("t.created_at <="));
+    assert!(debug.contains("2024-06-30"));
+}
+
+#[test]
+fn test_build_thread_email_filter_updated_at_uses_sort_ts_field() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let dt = chrono::Utc.with_ymd_and_hms(2024, 3, 1, 0, 0, 0).unwrap();
+    let expr = Expr::Literal(EmailLiteral::UpdatedAt(DateLiteral::GreaterThanOrEqual(dt)));
+
+    // Inbox view uses latest_inbound_message_ts
+    let inbox_sort_ts = "t.latest_inbound_message_ts";
+    let result = build_thread_email_filter(&expr, inbox_sort_ts);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("t.latest_inbound_message_ts >="));
+    assert!(debug.contains("2024-03-01"));
+}
+
+#[test]
+fn test_build_thread_email_filter_updated_at_with_different_sort_fields() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let dt = chrono::Utc.with_ymd_and_hms(2024, 5, 15, 0, 0, 0).unwrap();
+    let expr = Expr::Literal(EmailLiteral::UpdatedAt(DateLiteral::LessThan(dt)));
+
+    // Sent view uses latest_outbound_message_ts
+    let sent_sort_ts = "t.latest_outbound_message_ts";
+    let result = build_thread_email_filter(&expr, sent_sort_ts);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("t.latest_outbound_message_ts <"));
+    assert!(!debug.contains("t.updated_at <"));
+}
+
+#[test]
+fn test_has_thread_literals_true_when_created_at_present() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let dt = chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+    let expr = Expr::Literal(EmailLiteral::CreatedAt(DateLiteral::GreaterThan(dt)));
+    assert!(has_thread_literals(&expr));
+}
+
+#[test]
+fn test_has_thread_literals_true_when_updated_at_present() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let dt = chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+    let expr = Expr::Literal(EmailLiteral::UpdatedAt(DateLiteral::LessThan(dt)));
+    assert!(has_thread_literals(&expr));
+}
+
+#[test]
+fn test_has_message_literals_false_when_only_date_filters() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let dt = chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+    let expr = Expr::and(
+        Expr::Literal(EmailLiteral::CreatedAt(DateLiteral::GreaterThan(dt))),
+        Expr::Literal(EmailLiteral::UpdatedAt(DateLiteral::LessThan(dt))),
+    );
+    assert!(!has_message_literals(&expr));
+}
