@@ -60,6 +60,7 @@ export type ScalarFieldFilters = {
   chatUpdatedAt?: DateRangeFilter;
   folderCreatedAt?: DateRangeFilter;
   folderUpdatedAt?: DateRangeFilter;
+  emailUpdatedAt?: DateRangeFilter;
 };
 
 export type FieldFilters = ArrayFieldFilters & ScalarFieldFilters;

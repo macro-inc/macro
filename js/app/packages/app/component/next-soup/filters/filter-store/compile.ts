@@ -30,7 +30,8 @@ type DateRangeFieldName =
   | 'chatCreatedAt'
   | 'chatUpdatedAt'
   | 'folderCreatedAt'
-  | 'folderUpdatedAt';
+  | 'folderUpdatedAt'
+  | 'emailUpdatedAt';
 
 type CompiledFieldName = Exclude<FieldName, 'properties' | DateRangeFieldName>;
 
@@ -113,6 +114,7 @@ const DATE_RANGE_FIELDS: Record<
   chatUpdatedAt: { target: 'cf', field: 'ua' },
   folderCreatedAt: { target: 'pf', field: 'ca' },
   folderUpdatedAt: { target: 'pf', field: 'ua' },
+  emailUpdatedAt: { target: 'ef', field: 'ua' },
 };
 
 const expandDateRange = (

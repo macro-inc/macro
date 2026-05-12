@@ -44,6 +44,7 @@ const getInboxSignalFilters = () => {
       documentUpdatedAt: { gte: twoWeeksAgo },
       emailDone: false,
       emailImportance: true,
+      emailUpdatedAt: { gte: twoWeeksAgo },
       channelDone: false,
       chatDone: false,
       chatUpdatedAt: { gte: twoWeeksAgo },
