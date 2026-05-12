@@ -168,7 +168,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               <Tooltip label="Enter to send" placement="top">
                 <div class="flex items-center">
                   <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1 py-0.5">
-                    <Hotkey token={TOKENS.chat.send} />
+                    <Hotkey shortcut="enter" />
                   </div>
                 </div>
               </Tooltip>
