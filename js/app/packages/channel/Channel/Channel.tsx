@@ -416,7 +416,6 @@ export function Channel(props: ChannelProps) {
                   class="absolute top-2 right-3 z-10 w-80 max-w-[calc(100%-1.5rem)]"
                   controller={findBar}
                   direction="desc"
-                  placeholder="Find"
                 />
               </Show>
               <Show when={messages().length > 0}>
