@@ -99,10 +99,8 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
 
   const headerRowClass = createMemo(() =>
     cn(
-      'py-1 px-2 border-b border-edge-muted bg-accent/5 rounded-t-lg flex items-center gap-1 min-w-0 w-full',
-      !slim() || showExpandToFullCall()
-        ? 'justify-between gap-0'
-        : 'justify-center'
+      'py-1 px-2 border-b border-edge-muted bg-accent/5 rounded-t-lg flex items-center min-w-0 w-full',
+      slim() ? 'justify-center' : 'justify-between'
     )
   );
 

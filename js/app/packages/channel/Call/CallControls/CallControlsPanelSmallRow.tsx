@@ -5,12 +5,12 @@ import Info from '@icon/regular/info.svg';
 import Microphone from '@icon/regular/microphone.svg';
 import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
 import Screencast from '@icon/regular/screencast.svg';
-import Users from '@icon/regular/users.svg';
 import VideoCamera from '@icon/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/regular/video-camera-slash.svg';
 import VideoConference from '@icon/regular/video-conference.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
+import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
@@ -242,7 +242,7 @@ export function CallControlsPanelSmallRow(
               onSelect={() => void handleToggleShareWithTeam()}
             >
               <div class="flex min-w-0 flex-1 items-center gap-2">
-                <Users class="size-4 shrink-0" />
+                <ShareNetwork class="size-4 shrink-0" />
                 <span class="min-w-0 flex-1">
                   {callCtx.isSharedWithTeam()
                     ? 'Shared with team'
