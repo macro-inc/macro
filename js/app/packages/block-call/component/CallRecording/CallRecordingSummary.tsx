@@ -1,3 +1,8 @@
+import {
+  StaticMarkdown,
+  StaticMarkdownContext,
+} from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { Accessor } from 'solid-js';
 import { createMemo, Show } from 'solid-js';
@@ -35,9 +40,11 @@ export function CallRecordingSummarySection(props: {
           }
         >
           {(text) => (
-            <p class="text-sm/6 text-ink text-pretty whitespace-pre-wrap">
-              {text()}
-            </p>
+            <div class="text-sm/6 text-ink text-pretty">
+              <StaticMarkdownContext theme={aiChatTheme}>
+                <StaticMarkdown markdown={text()} />
+              </StaticMarkdownContext>
+            </div>
           )}
         </Show>
       </section>
