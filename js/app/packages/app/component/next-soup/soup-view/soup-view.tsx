@@ -62,6 +62,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { Resize } from '@core/component/Resize';
 import { Tooltip } from '@ui';
+import { TOKENS } from '@core/hotkey/tokens';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -358,7 +359,7 @@ export const SoupView = (props: SoupViewProps) => {
                   )}
                   collapsed={() => (
                     <Show when={!narrowSearchExpanded()}>
-                      <Tooltip label="Search" shortcut="⌘F">
+                      <Tooltip label="Search" hotkeyToken={TOKENS.soup.openSearch}>
                         <Button
                           variant="ghost"
                           class="p-1 rounded-xs"

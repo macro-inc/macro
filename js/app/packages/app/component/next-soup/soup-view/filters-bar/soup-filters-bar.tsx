@@ -6,6 +6,7 @@ import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Tooltip } from '@ui';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
 import { Button } from '@ui';
@@ -68,7 +69,7 @@ export const SoupFiltersBar = () => {
           isOptionActive={isOptionActive}
         />
         <div class="flex-1" />
-        <Tooltip label="Preview" shortcut="space">
+        <Tooltip label="Preview" hotkeyToken={TOKENS.unifiedList.togglePreview}>
           <Button variant="ghost" size="icon-sm" onClick={togglePreview}>
             <EyeIcon />
           </Button>

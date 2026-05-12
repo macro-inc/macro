@@ -5,6 +5,7 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
@@ -181,7 +182,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
         </div>
         <Show when={!hasContent() && !props.onDismiss}>
           <div class="shrink-0 text-xxs text-ink-extra-muted/50 rounded-sm border border-ink/5 px-1.5 py-px group-focus-within:hidden">
-            <Hotkey shortcut="cmd+f" class="flex gap-1" />
+            <Hotkey token={TOKENS.soup.openSearch} class="flex gap-1" />
           </div>
         </Show>
         <Show when={hasContent() || props.onDismiss}>
