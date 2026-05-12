@@ -76,9 +76,7 @@ export function CallRecordingTranscriptColumn(props: {
               accordionOpenMaxVh={38}
               onToggle={props.onToggleParticipants}
             >
-              <CallRecordingParticipantsSection
-                record={props.record}
-              />
+              <CallRecordingParticipantsSection record={props.record} />
             </CallRecordingSectionShell>
           </Show>
         </div>
