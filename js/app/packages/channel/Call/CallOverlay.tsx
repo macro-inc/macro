@@ -1,9 +1,14 @@
+import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
+import { Tooltip } from '@core/component/Tooltip';
 import { tryMacroId, useDisplayName } from '@core/user';
+import Info from '@icon/regular/info.svg';
+import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
 import { cn } from '@ui';
 import { type RemoteParticipant, Track } from 'livekit-client';
 import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
+import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { TrackView } from './TrackView';
 
 function VideoTag(props: {
@@ -142,6 +147,14 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
 export function CallOverlay(props: { onLeave: () => void }) {
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
+  const toggleShareWithTeam = useToggleShareWithTeamMutation();
+
+  const handleToggleShareWithTeam = async () => {
+    const callId = callCtx.activeCallId();
+    if (!callId) return;
+    const newValue = await toggleShareWithTeam.mutateAsync(callId);
+    callCtx.setSharedWithTeam(newValue);
+  };
 
   const participants = () =>
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
@@ -238,11 +251,32 @@ export function CallOverlay(props: { onLeave: () => void }) {
             />
           </div>
         </Show>
+
       </div>
 
       {/* Controls bar */}
-      <div class="flex items-center justify-center p-3 pt-1 bg-surface-1">
+      <div class="relative flex items-center justify-center p-3 pt-1 bg-surface-1">
         <CallControls onLeave={props.onLeave} />
+        <div class="absolute left-3 flex items-center gap-2">
+          <span class="text-xs text-ink-muted whitespace-nowrap">
+            {callCtx.isSharedWithTeam() ? 'Shared with team' : 'Share with team'}
+          </span>
+          <div class="flex items-center gap-1">
+            <ShareNetwork class={cn('size-3 shrink-0', callCtx.isSharedWithTeam() ? 'text-accent' : 'text-ink-muted')} aria-hidden />
+            <MiniToggleSwitch
+              checked={callCtx.isSharedWithTeam()}
+              onChange={() => void handleToggleShareWithTeam()}
+              disabled={isConnecting()}
+              size="SM"
+            />
+          </div>
+          <Tooltip
+            placement="top"
+            tooltip="When shared, all team members can view and search this call's transcript and AI summary in their Macro feed."
+          >
+            <Info class="size-3 shrink-0 text-ink-subtle" />
+          </Tooltip>
+        </div>
       </div>
     </div>
   );

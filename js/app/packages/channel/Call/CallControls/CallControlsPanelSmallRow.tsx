@@ -1,5 +1,7 @@
 import { DropdownMenuContent, MENU_ITEM_CLASS } from '@core/component/Menu';
+import { Tooltip } from '@core/component/Tooltip';
 import CheckIcon from '@icon/bold/check-bold.svg';
+import Info from '@icon/regular/info.svg';
 import Microphone from '@icon/regular/microphone.svg';
 import MicrophoneSlash from '@icon/regular/microphone-slash.svg';
 import Screencast from '@icon/regular/screencast.svg';
@@ -57,7 +59,7 @@ export function CallControlsPanelSmallRow(
           class={cn(
             'flex items-center justify-center size-4 shrink-0 rounded-md border-0 bg-transparent transition-colors',
             isConnecting() &&
-              'opacity-50 pointer-events-none cursor-not-allowed',
+              'opacity-50 pointer-events-none',
             !isConnecting() &&
               (!callCtx.isAudioMuted() ||
                 !callCtx.isVideoMuted() ||
@@ -247,6 +249,30 @@ export function CallControlsPanelSmallRow(
                     ? 'Shared with team'
                     : 'Share with team'}
                 </span>
+                <div class="ml-auto flex items-center gap-1.5 shrink-0">
+                  <div
+                    class="relative w-7 h-3 rounded-full transition-colors duration-80"
+                    classList={{
+                      'bg-edge': !callCtx.isSharedWithTeam(),
+                      'bg-accent': callCtx.isSharedWithTeam(),
+                    }}
+                    aria-hidden
+                  >
+                    <div
+                      class="absolute top-0.5 size-2 rounded-full bg-panel transition-transform duration-200 ease-click"
+                      classList={{
+                        'translate-x-0.5': !callCtx.isSharedWithTeam(),
+                        'translate-x-4.5': callCtx.isSharedWithTeam(),
+                      }}
+                    />
+                  </div>
+                  <Tooltip
+                    placement="left"
+                    tooltip="When shared, all team members can view and search this call's transcript and AI summary in their Macro feed."
+                  >
+                    <Info class="size-3 text-ink-subtle" />
+                  </Tooltip>
+                </div>
               </div>
             </DropdownMenu.Item>
 

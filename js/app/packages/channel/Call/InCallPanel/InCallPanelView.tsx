@@ -1,11 +1,16 @@
+import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
+import { Tooltip } from '@core/component/Tooltip';
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
 import ArrowsOut from '@icon/regular/arrows-out.svg';
+import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
 import { cn } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';
 import type { CallControlsVariant } from '../CallControls/CallControls';
 import { CallControls } from '../CallControls/CallControls';
+import { useCallContext } from '../CallContext';
 import type { InCallPanelProps } from '../InCallPanel/types';
 import { openChannelCallTab } from '../open-channel-call-tab';
+import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import {
   IN_CALL_ROSTER_CARD_CLASS,
   InCallParticipantsListPopover,
@@ -26,6 +31,15 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
     onLeaveCall: props.onLeaveCall,
     onJoinCall: props.onJoinCall,
   });
+  const callCtx = useCallContext();
+  const toggleShareWithTeam = useToggleShareWithTeamMutation();
+
+  const handleToggleShareWithTeam = async () => {
+    const callId = callCtx.activeCallId();
+    if (!callId) return;
+    const newValue = await toggleShareWithTeam.mutateAsync(callId);
+    callCtx.setSharedWithTeam(newValue);
+  };
 
   /** Memo so `props.isSlim` (boolean or accessor) always drives updates. */
   const isSlimLayout = createMemo((): boolean => {
@@ -120,25 +134,48 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
             </Show>
           </div>
 
-          <Show when={showExpandToFullCall()}>
-            <button
-              type="button"
-              class={cn(
-                'shrink-0 transition-colors hover:bg-accent/30 outline-0 outline-accent/50 hover:outline-1 hover-transition-outline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-edge-muted',
-                slim() && 'animate-pulse hover:outline-0'
-              )}
-              title="Open full call view"
-              aria-label="Open full call view"
-              onClick={() => {
-                const id = panel.callCtx.activeChannelId();
-                if (id) void openChannelCallTab(id);
-              }}
-            >
-              <ArrowsOut
-                class={cn('text-accent', slim() ? 'size-3.5' : 'size-4')}
-              />
-            </button>
-          </Show>
+          <div class="flex items-center gap-1 shrink-0">
+            <Show when={!slim()}>
+              <Tooltip
+                placement="top"
+                tooltip="When on, all team members can view and search this call's transcript and AI summary in their Macro feed."
+              >
+                <div class="flex items-center gap-1 px-1">
+                  <ShareNetwork
+                    class={cn('size-3 shrink-0', callCtx.isSharedWithTeam() ? 'text-accent' : 'text-ink-muted')}
+                    aria-hidden
+                  />
+                  <MiniToggleSwitch
+                    checked={callCtx.isSharedWithTeam()}
+                    onChange={() => void handleToggleShareWithTeam()}
+                    disabled={callCtx.isConnecting()}
+                    size="SM"
+                    compact
+                  />
+                </div>
+              </Tooltip>
+            </Show>
+
+            <Show when={showExpandToFullCall()}>
+              <button
+                type="button"
+                class={cn(
+                  'shrink-0 transition-colors hover:bg-accent/30 outline-0 outline-accent/50 hover:outline-1 hover-transition-outline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-edge-muted',
+                  slim() && 'animate-pulse hover:outline-0'
+                )}
+                title="Open full call view"
+                aria-label="Open full call view"
+                onClick={() => {
+                  const id = panel.callCtx.activeChannelId();
+                  if (id) void openChannelCallTab(id);
+                }}
+              >
+                <ArrowsOut
+                  class={cn('text-accent', slim() ? 'size-3.5' : 'size-4')}
+                />
+              </button>
+            </Show>
+          </div>
         </div>
 
         <div
