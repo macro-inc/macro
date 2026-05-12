@@ -406,11 +406,13 @@ fn test_build_query_orders_by_id_to_match_cursor_tiebreak() {
     assert!(!sql.contains("ORDER BY t.effective_ts DESC, t.updated_at DESC"));
 }
 
+const DEFAULT_SORT_TS: &str = "t.updated_at";
+
 #[test]
 fn test_build_thread_email_filter_single_thread_id() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));
-    let result = build_thread_email_filter(&expr);
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
     let debug = result.to_debug_sql();
 
     assert!(debug.contains("t.id = "));
@@ -426,7 +428,7 @@ fn test_build_thread_email_filter_multiple_thread_ids() {
         Expr::Literal(EmailLiteral::ThreadId(id1)),
         Expr::Literal(EmailLiteral::ThreadId(id2)),
     );
-    let result = build_thread_email_filter(&expr);
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
     let debug = result.to_debug_sql();
 
     assert!(result.has_bind_uuid(&id1));
@@ -439,7 +441,7 @@ fn test_build_thread_email_filter_multiple_thread_ids() {
 #[test]
 fn test_build_thread_email_filter_maps_sender_to_true() {
     let expr = Expr::Literal(EmailLiteral::Sender(complete("test@example.com")));
-    let result = build_thread_email_filter(&expr);
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
     let debug = result.to_debug_sql();
 
     assert!(debug.contains("TRUE"));
@@ -466,7 +468,7 @@ fn test_combined_thread_id_and_sender_splits_correctly() {
         Expr::Literal(EmailLiteral::Sender(complete("sender@example.com"))),
     );
 
-    let thread_result = build_thread_email_filter(&expr);
+    let thread_result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
     let thread_debug = thread_result.to_debug_sql();
     assert!(thread_result.has_bind_uuid(&id));
     assert!(!thread_debug.contains("from_contact_id"));
@@ -518,7 +520,7 @@ fn test_has_both_literals_in_combined_ast() {
 #[test]
 fn test_build_thread_email_filter_single_project_id() {
     let expr = Expr::Literal(EmailLiteral::ProjectId("project-123".to_string()));
-    let result = build_thread_email_filter(&expr);
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
     let debug = result.to_debug_sql();
 
     assert!(debug.contains("t.project_id = "));
@@ -532,7 +534,7 @@ fn test_build_thread_email_filter_multiple_project_ids() {
         Expr::Literal(EmailLiteral::ProjectId("project-1".to_string())),
         Expr::Literal(EmailLiteral::ProjectId("project-2".to_string())),
     );
-    let result = build_thread_email_filter(&expr);
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
     let debug = result.to_debug_sql();
 
     assert!(debug.contains("OR"));
@@ -572,7 +574,7 @@ fn test_combined_project_id_and_sender_splits_correctly() {
         Expr::Literal(EmailLiteral::Sender(complete("sender@example.com"))),
     );
 
-    let thread_result = build_thread_email_filter(&expr);
+    let thread_result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
     let thread_debug = thread_result.to_debug_sql();
     assert!(thread_debug.contains("t.project_id = "));
     assert!(thread_result.has_bind_string("project-123"));
@@ -589,7 +591,7 @@ fn test_combined_project_id_and_sender_splits_correctly() {
 #[test]
 fn test_sql_injection_project_id_not_in_raw_sql() {
     let expr = Expr::Literal(EmailLiteral::ProjectId("'; DROP TABLE--".to_string()));
-    let result = build_thread_email_filter(&expr);
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
 
     assert!(result.has_bind_string("'; DROP TABLE--"));
     assert!(result.has_no_raw_containing("DROP"));
@@ -635,7 +637,7 @@ fn test_sql_injection_user_label_not_in_raw_sql() {
 fn test_sql_injection_thread_id_not_in_raw_sql() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));
-    let result = build_thread_email_filter(&expr);
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
 
     assert!(result.has_bind_uuid(&id));
     assert!(result.has_no_raw_containing(&id.to_string()));
@@ -842,7 +844,7 @@ fn test_full_query_emits_matching_threads_cte_and_in_reference() {
 #[test]
 fn test_build_thread_email_filter_calendar_only_true_emits_ics_exists() {
     let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
-    let result = build_thread_email_filter(&expr);
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
     let debug = result.to_debug_sql();
 
     assert!(debug.contains("EXISTS"));
@@ -856,7 +858,7 @@ fn test_build_thread_email_filter_calendar_only_true_emits_ics_exists() {
 #[test]
 fn test_build_thread_email_filter_calendar_only_false_maps_to_true() {
     let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
-    let result = build_thread_email_filter(&expr);
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
     let debug = result.to_debug_sql();
 
     assert!(debug.contains("TRUE"));
