@@ -1,4 +1,4 @@
-import { Tooltip } from '@ui';
+import { HoverCard } from '@core/component/HoverCard';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { emailToMacroId } from '@core/user';
 import { createSignal, type JSX } from 'solid-js';
@@ -18,9 +18,13 @@ export function EmailUserTooltip(props: EmailUserTooltipProps) {
   const [open, setOpen] = createSignal(false);
 
   return (
-    <Tooltip placement="bottom" open={open()} onOpenChange={setOpen}>
-      <Tooltip.Trigger as="span">{props.children}</Tooltip.Trigger>
-      <Tooltip.Content>
+    <HoverCard
+      placement="bottom"
+      open={open()}
+      onOpenChange={setOpen}
+      triggerAs="span"
+      trigger={props.children}
+      content={
         <UserTooltip
           displayName={props.recipient?.name ?? props.recipient?.email ?? ''}
           email={props.recipient?.email ?? undefined}
@@ -31,7 +35,7 @@ export function EmailUserTooltip(props: EmailUserTooltipProps) {
           }
           onClose={() => setOpen(false)}
         />
-      </Tooltip.Content>
-    </Tooltip>
+      }
+    />
   );
 }

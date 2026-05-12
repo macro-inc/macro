@@ -1,7 +1,7 @@
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { HoverCard } from '@core/component/HoverCard';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@ui';
 import { UserIcon } from '@core/component/UserIcon';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { useEmail, useUserId } from '@core/context/user';
@@ -50,12 +50,14 @@ function ChipWithUserTooltip(props: {
 }) {
   const [open, setOpen] = createSignal(false);
   return (
-    <Tooltip placement="bottom" open={open()} onOpenChange={setOpen}>
-      <Tooltip.Trigger>{props.chip}</Tooltip.Trigger>
-      <Tooltip.Content>
-        {props.renderTooltip(() => setOpen(false))}
-      </Tooltip.Content>
-    </Tooltip>
+    <HoverCard
+      placement="bottom"
+      open={open()}
+      onOpenChange={setOpen}
+      triggerAs="div"
+      trigger={props.chip}
+      content={props.renderTooltip(() => setOpen(false))}
+    />
   );
 }
 

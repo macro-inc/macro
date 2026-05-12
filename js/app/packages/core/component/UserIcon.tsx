@@ -14,7 +14,7 @@ import { commsServiceClient } from '@service-comms/client';
 import { Avatar, type AvatarSize } from '@ui';
 import { createMemo, createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
-import { Tooltip } from '@ui';
+import { HoverCard } from './HoverCard';
 import { UserTooltip } from './UserTooltip';
 
 export type UserIconSize = AvatarSize;
@@ -239,7 +239,7 @@ export function UserIcon(props: UserIconProps) {
 
 /**
  * Local wrapper that owns the controlled-open state needed to let
- * `<UserTooltip>`'s internal close button dismiss the surrounding tooltip.
+ * `<UserTooltip>`'s internal close button dismiss the surrounding card.
  */
 function UserAvatarWithTooltip(props: {
   triggerClass: string;
@@ -248,11 +248,14 @@ function UserAvatarWithTooltip(props: {
 }) {
   const [open, setOpen] = createSignal(false);
   return (
-    <Tooltip placement="left" open={open()} onOpenChange={setOpen}>
-      <Tooltip.Trigger class={props.triggerClass}>{props.avatar}</Tooltip.Trigger>
-      <Tooltip.Content>
-        {props.renderContent(() => setOpen(false))}
-      </Tooltip.Content>
-    </Tooltip>
+    <HoverCard
+      placement="left"
+      open={open()}
+      onOpenChange={setOpen}
+      triggerAs="div"
+      triggerClass={props.triggerClass}
+      trigger={props.avatar}
+      content={props.renderContent(() => setOpen(false))}
+    />
   );
 }

@@ -1,7 +1,8 @@
+import { HoverCard } from '@core/component/HoverCard';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { toast } from '@core/component/Toast/Toast';
-import { Surface, Tooltip } from '@ui';
+import { Surface } from '@ui';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { useEmail } from '@core/context/user';
 import { emailToMacroId, useDisplayName } from '@core/user';
@@ -59,8 +60,11 @@ function ParticipantWithTooltip(props: {
   const [open, setOpen] = createSignal(false);
 
   return (
-    <Tooltip open={open()} onOpenChange={setOpen}>
-      <Tooltip.Trigger as="span">
+    <HoverCard
+      open={open()}
+      onOpenChange={setOpen}
+      triggerAs="span"
+      trigger={
         <Show
           when={props.highlighted}
           fallback={<span>{props.displayName}</span>}
@@ -73,16 +77,16 @@ function ParticipantWithTooltip(props: {
             />
           )}
         </Show>
-      </Tooltip.Trigger>
-      <Tooltip.Content>
+      }
+      content={
         <UserTooltip
           displayName={tooltipName()}
           email={props.participant.email}
           id={macroId()}
           onClose={() => setOpen(false)}
         />
-      </Tooltip.Content>
-    </Tooltip>
+      }
+    />
   );
 }
 
@@ -147,11 +151,10 @@ function copyEmail(email: string, e: MouseEvent) {
 
 function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {
   return (
-    <Tooltip>
-      <Tooltip.Trigger as="span">
-        <span class="opacity-60">+{props.hidden.length}</span>
-      </Tooltip.Trigger>
-      <Tooltip.Content>
+    <HoverCard
+      triggerAs="span"
+      trigger={<span class="opacity-60">+{props.hidden.length}</span>}
+      content={
         <Surface depth={3} class="py-1 text-ink">
           <For each={props.hidden}>
             {(r) => (
@@ -165,8 +168,8 @@ function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {
             )}
           </For>
         </Surface>
-      </Tooltip.Content>
-    </Tooltip>
+      }
+    />
   );
 }
 

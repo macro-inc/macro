@@ -1,4 +1,4 @@
-import { Tooltip } from '@ui';
+import { HoverCard } from '@core/component/HoverCard';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import type { UserMentionDecoratorProps } from '@lexical-core';
@@ -35,8 +35,12 @@ export function UserMention(props: UserMentionDecoratorProps) {
   const [open, setOpen] = createSignal(false);
 
   return (
-    <Tooltip placement="top" open={open()} onOpenChange={setOpen}>
-      <Tooltip.Trigger as="span">
+    <HoverCard
+      placement="top"
+      open={open()}
+      onOpenChange={setOpen}
+      triggerAs="span"
+      trigger={
         <span
           class={cn(
             'relative p-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink',
@@ -51,15 +55,15 @@ export function UserMention(props: UserMentionDecoratorProps) {
             @{propEmail().split('@')[0]}
           </span>
         </span>
-      </Tooltip.Trigger>
-      <Tooltip.Content>
+      }
+      content={
         <UserTooltip
           displayName={displayName() || email() || propEmail()}
           email={email() || propEmail()}
           id={userId()}
           onClose={() => setOpen(false)}
         />
-      </Tooltip.Content>
-    </Tooltip>
+      }
+    />
   );
 }

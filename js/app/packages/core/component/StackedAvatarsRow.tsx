@@ -11,6 +11,7 @@ import {
   Show,
 } from 'solid-js';
 import { Tooltip } from '@ui';
+import { HoverCard } from './HoverCard';
 import type { UserIconProps } from './UserIcon';
 
 /** Same keys as {@link UserIconProps} `size` (aligned ring + overlap + overflow chip). */
@@ -141,10 +142,13 @@ function OverflowTooltip(props: {
 }) {
   const [open, setOpen] = createSignal(false);
   return (
-    <Tooltip open={open()} onOpenChange={setOpen}>
-      <Tooltip.Trigger>{props.chip}</Tooltip.Trigger>
-      <Tooltip.Content>{props.render(() => setOpen(false))}</Tooltip.Content>
-    </Tooltip>
+    <HoverCard
+      open={open()}
+      onOpenChange={setOpen}
+      triggerAs="div"
+      trigger={props.chip}
+      content={props.render(() => setOpen(false))}
+    />
   );
 }
 
