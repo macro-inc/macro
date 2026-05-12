@@ -1,4 +1,3 @@
-use documents::domain::models::DocumentError;
 use documents::domain::ports::markdown::MarkdownInitializationPort;
 use documents::domain::upload_finalize::{UploadFinalizeDocumentPort, UploadedDocumentFinalizer};
 use model::document::FileType;
@@ -72,11 +71,6 @@ where
             return Ok(());
         };
 
-        if document_context.deleted_at.is_some() {
-            tracing::trace!(%document_id, key=%event.key, "skipping deleted document");
-            return Ok(());
-        }
-
         let markdown = if matches!(document_context.try_file_type(), Some(FileType::Md)) {
             Some(
                 self.object_reader
@@ -94,10 +88,6 @@ where
         {
             Ok(()) => {
                 tracing::info!(%document_id, key=%event.key, "finalized document upload");
-                Ok(())
-            }
-            Err(DocumentError::BadRequest(error)) => {
-                tracing::warn!(%document_id, key=%event.key, %error, "document upload could not be finalized");
                 Ok(())
             }
             Err(error) => Err(anyhow::anyhow!(error)),
