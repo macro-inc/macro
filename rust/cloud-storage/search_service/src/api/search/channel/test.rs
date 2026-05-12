@@ -265,7 +265,7 @@ fn test_construct_search_result_filters_messages_without_content() {
 }
 
 #[test]
-fn test_construct_search_result_filters_orphans_and_propagates_deleted_at() {
+fn test_construct_search_result_filters_deleted_and_orphan_hits() {
     let channel_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440099".parse().unwrap();
     let active_message_id: Uuid = "11111111-1111-1111-1111-111111111111".parse().unwrap();
     let deleted_message_id: Uuid = "22222222-2222-2222-2222-222222222222".parse().unwrap();
@@ -314,14 +314,13 @@ fn test_construct_search_result_filters_orphans_and_propagates_deleted_at() {
 
     assert_eq!(result.len(), 1);
     let hits = &result[0].extra.channel_message_search_results;
-    assert_eq!(hits.len(), 2, "orphan hit should be filtered out");
-
-    let by_id: HashMap<Uuid, &ChannelSearchResult> =
-        hits.iter().map(|h| (h.message_id.unwrap(), h)).collect();
-
-    assert_eq!(by_id[&active_message_id].deleted_at, None);
-    assert_eq!(by_id[&deleted_message_id].deleted_at, Some(deleted_at));
-    assert!(!by_id.contains_key(&orphan_message_id));
+    assert_eq!(
+        hits.len(),
+        1,
+        "soft-deleted and orphan hits should both be filtered out"
+    );
+    assert_eq!(hits[0].message_id, Some(active_message_id));
+    assert_eq!(hits[0].deleted_at, None);
 }
 
 fn create_test_channel_response(

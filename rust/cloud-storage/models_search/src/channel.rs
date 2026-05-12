@@ -115,6 +115,11 @@ pub struct ChannelSearchResponse {
     /// Base64-encoded cursor for the next page; `None` when exhausted.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+    /// Total number of matching channel messages across all pages, after
+    /// excluding deleted messages observed on the current page. Sourced from
+    /// OpenSearch's `hits.total.value` and adjusted down for any soft- or
+    /// hard-deleted hits filtered out before they reached the response.
+    pub total_count: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, JsonSchema)]
