@@ -13,6 +13,7 @@ import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr } from '@core/util/maybeResult';
 import { createRenameDssEntityMutation } from '@macro-entity';
@@ -166,9 +167,7 @@ function SoupChatInputInner() {
                       'border-edge-muted': !metaHeld(),
                     }}
                   >
-                    <Hotkey
-                      token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
-                    />
+                    <Hotkey shortcut={'cmd+enter' satisfies ValidHotkey} />
                   </div>
                   <span>Background</span>
                 </div>
