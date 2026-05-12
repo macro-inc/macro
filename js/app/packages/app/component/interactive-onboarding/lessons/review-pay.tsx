@@ -138,7 +138,7 @@ function ReviewPayDemo(props: LessonContentProps) {
                 <span class="text-4xl font-bold text-ink leading-none">
                   ${onboarding.userSeatCost()}
                 </span>
-                <span class="text-ink/50 text-base pb-0.5"> /month</span>
+                <span class="text-ink/50 text-base pb-0.5">/month</span>
               </div>
               <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium">
                 {selectedPlan()?.name}
@@ -154,7 +154,7 @@ function ReviewPayDemo(props: LessonContentProps) {
                 <For each={PLAN_FEATURES}>
                   {(feature) => (
                     <div class="flex justify-between text-sm">
-                      <span class="text-ink/60"> {feature.label} </span>
+                      <span class="text-ink/60">{feature.label}</span>
                       <span class="text-ink">
                         {feature.values[onboarding.selectedPlan() ?? 'free']}
                       </span>
@@ -208,7 +208,7 @@ function ReviewPayDemo(props: LessonContentProps) {
               <span class="text-4xl font-bold text-ink leading-none">
                 ${onboarding.totalCost()}
               </span>
-              <span class="text-ink/50 text-base pb-0.5"> /month</span>
+              <span class="text-ink/50 text-base pb-0.5">/month</span>
             </div>
             <span class="px-2 py-0.5 rounded-xs bg-accent/15 text-accent text-xs font-medium">
               Team plan
@@ -232,7 +232,7 @@ function ReviewPayDemo(props: LessonContentProps) {
                   Your seat · {selectedPlan()?.name}
                 </span>
                 <span>
-                  <span class="text-ink"> ${onboarding.userSeatCost()} </span>
+                  <span class="text-ink">${onboarding.userSeatCost()}</span>
                   <span class="text-ink/40"> /month</span>
                 </span>
               </div>
@@ -281,7 +281,7 @@ function ReviewPayDemo(props: LessonContentProps) {
                   <For each={PLAN_FEATURES}>
                     {(feature) => (
                       <div class="flex justify-between text-sm">
-                        <span class="text-ink/60"> {feature.label} </span>
+                        <span class="text-ink/60">{feature.label}</span>
                         <span class="text-ink">
                           {feature.values[onboarding.selectedPlan() ?? 'free']}
                         </span>
@@ -297,7 +297,7 @@ function ReviewPayDemo(props: LessonContentProps) {
           <Show when={onboarding.invitedMembers().length > 0}>
             <div class="py-4 border-b border-ink/10">
               <span class="text-xs text-ink/40 uppercase tracking-wide">
-                Invites({onboarding.invitedMembers().length})
+                Invites ({onboarding.invitedMembers().length})
               </span>
               <div class="flex flex-col gap-1.5 mt-2">
                 <For each={onboarding.invitedMembers()}>
@@ -358,7 +358,9 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
       .map((m) => ({ email: m.email, tier: toTeamUserTier(m.tier) }));
 
     if (invites.length > 0) {
-      await throwOnErr(() => authServiceClient.inviteToTeam({ invites }));
+      await throwOnErr(() =>
+        authServiceClient.inviteToTeam({ invites })
+      );
     }
 
     await invalidateUserTeams();
