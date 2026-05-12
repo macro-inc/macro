@@ -33,7 +33,7 @@ function ParticipantTileWrapper(props: {
   return (
     <div
       class={cn(
-        'relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-30',
+        'relative flex items-center justify-center rounded-lg overflow-hidden bg-message min-h-30 border border-edge-muted',
         props.class
       )}
       classList={{
@@ -66,7 +66,7 @@ function LocalParticipantTile(props: {
           <div class="flex items-center justify-center size-full p-4">
             <div
               class={cn(
-                'rounded-full bg-surface-3 flex items-center justify-center text-ink-muted font-medium',
+                'rounded-full bg-hover flex items-center justify-center text-ink-muted font-medium',
                 props.avatarSize === 'sm' ? 'size-8 text-sm' : 'size-12 text-lg'
               )}
             >
@@ -105,8 +105,8 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
       <Show
         when={cameraTrack()}
         fallback={
-          <div class="flex items-center justify-center size-full p-4 ring-2 ring-accent-2">
-            <div class="size-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
+          <div class="flex items-center justify-center size-full p-4">
+            <div class="size-12 rounded-full bg-hover flex items-center justify-center text-ink-muted text-lg font-medium">
               {displayName().charAt(0).toUpperCase()}
             </div>
           </div>
@@ -131,7 +131,7 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
   };
 
   return (
-    <div class="relative size-full flex items-center justify-center rounded-lg overflow-hidden bg-surface-2">
+    <div class="relative size-full flex items-center justify-center rounded-lg overflow-hidden bg-message border border-edge-muted">
       <TrackView track={screenTrack()} fit="contain" />
 
       <VideoTag variant="truncated">{displayName()}'s screen</VideoTag>
