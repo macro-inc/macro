@@ -3594,7 +3594,7 @@ export const getDocumentLocationV3Response = zod
           .describe(
             'Returns basic information of a document used for some db queries'
           ),
-        presigned_url: zod.string().describe('Presigned URL.'),
+        presignedUrl: zod.string().describe('Presigned URL.'),
         type: zod.enum(['presignedUrl']),
       })
       .describe('A single document-storage URL.'),
@@ -3640,7 +3640,7 @@ export const getDocumentLocationV3Response = zod
           .describe(
             'Returns basic information of a document used for some db queries'
           ),
-        presigned_urls: zod
+        presignedUrls: zod
           .array(
             zod.object({
               presignedUrl: zod
@@ -3697,7 +3697,7 @@ export const getDocumentLocationV3Response = zod
           .describe(
             'Returns basic information of a document used for some db queries'
           ),
-        sync_service_metadata: zod
+        syncServiceMetadata: zod
           .object({
             id: zod.string().describe('Sync-service document id.'),
             peers: zod

@@ -168,6 +168,8 @@ pub enum LocationResponseV3 {
     /// A single document-storage URL.
     PresignedUrl {
         /// Presigned URL.
+        #[serde(rename = "presignedUrl")]
+        #[cfg_attr(feature = "axum", schema(rename = "presignedUrl"))]
         presigned_url: String,
         /// Basic document metadata.
         metadata: DocumentBasic,
@@ -177,6 +179,8 @@ pub enum LocationResponseV3 {
     /// Multiple document-storage URLs, currently for DOCX BOM parts.
     PresignedUrls {
         /// Presigned URLs.
+        #[serde(rename = "presignedUrls")]
+        #[cfg_attr(feature = "axum", schema(rename = "presignedUrls"))]
         presigned_urls: Vec<PresignedUrl>,
         /// Basic document metadata.
         metadata: DocumentBasic,
@@ -188,6 +192,8 @@ pub enum LocationResponseV3 {
         /// Basic document metadata.
         metadata: DocumentBasic,
         /// Sync-service metadata.
+        #[serde(rename = "syncServiceMetadata")]
+        #[cfg_attr(feature = "axum", schema(rename = "syncServiceMetadata"))]
         sync_service_metadata: SyncServiceDocumentMetadata,
         /// Content lifecycle and location metadata.
         content: DocumentContent,

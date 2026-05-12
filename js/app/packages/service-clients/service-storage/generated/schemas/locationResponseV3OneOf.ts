@@ -18,6 +18,6 @@ export type LocationResponseV3OneOf = {
   /** Basic document metadata. */
   metadata: DocumentBasic;
   /** Presigned URL. */
-  presigned_url: string;
+  presignedUrl: string;
   type: LocationResponseV3OneOfType;
 };

@@ -19,6 +19,6 @@ export type LocationResponseV3OneOfFive = {
   /** Basic document metadata. */
   metadata: DocumentBasic;
   /** Sync-service metadata. */
-  sync_service_metadata: SyncServiceDocumentMetadata;
+  syncServiceMetadata: SyncServiceDocumentMetadata;
   type: LocationResponseV3OneOfFiveType;
 };

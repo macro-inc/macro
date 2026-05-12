@@ -10072,7 +10072,7 @@
           {
             "type": "object",
             "description": "A single document-storage URL.",
-            "required": ["presigned_url", "metadata", "content", "type"],
+            "required": ["presignedUrl", "metadata", "content", "type"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/DocumentContent",
@@ -10082,7 +10082,7 @@
                 "$ref": "#/components/schemas/DocumentBasic",
                 "description": "Basic document metadata."
               },
-              "presigned_url": {
+              "presignedUrl": {
                 "type": "string",
                 "description": "Presigned URL."
               },
@@ -10095,7 +10095,7 @@
           {
             "type": "object",
             "description": "Multiple document-storage URLs, currently for DOCX BOM parts.",
-            "required": ["presigned_urls", "metadata", "content", "type"],
+            "required": ["presignedUrls", "metadata", "content", "type"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/DocumentContent",
@@ -10105,7 +10105,7 @@
                 "$ref": "#/components/schemas/DocumentBasic",
                 "description": "Basic document metadata."
               },
-              "presigned_urls": {
+              "presignedUrls": {
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/PresignedUrl"
@@ -10121,12 +10121,7 @@
           {
             "type": "object",
             "description": "Sync-service backed content.",
-            "required": [
-              "metadata",
-              "sync_service_metadata",
-              "content",
-              "type"
-            ],
+            "required": ["metadata", "syncServiceMetadata", "content", "type"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/DocumentContent",
@@ -10136,7 +10131,7 @@
                 "$ref": "#/components/schemas/DocumentBasic",
                 "description": "Basic document metadata."
               },
-              "sync_service_metadata": {
+              "syncServiceMetadata": {
                 "$ref": "#/components/schemas/SyncServiceDocumentMetadata",
                 "description": "Sync-service metadata."
               },

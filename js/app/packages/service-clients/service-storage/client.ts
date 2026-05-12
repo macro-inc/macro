@@ -100,20 +100,7 @@ import {
 } from './util/getDocxFile';
 
 function normalizeLocationResponseV3(response: LocationResponseV3) {
-  switch (response.type) {
-    case 'presignedUrl': {
-      const { presigned_url: presignedUrl, ...rest } = response;
-      return { ...rest, presignedUrl };
-    }
-    case 'presignedUrls': {
-      const { presigned_urls: presignedUrls, ...rest } = response;
-      return { ...rest, presignedUrls };
-    }
-    case 'syncServiceContent': {
-      const { sync_service_metadata: syncServiceMetadata, ...rest } = response;
-      return { ...rest, syncServiceMetadata };
-    }
-  }
+  return response;
 }
 
 // the server is set to expire at 15 minutes, so expire just before that
