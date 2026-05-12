@@ -1,8 +1,12 @@
-use crate::domain::models::{
-    AdvancedSortParams, FrecencySoupItem, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
-    SimpleSortRequest, SoupErr, SoupRequest,
+use crate::domain::{
+    grouping::{GroupedCursor, GroupedPaginationLimits, GroupedResponse},
+    models::{
+        AdvancedSortParams, FrecencySoupItem, IntoSoupReqAst, SimpleSortRequest, SoupErr,
+        SoupRequest,
+    },
 };
 use either::Either;
+use models_grouping::GroupingConfig;
 use models_pagination::{Frecency, PaginatedCursor, SimpleSortMethod};
 use models_soup::item::SoupItem;
 use serde::Serialize;
@@ -35,12 +39,6 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         items: &mut [SoupItem],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Fetches expanded soup items with group metadata.
-    fn expanded_grouped_cursor_soup<'a>(
-        &self,
-        req: GroupedSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, Self::Err>> + Send;
 }
 
 /// type alias which represents the posible outputs of soup
@@ -54,6 +52,19 @@ pub type SoupOutput<T> = Either<
     PaginatedCursor<FrecencySoupItem, String, Frecency, T>,
 >;
 
+/// Request for grouped soup queries.
+#[derive(Debug)]
+pub struct GroupedSoupRequest {
+    /// Items to fetch (flat, will be grouped in Rust)
+    pub soup_request: SoupRequest<Option<item_filters::ast::EntityFilterAst>>,
+    /// Grouping configuration
+    pub grouping: GroupingConfig,
+    /// Pagination limits
+    pub limits: GroupedPaginationLimits,
+    /// Optional cursor for pagination
+    pub cursor: Option<GroupedCursor>,
+}
+
 pub trait SoupService: Send + Sync + 'static {
     fn get_user_soup<T>(
         &self,
@@ -63,8 +74,9 @@ pub trait SoupService: Send + Sync + 'static {
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send;
 
-    fn get_user_soup_grouped(
+    /// Get soup items with Rust-based grouping.
+    fn get_soup_grouped(
         &self,
-        req: GroupedSortRequest<'_>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, SoupErr>> + Send;
+        req: GroupedSoupRequest,
+    ) -> impl Future<Output = Result<GroupedResponse, SoupErr>> + Send;
 }

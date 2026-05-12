@@ -1,14 +1,9 @@
 use crate::{
     domain::{
-        models::{
-            AdvancedSortParams, GroupedSortRequest, GroupedSoupItem, SimpleSortQuery,
-            SimpleSortRequest,
-        },
+        models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest},
         ports::SoupRepo,
     },
-    outbound::pg_soup_repo::expanded::dynamic::{
-        ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs,
-    },
+    outbound::pg_soup_repo::expanded::dynamic::ExpandedDynamicCursorArgs,
 };
 use either::Either;
 use models_soup::{SoupProperty, item::SoupItem};
@@ -16,7 +11,6 @@ use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
 
 mod expanded;
-pub mod grouping;
 mod unexpanded;
 
 pub struct PgSoupRepo {
@@ -128,22 +122,6 @@ impl SoupRepo for PgSoupRepo {
         items: &mut [SoupItem],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send {
         populate_properties(&self.pool.0, items)
-    }
-
-    fn expanded_grouped_cursor_soup<'a>(
-        &self,
-        req: GroupedSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, Self::Err>> + Send {
-        expanded::dynamic::expanded_dynamic_cursor_soup_grouped(
-            &self.pool.0,
-            GroupedDynamicCursorArgs {
-                user_id: req.user_id,
-                limit: req.limit,
-                cursor: req.cursor,
-                exclude_frecency: false,
-                grouping: req.grouping,
-            },
-        )
     }
 }
 

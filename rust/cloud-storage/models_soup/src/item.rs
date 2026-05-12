@@ -172,4 +172,28 @@ impl SoupItem {
             SoupItem::Call(_) => None,
         }
     }
+
+    /// Returns the entity type as a string key.
+    pub fn entity_type_str(&self) -> &'static str {
+        match self {
+            SoupItem::Document(_) => "document",
+            SoupItem::Chat(_) => "chat",
+            SoupItem::Project(_) => "project",
+            SoupItem::EmailThread(_) => "email_thread",
+            SoupItem::Channel(_) => "channel",
+            SoupItem::Call(_) => "call",
+        }
+    }
+
+    /// Returns the project ID if this item belongs to a project.
+    pub fn project_id(&self) -> Option<Uuid> {
+        match self {
+            SoupItem::Document(d) => d.project_id,
+            SoupItem::Chat(c) => c.project_id,
+            SoupItem::Project(p) => Some(p.id),
+            SoupItem::EmailThread(_) => None,
+            SoupItem::Channel(_) => None,
+            SoupItem::Call(_) => None,
+        }
+    }
 }

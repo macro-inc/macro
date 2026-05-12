@@ -1,6 +1,6 @@
 mod grouping;
 
-pub use grouping::{GroupMeta, date_buckets, entity_type_labels};
+pub use grouping::GroupMeta;
 
 use call::domain::models::GetCallRecordsRequest;
 use comms::domain::models::GetChannelsRequest;
@@ -37,19 +37,6 @@ pub struct SimpleSortRequest<'a> {
     pub(crate) cursor: SimpleSortQuery,
     /// the id of the user
     pub(crate) user_id: MacroUserIdStr<'a>,
-}
-
-/// Parameters for grouped soup queries.
-#[derive(Debug)]
-pub struct GroupedSortRequest<'a> {
-    /// the limit of the number of items to return
-    pub limit: u16,
-    /// the cursor/query
-    pub cursor: Query<Uuid, SimpleSortMethod, EntityFilterAst>,
-    /// the id of the user
-    pub user_id: MacroUserIdStr<'a>,
-    /// grouping configuration
-    pub grouping: GroupingConfig,
 }
 
 #[derive(Debug)]
