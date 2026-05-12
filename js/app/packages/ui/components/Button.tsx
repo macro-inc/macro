@@ -22,13 +22,6 @@ export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> &
   shortcut?: string;
   /** Multi-step hotkey sequence. */
   hotkeySequence?: HotkeySequenceStep[];
-  /** Multi-row tooltip rows. */
-  rows?: Array<{
-    label: string;
-    hotkeyToken?: HotkeyToken;
-    shortcut?: string;
-    hotkeySequence?: HotkeySequenceStep[];
-  }>;
   size?: ButtonSize;
   class?: string;
 };
@@ -63,7 +56,6 @@ export const Button = (props: ButtonProps) => {
     'hotkeyToken',
     'shortcut',
     'hotkeySequence',
-    'rows',
     'class',
     'depth',
     'size',
@@ -91,13 +83,6 @@ export const Button = (props: ButtonProps) => {
   return (
     <Layer depth={local.depth ?? 0}>
       <Switch fallback={button()}>
-        <Match when={local.rows && local.rows.length > 0 ? local.rows : false}>
-          {(rows) => (
-            <Tooltip placement={placement()} rows={rows()}>
-              {button()}
-            </Tooltip>
-          )}
-        </Match>
         <Match when={local.label !== undefined ? local.label : false}>
           {(label) => (
             <Tooltip

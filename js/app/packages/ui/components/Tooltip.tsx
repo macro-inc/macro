@@ -6,7 +6,7 @@ import type { JSX, ParentProps } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { cn, Surface } from '@ui';
 
-export type TooltipProps = ParentProps<SharedTooltipProps & (RowsVariantProps | LabelVariantProps | TooltipVariantProps)>;
+export type TooltipProps = ParentProps<SharedTooltipProps & (LabelVariantProps | TooltipVariantProps)>;
 
 type SharedTooltipProps = {
   onOpenChange?: (open: boolean) => void;
@@ -17,7 +17,7 @@ type SharedTooltipProps = {
   class?: string;
 };
 
-type LabelAndHotKeyProps = {
+export type LabelAndHotKeyProps = {
   hotkeySequence?: HotkeySequenceStep[];
   hotkeyToken?: HotkeyToken;
   shortcut?: string;
@@ -30,21 +30,11 @@ type LabelVariantProps = {
   shortcut?: string;
   tooltip?: never;
   label: string;
-  rows?: never;
 };
 
 export type HotkeySequenceStep = {
   token?: HotkeyToken;
   shortcut?: string;
-};
-
-type RowsVariantProps = {
-  rows: LabelAndHotKeyProps[];
-  hotkeySequence?: never;
-  hotkeyToken?: never;
-  shortcut?: never;
-  tooltip?: never;
-  label?: never;
 };
 
 type TooltipVariantProps = {
@@ -53,7 +43,6 @@ type TooltipVariantProps = {
   hotkeyToken?: never;
   shortcut?: never;
   label?: never;
-  rows?: never;
 };
 
 const DEFAULT_PLACEMENT: Placement = 'bottom';
@@ -64,7 +53,7 @@ const TOOLTIP_GUTTER = 4;
 const TOOLTIP_DELAY = 250;
 const TOOLTIP_FLIP = true;
 
-function LabelAndHotKey(props: LabelAndHotKeyProps) {
+export function LabelAndHotKey(props: LabelAndHotKeyProps) {
   const steps = (): HotkeySequenceStep[] => {
     if (props.hotkeySequence?.length) { return props.hotkeySequence; }
     if (props.hotkeyToken || props.shortcut) { return [{ token: props.hotkeyToken, shortcut: props.shortcut }]; }
@@ -105,10 +94,10 @@ function LabelAndHotKey(props: LabelAndHotKeyProps) {
  * A hover-engaged tooltip with built-in chrome.
  *
  * Pick the content shape that fits:
- * - `tooltip`: arbitrary JSX/string content.
+ * - `tooltip`: arbitrary JSX/string content. For multi-row hotkey lists,
+ *   compose `<LabelAndHotKey />` rows inside a `<div class="flex flex-col">`.
  * - `label` (+ optional `hotkeyToken` / `shortcut` / `hotkeySequence`):
  *   single row with an optional hotkey badge.
- * - `rows`: multiple label-with-hotkey rows stacked vertically.
  *
  * For rich, interactive hover content (e.g. user cards with click
  * affordances), reach for `HoverCard`. For click-engaged surfaces, use
@@ -123,13 +112,6 @@ function LabelAndHotKey(props: LabelAndHotKeyProps) {
  */
 export function Tooltip(props: TooltipProps) {
   const content = (): JSX.Element | undefined => {
-    if (props.rows && props.rows.length > 0) {
-      return (
-        <div class="flex flex-col">
-          <For each={props.rows}>{(row) => <LabelAndHotKey {...row} />}</For>
-        </div>
-      );
-    }
     if (props.label !== undefined) {
       return (
         <LabelAndHotKey

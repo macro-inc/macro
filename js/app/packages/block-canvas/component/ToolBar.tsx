@@ -26,7 +26,7 @@ import PencilSimple from '@icon/regular/pencil-simple.svg';
 import Rectangle from '@icon/regular/rectangle.svg';
 import Text from '@icon/regular/text-t.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Button, cn } from '@ui';
+import { Button, cn, LabelAndHotKey } from '@ui';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createSignal, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -195,16 +195,18 @@ export function ToolBar() {
                   : 'ghost'
               }
               size="icon-md"
-              rows={[
-                {
-                  label: 'Zoom',
-                  hotkeyToken: TOKENS.canvas.zoomInTool,
-                },
-                {
-                  label: 'Zoom out',
-                  shortcut: `hold ${IS_MAC ? 'option' : 'alt'}`,
-                },
-              ]}
+              tooltip={
+                <div class="flex flex-col">
+                  <LabelAndHotKey
+                    label="Zoom"
+                    hotkeyToken={TOKENS.canvas.zoomInTool}
+                  />
+                  <LabelAndHotKey
+                    label="Zoom out"
+                    shortcut={`hold ${IS_MAC ? 'option' : 'alt'}`}
+                  />
+                </div>
+              }
               onClick={() => {
                 toolManager.setSelectedTool(Tools.ZoomIn);
               }}
