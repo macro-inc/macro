@@ -1503,7 +1503,6 @@ export function BaseInput(props: {
           <div class="flex flex-row w-full gap-2 items-center p-2">
             <FormatButtons
               selectionState={() => formatState}
-              includeQuote
               onInlineFormat={(format) => {
                 const editor_ = editor();
                 if (!editor_) return;

@@ -26,7 +26,6 @@ export {
   attachmentEntityType,
   buildPostMessageRequest,
 } from './message-payload';
-export { RibbonButton } from './RibbonButton';
 export { Root } from './Root';
 export { SendAction } from './SendAction';
 export { ThreadInput } from './ThreadInput';

@@ -10,7 +10,7 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
-import { Hotkey } from './Hotkey';
+import { Hotkey } from '../../ui/components/Hotkey';
 
 const TOOLTIP_DELAY = 250;
 
@@ -88,7 +88,7 @@ export function Tooltip(props: TooltipProps) {
         ref={(el) => {
           props.ref?.(el);
         }}
-        class={props.class}
+        class={cn('inline-flex items-center', props.class)}
       >
         {props.children}
       </CorvuTooltip.Trigger>

@@ -75,6 +75,7 @@ describe("document copy endpoint tests", () => {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "omit",
         body: JSON.stringify({ target_document_id: "unauthorized-copy" }),
       }
     );

@@ -28,10 +28,14 @@ function ParticipantTileWrapper(props: {
   isSpeaking: boolean;
   children: JSXElement;
   isConnecting?: boolean;
+  class?: string;
 }) {
   return (
     <div
-      class="relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-30"
+      class={cn(
+        'relative flex items-center justify-center rounded-lg overflow-hidden bg-surface-2 min-h-30',
+        props.class
+      )}
       classList={{
         'ring-inset ring-2 ring-accent-2': props.isSpeaking,
         'animate-pulse': props.isConnecting,
@@ -39,6 +43,47 @@ function ParticipantTileWrapper(props: {
     >
       {props.children}
     </div>
+  );
+}
+
+function LocalParticipantTile(props: {
+  isSpeaking: boolean;
+  isConnecting: boolean;
+  isVideoMuted: boolean;
+  track: Track | undefined;
+  avatarSize?: 'sm' | 'md';
+  class?: string;
+}) {
+  return (
+    <ParticipantTileWrapper
+      isSpeaking={props.isSpeaking}
+      isConnecting={props.isConnecting}
+      class={props.class}
+    >
+      <Show
+        when={!props.isConnecting && !props.isVideoMuted}
+        fallback={
+          <div class="flex items-center justify-center size-full p-4">
+            <div
+              class={cn(
+                'rounded-full bg-surface-3 flex items-center justify-center text-ink-muted font-medium',
+                props.avatarSize === 'sm' ? 'size-8 text-sm' : 'size-12 text-lg'
+              )}
+            >
+              You
+            </div>
+          </div>
+        }
+      >
+        <TrackView track={props.track} mirror />
+      </Show>
+
+      <Show when={props.isConnecting} fallback={<VideoTag>You</VideoTag>}>
+        <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-panel/70 text-ink-muted text-xs">
+          Connecting...
+        </div>
+      </Show>
+    </ParticipantTileWrapper>
   );
 }
 
@@ -130,7 +175,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
     callCtx.isScreenSharing() || remoteScreenShares().length > 0;
 
   const gridCols = () => {
-    const count = participants().length + 1; // +1 for local
+    const count = participants().length;
     if (count <= 1) return 'grid-cols-1';
     if (count <= 4) return 'grid-cols-2';
     return 'grid-cols-3';
@@ -156,38 +201,43 @@ export function CallOverlay(props: { onLeave: () => void }) {
         </div>
       </Show>
 
-      {/* Participants grid */}
+      {/* Participants area */}
       <div
-        class={`${hasAnyScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} grid ${gridCols()} gap-2 py-2 auto-rows-fr overflow-hidden`}
+        class={`${hasAnyScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative py-2`}
       >
-        {/* Local participant */}
-        <ParticipantTileWrapper
-          isSpeaking={isLocalSpeaking()}
-          isConnecting={isConnecting()}
+        <Show
+          when={participants().length > 0}
+          fallback={
+            <LocalParticipantTile
+              class="size-full"
+              isSpeaking={isLocalSpeaking()}
+              isConnecting={isConnecting()}
+              isVideoMuted={callCtx.isVideoMuted()}
+              track={localVideoTrack()}
+            />
+          }
         >
-          <Show
-            when={!isConnecting() && !callCtx.isVideoMuted()}
-            fallback={
-              <div class="flex items-center justify-center size-full p-4">
-                <div class="size-12 rounded-full bg-surface-3 flex items-center justify-center text-ink-muted text-lg font-medium">
-                  You
-                </div>
-              </div>
-            }
+          {/* Remote participants grid */}
+          <div
+            class={`size-full grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`}
           >
-            <TrackView track={localVideoTrack()} mirror />
-          </Show>
+            <For each={participants()}>
+              {(participant) => <ParticipantTile participant={participant} />}
+            </For>
+          </div>
 
-          <Show when={isConnecting()} fallback={<VideoTag>You</VideoTag>}>
-            <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-panel/70 text-ink-muted text-xs">
-              Connecting...
-            </div>
-          </Show>
-        </ParticipantTileWrapper>
-
-        <For each={participants()}>
-          {(participant) => <ParticipantTile participant={participant} />}
-        </For>
+          {/* Local participant PIP (Google Meet style: small, bottom-right) */}
+          <div class="absolute bottom-4 right-4 w-40 aspect-video shadow-lg z-10 sm:w-48">
+            <LocalParticipantTile
+              class="size-full min-h-0"
+              isSpeaking={isLocalSpeaking()}
+              isConnecting={isConnecting()}
+              isVideoMuted={callCtx.isVideoMuted()}
+              track={localVideoTrack()}
+              avatarSize="sm"
+            />
+          </div>
+        </Show>
       </div>
 
       {/* Controls bar */}

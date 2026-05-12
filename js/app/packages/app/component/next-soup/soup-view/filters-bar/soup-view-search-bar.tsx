@@ -2,14 +2,13 @@ import { useSoup } from '@app/component/next-soup/soup-context';
 import { registerSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { Hotkey } from '@core/component/Hotkey';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
-import { cn } from '@ui';
+import { cn, Hotkey } from '@ui';
 import {
   $getRoot,
   COMMAND_PRIORITY_HIGH,

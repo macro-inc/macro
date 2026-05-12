@@ -3,10 +3,8 @@
  * existing physical index without disrupting any other alias already
  * pointing at it.
  *
- * Use during the deploy-prep phase to introduce the new alias name (e.g.
- * `emails`) alongside a legacy alias (`emails_alias`) on the same physical
- * index, so the new code can deploy safely before the legacy alias is
- * dropped.
+ * Errors if the alias name is currently a physical index — use
+ * reindex_with_alias_swap.ts for that case.
  *
  * Usage:
  *   bun scripts/add_alias.ts <alias> <index>

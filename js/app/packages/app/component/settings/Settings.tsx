@@ -17,9 +17,7 @@ import { SplitHeaderLeft, SplitHeaderRight } from '../split-layout/components/Sp
 import { CollapsibleHeaderItem } from '../split-layout/components/CollapsibleHeaderItem';
 import { SettingsButton } from './SettingsButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Layer } from '@ui';
-import ChevronDownIcon from '@icon/regular/caret-down.svg';
+import { Dropdown, Layer } from '@ui';
 
 export function SettingsPanelComponentWrapper() {
   return (
@@ -259,17 +257,16 @@ function CollapsedSettingsTabs(props: CollapsedSettingsTabsProps) {
   });
 
   return (
-    <DropdownMenu placement="bottom-start" gutter={4}>
-      <DropdownMenu.Trigger class="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xs border border-edge-muted hover:bg-ink/6 transition-colors">
+    <Dropdown placement="bottom-start" gutter={4}>
+      <Dropdown.Trigger>
         <span class="truncate">{activeLabel()}</span>
-        <ChevronDownIcon class="size-3 shrink-0" />
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
+      </Dropdown.Trigger>
+      <Dropdown.Portal>
         <Layer depth={2}>
-          <DropdownMenu.Content class="z-action-menu bg-page border border-edge-muted rounded-sm shadow-sm p-1">
+          <Dropdown.Content class="z-action-menu bg-page border border-edge-muted rounded-sm shadow-sm p-1">
             <For each={props.tabs}>
               {(item) => (
-                <DropdownMenu.Item
+                <Dropdown.Item
                   class="w-full px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink/5 focus:bg-ink/5 outline-none cursor-default rounded-md"
                   classList={{
                     'font-semibold': props.value === item.value,
@@ -277,12 +274,12 @@ function CollapsedSettingsTabs(props: CollapsedSettingsTabsProps) {
                   onSelect={() => props.onChange(item.value)}
                 >
                   {item.label}
-                </DropdownMenu.Item>
+                </Dropdown.Item>
               )}
             </For>
-          </DropdownMenu.Content>
+          </Dropdown.Content>
         </Layer>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+      </Dropdown.Portal>
+    </Dropdown>
   );
 }

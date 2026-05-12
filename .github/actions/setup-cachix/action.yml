@@ -4,7 +4,8 @@ description: Install Cachix if needed and configure the macro-inc binary cache.
 inputs:
   cachix-auth-token:
     description: Cachix auth token used to configure authenticated pulls and pushes.
-    required: true
+    required: false
+    default: ''
   cache-name:
     description: Cachix cache name.
     required: false
@@ -31,5 +32,7 @@ runs:
         fi
 
         export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
-        cachix authtoken "$CACHIX_AUTH_TOKEN"
+        if [ -n "$CACHIX_AUTH_TOKEN" ]; then
+          cachix authtoken "$CACHIX_AUTH_TOKEN"
+        fi
         cachix use "$CACHIX_CACHE_NAME"

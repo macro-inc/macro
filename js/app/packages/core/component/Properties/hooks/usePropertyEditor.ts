@@ -13,6 +13,7 @@ export interface PropertyEditorReturn {
   hasChanges: Accessor<boolean>;
   initializeSelectedOptions: () => void;
   toggleOption: (optionValue: string) => void;
+  clearOptions: () => void;
   addOption: (value: string) => Promise<void>;
 }
 
@@ -78,6 +79,14 @@ export function usePropertyEditor(
         hasChanges: true,
       };
     });
+  };
+
+  const clearOptions = () => {
+    setLocalState((prev) => ({
+      ...prev,
+      selectedOptions: new Set(),
+      hasChanges: true,
+    }));
   };
 
   const addOption = async (value: string) => {
@@ -151,6 +160,7 @@ export function usePropertyEditor(
     hasChanges: () => localState().hasChanges,
     initializeSelectedOptions,
     toggleOption,
+    clearOptions,
     addOption,
   };
 }

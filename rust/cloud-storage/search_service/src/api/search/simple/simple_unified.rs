@@ -44,22 +44,18 @@ fn find_last_of_source(
     results.iter().rev().find(|h| h.source == source)
 }
 
-/// Generate a cursor from a TaggedSearchHit
+/// Generate a cursor from a TaggedSearchHit.
 fn cursor_from_tagged(tagged: &TaggedSearchHit) -> Option<SearchMethodCursor> {
-    tagged.hit.updated_at.map(|ts| SearchMethodCursor {
-        entity_id: tagged.hit.entity_id,
-        updated_at: ts,
-    })
+    tagged
+        .hit
+        .updated_at
+        .map(|ts| SearchMethodCursor::UpdatedAt {
+            entity_id: tagged.hit.entity_id,
+            updated_at: ts,
+        })
 }
 
-/// Computes the next cursor for a search source based on pagination state
-///
-/// # Arguments
-/// * `next_cursor_from_search` - The cursor returned by the search operation
-/// * `included_count` - Number of results from this source included in final page
-/// * `original_count` - Total number of results returned by search for this source
-/// * `last_included_hit` - The last result of this source type included in final page
-/// * `original_cursor` - The cursor passed into the search (to carry forward if no results included)
+/// Computes the next cursor for a search source based on pagination state.
 fn compute_next_cursor(
     next_cursor_from_search: &SearchCursorOption,
     included_count: usize,

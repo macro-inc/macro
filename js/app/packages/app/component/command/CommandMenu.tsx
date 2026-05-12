@@ -2,7 +2,6 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { Hotkey } from '@core/component/Hotkey';
 import { Tabs } from '@core/component/Tabs';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
@@ -11,7 +10,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { type EntityData, InlineEntity } from '@entity';
 import ArrowLeft from '@icon/regular/arrow-left.svg';
 import Macro from '@macro-icons/macro-logo.svg';
-import { cn, Dialog, Panel } from '@ui';
+import { cn, Dialog, Hotkey, Panel } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
@@ -592,9 +591,12 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
         {(entity) => {
           return (
             <div
-              class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
-                'max-w-[50%]': props.entities.length === 2,
-              })}
+              class={cn(
+                'bg-hover border border-edge-muted px-2 py-1 truncate text-xs rounded-xs',
+                {
+                  'max-w-[50%]': props.entities.length === 2,
+                }
+              )}
             >
               <InlineEntity entity={entity} />
             </div>

@@ -20,7 +20,7 @@ use call::{
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
     outbound::{
         ai_call_summarizer::AiCallSummarizer, livekit_rtc_client::LivekitRtcClient,
-        pg_call_repo::PgCallRepo,
+        pg_call_repo::PgCallRepo, pg_voice_repo::PgVoiceRepo,
     },
 };
 use channels::{
@@ -498,7 +498,11 @@ async fn main() -> anyhow::Result<()> {
     let call_search_indexer = crate::service::call_search_indexer::SqsCallSearchIndexer::new(
         Arc::new(sqs_client.clone()),
     );
-    let call_service = Arc::new(call_service_builder.with_search_indexer(call_search_indexer));
+    let call_service = Arc::new(
+        call_service_builder
+            .with_search_indexer(call_search_indexer)
+            .with_voice_repo(PgVoiceRepo::new(db.clone())),
+    );
 
     let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
     let call_webhook_state = WebhookRouterState::new(call_service.clone());

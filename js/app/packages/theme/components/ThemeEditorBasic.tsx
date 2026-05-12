@@ -252,22 +252,26 @@ export function ThemeEditorBasic(){
   }
 
   function handleChromaChange(e: Event){
+    const value = Math.max(0.0, Math.min(0.37, parseFloat((e.target as HTMLInputElement).value)));
     setChroma(
-      parseFloat((e.target as HTMLInputElement).value),
+      value,
       parseFloat(sliderSaturationRef.value)
     );
   }
 
   function handleSaturationChange(e: Event){
-    setSaturation(parseFloat((e.target as HTMLInputElement).value));
+    const value = Math.max(0.0, Math.min(1.0, parseFloat((e.target as HTMLInputElement).value)));
+    setSaturation(value);
   }
 
   function handleContrastChange(e: Event){
-    setContrast(parseFloat((e.target as HTMLInputElement).value));
+    const value = Math.max(0.0, Math.min(0.8, parseFloat((e.target as HTMLInputElement).value)));
+    setContrast(value);
   }
 
   function handleDepthChange(e: Event){
-    setThemeDepth(parseFloat((e.target as HTMLInputElement).value));
+    const value = Math.max(0.0, Math.min(0.4, parseFloat((e.target as HTMLInputElement).value)));
+    setThemeDepth(value);
   }
 
   onMount(() => {

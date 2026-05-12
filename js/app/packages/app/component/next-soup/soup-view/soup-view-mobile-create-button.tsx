@@ -96,11 +96,12 @@ export function SoupViewMobileCreateButton(props: {
         <button
           type="button"
           class="absolute bottom-4 right-4 z-10 pl-3 pr-4 py-2 rounded-full bg-panel ring text-accent flex items-center justify-center gap-2 shadow-md ring-accent/20"
-          onPointerDown={() => {
+          onClick={() => {
             hapticImpact('light');
             setAnimating(true);
             setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
-            createAction()?.();
+            // Defer to next frame to avoid focus race with Dialog
+            requestAnimationFrame(() => createAction()?.());
           }}
         >
           <div class="size-5 [&_svg]:size-5">

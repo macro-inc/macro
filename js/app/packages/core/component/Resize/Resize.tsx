@@ -1,4 +1,5 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { cn } from '@ui/utils/classname';
 import {
   createContext,
   createEffect,
@@ -429,22 +430,20 @@ function Gutter(props: GutterProps) {
       onKeyDown={onKeyDown}
     >
       <div
-        class="border-accent absolute opacity-0 group-focus:opacity-100"
-        classList={{
-          'group-hover:opacity-50': !ptrDown(),
-          'opacity-100': ptrDown(),
-        }}
+        class={cn(
+          'bg-accent absolute opacity-0 group-focus:opacity-100 rounded-[1px]',
+          !ptrDown() && 'group-hover:opacity-50',
+          ptrDown() && 'opacity-100'
+        )}
         style={{
           left: ctx.direction === 'horizontal' ? '50%' : '0',
           top: ctx.direction === 'vertical' ? '50%' : '0',
-          width: ctx.direction === 'horizontal' ? '0' : '100%',
-          height: ctx.direction === 'vertical' ? '0' : '100%',
-          'border-left-width': ctx.direction === 'horizontal' ? '1px' : '0',
-          'border-top-width': ctx.direction === 'vertical' ? '1px' : '0',
+          width: ctx.direction === 'horizontal' ? '2px' : '100%',
+          height: ctx.direction === 'vertical' ? '2px' : '100%',
           transform:
             ctx.direction === 'horizontal'
-              ? 'translate(-0.5px, 0)'
-              : 'translate(0, -0.5px)',
+              ? 'translateX(-50%)'
+              : 'translateY(-50%)',
         }}
       ></div>
     </div>

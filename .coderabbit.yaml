@@ -1,7 +1,7 @@
 language: en-US
 
 reviews:
-  profile: assertive
+  profile: chill
   request_changes_workflow: false
 
   # Walkthrough: clean and minimal
@@ -13,12 +13,12 @@ reviews:
   commit_status: true
   fail_commit_status: false
   collapse_walkthrough: true
-  changed_files_summary: true
+  changed_files_summary: false
   sequence_diagrams: false
   estimate_code_review_effort: false
-  assess_linked_issues: true
-  related_issues: true
-  related_prs: true
+  assess_linked_issues: false
+  related_issues: false
+  related_prs: false
   poem: false
   in_progress_fortune: false
 
@@ -49,13 +49,8 @@ reviews:
     - path: "rust/**/*.rs"
       instructions: |
         Rust review guidelines (from project conventions):
-        - Prefer `anyhow::bail!("msg")` over `Err(anyhow::anyhow!("msg"))` for early error returns.
-        - Use `#[tracing::instrument(err)]` on functions returning `Result`. Do NOT add `err` on functions returning `Option`, `()`, or non-Result types. Never include `level = "info"`.
-        - Log errors as `tracing::error!(error=?e, "msg")` — do not interpolate errors into the message string.
-        - Prefer `.inspect_err(|e| tracing::error!(error=?e, "msg"))` over `if let Err(e)` for logging.
-        - Tests go in a separate `test.rs` file in the same module directory, not inline `#[cfg(test)]` blocks.
         - New crates must have `#![deny(missing_docs)]` in `lib.rs`.
-        - Use `Extension` extractors (not `State`) for axum handlers.
+        - Only look for and report semantic bugs that the typesystem will not catch. This includes incomplete integration, incorrect environment variables, or any other logic error that will compile as valid rust.
 
     - path: "rust/**/*_db_client/**"
       instructions: |
@@ -100,7 +95,7 @@ reviews:
 
   auto_review:
     enabled: true
-    auto_incremental_review: true
+    auto_incremental_review: false
     auto_pause_after_reviewed_commits: 5
     drafts: false
     ignore_title_keywords:
@@ -134,23 +129,23 @@ reviews:
 
   # Only enable tools relevant to this repo's tech stack
   tools:
-    # JS/TS: Biome is the primary linter (not ESLint)
+    # JS/TS: Biome runs in CI already
     biome:
-      enabled: true
+      enabled: false
     eslint:
       enabled: false
     oxc:
       enabled: false
 
-    # Rust
+    # Rust: clippy runs in CI already
     clippy:
-      enabled: true
+      enabled: false
 
-    # Shell & CI
+    # Shell & CI: these run in CI already
     shellcheck:
-      enabled: true
+      enabled: false
     actionlint:
-      enabled: true
+      enabled: false
 
     # Config files
     yamllint:

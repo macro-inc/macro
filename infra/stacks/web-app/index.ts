@@ -5,10 +5,17 @@ import * as command from '@pulumi/command';
 import * as datadog from '@pulumi/datadog';
 import * as pulumi from '@pulumi/pulumi';
 import * as datadogEntity from './datadog-entity.json';
+import { hasItems } from '../../packages/utils';
 
 // Import the program's configuration
 const config = new pulumi.Config();
 const localPath: string = config.require('path');
+
+// Make sure there are items in the `localPath`
+if (!hasItems(localPath)) {
+  throw new Error('Local path of build output is empty');
+}
+
 const indexDocument = config.get('indexDocument') || 'index.html';
 
 // Get current Stack name
@@ -88,7 +95,7 @@ execSync(`cp ${buildOutputPath}/index.html ./appRouteLambda/index.html`, {
 const syncAssetsCommand = new command.local.Command(
   'sync-assets-command',
   {
-    create: pulumi.interpolate`aws s3 sync ./output s3://${webAppAssets.bucket} --acl public-read --delete${stack === 'prod' ? ' --exclude "*.js.map"' : ''}`,
+    create: pulumi.interpolate`aws s3 sync ./output s3://${webAppAssets.bucket} --acl public-read --delete --exclude "app/app-archive.zip"${stack === 'prod' ? ' --exclude "*.js.map"' : ''}`,
     triggers: [Date.now()],
   },
   {

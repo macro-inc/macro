@@ -1,5 +1,4 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { Hotkey } from '@core/component/Hotkey';
 import type { HotkeySequenceStep } from '@core/component/Tooltip';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { Entity, type EntityData } from '@entity';
@@ -10,7 +9,7 @@ import {
   enqueueDocumentWakeup,
   isWakeableDocument,
 } from '@queries/preview';
-import { cn } from '@ui';
+import { cn, Hotkey } from '@ui';
 import { createEffect, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {

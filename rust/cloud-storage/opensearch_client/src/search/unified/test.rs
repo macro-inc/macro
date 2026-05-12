@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::search::builder::updated_at_sort;
 use chrono::Utc;
 use models_search_cursor::SearchMethodCursor;
 use opensearch_query_builder::ToOpenSearchJson;
@@ -450,7 +451,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             ids_only: false,
         },
         call_record_search_args: UnifiedCallRecordSearchArgs::default(),
-        cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor {
+        cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id,
             updated_at: time,
         })),
@@ -836,7 +837,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             ids_only: false,
         },
         call_record_search_args: UnifiedCallRecordSearchArgs::default(),
-        cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor {
+        cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id,
             updated_at: time,
         })),
@@ -959,4 +960,16 @@ fn test_build_unified_search_request_empty_indices() -> anyhow::Result<()> {
     assert_eq!(err, OpensearchClientError::EmptySearchIndices);
 
     Ok(())
+}
+
+#[test]
+fn test_thread_sort_is_thread_id_then_message_id_field_sorts() {
+    use crate::search::builder::thread_sort;
+    let json: Vec<serde_json::Value> = thread_sort().iter().map(|s| s.to_json()).collect();
+
+    assert_eq!(json.len(), 2);
+    assert_eq!(json[0]["thread_id"]["order"], "desc");
+    assert_eq!(json[0]["thread_id"]["unmapped_type"], "keyword");
+    assert_eq!(json[1]["message_id"]["order"], "desc");
+    assert_eq!(json[1]["message_id"]["unmapped_type"], "keyword");
 }

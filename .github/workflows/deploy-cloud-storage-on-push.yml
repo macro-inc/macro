@@ -114,9 +114,6 @@ jobs:
         with:
           clean: false
 
-      - name: Add Nix to PATH
-        run: echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
-
       - name: Configure Cachix
         uses: ./.github/actions/setup-cachix
         with:

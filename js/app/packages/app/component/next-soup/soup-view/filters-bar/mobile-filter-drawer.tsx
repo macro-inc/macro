@@ -27,7 +27,7 @@ import CheckIcon from '@icon/regular/check.svg';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';
+import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useContacts } from '@queries/contacts/contacts';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';

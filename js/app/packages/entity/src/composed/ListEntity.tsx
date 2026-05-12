@@ -3,7 +3,6 @@ import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { isMobile } from '@core/mobile/isMobile';
-import type { DateValue } from '@core/util/date';
 import { stackNotifications } from '@notifications';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
@@ -22,7 +21,6 @@ import {
   createSignal,
   type JSX,
   Match,
-  type Ref,
   Show,
   Switch,
   useContext,
@@ -33,17 +31,9 @@ import {
   isHitSnippetComplete,
   isSnippetEntity,
 } from '../extractors-search/snippet-entity';
-import {
-  type EntityData,
-  isChannelEntity,
-  isEmailEntity,
-  type ProjectEntity,
-} from '../types/entity';
-import {
-  isWithNotification,
-  type WithNotification,
-} from '../types/notification';
-import { isSearchEntity, type SearchLocation } from '../types/search';
+import { isChannelEntity, isEmailEntity } from '../types/entity';
+import { isWithNotification } from '../types/notification';
+import { isSearchEntity } from '../types/search';
 import { createEntityDraggable } from '../utils/draggable';
 import { unreadFilterFn } from '../utils/filter';
 import {
@@ -54,6 +44,7 @@ import { useIsShared } from '../utils/shared';
 import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
 import { NarrowLayout } from './list-entity/narrow-layout';
 import {
+  type BaseListEntityProps,
   hasSearchContentHits,
   InboxDivider,
   type LayoutProps,
@@ -64,27 +55,8 @@ import { WideLayout } from './list-entity/wide-layout';
 
 export { ListLayoutProvider } from './list-entity/shared';
 
-interface ListEntityProps {
-  entity: WithNotification<EntityData>;
-  onClick?: (event: MouseEvent) => void;
-  timestamp?: DateValue | null;
-  ref?: Ref<HTMLDivElement>;
-  checked?: boolean;
-  highlighted?: boolean;
-  hovered?: boolean;
-  hideContentHits?: boolean;
-  onChecked?: (checked: boolean, shiftKey: boolean) => void;
-  onMouseMove?: () => void;
+interface ListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
-  onProjectClick?: (
-    entity: ProjectEntity,
-    e: PointerEvent | MouseEvent
-  ) => void;
-  onContentHitClick?: (
-    e: PointerEvent | MouseEvent,
-    location?: SearchLocation
-  ) => void;
-  entityRowConfig?: EntityRowConfig;
 }
 
 function MaybeEntityRow(props: {
@@ -214,11 +186,11 @@ export function ListEntity(props: ListEntityProps) {
         'soup-list-entity @container/entity w-full relative group/narrow flex flex-col',
         {
           'min-h-10': !isMobile(),
-          'bg-accent/5': props.checked,
+          'bg-accent/8': props.checked,
           'hover:bg-hover group-data-expanded/cm-trigger:bg-hover':
             !props.checked && !props.highlighted && !props.hovered,
           'bg-hover': props.hovered && !props.highlighted && !props.checked,
-          'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1':
+          'bg-accent/8 outline-1 outline-accent/20 -outline-offset-1':
             props.highlighted && !isMobile(),
         }
       )}

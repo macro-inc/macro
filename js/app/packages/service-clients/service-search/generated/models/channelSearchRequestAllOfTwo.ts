@@ -7,6 +7,7 @@
 import type { ChannelSearchRequestAllOfTwoCollapse } from './channelSearchRequestAllOfTwoCollapse';
 import type { ChannelSearchRequestAllOfTwoQuery } from './channelSearchRequestAllOfTwoQuery';
 import type { ChannelSearchRequestAllOfTwoTerms } from './channelSearchRequestAllOfTwoTerms';
+import type { ChannelSortTimestamp } from './channelSortTimestamp';
 import type { MatchType } from './matchType';
 import type { SearchOn } from './searchOn';
 
@@ -19,6 +20,8 @@ export type ChannelSearchRequestAllOfTwo = {
   query?: ChannelSearchRequestAllOfTwoQuery;
   /** Fields to search on (Name, Content, NameContent). Defaults to Content */
   search_on?: SearchOn;
+  /** Sort key for results. Defaults to `message`. */
+  sort?: ChannelSortTimestamp;
   /** Multiple terms to search over */
   terms?: ChannelSearchRequestAllOfTwoTerms;
 };
