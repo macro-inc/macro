@@ -239,6 +239,7 @@ export const SoupView = (props: SoupViewProps) => {
 
   registerHotkey({
     hotkey: 'cmd+f',
+    hotkeyToken: TOKENS.soup.openSearch,
     scopeId: panel.splitHotkeyScope,
     registrationType: 'add',
     description: 'Search',
