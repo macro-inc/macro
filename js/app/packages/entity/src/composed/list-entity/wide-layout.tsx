@@ -1,4 +1,5 @@
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { CallAgainButton } from '@channel/Call/CallAgainButton';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { AttendanceBadge, SharedBadge } from '../../components/Badges';
@@ -17,7 +18,6 @@ import {
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
 import { AutomationWideContent } from './automation';
-import { CallAgainButton } from '@channel/Call/CallAgainButton';
 import { CallParticipants, CallWideContent } from './call';
 import { ChannelMessageWideContent, ChannelWideContent } from './channel';
 import { EmailWideContent } from './email';

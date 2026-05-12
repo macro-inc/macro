@@ -1,8 +1,8 @@
+import { CallAgainButton } from '@channel/Call/CallAgainButton';
 import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
 import SubtitlesSlash from '@phosphor-icons/core/assets/regular/subtitles-slash.svg';
 import UserCircle from '@phosphor-icons/core/assets/regular/user-circle.svg';
 import UserCircleMinus from '@phosphor-icons/core/assets/regular/user-circle-minus.svg';
-import { CallAgainButton } from '@channel/Call/CallAgainButton';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { cn } from '@ui';
 import { format } from 'date-fns';
