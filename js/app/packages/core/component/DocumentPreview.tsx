@@ -225,7 +225,7 @@ function PopupIconButton(props: {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
 }) {
   return (
-    <Tooltip tooltip={props.tooltip}>
+    <Tooltip label={props.tooltip}>
       <button
         onClick={(e) => {
           e.stopPropagation();

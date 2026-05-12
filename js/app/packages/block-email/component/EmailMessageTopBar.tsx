@@ -210,7 +210,7 @@ function CollapsedHeader(props: {
             'opacity-100': props.isHovering,
           }}
         >
-          <Tooltip tooltip={<span class="text-xs">Expand Message Header</span>}>
+          <Tooltip label="Expand Message Header">
             <Button
               variant="ghost"
               size="icon-sm"

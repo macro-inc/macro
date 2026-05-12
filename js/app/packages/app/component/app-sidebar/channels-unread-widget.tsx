@@ -240,10 +240,7 @@ function ChannelGroupItem(props: {
         <Show
           when={!isSlim()}
           fallback={
-            <Tooltip
-              tooltip={<span class="text-xs">{displayName()}</span>}
-              placement="right"
-            >
+            <Tooltip label={displayName()} placement="right">
               <ButtonContent />
             </Tooltip>
           }

@@ -88,7 +88,7 @@ export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
   const [hovering, setHovering] = createSignal(false);
 
   return (
-    <Tooltip tooltip="Chat with Agent">
+    <Tooltip label="Chat with Agent">
       <div class="border border-edge-muted flex ml-1 items-stretch rounded-xs">
         <button
           class="h-7 px-2 flex items-center gap-1 text-xs hover:bg-hover hover-transition-bg"

@@ -179,7 +179,7 @@ function ReverseEdgeButton() {
   const { selectedEdges } = useSelection();
 
   return (
-    <Tooltip tooltip="Reverse connection">
+    <Tooltip label="Reverse connection">
       <button
         class={cn(
           themeColors['base'],

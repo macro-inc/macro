@@ -153,7 +153,7 @@ function SoupChatInputInner() {
             isPersistent={true}
             autoFocusOnMount={false}
             extraRightControls={() => (
-              <Tooltip tooltip="⌘ Enter to send in background" placement="top">
+              <Tooltip label="⌘ Enter to send in background" placement="top">
                 <div
                   class="flex items-center gap-1"
                   classList={{

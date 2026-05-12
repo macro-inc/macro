@@ -109,7 +109,7 @@ export const SegmentedControl: ParentComponent<
                   </div> */}
                     <Switch>
                       <Match when={tooltip()}>
-                        <Tooltip tooltip={tooltip()}>
+                        <Tooltip label={tooltip() ?? ''}>
                           <ToggleButton
                             size={props.size}
                             pressed={value() === itemValue()}

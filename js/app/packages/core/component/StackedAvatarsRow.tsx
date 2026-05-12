@@ -365,7 +365,7 @@ export function StackedAvatarsRow<T = unknown>(
     }
 
     return faceShell(
-      <Tooltip tooltip={plainOverflowTooltip()}>{chip}</Tooltip>
+      <Tooltip label={plainOverflowTooltip()}>{chip}</Tooltip>
     );
   };
 

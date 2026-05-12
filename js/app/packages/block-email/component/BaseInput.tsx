@@ -1451,7 +1451,7 @@ export function BaseInput(props: {
             {/* Show to, cc, bcc buttons */}
             <div class="flex flex-row justify-end space-x-2 pt-2">
               <Show when={!showCc()}>
-                <Tooltip tooltip="Add cc recipients">
+                <Tooltip label="Add cc recipients">
                   <div
                     onclick={() => {
                       setShowCc(true);
@@ -1464,7 +1464,7 @@ export function BaseInput(props: {
                 </Tooltip>
               </Show>
               <Show when={!showBcc()}>
-                <Tooltip tooltip="Add bcc recipients">
+                <Tooltip label="Add bcc recipients">
                   <div
                     onclick={() => {
                       setShowBcc(true);
@@ -1676,7 +1676,7 @@ export function BaseInput(props: {
             </Button>
 
             <Tooltip
-              tooltip={
+              label={
                 form().replyAppended() ? 'Hide quoted text' : 'Show quoted text'
               }
             >
@@ -1730,7 +1730,7 @@ export function BaseInput(props: {
           </div>
 
           <Tooltip
-            tooltip={form().sendTime() ? 'Send time is scheduled' : undefined}
+            label={form().sendTime() ? 'Send time is scheduled' : ''}
           >
             <button
               disabled={

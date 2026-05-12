@@ -154,7 +154,7 @@ export function EmailComposeToolbar(props: {
               </Button>
             </Show>
             <Tooltip
-              tooltip={ctx.sendTime() ? 'Send time is scheduled' : undefined}
+              label={ctx.sendTime() ? 'Send time is scheduled' : ''}
             >
               <button
                 disabled={
@@ -216,7 +216,7 @@ function MobileToolbar(props: {
           />
         </Show>
         <Tooltip
-          tooltip={ctx.sendTime() ? 'Send time is scheduled' : undefined}
+          label={ctx.sendTime() ? 'Send time is scheduled' : ''}
         >
           <Show when={ctx.onSaveDraft}>
             <Button

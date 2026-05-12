@@ -270,7 +270,7 @@ export function FloatingEquationMenu() {
                 Inline equation
               </label>
             </Show>
-            <Tooltip tooltip="Apply changes">
+            <Tooltip label="Apply changes">
               <button
                 onClick={handleSubmit}
                 disabled={!equation()}

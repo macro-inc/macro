@@ -165,7 +165,7 @@ export function ChatInput(props: ChatInputComponentProps) {
           fallback={
             <div class="flex flex-row items-center gap-3 text-xs text-ink-disabled opacity-70 shrink-0">
               {props.extraRightControls?.()}
-              <Tooltip tooltip="Enter to send" placement="top">
+              <Tooltip label="Enter to send" placement="top">
                 <div class="flex items-center">
                   <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1 py-0.5">
                     <Hotkey shortcut="Enter" />

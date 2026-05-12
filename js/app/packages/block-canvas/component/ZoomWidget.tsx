@@ -70,7 +70,7 @@ export function ZoomWidget() {
           <Minus class="size-4" />
         </div>
       </Show>
-      <Tooltip placement="top" tooltip="Reset zoom">
+      <Tooltip placement="top" label="Reset zoom">
         <div
           class="text-ink-muted text-center w-12 h-6 select-none"
           on:click={resetZoom}

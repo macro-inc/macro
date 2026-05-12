@@ -339,7 +339,7 @@ function InviteTeamDemo(props: LessonContentProps) {
                       />
                     </Show>
                     <Tooltip
-                      tooltip={inviteEntries().length > 1 ? 'Remove' : 'Clear'}
+                      label={inviteEntries().length > 1 ? 'Remove' : 'Clear'}
                       placement="top"
                     >
                       <button

@@ -517,7 +517,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
               'max-h-24 mt-1': expanded(),
             }}
           >
-            <Tooltip tooltip="Apply link changes">
+            <Tooltip label="Apply link changes">
               <Button
                 onClick={handleSubmit}
                 class="focus:ring-failure focus:ring-2 focus:ring-offset-2"

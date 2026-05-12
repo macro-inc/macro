@@ -37,7 +37,7 @@ export function ReferencesButton(props: {
     }
   );
   return (
-    <Tooltip tooltip={'View References'}>
+    <Tooltip label={'View References'}>
       <div
         class="flex items-center gap-1 py-1 font-mono text-xs text-ink-disabled hover:bg-hover relative"
         tabIndex={0}
@@ -139,7 +139,7 @@ export function ReferencesModal(props: ReferencesModalProps) {
   };
   return (
     <>
-      <Tooltip tooltip={'View References'}>
+      <Tooltip label={'View References'}>
         <div
           class="flex items-center gap-1 py-1 font-mono text-xs text-ink-disabled hover:bg-hover relative"
           tabIndex={0}

@@ -50,7 +50,7 @@ const OptionalTooltipWrapper = (props: {
   tooltip?: string;
 }) => {
   if (props.tooltip) {
-    return <Tooltip tooltip={props.tooltip}>{props.children}</Tooltip>;
+    return <Tooltip label={props.tooltip}>{props.children}</Tooltip>;
   }
   return <>{props.children}</>;
 };

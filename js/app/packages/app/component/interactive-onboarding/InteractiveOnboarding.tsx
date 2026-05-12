@@ -181,7 +181,7 @@ function OnboardingCostSummary() {
           <div class="flex justify-between items-center mt-2 pt-2 border-t border-ink/10 text-xs">
             <span class="text-ink/40 flex items-center gap-1">
               Total with team
-              <Tooltip tooltip="Team charges begin when members accept their invite">
+              <Tooltip label="Team charges begin when members accept their invite">
                 <InfoIcon class="size-3 text-ink/30" />
               </Tooltip>
             </span>

@@ -248,10 +248,7 @@ function GroupChannelLabel(props: { channelId: string; fallbackName: string }) {
 
   return (
     <Show when={others().length > 0} fallback={props.fallbackName}>
-      <Tooltip
-        placement="bottom"
-        tooltip={<div class="text-xs whitespace-pre">{tooltipContent()}</div>}
-      >
+      <Tooltip placement="bottom" label={tooltipContent()}>
         <span>{label()}</span>
       </Tooltip>
     </Show>
@@ -1254,28 +1251,25 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
     return 'Just me';
   });
 
+  const shareAccessTooltip = () =>
+    match(shareAccessLevelText())
+      .when(
+        (level) => level === 'Public',
+        () => 'Anyone with the link can access this item'
+      )
+      .when(
+        (level) => level === 'Shared',
+        () => 'Shared with specific people or channels'
+      )
+      .when(
+        (level) => level === 'Just me',
+        () => 'Only you can access this item'
+      )
+      .otherwise(() => 'This item has been shared with you');
+
   return (
     <div class="border border-edge-muted flex ml-1 items-stretch rounded-xs">
-      <Tooltip
-        tooltip={
-          <div>
-            {match(shareAccessLevelText())
-              .when(
-                (level) => level === 'Public',
-                () => 'Anyone with the link can access this item'
-              )
-              .when(
-                (level) => level === 'Shared',
-                () => 'Shared with specific people or channels'
-              )
-              .when(
-                (level) => level === 'Just me',
-                () => 'Only you can access this item'
-              )
-              .otherwise(() => 'This item has been shared with you')}
-          </div>
-        }
-      >
+      <Tooltip label={shareAccessTooltip()}>
         <button
           class="text-xs hover:bg-hover text-ink px-2 flex items-center gap-1 h-full"
           onClick={() => {

@@ -39,12 +39,12 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
         const showExpanded = () => !isCompact() && !!formattedDate();
         return (
           <Tooltip
-            tooltip={
+            label={
               state.selectedDate
                 ? `Scheduled for ${formattedDate()}`
                 : 'Schedule this email'
             }
-            hide={showExpanded()}
+            open={showExpanded() ? false : undefined}
           >
             <Button
               size="icon-sm"
@@ -59,7 +59,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
               />
               <Show when={showExpanded()}>
                 <span class="text-sm">{formattedDate()}</span>
-                <Tooltip tooltip="Clear">
+                <Tooltip label="Clear">
                   <div
                     tabIndex={0}
                     class="hover:bg-accent/30"

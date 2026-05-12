@@ -20,7 +20,7 @@ function Path(props: { path: string[] }) {
       when={truncated()}
       fallback={<div class="truncate">{displayPath()}</div>}
     >
-      <Tooltip tooltip={fullPath()}>
+      <Tooltip label={fullPath()}>
         <div class="truncate">{displayPath()}</div>
       </Tooltip>
     </Show>

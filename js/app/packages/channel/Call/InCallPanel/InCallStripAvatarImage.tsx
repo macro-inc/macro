@@ -43,9 +43,7 @@ export const InCallStripAvatarImage: Component<{
   };
 
   return (
-    <Tooltip
-      tooltip={<span class="wrap-break-word text-ink">{nameLabel()}</span>}
-    >
+    <Tooltip label={nameLabel()}>
       <Show
         when={props.image.stripLocalPending}
         fallback={
