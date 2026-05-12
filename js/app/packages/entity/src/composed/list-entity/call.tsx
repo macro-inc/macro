@@ -1,4 +1,5 @@
 import { formatCallDuration } from '@block-call/utils';
+import { CallAgainButton } from '@channel/Call/CallAgainButton';
 import { UserGroup } from '@core/component/Properties/component/propertyValue/UserGroup';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
 import type { EntityReference } from '@core/component/Properties/types';
@@ -65,6 +66,15 @@ export function CallParticipants(props: { participantIds: string[] }) {
         <UserGroup entities={entities()} maxUsers={2} />
       </Tooltip>
     </Show>
+  );
+}
+
+export function CallListAgainButton(props: { channelId: string }) {
+  return (
+    <CallAgainButton
+      channelId={props.channelId}
+      class="opacity-0 group-hover/narrow:opacity-100 transition-opacity flex shrink-0 items-center gap-1 rounded-xs border border-edge-muted px-1.5 py-1 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none"
+    />
   );
 }
 
