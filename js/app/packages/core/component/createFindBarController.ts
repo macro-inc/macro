@@ -11,7 +11,6 @@ export type FindBarSource<T> = {
   isFetching: Accessor<boolean>;
   navigate: (result: T) => void;
   validateText?: (text: string) => boolean;
-  // server total when known otherwise denominator is results length
   totalCount?: Accessor<number | undefined>;
 };
 
