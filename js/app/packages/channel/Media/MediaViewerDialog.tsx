@@ -1,5 +1,5 @@
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+
 import * as stackingContext from '@core/constant/stackingContext';
 import { isMobile } from '@core/mobile/isMobile';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
@@ -75,11 +75,7 @@ function VideoViewerContent(props: {
       <Dialog.Content class="flex items-center justify-center bg-panel">
         <LightboxToolbar isVisible={true}>
           <Dialog.CloseButton>
-            <Button
-              variant="ghost"
-              size="icon-md"
-              tooltip={<LabelAndHotKey label="Close" />}
-            >
+            <Button variant="ghost" size="icon-md" label="Close">
               <XIcon />
             </Button>
           </Dialog.CloseButton>

@@ -111,6 +111,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   const emails = () => emailsQuery.data ?? [];
 
   // Server-side email search
+  // TODO: fix this it doesn't work
   const emailSearchQuery = useSearchSoupQuery(
     () => ({
       params: { page_size: 20 },

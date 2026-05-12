@@ -1,6 +1,7 @@
-use axum::{
-    Json,
-    extract::{Path, State},
+use axum::{Json, extract::State};
+use entity_access::{
+    domain::{models::AdminTeamRole, ports::EntityAccessService},
+    inbound::axum_extractors::MacroUserTeamExtractor,
 };
 use model_error_response::ErrorResponse;
 
@@ -9,7 +10,7 @@ use crate::domain::{
     team_repo::TeamService,
 };
 
-use super::{TeamPathParam, TeamRouterState, middleware::TeamAccessRoleExtractor};
+use super::TeamRouterState;
 
 /// Response containing a list of team invites
 #[derive(serde::Serialize, utoipa::ToSchema)]
@@ -21,11 +22,8 @@ pub struct TeamInvitesResponse {
 /// Gets all invites for a team.
 #[utoipa::path(
     get,
-    path = "/team/{team_id}/invites",
+    path = "/team/invites",
     operation_id = "get_team_invites",
-    params(
-        ("team_id" = String, Path, description = "The ID of the team to get invites for")
-    ),
     responses(
         (status = 200, body = TeamInvitesResponse),
         (status = 400, body = ErrorResponse),
@@ -34,11 +32,13 @@ pub struct TeamInvitesResponse {
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn handler<T: TeamService>(
-    _access: TeamAccessRoleExtractor<super::middleware::AdminRole, T>,
-    State(state): State<TeamRouterState<T>>,
-    Path(TeamPathParam { team_id }): Path<TeamPathParam>,
+pub async fn handler<T: TeamService, Eas: EntityAccessService>(
+    access: MacroUserTeamExtractor<AdminTeamRole, Eas>,
+    State(state): State<TeamRouterState<T, Eas>>,
 ) -> Result<Json<TeamInvitesResponse>, TeamError> {
-    let invites = state.service.get_team_invites(&team_id).await?;
+    let invites = state
+        .service
+        .get_team_invites(access.entity_access_receipt)
+        .await?;
     Ok(Json(TeamInvitesResponse { invites }))
 }

@@ -306,7 +306,7 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
 
 export const ENABLE_APP_STORE_QR_CODE = resolveFeatureFlag(
   'ENABLE_APP_STORE_QR_CODE',
-  DEV_MODE_ENV
+  true
 );
 
 export const ENABLE_RAIL_CHAT_TASK_COMMENTS = resolveFeatureFlag(

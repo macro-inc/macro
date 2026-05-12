@@ -43,7 +43,8 @@ export function ThreadReplyList(props: {
   const scrollToIndex = (index: number): boolean => {
     const element = getReplyElementAtIndex(replyElements, index);
     if (!element) return false;
-    element.scrollIntoView({ block: 'center' });
+    // NOTE: this rAF helps prevent situations where the deeply nested thread element is unmounted
+    requestAnimationFrame(() => element.scrollIntoView({ block: 'center' }));
     return true;
   };
 

@@ -47,7 +47,6 @@ import {
   createSignal,
   Match,
   onCleanup,
-  onMount,
   Show,
   Suspense,
   Switch,
@@ -176,18 +175,18 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     callCtx.syncCallPageTab(channelId, false);
   });
 
-  // Clear the URL param after consuming it so a reload doesn't re-trigger
-  // the join if the user has since left the call.
-  onMount(() => {
-    if (
-      wantsJoinCall &&
-      searchParams[CHANNEL_URL_PARAMS.joinCall] !== undefined
-    ) {
-      setSearchParams(
-        { [CHANNEL_URL_PARAMS.joinCall]: undefined },
-        { replace: true }
-      );
-    }
+  // Once the call actually mounts for this channel, replace the URL so a
+  // reload doesn't re-trigger auto-join after the user has left. Waiting for
+  // the call to mount (instead of running on adapter mount) preserves the
+  // deep link if the join fails so the user can retry by refreshing.
+  createComputed(() => {
+    if (!callCtx) return;
+    if (!callCtx.isInCall() || callCtx.activeChannelId() !== channelId) return;
+    if (searchParams[CHANNEL_URL_PARAMS.joinCall] === undefined) return;
+    setSearchParams(
+      { [CHANNEL_URL_PARAMS.joinCall]: undefined },
+      { replace: true }
+    );
   });
 
   const convertTargetMessage = (

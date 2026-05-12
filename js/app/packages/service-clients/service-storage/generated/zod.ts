@@ -1192,6 +1192,12 @@ export const ingestTranscriptBody = zod
       .describe(
         "Stable per-speaker identifier produced by the STT provider's diarization\npass. Namespaced upstream by audio track so values are unique across all\ntracks in a call. `None` when the provider didn't return a speaker label."
       ),
+    embedding: zod
+      .array(zod.number())
+      .nullish()
+      .describe(
+        'Speaker voice embedding computed by the transcription agent\n(e.g. a Resemblyzer 256-dim vector). When present, the server\nupserts a `voice` row and stores the resulting id on the transcript\nsegment so the call-finished pipeline can match it to enrolled users.'
+      ),
     endedAt: zod.iso
       .datetime({})
       .nullish()
@@ -4057,6 +4063,16 @@ export const getEntityPermissionResponse = zod
               type: zod.enum(['channel_role']),
             })
             .describe('Permission for channel-based entities.'),
+          zod
+            .object({
+              role: zod
+                .enum(['member', 'admin', 'owner'])
+                .describe(
+                  'The role a user has within a team.\n\nOrdered least to most privileged so comparisons reflect access strength.'
+                ),
+              type: zod.enum(['team_role']),
+            })
+            .describe('Permission for team-based entities.'),
         ])
         .describe(
           "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."

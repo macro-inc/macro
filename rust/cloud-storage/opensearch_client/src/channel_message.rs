@@ -1,7 +1,19 @@
 use crate::{
     OpensearchClient, Result, delete,
+    search::{
+        self,
+        channels::{ChannelSearchArgs, ChannelSearchResults},
+    },
     upsert::{self, channel_message::UpsertChannelMessageArgs},
 };
+
+impl OpensearchClient {
+    /// Performs a channel content search.
+    #[tracing::instrument(skip(self, args))]
+    pub async fn search_channel(&self, args: ChannelSearchArgs) -> Result<ChannelSearchResults> {
+        search::channels::search_channel(&self.inner, args).await
+    }
+}
 
 impl OpensearchClient {
     /// Upserts a channel message into the opensearch index

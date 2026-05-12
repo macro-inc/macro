@@ -16,11 +16,10 @@ function CollapsibleCard(props: {
   hint?: string;
   copyKey: string;
   copyValue: string;
-  copyLabel?: string;
   copiedKey: () => string | null;
   onCopy: (key: string, text: string) => void;
 }) {
-  const [expanded, setExpanded] = createSignal(false);
+  const [expanded, setExpanded] = createSignal(true);
   const isCopied = () => props.copiedKey() === props.copyKey;
 
   return (
@@ -62,7 +61,7 @@ function CollapsibleCard(props: {
               ) : (
                 <>
                   <ClipboardIcon class="size-3.5" />
-                  {props.copyLabel ?? 'Copy'}
+                  Copy
                 </>
               )}
             </Button>
@@ -97,7 +96,6 @@ export function McpSetupCards(props: { class?: string }) {
             hint={item.hint}
             copyKey={item.key}
             copyValue={MACRO_MCP_URL}
-            copyLabel="Copy URL"
             copiedKey={copiedKey}
             onCopy={copy}
           />

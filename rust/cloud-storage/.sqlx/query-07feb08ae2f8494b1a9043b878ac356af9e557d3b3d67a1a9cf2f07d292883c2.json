@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH ordered AS (\n                SELECT\n                    segment_id,\n                    speaker_id,\n                    diarized_speaker_id,\n                    voice_id,\n                    content,\n                    started_at,\n                    ended_at,\n                    sequence_num,\n                    LAG(speaker_id) OVER w AS prev_speaker_id,\n                    LAG(diarized_speaker_id) OVER w AS prev_diarized_speaker_id,\n                    LAG(voice_id) OVER w AS prev_voice_id,\n                    LAG(ended_at) OVER w AS prev_ended_at\n                FROM call_transcripts\n                WHERE call_id = $2\n                WINDOW w AS (ORDER BY sequence_num)\n            ),\n            marked AS (\n                SELECT\n                    segment_id,\n                    speaker_id,\n                    diarized_speaker_id,\n                    voice_id,\n                    content,\n                    started_at,\n                    ended_at,\n                    sequence_num,\n                    CASE\n                        WHEN prev_speaker_id IS NOT NULL\n                            AND speaker_id = prev_speaker_id\n                            AND diarized_speaker_id IS NOT DISTINCT FROM prev_diarized_speaker_id\n                            AND voice_id IS NOT DISTINCT FROM prev_voice_id\n                            AND prev_ended_at IS NOT NULL\n                            AND started_at - prev_ended_at <= INTERVAL '5 seconds'\n                        THEN 0\n                        ELSE 1\n                    END AS is_new_group\n                FROM ordered\n            ),\n            grouped AS (\n                SELECT\n                    segment_id,\n                    speaker_id,\n                    diarized_speaker_id,\n                    voice_id,\n                    content,\n                    started_at,\n                    ended_at,\n                    sequence_num,\n                    SUM(is_new_group) OVER (ORDER BY sequence_num) AS group_id\n                FROM marked\n            )\n            INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, diarized_speaker_id, voice_id, content, started_at, ended_at, sequence_num)\n            SELECT\n                $1,\n                MIN(segment_id),\n                MIN(speaker_id),\n                MIN(diarized_speaker_id),\n                -- voice_id is UUID (no MIN); all rows in a group share the same value via IS NOT DISTINCT FROM.\n                (array_agg(voice_id ORDER BY sequence_num))[1],\n                STRING_AGG(content, ' ' ORDER BY sequence_num),\n                MIN(started_at),\n                MAX(ended_at),\n                MIN(sequence_num)\n            FROM grouped\n            GROUP BY group_id\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "07feb08ae2f8494b1a9043b878ac356af9e557d3b3d67a1a9cf2f07d292883c2"
+}

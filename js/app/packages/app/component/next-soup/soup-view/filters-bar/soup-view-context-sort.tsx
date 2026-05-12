@@ -12,6 +12,7 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { createMemo, createSignal, Match, Switch } from 'solid-js';
 
 type SortOpenProps = {
@@ -28,6 +29,7 @@ export const SoupViewContextSort = () => {
     hotkey: 's',
     scopeId: panel.splitHotkeyScope,
     description: 'Open sort menu',
+    hotkeyToken: TOKENS.soup.sort,
     keyDownHandler: () => {
       setSortOpen(true);
       return true;

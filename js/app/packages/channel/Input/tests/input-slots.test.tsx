@@ -51,6 +51,13 @@ vi.mock('@icon/bold/arrow-up-bold.svg', () => ({
   default: () => <span data-testid="send-icon" />,
 }));
 
+vi.mock(
+  '@phosphor-icons/core/regular/paper-plane-right.svg?component-solid',
+  () => ({
+    default: () => <span data-testid="paper-plane-icon" />,
+  })
+);
+
 vi.mock('@icon/bold/spinner-gap-bold.svg', () => ({
   default: () => <span data-testid="spinner-icon" />,
 }));

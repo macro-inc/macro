@@ -139,8 +139,10 @@ export function saveTheme(name: string): void{
 
 export function deleteTheme(id: string): void{
   setUserThemes(userThemes().filter((theme) => theme.id !== id));
-  setIsThemeSaved(false);
-  setCurrentThemeId('');
+  if(currentThemeId() === id){
+    setIsThemeSaved(false);
+    setCurrentThemeId('');
+  }
 }
 
 /** Returns true when the current theme has a dark background (ink lightness > panel lightness). */

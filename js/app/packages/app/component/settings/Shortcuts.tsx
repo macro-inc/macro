@@ -1,5 +1,5 @@
 import { IS_MAC } from '@core/constant/isMac';
-import { Hotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@ui';
 import { Keyboard, Panel } from '@ui';
 import { cn } from '@ui';
 import { createSignal, For, Index, type JSX } from 'solid-js';

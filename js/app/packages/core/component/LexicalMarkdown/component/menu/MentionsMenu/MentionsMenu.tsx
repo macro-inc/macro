@@ -9,7 +9,6 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { debouncedDependent } from '@core/util/debounce';
-import { createFreshSearch } from '@core/util/freshSort';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
 import type { HistoryItem as Item } from '@queries/history/history';
@@ -50,24 +49,7 @@ import { useUsersMention } from './hooks/useUsersMention';
 import type { BucketConfig, MentionBucketId } from './MentionsMenuController';
 import { useMentionsMenuController } from './MentionsMenuController';
 import { createItemHandler } from './utils/mentionHandlers';
-
-const mobileAllSearch = createFreshSearch<MentionItem>({
-  config: {
-    useViewedAt: true,
-    fuzzyWeight: 0.4,
-    timeWeight: 0.6,
-    brevityWeight: 0,
-  },
-  getName: (item) => {
-    if (item.kind === 'date') return item.data.displayText;
-    if (item.kind === 'group') return item.data.groupAlias;
-    return item.searchText;
-  },
-  getTimestamp: (item) => {
-    if (item.kind === 'date' || item.kind === 'group') return {};
-    return item.timestamps;
-  },
-});
+import { sortMobileMentions } from './utils/mobileSort';
 
 const MAX_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
@@ -227,8 +209,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
-  // On mobile, combine all sources into a single list interleaved by
-  // freshness instead of grouped by category.
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const combined: MentionItem[] = [
       ...(usersAndGroups() ?? []),
@@ -237,7 +217,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ...(emails() ?? []),
       ...(dates() ?? []),
     ];
-    return mobileAllSearch(combined, searchTerm()).map(({ item }) => item);
+    return sortMobileMentions(combined, searchTerm());
   });
 
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {

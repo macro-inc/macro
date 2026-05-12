@@ -1,8 +1,12 @@
 //! This module is responsible for enriching search results with metadata
 
 use models_opensearch::SearchEntityType;
+use models_search::channel::ChannelSortTimestamp;
 use models_search::unified::UnifiedSearchResponseItem;
 use opensearch_client::search::model::SearchHit;
+
+// Unified search always re-sorts channel results by created_at app-side (Message mode).
+const UNIFIED_CHANNEL_SORT: ChannelSortTimestamp = ChannelSortTimestamp::Message;
 
 use crate::api::{
     context::SearchHandlerState,
@@ -13,7 +17,7 @@ use crate::api::{
     },
 };
 
-/// Enriches search results with metadat and converts to UnifiedSearchResponseItem
+/// Enriches search results with metadata and converts to UnifiedSearchResponseItem
 #[tracing::instrument(skip(ctx, results), fields(result_count = results.len()), err)]
 pub async fn enrich_search_response(
     ctx: &SearchHandlerState,
@@ -38,7 +42,7 @@ pub async fn enrich_search_response(
                 .collect())
         }
         SearchEntityType::Channels => {
-            let response = enrich_channels(ctx, user_id, results).await?;
+            let response = enrich_channels(ctx, user_id, results, UNIFIED_CHANNEL_SORT).await?;
             Ok(response
                 .into_iter()
                 .map(UnifiedSearchResponseItem::Channel)

@@ -1,5 +1,5 @@
 import User from '@phosphor-icons/core/regular/user.svg?component-solid';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -10,7 +10,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { Tooltip } from './Tooltip';
+import { HoverCard } from './HoverCard';
 import type { UserIconProps } from './UserIcon';
 
 /** Same keys as {@link UserIconProps} `size` (aligned ring + overlap + overflow chip). */
@@ -134,6 +134,22 @@ export type StackedAvatarInput = {
   onPress?: () => void;
   ariaLabel?: string;
 };
+
+function OverflowTooltip(props: {
+  chip: JSX.Element;
+  render: (close: () => void) => JSX.Element;
+}) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <HoverCard
+      open={open()}
+      onOpenChange={setOpen}
+      triggerAs="div"
+      trigger={props.chip}
+      content={props.render(() => setOpen(false))}
+    />
+  );
+}
 
 export type StackedAvatarsRowProps<T = unknown> = {
   each: Accessor<T[]>;
@@ -340,18 +356,14 @@ export function StackedAvatarsRow<T = unknown>(
 
     if (props.overflowTooltipContent) {
       return faceShell(
-        <Tooltip
-          unstyled
-          tooltip={(close) => props.overflowTooltipContent!(close, ctx)}
-        >
-          {chip}
-        </Tooltip>
+        <OverflowTooltip
+          chip={chip}
+          render={(close) => props.overflowTooltipContent!(close, ctx)}
+        />
       );
     }
 
-    return faceShell(
-      <Tooltip tooltip={plainOverflowTooltip()}>{chip}</Tooltip>
-    );
+    return faceShell(<Tooltip label={plainOverflowTooltip()}>{chip}</Tooltip>);
   };
 
   return (

@@ -652,7 +652,7 @@ export function Document() {
   return (
     <>
       <Show when={!isNestedBlock}>
-        <div class="absolute top-4 left-4 z-simple-search">
+        <div class="absolute top-4 right-4 z-simple-search">
           <SimpleSearch />
         </div>
       </Show>

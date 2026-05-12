@@ -7,7 +7,6 @@ import {
   REMOVE_PINNED_PROPERTY_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import TagIcon from '@icon/regular/tag.svg';
@@ -26,7 +25,7 @@ export function MarkdownPropertiesButton(props: {
     <Button
       variant={drawerControl.isOpen() ? 'active' : 'ghost'}
       size={props.buttonSize === 'sm' ? 'icon-sm' : 'icon-md'}
-      tooltip={<LabelAndHotKey label="Properties" />}
+      label="Properties"
       onClick={drawerControl.toggle}
     >
       <TagIcon />
@@ -55,7 +54,7 @@ export function MarkdownPropertiesModal(props: {
       <Button
         variant={drawerControl.isOpen() ? 'active' : 'ghost'}
         size={props.buttonSize === 'sm' ? 'icon-sm' : 'icon-md'}
-        tooltip={<LabelAndHotKey label="Properties" />}
+        label="Properties"
         onClick={drawerControl.toggle}
       >
         <TagIcon />

@@ -25,7 +25,8 @@ async fn ids_search(
 
     let (cursor_updated_at, cursor_entity_id) = cursor
         .as_ref()
-        .map(|c| (Some(c.updated_at), Some(c.entity_id.to_string())))
+        .and_then(|c| c.as_updated_at())
+        .map(|(id, ts)| (Some(ts), Some(id.to_string())))
         .unwrap_or((None, None));
 
     // Fetch limit + 1 to determine if there are more results
@@ -93,7 +94,8 @@ async fn owner_search<'a>(
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
     let (cursor_updated_at, cursor_entity_id) = cursor
         .as_ref()
-        .map(|c| (Some(c.updated_at), Some(c.entity_id.to_string())))
+        .and_then(|c| c.as_updated_at())
+        .map(|(id, ts)| (Some(ts), Some(id.to_string())))
         .unwrap_or((None, None));
 
     // Fetch limit + 1 to determine if there are more results
@@ -158,7 +160,7 @@ async fn owner_search<'a>(
         time = 30,
         result = true,
         key = "String",
-        convert = r#"{ format!("{}-{:?}-{}-{}-{}-{}", macro_user_id.as_ref(), document_ids, term, ids_only, limit, cursor.as_ref().map(|c| format!("{}-{}", c.entity_id, c.updated_at)).unwrap_or_default()) }"#
+        convert = r#"{ format!("{}-{:?}-{}-{}-{}-{}", macro_user_id.as_ref(), document_ids, term, ids_only, limit, cursor.as_ref().and_then(|c| c.as_updated_at()).map(|(id, ts)| format!("{}-{}", id, ts)).unwrap_or_default()) }"#
     )
 )]
 pub async fn search_document_names<'a>(
@@ -172,6 +174,9 @@ pub async fn search_document_names<'a>(
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
     if term.is_empty() {
         return Err(NameSearchError::EmptySearchTerm);
+    }
+    if cursor.as_ref().is_some_and(|c| c.as_updated_at().is_none()) {
+        return Err(NameSearchError::IncompatibleCursor);
     }
 
     let search_pattern = format!("%{term}%");

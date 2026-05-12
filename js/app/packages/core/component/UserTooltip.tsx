@@ -91,7 +91,7 @@ export function UserTooltip(props: UserTooltipProps) {
 
   return (
     <Surface depth={2} active>
-      <div class="bg-panel text-ink box-border border-accent overflow-hidden max-w-lg">
+      <div class="text-ink max-w-lg">
         <div class="flex items-center gap-2 p-2">
           <UserIcon
             {...avatarProps()}

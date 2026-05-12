@@ -1,5 +1,12 @@
 export type EmailView = 'inbox' | 'drafts' | 'sent' | 'all';
 
+export type DateRangeFilter = {
+  gt?: string;
+  gte?: string;
+  lt?: string;
+  lte?: string;
+};
+
 export type PropertyFilter = {
   propertyId: string;
   type: 'select' | 'entity';
@@ -47,6 +54,12 @@ export type ScalarFieldFilters = {
   folderSeen?: boolean;
   folderDone?: boolean;
   callAttended?: boolean;
+  documentCreatedAt?: DateRangeFilter;
+  documentUpdatedAt?: DateRangeFilter;
+  chatCreatedAt?: DateRangeFilter;
+  chatUpdatedAt?: DateRangeFilter;
+  folderCreatedAt?: DateRangeFilter;
+  folderUpdatedAt?: DateRangeFilter;
 };
 
 export type FieldFilters = ArrayFieldFilters & ScalarFieldFilters;

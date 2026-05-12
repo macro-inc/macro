@@ -19,6 +19,11 @@ const RING_PULSE_GAP_S = 0.2;
 const RING_FADE_S = 0.02;
 // US dial-tone-style ring: superimposed 440Hz + 480Hz.
 const RING_FREQUENCIES_HZ = [440, 480];
+// Phone-style cadence: re-ring every few seconds while the call is incoming.
+const RING_INTERVAL_MS = 4_000;
+// Stop ringing after this long if the user neither answers nor dismisses, so
+// a missed call doesn't keep noise-making forever.
+const MAX_RING_DURATION_MS = 30_000;
 
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
 
@@ -60,6 +65,28 @@ function playRingSound() {
   setTimeout(() => {
     void ctx.close().catch(() => {});
   }, totalMs);
+}
+
+function startRingingLoop(shouldStop: () => boolean): { stop: () => void } {
+  let stopped = false;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    window.clearInterval(intervalId);
+    window.clearTimeout(timeoutId);
+  };
+
+  const intervalId = window.setInterval(() => {
+    if (shouldStop()) {
+      stop();
+      return;
+    }
+    playRingSound();
+  }, RING_INTERVAL_MS);
+
+  const timeoutId = window.setTimeout(stop, MAX_RING_DURATION_MS);
+
+  return { stop };
 }
 
 function safeJsonParse(s: string): unknown {
@@ -116,9 +143,11 @@ export function CallStartedNotifier() {
 
     void emitCallStartedNotification({
       channelId,
+      callId,
       createdBy: createdBy ?? null,
       channelName: channelsCtx.channelsById()[channelId]?.name ?? undefined,
       notif,
+      isJoined: () => callCtx.activeCallId() === callId,
     });
   });
 
@@ -127,11 +156,13 @@ export function CallStartedNotifier() {
 
 async function emitCallStartedNotification(args: {
   channelId: string;
+  callId: string;
   createdBy: string | null;
   channelName: string | undefined;
   notif: ReturnType<typeof usePlatformNotificationState>;
+  isJoined: () => boolean;
 }) {
-  const { channelId, createdBy, channelName, notif } = args;
+  const { channelId, callId, createdBy, channelName, notif, isJoined } = args;
 
   // Play the sound regardless of notification permission so a user with
   // browser notifications denied still gets an audio cue.
@@ -148,13 +179,27 @@ async function emitCallStartedNotification(args: {
     title: `Incoming call${target}`,
     options: {
       body: `${callerName} started a call`,
+      // Keep the toast visible until the user answers or dismisses it,
+      // instead of the browser's default few-second auto-dismiss.
+      requireInteraction: true,
+      // Collapse duplicate broadcasts (e.g. multi-device) into one toast.
+      tag: `call-${callId}`,
     },
   });
 
   if (handle === 'not-granted' || handle === 'disabled-in-ui') return;
+
+  // Only the tab that surfaced the notification keeps re-ringing — non-leader
+  // tabs short-circuit above with 'not-granted', so loops don't stack.
+  const ringer = startRingingLoop(isJoined);
+
   handle.onClick(() => {
     window.focus();
     void joinChannelCall(channelId);
     handle.close();
+    ringer.stop();
+  });
+  handle.onDismiss(() => {
+    ringer.stop();
   });
 }

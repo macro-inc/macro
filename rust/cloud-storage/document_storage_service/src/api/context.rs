@@ -209,6 +209,7 @@ pub(crate) type DssCallService = CallServiceImpl<
     call::outbound::ai_call_summarizer::AiCallSummarizer,
     crate::service::call_search_indexer::SqsCallSearchIndexer,
     DssVoipPushSender,
+    call::outbound::pg_voice_repo::PgVoiceRepo,
 >;
 
 /// Type alias for the call router state.

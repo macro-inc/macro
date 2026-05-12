@@ -210,6 +210,55 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
   };
 };
 
+/**
+ * Maps a single channel search response item into `ChannelMessageEntity`s.
+ * Shared between the unified search transform and the channel-only endpoint,
+ * both of which return the same per-channel shape.
+ */
+export function mapChannelSearchResultItem(
+  result: {
+    channel_id: string;
+    channel_type: string;
+    owner_id?: string | null;
+    channel_message_search_results: ChannelSearchResult[];
+  },
+  channels: ReadonlyArray<{ id: string; name?: string | null }>
+): WithSearch<ChannelMessageEntity>[] {
+  const channelWithLatest = channels.find((c) => c.id === result.channel_id);
+  const channelName =
+    channelWithLatest?.name ?? blockNameToDefaultFile('channel');
+  const channelType = result.channel_type as ChannelType;
+  const ownerId = result.owner_id ?? '';
+
+  return result.channel_message_search_results
+    .filter((msg) => !!msg.message_id)
+    .map((msg): WithSearch<ChannelMessageEntity> => {
+      const search = getSearchData({
+        type: 'channel',
+        results: [msg],
+      });
+
+      const content = search.contentHitData?.[0]?.content ?? '';
+
+      return {
+        type: 'channel_message',
+        id: `${result.channel_id}:${msg.message_id}`,
+        channelId: result.channel_id,
+        channelName,
+        channelType,
+        messageId: msg.message_id!,
+        threadId: msg.thread_id ?? undefined,
+        senderId: msg.sender_id!,
+        content,
+        name: channelName,
+        ownerId,
+        createdAt: msg.created_at,
+        updatedAt: msg.updated_at ?? msg.created_at,
+        search,
+      };
+    });
+}
+
 export const useSearchResponseItemMapper = () => {
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
@@ -309,41 +358,16 @@ export const useSearchResponseItemMapper = () => {
         ];
       }
       case 'channel': {
-        const channelWithLatest = channels().find(
-          (c) => c.id === result.channel_id
+        return mapChannelSearchResultItem(
+          {
+            channel_id: result.channel_id,
+            channel_type: result.channel_type,
+            owner_id: result.owner_id,
+            channel_message_search_results:
+              result.channel_message_search_results,
+          },
+          channels()
         );
-        const channelName =
-          channelWithLatest?.name ?? blockNameToDefaultFile('channel');
-        const channelType = result.channel_type as ChannelType;
-        const ownerId = result.owner_id ?? '';
-
-        return result.channel_message_search_results
-          .filter((msg) => !!msg.message_id)
-          .map((msg): WithSearch<ChannelMessageEntity> => {
-            const search = getSearchData({
-              type: 'channel',
-              results: [msg],
-            });
-
-            const content = search.contentHitData?.[0]?.content ?? '';
-
-            return {
-              type: 'channel_message',
-              id: `${result.channel_id}:${msg.message_id}`,
-              channelId: result.channel_id,
-              channelName,
-              channelType,
-              messageId: msg.message_id!,
-              threadId: msg.thread_id ?? undefined,
-              senderId: msg.sender_id!,
-              content,
-              name: channelName,
-              ownerId,
-              createdAt: msg.created_at,
-              updatedAt: msg.updated_at ?? msg.created_at,
-              search,
-            };
-          });
       }
 
       case 'project': {

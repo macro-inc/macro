@@ -36,10 +36,12 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
+    extract::FromRef,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post},
 };
+use entity_access::domain::ports::EntityAccessService;
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -50,56 +52,59 @@ use crate::domain::{
     team_repo::TeamService,
 };
 
-/// Shared path param for team endpoints.
-#[derive(serde::Deserialize)]
-pub struct TeamPathParam {
-    /// The team id
-    pub team_id: uuid::Uuid,
-}
-
 /// Router state containing the team service.
-pub struct TeamRouterState<T> {
+pub struct TeamRouterState<T, Eas> {
     /// The team service implementation.
     pub service: Arc<T>,
+    /// The entity access service.
+    pub entity_access_service: Arc<Eas>,
 }
 
-// Manual Clone impl so T doesn't need to be Clone (it's behind Arc).
-impl<T> Clone for TeamRouterState<T> {
+impl<T, Eas> FromRef<TeamRouterState<T, Eas>> for Arc<Eas> {
+    fn from_ref(state: &TeamRouterState<T, Eas>) -> Self {
+        state.entity_access_service.clone()
+    }
+}
+
+// Manual Clone impl so T, Eas doesn't need to be Clone (it's behind Arc).
+impl<T, Eas> Clone for TeamRouterState<T, Eas> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            entity_access_service: self.entity_access_service.clone(),
         }
     }
 }
 
 /// Build the teams router with all endpoints.
-pub fn teams_router<T, S>(state: TeamRouterState<T>) -> Router<S>
+pub fn teams_router<T, Eas, S>(state: TeamRouterState<T, Eas>) -> Router<S>
 where
     T: TeamService,
+    Eas: EntityAccessService,
     S: Send + Sync + 'static,
 {
     Router::new()
-        .route("/", post(create_team::handler::<T>))
-        .route("/join/{team_invite_id}", get(join_team::handler::<T>))
-        .route("/user", get(get_user_teams::handler::<T>))
-        .route("/user/invites", get(get_user_invites::handler::<T>))
-        .route("/{team_id}", get(get_team::handler::<T>))
-        .route("/{team_id}", patch(patch_team::handler::<T>))
-        .route("/{team_id}/tier", patch(patch_team_user_tier::handler::<T>))
-        .route("/{team_id}", delete(delete_team::handler::<T>))
-        .route("/{team_id}/invites", get(get_team_invites::handler::<T>))
-        .route("/{team_id}/invite", post(invite_to_team::handler::<T>))
+        .route("/", post(create_team::handler::<T, Eas>))
+        .route("/join/{team_invite_id}", get(join_team::handler::<T, Eas>))
+        .route("/user", get(get_user_teams::handler::<T, Eas>))
+        .route("/user/invites", get(get_user_invites::handler::<T, Eas>))
+        .route("/", get(get_team::handler::<T, Eas>))
+        .route("/", patch(patch_team::handler::<T, Eas>))
+        .route("/tier", patch(patch_team_user_tier::handler::<T, Eas>))
+        .route("/", delete(delete_team::handler::<T, Eas>))
+        .route("/invites", get(get_team_invites::handler::<T, Eas>))
+        .route("/invite", post(invite_to_team::handler::<T, Eas>))
         .route(
             "/join/{team_invite_id}",
-            delete(reject_invitation::handler::<T>),
+            delete(reject_invitation::handler::<T, Eas>),
         )
         .route(
-            "/{team_id}/remove/{remove_user_id}",
-            delete(remove_user_from_team::handler::<T>),
+            "/remove/{remove_user_id}",
+            delete(remove_user_from_team::handler::<T, Eas>),
         )
         .route(
-            "/{team_id}/invite/{team_invite_id}",
-            delete(delete_team_invite::handler::<T>),
+            "/invite/{team_invite_id}",
+            delete(delete_team_invite::handler::<T, Eas>),
         )
         .with_state(state)
 }

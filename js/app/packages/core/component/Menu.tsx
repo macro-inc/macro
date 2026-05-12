@@ -18,9 +18,9 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { Hotkey } from '../../ui/components/Hotkey';
 import clickOutside from '../directive/clickOutside';
 import { EditingContext } from './Editable';
-import { Hotkey } from './Hotkey';
 
 false && clickOutside;
 

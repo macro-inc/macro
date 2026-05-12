@@ -22,7 +22,12 @@ fn active_states_for(
 
 #[test]
 fn test_construct_search_result_empty_input() {
-    let result = construct_search_result(vec![], HashMap::new(), HashMap::new());
+    let result = construct_search_result(
+        vec![],
+        HashMap::new(),
+        HashMap::new(),
+        ChannelSortTimestamp::Message,
+    );
     assert!(result.is_ok());
     assert_eq!(result.unwrap().len(), 0);
 }
@@ -60,7 +65,13 @@ fn test_construct_search_result_single_channel() {
     );
 
     let states = active_states_for(&search_results);
-    let result = construct_search_result(search_results, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_id, channel_uuid);
@@ -143,7 +154,13 @@ fn test_construct_search_result_multiple_messages_same_channel() {
     );
 
     let states = active_states_for(&search_results);
-    let result = construct_search_result(search_results, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_id, channel_uuid);
@@ -226,7 +243,13 @@ fn test_construct_search_result_filters_messages_without_content() {
     );
 
     let states = active_states_for(&search_results);
-    let result = construct_search_result(search_results, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_message_search_results.len(), 2);
@@ -281,7 +304,13 @@ fn test_construct_search_result_filters_orphans_and_propagates_deleted_at() {
     states.insert(deleted_message_id, Some(deleted_at));
     // orphan_message_id intentionally omitted to simulate a hard-deleted row.
 
-    let result = construct_search_result(search_results, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     assert_eq!(result.len(), 1);
     let hits = &result[0].extra.channel_message_search_results;
@@ -368,7 +397,13 @@ fn test_channel_history_timestamps() {
 
     // Call the function under test
     let states = active_states_for(&input);
-    let result = construct_search_result(input, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        input,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     // Verify that timestamps were copied from the channel history
     assert_eq!(result.len(), 1);
@@ -410,7 +445,13 @@ fn test_channel_history_missing_entry() {
 
     // Call the function under test
     let states = active_states_for(&input);
-    let result = construct_search_result(input, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        input,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     // Channels without history info should not be returned
     assert_eq!(result.len(), 0);
@@ -445,7 +486,13 @@ fn test_channel_history_null_viewed_at() {
 
     // Call the function under test
     let states = active_states_for(&input);
-    let result = construct_search_result(input, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        input,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
@@ -592,12 +639,27 @@ fn test_sort_stability() {
     }
 
     let states = active_states_for(&input);
-    let result1 =
-        construct_search_result(input.clone(), channel_histories.clone(), states.clone()).unwrap();
-    let result2 =
-        construct_search_result(input.clone(), channel_histories.clone(), states.clone()).unwrap();
-    let result3 =
-        construct_search_result(input.clone(), channel_histories.clone(), states).unwrap();
+    let result1 = construct_search_result(
+        input.clone(),
+        channel_histories.clone(),
+        states.clone(),
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
+    let result2 = construct_search_result(
+        input.clone(),
+        channel_histories.clone(),
+        states.clone(),
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
+    let result3 = construct_search_result(
+        input.clone(),
+        channel_histories.clone(),
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
 
     assert_eq!(result1.len(), 5);
     assert_eq!(result2.len(), 5);
@@ -665,7 +727,13 @@ fn test_construct_search_result_breaks_created_at_ties_by_message_id() {
     );
     let states = active_states_for(&search_results);
 
-    let result = construct_search_result(search_results, channel_histories, states).unwrap();
+    let result = construct_search_result(
+        search_results,
+        channel_histories,
+        states,
+        ChannelSortTimestamp::Message,
+    )
+    .unwrap();
     let hits = &result[0].extra.channel_message_search_results;
 
     assert_eq!(hits.len(), 3);

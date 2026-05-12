@@ -25,6 +25,8 @@ export const MiniToggleSwitch: Component<
     animateFlicker?: boolean;
     animateFlickerOnDeactivate?: boolean;
     size?: 'SM' | 'Base';
+    compact?: boolean;
+    activeTrackClass?: string;
     disabled?: boolean;
     trueLabel?: string;
     falseLabel?: string;
@@ -67,7 +69,7 @@ export const MiniToggleSwitch: Component<
         [`${sizeClass[props.size || 'Base']}`]: true,
         [`${props.switchRootClass}`]: !!props.switchRootClass,
         'flex-row-reverse': props.labelPlacement === 'right',
-        'opacity-50 cursor-not-allowed': props.disabled,
+        'opacity-50': props.disabled,
       }}
       checked={checked()}
       onChange={onChange}
@@ -78,7 +80,6 @@ export const MiniToggleSwitch: Component<
           class={props.labelClass}
           classList={{
             [`${sizeClass[props.size || 'Base']}`]: true,
-            'cursor-not-allowed': props.disabled,
             'whitespace-nowrap': true,
           }}
         >
@@ -90,19 +91,24 @@ export const MiniToggleSwitch: Component<
         <KSwitch.Input class="absolute inset-0 size-full! pointer-events-none" />
         <KSwitch.Control class="relative">
           <div
-            class="relative w-8 h-3 touch:w-12 touch:h-8 rounded-full transition-colors duration-80"
+            class="relative rounded-full transition-colors duration-80"
             classList={{
+              'w-8 h-3 touch:w-12 touch:h-8': !props.compact,
+              'w-6 h-2.5': !!props.compact,
               'bg-edge': !checked(),
-              'bg-accent': checked(),
+              [props.activeTrackClass ?? 'bg-accent']: checked(),
             }}
             aria-hidden
           >
-            {/* Toggle thumb */}
             <div
-              class="absolute top-0.5 size-2 touch:size-7 rounded-full bg-panel transition-transform duration-200 ease-click"
+              class="absolute top-0.5 rounded-full bg-panel transition-transform duration-200 ease-click"
               classList={{
+                'size-2 touch:size-7': !props.compact,
+                'size-1.5': !!props.compact,
                 'translate-x-0.5': !checked(),
-                'translate-x-5.5 touch:translate-x-4.5': checked(),
+                'translate-x-5.5 touch:translate-x-4.5':
+                  !props.compact && checked(),
+                'translate-x-4': !!props.compact && checked(),
               }}
             />
           </div>

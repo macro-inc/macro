@@ -1,3 +1,4 @@
 self-hosted-runner:
   labels:
     - linux-extra-beefy
+    - linux-latest-middy

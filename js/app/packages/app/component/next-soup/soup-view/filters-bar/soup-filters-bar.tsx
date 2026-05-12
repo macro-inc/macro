@@ -4,12 +4,12 @@ import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
-import { Button } from '@ui';
-import { createMemo, createSignal, Show } from 'solid-js';
+import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
+import { Button, Tooltip } from '@ui';
+import { createMemo, Show } from 'solid-js';
 import { useSoup } from '../../soup-context';
 
 export const SoupFiltersBar = () => {
@@ -22,8 +22,6 @@ export const SoupFiltersBar = () => {
   } = useFilterRefinements();
 
   const analytics = useAnalytics();
-
-  const [previewBtnHovering, setPreviewBtnHovering] = createSignal(false);
 
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
@@ -47,6 +45,7 @@ export const SoupFiltersBar = () => {
     hotkey: 'space',
     scopeId: panel.splitHotkeyScope,
     description: 'Toggle preview',
+    hotkeyToken: TOKENS.unifiedList.togglePreview,
     keyDownHandler: () => {
       togglePreview();
       return true;
@@ -60,7 +59,7 @@ export const SoupFiltersBar = () => {
 
   return (
     <Show when={!isMobile()}>
-      <div class="flex items-start gap-2 border-b border-edge-muted w-full px-2 py-1.5">
+      <div class="flex items-start gap-2 border-b border-edge-muted w-full p-2">
         <UnifiedFilterDropdown />
         <ActiveFilterChips
           filters={activeFiltersList()}
@@ -70,16 +69,9 @@ export const SoupFiltersBar = () => {
           isOptionActive={isOptionActive}
         />
         <div class="flex-1" />
-        <Tooltip tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}>
-          <Button
-            variant={soup.previewEntity() ? 'base' : 'ghost'}
-            size="sm"
-            class="rounded-xs [&_svg]:size-4 px-1 border border-transparent"
-            onClick={togglePreview}
-            onMouseEnter={() => setPreviewBtnHovering(true)}
-            onMouseLeave={() => setPreviewBtnHovering(false)}
-          >
-            <AnimatedPreviewIcon triggerAnimation={previewBtnHovering()} />
+        <Tooltip label="Preview" hotkey={TOKENS.unifiedList.togglePreview}>
+          <Button variant="ghost" size="icon-sm" onClick={togglePreview}>
+            <EyeIcon />
           </Button>
         </Tooltip>
         <Show when={!isSearchView()}>

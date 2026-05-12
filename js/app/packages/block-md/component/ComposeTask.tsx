@@ -3,7 +3,6 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
-import { Hotkey } from '@core/component/Hotkey';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -32,6 +31,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { createTask } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
@@ -48,7 +48,7 @@ import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
-import { Button } from '@ui';
+import { Button, Hotkey } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
@@ -653,7 +653,7 @@ export function ComposeTask(props: ComposeTaskProps) {
               }
             }}
             disabled={isCreating()}
-            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder/50 disabled:opacity-50"
+            class="w-full py-2 text-xl font-medium placeholder-ink-placeholder disabled:opacity-50"
             on:keydown={(e) => {
               if (e.key === 'Escape') {
                 const container = containerRef();
@@ -741,7 +741,11 @@ export function ComposeTask(props: ComposeTaskProps) {
           </Show>
           Create Task
           <div class="text-xxs text-ink-extra-muted ml-auto border border-edge-muted px-1.5 py-1 font-sans rounded-xs">
-            <Hotkey shortcut="cmd+enter" />
+            <Hotkey
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+            />
           </div>
         </Button>
       </div>

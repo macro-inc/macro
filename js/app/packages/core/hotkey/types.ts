@@ -44,6 +44,8 @@ export interface HotkeyCommand {
   hide?: boolean | (() => boolean);
   // Optional icon to display in the command palette.
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  // Optional component to display in the command palette
+  displayComponent?: Component<any>;
   // Optional tags for categorizing in the command palette.
   tags?: string[];
   /**
@@ -159,6 +161,10 @@ export interface HotkeyRegistrationOptions {
    */
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   /**
+   * Optional component to display in command palette rather than description.
+   */
+  displayComponent?: Component<any>;
+  /**
    * Optional tags for categorizing in the command palette.
    */
   tags?: string[];
@@ -192,6 +198,7 @@ export type HotkeyGroup = {
 export type RegisterHotkeyReturn = {
   dispose: () => void;
   commandScopeId?: string;
+  hotkey: () => string | undefined;
   /** Add this registration to a group for grouped disposal */
   withGroup: (group: HotkeyGroup) => RegisterHotkeyReturn;
 };

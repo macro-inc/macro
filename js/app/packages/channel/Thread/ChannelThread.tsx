@@ -5,7 +5,7 @@ import { deferredGate } from '@core/util/debounce';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import type { ApiThreadReply } from '@service-comms/client';
-import { createEffect, createSignal, on, Show } from 'solid-js';
+import { createEffect, createSignal, on, Show, untrack } from 'solid-js';
 import { createMessageSelection } from '../Channel/create-message-selection';
 import { ChannelMessage } from '../Message';
 import { createThreadHotkeys } from './create-thread-hotkeys';
@@ -73,7 +73,19 @@ export function ChannelThread(props: ThreadProps) {
     keys: () => activeReplies().map((r) => r.id),
   });
 
-  const isThreadFocused = () => isSelected() && !!replySelection.selectedId();
+  // Clears the local reply selection when the channel-level selection moves away
+  createEffect(
+    on(
+      () => props.selectedMessageId?.(),
+      (selectedId) => {
+        if (selectedId === props.data().id) return;
+        if (replySelection.selectedId()) replySelection.clear();
+      },
+      { defer: true }
+    )
+  );
+
+  const isThreadFocused = () => !!replySelection.selectedId();
   const selectThreadMessage = () => {
     if (isSelected() && !isThreadFocused()) {
       props.onClearSelection?.();
@@ -144,48 +156,61 @@ export function ChannelThread(props: ThreadProps) {
 
   createEffect(
     on(
-      [
-        () => props.targetReplyId,
-        canScrollToTargetReply,
-        loadedReplies,
-        displayReplies,
-        props.isExpanded,
-        replyListHandle,
-      ],
-      ([
-        targetReplyId,
-        canScroll,
-        replies,
-        renderedReplies,
-        isExpanded,
-        handle,
-      ]) => {
-        if (!targetReplyId) return;
-        if (!canScroll) return;
-
-        const targetReplyIndex = replies.findIndex(
-          (reply) => reply.id === targetReplyId
-        );
-        if (targetReplyIndex === -1) return;
-
-        props.onSelectMessage?.(props.data().id);
-        replySelection.select(targetReplyId);
-
-        if (!isExpanded) {
-          const renderedTargetReplyIndex = renderedReplies.findIndex(
-            (reply) => reply.id === targetReplyId
-          );
-          if (renderedTargetReplyIndex === -1) {
-            props.setIsExpanded(true);
-            return;
-          }
-
-          if (!handle?.scrollToIndex(renderedTargetReplyIndex)) return;
-          props.onTargetReplyScrolled?.(targetReplyId);
+      [() => props.selectedReplyId, loadedReplies],
+      ([selectedReplyId, replies]) => {
+        if (!selectedReplyId) {
+          if (replySelection.selectedId()) replySelection.clear();
           return;
         }
+        const found = replies.some((r) => r.id === selectedReplyId);
+        if (!found) {
+          if (replySelection.selectedId()) replySelection.clear();
+          return;
+        }
+        props.onSelectMessage?.(props.data().id);
+        replySelection.select(selectedReplyId);
+      }
+    )
+  );
 
-        if (!handle?.scrollToIndex(targetReplyIndex)) return;
+  createEffect(
+    on(
+      [() => props.targetReplyId, displayReplies, props.isExpanded],
+      ([targetReplyId, rendered, isExpanded]) => {
+        if (!targetReplyId || isExpanded) return;
+        if (rendered.some((r) => r.id === targetReplyId)) return;
+        props.setIsExpanded(true);
+      }
+    )
+  );
+
+  // this stops re-scrolling to the same target
+  let lastScrolledReplyId: string | undefined;
+  createEffect(
+    on(
+      [
+        () => props.targetReplyId,
+        replyListHandle,
+        canScrollToTargetReply,
+        props.isExpanded,
+      ],
+      ([targetReplyId, handle, canScroll, isExpanded]) => {
+        if (!targetReplyId) {
+          lastScrolledReplyId = undefined;
+          return;
+        }
+        if (lastScrolledReplyId === targetReplyId) return;
+        if (!canScroll || !handle) return;
+
+        // Untracked: channel-message reconciles must not re-fire scroll.
+        const replies = isExpanded
+          ? untrack(loadedReplies)
+          : untrack(displayReplies);
+        const index = replies.findIndex((r) => r.id === targetReplyId);
+        if (index === -1) return;
+
+        if (!handle.scrollToIndex(index)) return;
+        lastScrolledReplyId = targetReplyId;
         props.onTargetReplyScrolled?.(targetReplyId);
       }
     )

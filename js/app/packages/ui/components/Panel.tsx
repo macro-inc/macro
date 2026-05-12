@@ -5,16 +5,14 @@ import { cn } from '../utils/classname';
 import { Surface } from './Surface';
 import { Scroll } from './Scroll';
 
-/**
- * ```tsx
- * <Panel>
- *   <Panel.Header>Title</Panel.Header>
- *   <Panel.Toolbar>...</Panel.Toolbar>
- *   <Panel.Body>...</Panel.Body>
- *   <Panel.Footer>...</Panel.Footer>
- * </Panel>
- * ```
- */
+/*
+<Panel>
+  <Panel.Header></Panel.Header>
+  <Panel.Toolbar></Panel.Toolbar>
+  <Panel.Body></Panel.Body>
+  <Panel.Footer></Panel.Footer>
+</Panel>
+*/
 
 type BodyProps = ParentProps<{ class?: string; scroll?: boolean }>;
 type SlotProps = ParentProps<{ class?: string }>;
