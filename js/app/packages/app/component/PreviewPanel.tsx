@@ -62,9 +62,9 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   const blockInstance = () => {
     const aliasContext = isTaskEntity(props.selectedEntity)
       ? ({
-        alias: 'task',
-        baseType: 'md',
-      } as BlockAliasContext)
+          alias: 'task',
+          baseType: 'md',
+        } as BlockAliasContext)
       : undefined;
 
     let blockType: BlockName;
