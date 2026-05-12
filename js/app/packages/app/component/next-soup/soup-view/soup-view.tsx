@@ -874,7 +874,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
             maxSize={previewVisible() ? 840 : undefined}
           >
             <div
-              class="@container/uList size-full unified-list-root flex flex-col"
+              class="@container/u-list size-full unified-list-root flex flex-col"
               classList={{
                 'border-r border-edge-muted':
                   soup.previewEntity() !== undefined,

@@ -169,11 +169,11 @@ export function TaskGridLayout(props: LayoutProps) {
           {/* Show shared badges on narrow/medium containers, hide on wide (>1220px) */}
           <Show when={isShared()}>
             {/* Narrow: "shared this with you" tooltip */}
-            <span class="@min-[841px]/uList:hidden">
+            <span class="@min-[841px]/u-list:hidden">
               <SharedBadgeSmall ownerId={props.entity.ownerId} />
             </span>
             {/* Medium (841px-1220px): "Created by" tooltip */}
-            <span class="hidden @min-[841px]/uList:inline @min-[1221px]/uList:hidden">
+            <span class="hidden @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
               <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
             </span>
           </Show>
@@ -197,7 +197,7 @@ export function TaskGridLayout(props: LayoutProps) {
         {/* Created By column - only shown on wide containers (>1220px) */}
         <Entity.Slot
           placement="createdBy"
-          class="hidden @min-[1221px]/uList:flex items-center gap-1.5 min-w-0 overflow-hidden text-xs ph-no-capture"
+          class="hidden @min-[1221px]/u-list:flex items-center gap-1.5 min-w-0 overflow-hidden text-xs ph-no-capture"
         >
           <UserIcon id={props.entity.ownerId} size="sm" showTooltip={true} />
           <span class="truncate text-ink-muted">{ownerDisplayName()}</span>

@@ -65,11 +65,11 @@ export function TaskListHeader(props: { class?: string }) {
             class="truncate flex items-center min-w-0"
           >
             {/* Wide: show label, Narrow: hide */}
-            <span class="truncate @max-[840px]/uList:hidden">{col.label}</span>
+            <span class="truncate @max-[840px]/u-list:hidden">{col.label}</span>
             {/* Narrow: show icon with tooltip */}
             <Tooltip
               tooltip={col.label}
-              class="hidden @max-[840px]/uList:flex @max-[840px]/uList:px-1.5"
+              class="hidden @max-[840px]/u-list:flex @max-[840px]/u-list:px-1.5"
             >
               {COLUMN_ICONS[col.id]?.()}
             </Tooltip>
@@ -79,7 +79,7 @@ export function TaskListHeader(props: { class?: string }) {
       {/* Created By column - only shown on wide containers (>1220px) */}
       <div
         style={{ 'grid-area': 'createdBy' }}
-        class="truncate hidden @min-[1221px]/uList:block"
+        class="truncate hidden @min-[1221px]/u-list:block"
       >
         Created By
       </div>

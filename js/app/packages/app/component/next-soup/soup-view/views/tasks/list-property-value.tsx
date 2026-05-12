@@ -118,7 +118,7 @@ const ListSelectValue: Component<{ property: Property }> = (props) => {
         {/* Label hidden when container is narrow via CSS */}
         <span
           class={cn(
-            'list-property-label truncate flex-1 @max-[840px]/uList:hidden',
+            'list-property-label truncate flex-1 @max-[840px]/u-list:hidden',
             {
               'text-ink-extra-muted opacity-50': firstValue() === undefined,
             }
@@ -128,7 +128,7 @@ const ListSelectValue: Component<{ property: Property }> = (props) => {
         </span>
         {/* Caret hidden when container is narrow */}
         <Show when={!isReadOnly()}>
-          <CaretDownIcon class="size-3 shrink-0 @max-[840px]/uList:hidden" />
+          <CaretDownIcon class="size-3 shrink-0 @max-[840px]/u-list:hidden" />
         </Show>
       </button>
     </Tooltip>
@@ -144,7 +144,7 @@ const SingleUserValue: Component<{ userId: string }> = (props) => {
     <div class="flex items-center gap-1.5 min-w-0">
       <UserIcon id={props.userId} size="sm" suppressClick showTooltip />
       {/* First name hidden on narrow containers */}
-      <span class="truncate @max-[840px]/uList:hidden">{firstName()}</span>
+      <span class="truncate @max-[840px]/u-list:hidden">{firstName()}</span>
     </div>
   );
 };
@@ -154,7 +154,7 @@ const MultiUserValue: Component<{ userIds: string[] }> = (props) => {
   return (
     <>
       {/* Wide mode: show up to 2 users */}
-      <div class="flex @max-[840px]/uList:hidden">
+      <div class="flex @max-[840px]/u-list:hidden">
         <UserGroup
           userIds={props.userIds}
           size="sm"
@@ -164,7 +164,7 @@ const MultiUserValue: Component<{ userIds: string[] }> = (props) => {
         />
       </div>
       {/* Narrow mode: show 1 user */}
-      <div class="hidden @max-[840px]/uList:flex">
+      <div class="hidden @max-[840px]/u-list:flex">
         <UserGroup
           userIds={props.userIds}
           size="sm"
@@ -211,7 +211,7 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
           fallback={
             <>
               <CircleDashedEmpty class="size-3 shrink-0" />
-              <span class="truncate flex-1 @max-[840px]/uList:hidden">
+              <span class="truncate flex-1 @max-[840px]/u-list:hidden">
                 None
               </span>
             </>
@@ -220,7 +220,7 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
           <Show
             when={isUser()}
             fallback={
-              <span class="truncate flex-1 @max-[840px]/uList:hidden">
+              <span class="truncate flex-1 @max-[840px]/u-list:hidden">
                 {entities().length === 1
                   ? '1 item'
                   : `${entities().length} items`}
@@ -240,7 +240,7 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
         </Show>
         {/* Caret hidden when container is narrow */}
         <Show when={!isReadOnly()}>
-          <CaretDownIcon class="size-3 shrink-0 @max-[840px]/uList:hidden" />
+          <CaretDownIcon class="size-3 shrink-0 @max-[840px]/u-list:hidden" />
         </Show>
       </button>
     </Tooltip>
