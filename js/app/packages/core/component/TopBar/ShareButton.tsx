@@ -1269,26 +1269,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
 
   return (
     <ButtonGroup variant="base" size="sm" class="ml-1 bg-panel" depth={3}>
-      <Tooltip
-        tooltip={
-          <div>
-            {match(shareAccessLevelText())
-              .when(
-                (level) => level === 'Public',
-                () => 'Anyone with the link can access this item'
-              )
-              .when(
-                (level) => level === 'Shared',
-                () => 'Shared with specific people or channels'
-              )
-              .when(
-                (level) => level === 'Just me',
-                () => 'Only you can access this item'
-              )
-              .otherwise(() => 'This item has been shared with you')}
-          </div>
-        }
-      >
+      <Tooltip label={shareAccessTooltip()}>
         <Button
           onClick={() => {
             if (!isAuthenticated()) {
