@@ -6,7 +6,6 @@ import {
   SlidableNumberInput,
 } from '@core/component/SlidableNumberInput';
 import { themeColors, themeStyles } from '@core/component/Themes';
-import { Tooltip } from '@core/component/Tooltip';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import AlignBottom from '@phosphor-icons/core/regular/align-bottom.svg?component-solid';
 import AlignCenterHorizontal from '@phosphor-icons/core/regular/align-center-horizontal.svg?component-solid';
@@ -18,7 +17,7 @@ import Reverse from '@phosphor-icons/core/regular/arrows-horizontal.svg?componen
 import CornersOut from '@phosphor-icons/core/regular/corners-out.svg?component-solid';
 import TextAa from '@phosphor-icons/core/regular/text-aa.svg?component-solid';
 import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
-import { Button, cn } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import type { JSX } from 'solid-js';
 import {
   batch,
@@ -179,7 +178,7 @@ function ReverseEdgeButton() {
   const { selectedEdges } = useSelection();
 
   return (
-    <Tooltip tooltip="Reverse connection">
+    <Tooltip label="Reverse connection">
       <button
         class={cn(
           themeColors['base'],

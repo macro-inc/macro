@@ -10,6 +10,7 @@ export type Theme =
   | 'red'
   | 'muted'
   | 'extraMuted'
+  | 'subtle'
   | 'accentFill'
   | 'current'
   | 'reverse';
@@ -31,6 +32,7 @@ export const themeColors: Record<Theme, string> = {
   red: 'text-failure-ink border-failure/50',
   muted: 'text-ink-muted border-transparent',
   extraMuted: 'text-ink-extra-muted border-transparent',
+  subtle: 'text-ink-extra-muted border-ink/5',
   current: 'text-current border-transparent',
   reverse: 'bg-current border-transparent',
 };
@@ -54,6 +56,8 @@ export const themeStyles: Record<Theme, string> = {
     'bg-transparent hover:bg-hover hover-transition-bg border border-transparent',
   extraMuted:
     'bg-transparent hover:bg-hover hover-transition-bg border border-transparent',
+  subtle:
+    'bg-transparent hover:bg-hover hover-transition-bg border border-inherit',
   current: 'bg-transparent hover:bg-current/20',
   reverse: 'bg-current hover:bg-current/90',
 };
@@ -72,6 +76,7 @@ export const themeSelectedColors: Record<Theme, string> = {
   red: 'bg-failure-bg!',
   muted: 'bg-hover!',
   extraMuted: 'bg-hover!',
+  subtle: 'bg-hover!',
   current: 'bg-current/20',
   reverse: 'bg-current',
 };
@@ -90,6 +95,7 @@ export const shortcutBadgeStyles: Record<Theme, string> = {
   red: 'bg-failure-bg/30',
   muted: 'bg-hover',
   extraMuted: 'bg-hover',
+  subtle: 'bg-transparent',
   current: 'bg-current/20',
   reverse: 'bg-current',
 };

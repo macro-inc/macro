@@ -19,8 +19,10 @@ import IconGear from '@macro-icons/macro-gear.svg';
 import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { useMutationUndoContext } from '@queries/undo';
 import { debounce } from '@solid-primitives/scheduled';
+import { ThemeChips } from '@theme/components/ThemeChips';
+import type { ThemeV2 } from '@theme/types/themeTypes';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import { createMemo, onCleanup } from 'solid-js';
+import { type Component, createMemo, onCleanup } from 'solid-js';
 import {
   monochromeIcons,
   setDarkModeTheme,
@@ -246,6 +248,15 @@ export default function GlobalShortcuts() {
     displayPriority: 10,
   });
 
+  const ThemeDisplay: Component<{ theme: ThemeV2 }> = (props) => (
+    <div class="flex items-center gap-2">
+      {props.theme.name}
+      <div class="px-1 ring ring-edge-muted rounded-xs">
+        <ThemeChips theme={props.theme} />
+      </div>
+    </div>
+  );
+
   themes().forEach((theme) => {
     registerHotkey({
       scopeId: setThemeScope.commandScopeId,
@@ -256,6 +267,7 @@ export default function GlobalShortcuts() {
         return true;
       },
       runWithInputFocused: true,
+      displayComponent: () => <ThemeDisplay theme={theme} />,
     });
   });
 
@@ -279,6 +291,7 @@ export default function GlobalShortcuts() {
         return true;
       },
       runWithInputFocused: true,
+      displayComponent: () => <ThemeDisplay theme={theme} />,
     });
   });
 
@@ -302,6 +315,7 @@ export default function GlobalShortcuts() {
         return true;
       },
       runWithInputFocused: true,
+      displayComponent: () => <ThemeDisplay theme={theme} />,
     });
   });
 

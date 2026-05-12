@@ -10,7 +10,7 @@ import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 import { Button } from '@ui';
 import { Dialog, Panel } from '@ui';
 import { cn } from '@ui';
@@ -230,7 +230,7 @@ function InviteEntryRow(props: {
           />
         </Show>
         <Show when={props.showRemove}>
-          <Tooltip tooltip="Remove">
+          <Tooltip label="Remove">
             <Button
               variant="base"
               size="icon-sm"
@@ -431,7 +431,7 @@ function MemberRow(props: {
             when={!props.isCurrentUser && !isMemberOwner()}
             fallback={
               <Tooltip
-                tooltip={
+                label={
                   isMemberOwner()
                     ? 'Cannot remove team owner'
                     : 'Cannot remove yourself'
@@ -448,7 +448,7 @@ function MemberRow(props: {
               </Tooltip>
             }
           >
-            <Tooltip tooltip="Remove member">
+            <Tooltip label="Remove member">
               <Button variant="ghost" size="sm" onClick={props.onRemove}>
                 <TrashIcon class="size-4" />
               </Button>
@@ -487,7 +487,7 @@ function InviteRow(props: {
         </div>
       </div>
       <Show when={props.isOwner}>
-        <Tooltip tooltip="Cancel invite">
+        <Tooltip label="Cancel invite">
           <Button
             variant="ghost"
             size="sm"
@@ -1027,7 +1027,7 @@ function TeamManagement(props: {
                   />
                   <Show when={hasTeamNameChanged()}>
                     <div class="flex items-center gap-1 shrink-0">
-                      <Tooltip tooltip="Save">
+                      <Tooltip label="Save">
                         <Button
                           variant="active"
                           size="icon-sm"
@@ -1046,7 +1046,7 @@ function TeamManagement(props: {
                           </Show>
                         </Button>
                       </Tooltip>
-                      <Tooltip tooltip="Cancel">
+                      <Tooltip label="Cancel">
                         <Button
                           variant="ghost"
                           size="icon-sm"

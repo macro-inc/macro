@@ -2,7 +2,7 @@ import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer'
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { BlockName } from '@core/block';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import TagIcon from '@icon/regular/tag.svg';
@@ -38,7 +38,7 @@ export function DocumentPropertiesButton(props: {
     <Button
       variant={drawerControl.isOpen() ? 'active' : 'ghost'}
       size={props.buttonSize === 'sm' ? 'icon-sm' : 'icon-md'}
-      tooltip={<LabelAndHotKey label="Properties" />}
+      label="Properties"
       onClick={() => {
         props.onOpenChange?.(!drawerControl.isOpen());
         drawerControl.toggle();

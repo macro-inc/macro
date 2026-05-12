@@ -5,6 +5,7 @@ use analytics_client::{
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use github::{
     domain::service::{GithubLinkConfig, GithubLinkServiceImpl},
     outbound::{
@@ -284,6 +285,9 @@ async fn main() -> anyhow::Result<()> {
         notification_ingress: notification_ingress_service.clone(),
     };
 
+    let entity_access_service_impl =
+        EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
+
     api::setup_and_serve(
         ApiContext {
             db,
@@ -310,6 +314,7 @@ async fn main() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
+            entity_access_service: Arc::new(entity_access_service_impl),
             referral_service: Arc::new(referral_service),
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(config.environment.app()),

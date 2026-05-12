@@ -3,7 +3,7 @@ import { clamp } from '@block-canvas/util/math';
 import { type Vector2, vec2 } from '@block-canvas/util/vector2';
 import CaretDown from '@icon/regular/caret-down.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import {
   type Component,
   type ComponentProps,
@@ -17,7 +17,6 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { DropdownMenuContent, MenuItem } from './Menu';
-import { Tooltip } from './Tooltip';
 
 export type DropdownPreset = {
   value: string;
@@ -50,7 +49,7 @@ const OptionalTooltipWrapper = (props: {
   tooltip?: string;
 }) => {
   if (props.tooltip) {
-    return <Tooltip tooltip={props.tooltip}>{props.children}</Tooltip>;
+    return <Tooltip label={props.tooltip}>{props.children}</Tooltip>;
   }
   return <>{props.children}</>;
 };

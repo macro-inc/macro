@@ -1,7 +1,6 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { INSERT_MEDIA_COMMAND } from '@core/component/LexicalMarkdown/plugins';
 import { DropdownMenuContent } from '@core/component/Menu';
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import {
   blockAcceptsFileExtension,
   blockNameToFileExtensions,
@@ -123,7 +122,7 @@ export function MediaSelector(props: MediaSelectorProps) {
     <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
         <Button
-          tooltip={<LabelAndHotKey label="Insert Media File" />}
+          label="Insert Media File"
           variant="ghost"
           size="icon-md"
           disabled={props?.buttonIsDisabled?.() ?? false}

@@ -2,12 +2,14 @@
 export { SegmentedControl } from './components/SegmentedControl';
 export { TabbedControl } from './components/TabbedControl';
 export { Avatar, AvatarGroup } from './components/Avatar';
+export { ButtonGroup } from './components/ButtonGroup';
+export { HoverCard } from './components/HoverCard';
 export { Dropdown } from './components/Dropdown';
 export { Keyboard } from './components/Keyboard';
 export { Surface } from './components/Surface';
+export { Tooltip } from './components/Tooltip';
 export { Dialog  } from './components/Dialog';
 export { Button } from './components/Button';
-export { ButtonGroup } from './components/ButtonGroup';
 export { Hotkey } from './components/Hotkey';
 export { Scroll } from './components/Scroll';
 export { Panel  } from './components/Panel';
@@ -15,7 +17,7 @@ export { Layer } from './components/Layer';
 
 /* types */
 export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
-export type { ButtonProps, ButtonSize, ButtonVariant } from './components/Button';
+export type { ButtonProps } from './components/Button';
 export type { DialogProps } from './components/Dialog';
 
 /* utils */

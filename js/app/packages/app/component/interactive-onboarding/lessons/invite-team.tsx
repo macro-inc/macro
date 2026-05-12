@@ -1,14 +1,13 @@
 import type { PaidPlanTier } from '@app/component/paywall/plans';
 import { TierSelect } from '@app/component/teams/TierSelect';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { Tooltip } from '@core/component/Tooltip';
 import { ENABLE_TEAM_INVITE_TIERS_OVERRIDE } from '@core/constant/featureFlags';
 import { useEmail } from '@core/context/user';
 import CheckIcon from '@icon/regular/check.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import TrashIcon from '@icon/regular/trash-simple.svg';
 import XIcon from '@icon/regular/x.svg';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import { createMemo, createSignal, Index, onMount, Show } from 'solid-js';
 import { z } from 'zod';
 import { useOnboarding } from '../onboarding-context';
@@ -339,7 +338,7 @@ function InviteTeamDemo(props: LessonContentProps) {
                       />
                     </Show>
                     <Tooltip
-                      tooltip={inviteEntries().length > 1 ? 'Remove' : 'Clear'}
+                      label={inviteEntries().length > 1 ? 'Remove' : 'Clear'}
                       placement="top"
                     >
                       <button

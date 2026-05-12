@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use analytics_client::AnalyticsClient;
 use axum::extract::FromRef;
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access::outbound::PgAccessRepository;
 use github::domain::service::GithubLinkServiceImpl;
 use github::outbound::github_auth_client::GithubAuthImpl;
 use github::outbound::github_oauth_client::GithubOauthImpl;
@@ -50,6 +52,8 @@ pub(crate) type ReferralServiceType = ReferralServiceImpl<
 pub(crate) type GithubLinkServiceType =
     GithubLinkServiceImpl<PgGithubRepo, GithubOauthImpl, GithubAuthImpl>;
 
+pub(crate) type EntityAccessServiceType = EntityAccessServiceImpl<PgAccessRepository>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
@@ -70,6 +74,7 @@ pub(crate) struct ApiContext {
     pub user_roles_and_permissions_service:
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
+    pub entity_access_service: Arc<EntityAccessServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
     pub analytics_client: Arc<AnalyticsClient>,
     pub referral_service: Arc<ReferralServiceType>,

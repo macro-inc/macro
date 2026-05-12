@@ -10,7 +10,6 @@ import {
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
-import { Tooltip } from '@core/component/Tooltip';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -19,7 +18,7 @@ import { isErr } from '@core/util/maybeResult';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { Hotkey } from '@ui';
+import { Hotkey, Tooltip } from '@ui';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { createSignal, onCleanup, onMount } from 'solid-js';
@@ -153,7 +152,7 @@ function SoupChatInputInner() {
             isPersistent={true}
             autoFocusOnMount={false}
             extraRightControls={() => (
-              <Tooltip tooltip="⌘ Enter to send in background" placement="top">
+              <Tooltip label="⌘ Enter to send in background" placement="top">
                 <div
                   class="flex items-center gap-1"
                   classList={{
@@ -167,7 +166,12 @@ function SoupChatInputInner() {
                       'border-edge-muted': !metaHeld(),
                     }}
                   >
-                    <Hotkey shortcut="cmd+Enter" />
+                    <Hotkey
+                      token={
+                        TOKENS.global
+                          .commandMenu /* scuffed, should use TOKENS.ts */
+                      }
+                    />
                   </div>
                   <span>Background</span>
                 </div>

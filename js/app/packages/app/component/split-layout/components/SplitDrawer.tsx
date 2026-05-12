@@ -1,5 +1,5 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@icon/regular/x.svg';
 import { Button, Layer } from '@ui';
@@ -133,7 +133,7 @@ export function SplitDrawer(
               <Button
                 variant="ghost"
                 size="icon-sm"
-                tooltip={<LabelAndHotKey label="Close" />}
+                label="Close"
                 onClick={drawerControl.close}
               >
                 <CloseIcon />

@@ -1,8 +1,8 @@
 import { ZOOM_TARGETS } from '@block-canvas/constants';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import Tooltip from '@corvu/tooltip';
 import Minus from '@icon/regular/minus.svg';
 import Plus from '@icon/regular/plus.svg';
+import { Tooltip } from '@ui';
 import { onMount, Show } from 'solid-js';
 import { useToolManager } from '../signal/toolManager';
 import { useRenderState } from '../store/RenderState';
@@ -70,29 +70,13 @@ export function ZoomWidget() {
           <Minus class="size-4" />
         </div>
       </Show>
-      <Tooltip placement="top" floatingOptions={{ offset: 12 }}>
-        <Tooltip.Anchor>
-          <Tooltip.Trigger>
-            <div
-              class="text-ink-muted text-center w-12 h-6 select-none"
-              on:click={resetZoom}
-            >
-              {zoomPercent()}%
-            </div>
-          </Tooltip.Trigger>
-        </Tooltip.Anchor>
-        <Tooltip.Portal>
-          <Tooltip.Content>
-            <div
-              class="flex items-center justify-center 
-                      bg-ink p-1.5 text-panel text-sm
-                      rounded-md shadow-xs"
-            >
-              Reset zoom
-            </div>
-            <Tooltip.Arrow class="text-ink text-xs size-1" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
+      <Tooltip placement="top" label="Reset zoom">
+        <div
+          class="text-ink-muted text-center w-12 h-6 select-none"
+          on:click={resetZoom}
+        >
+          {zoomPercent()}%
+        </div>
       </Tooltip>
       <Show when={!isMobileWidth()}>
         <div

@@ -8,7 +8,6 @@ import { useHasPaidAccess } from '@core/auth/license';
 import MacroLogo from '@core/component/MacroLogo';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
 import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 import { useTutorialCompleted } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -23,7 +22,7 @@ import { useSendMobileWelcomeEmail } from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserTeamsQuery } from '@queries/team';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Button, cn, Surface } from '@ui';
+import { Button, cn, Surface, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -181,7 +180,7 @@ function OnboardingCostSummary() {
           <div class="flex justify-between items-center mt-2 pt-2 border-t border-ink/10 text-xs">
             <span class="text-ink/40 flex items-center gap-1">
               Total with team
-              <Tooltip tooltip="Team charges begin when members accept their invite">
+              <Tooltip label="Team charges begin when members accept their invite">
                 <InfoIcon class="size-3 text-ink/30" />
               </Tooltip>
             </span>

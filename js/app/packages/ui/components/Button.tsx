@@ -1,7 +1,8 @@
 import { Button as KobalteButton, type ButtonRootProps } from '@kobalte/core/button';
 import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
+import { Tooltip } from './Tooltip';
+import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { Placement } from '@floating-ui/dom';
-import CorvuTooltip from '@corvu/tooltip';
 import { cn } from '../utils/classname';
 import { useButtonGroupContext } from './ButtonGroup';
 import { Layer } from './Layer';
@@ -12,7 +13,9 @@ export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> &
   noTouchResize?: boolean;
   variant?: ButtonVariant;
   children?: JSX.Element;
-  tooltip?: JSX.Element;
+  tooltip?: string;
+  label?: string;
+  hotkey?: HotkeyToken | HotkeyToken[];
   size?: ButtonSize;
   class?: string;
 };
@@ -41,10 +44,12 @@ export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
     'tooltipPlacement',
     'children',
-    'variant',
     'tooltip',
+    'variant',
+    'hotkey',
     'class',
     'depth',
+    'label',
     'size',
   ]);
 
@@ -61,44 +66,28 @@ export const Button = (props: ButtonProps) => {
       local.class
     );
 
+  const placement = () => local.tooltipPlacement ?? 'bottom';
+
+  const button = () => (
+    <KobalteButton class={cls()} {...others}>
+      {local.children}
+    </KobalteButton>
+  );
+
+  const tooltipLabel = () => local.label ?? local.tooltip;
+
   return (
-    <Layer depth={local.depth ?? group?.depth ?? 0}>
-      <Show
-        fallback={
-          <KobalteButton class={cls()} data-button {...others}>
-            {local.children}
-          </KobalteButton>
-        }
-        when={local.tooltip}
-      >
-        <CorvuTooltip
-          placement={local.tooltipPlacement ?? 'bottom'}
-          floatingOptions={{
-            size: { padding: 16, fitViewPort: true },
-            shift: { padding: 16 },
-            offset: 12,
-            flip: true,
-          }}
-          group="tooltip-single-group"
-          closeDelay={250}
-          openDelay={250}
-        >
-          <CorvuTooltip.Trigger as={KobalteButton} class={cls()} data-button {...others}>
-            {local.children}
-          </CorvuTooltip.Trigger>
-          <CorvuTooltip.Portal>
-            <CorvuTooltip.Content
-              style={{ 'max-width': 'calc(100vw - 32px)' }}
-              class="z-tool-tip"
-            >
-              <Layer depth={3}>
-              <div class="border border-edge bg-panel flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm shadow-md shadow-[#000]/5">
-                {local.tooltip}
-              </div>
-              </Layer>
-            </CorvuTooltip.Content>
-          </CorvuTooltip.Portal>
-        </CorvuTooltip>
+    <Layer depth={local.depth ?? 0}>
+      <Show when={tooltipLabel() !== undefined ? tooltipLabel() : false} fallback={button()}>
+        {(label) => (
+          <Tooltip
+            hotkey={local.hotkey}
+            placement={placement()}
+            label={label()}
+          >
+            {button()}
+          </Tooltip>
+        )}
       </Show>
     </Layer>
   );

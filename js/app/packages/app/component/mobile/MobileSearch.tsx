@@ -175,7 +175,7 @@ export function MobileSearchInner() {
         <input
           id="mobile-search-input"
           type="text"
-          class="pt-3 pb-2 flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder/50"
+          class="pt-3 pb-2 flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder"
           placeholder={'Search...'}
           value={SearchState.query()}
           onInput={(e) => SearchState.setQuery(e.currentTarget.value)}

@@ -5,6 +5,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { Tabs } from '@core/component/Tabs';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { type EntityData, InlineEntity } from '@entity';
@@ -475,7 +476,7 @@ export function CommandMenuInner(props: {
         </Show>
         <input
           type="text"
-          class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder/50"
+          class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder"
           placeholder={isEntityActionMode() ? 'Search actions...' : 'Search...'}
           value={CommandState.query()}
           onInput={(e) => CommandState.setQuery(e.currentTarget.value)}
@@ -535,10 +536,20 @@ export function CommandMenuInner(props: {
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey shortcut="arrowup" class="space-x-1" />
+              <Hotkey
+                token={
+                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+                }
+                class="space-x-1"
+              />
             </div>
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey shortcut="arrowdown" class="space-x-1" />
+              <Hotkey
+                token={
+                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+                }
+                class="space-x-1"
+              />
             </div>
           </div>
           Navigate
@@ -546,34 +557,86 @@ export function CommandMenuInner(props: {
 
         <Switch>
           <Match when={isInCommandScope()}>
-            <HotkeyHint shortcut="enter" label="Run action" />
-            <HotkeyHint shortcut="escape" label="Back" />
+            <HotkeyHint
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+              label="Run action"
+            />
+            <HotkeyHint
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+              label="Back"
+            />
           </Match>
           <Match when={selectedIsCommand() || isEntityActionMode()}>
-            <HotkeyHint shortcut="enter" label="Run action" />
+            <HotkeyHint
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+              label="Run action"
+            />
           </Match>
           <Match when={selectedIsSearch()}>
-            <HotkeyHint shortcut="enter" label="Search" />
+            <HotkeyHint
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+              label="Search"
+            />
             <Show when={canOpenInNewSplit()}>
-              <HotkeyHint shortcut="shift+enter" label="Search in new split" />
+              <HotkeyHint
+                token={
+                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+                }
+                label="Search in new split"
+              />
             </Show>
           </Match>
           <Match when={selectedIsEntity()}>
-            <HotkeyHint shortcut="enter" label="Open" />
+            <HotkeyHint
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+              label="Open"
+            />
             <Show when={canOpenInNewSplit()}>
-              <HotkeyHint shortcut="shift+enter" label="Open in new split" />
+              <HotkeyHint
+                token={
+                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+                }
+                label="Open in new split"
+              />
             </Show>
           </Match>
         </Switch>
 
         <Show when={!isInCommandScope() && !isEntityActionMode()}>
-          <HotkeyHint shortcut="tab" label="Category" />
+          <HotkeyHint
+            token={
+              TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+            }
+            label="Category"
+          />
         </Show>
         <Show
           when={isInCommandScope()}
-          fallback={<HotkeyHint shortcut="escape" label="Close" />}
+          fallback={
+            <HotkeyHint
+              token={
+                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+              }
+              label="Close"
+            />
+          }
         >
-          <HotkeyHint shortcut="escape" label="Back" />
+          <HotkeyHint
+            token={
+              TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+            }
+            label="Back"
+          />
         </Show>
       </Panel.Footer>
     </Panel>
@@ -663,11 +726,11 @@ function VirtualizedCommandList(props: {
   );
 }
 
-function HotkeyHint(props: { shortcut: string; label: string }) {
+function HotkeyHint(props: { token: HotkeyToken; label: string }) {
   return (
     <span class="flex items-center gap-1">
       <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-        <Hotkey shortcut={props.shortcut} class="space-x-1" />
+        <Hotkey token={props.token} class="space-x-1" />
       </div>
       {props.label}
     </span>

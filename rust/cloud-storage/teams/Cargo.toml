@@ -5,7 +5,15 @@ publish = false
 version = "0.1.0"
 
 [features]
-axum = ["dep:axum", "dep:model-error-response", "dep:model_user", "dep:utoipa"]
+axum = [
+  "dep:axum",
+  "dep:model-error-response",
+  "dep:model_user",
+  "dep:utoipa",
+  "entity_access/axum",
+  "entity_access/inbound",
+  "entity_access/ports",
+]
 default = ["axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
 outbound = ["dep:sqlx", "ports"]
@@ -35,6 +43,8 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
+
+entity_access = { path = "../entity_access", default-features = false }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }

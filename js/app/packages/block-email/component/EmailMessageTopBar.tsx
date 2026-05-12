@@ -1,10 +1,9 @@
-import { Tooltip } from '@core/component/Tooltip';
 import { useEmail } from '@core/context/user';
 import type { DateValue } from '@core/util/date';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
-import { Button } from '@ui';
+import { Button, Tooltip } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -210,7 +209,7 @@ function CollapsedHeader(props: {
             'opacity-100': props.isHovering,
           }}
         >
-          <Tooltip tooltip={<span class="text-xs">Expand Message Header</span>}>
+          <Tooltip label="Expand Message Header">
             <Button
               variant="ghost"
               size="icon-sm"

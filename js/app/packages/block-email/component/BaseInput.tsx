@@ -25,7 +25,6 @@ import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/me
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -80,7 +79,7 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
-import { Button, cn } from '@ui';
+import { Button, cn, HoverCard, Tooltip } from '@ui';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -327,19 +326,19 @@ function TruncatedRecipientList(props: {
         <For each={visibleRecipients()}>
           {(item, index) => (
             <>
-              <Tooltip
-                tooltip={
+              <HoverCard>
+                <HoverCard.Trigger>
+                  <span class="shrink-0">
+                    {item.prefix}
+                    {getRecipientDisplayName(item.recipient)}
+                  </span>
+                </HoverCard.Trigger>
+                <HoverCard.Content>
                   <div class="text-xs select-text cursor-text">
                     {item.recipient.data.email}
                   </div>
-                }
-                class="inline shrink-0"
-              >
-                <span class="shrink-0">
-                  {item.prefix}
-                  {getRecipientDisplayName(item.recipient)}
-                </span>
-              </Tooltip>
+                </HoverCard.Content>
+              </HoverCard>
               <Show
                 when={
                   index() < visibleRecipients().length - 1 || hiddenCount() > 0
@@ -1451,7 +1450,7 @@ export function BaseInput(props: {
             {/* Show to, cc, bcc buttons */}
             <div class="flex flex-row justify-end space-x-2 pt-2">
               <Show when={!showCc()}>
-                <Tooltip tooltip="Add cc recipients">
+                <Tooltip label="Add cc recipients">
                   <div
                     onclick={() => {
                       setShowCc(true);
@@ -1464,7 +1463,7 @@ export function BaseInput(props: {
                 </Tooltip>
               </Show>
               <Show when={!showBcc()}>
-                <Tooltip tooltip="Add bcc recipients">
+                <Tooltip label="Add bcc recipients">
                   <div
                     onclick={() => {
                       setShowBcc(true);
@@ -1676,7 +1675,7 @@ export function BaseInput(props: {
             </Button>
 
             <Tooltip
-              tooltip={
+              label={
                 form().replyAppended() ? 'Hide quoted text' : 'Show quoted text'
               }
             >
@@ -1729,9 +1728,7 @@ export function BaseInput(props: {
             </Button>
           </div>
 
-          <Tooltip
-            tooltip={form().sendTime() ? 'Send time is scheduled' : undefined}
-          >
+          <Tooltip label={form().sendTime() ? 'Send time is scheduled' : ''}>
             <button
               disabled={
                 uploadAttachmentMutation.isPending ||

@@ -65,7 +65,11 @@ export function createTargetMessageController(
     setTargetMessageData({
       activeTargetMessageId: messageId,
       activeTargetMessageReplyId: replyId,
-      loadAroundMessageId: hasMessageLoaded(messageId) ? undefined : messageId,
+      // TODO: need a better approach where the load around should be undefined
+      // the current approach is a hack to fix rapid navigation race condition
+      loadAroundMessageId: hasMessageLoaded(messageId)
+        ? targetMessageData['loadAroundMessageId']
+        : messageId,
       pendingScrollTargetId: messageId,
       pendingTargetReplyId: replyId,
     });

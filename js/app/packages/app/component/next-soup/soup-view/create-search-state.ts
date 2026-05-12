@@ -124,7 +124,6 @@ interface CreateSearchStateArgs {
   assignees: Accessor<string[]>;
   disableLocalSearch?: boolean;
   searchPaused?: Accessor<boolean>;
-  searchMentions?: Accessor<string[]>;
   /** Pre-populate searchText so the service request fires on mount (skips the debounce wait for the initial value). */
   initialText?: string;
 }
@@ -135,7 +134,6 @@ export const createSearchState = ({
   assignees,
   disableLocalSearch,
   searchPaused,
-  searchMentions,
   initialText,
 }: CreateSearchStateArgs) => {
   const [searchText, setSearchText] = createSignal(initialText ?? '');
@@ -174,21 +172,7 @@ export const createSearchState = ({
   const searchUnifiedNameContentRequest = createMemo(
     (): UnifiedSearchRequest => {
       const query = debouncedSearchForService();
-      const mentionIds =
-        isSearchServiceDebounceSettled() && !isSearchServiceDisabled()
-          ? searchMentions?.()
-          : undefined;
-
-      // Translate FilterData to legacy EntityFilters format for search service
       const baseFilters = filterDataToQueryFilters(filters());
-
-      // Merge mention filters into channel_filters if present
-      if (mentionIds && mentionIds.length > 0) {
-        baseFilters.channel_filters = {
-          ...baseFilters.channel_filters,
-          mentions: mentionIds,
-        };
-      }
 
       return {
         search_on: 'name_content',

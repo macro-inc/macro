@@ -65,7 +65,7 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Button, ButtonGroup, cn, Panel } from '@ui';
+import { Button, ButtonGroup, cn, Panel, Tooltip } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -87,7 +87,6 @@ import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
-import { Tooltip } from '../Tooltip';
 import { ScrollIndicators } from '../VerticalScrollIndicators';
 import { openLoginModal } from './LoginButton';
 
@@ -248,10 +247,7 @@ function GroupChannelLabel(props: { channelId: string; fallbackName: string }) {
 
   return (
     <Show when={others().length > 0} fallback={props.fallbackName}>
-      <Tooltip
-        placement="bottom"
-        tooltip={<div class="text-xs whitespace-pre">{tooltipContent()}</div>}
-      >
+      <Tooltip placement="bottom" label={tooltipContent()}>
         <span>{label()}</span>
       </Tooltip>
     </Show>
@@ -1254,28 +1250,25 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
     return 'Just me';
   });
 
+  const shareAccessTooltip = () =>
+    match(shareAccessLevelText())
+      .when(
+        (level) => level === 'Public',
+        () => 'Anyone with the link can access this item'
+      )
+      .when(
+        (level) => level === 'Shared',
+        () => 'Shared with specific people or channels'
+      )
+      .when(
+        (level) => level === 'Just me',
+        () => 'Only you can access this item'
+      )
+      .otherwise(() => 'This item has been shared with you');
+
   return (
     <ButtonGroup variant="base" size="sm" class="ml-1 bg-panel" depth={3}>
-      <Tooltip
-        tooltip={
-          <div>
-            {match(shareAccessLevelText())
-              .when(
-                (level) => level === 'Public',
-                () => 'Anyone with the link can access this item'
-              )
-              .when(
-                (level) => level === 'Shared',
-                () => 'Shared with specific people or channels'
-              )
-              .when(
-                (level) => level === 'Just me',
-                () => 'Only you can access this item'
-              )
-              .otherwise(() => 'This item has been shared with you')}
-          </div>
-        }
-      >
+      <Tooltip label={shareAccessTooltip()}>
         <Button
           onClick={() => {
             if (!isAuthenticated()) {

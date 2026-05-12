@@ -312,6 +312,30 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
             _marker: PhantomData,
         }
     }
+
+    /// Dangerously generates an `EntityAccessReceipt` for an authenticated user
+    /// without performing the underlying access check.
+    ///
+    /// **NOTE** This is intended for tests. It **DOES NOT** assert the
+    /// existence of the item or that the user actually has the required
+    /// permission.
+    pub fn dangerously_assert_authenticated_user(
+        user_id: MacroUserIdStr<'static>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> EntityAccessReceipt<T> {
+        EntityAccessReceipt {
+            auth: EntityAccessAuth::Authenticated(user_id),
+            entity: Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            entity_permission: EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+            _marker: PhantomData,
+        }
+    }
 }
 
 /// Information about a call's channel association and share permission.

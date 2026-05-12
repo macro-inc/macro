@@ -1,7 +1,6 @@
 import { getSelectValues } from '@core/component/Properties/utils';
-import { Tooltip } from '@core/component/Tooltip';
 import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
-import { cn } from '@ui';
+import { cn, HoverCard } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import { Show } from 'solid-js';
 import type { Property } from '../../types';
@@ -47,26 +46,27 @@ export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
   };
 
   return (
-    <Tooltip
-      unstyled
-      tooltip={<PropertyTooltip property={props.property} />}
-      class="flex items-center"
-    >
-      <div
-        class={cn(
-          'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 p-1.5 h-6.5 transition-colors',
-          {
-            'hover:border-edge-muted hover:bg-hover': props.canEdit,
-            'opacity-50': !validValue(),
-          }
-        )}
-        onClick={handleClick}
-        role={props.canEdit ? 'button' : undefined}
-        tabIndex={props.canEdit ? 0 : undefined}
-      >
-        <CondensedIcon property={props.property} />
-      </div>
-    </Tooltip>
+    <HoverCard>
+      <HoverCard.Trigger>
+        <div
+          class={cn(
+            'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 p-1.5 h-6.5 transition-colors',
+            {
+              'hover:border-edge-muted hover:bg-hover': props.canEdit,
+              'opacity-50': !validValue(),
+            }
+          )}
+          onClick={handleClick}
+          role={props.canEdit ? 'button' : undefined}
+          tabIndex={props.canEdit ? 0 : undefined}
+        >
+          <CondensedIcon property={props.property} />
+        </div>
+      </HoverCard.Trigger>
+      <HoverCard.Content>
+        <PropertyTooltip property={props.property} />
+      </HoverCard.Content>
+    </HoverCard>
   );
 };
 

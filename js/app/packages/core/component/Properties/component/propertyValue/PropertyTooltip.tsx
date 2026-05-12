@@ -19,7 +19,6 @@ import LinkIcon from '@icon/regular/link.svg';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { proxyResource } from '@service-unfurl/client';
-import { Layer } from '@ui';
 import {
   createSignal,
   For,
@@ -77,38 +76,31 @@ const TooltipWrapper = (props: {
   const singleSelect = () => !props.property.isMultiSelect;
   const hasValue = () => propertyHasValue(props.property);
   return (
-    <Layer depth={2}>
-      <Show
-        when={hasValue()}
-        fallback={
-          <div class="p-2 border border-edge bg-panel text-xs rounded-sm shadow-md shadow-[#0001]">
-            No {props.property.displayName} set
-          </div>
-        }
+    <Show
+      when={hasValue()}
+      fallback={<div class="text-xs">No {props.property.displayName} set</div>}
+    >
+      <div
+        classList={{
+          'flex flex-row gap-2 items-center': singleSelect(),
+          'min-w-48 max-w-72': !singleSelect(),
+        }}
       >
         <div
-          class="p-2 border border-edge bg-panel rounded-sm shadow-md shadow-[#0001]"
+          class="flex items-center gap-2 text-ink-muted"
           classList={{
-            'flex flex-row gap-2 items-center': singleSelect(),
-            'min-w-48 max-w-72': !singleSelect(),
+            'border-b border-edge pb-1.5 mb-1.5': !singleSelect(),
           }}
         >
-          <div
-            class="flex items-center gap-2 text-ink-muted"
-            classList={{
-              'border-b border-edge pb-1.5 mb-1.5': !singleSelect(),
-            }}
-          >
-            <PropertyDataTypeIcon
-              property={props.property}
-              class="size-3.5 text-ink-muted"
-            />
-            <span class="text-xs">{props.property.displayName}</span>
-          </div>
-          {props.children}
+          <PropertyDataTypeIcon
+            property={props.property}
+            class="size-3.5 text-ink-muted"
+          />
+          <span class="text-xs">{props.property.displayName}</span>
         </div>
-      </Show>
-    </Layer>
+        {props.children}
+      </div>
+    </Show>
   );
 };
 
@@ -125,7 +117,7 @@ const StringTooltipContent = (props: {
     <TooltipWrapper property={props.property}>
       <div class="flex items-center gap-1.5 flex-wrap">
         <ValueContainer>
-          <span class="truncate max-w-[150px]">{props.property.value}</span>
+          <span class="truncate max-w-37.5">{props.property.value}</span>
         </ValueContainer>
       </div>
     </TooltipWrapper>
@@ -142,7 +134,7 @@ const NumberTooltipContent = (props: {
     <TooltipWrapper property={props.property}>
       <div class="flex items-center gap-1.5 flex-wrap">
         <ValueContainer>
-          <span class="truncate max-w-[150px]">{displayValue()}</span>
+          <span class="truncate max-w-37.5">{displayValue()}</span>
         </ValueContainer>
       </div>
     </TooltipWrapper>
@@ -176,7 +168,7 @@ const DateTooltipContent = (props: {
     <TooltipWrapper property={props.property}>
       <div class="flex items-center gap-1.5 flex-wrap">
         <ValueContainer>
-          <span class="truncate max-w-[150px]">{displayValue()}</span>
+          <span class="truncate max-w-37.5">{displayValue()}</span>
         </ValueContainer>
       </div>
     </TooltipWrapper>
@@ -194,7 +186,7 @@ const SelectTooltipContent = (props: {
           {(optionId, index) => (
             <ValueContainer>
               <SelectValueIcon property={props.property} valueIndex={index()} />
-              <span class="truncate max-w-[150px]">
+              <span class="truncate max-w-37.5">
                 {formatPropertyValue(props.property, optionId)}
               </span>
             </ValueContainer>
@@ -255,7 +247,7 @@ const EntityValuePill = (props: { entity: EntityReference }) => {
   return (
     <ValueContainer>
       <Show when={icon()}>{icon()}</Show>
-      <span class="truncate max-w-[150px]">{name()}</span>
+      <span class="truncate max-w-37.5">{name()}</span>
     </ValueContainer>
   );
 };
@@ -272,7 +264,7 @@ const UserEntityItem = (props: { entity: EntityReference }) => {
       <div class="size-4 rounded-full overflow-hidden shrink-0">
         <UserIcon id={props.entity.entity_id} isDeleted={false} size="fill" />
       </div>
-      <span class="truncate max-w-[150px]">{name()}</span>
+      <span class="truncate max-w-37.5">{name()}</span>
     </ValueContainer>
   );
 };
@@ -331,7 +323,7 @@ const LinkValuePill = (props: { url: string }) => {
           onError={() => setImageError(true)}
         />
       </Show>
-      <span class="truncate max-w-[150px]">{title()}</span>
+      <span class="truncate max-w-37.5">{title()}</span>
     </a>
   );
 };

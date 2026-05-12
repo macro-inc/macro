@@ -70,7 +70,7 @@ export function MessageActions(props: {
             <Button
               class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
               onClick={onChangeReplyType('reply')}
-              tooltip={<span>Reply</span>}
+              tooltip="Reply"
             >
               <ArrowBendUpLeft class="size-5" />
             </Button>
@@ -80,7 +80,7 @@ export function MessageActions(props: {
         <Button
           class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
           onClick={onChangeReplyType('reply-all')}
-          tooltip={<span>Reply all</span>}
+          tooltip="Reply all"
         >
           <ArrowBendDoubleUpLeft class="size-5" />
         </Button>
@@ -89,7 +89,7 @@ export function MessageActions(props: {
         <Button
           class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
           onClick={onChangeReplyType('forward')}
-          tooltip={<span>Forward</span>}
+          tooltip="Forward"
         >
           <ArrowBendUpRight class="size-5" />
         </Button>
