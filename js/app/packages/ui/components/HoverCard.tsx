@@ -1,20 +1,21 @@
 import { HoverCard as KobalteHoverCard } from '@kobalte/core/hover-card';
 import type { Placement } from '@floating-ui/dom';
-import type { JSX, ParentProps } from 'solid-js';
-import { Surface } from '@ui';
+import type { ParentProps } from 'solid-js';
+import { cn } from '../utils/classname';
+import { Surface } from './Surface';
 
-export type HoverCardProps = ParentProps<{
-  content: JSX.Element;
-  placement?: Placement;
-  as?: 'div' | 'span';
-}>;
+/*
+<HoverCard>
+  <HoverCard.Trigger></HoverCard.Trigger>
+  <HoverCard.Content></HoverCard.Content>
+</HoverCard>
+*/
 
-/**
- * @example
- * <HoverCard content={<></>}>
- * </HoverCard>
- */
-export function HoverCard(props: HoverCardProps) {
+type RootProps = ParentProps<{ placement?: Placement }>;
+type TriggerProps = ParentProps<{ as?: 'div' | 'span'; class?: string }>;
+type ContentProps = ParentProps<{ class?: string }>;
+
+function HoverCardRoot(props: RootProps) {
   return (
     <KobalteHoverCard
       placement={props.placement ?? 'bottom'}
@@ -25,22 +26,41 @@ export function HoverCard(props: HoverCardProps) {
       flip={true}
       gutter={4}
     >
-      <KobalteHoverCard.Trigger
-        class="inline-flex items-center"
-        as={props.as ?? 'div'}
-      >
-        {props.children}
-      </KobalteHoverCard.Trigger>
-      <KobalteHoverCard.Portal>
-        <KobalteHoverCard.Content class="z-tool-tip max-w-[calc(100vw-32px)]">
-          <Surface
-            class="flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word"
-            depth={3}
-          >
-            {props.content}
-          </Surface>
-        </KobalteHoverCard.Content>
-      </KobalteHoverCard.Portal>
+      {props.children}
     </KobalteHoverCard>
   );
 }
+
+function HoverCardTrigger(props: TriggerProps) {
+  return (
+    <KobalteHoverCard.Trigger
+      class={cn('inline-flex items-center', props.class)}
+      as={props.as ?? 'div'}
+    >
+      {props.children}
+    </KobalteHoverCard.Trigger>
+  );
+}
+
+function HoverCardContent(props: ContentProps) {
+  return (
+    <KobalteHoverCard.Portal>
+      <KobalteHoverCard.Content class="z-tool-tip max-w-[calc(100vw-32px)]">
+        <Surface
+          class={cn(
+            'flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word',
+            props.class,
+          )}
+          depth={3}
+        >
+          {props.children}
+        </Surface>
+      </KobalteHoverCard.Content>
+    </KobalteHoverCard.Portal>
+  );
+}
+
+export const HoverCard = Object.assign(HoverCardRoot, {
+  Trigger: HoverCardTrigger,
+  Content: HoverCardContent,
+});

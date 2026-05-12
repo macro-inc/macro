@@ -326,17 +326,18 @@ function TruncatedRecipientList(props: {
         <For each={visibleRecipients()}>
           {(item, index) => (
             <>
-              <HoverCard
-                content={
+              <HoverCard>
+                <HoverCard.Trigger>
+                  <span class="shrink-0">
+                    {item.prefix}
+                    {getRecipientDisplayName(item.recipient)}
+                  </span>
+                </HoverCard.Trigger>
+                <HoverCard.Content>
                   <div class="text-xs select-text cursor-text">
                     {item.recipient.data.email}
                   </div>
-                }
-              >
-                <span class="shrink-0">
-                  {item.prefix}
-                  {getRecipientDisplayName(item.recipient)}
-                </span>
+                </HoverCard.Content>
               </HoverCard>
               <Show
                 when={

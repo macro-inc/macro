@@ -65,17 +65,9 @@ export function ReactionChip(props: ReactionChipProps) {
       placement="top"
     >
       <Popover.Anchor>
-        <HoverCard
-          content={
-            <ReactionTooltipContent
-              users={props.users}
-              currentUserId={props.currentUserId}
-              emoji={props.emoji}
-            />
-          }
-          placement="top"
-        >
-          <Button
+        <HoverCard placement="top">
+          <HoverCard.Trigger>
+            <Button
             data-message-reaction-chip
             data-emoji={props.emoji}
             noTouchResize
@@ -111,6 +103,14 @@ export function ReactionChip(props: ReactionChipProps) {
               <span class="text-xs">{props.count}</span>
             </Show>
           </Button>
+          </HoverCard.Trigger>
+          <HoverCard.Content>
+            <ReactionTooltipContent
+              users={props.users}
+              currentUserId={props.currentUserId}
+              emoji={props.emoji}
+            />
+          </HoverCard.Content>
         </HoverCard>
       </Popover.Anchor>
       <Popover.Portal>

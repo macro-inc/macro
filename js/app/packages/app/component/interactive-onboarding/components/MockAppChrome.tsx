@@ -226,8 +226,25 @@ export function MockAppChrome(props: MockAppChromeProps) {
                 return 'text-ink opacity-50 hover:opacity-80 hover:bg-ink/10';
               };
               return (
-                <HoverCard
-                  content={
+                <HoverCard placement="right">
+                  <HoverCard.Trigger>
+                    <button
+                      type="button"
+                      class={cn(
+                        'size-6 rounded-xs p-1 transition-colors cursor-default',
+                        stateClass()
+                      )}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setFilter(link.id as SandboxSidebarFilter);
+                      }}
+                    >
+                      {link.icon && (
+                        <Dynamic component={link.icon} class="size-4" />
+                      )}
+                    </button>
+                  </HoverCard.Trigger>
+                  <HoverCard.Content>
                     <span class="flex items-center gap-1.5 text-xs">
                       {link.label}
                       <span class="flex items-center gap-1 text-ink/40">
@@ -240,24 +257,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
                         </span>
                       </span>
                     </span>
-                  }
-                  placement="right"
-                >
-                  <button
-                    type="button"
-                    class={cn(
-                      'size-6 rounded-xs p-1 transition-colors cursor-default',
-                      stateClass()
-                    )}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setFilter(link.id as SandboxSidebarFilter);
-                    }}
-                  >
-                    {link.icon && (
-                      <Dynamic component={link.icon} class="size-4" />
-                    )}
-                  </button>
+                  </HoverCard.Content>
                 </HoverCard>
               );
             }}

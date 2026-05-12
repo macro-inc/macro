@@ -69,16 +69,21 @@ export function Wordcount(props: { stats: Store<WordcountStats> }) {
       </Button>
 
       <Show when={isExpanded()}>
-        <HoverCard placement="top-start" content={<Details />}>
-          <div class="text-sm text-ink-extra-muted flex w-32 justify-between h-7 rounded items-center hover:bg-hover hover-transition-bg p-1">
-            <span>
-              <span class="font-semibold">
-                {simpleWordCount().toLocaleString()}
-              </span>{' '}
-              {simpleWordCount() === 1 ? 'word' : 'words'}
-            </span>
-            <CaretUp class="text-ink-extra-muted size-3" />
-          </div>
+        <HoverCard placement="top-start">
+          <HoverCard.Trigger>
+            <div class="text-sm text-ink-extra-muted flex w-32 justify-between h-7 rounded items-center hover:bg-hover hover-transition-bg p-1">
+              <span>
+                <span class="font-semibold">
+                  {simpleWordCount().toLocaleString()}
+                </span>{' '}
+                {simpleWordCount() === 1 ? 'word' : 'words'}
+              </span>
+              <CaretUp class="text-ink-extra-muted size-3" />
+            </div>
+          </HoverCard.Trigger>
+          <HoverCard.Content>
+            <Details />
+          </HoverCard.Content>
         </HoverCard>
       </Show>
     </div>

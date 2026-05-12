@@ -46,21 +46,26 @@ export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
   };
 
   return (
-    <HoverCard content={<PropertyTooltip property={props.property} />}>
-      <div
-        class={cn(
-          'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 p-1.5 h-6.5 transition-colors',
-          {
-            'hover:border-edge-muted hover:bg-hover': props.canEdit,
-            'opacity-50': !validValue(),
-          }
-        )}
-        onClick={handleClick}
-        role={props.canEdit ? 'button' : undefined}
-        tabIndex={props.canEdit ? 0 : undefined}
-      >
-        <CondensedIcon property={props.property} />
-      </div>
+    <HoverCard>
+      <HoverCard.Trigger>
+        <div
+          class={cn(
+            'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 p-1.5 h-6.5 transition-colors',
+            {
+              'hover:border-edge-muted hover:bg-hover': props.canEdit,
+              'opacity-50': !validValue(),
+            }
+          )}
+          onClick={handleClick}
+          role={props.canEdit ? 'button' : undefined}
+          tabIndex={props.canEdit ? 0 : undefined}
+        >
+          <CondensedIcon property={props.property} />
+        </div>
+      </HoverCard.Trigger>
+      <HoverCard.Content>
+        <PropertyTooltip property={props.property} />
+      </HoverCard.Content>
     </HoverCard>
   );
 };
