@@ -128,7 +128,7 @@ fn exclude_voip_recipients_returns_empty_when_all_users_received_voip() {
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn enroll_stable_speaker_voices_links_only_unambiguous_speakers(
+async fn enroll_stable_speaker_voices_links_all_voices_for_consistent_diarized_speakers(
     pool: sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
     use crate::domain::models::TranscriptSegmentRequest;
@@ -151,7 +151,7 @@ async fn enroll_stable_speaker_voices_links_only_unambiguous_speakers(
 
     let segments = [
         ("stable-a-1", user_a.as_ref(), Some("spk-a0"), voice_a),
-        ("stable-a-2", user_a.as_ref(), Some("spk-a1"), voice_a),
+        ("stable-a-2", user_a.as_ref(), Some("spk-a0"), voice_b),
         ("ambiguous-b-1", user_b.as_ref(), Some("spk-b0"), voice_a),
         ("ambiguous-b-2", user_b.as_ref(), Some("spk-b1"), voice_b),
     ];
@@ -184,10 +184,11 @@ async fn enroll_stable_speaker_voices_links_only_unambiguous_speakers(
     super::enroll_stable_speaker_voices_for_call_record(&call_repo, &voice_repo, call_record_id)
         .await;
 
-    assert_eq!(
-        voice_repo.get_user_voices(&MACRO_USER_A).await?,
-        vec![voice_a]
-    );
+    let mut user_a_voices = voice_repo.get_user_voices(&MACRO_USER_A).await?;
+    user_a_voices.sort();
+    let mut expected = vec![voice_a, voice_b];
+    expected.sort();
+    assert_eq!(user_a_voices, expected);
     assert!(voice_repo.get_user_voices(&MACRO_USER_B).await?.is_empty());
     Ok(())
 }

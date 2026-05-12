@@ -1355,10 +1355,11 @@ impl<
     /// Fire-and-forget spawn of finished-call voice processing.
     ///
     /// Called from `process_webhook_event` immediately after `archive_call`
-    /// finalizes the `call_records` row. First, stable speaker voice ids are
-    /// enrolled for the users who spoke them; then the regular voice matcher
-    /// can use both pre-existing and newly-enrolled voices to populate speaker
-    /// overrides. Errors are logged inside the spawned task.
+    /// finalizes the `call_records` row. First, voice ids for consistently
+    /// diarized speakers are enrolled for the users who spoke them; then the
+    /// regular voice matcher can use both pre-existing and newly-enrolled
+    /// voices to populate speaker overrides. Errors are logged inside the
+    /// spawned task.
     fn spawn_process_voices_for_call(&self, call_record_id: Uuid) {
         let repo = self.repo.clone();
         let voice_repo = self.voice_repo.clone();
@@ -1377,10 +1378,11 @@ impl<
 
 /// Enroll stable speaker voice ids observed in a freshly archived call.
 ///
-/// For each `speaker_id` in the call transcript, the repository returns a
-/// candidate only when every transcript row for that speaker has the same
-/// non-NULL `voice_id`. Those unambiguous pairs are linked to the resolved
-/// macro user in `macro_user_voice` via [`VoiceRepository::link_user_voice`].
+/// For each `speaker_id` in the call transcript, the repository returns
+/// candidates only when every transcript row for that speaker has the same
+/// non-NULL `diarized_speaker_id`. All distinct non-NULL `voice_id`s on those
+/// rows are linked to the resolved macro user in `macro_user_voice` via
+/// [`VoiceRepository::link_user_voice`].
 async fn enroll_stable_speaker_voices_for_call_record<R: CallRepository, Vr: VoiceRepository>(
     repo: &R,
     voice_repo: &Vr,

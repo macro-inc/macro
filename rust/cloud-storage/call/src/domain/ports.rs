@@ -268,9 +268,10 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Stable `(macro_user_id, voice_id)` pairs inferred from a finished
     /// call's archived transcripts. A speaker is returned only when every
-    /// transcript row for that `speaker_id` has a non-NULL `voice_id` and all
-    /// of those voice ids are the same. The `speaker_id` is resolved through
-    /// the canonical `User` row to get the `macro_user.id` used by
+    /// transcript row for that `speaker_id` has the same non-NULL
+    /// `diarized_speaker_id`; all distinct non-NULL `voice_id`s observed on
+    /// those rows are returned. The `speaker_id` is resolved through the
+    /// canonical `User` row to get the `macro_user.id` used by
     /// `macro_user_voice`.
     fn get_stable_speaker_voices_for_call_record(
         &self,
