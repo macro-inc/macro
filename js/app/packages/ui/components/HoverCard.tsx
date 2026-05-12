@@ -1,4 +1,4 @@
-import { HoverCard as KobalteHoverCard } from '@kobalte/core/hover-card';
+import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
 import type { Placement } from '@floating-ui/dom';
 import type { ParentProps } from 'solid-js';
 import { cn } from '../utils/classname';
@@ -19,7 +19,7 @@ type ContentProps = ParentProps<{ class?: string }>;
 
 function HoverCardRoot(props: RootProps) {
   return (
-    <KobalteHoverCard
+    <KobalteTooltip
       placement={props.placement ?? 'bottom'}
       overflowPadding={16}
       fitViewport={true}
@@ -29,25 +29,25 @@ function HoverCardRoot(props: RootProps) {
       gutter={4}
     >
       {props.children}
-    </KobalteHoverCard>
+    </KobalteTooltip>
   );
 }
 
 function HoverCardTrigger(props: TriggerProps) {
   return (
-    <KobalteHoverCard.Trigger
+    <KobalteTooltip.Trigger
       class={cn('inline-flex items-center', props.class)}
       as={props.as ?? 'div'}
     >
       {props.children}
-    </KobalteHoverCard.Trigger>
+    </KobalteTooltip.Trigger>
   );
 }
 
 function HoverCardContent(props: ContentProps) {
   return (
-    <KobalteHoverCard.Portal>
-      <KobalteHoverCard.Content class="z-tool-tip max-w-[calc(100vw-32px)]">
+    <KobalteTooltip.Portal>
+      <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)]">
         <Surface
           class={cn(
             'flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word',
@@ -57,8 +57,8 @@ function HoverCardContent(props: ContentProps) {
         >
           {props.children}
         </Surface>
-      </KobalteHoverCard.Content>
-    </KobalteHoverCard.Portal>
+      </KobalteTooltip.Content>
+    </KobalteTooltip.Portal>
   );
 }
 
