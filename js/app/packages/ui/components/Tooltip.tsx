@@ -4,7 +4,7 @@ import { Hotkey } from '../../ui/components/Hotkey';
 import type { Placement } from '@floating-ui/dom';
 import type { ParentProps } from 'solid-js';
 import { For, Show } from 'solid-js';
-import { cn, Surface } from '@ui';
+import { Surface } from '@ui';
 
 export type HotkeySequenceStep = {
   token?: HotkeyToken;
@@ -17,14 +17,6 @@ export type TooltipProps = ParentProps<{
   as?: 'div' | 'span';
   label: string;
 }>;
-
-const DEFAULT_PLACEMENT: Placement = 'bottom';
-const TOOLTIP_OVERFLOW_PADDING = 16;
-const TOOLTIP_VIEWPORT_PADDING = 16;
-const TOOLTIP_FIT_VIEWPORT = true;
-const TOOLTIP_GUTTER = 4;
-const TOOLTIP_DELAY = 250;
-const TOOLTIP_FLIP = true;
 
 /**
  * @example
@@ -43,13 +35,13 @@ export function Tooltip(props: TooltipProps) {
 
   return (
     <KobalteTooltip
-      placement={props.placement ?? DEFAULT_PLACEMENT}
-      overflowPadding={TOOLTIP_OVERFLOW_PADDING}
-      fitViewport={TOOLTIP_FIT_VIEWPORT}
-      closeDelay={TOOLTIP_DELAY}
-      openDelay={TOOLTIP_DELAY}
-      gutter={TOOLTIP_GUTTER}
-      flip={TOOLTIP_FLIP}
+      placement={props.placement ?? 'bottom'}
+      overflowPadding={16}
+      fitViewport={true}
+      closeDelay={250}
+      openDelay={250}
+      flip={true}
+      gutter={4}
     >
       <KobalteTooltip.Trigger
         class="inline-flex items-center"
@@ -59,19 +51,14 @@ export function Tooltip(props: TooltipProps) {
       </KobalteTooltip.Trigger>
       <KobalteTooltip.Portal>
         <KobalteTooltip.Content
-          style={{ 'max-width': `calc(100vw - ${2 * TOOLTIP_VIEWPORT_PADDING}px)` }}
+          style={{ 'max-width': `calc(100vw - ${2 * 16}px)` }}
           class="z-tool-tip"
         >
           <Surface
             class="flex items-center justify-center p-1.5 text-ink-muted text-xs wrap-break-word"
             depth={3}
           >
-            <div
-              class={cn(
-                'flex flex-row items-center space-x-2',
-                steps().length === 0 ? 'px-1' : 'px-0'
-              )}
-            >
+            <div class="flex flex-row items-center gap-2">
               <div class="text-xs capitalize">{props.label}</div>
               <Show when={steps().length > 0}>
                 <div class="flex items-center gap-1 ml-auto">
