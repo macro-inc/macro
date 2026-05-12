@@ -68,6 +68,7 @@ interface SidebarItem {
     JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
   >;
   hotkey: ValidHotkey;
+  hotkeyToken: HotkeyToken;
   standaloneHotkey?: boolean;
 }
 
@@ -78,6 +79,7 @@ export const SIDEBAR_LINKS = [
     href: LIST_VIEW_PATHS.inbox,
     icon: AnimatedInboxIcon,
     hotkey: 'i',
+    hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
   {
     id: 'search',
@@ -85,6 +87,7 @@ export const SIDEBAR_LINKS = [
     href: LIST_VIEW_PATHS.search,
     icon: AnimatedSearchIcon,
     hotkey: '/',
+    hotkeyToken: TOKENS.sidebar.goTo.search,
     standaloneHotkey: true,
   },
   {
@@ -93,6 +96,7 @@ export const SIDEBAR_LINKS = [
     href: LIST_VIEW_PATHS.agents,
     icon: AnimatedStarIcon,
     hotkey: 'a',
+    hotkeyToken: TOKENS.sidebar.goTo.agents,
   },
   {
     id: 'mail',
@@ -100,6 +104,7 @@ export const SIDEBAR_LINKS = [
     href: LIST_VIEW_PATHS.mail,
     icon: AnimatedEmailIcon,
     hotkey: 'e',
+    hotkeyToken: TOKENS.sidebar.goTo.mail,
   },
   {
     id: 'documents',
@@ -107,6 +112,7 @@ export const SIDEBAR_LINKS = [
     href: LIST_VIEW_PATHS.documents,
     icon: AnimatedFileMdIcon,
     hotkey: 'd',
+    hotkeyToken: TOKENS.sidebar.goTo.documents,
   },
   {
     id: 'tasks',
@@ -114,6 +120,7 @@ export const SIDEBAR_LINKS = [
     href: LIST_VIEW_PATHS.tasks,
     icon: AnimatedTaskIcon,
     hotkey: 't',
+    hotkeyToken: TOKENS.sidebar.goTo.tasks,
   },
   {
     id: 'channels',
@@ -121,6 +128,7 @@ export const SIDEBAR_LINKS = [
     href: LIST_VIEW_PATHS.channels,
     icon: AnimatedChannelIcon,
     hotkey: 'c',
+    hotkeyToken: TOKENS.sidebar.goTo.channels,
   },
   {
     id: 'folders',
@@ -128,6 +136,7 @@ export const SIDEBAR_LINKS = [
     href: LIST_VIEW_PATHS.folders,
     icon: AnimatedFolderIcon,
     hotkey: 'f',
+    hotkeyToken: TOKENS.sidebar.goTo.folders,
   },
 ] satisfies SidebarItem[];
 
@@ -242,6 +251,7 @@ export const registerSidebarHotkeys = ({
   registerHotkey({
     hotkey: GO_TO_LEADER_KEY,
     scopeId: 'global',
+    hotkeyToken: TOKENS.sidebar.goToLeader,
     description: 'Go to page',
     keyDownHandler: () => {
       // We debounce the time till the hot keys are visible to allow other commands
@@ -353,6 +363,7 @@ export const registerSidebarHotkeys = ({
     registerHotkey({
       hotkey: link.hotkey,
       scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
+      hotkeyToken: link.hotkeyToken,
       description: `Go to ${link.label}`,
       keyDownHandler: openSidebarView,
       icon: link.icon,
@@ -421,6 +432,7 @@ const CALLS_LINK: SidebarItem = {
   href: LIST_VIEW_PATHS.calls,
   icon: AnimatedCallIcon,
   hotkey: 'l',
+  hotkeyToken: TOKENS.sidebar.goTo.calls,
 };
 
 export const AppSidebar = (props: AppSidebarProps) => {
@@ -734,13 +746,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
           hotkey={
             props.sidebarState === 'slim'
               ? props.standaloneHotkey
-                ? TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-                : [
-                    TOKENS.global
-                      .commandMenu /* scuffed, should use TOKENS.ts */,
-                    TOKENS.global
-                      .commandMenu /* scuffed, should use TOKENS.ts */,
-                  ]
+                ? props.hotkeyToken
+                : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
               : undefined
           }
           onMouseLeave={() => setIsHovering(false)}
@@ -792,30 +799,15 @@ const SidebarLink = (props: SidebarLinkProps) => {
               <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
                 <Show when={!props.standaloneHotkey}>
                   <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
-                    <Hotkey
-                      token={
-                        TOKENS.global
-                          .commandMenu /* scuffed, should use TOKENS.ts */
-                      }
-                    />
+                    <Hotkey token={TOKENS.sidebar.goToLeader} />
                   </div>
                   <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
-                    <Hotkey
-                      token={
-                        TOKENS.global
-                          .commandMenu /* scuffed, should use TOKENS.ts */
-                      }
-                    />
+                    <Hotkey token={props.hotkeyToken} />
                   </div>
                 </Show>
                 <Show when={props.standaloneHotkey}>
                   <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
-                    <Hotkey
-                      token={
-                        TOKENS.global
-                          .commandMenu /* scuffed, should use TOKENS.ts */
-                      }
-                    />
+                    <Hotkey token={props.hotkeyToken} />
                   </div>
                 </Show>
               </div>
@@ -829,11 +821,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
                 props.sidebarState !== 'slim' && 'relative p-1 ml-auto'
               )}
             >
-              <Hotkey
-                token={
-                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-                }
-              />
+              <Hotkey token={props.hotkeyToken} />
             </div>
           </Show>
         </Button>

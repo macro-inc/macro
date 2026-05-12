@@ -82,6 +82,22 @@ export const TOKENS = {
     redo: 'global.redo',
   },
 
+  // sidebar navigation
+  sidebar: {
+    goToLeader: 'sidebar.goToLeader',
+    goTo: {
+      inbox: 'sidebar.goTo.inbox',
+      search: 'sidebar.goTo.search',
+      agents: 'sidebar.goTo.agents',
+      mail: 'sidebar.goTo.mail',
+      documents: 'sidebar.goTo.documents',
+      tasks: 'sidebar.goTo.tasks',
+      channels: 'sidebar.goTo.channels',
+      calls: 'sidebar.goTo.calls',
+      folders: 'sidebar.goTo.folders',
+    },
+  },
+
   // email
   email: {
     nextThread: 'email.nextThread',
