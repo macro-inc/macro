@@ -38,6 +38,8 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
+import { ResponsiveTaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -108,6 +110,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
+import { Dynamic } from 'solid-js/web';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
@@ -868,7 +871,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
             maxSize={previewVisible() ? 840 : undefined}
           >
             <div
-              class="@container/uList size-full unified-list-root flex flex-col"
+              class="@container/u-list size-full unified-list-root flex flex-col"
               classList={{
                 'border-r border-edge-muted':
                   soup.previewEntity() !== undefined,
@@ -900,6 +903,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   </Match>
                   <Match when={rows().length}>
                     <ListLayoutProvider ref={localEntityListRef}>
+                      <Show when={currentView() === 'tasks' && !isMobile()}>
+                        <ResponsiveTaskListHeader class="shrink-0" />
+                      </Show>
                       <EntityRowProvider
                         container={localEntityListRef}
                         canSwipeLeft={(entityId) => {
@@ -975,7 +981,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 </Show>
 
                                 <SoupEntityContextMenu entity={row.original}>
-                                  <ListEntity
+                                  <Dynamic
+                                    component={
+                                      currentView() === 'tasks'
+                                        ? TaskListEntity
+                                        : ListEntity
+                                    }
                                     entity={row.original}
                                     timestamp={timestamp()}
                                     highlighted={
@@ -991,10 +1002,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                       !soup.predicates.isActive('noise')
                                     }
                                     checked={row.isSelected()}
-                                    onChecked={(
-                                      next: boolean,
-                                      shiftKey: boolean
-                                    ) =>
+                                    onChecked={(next, shiftKey) =>
                                       handleMultiSelectChecked({
                                         entity: row.original,
                                         entityIndex: i(),
@@ -1002,7 +1010,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                         shiftKey: shiftKey ?? false,
                                       })
                                     }
-                                    onClick={(event: MouseEvent) => {
+                                    onClick={(event) => {
                                       onEntityClick({
                                         type: 'entity',
                                         entity: row.original,
@@ -1019,10 +1027,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                         location: undefined,
                                       });
                                     }}
-                                    onContentHitClick={(
-                                      e: PointerEvent | MouseEvent,
-                                      location?: SearchLocation
-                                    ) => {
+                                    onContentHitClick={(e, location) => {
                                       onEntityClick({
                                         type: 'entity',
                                         entity: row.original,
@@ -1158,7 +1163,10 @@ const SoupList = (props: SoupListProps) => {
   return (
     <div
       ref={props.ref}
-      class={cn('unified-table-body size-full relative', props.class)}
+      class={cn(
+        'unified-table-body w-full flex-1 min-h-0 relative',
+        props.class
+      )}
     >
       <VList
         cache={props.cache}

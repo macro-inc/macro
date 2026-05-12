@@ -37,6 +37,9 @@ const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 const CALL1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
 const CALL2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca220);
 const CALL_ARCHIVED: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca2ed);
+const MACRO_USER_A: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaaaa1);
+const MACRO_USER_B: Uuid = Uuid::from_u128(0xbbbbbbbb_bbbb_bbbb_bbbb_bbbbbbbbbbb2);
+const MACRO_USER_C: Uuid = Uuid::from_u128(0xcccccccc_cccc_cccc_cccc_ccccccccccc3);
 static USER_A: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-a@test.com").unwrap());
 static USER_B: LazyLock<MacroUserIdStr<'static>> =
@@ -46,6 +49,57 @@ static USER_C: LazyLock<MacroUserIdStr<'static>> =
 
 fn repo(pool: Pool<Postgres>) -> PgCallRepo {
     PgCallRepo::new(pool)
+}
+
+fn axis_unit_vector(axis: usize) -> Vec<f32> {
+    let mut v = vec![0.0_f32; 256];
+    v[axis] = 1.0;
+    v
+}
+
+async fn insert_voice(pool: &Pool<Postgres>, voice_id: Uuid, axis: usize) -> anyhow::Result<()> {
+    sqlx::query("INSERT INTO voice (id, embedding) VALUES ($1, $2)")
+        .bind(voice_id)
+        .bind(pgvector::Vector::from(axis_unit_vector(axis)))
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+async fn insert_user_mapping(
+    pool: &Pool<Postgres>,
+    user_id: &MacroUserIdStr<'_>,
+    macro_user_id: Uuid,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (id) DO NOTHING
+        "#,
+    )
+    .bind(macro_user_id)
+    .bind(user_id.as_ref())
+    .bind(user_id.email_str())
+    .bind(format!("cus_{macro_user_id}"))
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO "User" (id, email, "stripeCustomerId", macro_user_id)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (id) DO UPDATE SET macro_user_id = EXCLUDED.macro_user_id
+        "#,
+    )
+    .bind(user_id.as_ref())
+    .bind(user_id.email_str())
+    .bind(format!("cus_{macro_user_id}"))
+    .bind(macro_user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
 
 // -- create_call --------------------------------------------------------------
@@ -746,6 +800,106 @@ async fn create_transcript_segment_stores_and_increments_sequence(
     Ok(())
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_transcript_voice_id_for_speaker_uses_diarized_speaker_id(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let now = Utc::now();
+    let voice_a = macro_uuid::generate_uuid_v7();
+    let voice_b = macro_uuid::generate_uuid_v7();
+    insert_voice(&pool, voice_a, 0).await?;
+    insert_voice(&pool, voice_b, 1).await?;
+
+    let seg_a = TranscriptSegmentRequest {
+        segment_id: "seg-voice-a".to_string(),
+        speaker_id: USER_A.to_string(),
+        diarized_speaker_id: Some("spk-a0".to_string()),
+        content: "first voice".to_string(),
+        started_at: now,
+        ended_at: Some(now),
+        is_final: true,
+        stream_started_at: None,
+        embedding: None,
+    };
+    let seg_b = TranscriptSegmentRequest {
+        segment_id: "seg-voice-b".to_string(),
+        speaker_id: USER_A.to_string(),
+        diarized_speaker_id: Some("spk-a1".to_string()),
+        content: "second voice".to_string(),
+        started_at: now,
+        ended_at: Some(now),
+        is_final: true,
+        stream_started_at: None,
+        embedding: None,
+    };
+
+    repo.create_transcript_segment(&CALL1, &seg_a, Some(voice_a))
+        .await?;
+    repo.create_transcript_segment(&CALL1, &seg_b, Some(voice_b))
+        .await?;
+
+    assert_eq!(
+        repo.get_transcript_voice_id_for_speaker(&CALL1, USER_A.as_ref(), Some("spk-a0"))
+            .await?,
+        Some(voice_a)
+    );
+    assert_eq!(
+        repo.get_transcript_voice_id_for_speaker(&CALL1, USER_A.as_ref(), Some("spk-a1"))
+            .await?,
+        Some(voice_b)
+    );
+    assert_eq!(
+        repo.get_transcript_voice_id_for_speaker(&CALL1, USER_A.as_ref(), Some("missing"))
+            .await?,
+        None
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_transcript_voice_id_for_speaker_falls_back_to_participant_id(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let now = Utc::now();
+    let voice_id = macro_uuid::generate_uuid_v7();
+    insert_voice(&pool, voice_id, 0).await?;
+
+    let segment = TranscriptSegmentRequest {
+        segment_id: "seg-voice-participant".to_string(),
+        speaker_id: USER_A.to_string(),
+        diarized_speaker_id: None,
+        content: "voice without diarization".to_string(),
+        started_at: now,
+        ended_at: Some(now),
+        is_final: true,
+        stream_started_at: None,
+        embedding: None,
+    };
+
+    repo.create_transcript_segment(&CALL1, &segment, Some(voice_id))
+        .await?;
+
+    assert_eq!(
+        repo.get_transcript_voice_id_for_speaker(&CALL1, USER_A.as_ref(), None)
+            .await?,
+        Some(voice_id)
+    );
+    assert_eq!(
+        repo.get_transcript_voice_id_for_speaker(&CALL1, USER_B.as_ref(), None)
+            .await?,
+        None
+    );
+    Ok(())
+}
+
 // -- archive_call copies transcripts ------------------------------------------
 
 #[sqlx::test(
@@ -926,6 +1080,96 @@ async fn archive_call_rolls_up_consecutive_same_speaker_transcripts(
     assert_eq!(rows[3].diarized_speaker_id.as_deref(), Some("spk-b1"));
     assert_eq!(rows[3].content, "other");
 
+    Ok(())
+}
+
+// -- get_stable_speaker_voices_for_call_record -------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_stable_speaker_voices_for_call_record_returns_all_voices_for_consistent_diarized_speakers(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let now = Utc::now();
+    let voice_a = macro_uuid::generate_uuid_v7();
+    let voice_b = macro_uuid::generate_uuid_v7();
+    insert_voice(&pool, voice_a, 0).await?;
+    insert_voice(&pool, voice_b, 1).await?;
+    insert_user_mapping(&pool, USER_A.deref(), MACRO_USER_A).await?;
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    insert_user_mapping(&pool, USER_C.deref(), MACRO_USER_C).await?;
+
+    let segments = [
+        // USER_A is stable: every row has the same non-null diarized speaker,
+        // so all non-null voice ids from those rows should be returned.
+        ("stable-a-1", USER_A.as_ref(), Some("spk-a0"), Some(voice_a)),
+        ("stable-a-2", USER_A.as_ref(), Some("spk-a0"), Some(voice_b)),
+        ("stable-a-3", USER_A.as_ref(), Some("spk-a0"), None),
+        // USER_B is ambiguous: more than one distinct diarized speaker id.
+        (
+            "ambiguous-b-1",
+            USER_B.as_ref(),
+            Some("spk-b0"),
+            Some(voice_a),
+        ),
+        (
+            "ambiguous-b-2",
+            USER_B.as_ref(),
+            Some("spk-b1"),
+            Some(voice_b),
+        ),
+        // USER_C is incomplete: at least one transcript row has no diarized speaker id.
+        (
+            "missing-c-1",
+            USER_C.as_ref(),
+            Some("spk-c0"),
+            Some(voice_a),
+        ),
+        ("missing-c-2", USER_C.as_ref(), None, Some(voice_b)),
+        // Unknown speaker ids are ignored even if their diarized speaker id is stable.
+        (
+            "unknown-speaker",
+            "macro|unknown-speaker@test.com",
+            Some("spk-unknown"),
+            Some(voice_a),
+        ),
+    ];
+
+    for (idx, (segment_id, speaker_id, diarized_speaker_id, voice_id)) in
+        segments.into_iter().enumerate()
+    {
+        let started_at = now + Duration::seconds(idx as i64);
+        repo.create_transcript_segment(
+            &CALL1,
+            &TranscriptSegmentRequest {
+                segment_id: segment_id.to_string(),
+                speaker_id: speaker_id.to_string(),
+                diarized_speaker_id: diarized_speaker_id.map(str::to_string),
+                content: segment_id.to_string(),
+                started_at,
+                ended_at: Some(started_at + Duration::milliseconds(100)),
+                is_final: true,
+                stream_started_at: None,
+                embedding: None,
+            },
+            voice_id,
+        )
+        .await?;
+    }
+
+    let record_id = repo.archive_call(&CALL1).await?;
+
+    let mut stable = repo
+        .get_stable_speaker_voices_for_call_record(&record_id)
+        .await?;
+    stable.sort();
+
+    let mut expected = vec![(MACRO_USER_A, voice_a), (MACRO_USER_A, voice_b)];
+    expected.sort();
+    assert_eq!(stable, expected);
     Ok(())
 }
 

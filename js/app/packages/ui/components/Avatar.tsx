@@ -130,9 +130,9 @@ const GROUP_OVERLAP_CLASSES: Record<AvatarGroupSize, string> = {
  * Ring classes applied to child avatars for separation.
  */
 const GROUP_RING_CLASSES: Record<AvatarGroupSize, string> = {
-  sm: '*:data-[slot=avatar]:ring-1',
-  md: '*:data-[slot=avatar]:ring-2',
-  lg: '*:data-[slot=avatar]:ring-2',
+  sm: '**:data-[slot=avatar]:ring-1',
+  md: '**:data-[slot=avatar]:ring-2',
+  lg: '**:data-[slot=avatar]:ring-2',
 };
 
 /**
@@ -165,7 +165,7 @@ export function AvatarGroup(props: AvatarGroupProps) {
         'isolate flex w-fit shrink-0 items-center',
         GROUP_OVERLAP_CLASSES[size()],
         GROUP_RING_CLASSES[size()],
-        '*:data-[slot=avatar]:ring-(--avatar-group-separator,var(--color-panel))',
+        '**:data-[slot=avatar]:ring-(--avatar-group-separator,var(--color-panel))',
         local.class
       )}
       {...others}

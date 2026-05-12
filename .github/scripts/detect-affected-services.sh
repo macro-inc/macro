@@ -5,7 +5,7 @@ set -e
 # It uses cargo metadata to build a proper dependency graph
 
 # Get changed files from git
-CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep "^rust/cloud-storage/" || true)
+CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E "^(rust/cloud-storage/|infra/|\.github/services-config\.json|\.github/scripts/build-cloud-storage-lambdas\.sh)" || true)
 
 if [ -z "$CHANGED_FILES" ]; then
     echo "No cloud-storage files changed"

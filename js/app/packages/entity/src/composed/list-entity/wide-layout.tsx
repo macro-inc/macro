@@ -1,4 +1,5 @@
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { CallAgainButton } from '@channel/Call/CallAgainButton';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { AttendanceBadge, SharedBadge } from '../../components/Badges';
@@ -117,6 +118,12 @@ export function WideLayout(props: LayoutProps) {
         <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (
             <>
+              <Show when={!entity().isActive}>
+                <CallAgainButton
+                  channelId={entity().channelId}
+                  class="opacity-0 group-hover/narrow:opacity-100 transition-opacity flex shrink-0 items-center gap-1 rounded-xs border border-edge-muted px-1.5 py-1 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none"
+                />
+              </Show>
               <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
                 <AttendanceBadge attended={entity().attended} />
               </Show>

@@ -3731,6 +3731,16 @@ export const getEntityPermissionResponse = zod
               type: zod.enum(['channel_role']),
             })
             .describe('Permission for channel-based entities.'),
+          zod
+            .object({
+              role: zod
+                .enum(['member', 'admin', 'owner'])
+                .describe(
+                  'The role a user has within a team.\n\nOrdered least to most privileged so comparisons reflect access strength.'
+                ),
+              type: zod.enum(['team_role']),
+            })
+            .describe('Permission for team-based entities.'),
         ])
         .describe(
           "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."

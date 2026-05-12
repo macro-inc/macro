@@ -11,6 +11,7 @@ mod entity_permission;
 mod history;
 mod pin;
 mod project;
+mod team;
 mod thread;
 
 pub use call::{CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor};
@@ -21,6 +22,7 @@ pub use entity_permission::EntityPermissionExtractor;
 pub use history::HistoryAccessExtractor;
 pub use pin::PinAccessLevelExtractor;
 pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor};
+pub use team::OptionalMacroUserTeamExtractor;
 pub use thread::ThreadAccessLevelExtractor;
 
 use crate::domain::models::{AccessError, AccessLevel};

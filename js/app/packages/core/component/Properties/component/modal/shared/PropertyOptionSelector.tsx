@@ -1,8 +1,10 @@
 import { useKeyPressed } from '@core/util/useKeyPressed';
+import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
-import { cn, Hotkey } from '@ui';
+import { Hotkey } from '@ui';
+import { cn } from '@ui/utils/classname';
 import type { JSX, ParentComponent } from 'solid-js';
 import {
   type Accessor,
@@ -10,9 +12,11 @@ import {
   createMemo,
   createSignal,
   For,
+  Match,
   onCleanup,
   onMount,
   Show,
+  Switch,
 } from 'solid-js';
 import { useSearchInputFocus } from '../../../utils';
 import { ERROR_MESSAGES } from '../../../utils/errorHandling';
@@ -95,7 +99,7 @@ type DropdownSearchInputProps = {
 const DropdownSearchInput = (props: DropdownSearchInputProps) => {
   return (
     <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-      <SearchIcon class="size-4 text-ink-muted" />
+      <SearchIcon class="h-4 w-4 text-ink-muted" />
       <input
         class="w-full caret-accent"
         ref={props.inputRef}
@@ -150,8 +154,15 @@ type SelectOptionsProps = {
   selectedOptions: () => Set<string>;
   onToggleOption: (value: string) => void;
   onAddOption?: (value: string) => Promise<void>;
+  /** When provided, renders a "no value" item at the top of the list. */
+  clearOption?: { label: string; onClear: () => void };
   onClose?: () => void;
 };
+
+type SelectableItem =
+  | { type: 'option'; option: SelectableOption }
+  | { type: 'add' }
+  | { type: 'clear' };
 
 export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const [isAddingOption, setIsAddingOption] = createSignal(false);
@@ -183,7 +194,12 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     const item = selectableItems()[idx];
     if (item?.type === 'add') {
       handleAddOption();
-    } else if (item?.type === 'option' && item.option) {
+    } else if (item?.type === 'clear') {
+      props.clearOption?.onClear();
+      if (!props.config.isMultiSelect && props.onClose) {
+        props.onClose();
+      }
+    } else if (item?.type === 'option') {
       props.onToggleOption(item.option.id);
       if (!props.config.isMultiSelect && props.onClose) {
         props.onClose();
@@ -250,15 +266,22 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     return allOptions;
   });
 
-  // Get selectable items (filtered options + add option if available)
-  const selectableItems = createMemo(() => {
-    const options = filteredOptions();
-    const items: Array<{ type: 'option' | 'add'; option?: SelectableOption }> =
-      [];
+  // Only show the clear item when the user isn't searching — searching by name
+  // matches the option list, not the synthetic "no value" entry.
+  const showClearItem = () =>
+    !!props.clearOption && !dropdown.searchQuery().trim();
 
-    options.forEach((option) => {
+  // Get selectable items: optional clear + filtered options + optional add.
+  const selectableItems = createMemo(() => {
+    const items: SelectableItem[] = [];
+
+    if (showClearItem()) {
+      items.push({ type: 'clear' });
+    }
+
+    for (const option of filteredOptions()) {
       items.push({ type: 'option', option });
-    });
+    }
 
     if (isValidNewOption() && props.onAddOption) {
       items.push({ type: 'add' });
@@ -311,7 +334,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
       when={!props.isLoading}
       fallback={
         <div class="flex items-center justify-center py-8">
-          <div class="size-5 animate-spin">
+          <div class="w-5 h-5 animate-spin">
             <LoadingSpinner />
           </div>
           <span class="ml-2 text-ink-muted">Loading options...</span>
@@ -356,7 +379,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
             }
           >
             <div class="p-1">
-              <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+              <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
                 <Show
                   when={selectableItems().length > 0}
                   fallback={
@@ -366,63 +389,90 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                   }
                 >
                   <For each={selectableItems()}>
-                    {(item, index) => (
-                      <Show
-                        when={item.type === 'add'}
-                        fallback={
-                          <DropdownSelectableRow
-                            isSelected={index() === dropdown.selectedIndex()}
-                            onClick={() => {
-                              if (item.option) {
-                                props.onToggleOption(item.option.id);
-                                if (
-                                  !props.config.isMultiSelect &&
-                                  props.onClose
-                                ) {
-                                  props.onClose();
-                                }
-                              }
-                            }}
-                            onMouseEnter={() => {
-                              if (!dropdown.keyboardMode()) {
-                                dropdown.setSelectedIndex(index());
-                              }
-                            }}
-                            showHotkey={
-                              dropdown.shouldShowHotkeys() && index() < 9
-                            }
-                            hotkeyShortcut={`${index() + 1}`}
-                            rightContent={
-                              <Show when={props.config.isMultiSelect}>
-                                <OptionCheckBox
-                                  checked={isOptionSelected(item.option!.id)}
-                                  multiselect={props.config.isMultiSelect}
-                                />
-                              </Show>
-                            }
-                          >
-                            <PropertyValueIcon optionId={item.option!.id} />
-                            <div class="flex-1 min-w-0 text-left">
-                              <p class="text-sm font-medium truncate">
-                                {item.option!.label}
-                              </p>
-                            </div>
-                          </DropdownSelectableRow>
+                    {(item, index) => {
+                      const isSelected = () =>
+                        index() === dropdown.selectedIndex();
+                      const onMouseEnter = () => {
+                        if (!dropdown.keyboardMode()) {
+                          dropdown.setSelectedIndex(index());
                         }
-                      >
-                        <div
-                          onMouseEnter={() => {
-                            if (!dropdown.keyboardMode()) {
-                              dropdown.setSelectedIndex(index());
-                            }
-                          }}
-                        >
-                          <AddOptionButton
-                            isSelected={index() === dropdown.selectedIndex()}
-                          />
-                        </div>
-                      </Show>
-                    )}
+                      };
+                      return (
+                        <Switch>
+                          <Match when={item.type === 'option' ? item : false}>
+                            {(optionItem) => (
+                              <DropdownSelectableRow
+                                isSelected={isSelected()}
+                                onClick={() => {
+                                  props.onToggleOption(optionItem().option.id);
+                                  if (
+                                    !props.config.isMultiSelect &&
+                                    props.onClose
+                                  ) {
+                                    props.onClose();
+                                  }
+                                }}
+                                onMouseEnter={onMouseEnter}
+                                showHotkey={
+                                  dropdown.shouldShowHotkeys() && index() < 9
+                                }
+                                hotkeyShortcut={`${index() + 1}`}
+                                rightContent={
+                                  <Show when={props.config.isMultiSelect}>
+                                    <OptionCheckBox
+                                      checked={isOptionSelected(
+                                        optionItem().option.id
+                                      )}
+                                      multiselect={props.config.isMultiSelect}
+                                    />
+                                  </Show>
+                                }
+                              >
+                                <PropertyValueIcon
+                                  optionId={optionItem().option.id}
+                                />
+                                <div class="flex-1 min-w-0 text-left">
+                                  <p class="text-sm font-medium truncate">
+                                    {optionItem().option.label}
+                                  </p>
+                                </div>
+                              </DropdownSelectableRow>
+                            )}
+                          </Match>
+                          <Match
+                            when={item.type === 'clear' && props.clearOption}
+                          >
+                            {(clear) => (
+                              <DropdownSelectableRow
+                                isSelected={isSelected()}
+                                onClick={() => {
+                                  clear().onClear();
+                                  if (
+                                    !props.config.isMultiSelect &&
+                                    props.onClose
+                                  ) {
+                                    props.onClose();
+                                  }
+                                }}
+                                onMouseEnter={onMouseEnter}
+                              >
+                                <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
+                                <div class="flex-1 min-w-0 text-left">
+                                  <p class="text-sm font-medium text-ink-muted truncate">
+                                    {clear().label}
+                                  </p>
+                                </div>
+                              </DropdownSelectableRow>
+                            )}
+                          </Match>
+                          <Match when={item.type === 'add'}>
+                            <div onMouseEnter={onMouseEnter}>
+                              <AddOptionButton isSelected={isSelected()} />
+                            </div>
+                          </Match>
+                        </Switch>
+                      );
+                    }}
                   </For>
                 </Show>
               </div>

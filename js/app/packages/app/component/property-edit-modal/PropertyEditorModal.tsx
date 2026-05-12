@@ -75,7 +75,7 @@ function ListItem(props: {
       class={cn(
         'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 scroll-my-1',
         {
-          'bg-active': props.isSelected && !props.disabled,
+          'bg-hover': props.isSelected && !props.disabled,
           'opacity-50 cursor-not-allowed': props.disabled,
         }
       )}
@@ -330,9 +330,12 @@ function EditingEntityPreview(props: { entities: EntityData[] }) {
         {(entity) => {
           return (
             <div
-              class={cn('bg-edge px-2 py-1 truncate text-xs rounded-xs', {
-                'max-w-[50%]': props.entities.length === 2,
-              })}
+              class={cn(
+                'bg-hover border border-edge-muted px-2 py-1 truncate text-xs rounded-xs',
+                {
+                  'max-w-[50%]': props.entities.length === 2,
+                }
+              )}
             >
               <InlineEntity entity={entity} />
             </div>

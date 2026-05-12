@@ -24,23 +24,24 @@ jobs:
               - 'flake.nix'
               - 'flake.lock'
               - '.github/actions/setup-cachix/**'
-              - '.github/actions/setup-nix-dev-shell/**'
               - .github/workflows/code-check-infra.yml
 
   biome-check:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     name: Biome Check
-    runs-on: temp-middy
+    runs-on: linux-latest-middy
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Setup Nix dev shell
-        uses: ./.github/actions/setup-nix-dev-shell
+        uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Run Biome
         working-directory: infra
         run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
@@ -48,13 +49,15 @@ jobs:
   check:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: temp-middy
+    runs-on: linux-latest-middy
     steps:
       - uses: actions/checkout@v6
       - name: Setup Nix dev shell
-        uses: ./.github/actions/setup-nix-dev-shell
+        uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: install
         working-directory: infra
         run: bun install --frozen-lockfile

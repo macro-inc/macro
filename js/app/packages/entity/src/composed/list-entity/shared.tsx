@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
@@ -7,12 +8,36 @@ import {
   createSignal,
   type JSX,
   onCleanup,
+  type Ref,
   useContext,
 } from 'solid-js';
+import type { EntityRowConfig } from '../../extractors-notification';
 import type { EntityData, ProjectEntity } from '../../types/entity';
 import type { WithNotification } from '../../types/notification';
-import type { ContentHitData } from '../../types/search';
+import type { ContentHitData, SearchLocation } from '../../types/search';
 import { isSearchEntity } from '../../types/search';
+
+export interface BaseListEntityProps<E extends EntityData = EntityData> {
+  entity: WithNotification<E>;
+  onClick?: (event: MouseEvent) => void;
+  timestamp?: DateValue | null;
+  ref?: Ref<HTMLDivElement>;
+  checked?: boolean;
+  highlighted?: boolean;
+  hovered?: boolean;
+  hideContentHits?: boolean;
+  onChecked?: (checked: boolean, shiftKey: boolean) => void;
+  onMouseMove?: () => void;
+  onProjectClick?: (
+    entity: ProjectEntity,
+    e: PointerEvent | MouseEvent
+  ) => void;
+  onContentHitClick?: (
+    e: PointerEvent | MouseEvent,
+    location?: SearchLocation
+  ) => void;
+  entityRowConfig?: EntityRowConfig;
+}
 
 export const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 

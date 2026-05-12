@@ -681,7 +681,7 @@ impl<
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
                     self.spawn_summarize_call(call.id);
-                    self.spawn_match_voices_for_call(call.id);
+                    self.spawn_process_voices_for_call(call.id);
 
                     if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
                         tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
@@ -791,7 +791,7 @@ impl<
                     // Fire-and-forget summarization now that the
                     // `call_records` row is persisted.
                     self.spawn_summarize_call(call.id);
-                    self.spawn_match_voices_for_call(call.id);
+                    self.spawn_process_voices_for_call(call.id);
 
                     if let Err(e) = self.search_indexer.enqueue_upsert(&call.id).await {
                         tracing::error!(error=?e, call_id=%call.id, "failed to enqueue call record for search indexing");
@@ -1018,17 +1018,40 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?
             .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?;
 
-        // Upsert the speaker embedding (if the agent sent one) so we can
-        // store the resulting voice id on the transcript row. Failure to
-        // persist the embedding must not block transcript ingest — log and
-        // continue without a voice id.
+        // Attach a stable voice id to each transcript row. Reuse an earlier
+        // voice id for the same diarized speaker in this call before falling
+        // back to embedding-based upsert; this prevents creating a fresh
+        // `voice.id` for every finalized utterance from the same user.
+        // Failure to persist the embedding must not block transcript ingest —
+        // log and continue without a voice id.
         let voice_id = match segment.embedding.as_deref() {
-            Some(embedding) if !embedding.is_empty() => self
-                .voice_repo
-                .upsert_voice(embedding)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, "failed to upsert voice embedding"))
-                .ok(),
+            Some(embedding) if !embedding.is_empty() => {
+                let existing_voice_id = self
+                    .repo
+                    .get_transcript_voice_id_for_speaker(
+                        &call.id,
+                        &segment.speaker_id,
+                        segment.diarized_speaker_id.as_deref(),
+                    )
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "failed to look up existing speaker voice id")
+                    })
+                    .ok()
+                    .flatten();
+
+                match existing_voice_id {
+                    Some(voice_id) => Some(voice_id),
+                    None => self
+                        .voice_repo
+                        .upsert_voice(embedding)
+                        .await
+                        .inspect_err(
+                            |e| tracing::error!(error=?e, "failed to upsert voice embedding"),
+                        )
+                        .ok(),
+                }
+            }
             _ => None,
         };
 
@@ -1329,15 +1352,19 @@ impl<
         });
     }
 
-    /// Fire-and-forget spawn of [`match_voices_for_call_record`].
+    /// Fire-and-forget spawn of finished-call voice processing.
     ///
     /// Called from `process_webhook_event` immediately after `archive_call`
-    /// finalizes the `call_records` row so voice matching runs off the
-    /// request path. Errors are logged inside the spawned task.
-    fn spawn_match_voices_for_call(&self, call_record_id: Uuid) {
+    /// finalizes the `call_records` row. First, voice ids for consistently
+    /// diarized speakers are enrolled for the users who spoke them; then the
+    /// regular voice matcher can use both pre-existing and newly-enrolled
+    /// voices to populate speaker overrides. Errors are logged inside the
+    /// spawned task.
+    fn spawn_process_voices_for_call(&self, call_record_id: Uuid) {
         let repo = self.repo.clone();
         let voice_repo = self.voice_repo.clone();
         tokio::spawn(async move {
+            enroll_stable_speaker_voices_for_call_record(&repo, &voice_repo, call_record_id).await;
             match_voices_for_call_record(
                 &repo,
                 &voice_repo,
@@ -1347,6 +1374,54 @@ impl<
             .await;
         });
     }
+}
+
+/// Enroll stable speaker voice ids observed in a freshly archived call.
+///
+/// For each `speaker_id` in the call transcript, the repository returns
+/// candidates only when every transcript row for that speaker has the same
+/// non-NULL `diarized_speaker_id`. All distinct non-NULL `voice_id`s on those
+/// rows are linked to the resolved macro user in `macro_user_voice` via
+/// [`VoiceRepository::link_user_voice`].
+async fn enroll_stable_speaker_voices_for_call_record<R: CallRepository, Vr: VoiceRepository>(
+    repo: &R,
+    voice_repo: &Vr,
+    call_record_id: Uuid,
+) {
+    let stable_voices = match repo
+        .get_stable_speaker_voices_for_call_record(&call_record_id)
+        .await
+    {
+        Ok(stable_voices) => stable_voices,
+        Err(e) => {
+            tracing::error!(
+                error=?e, %call_record_id,
+                "failed to load stable speaker voices for enrollment"
+            );
+            return;
+        }
+    };
+
+    if stable_voices.is_empty() {
+        return;
+    }
+
+    let total = stable_voices.len();
+    let mut linked = 0usize;
+    for (macro_user_id, voice_id) in stable_voices {
+        match voice_repo.link_user_voice(&macro_user_id, &voice_id).await {
+            Ok(()) => linked += 1,
+            Err(e) => tracing::error!(
+                error=?e, %call_record_id, %macro_user_id, %voice_id,
+                "failed to link stable speaker voice to user"
+            ),
+        }
+    }
+
+    tracing::info!(
+        %call_record_id, linked, total,
+        "stable speaker voice enrollment completed"
+    );
 }
 
 /// Match the voice ids on a freshly archived call to enrolled users and

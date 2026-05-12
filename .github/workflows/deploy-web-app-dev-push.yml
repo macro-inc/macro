@@ -38,3 +38,5 @@ jobs:
       DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
       SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      SCCACHE_BUCKET: ${{ secrets.SCCACHE_BUCKET }}

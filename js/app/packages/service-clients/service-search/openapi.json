@@ -472,7 +472,7 @@
       "ChannelSearchResponse": {
         "type": "object",
         "description": "The document search response object",
-        "required": ["results"],
+        "required": ["results", "total_count"],
         "properties": {
           "next_cursor": {
             "type": ["string", "null"],
@@ -484,6 +484,11 @@
               "$ref": "#/components/schemas/ChannelSearchResponseItemWithMetadata"
             },
             "description": "List containing results from email threads"
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of matching channel messages across all pages."
           }
         }
       },

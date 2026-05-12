@@ -9,6 +9,7 @@ export { Surface } from './components/Surface';
 export { Tooltip } from './components/Tooltip';
 export { Dialog  } from './components/Dialog';
 export { Button } from './components/Button';
+export { ButtonGroup } from './components/ButtonGroup';
 export { Hotkey } from './components/Hotkey';
 export { Scroll } from './components/Scroll';
 export { Panel  } from './components/Panel';

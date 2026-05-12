@@ -838,6 +838,34 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_transcript_voice_id_for_speaker(
+        &self,
+        call_id: &Uuid,
+        speaker_id: &str,
+        diarized_speaker_id: Option<&str>,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        sqlx::query_scalar::<_, Uuid>(
+            r#"
+            SELECT voice_id
+            FROM call_transcripts
+            WHERE call_id = $1
+              AND voice_id IS NOT NULL
+              AND (
+                  ($3::text IS NOT NULL AND diarized_speaker_id = $3)
+                  OR ($3::text IS NULL AND diarized_speaker_id IS NULL AND speaker_id = $2)
+              )
+            ORDER BY sequence_num ASC
+            LIMIT 1
+            "#,
+        )
+        .bind(call_id)
+        .bind(speaker_id)
+        .bind(diarized_speaker_id)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_call_record_by_call_id(
         &self,
         call_id: &Uuid,
@@ -1410,6 +1438,54 @@ impl CallRepository for PgCallRepo {
         edit::set_custom_speakers(&mut tx, call_record_id, assignments).await?;
         tx.commit().await?;
         Ok(())
+    }
+
+    /// Return stable `(macro_user_id, voice_id)` pairs for one archived call.
+    ///
+    /// `call_record_id` scopes the scan to a single call's archived transcript rows.
+    /// A speaker is returned only when every row for that `speaker_id` has the
+    /// same non-NULL `diarized_speaker_id`; all distinct non-NULL `voice_id`s
+    /// on those rows are returned. Ambiguous, missing, or unresolved speakers
+    /// are skipped. The returned `macro_user_id` is the user's canonical
+    /// `macro_user.id`, suitable for linking to `voice_id` in `macro_user_voice`.
+    #[tracing::instrument(err, skip(self))]
+    async fn get_stable_speaker_voices_for_call_record(
+        &self,
+        call_record_id: &Uuid,
+    ) -> Result<Vec<(Uuid, Uuid)>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            WITH per_speaker AS (
+                SELECT
+                    u.macro_user_id,
+                    COUNT(*) AS total_segments,
+                    COUNT(t.diarized_speaker_id) AS diarized_segments,
+                    COUNT(DISTINCT t.diarized_speaker_id) AS distinct_diarized_speaker_ids,
+                    ARRAY_AGG(DISTINCT t.voice_id) FILTER (WHERE t.voice_id IS NOT NULL) AS voice_ids,
+                    MIN(t.sequence_num) AS first_sequence_num
+                FROM call_record_transcripts t
+                JOIN "User" u
+                  ON u.id = t.speaker_id
+                 AND u.macro_user_id IS NOT NULL
+                WHERE t.call_record_id = $1
+                GROUP BY t.speaker_id, u.macro_user_id
+            )
+            SELECT macro_user_id AS "macro_user_id!", voices.voice_id AS "voice_id!"
+            FROM per_speaker
+            CROSS JOIN LATERAL UNNEST(voice_ids) AS voices(voice_id)
+            WHERE total_segments = diarized_segments
+              AND distinct_diarized_speaker_ids = 1
+            ORDER BY first_sequence_num ASC, voices.voice_id ASC
+            "#,
+            call_record_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.macro_user_id, row.voice_id))
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self))]

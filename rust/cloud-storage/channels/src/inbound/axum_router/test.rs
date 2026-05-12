@@ -13,7 +13,7 @@ use axum::{
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, EntityAccessReceipt, EntityPermission, EntityType,
-        ParticipantRole as EntityParticipantRole, RequiredPermission,
+        ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -157,6 +157,13 @@ impl EntityAccessService for TestAccessService {
         &self,
         _channel_id: &Uuid,
     ) -> Result<Option<entity_access::domain::models::CallChannelInfo>, AccessError> {
+        unimplemented!()
+    }
+
+    async fn get_user_team(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Option<UserTeamInfo>, AccessError> {
         unimplemented!()
     }
 }
