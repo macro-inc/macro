@@ -7,9 +7,6 @@ import { For, Show } from 'solid-js';
 import { Surface } from '@ui';
 
 export type TooltipProps = ParentProps<{
-  /**
-   * A single hotkey token, or a sequence of tokens (rendered as "X then Y").
-   */
   hotkey?: HotkeyToken | HotkeyToken[];
   placement?: Placement;
   as?: 'div' | 'span';
@@ -18,21 +15,14 @@ export type TooltipProps = ParentProps<{
 
 /**
  * @example
- * <Tooltip label="Zoom" hotkey={TOKENS.canvas.zoomInTool}>
- *   <Button>Zoom</Button>
- * </Tooltip>
- *
- * @example
- * <Tooltip label="Open command menu" hotkey={[TOKENS.global.commandMenu, TOKENS.global.commandMenu]}>
- *   <Button>Command</Button>
+ * <Tooltip label="" hotkey={}>
+ *   <div></div>
  * </Tooltip>
  */
 export function Tooltip(props: TooltipProps) {
-  const tokens = (): HotkeyToken[] => {
-    const h = props.hotkey;
-    if (!h) return [];
-    return Array.isArray(h) ? h : [h];
-  };
+  function tokens(): HotkeyToken[] {
+    return props.hotkey == null ? [] : Array.isArray(props.hotkey) ? props.hotkey : [props.hotkey];
+  }
 
   return (
     <KobalteTooltip
