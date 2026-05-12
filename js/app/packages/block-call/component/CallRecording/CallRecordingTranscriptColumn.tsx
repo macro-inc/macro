@@ -78,7 +78,6 @@ export function CallRecordingTranscriptColumn(props: {
             >
               <CallRecordingParticipantsSection
                 record={props.record}
-                withShell={false}
               />
             </CallRecordingSectionShell>
           </Show>
