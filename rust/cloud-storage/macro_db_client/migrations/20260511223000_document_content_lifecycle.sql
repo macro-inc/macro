@@ -1,3 +1,8 @@
+-- Markdown rows are initialized to `unknown` when already uploaded because the
+-- authoritative location requires checking sync-service. Run the custom
+-- dry-run/apply script after this schema migration:
+-- cargo run -p document_storage_service --bin backfill_markdown_content_location -- --apply
+
 ALTER TABLE "Document"
     ADD COLUMN "contentState" TEXT,
     ADD COLUMN "contentLocation" TEXT;

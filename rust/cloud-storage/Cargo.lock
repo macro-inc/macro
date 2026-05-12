@@ -3354,6 +3354,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-s3",
+ "aws-sdk-sqs",
  "aws_lambda_events",
  "documents",
  "lambda_runtime",
@@ -3363,10 +3364,13 @@ dependencies = [
  "model",
  "openssl",
  "s3_key",
+ "serde",
+ "serde_json",
  "sqlx",
  "sync_service_client",
  "tokio",
  "tracing",
+ "urlencoding",
 ]
 
 [[package]]
