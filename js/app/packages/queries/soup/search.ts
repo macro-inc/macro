@@ -164,9 +164,7 @@ export const useSearchChannelQuery = (
           mapChannelSearchResultItem(item, channels())
         )
       ) as WithSearch<ChannelMessageEntity>[];
-      // `total_count` is stable per query (passed through from OpenSearch
-      // `hits.total.value`); reading from the first page is sufficient and
-      // remains defined while later pages are still in flight.
+      // stable per query so first page is enough
       const totalCount = data.pages[0]?.total_count;
       return { items, totalCount };
     },
