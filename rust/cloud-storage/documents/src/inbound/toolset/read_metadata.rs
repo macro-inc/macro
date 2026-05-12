@@ -1,6 +1,6 @@
 //! ReadMetadata tool for reading document metadata.
 
-use crate::domain::ports::DocumentService;
+use crate::domain::ports::{DocumentService, create::DocumentCreationService};
 use crate::domain::response::DocumentMetadataWithContent;
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -46,7 +46,7 @@ pub struct ReadMetadata {
 #[async_trait]
 impl<DSvc, ESvc> AsyncTool<DocumentToolContext<DSvc, ESvc>> for ReadMetadata
 where
-    DSvc: DocumentService,
+    DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
 {
     type Output = ReadMetadataResponse;

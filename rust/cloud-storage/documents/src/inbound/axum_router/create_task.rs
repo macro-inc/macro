@@ -7,14 +7,10 @@ use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
-use crate::domain::create::{
-    DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
-};
+use crate::domain::create::{MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument};
 use crate::domain::models::{CreateTaskRequest, CreateTaskResponse, DocumentError};
 use crate::domain::ports::DocumentService;
 use crate::domain::ports::create::DocumentCreationService;
-use crate::outbound::document_bytes_upload::ReqwestDocumentBytesUploader;
-use crate::outbound::markdown_init::LexicalSyncMarkdownInitializer;
 
 /// Creates a task document with properties and initialized markdown content in
 /// one backend-owned lifecycle.
@@ -46,17 +42,8 @@ pub async fn create_task_handler<
         metadata = metadata.project_id(project_id);
     }
 
-    let markdown_initializer = LexicalSyncMarkdownInitializer::new(
-        state.lexical_client.as_ref(),
-        state.sync_service_client.as_ref(),
-    );
-    let bytes_uploader = ReqwestDocumentBytesUploader::default();
-    let creator = DocumentCreator::new(
-        state.service.as_ref(),
-        &markdown_initializer,
-        &bytes_uploader,
-    );
-    let created = creator
+    let created = state
+        .creator
         .create_markdown_text(
             user_context.macro_user_id,
             NewMarkdownTextDocument {

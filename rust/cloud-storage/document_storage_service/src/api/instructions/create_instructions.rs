@@ -2,13 +2,9 @@ use crate::{
     api::context::ApiContext, model::response::instructions::CreateInstructionsDocumentResponse,
 };
 use axum::{Json, extract::State};
-use documents_hex::domain::create::{
-    DocumentCreator, NewDocumentMetadata, NewMarkdownTextDocument,
-};
+use documents_hex::domain::create::{NewDocumentMetadata, NewMarkdownTextDocument};
 use documents_hex::domain::models::DocumentError;
 use documents_hex::domain::ports::create::DocumentCreationService as _;
-use documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader;
-use documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer;
 use macro_db_client::instructions::create::{
     CreateInstructionsError, insert_instructions_document,
 };
@@ -45,17 +41,9 @@ pub async fn create_instructions_handler(
         ));
     }
 
-    let markdown_initializer = LexicalSyncMarkdownInitializer::new(
-        ctx.documents_state.lexical_client.as_ref(),
-        ctx.documents_state.sync_service_client.as_ref(),
-    );
-    let bytes_uploader = ReqwestDocumentBytesUploader::default();
-    let creator = DocumentCreator::new(
-        ctx.documents_state.service.as_ref(),
-        &markdown_initializer,
-        &bytes_uploader,
-    );
-    let created = creator
+    let created = ctx
+        .documents_state
+        .creator
         .create_markdown_text(
             user_id.clone(),
             NewMarkdownTextDocument::empty_note(NewDocumentMetadata::new(INSTRUCTIONS_FILE_NAME)),

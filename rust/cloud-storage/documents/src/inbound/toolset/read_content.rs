@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use crate::domain::{
     models::{CommentThread, LocationQueryParams},
-    ports::DocumentService,
+    ports::{DocumentService, create::DocumentCreationService},
     response::LocationResponseV3,
 };
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -76,7 +76,7 @@ pub struct ReadContent {
 #[async_trait]
 impl<DSvc, ESvc> AsyncTool<DocumentToolContext<DSvc, ESvc>> for ReadContent
 where
-    DSvc: DocumentService,
+    DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
 {
     type Output = ReadContentResponse;
@@ -188,7 +188,10 @@ where
 
 /// Gets the document content from location
 #[tracing::instrument(skip(service_context), err)]
-async fn get_document_content_from_location<DSvc: DocumentService, ESvc: EntityAccessService>(
+async fn get_document_content_from_location<
+    DSvc: DocumentService + DocumentCreationService,
+    ESvc: EntityAccessService,
+>(
     service_context: ServiceContext<DocumentToolContext<DSvc, ESvc>>,
     document_context: &DocumentBasic,
     entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,

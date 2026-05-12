@@ -1,6 +1,7 @@
 //! Port definitions for backend-owned document creation.
 
 use std::future::Future;
+use std::sync::Arc;
 
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -62,4 +63,45 @@ pub trait DocumentCreationService: Send + Sync {
 
     /// Clean up a document that failed after its database row was created.
     fn cleanup_created_document(&self, document_id: &str) -> impl Future<Output = ()> + Send;
+}
+
+impl<T> DocumentCreationService for Arc<T>
+where
+    T: DocumentCreationService + ?Sized,
+{
+    async fn create_document(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        args: CreateDocumentRepoArgs,
+        job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        (**self).create_document(user_id, args, job_id).await
+    }
+
+    async fn handle_task_properties(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
+        (**self)
+            .handle_task_properties(user_id, document_id, request)
+            .await
+    }
+
+    async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), DocumentError> {
+        (**self).mark_document_uploaded(document_id).await
+    }
+
+    async fn set_document_content(
+        &self,
+        document_id: &str,
+        content: DocumentContent,
+    ) -> Result<(), DocumentError> {
+        (**self).set_document_content(document_id, content).await
+    }
+
+    async fn cleanup_created_document(&self, document_id: &str) {
+        (**self).cleanup_created_document(document_id).await
+    }
 }

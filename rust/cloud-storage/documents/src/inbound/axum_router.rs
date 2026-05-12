@@ -83,7 +83,15 @@ impl IntoResponse for DocumentError {
     }
 }
 
-/// Router state containing the document service, entity access service, and DB pool.
+/// Default backend-owned document creation use case for the document router.
+#[cfg(feature = "document_create_adapters")]
+pub type DefaultDocumentCreator<T> = crate::domain::create::DocumentCreator<
+    Arc<T>,
+    crate::outbound::markdown_init::LexicalSyncMarkdownInitializer,
+    crate::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
+>;
+
+/// Router state containing document router dependencies.
 pub struct DocumentRouterState<T, Svc> {
     /// The document service implementation.
     pub service: Arc<T>,
@@ -91,12 +99,9 @@ pub struct DocumentRouterState<T, Svc> {
     pub access_service: Arc<Svc>,
     /// The database pool (used by middleware for document lookups).
     pub pool: PgPool,
-    /// Lexical-service client for backend-owned markdown initialization.
-    #[cfg(feature = "document_create")]
-    pub lexical_client: Arc<lexical_client::LexicalClient>,
-    /// Sync-service client for backend-owned markdown initialization.
-    #[cfg(feature = "document_create")]
-    pub sync_service_client: Arc<sync_service_client::SyncServiceClient>,
+    /// Backend-owned document creation use case.
+    #[cfg(feature = "document_create_adapters")]
+    pub creator: DefaultDocumentCreator<T>,
 }
 
 // Manual Clone impl so T and Svc don't need to be Clone (they're behind Arc).
@@ -106,10 +111,8 @@ impl<T, Svc> Clone for DocumentRouterState<T, Svc> {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
             pool: self.pool.clone(),
-            #[cfg(feature = "document_create")]
-            lexical_client: self.lexical_client.clone(),
-            #[cfg(feature = "document_create")]
-            sync_service_client: self.sync_service_client.clone(),
+            #[cfg(feature = "document_create_adapters")]
+            creator: self.creator.clone(),
         }
     }
 }

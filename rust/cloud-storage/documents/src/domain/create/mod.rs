@@ -407,28 +407,19 @@ impl CreatedDocument {
 }
 
 /// Service for creating backend-owned document content.
-pub struct DocumentCreator<'a, Svc, MarkdownInit, BytesUpload>
-where
-    Svc: DocumentCreationService,
-    MarkdownInit: MarkdownInitializationPort,
-    BytesUpload: DocumentBytesUploadPort,
-{
-    document_service: &'a Svc,
-    markdown_initializer: &'a MarkdownInit,
-    bytes_uploader: &'a BytesUpload,
+#[derive(Clone)]
+pub struct DocumentCreator<Svc, MarkdownInit, BytesUpload> {
+    document_service: Svc,
+    markdown_initializer: MarkdownInit,
+    bytes_uploader: BytesUpload,
 }
 
-impl<'a, Svc, MarkdownInit, BytesUpload> DocumentCreator<'a, Svc, MarkdownInit, BytesUpload>
-where
-    Svc: DocumentCreationService,
-    MarkdownInit: MarkdownInitializationPort,
-    BytesUpload: DocumentBytesUploadPort,
-{
+impl<Svc, MarkdownInit, BytesUpload> DocumentCreator<Svc, MarkdownInit, BytesUpload> {
     /// Construct a document creator.
     pub fn new(
-        document_service: &'a Svc,
-        markdown_initializer: &'a MarkdownInit,
-        bytes_uploader: &'a BytesUpload,
+        document_service: Svc,
+        markdown_initializer: MarkdownInit,
+        bytes_uploader: BytesUpload,
     ) -> Self {
         Self {
             document_service,
@@ -436,7 +427,14 @@ where
             bytes_uploader,
         }
     }
+}
 
+impl<Svc, MarkdownInit, BytesUpload> DocumentCreator<Svc, MarkdownInit, BytesUpload>
+where
+    Svc: DocumentCreationService,
+    MarkdownInit: MarkdownInitializationPort,
+    BytesUpload: DocumentBytesUploadPort,
+{
     /// Create a plaintext document using the lifecycle implied by its file type.
     #[tracing::instrument(skip(self, document), err)]
     pub async fn create_plain_text(

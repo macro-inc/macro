@@ -2,12 +2,10 @@
 
 use std::str::FromStr;
 
-use crate::domain::create::{DocumentCreator, NewDocumentMetadata, NewPlainTextDocument};
+use crate::domain::create::{NewDocumentMetadata, NewPlainTextDocument};
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
 use crate::domain::ports::create::DocumentCreationService;
-use crate::outbound::document_bytes_upload::ReqwestDocumentBytesUploader;
-use crate::outbound::markdown_init::LexicalSyncMarkdownInitializer;
 use ai::tool::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::Context;
 use async_trait::async_trait;
@@ -79,17 +77,6 @@ where
             })?;
         let user_id: MacroUserIdStr<'static> = request_context.user_id.clone();
 
-        let markdown_initializer = LexicalSyncMarkdownInitializer::new(
-            service_context.lexical_client.as_ref(),
-            service_context.sync_service_client.as_ref(),
-        );
-        let bytes_uploader = ReqwestDocumentBytesUploader::default();
-        let creator = DocumentCreator::new(
-            service_context.service.as_ref(),
-            &markdown_initializer,
-            &bytes_uploader,
-        );
-
         let metadata = NewDocumentMetadata::new(self.document_name.clone());
 
         let document = NewPlainTextDocument::builder(metadata)
@@ -99,7 +86,8 @@ where
             .build()
             .map_err(failed_to_create_document)?;
 
-        let response = creator
+        let response = service_context
+            .creator
             .create_plain_text(user_id, document)
             .await
             .map(|document| document.into_response())

@@ -7,17 +7,15 @@ use crate::domain::models::DocumentError;
 use crate::domain::ports::markdown::MarkdownInitializationPort;
 
 /// Markdown initializer backed by lexical-service and sync-service clients.
-pub struct LexicalSyncMarkdownInitializer<'a> {
-    lexical_client: &'a LexicalClient,
-    sync_service_client: &'a SyncServiceClient,
+#[derive(Clone)]
+pub struct LexicalSyncMarkdownInitializer {
+    lexical_client: LexicalClient,
+    sync_service_client: SyncServiceClient,
 }
 
-impl<'a> LexicalSyncMarkdownInitializer<'a> {
+impl LexicalSyncMarkdownInitializer {
     /// Construct a lexical/sync-backed markdown initializer.
-    pub fn new(
-        lexical_client: &'a LexicalClient,
-        sync_service_client: &'a SyncServiceClient,
-    ) -> Self {
+    pub fn new(lexical_client: LexicalClient, sync_service_client: SyncServiceClient) -> Self {
         Self {
             lexical_client,
             sync_service_client,
@@ -25,7 +23,7 @@ impl<'a> LexicalSyncMarkdownInitializer<'a> {
     }
 }
 
-impl MarkdownInitializationPort for LexicalSyncMarkdownInitializer<'_> {
+impl MarkdownInitializationPort for LexicalSyncMarkdownInitializer {
     #[tracing::instrument(skip(self, markdown), err)]
     async fn initialize_existing_markdown(
         &self,

@@ -52,8 +52,10 @@ impl AppContext {
 
     /// Handle one normalized object-created event.
     pub async fn handle_object_created(&self, event: ObjectCreated) -> Result<(), anyhow::Error> {
-        let markdown_initializer =
-            LexicalSyncMarkdownInitializer::new(&self.lexical_client, &self.sync_service_client);
+        let markdown_initializer = LexicalSyncMarkdownInitializer::new(
+            self.lexical_client.clone(),
+            self.sync_service_client.clone(),
+        );
 
         self.finalizer
             .handle_object_created(event, &markdown_initializer)

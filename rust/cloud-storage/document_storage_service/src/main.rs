@@ -557,11 +557,17 @@ async fn main() -> anyhow::Result<()> {
         permissions_token_secret: comms_permissions_token_secret,
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
-            service: document_service,
+            service: document_service.clone(),
             access_service: entity_access_service.clone(),
             pool: db.clone(),
-            lexical_client: lexical_client.clone(),
-            sync_service_client: sync_service_client.clone(),
+            creator: documents_hex::domain::create::DocumentCreator::new(
+                document_service,
+                documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer::new(
+                    lexical_client.as_ref().clone(),
+                    sync_service_client.as_ref().clone(),
+                ),
+                documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
+            ),
         },
         channels_state: ChannelsRouterState::new(
             ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),
