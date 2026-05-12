@@ -1013,7 +1013,7 @@ fn build_grouped_items_cte(builder: &mut QueryBuilder<'_, Postgres>, grouping: &
     // FilteredGroupedItems: apply per-group limit when not fetching a specific group
     if grouping.group_key.is_none() {
         builder.push("FilteredGroupedItems AS (SELECT * FROM GroupedItems WHERE row_in_group <= ");
-        builder.push(&PER_GROUP_LIMIT.to_string());
+        builder.push(PER_GROUP_LIMIT.to_string());
         builder.push("), ");
     }
 }
@@ -1101,15 +1101,15 @@ fn build_grouped_query<'a>(
 
     builder.push("Combined AS (");
     builder.push(
-        &GROUPED_DOCUMENT_DETAIL_CLAUSE.replace("GroupedItems gi", &format!("{} gi", source_table)),
+        GROUPED_DOCUMENT_DETAIL_CLAUSE.replace("GroupedItems gi", &format!("{} gi", source_table)),
     );
     builder.push(" UNION ALL ");
     builder.push(
-        &GROUPED_CHAT_DETAIL_CLAUSE.replace("GroupedItems gi", &format!("{} gi", source_table)),
+        GROUPED_CHAT_DETAIL_CLAUSE.replace("GroupedItems gi", &format!("{} gi", source_table)),
     );
     builder.push(" UNION ALL ");
     builder.push(
-        &GROUPED_PROJECT_DETAIL_CLAUSE.replace("GroupedItems gi", &format!("{} gi", source_table)),
+        GROUPED_PROJECT_DETAIL_CLAUSE.replace("GroupedItems gi", &format!("{} gi", source_table)),
     );
     builder.push(") ");
 
@@ -1118,7 +1118,7 @@ fn build_grouped_query<'a>(
 
     match &grouping.field {
         GroupByField::Date => {
-            builder.push(&date_bucket_order_expr().replace("sort_ts", "\"sort_ts\""));
+            builder.push(date_bucket_order_expr().replace("sort_ts", "\"sort_ts\""));
         }
         _ => {
             builder.push("\"group_key\"");

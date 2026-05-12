@@ -59,7 +59,7 @@ pub mod date_buckets {
             LAST_WEEK => "Last Week",
             THIS_MONTH => "This Month",
             LAST_MONTH => "Last Month",
-            OLDER | _ => "Older",
+            _ => "Older",
         }
     }
 

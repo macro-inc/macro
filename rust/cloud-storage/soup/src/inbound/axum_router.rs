@@ -380,14 +380,16 @@ fn build_grouped_response_with_cursors(
     use models_pagination::{Base64Str, CursorVal, CursorWithValAndFilter, Identify, SortOn};
     use std::collections::HashMap;
 
-    // Track: (total_count, page_count, start_index, last_item_id, last_cursor_val)
-    type GroupData = (
-        u32,
-        u32,
-        u32,
-        Option<Uuid>,
-        Option<CursorVal<SimpleSortMethod>>,
-    );
+    // Track group metadata and cursor state
+    struct GroupData {
+        total_count: u32,
+        page_count: u32,
+        start_index: u32,
+        last_item_id: Option<Uuid>,
+        last_cursor_val: Option<CursorVal<SimpleSortMethod>>,
+        label: Option<String>,
+        display_order: Option<i32>,
+    }
     let mut group_stats: HashMap<String, GroupData> = HashMap::new();
     let mut api_items = Vec::with_capacity(items.len());
 
@@ -401,17 +403,19 @@ fn build_grouped_response_with_cursors(
         let item_id = grouped_item.item.id();
         let cursor_val = get_cursor_val(&grouped_item.item);
 
-        let entry = group_stats.entry(key).or_insert((
-            grouped_item.group_total_count,
-            0,
-            idx as u32,
-            None,
-            None,
-        ));
-        entry.1 += 1;
+        let entry = group_stats.entry(key).or_insert_with(|| GroupData {
+            total_count: grouped_item.group_total_count,
+            page_count: 0,
+            start_index: idx as u32,
+            last_item_id: None,
+            last_cursor_val: None,
+            label: grouped_item.group_label.clone(),
+            display_order: grouped_item.group_display_order,
+        });
+        entry.page_count += 1;
         // Track last item's cursor info
-        entry.3 = Some(item_id);
-        entry.4 = Some(cursor_val);
+        entry.last_item_id = Some(item_id);
+        entry.last_cursor_val = Some(cursor_val);
 
         api_items.push(SoupApiItem::from_frecency_soup_item(FrecencySoupItem {
             item: grouped_item.item,
@@ -421,43 +425,45 @@ fn build_grouped_response_with_cursors(
 
     let mut groups: Vec<ApiGroupMeta> = group_stats
         .into_iter()
-        .map(
-            |(key, (total_count, page_count, start_index, last_id, last_val))| {
-                let (label, display_order) = resolve_group_label_and_order(&key, group_by);
+        .map(|(key, data)| {
+            // Use DB-provided label/order if available, otherwise compute from key
+            let (label, display_order) = match (data.label, data.display_order) {
+                (Some(l), d) => (l, d),
+                (None, _) => resolve_group_label_and_order(&key, group_by),
+            };
 
-                // Compute cursor if there are more items in this group
-                let has_more = page_count < total_count;
-                let next_cursor = if has_more {
-                    last_id.and_then(|id| {
-                        last_val.map(|val| {
-                            let cursor: CursorWithValAndFilter<
-                                Uuid,
-                                SimpleSortMethod,
-                                EntityFilterAst,
-                            > = CursorWithValAndFilter {
-                                id,
-                                limit: page_count as usize,
-                                val,
-                                filter: filters.clone(),
-                            };
-                            Base64Str::encode_json(cursor).type_erase()
-                        })
+            // Compute cursor if there are more items in this group
+            let has_more = data.page_count < data.total_count;
+            let next_cursor = if has_more {
+                data.last_item_id.and_then(|id| {
+                    data.last_cursor_val.map(|val| {
+                        let cursor: CursorWithValAndFilter<
+                            Uuid,
+                            SimpleSortMethod,
+                            EntityFilterAst,
+                        > = CursorWithValAndFilter {
+                            id,
+                            limit: data.page_count as usize,
+                            val,
+                            filter: filters.clone(),
+                        };
+                        Base64Str::encode_json(cursor).type_erase()
                     })
-                } else {
-                    None
-                };
+                })
+            } else {
+                None
+            };
 
-                ApiGroupMeta {
-                    key,
-                    label,
-                    display_order,
-                    total_count,
-                    page_count,
-                    start_index,
-                    next_cursor,
-                }
-            },
-        )
+            ApiGroupMeta {
+                key,
+                label,
+                display_order,
+                total_count: data.total_count,
+                page_count: data.page_count,
+                start_index: data.start_index,
+                next_cursor,
+            }
+        })
         .collect();
 
     groups.sort_by(|a, b| {
