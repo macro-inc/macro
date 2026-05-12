@@ -16,9 +16,6 @@ use super::TeamRouterState;
     delete,
     path = "/team",
     operation_id = "delete_team",
-    params(
-        ("team_id" = String, Path, description = "The ID of the team to delete")
-    ),
     responses(
         (status = 200),
         (status = 400, body = ErrorResponse),
