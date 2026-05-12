@@ -27,9 +27,10 @@ WHERE property_definition_id = '00000001-0000-0000-0000-000000000002';
 -- Speed up access checks for users with many channel/team sources.
 --
 -- The soup query first filters entity_access by source_id and then immediately
--- needs entity_type/entity_id to join or semi-join against candidate entities.
--- The existing single-column source_id index can require extra heap reads and
--- a sort/dedup step. This covering btree index keeps the fields needed by the
--- access CTE/check together in index order.
+-- needs entity_type/entity_id::text to join or semi-join against candidate
+-- entities, whose ids are TEXT columns. The existing single-column source_id
+-- index can require extra heap reads and a sort/dedup step. This expression
+-- btree index matches the hot-path predicate and keeps the fields needed by
+-- the access CTE/check together in index order.
 CREATE INDEX IF NOT EXISTS idx_entity_access_source_type_entity
-ON entity_access (source_id, entity_type, entity_id);
+ON entity_access (source_id, entity_type, (entity_id::text));
