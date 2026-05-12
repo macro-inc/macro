@@ -36,6 +36,7 @@ import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import IconShared from '@macro-icons/wide/share.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';
+import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { useEmailContext } from './EmailContext';
 import {
@@ -170,19 +171,19 @@ export function TopBar(props: {
       buttonComponent: () => {
         const [hovering, setHovering] = createSignal(false);
         return (
-          <div class="border border-edge-muted flex items-stretch rounded-xs">
-            <button
-              class="h-7 px-2 flex items-center gap-1 text-xs hover:bg-hover hover-transition-bg"
-              onMouseEnter={() => setHovering(true)}
-              onMouseLeave={() => setHovering(false)}
-              onClick={openTaskCompose}
-            >
-              <div class="size-4">
-                <AnimatedTaskIcon triggerAnimation={hovering()} />
-              </div>
-              <span class="text-ink">Task</span>
-            </button>
-          </div>
+          <Button
+            tooltip="Create Task"
+            variant="base"
+            size="sm"
+            onMouseEnter={() => setHovering(true)}
+            onMouseLeave={() => setHovering(false)}
+            onClick={openTaskCompose}
+            depth={2}
+            class="bg-panel text-ink-muted"
+          >
+            <AnimatedTaskIcon triggerAnimation={hovering()} />
+            <span class="text-xs text-ink-extra-muted">Task</span>
+          </Button>
         );
       },
     },

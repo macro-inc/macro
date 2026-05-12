@@ -53,13 +53,13 @@ export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
       ref={props.ref}
     >
       <div
-        class="flex-1 h-full flex items-center gap-0.5 px-2"
+        class="flex-1 h-full flex items-center gap-1 px-2"
         ref={(ref) => {
           panel.layoutRefs.toolbarLeft = ref;
         }}
       />
       <div
-        class="flex h-full items-center gap-0.5 px-2"
+        class="flex h-full items-center gap-1 px-2"
         ref={(ref) => {
           panel.layoutRefs.toolbarRight = ref;
         }}
