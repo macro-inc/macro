@@ -41,6 +41,7 @@ jobs:
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
           dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Run Biome
         working-directory: infra
         run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
@@ -56,6 +57,7 @@ jobs:
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
           dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: install
         working-directory: infra
         run: bun install --frozen-lockfile

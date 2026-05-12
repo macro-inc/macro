@@ -44,6 +44,7 @@ jobs:
         uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
 
       - name: Materialize dev shell into /nix/store
         shell: bash

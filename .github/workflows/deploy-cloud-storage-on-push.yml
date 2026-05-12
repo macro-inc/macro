@@ -128,6 +128,7 @@ jobs:
         uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
 
       - name: Build prebuilt binaries
         shell: bash
@@ -182,11 +183,14 @@ jobs:
         uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
 
       - name: Build Lambda artifact
         shell: bash
         env:
           LAMBDA: ${{ matrix.lambda }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
           nix develop .# -c bash -lc '
