@@ -14,6 +14,18 @@ inputs:
     description: Enter the repository Nix dev shell after configuring Cachix.
     required: false
     default: 'false'
+  sccache-bucket:
+    description: Optional S3 bucket for shared sccache storage.
+    required: false
+    default: ''
+  sccache-region:
+    description: AWS region for the shared sccache S3 bucket.
+    required: false
+    default: us-east-1
+  sccache-s3-key-prefix:
+    description: S3 key prefix for shared sccache storage.
+    required: false
+    default: sccache/
 
 runs:
   using: composite
@@ -40,6 +52,26 @@ runs:
           cachix authtoken "$CACHIX_AUTH_TOKEN"
         fi
         cachix use "$CACHIX_CACHE_NAME"
+
+    - name: Configure sccache
+      shell: bash
+      env:
+        SCCACHE_BUCKET_INPUT: ${{ inputs.sccache-bucket }}
+        SCCACHE_REGION_INPUT: ${{ inputs.sccache-region }}
+        SCCACHE_S3_KEY_PREFIX_INPUT: ${{ inputs.sccache-s3-key-prefix }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$HOME/.cache/sccache"
+        {
+          echo "SCCACHE_DIR=$HOME/.cache/sccache"
+          echo "SCCACHE_CACHE_SIZE=5G"
+          echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
+          if [ -n "$SCCACHE_BUCKET_INPUT" ]; then
+            echo "SCCACHE_BUCKET=$SCCACHE_BUCKET_INPUT"
+            echo "SCCACHE_REGION=$SCCACHE_REGION_INPUT"
+            echo "SCCACHE_S3_KEY_PREFIX=$SCCACHE_S3_KEY_PREFIX_INPUT"
+          fi
+        } >> "$GITHUB_ENV"
 
     - name: Enter Nix dev shell
       if: ${{ inputs.dev-shell == 'true' }}

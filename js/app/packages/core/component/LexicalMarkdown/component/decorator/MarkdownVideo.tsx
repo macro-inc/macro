@@ -336,7 +336,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
             (state() === 'ok' || state() === 'error')
           }
         >
-          <div class="size-full absolute top-0 left-0 pointer-events-none bg-edge" />
+          <div class="size-full absolute top-0 left-0 pointer-events-none bg-edge/10" />
           <MediaButtons
             delete={interactable() ? deleteVideo : undefined}
             enlarge={state() === 'ok' ? viewFull : undefined}

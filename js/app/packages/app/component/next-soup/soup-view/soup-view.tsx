@@ -63,10 +63,10 @@ import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { Resize } from '@core/component/Resize';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
@@ -90,7 +90,7 @@ import {
 } from '@queries/soup/normalized-cache';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
-import { Button, cn } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -361,11 +361,7 @@ export const SoupView = (props: SoupViewProps) => {
                   )}
                   collapsed={() => (
                     <Show when={!narrowSearchExpanded()}>
-                      <Tooltip
-                        tooltip={
-                          <LabelAndHotKey label="Search" shortcut="⌘F" />
-                        }
-                      >
+                      <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                         <Button
                           variant="ghost"
                           class="p-1 rounded-xs"

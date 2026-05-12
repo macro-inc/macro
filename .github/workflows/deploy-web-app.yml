@@ -43,6 +43,8 @@ on:
         required: true
       CACHIX_AUTH_TOKEN:
         required: true
+      SCCACHE_BUCKET:
+        required: false
 
 concurrency:
   group: ${{ github.workflow }}-web-app-${{ inputs.environment }}
@@ -62,6 +64,7 @@ jobs:
         uses: ./.github/actions/setup-reqs-web
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Build
         working-directory: js/app
         run: just build-${{ inputs.environment }}

@@ -98,6 +98,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
             teams::inbound::axum_router::teams_router(
                 teams::inbound::axum_router::TeamRouterState {
                     service: state.teams_service.clone(),
+                    entity_access_service: state.entity_access_service.clone(),
                 },
             )
             .layer(

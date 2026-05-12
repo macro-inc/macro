@@ -1,5 +1,5 @@
 import { isListViewID } from '@app/constants/list-views';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+
 import {
   ENABLE_PREVIEW,
   ENABLE_PROJECT_VIEW_PREVIEW,
@@ -31,9 +31,8 @@ function SplitBackButton() {
   return (
     <Button
       class="p-1"
-      tooltip={
-        <LabelAndHotKey label="Go Back" hotkeyToken={TOKENS.split.go.back} />
-      }
+      label="Go Back"
+      hotkey={TOKENS.split.go.back}
       disabled={!context.handle.canGoBack()}
       onClick={context.handle.goBack}
     >
@@ -47,12 +46,8 @@ function SplitForwardButton() {
   if (!context) return '';
   return (
     <Button
-      tooltip={
-        <LabelAndHotKey
-          label="Go Forward"
-          hotkeyToken={TOKENS.split.go.forward}
-        />
-      }
+      label="Go Forward"
+      hotkey={TOKENS.split.go.forward}
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
       class={cn(
@@ -73,16 +68,10 @@ function SplitSpotlightButton() {
     <Show when={canSpotlight(layout.manager)}>
       <Button
         class="p-1 rounded-xs hidden"
-        tooltip={
-          <LabelAndHotKey
-            label={
-              context.handle.isSpotLight()
-                ? 'Minimize Split'
-                : 'Spotlight Split'
-            }
-            hotkeyToken={TOKENS.window.spotlight.toggle}
-          />
+        label={
+          context.handle.isSpotLight() ? 'Minimize Split' : 'Spotlight Split'
         }
+        hotkey={TOKENS.window.spotlight.toggle}
         onClick={() => context.handle.toggleSpotlight()}
       >
         {context.handle.isSpotLight() ? (
@@ -110,9 +99,8 @@ function SplitCloseButton() {
     <Show when={layout.manager.splits().length > 1}>
       <Button
         class="p-1"
-        tooltip={
-          <LabelAndHotKey label={label()} hotkeyToken={TOKENS.split.close} />
-        }
+        label={label()}
+        hotkey={TOKENS.split.close}
         onClick={context.handle.close}
       >
         <CloseIcon class="size-4" />
@@ -142,12 +130,8 @@ function _SplitPreviewToggle() {
           classList={{
             'bg-accent/20 text-accent': preview(),
           }}
-          tooltip={
-            <LabelAndHotKey
-              label={!preview() ? 'Split View (Preview)' : 'Full View (List)'}
-              hotkeyToken={TOKENS.unifiedList.togglePreview}
-            />
-          }
+          label={!preview() ? 'Split View (Preview)' : 'Full View (List)'}
+          hotkey={TOKENS.unifiedList.togglePreview}
           tabIndex={-1}
           onClick={() => setPreview((prev) => !prev)}
         >

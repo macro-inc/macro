@@ -1,6 +1,5 @@
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { DropdownMenuContent, MENU_ITEM_CLASS } from '@core/component/Menu';
-import { Tooltip } from '@core/component/Tooltip';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Info from '@icon/regular/info.svg';
 import Microphone from '@icon/regular/microphone.svg';
@@ -13,7 +12,7 @@ import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
 import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
 import { useCallContext } from '../CallContext';
 
@@ -259,7 +258,7 @@ export function CallControlsPanelSmallRow(
                   />
                   <Tooltip
                     placement="left"
-                    tooltip="When on, all team members can view and search this call's transcript and AI summary."
+                    label="When on, all team members can view and search this call's transcript and AI summary."
                   >
                     <Info class="size-3 text-ink-subtle" />
                   </Tooltip>

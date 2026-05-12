@@ -1,4 +1,5 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { Hotkey } from '@ui';
@@ -34,7 +35,7 @@ export const EntitySelectionToolbarModal = (
             class="p-1 px-2 flex gap-1 border-edge-muted rounded-xs border items-center size-full hover:bg-hover hover-transition-bg"
           >
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey shortcut="cmd+k" class="space-x-1" />
+              <Hotkey token={TOKENS.global.commandMenu} class="space-x-1" />
             </div>
             <span>Actions</span>
           </button>
@@ -43,7 +44,11 @@ export const EntitySelectionToolbarModal = (
             class="p-1 px-2 flex gap-1 border-edge-muted rounded-xs border items-center size-full hover:bg-hover hover-transition-bg"
           >
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
-              <Hotkey shortcut="ESC" />
+              <Hotkey
+                token={
+                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
+                }
+              />
             </div>
             <span>Clear</span>
           </button>

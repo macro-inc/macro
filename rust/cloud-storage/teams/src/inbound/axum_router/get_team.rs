@@ -1,6 +1,7 @@
-use axum::{
-    Json,
-    extract::{Path, State},
+use axum::{Json, extract::State};
+use entity_access::{
+    domain::{models::MemberTeamRole, ports::EntityAccessService},
+    inbound::axum_extractors::MacroUserTeamExtractor,
 };
 use model_error_response::ErrorResponse;
 
@@ -9,16 +10,13 @@ use crate::domain::{
     team_repo::TeamService,
 };
 
-use super::{TeamPathParam, TeamRouterState, middleware::TeamAccessRoleExtractor};
+use super::TeamRouterState;
 
 /// Gets a team by ID.
 #[utoipa::path(
     get,
-    path = "/team/{team_id}",
+    path = "/team",
     operation_id = "get_team",
-    params(
-        ("team_id" = String, Path, description = "The ID of the team to retrieve")
-    ),
     responses(
         (status = 200, body = TeamWithMembers),
         (status = 400, body = ErrorResponse),
@@ -28,11 +26,10 @@ use super::{TeamPathParam, TeamRouterState, middleware::TeamAccessRoleExtractor}
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn handler<T: TeamService>(
-    _access: TeamAccessRoleExtractor<super::middleware::MemberRole, T>,
-    State(state): State<TeamRouterState<T>>,
-    Path(TeamPathParam { team_id }): Path<TeamPathParam>,
+pub async fn handler<T: TeamService, Eas: EntityAccessService>(
+    access: MacroUserTeamExtractor<MemberTeamRole, Eas>,
+    State(state): State<TeamRouterState<T, Eas>>,
 ) -> Result<Json<TeamWithMembers>, TeamError> {
-    let team = state.service.get_team(&team_id).await?;
+    let team = state.service.get_team(access.entity_access_receipt).await?;
     Ok(Json(team))
 }

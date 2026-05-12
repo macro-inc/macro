@@ -1,10 +1,9 @@
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
-import { Tooltip } from '@core/component/Tooltip';
 import ArrowsOut from '@icon/regular/arrows-out.svg';
 import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { cn } from '@ui';
+import { cn, Surface, Tooltip } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';
 import { useCallContext } from '../CallContext';
 import type { CallControlsVariant } from '../CallControls/CallControls';
@@ -12,7 +11,6 @@ import { CallControls } from '../CallControls/CallControls';
 import type { InCallPanelProps } from '../InCallPanel/types';
 import { openChannelCallTab } from '../open-channel-call-tab';
 import {
-  IN_CALL_ROSTER_CARD_CLASS,
   InCallParticipantsListPopover,
   InCallRosterListSection,
 } from './InCallParticipantsListPopover';
@@ -136,7 +134,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
             <Show when={!slim()}>
               <Tooltip
                 placement="top"
-                tooltip="When on, all team members can view and search this call's transcript and AI summary."
+                label="When on, all team members can view and search this call's transcript and AI summary."
               >
                 <div class="flex items-center gap-1 px-1">
                   <ShareNetwork
@@ -203,14 +201,14 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
                 defaultEmptyUserPlaceholder
                 overflowChipClass="bg-edge-muted"
                 overflowTooltipContent={(close) => (
-                  <div class={IN_CALL_ROSTER_CARD_CLASS}>
+                  <Surface depth={3} class="min-w-48 max-w-72">
                     <InCallRosterListSection
                       panel={panel}
                       members={orderedMembers()}
                       onClose={() => close()}
                       allowOpenDm={false}
                     />
-                  </div>
+                  </Surface>
                 )}
               >
                 {(image) => (

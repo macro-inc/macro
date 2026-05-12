@@ -603,21 +603,20 @@ export const authServiceClient = {
     );
   },
 
-  async getTeam(teamId: string) {
+  async getTeam() {
     return mapOk(
-      await fetchWithAuth<TeamWithMembers>(`${authHost}/team/${teamId}`, {
+      await fetchWithAuth<TeamWithMembers>(`${authHost}/team`, {
         method: 'GET',
       }),
       (result) => result
     );
   },
 
-  async getTeamInvites(teamId: string) {
+  async getTeamInvites() {
     return mapOk(
-      await fetchWithAuth<TeamInvitesResponse>(
-        `${authHost}/team/${teamId}/invites`,
-        { method: 'GET' }
-      ),
+      await fetchWithAuth<TeamInvitesResponse>(`${authHost}/team/invites`, {
+        method: 'GET',
+      }),
       (result) => result
     );
   },
@@ -650,9 +649,9 @@ export const authServiceClient = {
     );
   },
 
-  async patchTeam(teamId: string, args: PatchTeamRequest) {
+  async patchTeam(args: PatchTeamRequest) {
     return mapOk(
-      await fetchWithAuth<{}>(`${authHost}/team/${teamId}`, {
+      await fetchWithAuth<{}>(`${authHost}/team`, {
         method: 'PATCH',
         body: JSON.stringify(args),
       }),
@@ -660,9 +659,9 @@ export const authServiceClient = {
     );
   },
 
-  async patchTeamUserTier(teamId: string, args: PatchTeamUserTierRequest) {
+  async patchTeamUserTier(args: PatchTeamUserTierRequest) {
     return mapOk(
-      await fetchWithAuth<{}>(`${authHost}/team/${teamId}/tier`, {
+      await fetchWithAuth<{}>(`${authHost}/team/tier`, {
         method: 'PATCH',
         body: JSON.stringify(args),
       }),
@@ -670,9 +669,9 @@ export const authServiceClient = {
     );
   },
 
-  async inviteToTeam(teamId: string, args: InviteToTeamRequest) {
+  async inviteToTeam(args: InviteToTeamRequest) {
     return mapOk(
-      await fetchWithAuth<{}>(`${authHost}/team/${teamId}/invite`, {
+      await fetchWithAuth<{}>(`${authHost}/team/invite`, {
         method: 'POST',
         body: JSON.stringify(args),
       }),
@@ -680,28 +679,27 @@ export const authServiceClient = {
     );
   },
 
-  async deleteTeamInvite(teamId: string, teamInviteId: string) {
+  async deleteTeamInvite(teamInviteId: string) {
     return mapOk(
-      await fetchWithAuth<{}>(
-        `${authHost}/team/${teamId}/invite/${teamInviteId}`,
-        { method: 'DELETE' }
-      ),
-      () => undefined
-    );
-  },
-
-  async removeUserFromTeam(teamId: string, userId: string) {
-    return mapOk(
-      await fetchWithAuth<{}>(`${authHost}/team/${teamId}/remove/${userId}`, {
+      await fetchWithAuth<{}>(`${authHost}/team/invite/${teamInviteId}`, {
         method: 'DELETE',
       }),
       () => undefined
     );
   },
 
-  async deleteTeam(teamId: string) {
+  async removeUserFromTeam(userId: string) {
     return mapOk(
-      await fetchWithAuth<{}>(`${authHost}/team/${teamId}`, {
+      await fetchWithAuth<{}>(`${authHost}/team/remove/${userId}`, {
+        method: 'DELETE',
+      }),
+      () => undefined
+    );
+  },
+
+  async deleteTeam() {
+    return mapOk(
+      await fetchWithAuth<{}>(`${authHost}/team`, {
         method: 'DELETE',
       }),
       () => undefined

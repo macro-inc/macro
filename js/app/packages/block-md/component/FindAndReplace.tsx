@@ -6,7 +6,6 @@ import {
   DO_SEARCH_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import type { FloatingStyle } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
-import { Tooltip } from '@core/component/Tooltip';
 import { IS_MAC } from '@core/constant/isMac';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { useCanEdit } from '@core/signal/permissions';
@@ -18,7 +17,7 @@ import CaretUp from '@icon/regular/caret-up.svg';
 import MagnifyingGlass from '@icon/regular/magnifying-glass.svg';
 import X from '@icon/regular/x.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 
@@ -287,7 +286,7 @@ export function FindAndReplace() {
       <div class="flex items-center justify-start rounded-md border border-edge bg-menu p-1 shadow w-fit">
         <div class="flex items-center px-1">
           <Tooltip
-            tooltip={`${findAndReplaceStore.replaceInputOpen ? 'Collapse' : 'Expand'} Search Bar`}
+            label={`${findAndReplaceStore.replaceInputOpen ? 'Collapse' : 'Expand'} Search Bar`}
           >
             <div
               class="flex items-center w-8 h-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
@@ -340,7 +339,7 @@ export function FindAndReplace() {
                 </p>
               </div>
               <div class="ml-4 flex justify-end items-center">
-                <Tooltip tooltip={`Previous Match`}>
+                <Tooltip label={`Previous Match`}>
                   <div
                     class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
                     onMouseDown={() => {
@@ -350,7 +349,7 @@ export function FindAndReplace() {
                     <CaretUp />
                   </div>
                 </Tooltip>
-                <Tooltip tooltip={`Next Match`}>
+                <Tooltip label={`Next Match`}>
                   <div
                     class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
                     onMouseDown={() => {
@@ -360,7 +359,7 @@ export function FindAndReplace() {
                     <CaretDown />
                   </div>
                 </Tooltip>
-                <Tooltip tooltip={`Close Search Bar`}>
+                <Tooltip label={`Close Search Bar`}>
                   <div
                     class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
                     onMouseDown={closeSearch}
@@ -388,7 +387,7 @@ export function FindAndReplace() {
                 />
               </div>
               <div class="flex grow justify-center ml-2">
-                <Tooltip tooltip={`Replace`}>
+                <Tooltip label={`Replace`}>
                   <div
                     class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
                     onMouseDown={() => {
@@ -398,7 +397,7 @@ export function FindAndReplace() {
                     <Replace />
                   </div>
                 </Tooltip>
-                <Tooltip tooltip={`Replace All`}>
+                <Tooltip label={`Replace All`}>
                   <div
                     class="flex items-center px-1 size-6 justify-center rounded-md hover:bg-hover hover-transition-bg"
                     onMouseDown={() => {

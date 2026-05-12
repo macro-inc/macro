@@ -1,3 +1,4 @@
+import { CallAgainButton } from '@channel/Call/CallAgainButton';
 import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
 import SubtitlesSlash from '@phosphor-icons/core/assets/regular/subtitles-slash.svg';
 import UserCircle from '@phosphor-icons/core/assets/regular/user-circle.svg';
@@ -42,6 +43,12 @@ export function CallRecordingMetaStrip(props: {
         </Show>
       </div>
       <div class="flex items-center gap-1.5">
+        <Show when={!props.record.isActive}>
+          <CallAgainButton
+            channelId={props.record.channelId}
+            class={cn(CALL_META_STRIP_TOGGLE_IDLE, 'shrink-0')}
+          />
+        </Show>
         <button
           type="button"
           class={cn(

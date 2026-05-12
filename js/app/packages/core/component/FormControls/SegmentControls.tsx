@@ -1,8 +1,8 @@
-import { Tooltip } from '@core/component/Tooltip';
 import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
+import { Tooltip } from '@ui';
 import {
   createEffect,
   createSignal,
@@ -109,7 +109,7 @@ export const SegmentedControl: ParentComponent<
                   </div> */}
                     <Switch>
                       <Match when={tooltip()}>
-                        <Tooltip tooltip={tooltip()}>
+                        <Tooltip label={tooltip() ?? ''}>
                           <ToggleButton
                             size={props.size}
                             pressed={value() === itemValue()}

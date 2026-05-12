@@ -1,8 +1,8 @@
-import { Tooltip } from '@core/component/Tooltip';
 import { useListLayout } from '@entity/composed/list-entity/shared';
 import UsersIcon from '@icon/regular/users.svg';
 import StatusInProgress from '@macro-icons/square/task-in-progress-circle.svg';
 import PriorityHigh from '@macro-icons/wide/priority-high.svg';
+import { Tooltip } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { For, type JSX, Show } from 'solid-js';
 import {
@@ -67,12 +67,9 @@ export function TaskListHeader(props: { class?: string }) {
             {/* Wide: show label, Narrow: hide */}
             <span class="truncate @max-[840px]/u-list:hidden">{col.label}</span>
             {/* Narrow: show icon with tooltip */}
-            <Tooltip
-              tooltip={col.label}
-              class="hidden @max-[840px]/u-list:flex @max-[840px]/u-list:px-1.5"
-            >
-              {COLUMN_ICONS[col.id]?.()}
-            </Tooltip>
+            <div class="hidden @max-[840px]/u-list:flex @max-[840px]/u-list:px-1.5">
+              <Tooltip label={col.label}>{COLUMN_ICONS[col.id]?.()}</Tooltip>
+            </div>
           </div>
         )}
       </For>

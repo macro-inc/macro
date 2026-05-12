@@ -23,6 +23,7 @@ pub mod channel_users;
 pub mod chat_access;
 pub mod document_access;
 pub mod project_access;
+pub mod team_access;
 pub mod thread_access;
 
 /// Type safety for source ids for entity_access table

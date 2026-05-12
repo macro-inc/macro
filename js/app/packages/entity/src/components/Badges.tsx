@@ -1,8 +1,7 @@
-import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
 import UserPlus from '@icon/fill/user-plus-fill.svg';
-import { cn } from '@ui';
+import { cn, HoverCard } from '@ui';
 import type { ParentProps } from 'solid-js';
 
 function Badge(props: ParentProps<{ class?: string }>) {
@@ -40,8 +39,13 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
   };
 
   return (
-    <Tooltip
-      tooltip={
+    <HoverCard>
+      <HoverCard.Trigger>
+        <div class="text-ink-extra-muted/50 p-1">
+          <UserPlus class="size-4" />
+        </div>
+      </HoverCard.Trigger>
+      <HoverCard.Content>
         <div class="flex items-center gap-1.5 text-xs">
           <UserIcon
             id={props.ownerId}
@@ -51,12 +55,8 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
           />
           <span>{name()()} shared this with you</span>
         </div>
-      }
-    >
-      <div class="text-ink-extra-muted/50 p-1">
-        <UserPlus class="size-4" />
-      </div>
-    </Tooltip>
+      </HoverCard.Content>
+    </HoverCard>
   );
 }
 
@@ -72,8 +72,13 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
   };
 
   return (
-    <Tooltip
-      tooltip={
+    <HoverCard>
+      <HoverCard.Trigger>
+        <div class="text-ink-extra-muted/50 p-1">
+          <UserPlus class="size-4" />
+        </div>
+      </HoverCard.Trigger>
+      <HoverCard.Content>
         <div class="flex items-center gap-1.5 text-xs">
           <UserIcon
             id={props.ownerId}
@@ -83,12 +88,8 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
           />
           <span>Created by {name()()}</span>
         </div>
-      }
-    >
-      <div class="text-ink-extra-muted/50 p-1">
-        <UserPlus class="size-4" />
-      </div>
-    </Tooltip>
+      </HoverCard.Content>
+    </HoverCard>
   );
 }
 

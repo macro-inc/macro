@@ -1,9 +1,8 @@
 import { DateSelector } from '@block-email/component/date-selector';
-import { Tooltip } from '@core/component/Tooltip';
 import { isMobile } from '@core/mobile/isMobile';
 import IconX from '@icon/regular/x.svg';
 import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
-import { Button, cn } from '@ui';
+import { Button, Tooltip } from '@ui';
 import { addYears } from 'date-fns/addYears';
 import { format } from 'date-fns/format';
 import { Show, type VoidComponent } from 'solid-js';
@@ -32,48 +31,50 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
       disableAfterDate={addYears(new Date(), 1)}
       disablePortal={props.disablePortal}
       trigger={(state) => {
-        const formattedDate = () => {
-          if (!state.selectedDate) return;
-          return format(state.selectedDate, 'MMM d, yyyy  h:mm a');
-        };
+        const formattedDate = () =>
+          state.selectedDate
+            ? format(state.selectedDate, 'MMM d, yyyy  h:mm a')
+            : undefined;
         const showExpanded = () => !isCompact() && !!formattedDate();
+
         return (
-          <Tooltip
-            tooltip={
-              state.selectedDate
-                ? `Scheduled for ${formattedDate()}`
-                : 'Schedule this email'
+          <Show
+            when={showExpanded()}
+            fallback={
+              <Tooltip
+                label={
+                  state.selectedDate
+                    ? `Scheduled for ${formattedDate()}`
+                    : 'Schedule this email'
+                }
+              >
+                <Button size="icon-sm" disabled={props.disabled}>
+                  <ClockIcon class={state.selectedDate ? 'text-accent' : ''} />
+                </Button>
+              </Tooltip>
             }
-            hide={showExpanded()}
           >
             <Button
               size="icon-sm"
               disabled={props.disabled}
-              class={cn(
-                showExpanded() &&
-                  'size-auto gap-1 bg-accent/20 text-accent-ink hover:bg-accent/15! hover:text-accent-ink!'
-              )}
+              class="size-auto gap-1 bg-accent/20 text-accent-ink hover:bg-accent/15! hover:text-accent-ink!"
             >
-              <ClockIcon
-                class={state.selectedDate && isCompact() ? 'text-accent' : ''}
-              />
-              <Show when={showExpanded()}>
-                <span class="text-sm">{formattedDate()}</span>
-                <Tooltip tooltip="Clear">
-                  <div
-                    tabIndex={0}
-                    class="hover:bg-accent/30"
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                    }}
-                    onClick={() => props.onSendTimeChange?.(null)}
-                  >
-                    <IconX class="size-5" />
-                  </div>
-                </Tooltip>
-              </Show>
+              <ClockIcon />
+              <span class="text-sm">{formattedDate()}</span>
+              <Tooltip label="Clear">
+                <div
+                  tabIndex={0}
+                  class="hover:bg-accent/30"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                  }}
+                  onClick={() => props.onSendTimeChange?.(null)}
+                >
+                  <IconX class="size-5" />
+                </div>
+              </Tooltip>
             </Button>
-          </Tooltip>
+          </Show>
         );
       }}
     />

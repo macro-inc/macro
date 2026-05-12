@@ -29,7 +29,7 @@ export function NotificationsButton(props: {
     () => notifications().filter((n) => !n.viewed_at).length
   );
   return (
-    <div class="relative" tabIndex={-1}>
+    <div class="relative p-0 flex" tabIndex={-1}>
       <Button
         class={cn(
           'px-1',

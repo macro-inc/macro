@@ -25,8 +25,8 @@ function TeamChoiceDemo(props: LessonContentProps) {
   const isAuthenticated = useIsAuthenticated();
   const [isRedirecting, setIsRedirecting] = createSignal(false);
 
-  // Returns to /welcome?subscriptionSuccess=true on success, which triggers
-  // completeOnParam on choose-plan and lands the user on launch.
+  // Returns to /welcome?subscriptionSuccess=true on success, which completes
+  // all lessons except launch, landing the user on the launch lesson.
   const checkoutMutation = useOnboardingCheckoutMutation({
     onSuccess: (result) => {
       analytics.track('subscription_start', {
@@ -68,9 +68,7 @@ function TeamChoiceDemo(props: LessonContentProps) {
     onboarding.setInvitedMembers([]);
     onboarding.setTeamName('');
 
-    checkoutMutation.mutate({
-      tier: tier as PaidPlanTier,
-    });
+    checkoutMutation.mutate({ tier: tier as PaidPlanTier });
   };
 
   return (
@@ -128,6 +126,7 @@ export const teamChoiceLesson: LessonDefinition = {
   demo: TeamChoiceDemo,
   order: 89,
   hideContinue: true,
+  completeOnParam: 'subscriptionSuccess',
   previousLesson: ({ isLessonSkipped, hasPaidAccess }) => {
     if (isLessonSkipped('choose-plan') || hasPaidAccess) {
       return undefined;

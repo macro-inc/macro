@@ -7,7 +7,6 @@ import { vec2 } from '@block-canvas/util/vector2';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { DropdownMenuContent } from '@core/component/Menu';
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import {
   blockAcceptsFileExtension,
   blockNameToFileExtensions,
@@ -137,12 +136,7 @@ export function MediaSelector() {
       onOpenChange={setImageSelectorOpen}
     >
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <Button
-          variant="ghost"
-          size="icon-md"
-          tooltip={<LabelAndHotKey label="Media" />}
-          tabIndex={-1}
-        >
+        <Button variant="ghost" size="icon-md" label="Media" tabIndex={-1}>
           <Image />
         </Button>
       </DropdownMenu.Trigger>

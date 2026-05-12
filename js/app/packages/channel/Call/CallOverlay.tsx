@@ -1,9 +1,8 @@
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
-import { Tooltip } from '@core/component/Tooltip';
 import { tryMacroId, useDisplayName } from '@core/user';
 import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import { type RemoteParticipant, Track } from 'livekit-client';
 import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
@@ -268,7 +267,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
           </span>
           <Tooltip
             placement="top"
-            tooltip="When on, all team members can view and search this call's transcript and AI summary."
+            label="When on, all team members can view and search this call's transcript and AI summary."
           >
             <div class="flex items-center gap-1">
               <ShareNetwork

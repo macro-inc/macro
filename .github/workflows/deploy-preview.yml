@@ -34,6 +34,7 @@ jobs:
         uses: ./.github/actions/setup-reqs-web
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
 
       # Build identical to dev.macro.com deployment
       - name: Build
