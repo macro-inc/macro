@@ -55,7 +55,7 @@ export const definition = defineBlock({
       const { documentMetadata, userAccessLevel } = documentResult;
       let [, { data: location }] = maybeLocation;
 
-      if ('presignedUrl' in location && location.content.state === 'pending') {
+      if (location.type === 'presignedUrl' && location.content.state === 'pending') {
         location = await waitForDocumentSyncServiceReady({
           documentId,
         }).catch((error) => {
@@ -71,7 +71,7 @@ export const definition = defineBlock({
       // If a markdown document still resolves to object storage here, opening
       // it would require a backend repair/backfill path rather than a frontend
       // sync-service mutation that leaves DB content metadata inconsistent.
-      if ('presignedUrl' in location) {
+      if (location.type !== 'syncServiceContent') {
         console.error(
           'Markdown document is not available in sync-service',
           documentId,

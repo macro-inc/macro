@@ -4,12 +4,21 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { LocationResponseV3OneOfThreePresignedUrls } from './locationResponseV3OneOfThreePresignedUrls';
+
+import type { DocumentBasic } from './documentBasic';
+import type { DocumentContent } from './documentContent';
+import type { LocationResponseV3OneOfThreeType } from './locationResponseV3OneOfThreeType';
+import type { PresignedUrl } from './presignedUrl';
 
 /**
  * Multiple document-storage URLs, currently for DOCX BOM parts.
  */
 export type LocationResponseV3OneOfThree = {
-  /** Multiple document-storage URLs, currently for DOCX BOM parts. */
-  presignedUrls: LocationResponseV3OneOfThreePresignedUrls;
+  /** Content lifecycle and location metadata. */
+  content: DocumentContent;
+  /** Basic document metadata. */
+  metadata: DocumentBasic;
+  /** Presigned URLs. */
+  presigned_urls: PresignedUrl[];
+  type: LocationResponseV3OneOfThreeType;
 };

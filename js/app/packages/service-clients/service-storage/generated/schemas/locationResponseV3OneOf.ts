@@ -4,12 +4,20 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { LocationResponseV3OneOfPresignedUrl } from './locationResponseV3OneOfPresignedUrl';
+
+import type { DocumentBasic } from './documentBasic';
+import type { DocumentContent } from './documentContent';
+import type { LocationResponseV3OneOfType } from './locationResponseV3OneOfType';
 
 /**
  * A single document-storage URL.
  */
 export type LocationResponseV3OneOf = {
-  /** A single document-storage URL. */
-  presignedUrl: LocationResponseV3OneOfPresignedUrl;
+  /** Content lifecycle and location metadata. */
+  content: DocumentContent;
+  /** Basic document metadata. */
+  metadata: DocumentBasic;
+  /** Presigned URL. */
+  presigned_url: string;
+  type: LocationResponseV3OneOfType;
 };

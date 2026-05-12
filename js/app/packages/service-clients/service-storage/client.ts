@@ -100,17 +100,20 @@ import {
 } from './util/getDocxFile';
 
 function normalizeLocationResponseV3(response: LocationResponseV3) {
-  if ('presignedUrl' in response) {
-    const { presigned_url: presignedUrl, ...rest } = response.presignedUrl;
-    return { ...rest, presignedUrl };
+  switch (response.type) {
+    case 'presignedUrl': {
+      const { presigned_url: presignedUrl, ...rest } = response;
+      return { ...rest, presignedUrl };
+    }
+    case 'presignedUrls': {
+      const { presigned_urls: presignedUrls, ...rest } = response;
+      return { ...rest, presignedUrls };
+    }
+    case 'syncServiceContent': {
+      const { sync_service_metadata: syncServiceMetadata, ...rest } = response;
+      return { ...rest, syncServiceMetadata };
+    }
   }
-  if ('presignedUrls' in response) {
-    const { presigned_urls: presignedUrls, ...rest } = response.presignedUrls;
-    return { ...rest, presignedUrls };
-  }
-  const { sync_service_metadata: syncServiceMetadata, ...rest } =
-    response.syncServiceContent;
-  return { ...rest, syncServiceMetadata };
 }
 
 // the server is set to expire at 15 minutes, so expire just before that
@@ -980,7 +983,7 @@ export const storageServiceClient = {
         return err('NOT_FOUND', 'The document resource is no longer available');
       else if (isErr(locationResult)) return locationResult;
       const [, { data }] = locationResult;
-      if (!('presignedUrl' in data)) {
+      if (data.type !== 'presignedUrl') {
         return err(
           'INVALID_DOCUMENT',
           'Document location is missing presignedUrl'
@@ -1030,7 +1033,7 @@ export const storageServiceClient = {
     }
 
     const [, { data }] = maybeLocation;
-    if (!('presignedUrl' in data)) {
+    if (data.type !== 'presignedUrl') {
       return err(
         'INVALID_DOCUMENT',
         'Document location is missing presignedUrl'

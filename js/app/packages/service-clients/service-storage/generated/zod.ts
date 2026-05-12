@@ -3554,183 +3554,172 @@ export const getDocumentLocationV3Response = zod
   .union([
     zod
       .object({
-        presignedUrl: zod
+        content: zod
           .object({
-            content: zod
-              .object({
-                location: zod
-                  .union([
-                    zod.null(),
-                    zod
-                      .enum([
-                        'object_storage',
-                        'sync_service',
-                        'docx_bom_parts',
-                        'converted_pdf',
-                        'unknown',
-                      ])
-                      .describe(
-                        'Where document content is, or is expected to be, read from.'
-                      ),
+            location: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'object_storage',
+                    'sync_service',
+                    'docx_bom_parts',
+                    'converted_pdf',
+                    'unknown',
                   ])
-                  .optional(),
-                state: zod
-                  .enum(['unknown', 'pending', 'ready'])
                   .describe(
-                    'API-visible content lifecycle state derived from current document metadata.'
+                    'Where document content is, or is expected to be, read from.'
                   ),
-              })
-              .describe('API-visible content lifecycle and location metadata.'),
-            metadata: zod
-              .object({
-                branchedFromId: zod.string().nullish(),
-                branchedFromVersionId: zod.number().nullish(),
-                deletedAt: zod.iso.datetime({}).nullish(),
-                documentFamilyId: zod.number().nullish(),
-                documentId: zod.string(),
-                documentName: zod.string(),
-                fileType: zod.string().nullish(),
-                owner: zod.string(),
-                projectId: zod.string().nullish(),
-              })
+              ])
+              .optional(),
+            state: zod
+              .enum(['unknown', 'pending', 'ready'])
               .describe(
-                'Returns basic information of a document used for some db queries'
+                'API-visible content lifecycle state derived from current document metadata.'
               ),
-            presigned_url: zod.string().describe('Presigned URL.'),
           })
-          .describe('A single document-storage URL.'),
+          .describe('API-visible content lifecycle and location metadata.'),
+        metadata: zod
+          .object({
+            branchedFromId: zod.string().nullish(),
+            branchedFromVersionId: zod.number().nullish(),
+            deletedAt: zod.iso.datetime({}).nullish(),
+            documentFamilyId: zod.number().nullish(),
+            documentId: zod.string(),
+            documentName: zod.string(),
+            fileType: zod.string().nullish(),
+            owner: zod.string(),
+            projectId: zod.string().nullish(),
+          })
+          .describe(
+            'Returns basic information of a document used for some db queries'
+          ),
+        presigned_url: zod.string().describe('Presigned URL.'),
+        type: zod.enum(['presignedUrl']),
       })
       .describe('A single document-storage URL.'),
     zod
       .object({
-        presignedUrls: zod
+        content: zod
           .object({
-            content: zod
-              .object({
-                location: zod
-                  .union([
-                    zod.null(),
-                    zod
-                      .enum([
-                        'object_storage',
-                        'sync_service',
-                        'docx_bom_parts',
-                        'converted_pdf',
-                        'unknown',
-                      ])
-                      .describe(
-                        'Where document content is, or is expected to be, read from.'
-                      ),
+            location: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'object_storage',
+                    'sync_service',
+                    'docx_bom_parts',
+                    'converted_pdf',
+                    'unknown',
                   ])
-                  .optional(),
-                state: zod
-                  .enum(['unknown', 'pending', 'ready'])
                   .describe(
-                    'API-visible content lifecycle state derived from current document metadata.'
+                    'Where document content is, or is expected to be, read from.'
                   ),
-              })
-              .describe('API-visible content lifecycle and location metadata.'),
-            metadata: zod
-              .object({
-                branchedFromId: zod.string().nullish(),
-                branchedFromVersionId: zod.number().nullish(),
-                deletedAt: zod.iso.datetime({}).nullish(),
-                documentFamilyId: zod.number().nullish(),
-                documentId: zod.string(),
-                documentName: zod.string(),
-                fileType: zod.string().nullish(),
-                owner: zod.string(),
-                projectId: zod.string().nullish(),
-              })
+              ])
+              .optional(),
+            state: zod
+              .enum(['unknown', 'pending', 'ready'])
               .describe(
-                'Returns basic information of a document used for some db queries'
+                'API-visible content lifecycle state derived from current document metadata.'
               ),
-            presigned_urls: zod
-              .array(
-                zod.object({
-                  presignedUrl: zod
-                    .string()
-                    .describe('The presigned url used to upload the sha'),
-                  sha: zod.string().describe('The sha of the item'),
-                })
-              )
-              .describe('Presigned URLs.'),
+          })
+          .describe('API-visible content lifecycle and location metadata.'),
+        metadata: zod
+          .object({
+            branchedFromId: zod.string().nullish(),
+            branchedFromVersionId: zod.number().nullish(),
+            deletedAt: zod.iso.datetime({}).nullish(),
+            documentFamilyId: zod.number().nullish(),
+            documentId: zod.string(),
+            documentName: zod.string(),
+            fileType: zod.string().nullish(),
+            owner: zod.string(),
+            projectId: zod.string().nullish(),
           })
           .describe(
-            'Multiple document-storage URLs, currently for DOCX BOM parts.'
+            'Returns basic information of a document used for some db queries'
           ),
+        presigned_urls: zod
+          .array(
+            zod.object({
+              presignedUrl: zod
+                .string()
+                .describe('The presigned url used to upload the sha'),
+              sha: zod.string().describe('The sha of the item'),
+            })
+          )
+          .describe('Presigned URLs.'),
+        type: zod.enum(['presignedUrls']),
       })
       .describe(
         'Multiple document-storage URLs, currently for DOCX BOM parts.'
       ),
     zod
       .object({
-        syncServiceContent: zod
+        content: zod
           .object({
-            content: zod
-              .object({
-                location: zod
-                  .union([
-                    zod.null(),
-                    zod
-                      .enum([
-                        'object_storage',
-                        'sync_service',
-                        'docx_bom_parts',
-                        'converted_pdf',
-                        'unknown',
-                      ])
-                      .describe(
-                        'Where document content is, or is expected to be, read from.'
-                      ),
+            location: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'object_storage',
+                    'sync_service',
+                    'docx_bom_parts',
+                    'converted_pdf',
+                    'unknown',
                   ])
-                  .optional(),
-                state: zod
-                  .enum(['unknown', 'pending', 'ready'])
                   .describe(
-                    'API-visible content lifecycle state derived from current document metadata.'
+                    'Where document content is, or is expected to be, read from.'
                   ),
-              })
-              .describe('API-visible content lifecycle and location metadata.'),
-            metadata: zod
-              .object({
-                branchedFromId: zod.string().nullish(),
-                branchedFromVersionId: zod.number().nullish(),
-                deletedAt: zod.iso.datetime({}).nullish(),
-                documentFamilyId: zod.number().nullish(),
-                documentId: zod.string(),
-                documentName: zod.string(),
-                fileType: zod.string().nullish(),
-                owner: zod.string(),
-                projectId: zod.string().nullish(),
-              })
+              ])
+              .optional(),
+            state: zod
+              .enum(['unknown', 'pending', 'ready'])
               .describe(
-                'Returns basic information of a document used for some db queries'
-              ),
-            sync_service_metadata: zod
-              .object({
-                id: zod.string().describe('Sync-service document id.'),
-                peers: zod
-                  .array(
-                    zod
-                      .object({
-                        peer_id: zod.string().describe('Sync-service peer id.'),
-                        user_id: zod.string().describe('Macro user id.'),
-                      })
-                      .describe(
-                        'Peer\/user mapping returned by sync-service metadata.'
-                      )
-                  )
-                  .describe('Known peers for the sync document.'),
-                version_id: zod
-                  .string()
-                  .describe('Current sync-service version id.'),
-              })
-              .describe(
-                'Sync-service document metadata exposed through document location responses.'
+                'API-visible content lifecycle state derived from current document metadata.'
               ),
           })
-          .describe('Sync-service backed content.'),
+          .describe('API-visible content lifecycle and location metadata.'),
+        metadata: zod
+          .object({
+            branchedFromId: zod.string().nullish(),
+            branchedFromVersionId: zod.number().nullish(),
+            deletedAt: zod.iso.datetime({}).nullish(),
+            documentFamilyId: zod.number().nullish(),
+            documentId: zod.string(),
+            documentName: zod.string(),
+            fileType: zod.string().nullish(),
+            owner: zod.string(),
+            projectId: zod.string().nullish(),
+          })
+          .describe(
+            'Returns basic information of a document used for some db queries'
+          ),
+        sync_service_metadata: zod
+          .object({
+            id: zod.string().describe('Sync-service document id.'),
+            peers: zod
+              .array(
+                zod
+                  .object({
+                    peer_id: zod.string().describe('Sync-service peer id.'),
+                    user_id: zod.string().describe('Macro user id.'),
+                  })
+                  .describe(
+                    'Peer\/user mapping returned by sync-service metadata.'
+                  )
+              )
+              .describe('Known peers for the sync document.'),
+            version_id: zod
+              .string()
+              .describe('Current sync-service version id.'),
+          })
+          .describe(
+            'Sync-service document metadata exposed through document location responses.'
+          ),
+        type: zod.enum(['syncServiceContent']),
       })
       .describe('Sync-service backed content.'),
   ])

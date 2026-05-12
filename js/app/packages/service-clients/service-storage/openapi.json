@@ -10072,81 +10072,77 @@
           {
             "type": "object",
             "description": "A single document-storage URL.",
-            "required": ["presignedUrl"],
+            "required": ["presigned_url", "metadata", "content", "type"],
             "properties": {
-              "presignedUrl": {
-                "type": "object",
-                "description": "A single document-storage URL.",
-                "required": ["presigned_url", "metadata", "content"],
-                "properties": {
-                  "content": {
-                    "$ref": "#/components/schemas/DocumentContent",
-                    "description": "Content lifecycle and location metadata."
-                  },
-                  "metadata": {
-                    "$ref": "#/components/schemas/DocumentBasic",
-                    "description": "Basic document metadata."
-                  },
-                  "presigned_url": {
-                    "type": "string",
-                    "description": "Presigned URL."
-                  }
-                }
+              "content": {
+                "$ref": "#/components/schemas/DocumentContent",
+                "description": "Content lifecycle and location metadata."
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentBasic",
+                "description": "Basic document metadata."
+              },
+              "presigned_url": {
+                "type": "string",
+                "description": "Presigned URL."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["presignedUrl"]
               }
             }
           },
           {
             "type": "object",
             "description": "Multiple document-storage URLs, currently for DOCX BOM parts.",
-            "required": ["presignedUrls"],
+            "required": ["presigned_urls", "metadata", "content", "type"],
             "properties": {
-              "presignedUrls": {
-                "type": "object",
-                "description": "Multiple document-storage URLs, currently for DOCX BOM parts.",
-                "required": ["presigned_urls", "metadata", "content"],
-                "properties": {
-                  "content": {
-                    "$ref": "#/components/schemas/DocumentContent",
-                    "description": "Content lifecycle and location metadata."
-                  },
-                  "metadata": {
-                    "$ref": "#/components/schemas/DocumentBasic",
-                    "description": "Basic document metadata."
-                  },
-                  "presigned_urls": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/PresignedUrl"
-                    },
-                    "description": "Presigned URLs."
-                  }
-                }
+              "content": {
+                "$ref": "#/components/schemas/DocumentContent",
+                "description": "Content lifecycle and location metadata."
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentBasic",
+                "description": "Basic document metadata."
+              },
+              "presigned_urls": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PresignedUrl"
+                },
+                "description": "Presigned URLs."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["presignedUrls"]
               }
             }
           },
           {
             "type": "object",
             "description": "Sync-service backed content.",
-            "required": ["syncServiceContent"],
+            "required": [
+              "metadata",
+              "sync_service_metadata",
+              "content",
+              "type"
+            ],
             "properties": {
-              "syncServiceContent": {
-                "type": "object",
-                "description": "Sync-service backed content.",
-                "required": ["metadata", "sync_service_metadata", "content"],
-                "properties": {
-                  "content": {
-                    "$ref": "#/components/schemas/DocumentContent",
-                    "description": "Content lifecycle and location metadata."
-                  },
-                  "metadata": {
-                    "$ref": "#/components/schemas/DocumentBasic",
-                    "description": "Basic document metadata."
-                  },
-                  "sync_service_metadata": {
-                    "$ref": "#/components/schemas/SyncServiceDocumentMetadata",
-                    "description": "Sync-service metadata."
-                  }
-                }
+              "content": {
+                "$ref": "#/components/schemas/DocumentContent",
+                "description": "Content lifecycle and location metadata."
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentBasic",
+                "description": "Basic document metadata."
+              },
+              "sync_service_metadata": {
+                "$ref": "#/components/schemas/SyncServiceDocumentMetadata",
+                "description": "Sync-service metadata."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["syncServiceContent"]
               }
             }
           }

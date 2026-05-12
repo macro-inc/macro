@@ -163,7 +163,7 @@ export function waitForDocumentSyncServiceReady(
     maxDelayMs,
     isReady: (location) =>
       location.content.state === DocumentContentState.ready &&
-      'syncServiceMetadata' in location,
+      location.type === 'syncServiceContent',
   });
 }
 
@@ -182,7 +182,7 @@ export function waitForDocumentPresignedUrlReady(
     maxDelayMs,
     isReady: (location) =>
       location.content.state === DocumentContentState.ready &&
-      'presignedUrl' in location,
+      location.type === 'presignedUrl',
   });
 }
 

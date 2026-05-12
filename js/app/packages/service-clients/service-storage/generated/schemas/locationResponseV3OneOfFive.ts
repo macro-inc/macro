@@ -4,12 +4,21 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { LocationResponseV3OneOfFiveSyncServiceContent } from './locationResponseV3OneOfFiveSyncServiceContent';
+
+import type { DocumentBasic } from './documentBasic';
+import type { DocumentContent } from './documentContent';
+import type { LocationResponseV3OneOfFiveType } from './locationResponseV3OneOfFiveType';
+import type { SyncServiceDocumentMetadata } from './syncServiceDocumentMetadata';
 
 /**
  * Sync-service backed content.
  */
 export type LocationResponseV3OneOfFive = {
-  /** Sync-service backed content. */
-  syncServiceContent: LocationResponseV3OneOfFiveSyncServiceContent;
+  /** Content lifecycle and location metadata. */
+  content: DocumentContent;
+  /** Basic document metadata. */
+  metadata: DocumentBasic;
+  /** Sync-service metadata. */
+  sync_service_metadata: SyncServiceDocumentMetadata;
+  type: LocationResponseV3OneOfFiveType;
 };

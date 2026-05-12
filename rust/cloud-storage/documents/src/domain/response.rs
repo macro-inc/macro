@@ -159,7 +159,11 @@ pub type GetDocumentResponse = TypedSuccessResponse<GetDocumentResponseData>;
 /// Location response with content lifecycle metadata.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum LocationResponseV3 {
     /// A single document-storage URL.
     PresignedUrl {

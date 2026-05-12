@@ -41,7 +41,7 @@ export async function fetchBinaryDocumentData(
   if (
     !location ||
     location.content.state !== 'ready' ||
-    !('presignedUrl' in location)
+    location.type !== 'presignedUrl'
   ) {
     return [
       [
