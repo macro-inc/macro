@@ -159,11 +159,16 @@ export const useSearchChannelQuery = (
       };
     },
     select: (data) => {
-      return data.pages.flatMap((page) =>
+      const items = data.pages.flatMap((page) =>
         page.results.flatMap((item) =>
           mapChannelSearchResultItem(item, channels())
         )
       ) as WithSearch<ChannelMessageEntity>[];
+      // `total_count` is stable per query (passed through from OpenSearch
+      // `hits.total.value`); reading from the first page is sufficient and
+      // remains defined while later pages are still in flight.
+      const totalCount = data.pages[0]?.total_count;
+      return { items, totalCount };
     },
     enabled: enabled(),
     placeholderData: (p) => p,

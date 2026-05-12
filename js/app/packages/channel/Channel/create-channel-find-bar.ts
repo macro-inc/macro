@@ -53,10 +53,17 @@ export function createChannelFindBar(
         if (!searchQuery.isSuccess) return [];
         const data = searchQuery.data;
         if (!data) return [];
-        return data.filter(
+        return data.items.filter(
           (e): e is WithSearch<ChannelMessageEntity> =>
             isChannelMessageEntity(e) && e.channelId === options.channelId()
         );
+      });
+
+      const totalCount = createMemo<number | undefined>(() => {
+        if (!submittedQuery()) return undefined;
+        if (searchQuery.isPlaceholderData) return undefined;
+        if (!searchQuery.isSuccess) return undefined;
+        return searchQuery.data?.totalCount;
       });
 
       // Prefetch the next page when the cursor approaches the end of the
@@ -74,6 +81,7 @@ export function createChannelFindBar(
 
       return {
         results,
+        totalCount,
         isFetching: () => searchQuery.isFetching,
         validateText: validateSearchServiceText,
         navigate: (result) => {
