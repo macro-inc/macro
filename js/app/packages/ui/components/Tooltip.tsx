@@ -12,15 +12,11 @@ export type HotkeySequenceStep = {
 };
 
 export type TooltipProps = ParentProps<{
-  onOpenChange?: (open: boolean) => void;
   hotkeySequence?: HotkeySequenceStep[];
-  ref?: (el: HTMLElement) => void;
   hotkeyToken?: HotkeyToken;
   placement?: Placement;
   as?: 'div' | 'span';
   shortcut?: string;
-  open?: boolean;
-  class?: string;
   label: string;
 }>;
 
@@ -52,16 +48,13 @@ export function Tooltip(props: TooltipProps) {
       placement={props.placement ?? DEFAULT_PLACEMENT}
       overflowPadding={TOOLTIP_OVERFLOW_PADDING}
       fitViewport={TOOLTIP_FIT_VIEWPORT}
-      onOpenChange={props.onOpenChange}
       closeDelay={TOOLTIP_DELAY}
       openDelay={TOOLTIP_DELAY}
       gutter={TOOLTIP_GUTTER}
       flip={TOOLTIP_FLIP}
-      open={props.open}
     >
       <KobalteTooltip.Trigger
-        class={cn('inline-flex items-center', props.class)}
-        ref={(el: HTMLElement) => { props.ref?.(el); }}
+        class="inline-flex items-center"
         as={props.as ?? 'div'}
       >
         {props.children}
