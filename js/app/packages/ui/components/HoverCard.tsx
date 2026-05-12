@@ -4,16 +4,18 @@ import type { ParentProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Surface } from './Surface';
 
+type TriggerProps = ParentProps<{ as?: 'div' | 'span'; class?: string }>;
+
+type RootProps = ParentProps<{ placement?: Placement }>;
+
+type ContentProps = ParentProps<{ class?: string }>;
+
 /*
 <HoverCard>
   <HoverCard.Trigger></HoverCard.Trigger>
   <HoverCard.Content></HoverCard.Content>
 </HoverCard>
 */
-
-type RootProps = ParentProps<{ placement?: Placement }>;
-type TriggerProps = ParentProps<{ as?: 'div' | 'span'; class?: string }>;
-type ContentProps = ParentProps<{ class?: string }>;
 
 function HoverCardRoot(props: RootProps) {
   return (
