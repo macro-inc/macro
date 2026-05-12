@@ -58,8 +58,7 @@ export function CallControlsPanelSmallRow(
           disabled={isConnecting()}
           class={cn(
             'flex items-center justify-center size-4 shrink-0 rounded-md border-0 bg-transparent transition-colors',
-            isConnecting() &&
-              'opacity-50 pointer-events-none',
+            isConnecting() && 'opacity-50 pointer-events-none',
             !isConnecting() &&
               (!callCtx.isAudioMuted() ||
                 !callCtx.isVideoMuted() ||

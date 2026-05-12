@@ -1,16 +1,16 @@
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
-import { Tooltip } from '@core/component/Tooltip';
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
+import { Tooltip } from '@core/component/Tooltip';
 import ArrowsOut from '@icon/regular/arrows-out.svg';
 import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
+import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { cn } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';
+import { useCallContext } from '../CallContext';
 import type { CallControlsVariant } from '../CallControls/CallControls';
 import { CallControls } from '../CallControls/CallControls';
-import { useCallContext } from '../CallContext';
 import type { InCallPanelProps } from '../InCallPanel/types';
 import { openChannelCallTab } from '../open-channel-call-tab';
-import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import {
   IN_CALL_ROSTER_CARD_CLASS,
   InCallParticipantsListPopover,
@@ -142,7 +142,10 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
               >
                 <div class="flex items-center gap-1 px-1">
                   <ShareNetwork
-                    class={cn('size-3 shrink-0', callCtx.isSharedWithTeam() ? 'text-ink' : 'text-ink-muted')}
+                    class={cn(
+                      'size-3 shrink-0',
+                      callCtx.isSharedWithTeam() ? 'text-ink' : 'text-ink-muted'
+                    )}
                     aria-hidden
                   />
                   <MiniToggleSwitch

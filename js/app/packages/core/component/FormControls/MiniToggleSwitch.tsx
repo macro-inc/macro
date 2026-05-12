@@ -106,7 +106,8 @@ export const MiniToggleSwitch: Component<
                 'size-2 touch:size-7': !props.compact,
                 'size-1.5': !!props.compact,
                 'translate-x-0.5': !checked(),
-                'translate-x-5.5 touch:translate-x-4.5': !props.compact && checked(),
+                'translate-x-5.5 touch:translate-x-4.5':
+                  !props.compact && checked(),
                 'translate-x-4': !!props.compact && checked(),
               }}
             />

@@ -2,12 +2,12 @@ import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch'
 import { Tooltip } from '@core/component/Tooltip';
 import { tryMacroId, useDisplayName } from '@core/user';
 import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
+import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { cn } from '@ui';
 import { type RemoteParticipant, Track } from 'livekit-client';
 import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
-import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { TrackView } from './TrackView';
 
 function VideoTag(props: {
@@ -250,7 +250,6 @@ export function CallOverlay(props: { onLeave: () => void }) {
             />
           </div>
         </Show>
-
       </div>
 
       {/* Controls bar */}
@@ -258,9 +257,13 @@ export function CallOverlay(props: { onLeave: () => void }) {
         <CallControls onLeave={props.onLeave} />
         <div class="absolute left-3 flex items-center gap-2">
           <span class="text-xs text-ink-muted whitespace-nowrap inline-grid">
-            <span class="col-start-1 row-start-1 invisible" aria-hidden>Shared with team</span>
+            <span class="col-start-1 row-start-1 invisible" aria-hidden>
+              Shared with team
+            </span>
             <span class="col-start-1 row-start-1">
-              {callCtx.isSharedWithTeam() ? 'Shared with team' : 'Share with team'}
+              {callCtx.isSharedWithTeam()
+                ? 'Shared with team'
+                : 'Share with team'}
             </span>
           </span>
           <Tooltip
@@ -268,7 +271,13 @@ export function CallOverlay(props: { onLeave: () => void }) {
             tooltip="When on, all team members can view and search this call's transcript and AI summary."
           >
             <div class="flex items-center gap-1">
-              <ShareNetwork class={cn('size-3 shrink-0', callCtx.isSharedWithTeam() ? 'text-ink' : 'text-ink-muted')} aria-hidden />
+              <ShareNetwork
+                class={cn(
+                  'size-3 shrink-0',
+                  callCtx.isSharedWithTeam() ? 'text-ink' : 'text-ink-muted'
+                )}
+                aria-hidden
+              />
               <MiniToggleSwitch
                 checked={callCtx.isSharedWithTeam()}
                 onChange={() => void handleToggleShareWithTeam()}
