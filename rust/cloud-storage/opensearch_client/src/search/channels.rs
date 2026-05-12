@@ -207,9 +207,6 @@ fn build_channel_search_request(
     Ok(request_builder.build())
 }
 
-/// Result of a channel search: hits for the current page, the cursor for the
-/// next page, and the total number of matching messages reported by
-/// OpenSearch (`hits.total.value`).
 pub struct ChannelSearchResults {
     pub hits: Vec<SearchHit>,
     pub next_cursor: SearchCursorOption,

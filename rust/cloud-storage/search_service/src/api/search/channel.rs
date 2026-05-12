@@ -31,38 +31,13 @@ pub(in crate::api::search) async fn enrich_channels(
     results: Vec<opensearch_client::search::model::SearchHit>,
     sort_timestamp: ChannelSortTimestamp,
 ) -> Result<Vec<ChannelSearchResponseItemWithMetadata>, SearchError> {
-    let EnrichChannelsResult { items, .. } =
-        enrich_channels_inner(ctx, user_id, results, sort_timestamp).await?;
-    Ok(items)
-}
-
-/// Output of [`enrich_channels_inner`]: the enriched items, plus the number of
-/// content-match hits that were dropped because the underlying message was
-/// hard- or soft-deleted. Callers that report a `total_count` should subtract
-/// `dropped_deleted` from the OpenSearch total to keep the count in sync with
-/// what the user sees.
-pub(in crate::api::search) struct EnrichChannelsResult {
-    pub items: Vec<ChannelSearchResponseItemWithMetadata>,
-    pub dropped_deleted: i64,
-}
-
-#[tracing::instrument(skip(ctx, results), err)]
-pub(in crate::api::search) async fn enrich_channels_inner(
-    ctx: &SearchHandlerState,
-    user_id: &str,
-    results: Vec<opensearch_client::search::model::SearchHit>,
-    sort_timestamp: ChannelSortTimestamp,
-) -> Result<EnrichChannelsResult, SearchError> {
     let results: Vec<opensearch_client::search::model::SearchHit> = results
         .into_iter()
         .filter(|r| r.entity_type == models_opensearch::SearchEntityType::Channels)
         .collect();
 
     if results.is_empty() {
-        return Ok(EnrichChannelsResult {
-            items: vec![],
-            dropped_deleted: 0,
-        });
+        return Ok(vec![]);
     }
 
     // Extract channel IDs from results
@@ -97,31 +72,12 @@ pub(in crate::api::search) async fn enrich_channels_inner(
     )
     .map_err(SearchError::InternalError)?;
 
-    // Count content-match hits whose underlying message is hard- or soft-deleted.
-    // These will be dropped by `construct_search_result` below, so the caller
-    // can adjust totals to match.
-    let dropped_deleted: i64 = results
-        .iter()
-        .filter(|r| {
-            let Some(SearchGotoContent::Channels(goto)) = &r.goto else {
-                return false;
-            };
-            match message_states.get(&goto.channel_message_id) {
-                None => true,          // hard-deleted (no row in DB)
-                Some(Some(_)) => true, // soft-deleted (has deleted_at)
-                Some(None) => false,   // live
-            }
-        })
-        .count() as i64;
-
     // Construct enriched results
-    let items = construct_search_result(results, channel_histories, message_states, sort_timestamp)
-        .map_err(SearchError::InternalError)?;
+    let enriched_results =
+        construct_search_result(results, channel_histories, message_states, sort_timestamp)
+            .map_err(SearchError::InternalError)?;
 
-    Ok(EnrichChannelsResult {
-        items,
-        dropped_deleted,
-    })
+    Ok(enriched_results)
 }
 
 pub fn construct_search_result(
@@ -295,22 +251,14 @@ pub async fn handler(
     let opensearch_client::search::channels::ChannelSearchResults {
         hits,
         next_cursor,
-        total,
+        total: total_count,
     } = ctx
         .opensearch_client
         .search_channel(args)
         .await
         .map_err(SearchError::Search)?;
 
-    let EnrichChannelsResult {
-        items: results,
-        dropped_deleted,
-    } = enrich_channels_inner(&ctx, user_id.as_ref(), hits, req.sort).await?;
-
-    // Best-effort total: OpenSearch reports total matches across all pages,
-    // but the index can lag deletes. Subtract the deletions we detected on
-    // this page so the surfaced number is at least as accurate as the results.
-    let total_count = (total - dropped_deleted).max(0);
+    let results = enrich_channels(&ctx, user_id.as_ref(), hits, req.sort).await?;
 
     let next_cursor = match next_cursor {
         SearchCursorOption::NotDone(Some(c)) => c.encode(),
