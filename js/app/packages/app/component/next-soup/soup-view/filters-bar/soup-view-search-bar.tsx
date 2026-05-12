@@ -165,7 +165,9 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
             class="min-h-0! overflow-visible!"
           />
         </div>
-        <Show when={!hasContent() && !props.onDismiss && !!searchHotkey.hotkey()}>
+        <Show
+          when={!hasContent() && !props.onDismiss && !!searchHotkey.hotkey()}
+        >
           <div class="shrink-0 text-xxs text-ink-extra-muted/50 rounded-sm border border-ink/5 px-1.5 py-px group-focus-within:hidden">
             <Hotkey shortcut={searchHotkey.hotkey()} class="flex gap-1" />
           </div>
