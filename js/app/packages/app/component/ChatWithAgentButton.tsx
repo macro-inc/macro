@@ -2,7 +2,6 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import type { Attachment } from '@core/component/AI/types';
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
 import { createChat } from '@core/util/create';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { ChannelType } from '@service-cognition/generated/schemas/channelType';
@@ -97,7 +96,7 @@ export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
       onMouseLeave={() => setHovering(false)}
       onClick={() => openChatWithAgent(props.entity)}
       depth={3}
-      class='bg-panel shadow shadow-drop-shadow'
+      class="bg-panel shadow shadow-drop-shadow"
     >
       <AnimatedStarIcon triggerAnimation={hovering()} />
       <span class="text-xs">Chat</span>
