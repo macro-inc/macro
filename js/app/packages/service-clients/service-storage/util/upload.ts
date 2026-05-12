@@ -9,6 +9,7 @@ import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import { storageServiceClient } from '@service-storage/client';
 import { filenameWithoutExtension } from '@service-storage/util/filename';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
+import { waitForDocumentContentReady } from '@queries/storage/document-location';
 import { storageWS } from '@service-storage/websocket';
 import { createUploadToast, toast } from 'core/component/Toast/Toast';
 import { FileTypeMap } from '../fileTypeMap';
@@ -198,15 +199,8 @@ export async function upload(
     return handleUploadError(newfile[0], toastId);
   }
 
-  const [
-    ,
-    {
-      metadata: { documentId },
-      presignedUrl,
-      contentType,
-      fileType,
-    },
-  ] = newfile;
+  const [, { metadata, presignedUrl, contentType, fileType }] = newfile;
+  const { documentId, documentVersionId } = metadata;
 
   const fallbackMime = fileType
     ? (FileTypeMap[fileType as keyof typeof FileTypeMap]?.mime as
@@ -233,6 +227,22 @@ export async function upload(
   // Document upload finalization is owned by the backend S3 ObjectCreated
   // pipeline. The event finalizer marks object-storage documents uploaded and
   // initializes markdown documents in sync-service.
+  if (fileType !== 'docx') {
+    const readyLocation = await waitForDocumentContentReady({
+      documentId,
+      versionId: documentVersionId,
+    }).catch((error) => {
+      console.warn('failed while waiting for document upload readiness', error);
+      return undefined;
+    });
+    if (readyLocation?.content.state !== 'ready') {
+      console.warn('document upload did not become ready before timeout', {
+        documentId,
+        fileType,
+      });
+    }
+  }
+
   if (docxProcessingPromise) {
     await docxProcessingPromise;
   }

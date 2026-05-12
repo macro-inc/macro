@@ -11,6 +11,7 @@ use model::document::DocumentBasic;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
 use super::{DocumentRouterState, Params};
+use crate::domain::content::DocumentContentState;
 use crate::domain::models::{DocumentError, LocationQueryParams};
 use crate::domain::ports::DocumentService;
 use crate::domain::response::LocationResponseV3;
@@ -51,7 +52,12 @@ pub async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessServic
 
     let mut header_map = HeaderMap::new();
     header_map.append("content-type", "application/json".parse().unwrap());
-    header_map.append("Cache-Control", "max-age=300".parse().unwrap());
+    let cache_control = if response_data.content().state == DocumentContentState::Ready {
+        "max-age=300"
+    } else {
+        "no-store"
+    };
+    header_map.append("Cache-Control", cache_control.parse().unwrap());
 
     Ok((header_map, Json(response_data)))
 }

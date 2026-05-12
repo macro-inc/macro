@@ -5,7 +5,7 @@ import {
   loadResult,
 } from '@core/block';
 import { isErr, ok } from '@core/util/maybeResult';
-import { storageServiceClient } from '@service-storage/client';
+import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import BlockPdf from './component/Block';
 import PdfJsWorker from './PdfViewer/pdfjs-worker?worker';
@@ -26,9 +26,7 @@ export const definition = defineBlock({
         GlobalWorkerOptions.workerPort = new PdfJsWorker();
 
       const maybeDocument = await loadResult(
-        storageServiceClient.getBinaryDocument({
-          documentId: source.id,
-        })
+        fetchBinaryDocumentData(source.id)
       );
 
       if (intent === 'preload')

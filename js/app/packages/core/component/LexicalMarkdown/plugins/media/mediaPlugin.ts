@@ -5,6 +5,7 @@ import type { FetchError } from '@core/service';
 import { createStaticFile } from '@core/util/create';
 import { contentHash } from '@core/util/hash';
 import { type MaybeResult, mapOk } from '@core/util/maybeResult';
+import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { mergeRegister } from '@lexical/utils';
 import {
   $createImageNode,
@@ -129,12 +130,7 @@ export async function getMediaUrl(src: {
     return [null, url];
   }
   if (src.type === 'dss') {
-    return mapOk(
-      await storageServiceClient.getBinaryDocument({
-        documentId: src.id,
-      }),
-      (res) => res.blobUrl
-    );
+    return mapOk(await fetchBinaryDocumentData(src.id), (res) => res.blobUrl);
   }
   console.warn('Get media url failed for src:', src);
   return [null, ''];

@@ -77,14 +77,13 @@ where
             })?;
         let user_id: MacroUserIdStr<'static> = request_context.user_id.clone();
 
-        let metadata = NewDocumentMetadata::new(self.document_name.clone());
-
-        let document = NewPlainTextDocument::builder(metadata)
-            .file_type(parsed_file_type)
-            .text(self.file_content.clone())
-            .task_flag(self.is_task)
-            .build()
-            .map_err(failed_to_create_document)?;
+        let document =
+            NewPlainTextDocument::builder(NewDocumentMetadata::new(self.document_name.clone()))
+                .file_type(parsed_file_type)
+                .text(self.file_content.clone())
+                .task_flag(self.is_task)
+                .build()
+                .map_err(failed_to_create_document)?;
 
         let response = service_context
             .creator
@@ -92,6 +91,7 @@ where
             .await
             .map(|document| document.into_response())
             .map_err(failed_to_create_document)?;
+
         tracing::trace!("created document");
 
         let document_id_str = response

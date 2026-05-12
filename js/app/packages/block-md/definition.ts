@@ -10,6 +10,7 @@ import { isErr, ok } from '@core/util/maybeResult';
 import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import { storageServiceClient } from '@service-storage/client';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
+import { waitForDocumentSyncServiceReady } from '@queries/storage/document-location';
 import { createSyncServiceSource } from '@service-sync/source';
 import MarkdownBlock from './component/Block';
 import type { MarkdownRewriteOutput } from './signal/rewriteSignal';
@@ -52,7 +53,19 @@ export const definition = defineBlock({
 
       const [, documentResult] = maybeDocument;
       const { documentMetadata, userAccessLevel } = documentResult;
-      const [, { data: location }] = maybeLocation;
+      let [, { data: location }] = maybeLocation;
+
+      if ('presignedUrl' in location && location.content.state === 'pending') {
+        location = await waitForDocumentSyncServiceReady({
+          documentId,
+        }).catch((error) => {
+          console.error(
+            'Failed waiting for markdown sync-service location',
+            error
+          );
+          return location;
+        });
+      }
 
       // Markdown initialization and lifecycle persistence are backend-owned.
       // If a markdown document still resolves to object storage here, opening
