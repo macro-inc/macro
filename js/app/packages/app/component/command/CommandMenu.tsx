@@ -537,17 +537,13 @@ export function CommandMenuInner(props: {
           <div class="flex gap-1">
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
               <Hotkey
-                token={
-                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-                }
+                token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
                 class="space-x-1"
               />
             </div>
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
               <Hotkey
-                token={
-                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-                }
+                token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
                 class="space-x-1"
               />
             </div>
@@ -558,54 +554,40 @@ export function CommandMenuInner(props: {
         <Switch>
           <Match when={isInCommandScope()}>
             <HotkeyHint
-              token={
-                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-              }
+              token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
               label="Run action"
             />
             <HotkeyHint
-              token={
-                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-              }
+              token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
               label="Back"
             />
           </Match>
           <Match when={selectedIsCommand() || isEntityActionMode()}>
             <HotkeyHint
-              token={
-                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-              }
+              token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
               label="Run action"
             />
           </Match>
           <Match when={selectedIsSearch()}>
             <HotkeyHint
-              token={
-                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-              }
+              token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
               label="Search"
             />
             <Show when={canOpenInNewSplit()}>
               <HotkeyHint
-                token={
-                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-                }
+                token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
                 label="Search in new split"
               />
             </Show>
           </Match>
           <Match when={selectedIsEntity()}>
             <HotkeyHint
-              token={
-                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-              }
+              token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
               label="Open"
             />
             <Show when={canOpenInNewSplit()}>
               <HotkeyHint
-                token={
-                  TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-                }
+                token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
                 label="Open in new split"
               />
             </Show>
@@ -614,9 +596,7 @@ export function CommandMenuInner(props: {
 
         <Show when={!isInCommandScope() && !isEntityActionMode()}>
           <HotkeyHint
-            token={
-              TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-            }
+            token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
             label="Category"
           />
         </Show>
@@ -624,17 +604,13 @@ export function CommandMenuInner(props: {
           when={isInCommandScope()}
           fallback={
             <HotkeyHint
-              token={
-                TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-              }
+              token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
               label="Close"
             />
           }
         >
           <HotkeyHint
-            token={
-              TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */
-            }
+            token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
             label="Back"
           />
         </Show>

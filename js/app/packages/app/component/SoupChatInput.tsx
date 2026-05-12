@@ -167,10 +167,7 @@ function SoupChatInputInner() {
                     }}
                   >
                     <Hotkey
-                      token={
-                        TOKENS.global
-                          .commandMenu /* scuffed, should use TOKENS.ts */
-                      }
+                      token={ TOKENS.global.commandMenu /* scuffed, should use TOKENS.ts */ }
                     />
                   </div>
                   <span>Background</span>
