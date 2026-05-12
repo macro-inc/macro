@@ -7,15 +7,6 @@ use crate::domain::models::{TeamRole, UserTeamInfo};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
 
-/// Parse a team role string from the database.
-fn parse_role(s: &str) -> TeamRole {
-    match s {
-        "owner" => TeamRole::Owner,
-        "admin" => TeamRole::Admin,
-        _ => TeamRole::Member,
-    }
-}
-
 /// Look up the team a user belongs to and the role they hold.
 ///
 /// Users are expected to belong to at most one team, but this query is
@@ -30,7 +21,7 @@ pub async fn get_user_team(
 ) -> Result<Option<UserTeamInfo>, sqlx::Error> {
     let row = sqlx::query!(
         r#"
-        SELECT team_id, team_role::text as "role!"
+        SELECT team_id, team_role as "role!: TeamRole"
         FROM team_user
         WHERE user_id = $1
         ORDER BY team_role DESC
@@ -43,6 +34,6 @@ pub async fn get_user_team(
 
     Ok(row.map(|r| UserTeamInfo {
         team_id: r.team_id,
-        role: parse_role(&r.role),
+        role: r.role,
     }))
 }
