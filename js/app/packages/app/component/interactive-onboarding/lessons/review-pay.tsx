@@ -50,8 +50,8 @@ function ReviewPayDemo(props: LessonContentProps) {
   const isAuthenticated = useIsAuthenticated();
   const [isRedirecting, setIsRedirecting] = createSignal(false);
 
-  // Returns to /welcome?subscriptionSuccess=true on success, which triggers
-  // completeOnParam and runs onCompleteParam to create the pending team.
+  // Returns to /welcome?subscriptionSuccess=true on success, which completes
+  // all lessons except launch and runs onCompleteParam to create the pending team.
   const checkoutMutation = useOnboardingCheckoutMutation({
     onSuccess: (result) => {
       analytics.track('subscription_start', {
@@ -386,6 +386,8 @@ export const reviewPayLesson: LessonDefinition = {
   demo: ReviewPayDemo,
   order: 95,
   hideContinue: true,
+  completeOnParam: 'subscriptionSuccess',
+  onCompleteParam: createPendingTeamOnReturn,
   previousLesson: ({ onboarding, isLessonSkipped }) => {
     // When teams feature is disabled, these lessons are skipped
     if (isLessonSkipped('team-choice')) {
@@ -396,6 +398,4 @@ export const reviewPayLesson: LessonDefinition = {
       onboarding.teamName().trim() !== '';
     return hasTeam ? 'invite-team' : 'team-choice';
   },
-  completeOnParam: 'subscriptionSuccess',
-  onCompleteParam: createPendingTeamOnReturn,
 };
