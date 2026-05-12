@@ -1,6 +1,6 @@
 import { searchLocationPendingSignal } from '@block-pdf/signal/location';
-import { FindBar } from '@core/component/FindBar';
 import type { FindBarController } from '@core/component/createFindBarController';
+import { FindBar } from '@core/component/FindBar';
 import { IS_MAC } from '@core/constant/isMac';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { createEffect, createSignal, onCleanup, Show, untrack } from 'solid-js';
