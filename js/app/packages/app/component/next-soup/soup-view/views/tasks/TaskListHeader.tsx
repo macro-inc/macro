@@ -7,8 +7,8 @@ import { cn } from '@ui/utils/classname';
 import { For, type JSX, Show } from 'solid-js';
 import {
   TASK_GRID_COLUMNS,
-  TASK_GRID_TEMPLATE_AREAS,
-  TASK_GRID_TEMPLATE_COLUMNS,
+  TASK_GRID_TEMPLATE_AREAS_WIDE,
+  TASK_GRID_TEMPLATE_COLUMNS_WIDE,
 } from './task-grid-template';
 import './list-property-value.css';
 
@@ -50,8 +50,8 @@ export function TaskListHeader(props: { class?: string }) {
         props.class
       )}
       style={{
-        'grid-template-columns': TASK_GRID_TEMPLATE_COLUMNS,
-        'grid-template-areas': TASK_GRID_TEMPLATE_AREAS,
+        'grid-template-columns': TASK_GRID_TEMPLATE_COLUMNS_WIDE,
+        'grid-template-areas': TASK_GRID_TEMPLATE_AREAS_WIDE,
       }}
     >
       <div style={{ 'grid-area': 'indicator' }} />
@@ -76,6 +76,13 @@ export function TaskListHeader(props: { class?: string }) {
           </div>
         )}
       </For>
+      {/* Created By column - only shown on wide containers (>1220px) */}
+      <div
+        style={{ 'grid-area': 'createdBy' }}
+        class="truncate hidden @min-[1221px]/uList:block"
+      >
+        Created By
+      </div>
       <div style={{ 'grid-area': 'timestamp' }} class="text-right">
         Updated
       </div>

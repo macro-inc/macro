@@ -10,6 +10,8 @@ import {
 } from '@core/component/Properties/utils';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserGroup } from '@core/component/UserGroup';
+import { UserIcon } from '@core/component/UserIcon';
+import { tryMacroId, useDisplayNameParts } from '@core/user';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
 import { cn } from '@ui/utils/classname';
@@ -133,6 +135,48 @@ const ListSelectValue: Component<{ property: Property }> = (props) => {
   );
 };
 
+/** Single user display with icon + truncated first name */
+const SingleUserValue: Component<{ userId: string }> = (props) => {
+  const nameParts = () => useDisplayNameParts(tryMacroId(props.userId));
+  const firstName = () => nameParts().firstName() || 'Unknown';
+
+  return (
+    <div class="flex items-center gap-1.5 min-w-0">
+      <UserIcon id={props.userId} size="sm" suppressClick showTooltip />
+      {/* First name hidden on narrow containers */}
+      <span class="truncate @max-[840px]/uList:hidden">{firstName()}</span>
+    </div>
+  );
+};
+
+/** Multi-user display with avatar stack */
+const MultiUserValue: Component<{ userIds: string[] }> = (props) => {
+  return (
+    <>
+      {/* Wide mode: show up to 2 users */}
+      <div class="flex @max-[840px]/uList:hidden">
+        <UserGroup
+          userIds={props.userIds}
+          size="sm"
+          suppressClick
+          showTooltip
+          maxUsers={2}
+        />
+      </div>
+      {/* Narrow mode: show 1 user */}
+      <div class="hidden @max-[840px]/uList:flex">
+        <UserGroup
+          userIds={props.userIds}
+          size="sm"
+          suppressClick
+          showTooltip
+          maxUsers={1}
+        />
+      </div>
+    </>
+  );
+};
+
 const ListEntityValue: Component<{ property: Property }> = (props) => {
   const context = usePropertiesContext();
 
@@ -147,6 +191,7 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
   const entities = () => getEntityValues(props.property);
   const isUser = () => props.property.specificEntityType === 'USER';
   const hasValues = () => entities().length > 0;
+  const isSingleUser = () => isUser() && entities().length === 1;
 
   return (
     <Tooltip
@@ -182,25 +227,15 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
               </span>
             }
           >
-            {/* Wide mode: show up to 2 users. Narrow mode: show 1 user */}
-            <div class="flex @max-[840px]/uList:hidden">
-              <UserGroup
-                userIds={entities().map((e) => e.entity_id)}
-                size="sm"
-                suppressClick
-                showTooltip
-                maxUsers={2}
-              />
-            </div>
-            <div class="hidden @max-[840px]/uList:flex">
-              <UserGroup
-                userIds={entities().map((e) => e.entity_id)}
-                size="sm"
-                suppressClick
-                showTooltip
-                maxUsers={1}
-              />
-            </div>
+            {/* Single user: show icon + first name */}
+            <Show
+              when={isSingleUser()}
+              fallback={
+                <MultiUserValue userIds={entities().map((e) => e.entity_id)} />
+              }
+            >
+              <SingleUserValue userId={entities()[0].entity_id} />
+            </Show>
           </Show>
         </Show>
         {/* Caret hidden when container is narrow */}

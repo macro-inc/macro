@@ -7,6 +7,8 @@ import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
+import { UserIcon } from '@core/component/UserIcon';
+import { tryMacroId, useDisplayNameParts } from '@core/user';
 import {
   Entity,
   type EntityData,
@@ -16,7 +18,10 @@ import {
   ProjectBreadCrumb,
   UnreadIndicator,
 } from '@entity';
-import { SharedBadgeSmall } from '@entity/components/Badges';
+import {
+  CreatedByBadgeSmall,
+  SharedBadgeSmall,
+} from '@entity/components/Badges';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
 import { useUserId } from '@queries/auth';
@@ -28,8 +33,8 @@ import { createMemo, For, Show, Suspense } from 'solid-js';
 import { ListPropertyValue } from './list-property-value';
 import {
   TASK_GRID_COLUMNS,
-  TASK_GRID_TEMPLATE_AREAS,
-  TASK_GRID_TEMPLATE_COLUMNS,
+  TASK_GRID_TEMPLATE_AREAS_WIDE,
+  TASK_GRID_TEMPLATE_COLUMNS_WIDE,
   type TaskGridColumn,
 } from './task-grid-template';
 
@@ -60,6 +65,13 @@ function buildStubProperty(col: TaskGridColumn): Property {
 export function TaskGridLayout(props: LayoutProps) {
   const currentId = useUserId();
   const entity = () => props.entity as EntityWithProperties<EntityData>;
+  const isShared = () => props.entity.ownerId !== currentId();
+
+  // Get owner's first name for the Created By column
+  const ownerNameParts = () =>
+    useDisplayNameParts(tryMacroId(props.entity.ownerId));
+  const ownerDisplayName = () =>
+    isShared() ? ownerNameParts().firstName() || 'Unknown' : 'Me';
 
   const propertyMap = createMemo(() => {
     const map = new Map<string, Property>();
@@ -108,8 +120,8 @@ export function TaskGridLayout(props: LayoutProps) {
           'gap-2 grid grid-rows-[1fr]'
         )}
         style={{
-          'grid-template-columns': TASK_GRID_TEMPLATE_COLUMNS,
-          'grid-template-areas': TASK_GRID_TEMPLATE_AREAS,
+          'grid-template-columns': TASK_GRID_TEMPLATE_COLUMNS_WIDE,
+          'grid-template-areas': TASK_GRID_TEMPLATE_AREAS_WIDE,
         }}
       >
         <Entity.Slot placement="indicator" class="relative size-full group">
@@ -154,8 +166,16 @@ export function TaskGridLayout(props: LayoutProps) {
               </span>
             )}
           </Show>
-          <Show when={props.entity.ownerId !== currentId()}>
-            <SharedBadgeSmall ownerId={props.entity.ownerId} />
+          {/* Show shared badges on narrow/medium containers, hide on wide (>1220px) */}
+          <Show when={isShared()}>
+            {/* Narrow: "shared this with you" tooltip */}
+            <span class="@min-[841px]/uList:hidden">
+              <SharedBadgeSmall ownerId={props.entity.ownerId} />
+            </span>
+            {/* Medium (841px-1220px): "Created by" tooltip */}
+            <span class="hidden @min-[841px]/uList:inline @min-[1221px]/uList:hidden">
+              <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
+            </span>
           </Show>
         </Entity.Slot>
 
@@ -173,6 +193,15 @@ export function TaskGridLayout(props: LayoutProps) {
             </Entity.Slot>
           )}
         </For>
+
+        {/* Created By column - only shown on wide containers (>1220px) */}
+        <Entity.Slot
+          placement="createdBy"
+          class="hidden @min-[1221px]/uList:flex items-center gap-1.5 min-w-0 overflow-hidden text-xs ph-no-capture"
+        >
+          <UserIcon id={props.entity.ownerId} size="sm" showTooltip={true} />
+          <span class="truncate text-ink-muted">{ownerDisplayName()}</span>
+        </Entity.Slot>
 
         <Entity.Slot
           placement="timestamp"

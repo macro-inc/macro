@@ -33,12 +33,33 @@ export const TASK_GRID_COLUMNS = [
   },
 ] as const;
 
+/** Width for the "Created By" column - only shown on wide containers */
+export const CREATED_BY_COLUMN_WIDTH = 'var(--task-col-created-by, 7rem)';
+
 export type TaskGridColumn = (typeof TASK_GRID_COLUMNS)[number];
 
-export const TASK_GRID_TEMPLATE_COLUMNS = `1rem minmax(0, 100%) ${TASK_GRID_COLUMNS.map(
+/** Grid template for narrow containers (no Created By column) */
+export const TASK_GRID_TEMPLATE_COLUMNS_NARROW = `1rem minmax(0, 100%) ${TASK_GRID_COLUMNS.map(
   (c) => c.width
 ).join(' ')} var(--task-col-timestamp, 5rem)`;
 
-export const TASK_GRID_TEMPLATE_AREAS = `"indicator content ${TASK_GRID_COLUMNS.map(
+/** Grid template for wide containers (includes Created By column) */
+export const TASK_GRID_TEMPLATE_COLUMNS_WIDE = `1rem minmax(0, 100%) ${TASK_GRID_COLUMNS.map(
+  (c) => c.width
+).join(' ')} ${CREATED_BY_COLUMN_WIDTH} var(--task-col-timestamp, 5rem)`;
+
+/** @deprecated Use TASK_GRID_TEMPLATE_COLUMNS_NARROW or TASK_GRID_TEMPLATE_COLUMNS_WIDE */
+export const TASK_GRID_TEMPLATE_COLUMNS = TASK_GRID_TEMPLATE_COLUMNS_NARROW;
+
+/** Grid template areas for narrow containers (no Created By column) */
+export const TASK_GRID_TEMPLATE_AREAS_NARROW = `"indicator content ${TASK_GRID_COLUMNS.map(
   (c) => c.id
 ).join(' ')} timestamp"`;
+
+/** Grid template areas for wide containers (includes Created By column) */
+export const TASK_GRID_TEMPLATE_AREAS_WIDE = `"indicator content ${TASK_GRID_COLUMNS.map(
+  (c) => c.id
+).join(' ')} createdBy timestamp"`;
+
+/** @deprecated Use TASK_GRID_TEMPLATE_AREAS_NARROW or TASK_GRID_TEMPLATE_AREAS_WIDE */
+export const TASK_GRID_TEMPLATE_AREAS = TASK_GRID_TEMPLATE_AREAS_NARROW;

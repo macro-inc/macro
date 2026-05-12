@@ -60,6 +60,38 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
   );
 }
 
+export function CreatedByBadgeSmall(props: { ownerId: string }) {
+  const id = () => tryMacroId(props.ownerId);
+  const name = () => {
+    const currentId = id();
+    if (currentId) {
+      let [name] = useDisplayName(currentId);
+      return name;
+    }
+    return () => undefined;
+  };
+
+  return (
+    <Tooltip
+      tooltip={
+        <div class="flex items-center gap-1.5 text-xs">
+          <UserIcon
+            id={props.ownerId}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+          <span>Created by {name()()}</span>
+        </div>
+      }
+    >
+      <div class="text-ink-extra-muted/50 p-1">
+        <UserPlus class="size-4" />
+      </div>
+    </Tooltip>
+  );
+}
+
 export function DraftBadge() {
   return <Badge class="text-accent-30 border-edge-muted px-2">draft</Badge>;
 }
