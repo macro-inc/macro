@@ -102,22 +102,37 @@ pub fn group_order_expr(field: &GroupByField) -> String {
     }
 }
 
+/// Result of building a group JOIN clause with optional bind parameter.
+pub struct GroupJoinClause {
+    /// The SQL JOIN clause (may contain $10 placeholder for entity_type)
+    pub sql: String,
+    /// Entity type value to bind at $10, if present
+    pub entity_type_bind: Option<String>,
+}
+
 /// Build the JOIN clause for property-based grouping.
-pub fn group_join_clause(field: &GroupByField) -> Option<String> {
+/// Returns SQL with $10 placeholder for entity_type when present.
+pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
     match field {
         GroupByField::Property {
             property_definition_id,
             entity_type,
         } => {
-            let entity_type_filter = entity_type
-                .as_ref()
-                .map(|et| format!("AND ep_group.entity_type = '{}'", et))
-                .unwrap_or_default();
+            let (entity_type_filter, entity_type_bind) = match entity_type {
+                Some(et) => (
+                    "AND ep_group.entity_type = $10".to_string(),
+                    Some(et.clone()),
+                ),
+                None => (String::new(), None),
+            };
 
-            Some(format!(
-                "LEFT JOIN entity_properties ep_group ON ep_group.entity_id = t.id::text AND ep_group.property_definition_id = '{}' {}",
-                property_definition_id, entity_type_filter
-            ))
+            Some(GroupJoinClause {
+                sql: format!(
+                    "LEFT JOIN entity_properties ep_group ON ep_group.entity_id = t.id::text AND ep_group.property_definition_id = '{}' {}",
+                    property_definition_id, entity_type_filter
+                ),
+                entity_type_bind,
+            })
         }
         _ => None,
     }

@@ -29,7 +29,7 @@ use uuid::Uuid;
 
 use crate::domain::models::GroupedSoupItem;
 use crate::outbound::pg_soup_repo::grouping::{
-    date_bucket_order_expr, group_join_clause, group_select_expr,
+    GroupJoinClause, date_bucket_order_expr, group_join_clause, group_select_expr,
 };
 use crate::outbound::pg_soup_repo::{populate_properties, type_err};
 use models_grouping::{GroupByField, GroupingConfig};
@@ -983,7 +983,11 @@ impl<'a> FromRow<'a, PgRow> for GroupedSoupRow {
 const PER_GROUP_LIMIT: i32 = 10;
 
 /// Build the GroupedItems CTE based on the grouping configuration.
-fn build_grouped_items_cte(builder: &mut QueryBuilder<'_, Postgres>, grouping: &GroupingConfig) {
+/// Returns the entity_type value to bind at $10, if property grouping with entity_type filter.
+fn build_grouped_items_cte(
+    builder: &mut QueryBuilder<'_, Postgres>,
+    grouping: &GroupingConfig,
+) -> Option<String> {
     let select_expr = group_select_expr(&grouping.field);
 
     builder.push("GroupedItems AS (SELECT t.*, (");
@@ -994,18 +998,24 @@ fn build_grouped_items_cte(builder: &mut QueryBuilder<'_, Postgres>, grouping: &
     builder.push(&select_expr);
     builder.push(" ORDER BY t.sort_ts DESC, t.id DESC) as row_in_group FROM TopItems t ");
 
-    if let Some(join) = group_join_clause(&grouping.field) {
-        builder.push(&join);
+    let entity_type_bind = if let Some(GroupJoinClause {
+        sql,
+        entity_type_bind,
+    }) = group_join_clause(&grouping.field)
+    {
+        builder.push(&sql);
         builder.push(" ");
-    }
+        entity_type_bind
+    } else {
+        None
+    };
 
-    if let Some(ref key) = grouping.group_key {
+    if grouping.group_key.is_some() {
         // Single group mode: fetch items for a specific group (for "load more")
+        // Uses $9 parameter for group_key to prevent SQL injection
         builder.push("WHERE (");
         builder.push(&select_expr);
-        builder.push(") = '");
-        builder.push(key);
-        builder.push("' ");
+        builder.push(") = $9 ");
     }
 
     builder.push("), ");
@@ -1016,14 +1026,18 @@ fn build_grouped_items_cte(builder: &mut QueryBuilder<'_, Postgres>, grouping: &
         builder.push(PER_GROUP_LIMIT.to_string());
         builder.push("), ");
     }
+
+    entity_type_bind
 }
 
 /// Build the grouped query with grouping CTE.
+/// Returns (QueryBuilder, entity_type_bind) where entity_type_bind is Some when
+/// property grouping with entity_type filter is used (bind at $10).
 fn build_grouped_query<'a>(
     filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
     grouping: &'a GroupingConfig,
-) -> QueryBuilder<'a, Postgres> {
+) -> (QueryBuilder<'a, Postgres>, Option<String>) {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
     // TopItems CTE: lightweight id + sort_ts with filters, cursor, and limit
@@ -1089,7 +1103,7 @@ fn build_grouped_query<'a>(
     builder.push("), ");
 
     // GroupedItems CTE: adds group metadata (and FilteredGroupedItems if not single-group mode)
-    build_grouped_items_cte(&mut builder, grouping);
+    let entity_type_bind = build_grouped_items_cte(&mut builder, grouping);
 
     // Combined CTE: full detail joins from GroupedItems (or FilteredGroupedItems)
     // When fetching a specific group, use GroupedItems directly; otherwise use FilteredGroupedItems
@@ -1126,7 +1140,7 @@ fn build_grouped_query<'a>(
     }
     builder.push(", \"sort_ts\" DESC, \"id\" DESC LIMIT $3");
 
-    builder
+    (builder, entity_type_bind)
 }
 
 /// Execute a grouped dynamic cursor soup query.
@@ -1151,20 +1165,34 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let rows: Vec<GroupedSoupRow> =
-        build_grouped_query(cursor.filter(), exclude_frecency, &grouping)
-            .build()
-            .bind(user_id.as_ref())
-            .bind(sort_method_str)
-            .bind(query_limit)
-            .bind(cursor_timestamp)
-            .bind(cursor_id_str)
-            .bind(completed_option_id)
-            .bind(status_property_id)
-            .bind(assignees_property_id)
-            .try_map(|row| GroupedSoupRow::from_row(&row))
-            .fetch_all(db)
-            .await?;
+    let (query_builder, entity_type_bind) =
+        build_grouped_query(cursor.filter(), exclude_frecency, &grouping);
+
+    let mut query = query_builder
+        .build()
+        .bind(user_id.as_ref())
+        .bind(sort_method_str)
+        .bind(query_limit)
+        .bind(cursor_timestamp)
+        .bind(cursor_id_str)
+        .bind(completed_option_id)
+        .bind(status_property_id)
+        .bind(assignees_property_id);
+
+    // Bind group_key as $9 when filtering by specific group
+    if let Some(ref key) = grouping.group_key {
+        query = query.bind(key.clone());
+    }
+
+    // Bind entity_type as $10 when property grouping with entity_type filter
+    if let Some(ref et) = entity_type_bind {
+        query = query.bind(et.clone());
+    }
+
+    let rows: Vec<GroupedSoupRow> = query
+        .try_map(|row| GroupedSoupRow::from_row(&row))
+        .fetch_all(db)
+        .await?;
 
     // Convert rows to (SoupItem, GroupFields) pairs and unzip
     let (mut soup_items, groups): (Vec<SoupItem>, Vec<GroupFields>) = rows
