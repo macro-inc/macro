@@ -52,13 +52,6 @@ use crate::domain::{
     team_repo::TeamService,
 };
 
-/// Shared path param for team endpoints.
-#[derive(serde::Deserialize)]
-pub struct TeamPathParam {
-    /// The team id
-    pub team_id: uuid::Uuid,
-}
-
 /// Router state containing the team service.
 pub struct TeamRouterState<T, Eas> {
     /// The team service implementation.
@@ -95,28 +88,22 @@ where
         .route("/join/{team_invite_id}", get(join_team::handler::<T, Eas>))
         .route("/user", get(get_user_teams::handler::<T, Eas>))
         .route("/user/invites", get(get_user_invites::handler::<T, Eas>))
-        .route("/{team_id}", get(get_team::handler::<T, Eas>))
-        .route("/{team_id}", patch(patch_team::handler::<T, Eas>))
-        .route(
-            "/{team_id}/tier",
-            patch(patch_team_user_tier::handler::<T, Eas>),
-        )
-        .route("/{team_id}", delete(delete_team::handler::<T, Eas>))
-        .route(
-            "/{team_id}/invites",
-            get(get_team_invites::handler::<T, Eas>),
-        )
-        .route("/{team_id}/invite", post(invite_to_team::handler::<T, Eas>))
+        .route("/", get(get_team::handler::<T, Eas>))
+        .route("/", patch(patch_team::handler::<T, Eas>))
+        .route("/tier", patch(patch_team_user_tier::handler::<T, Eas>))
+        .route("/", delete(delete_team::handler::<T, Eas>))
+        .route("/invites", get(get_team_invites::handler::<T, Eas>))
+        .route("/invite", post(invite_to_team::handler::<T, Eas>))
         .route(
             "/join/{team_invite_id}",
             delete(reject_invitation::handler::<T, Eas>),
         )
         .route(
-            "/{team_id}/remove/{remove_user_id}",
+            "/remove/{remove_user_id}",
             delete(remove_user_from_team::handler::<T, Eas>),
         )
         .route(
-            "/{team_id}/invite/{team_invite_id}",
+            "/invite/{team_invite_id}",
             delete(delete_team_invite::handler::<T, Eas>),
         )
         .with_state(state)
