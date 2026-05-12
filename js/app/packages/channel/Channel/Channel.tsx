@@ -203,6 +203,7 @@ export function Channel(props: ChannelProps) {
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
     channelId: () => props.channelId,
+    participantIds: () => participants.ids(),
     patchMessage: patchMessageMutation.mutate,
   });
 
