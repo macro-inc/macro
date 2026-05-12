@@ -1,13 +1,12 @@
 /* components */
-export { Tooltip } from './components/Tooltip';
-export { HoverCard } from './components/HoverCard';
-export { Popover } from './components/Popover';
 export { SegmentedControl } from './components/SegmentedControl';
 export { TabbedControl } from './components/TabbedControl';
 export { Avatar, AvatarGroup } from './components/Avatar';
+export { HoverCard } from './components/HoverCard';
 export { Dropdown } from './components/Dropdown';
 export { Keyboard } from './components/Keyboard';
 export { Surface } from './components/Surface';
+export { Tooltip } from './components/Tooltip';
 export { Dialog  } from './components/Dialog';
 export { Button } from './components/Button';
 export { Hotkey } from './components/Hotkey';

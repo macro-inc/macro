@@ -15,7 +15,7 @@ export const MacroSignatureButton = (props: MacroSignatureButtonProps) => {
   const { isLoading } = useUserContext();
   return (
     <Show when={!isLoading() && !hasPaidAccess()}>
-      <Tooltip label="Subscribe to remove watermark" class="w-fit">
+      <Tooltip label="Subscribe to remove watermark">
         <button
           type="button"
           class="hover:bg-hover pointer-events-all"

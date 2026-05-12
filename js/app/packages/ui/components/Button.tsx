@@ -42,10 +42,10 @@ const sizeStyles: Record<ButtonSize, string> = {
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
     'tooltipPlacement',
-    'hotkey',
     'children',
     'tooltip',
     'variant',
+    'hotkey',
     'class',
     'depth',
     'label',
