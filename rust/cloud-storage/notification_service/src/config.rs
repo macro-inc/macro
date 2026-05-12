@@ -94,8 +94,15 @@ impl Config {
         let sns_fcm_platform_arn = std::env::var("SNS_FCM_PLATFORM_ARN")
             .context("SNS_FCM_PLATFORM_ARN must be provided")?;
 
-        let sns_apns_voip_platform_arn = std::env::var("SNS_APNS_VOIP_PLATFORM_ARN")
-            .context("SNS_APNS_VOIP_PLATFORM_ARN must be provided")?;
+        let sns_apns_voip_platform_arn = match std::env::var("SNS_APNS_VOIP_PLATFORM_ARN") {
+            Ok(value) => value,
+            // Local `run_local` does not provision SNS platform applications. Keep
+            // VoIP push disabled locally instead of requiring a dummy ARN in .env.
+            Err(std::env::VarError::NotPresent) if matches!(environment, Environment::Local) => {
+                String::new()
+            }
+            Err(error) => return Err(error).context("SNS_APNS_VOIP_PLATFORM_ARN must be provided"),
+        };
 
         let sender_base_address =
             std::env::var("SENDER_BASE_ADDRESS").context("SENDER_BASE_ADDRESS must be provided")?;
