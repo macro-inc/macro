@@ -92,12 +92,9 @@ pub fn construct_search_result(
         .filter_map(|hit| {
             let result = if let Some(SearchGotoContent::Channels(goto)) = hit.goto {
                 // Drop content-match hits whose underlying message no longer exists in
-                // the DB (hard-deleted / stale OpenSearch entries) or has been
-                // soft-deleted — neither should surface to users.
+                // the DB — those are stale OpenSearch entries (e.g. hard-deleted) that
+                // shouldn't surface to users.
                 let deleted_at = *message_states.get(&goto.channel_message_id)?;
-                if deleted_at.is_some() {
-                    return None;
-                }
                 ChannelSearchResult {
                     highlight: hit.highlight.into(),
                     score: hit.score,
