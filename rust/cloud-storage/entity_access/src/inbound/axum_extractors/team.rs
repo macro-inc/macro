@@ -30,13 +30,13 @@ use model_user::axum_extractor::MacroUserExtractor;
 ///
 /// Returns `ExtractorError::Unauthorized` if there is no authenticated user.
 #[derive(Debug)]
-pub struct TeamAccessLevelExtractor<T: RequiredPermission, Svc> {
+pub struct OptionalMacroUserTeamExtractor<T: RequiredPermission, Svc> {
     /// The entity access receipt, if the user has a qualifying team membership.
     pub entity_access_receipt: Option<EntityAccessReceipt<T>>,
     _marker: PhantomData<(T, Svc)>,
 }
 
-impl<T, S, Svc> FromRequestParts<S> for TeamAccessLevelExtractor<T, Svc>
+impl<T, S, Svc> FromRequestParts<S> for OptionalMacroUserTeamExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
