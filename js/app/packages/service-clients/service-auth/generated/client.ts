@@ -1683,6 +1683,66 @@ export const sessionLogin = async (
 };
 
 /**
+ * @summary Gets a team by ID.
+ */
+export type getTeamResponse200 = {
+  data: TeamWithMembers;
+  status: 200;
+};
+
+export type getTeamResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getTeamResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamResponseSuccess = getTeamResponse200 & {
+  headers: Headers;
+};
+export type getTeamResponseError = (
+  | getTeamResponse400
+  | getTeamResponse401
+  | getTeamResponse404
+  | getTeamResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTeamResponse = getTeamResponseSuccess | getTeamResponseError;
+
+export const getGetTeamUrl = () => {
+  return `/team`;
+};
+
+export const getTeam = async (
+  options?: RequestInit
+): Promise<getTeamResponse> => {
+  const res = await fetch(getGetTeamUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as getTeamResponse;
+};
+
+/**
  * @summary Creates a new team.
  */
 export type createTeamResponse200 = {
@@ -1737,6 +1797,342 @@ export const createTeam = async (
     status: res.status,
     headers: res.headers,
   } as createTeamResponse;
+};
+
+/**
+ * @summary Deletes a team.
+This will update all team members roles and cancel your subscription for the team.
+This action is **irreversible** and you will not be able to recover the team afterwards.
+ */
+export type deleteTeamResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type deleteTeamResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type deleteTeamResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteTeamResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteTeamResponseSuccess = deleteTeamResponse200 & {
+  headers: Headers;
+};
+export type deleteTeamResponseError = (
+  | deleteTeamResponse400
+  | deleteTeamResponse401
+  | deleteTeamResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteTeamResponse =
+  | deleteTeamResponseSuccess
+  | deleteTeamResponseError;
+
+export const getDeleteTeamUrl = () => {
+  return `/team`;
+};
+
+export const deleteTeam = async (
+  options?: RequestInit
+): Promise<deleteTeamResponse> => {
+  const res = await fetch(getDeleteTeamUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteTeamResponse;
+};
+
+/**
+ * @summary Updates a team.
+ */
+export type patchTeamResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type patchTeamResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type patchTeamResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type patchTeamResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type patchTeamResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type patchTeamResponseSuccess = patchTeamResponse200 & {
+  headers: Headers;
+};
+export type patchTeamResponseError = (
+  | patchTeamResponse400
+  | patchTeamResponse401
+  | patchTeamResponse404
+  | patchTeamResponse500
+) & {
+  headers: Headers;
+};
+
+export type patchTeamResponse =
+  | patchTeamResponseSuccess
+  | patchTeamResponseError;
+
+export const getPatchTeamUrl = () => {
+  return `/team`;
+};
+
+export const patchTeam = async (
+  patchTeamRequest: PatchTeamRequest,
+  options?: RequestInit
+): Promise<patchTeamResponse> => {
+  const res = await fetch(getPatchTeamUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(patchTeamRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: patchTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchTeamResponse;
+};
+
+/**
+ * @summary Invites a user to a team.
+ */
+export type inviteToTeamResponse201 = {
+  data: void;
+  status: 201;
+};
+
+export type inviteToTeamResponse304 = {
+  data: void;
+  status: 304;
+};
+
+export type inviteToTeamResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type inviteToTeamResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type inviteToTeamResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type inviteToTeamResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type inviteToTeamResponseSuccess = inviteToTeamResponse201 & {
+  headers: Headers;
+};
+export type inviteToTeamResponseError = (
+  | inviteToTeamResponse304
+  | inviteToTeamResponse400
+  | inviteToTeamResponse401
+  | inviteToTeamResponse404
+  | inviteToTeamResponse500
+) & {
+  headers: Headers;
+};
+
+export type inviteToTeamResponse =
+  | inviteToTeamResponseSuccess
+  | inviteToTeamResponseError;
+
+export const getInviteToTeamUrl = () => {
+  return `/team/invite`;
+};
+
+export const inviteToTeam = async (
+  inviteToTeamRequest: InviteToTeamRequest,
+  options?: RequestInit
+): Promise<inviteToTeamResponse> => {
+  const res = await fetch(getInviteToTeamUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inviteToTeamRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: inviteToTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as inviteToTeamResponse;
+};
+
+/**
+ * @summary Deletes a team invite from a team.
+ */
+export type deleteTeamInviteHandlerResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type deleteTeamInviteHandlerResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type deleteTeamInviteHandlerResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteTeamInviteHandlerResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteTeamInviteHandlerResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteTeamInviteHandlerResponseSuccess =
+  deleteTeamInviteHandlerResponse200 & {
+    headers: Headers;
+  };
+export type deleteTeamInviteHandlerResponseError = (
+  | deleteTeamInviteHandlerResponse400
+  | deleteTeamInviteHandlerResponse401
+  | deleteTeamInviteHandlerResponse404
+  | deleteTeamInviteHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteTeamInviteHandlerResponse =
+  | deleteTeamInviteHandlerResponseSuccess
+  | deleteTeamInviteHandlerResponseError;
+
+export const getDeleteTeamInviteHandlerUrl = (teamInviteId: string) => {
+  return `/team/invite/${teamInviteId}`;
+};
+
+export const deleteTeamInviteHandler = async (
+  teamInviteId: string,
+  options?: RequestInit
+): Promise<deleteTeamInviteHandlerResponse> => {
+  const res = await fetch(getDeleteTeamInviteHandlerUrl(teamInviteId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteTeamInviteHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteTeamInviteHandlerResponse;
+};
+
+/**
+ * @summary Gets all invites for a team.
+ */
+export type getTeamInvitesResponse200 = {
+  data: TeamInvitesResponse;
+  status: 200;
+};
+
+export type getTeamInvitesResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getTeamInvitesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamInvitesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamInvitesResponseSuccess = getTeamInvitesResponse200 & {
+  headers: Headers;
+};
+export type getTeamInvitesResponseError = (
+  | getTeamInvitesResponse400
+  | getTeamInvitesResponse401
+  | getTeamInvitesResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTeamInvitesResponse =
+  | getTeamInvitesResponseSuccess
+  | getTeamInvitesResponseError;
+
+export const getGetTeamInvitesUrl = () => {
+  return `/team/invites`;
+};
+
+export const getTeamInvites = async (
+  options?: RequestInit
+): Promise<getTeamInvitesResponse> => {
+  const res = await fetch(getGetTeamInvitesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamInvitesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamInvitesResponse;
 };
 
 /**
@@ -1853,6 +2249,137 @@ export const rejectInvitation = async (
     status: res.status,
     headers: res.headers,
   } as rejectInvitationResponse;
+};
+
+/**
+ * @summary Removes a user from a team.
+ */
+export type removeUserFromTeamResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type removeUserFromTeamResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type removeUserFromTeamResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type removeUserFromTeamResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type removeUserFromTeamResponseSuccess =
+  removeUserFromTeamResponse200 & {
+    headers: Headers;
+  };
+export type removeUserFromTeamResponseError = (
+  | removeUserFromTeamResponse400
+  | removeUserFromTeamResponse401
+  | removeUserFromTeamResponse500
+) & {
+  headers: Headers;
+};
+
+export type removeUserFromTeamResponse =
+  | removeUserFromTeamResponseSuccess
+  | removeUserFromTeamResponseError;
+
+export const getRemoveUserFromTeamUrl = (removeUserId: string) => {
+  return `/team/remove/${removeUserId}`;
+};
+
+export const removeUserFromTeam = async (
+  removeUserId: string,
+  options?: RequestInit
+): Promise<removeUserFromTeamResponse> => {
+  const res = await fetch(getRemoveUserFromTeamUrl(removeUserId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeUserFromTeamResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeUserFromTeamResponse;
+};
+
+/**
+ * @summary Updates a team.
+ */
+export type patchTeamUserTierResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type patchTeamUserTierResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type patchTeamUserTierResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type patchTeamUserTierResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type patchTeamUserTierResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type patchTeamUserTierResponseSuccess = patchTeamUserTierResponse200 & {
+  headers: Headers;
+};
+export type patchTeamUserTierResponseError = (
+  | patchTeamUserTierResponse400
+  | patchTeamUserTierResponse401
+  | patchTeamUserTierResponse404
+  | patchTeamUserTierResponse500
+) & {
+  headers: Headers;
+};
+
+export type patchTeamUserTierResponse =
+  | patchTeamUserTierResponseSuccess
+  | patchTeamUserTierResponseError;
+
+export const getPatchTeamUserTierUrl = () => {
+  return `/team/tier`;
+};
+
+export const patchTeamUserTier = async (
+  patchTeamUserTierRequest: PatchTeamUserTierRequest,
+  options?: RequestInit
+): Promise<patchTeamUserTierResponse> => {
+  const res = await fetch(getPatchTeamUserTierUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(patchTeamUserTierRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: patchTeamUserTierResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchTeamUserTierResponse;
 };
 
 /**
@@ -1973,547 +2500,6 @@ export const getUserInvites = async (
     status: res.status,
     headers: res.headers,
   } as getUserInvitesResponse;
-};
-
-/**
- * @summary Gets a team by ID.
- */
-export type getTeamResponse200 = {
-  data: TeamWithMembers;
-  status: 200;
-};
-
-export type getTeamResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type getTeamResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type getTeamResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type getTeamResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type getTeamResponseSuccess = getTeamResponse200 & {
-  headers: Headers;
-};
-export type getTeamResponseError = (
-  | getTeamResponse400
-  | getTeamResponse401
-  | getTeamResponse404
-  | getTeamResponse500
-) & {
-  headers: Headers;
-};
-
-export type getTeamResponse = getTeamResponseSuccess | getTeamResponseError;
-
-export const getGetTeamUrl = (teamId: string) => {
-  return `/team/${teamId}`;
-};
-
-export const getTeam = async (
-  teamId: string,
-  options?: RequestInit
-): Promise<getTeamResponse> => {
-  const res = await fetch(getGetTeamUrl(teamId), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as getTeamResponse;
-};
-
-/**
- * @summary Deletes a team.
-This will update all team members roles and cancel your subscription for the team.
-This action is **irreversible** and you will not be able to recover the team afterwards.
- */
-export type deleteTeamResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type deleteTeamResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type deleteTeamResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type deleteTeamResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type deleteTeamResponseSuccess = deleteTeamResponse200 & {
-  headers: Headers;
-};
-export type deleteTeamResponseError = (
-  | deleteTeamResponse400
-  | deleteTeamResponse401
-  | deleteTeamResponse500
-) & {
-  headers: Headers;
-};
-
-export type deleteTeamResponse =
-  | deleteTeamResponseSuccess
-  | deleteTeamResponseError;
-
-export const getDeleteTeamUrl = (teamId: string) => {
-  return `/team/${teamId}`;
-};
-
-export const deleteTeam = async (
-  teamId: string,
-  options?: RequestInit
-): Promise<deleteTeamResponse> => {
-  const res = await fetch(getDeleteTeamUrl(teamId), {
-    ...options,
-    method: 'DELETE',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteTeamResponse;
-};
-
-/**
- * @summary Updates a team.
- */
-export type patchTeamResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type patchTeamResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type patchTeamResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type patchTeamResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type patchTeamResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type patchTeamResponseSuccess = patchTeamResponse200 & {
-  headers: Headers;
-};
-export type patchTeamResponseError = (
-  | patchTeamResponse400
-  | patchTeamResponse401
-  | patchTeamResponse404
-  | patchTeamResponse500
-) & {
-  headers: Headers;
-};
-
-export type patchTeamResponse =
-  | patchTeamResponseSuccess
-  | patchTeamResponseError;
-
-export const getPatchTeamUrl = (teamId: string) => {
-  return `/team/${teamId}`;
-};
-
-export const patchTeam = async (
-  teamId: string,
-  patchTeamRequest: PatchTeamRequest,
-  options?: RequestInit
-): Promise<patchTeamResponse> => {
-  const res = await fetch(getPatchTeamUrl(teamId), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(patchTeamRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchTeamResponse;
-};
-
-/**
- * @summary Invites a user to a team.
- */
-export type inviteToTeamResponse201 = {
-  data: void;
-  status: 201;
-};
-
-export type inviteToTeamResponse304 = {
-  data: void;
-  status: 304;
-};
-
-export type inviteToTeamResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type inviteToTeamResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type inviteToTeamResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type inviteToTeamResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type inviteToTeamResponseSuccess = inviteToTeamResponse201 & {
-  headers: Headers;
-};
-export type inviteToTeamResponseError = (
-  | inviteToTeamResponse304
-  | inviteToTeamResponse400
-  | inviteToTeamResponse401
-  | inviteToTeamResponse404
-  | inviteToTeamResponse500
-) & {
-  headers: Headers;
-};
-
-export type inviteToTeamResponse =
-  | inviteToTeamResponseSuccess
-  | inviteToTeamResponseError;
-
-export const getInviteToTeamUrl = (teamId: string) => {
-  return `/team/${teamId}/invite`;
-};
-
-export const inviteToTeam = async (
-  teamId: string,
-  inviteToTeamRequest: InviteToTeamRequest,
-  options?: RequestInit
-): Promise<inviteToTeamResponse> => {
-  const res = await fetch(getInviteToTeamUrl(teamId), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(inviteToTeamRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: inviteToTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as inviteToTeamResponse;
-};
-
-/**
- * @summary Deletes a team invite from a team.
- */
-export type deleteTeamInviteHandlerResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type deleteTeamInviteHandlerResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type deleteTeamInviteHandlerResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type deleteTeamInviteHandlerResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type deleteTeamInviteHandlerResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type deleteTeamInviteHandlerResponseSuccess =
-  deleteTeamInviteHandlerResponse200 & {
-    headers: Headers;
-  };
-export type deleteTeamInviteHandlerResponseError = (
-  | deleteTeamInviteHandlerResponse400
-  | deleteTeamInviteHandlerResponse401
-  | deleteTeamInviteHandlerResponse404
-  | deleteTeamInviteHandlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type deleteTeamInviteHandlerResponse =
-  | deleteTeamInviteHandlerResponseSuccess
-  | deleteTeamInviteHandlerResponseError;
-
-export const getDeleteTeamInviteHandlerUrl = (
-  teamId: string,
-  teamInviteId: string
-) => {
-  return `/team/${teamId}/invite/${teamInviteId}`;
-};
-
-export const deleteTeamInviteHandler = async (
-  teamId: string,
-  teamInviteId: string,
-  options?: RequestInit
-): Promise<deleteTeamInviteHandlerResponse> => {
-  const res = await fetch(getDeleteTeamInviteHandlerUrl(teamId, teamInviteId), {
-    ...options,
-    method: 'DELETE',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteTeamInviteHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteTeamInviteHandlerResponse;
-};
-
-/**
- * @summary Gets all invites for a team.
- */
-export type getTeamInvitesResponse200 = {
-  data: TeamInvitesResponse;
-  status: 200;
-};
-
-export type getTeamInvitesResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type getTeamInvitesResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type getTeamInvitesResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type getTeamInvitesResponseSuccess = getTeamInvitesResponse200 & {
-  headers: Headers;
-};
-export type getTeamInvitesResponseError = (
-  | getTeamInvitesResponse400
-  | getTeamInvitesResponse401
-  | getTeamInvitesResponse500
-) & {
-  headers: Headers;
-};
-
-export type getTeamInvitesResponse =
-  | getTeamInvitesResponseSuccess
-  | getTeamInvitesResponseError;
-
-export const getGetTeamInvitesUrl = (teamId: string) => {
-  return `/team/${teamId}/invites`;
-};
-
-export const getTeamInvites = async (
-  teamId: string,
-  options?: RequestInit
-): Promise<getTeamInvitesResponse> => {
-  const res = await fetch(getGetTeamInvitesUrl(teamId), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getTeamInvitesResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getTeamInvitesResponse;
-};
-
-/**
- * @summary Removes a user from a team.
- */
-export type removeUserFromTeamResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type removeUserFromTeamResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type removeUserFromTeamResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type removeUserFromTeamResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type removeUserFromTeamResponseSuccess =
-  removeUserFromTeamResponse200 & {
-    headers: Headers;
-  };
-export type removeUserFromTeamResponseError = (
-  | removeUserFromTeamResponse400
-  | removeUserFromTeamResponse401
-  | removeUserFromTeamResponse500
-) & {
-  headers: Headers;
-};
-
-export type removeUserFromTeamResponse =
-  | removeUserFromTeamResponseSuccess
-  | removeUserFromTeamResponseError;
-
-export const getRemoveUserFromTeamUrl = (
-  teamId: string,
-  removeUserId: string
-) => {
-  return `/team/${teamId}/remove/${removeUserId}`;
-};
-
-export const removeUserFromTeam = async (
-  teamId: string,
-  removeUserId: string,
-  options?: RequestInit
-): Promise<removeUserFromTeamResponse> => {
-  const res = await fetch(getRemoveUserFromTeamUrl(teamId, removeUserId), {
-    ...options,
-    method: 'DELETE',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: removeUserFromTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as removeUserFromTeamResponse;
-};
-
-/**
- * @summary Updates a team.
- */
-export type patchTeamUserTierResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type patchTeamUserTierResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type patchTeamUserTierResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type patchTeamUserTierResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type patchTeamUserTierResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type patchTeamUserTierResponseSuccess = patchTeamUserTierResponse200 & {
-  headers: Headers;
-};
-export type patchTeamUserTierResponseError = (
-  | patchTeamUserTierResponse400
-  | patchTeamUserTierResponse401
-  | patchTeamUserTierResponse404
-  | patchTeamUserTierResponse500
-) & {
-  headers: Headers;
-};
-
-export type patchTeamUserTierResponse =
-  | patchTeamUserTierResponseSuccess
-  | patchTeamUserTierResponseError;
-
-export const getPatchTeamUserTierUrl = (teamId: string) => {
-  return `/team/${teamId}/tier`;
-};
-
-export const patchTeamUserTier = async (
-  teamId: string,
-  patchTeamUserTierRequest: PatchTeamUserTierRequest,
-  options?: RequestInit
-): Promise<patchTeamUserTierResponse> => {
-  const res = await fetch(getPatchTeamUserTierUrl(teamId), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(patchTeamUserTierRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchTeamUserTierResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchTeamUserTierResponse;
 };
 
 /**
