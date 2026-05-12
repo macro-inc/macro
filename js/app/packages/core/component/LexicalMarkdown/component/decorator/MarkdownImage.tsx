@@ -358,19 +358,19 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           }
         >
           <Layer depth={3}>
-          <div class="size-full absolute top-0 left-0 pointer-events-none bg-edge/10" />
-          <MediaButtons
-            delete={interactable() ? deleteImage : undefined}
-            enlarge={state() === 'ok' ? viewFull : undefined}
-            newTab={
-              state() === 'ok'
-                ? () => {
-                    window.open(imageUrl(), '_blank');
-                  }
-                : undefined
-            }
-            containerRef={containerRef}
-          />
+            <div class="size-full absolute top-0 left-0 pointer-events-none bg-edge/10" />
+            <MediaButtons
+              delete={interactable() ? deleteImage : undefined}
+              enlarge={state() === 'ok' ? viewFull : undefined}
+              newTab={
+                state() === 'ok'
+                  ? () => {
+                      window.open(imageUrl(), '_blank');
+                    }
+                  : undefined
+              }
+              containerRef={containerRef}
+            />
           </Layer>
         </Show>
       </div>

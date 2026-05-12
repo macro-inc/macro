@@ -20,9 +20,9 @@ import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { useMutationUndoContext } from '@queries/undo';
 import { debounce } from '@solid-primitives/scheduled';
 import { ThemeChips } from '@theme/components/ThemeChips';
-import { ThemeV2 } from '@theme/types/themeTypes';
+import type { ThemeV2 } from '@theme/types/themeTypes';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import { Component, createMemo, onCleanup } from 'solid-js';
+import { type Component, createMemo, onCleanup } from 'solid-js';
 import {
   monochromeIcons,
   setDarkModeTheme,
