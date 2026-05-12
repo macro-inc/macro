@@ -334,6 +334,11 @@ async fn main() -> anyhow::Result<()> {
         config.vars.document_storage_bucket.as_ref(),
         config.vars.docx_document_upload_bucket.as_ref(),
     );
+    let markdown_initializer =
+        documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer::new(
+            lexical_client.as_ref().clone(),
+            sync_service_client.as_ref().clone(),
+        );
 
     let connection_gateway = Arc::new(ConnectionGatewayImpl::new(conn_gateway_client.clone()));
 
@@ -562,10 +567,7 @@ async fn main() -> anyhow::Result<()> {
             pool: db.clone(),
             creator: documents_hex::domain::create::DocumentCreator::new(
                 document_service,
-                documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer::new(
-                    lexical_client.as_ref().clone(),
-                    sync_service_client.as_ref().clone(),
-                ),
+                markdown_initializer,
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
             ),
         },

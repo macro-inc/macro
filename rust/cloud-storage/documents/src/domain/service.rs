@@ -327,6 +327,57 @@ impl<
         Ok(DocumentContent::from_legacy_uploaded(uploaded, file_type))
     }
 
+    async fn markdown_sync_service_location_response(
+        &self,
+        document_context: &DocumentBasic,
+        document_id: &str,
+        content: DocumentContent,
+    ) -> Result<LocationResponseV3, DocumentError> {
+        let sync_service_metadata = self
+            .sync_service_client
+            .get_metadata(document_id)
+            .await
+            .map_err(DocumentError::Internal)?;
+
+        Ok(LocationResponseV3::SyncServiceContent {
+            metadata: document_context.clone(),
+            sync_service_metadata: sync_service_metadata.into(),
+            content,
+        })
+    }
+
+    async fn resolve_markdown_sync_service_location(
+        &self,
+        document_context: &DocumentBasic,
+        document_id: &str,
+        content: DocumentContent,
+    ) -> Result<Option<LocationResponseV3>, DocumentError> {
+        if content.state == DocumentContentState::Ready
+            && content.location == Some(DocumentContentLocation::SyncService)
+        {
+            return self
+                .markdown_sync_service_location_response(document_context, document_id, content)
+                .await
+                .map(Some);
+        }
+
+        match self.sync_service_client.get_metadata(document_id).await {
+            Ok(sync_service_metadata) => Ok(Some(LocationResponseV3::SyncServiceContent {
+                metadata: document_context.clone(),
+                sync_service_metadata: sync_service_metadata.into(),
+                content: DocumentContent::ready(DocumentContentLocation::SyncService),
+            })),
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    document_id=?document_id,
+                    "temporary markdown location fallback did not find sync-service state"
+                );
+                Ok(None)
+            }
+        }
+    }
+
     /// Clean up a document on creation error.
     async fn cleanup_document(&self, document_id: &str) {
         if let Err(e) = self.repo.delete_document_by_id(document_id).await {
@@ -464,55 +515,16 @@ impl<
         let document_id = entity_access_receipt.entity().entity_id.clone();
         let content = self.content_for_document(&document_id, file_type).await?;
 
-        if matches!(
-            (file_type, content.state, content.location),
-            (
-                Some(FileType::Md),
-                DocumentContentState::Ready,
-                Some(DocumentContentLocation::SyncService)
-            )
-        ) {
-            let sync_service_metadata = self
-                .sync_service_client
-                .get_metadata(&document_id)
-                .await
-                .map_err(DocumentError::Internal)?;
-
-            return Ok(LocationResponseV3::SyncServiceContent {
-                metadata: document_context.clone(),
-                sync_service_metadata: sync_service_metadata.into(),
-                content: DocumentContent::ready(DocumentContentLocation::SyncService),
-            });
-        }
-
-        if matches!(
-            (file_type, content.state, content.location),
-            (
-                Some(FileType::Md),
-                DocumentContentState::Ready,
-                Some(DocumentContentLocation::Unknown)
-            )
-        ) && let Ok(sync_service_metadata) =
-            self.sync_service_client.get_metadata(&document_id).await
+        if matches!(file_type, Some(FileType::Md))
+            && let Some(response) = self
+                .resolve_markdown_sync_service_location(
+                    document_context,
+                    &document_id,
+                    content.clone(),
+                )
+                .await?
         {
-            let sync_content = DocumentContent::ready(DocumentContentLocation::SyncService);
-            let _ = self
-                .repo
-                .set_document_content(&document_id, sync_content.clone())
-                .await
-                .inspect_err(|error| {
-                    tracing::warn!(
-                        error=?error,
-                        document_id=?document_id,
-                        "failed to persist discovered markdown sync-service location"
-                    )
-                });
-
-            return Ok(LocationResponseV3::SyncServiceContent {
-                metadata: document_context.clone(),
-                sync_service_metadata: sync_service_metadata.into(),
-                content: sync_content,
-            });
+            return Ok(response);
         }
 
         let owner = document_context.owner.as_ref();
