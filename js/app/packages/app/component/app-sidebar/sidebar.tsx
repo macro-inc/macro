@@ -789,9 +789,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           </Show>
 
           <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
-            <span class="whitespace-nowrap">
-              {props.label}
-            </span>
+            <span class="whitespace-nowrap">{props.label}</span>
           </div>
 
           <Show when={isHovering() && !props.hotkeyVisible}>
