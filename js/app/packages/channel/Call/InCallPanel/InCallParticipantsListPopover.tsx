@@ -4,15 +4,11 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import UserCircle from '@icon/regular/user-circle.svg';
 import { Popover } from '@kobalte/core/popover';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
-import { cn } from '@ui';
+import { cn, Surface } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { InCallParticipantAvatar } from './InCallParticipantAvatar';
 import { profilePictureIdForMember } from './profile-picture-id-for-member';
 import type { InCallPanelMember, UseInCallPanelResult } from './types';
-
-/** Shared shell for “In this call” (popover content + +N tooltip). */
-export const IN_CALL_ROSTER_CARD_CLASS =
-  'z-modal min-w-[12rem] max-w-[18rem] rounded-md border border-edge-muted bg-panel shadow-lg';
 
 export function InCallRosterListSection(props: {
   panel: UseInCallPanelResult;
@@ -158,12 +154,14 @@ export function InCallParticipantsListPopover(
       </Popover.Trigger>
 
       <Popover.Portal>
-        <Popover.Content class={IN_CALL_ROSTER_CARD_CLASS}>
-          <InCallRosterListSection
-            panel={props.panel}
-            members={members()}
-            onClose={() => setOpen(false)}
-          />
+        <Popover.Content class="z-modal">
+          <Surface depth={3} class="min-w-48 max-w-72">
+            <InCallRosterListSection
+              panel={props.panel}
+              members={members()}
+              onClose={() => setOpen(false)}
+            />
+          </Surface>
         </Popover.Content>
       </Popover.Portal>
     </Popover>

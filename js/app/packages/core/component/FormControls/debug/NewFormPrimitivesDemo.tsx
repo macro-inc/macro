@@ -1,7 +1,8 @@
+import { TOKENS } from '@core/hotkey/tokens';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { LabelAndHotKey } from '../../Tooltip';
+
 import DropdownMenu from '../DropdownMenu';
 import { SegmentedControl } from '../SegmentControls';
 import { ToggleButton } from '../ToggleButton';
@@ -38,10 +39,7 @@ const NewFormPrimitivesDemo = () => {
         />
         <ToggleButton size="SM">Select Btn</ToggleButton>
 
-        <Button
-          size="sm"
-          tooltip={<LabelAndHotKey label="Console" shortcut="cmd+k" />}
-        >
+        <Button size="sm" label="Console" hotkey={TOKENS.global.commandMenu}>
           Console
         </Button>
 
@@ -180,10 +178,7 @@ const NewFormPrimitivesDemo = () => {
           </div>
         </DropdownMenu>
         <ToggleButton size="Base">Select Btn</ToggleButton>
-        <Button
-          size="md"
-          tooltip={<LabelAndHotKey label="Console" shortcut="cmd+k" />}
-        >
+        <Button size="md" label="Console" hotkey={TOKENS.global.commandMenu}>
           Console
         </Button>
       </div>

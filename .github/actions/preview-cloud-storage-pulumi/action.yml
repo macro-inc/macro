@@ -52,6 +52,10 @@ inputs:
     description: 'Cachix auth token used when building Lambda artifacts'
     required: false
     default: ''
+  sccache-bucket:
+    description: 'Optional S3 bucket for shared sccache storage during Lambda artifact builds'
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -66,6 +70,7 @@ runs:
       uses: ./.github/actions/setup-cachix
       with:
         cachix-auth-token: ${{ inputs.cachix-auth-token }}
+        sccache-bucket: ${{ inputs.sccache-bucket }}
 
     - name: Check Lambda config
       if: ${{ inputs.cloud-storage-service-name != '' }}
@@ -82,6 +87,8 @@ runs:
       shell: bash
       env:
         SERVICE: ${{ inputs.cloud-storage-service-name }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-key }}
       run: .github/scripts/build-cloud-storage-lambdas.sh
 
     # setup docker

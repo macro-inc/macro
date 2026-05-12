@@ -28,10 +28,8 @@ export function usePatchTeamUserTierMutation(
   callbacks?: PatchTeamUserTierCallbacks
 ) {
   return useMutation(() => ({
-    mutationFn: async ({ teamId, request }: PatchTeamUserTierArgs) => {
-      await throwOnErr(() =>
-        authServiceClient.patchTeamUserTier(teamId, request)
-      );
+    mutationFn: async ({ request }: PatchTeamUserTierArgs) => {
+      await throwOnErr(() => authServiceClient.patchTeamUserTier(request));
     },
 
     ...withCallbacks<
@@ -113,10 +111,8 @@ export function useRemoveUserFromTeamMutation(
   callbacks?: RemoveUserFromTeamCallbacks
 ) {
   return useMutation(() => ({
-    mutationFn: async ({ teamId, userId }: RemoveUserFromTeamArgs) => {
-      await throwOnErr(() =>
-        authServiceClient.removeUserFromTeam(teamId, userId)
-      );
+    mutationFn: async ({ userId }: RemoveUserFromTeamArgs) => {
+      await throwOnErr(() => authServiceClient.removeUserFromTeam(userId));
     },
 
     ...withCallbacks<

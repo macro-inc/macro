@@ -58,6 +58,7 @@ jobs:
         uses: ./.github/actions/setup-reqs-web
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
         if: needs.path-check.outputs.api_changed == 'true'
         with:
@@ -65,24 +66,6 @@ jobs:
           shared-key: cloud-storage-gen-api
           cache-on-failure: true
           cache-targets: true
-      - name: Configure sccache S3 backend
-        if: needs.path-check.outputs.api_changed == 'true'
-        env:
-          SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.cache/sccache"
-          {
-            echo "SCCACHE_DIR=$HOME/.cache/sccache"
-            echo "SCCACHE_CACHE_SIZE=5G"
-            echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
-            if [ -n "${SCCACHE_BUCKET:-}" ]; then
-              echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
-              echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
-              echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
-            fi
-          } >> "$GITHUB_ENV"
-          sccache --version
       - name: Generate API Types
         if: needs.path-check.outputs.api_changed == 'true'
         working-directory: js/app
@@ -116,6 +99,7 @@ jobs:
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
           dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Run Biome
         working-directory: js/app
         run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
@@ -134,6 +118,7 @@ jobs:
         uses: ./.github/actions/setup-reqs-web
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Check Tailwind Classes
         working-directory: js/app
         run: just check-tailwind
@@ -150,6 +135,7 @@ jobs:
         uses: ./.github/actions/setup-reqs-web
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
           playwright: 'true'
       - name: Test
         working-directory: js/app
@@ -168,6 +154,7 @@ jobs:
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
           dev-shell: 'true'
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Cycles Import Check
         working-directory: js/app
         run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
@@ -184,6 +171,7 @@ jobs:
         uses: ./.github/actions/setup-reqs-web
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Build
         working-directory: js/app
         run: bun run build

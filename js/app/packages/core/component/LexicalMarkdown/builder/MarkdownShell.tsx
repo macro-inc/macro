@@ -225,7 +225,7 @@ export const MarkdownShell: Component<
         </Show>
 
         <Show when={showPlaceholder()}>
-          <div class="pointer-events-none text-ink-placeholder/50 absolute top-0">
+          <div class="pointer-events-none text-ink-placeholder absolute top-0">
             <p class="my-1.5 pointer-events-none">
               {props.placeholder ?? '...'}
             </p>

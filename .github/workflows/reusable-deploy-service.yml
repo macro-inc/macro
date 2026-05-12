@@ -37,6 +37,10 @@ on:
         required: true
       CACHIX_AUTH_TOKEN:
         required: true
+      AWS_ACCESS_KEY_ID:
+        required: false
+      SCCACHE_BUCKET:
+        required: false
 
 jobs:
   build-service-binaries:
@@ -55,6 +59,7 @@ jobs:
         uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
 
       - name: Check prebuilt binaries config
         id: check-binaries
@@ -108,6 +113,7 @@ jobs:
         uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
 
       - name: Check Lambda config
         id: check-lambdas
@@ -121,6 +127,8 @@ jobs:
         if: ${{ steps.check-lambdas.outputs.has_lambdas == 'true' }}
         env:
           SERVICE: ${{ inputs.service-name }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: .github/scripts/build-cloud-storage-lambdas.sh
 
       - name: Upload Lambda artifacts

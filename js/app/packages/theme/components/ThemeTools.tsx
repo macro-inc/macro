@@ -1,6 +1,6 @@
 import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
 import { Button } from '@ui';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import { invertTheme, saveTheme } from '../utils/themeUtils';
 import { randomizeTheme } from './ThemeEditorBasic';
@@ -38,7 +38,7 @@ export function ThemeTools(props: { class?: string }) {
           onPointerDown={() => {
             saveTheme(themeName.innerText);
           }}
-          tooltip={<LabelAndHotKey label="Save Theme" />}
+          label="Save Theme"
           variant="ghost"
           size="icon-sm"
         >
@@ -46,26 +46,8 @@ export function ThemeTools(props: { class?: string }) {
         </Button>
       </Show>
 
-      {/*<Show when={DEV_MODE_ENV}>
-        <IconButton
-          tooltip={{label: "Copy Tokens"}}
-          onPointerDown={copyTokens}
-          icon={IconFigma}
-          theme="clear"
-          size="sm"
-        />
-      </Show>*/}
-
-      {/*<DeprecatedIconButton
-        tooltip={{label: "Import From Clipboard"}}
-        onPointerDown={importTheme}
-        icon={IconImport}
-        theme="clear"
-        size="sm"
-      />*/}
-
       <Button
-        tooltip={<LabelAndHotKey label="Randomize Theme" />}
+        label="Randomize Theme"
         onPointerDown={randomizeTheme}
         variant="ghost"
         size="icon-sm"
@@ -74,7 +56,7 @@ export function ThemeTools(props: { class?: string }) {
       </Button>
 
       <Button
-        tooltip={<LabelAndHotKey label="Toggle Light / Dark" />}
+        label="Toggle Light / Dark"
         onPointerDown={invertTheme}
         variant="ghost"
         size="icon-sm"

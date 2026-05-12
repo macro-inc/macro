@@ -14,6 +14,7 @@ type CreateChannelHotkeysOptions = {
   userId: Accessor<string | undefined>;
   isInputEmpty: Accessor<boolean>;
   isEditing: Accessor<boolean>;
+  onOpenFindBar: () => void;
 };
 
 export function canReplyToSelectedMessageFromHotkey(input: {
@@ -187,6 +188,20 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       return true;
     },
   });
+
+  for (const scopeId of [messageListScope, inputScope]) {
+    registerHotkey({
+      scopeId,
+      hotkey: 'cmd+f',
+      hotkeyToken: TOKENS.channel.findInChannel,
+      description: 'Find in channel',
+      runWithInputFocused: true,
+      keyDownHandler: () => {
+        options.onOpenFindBar();
+        return true;
+      },
+    });
+  }
 
   return {
     messageListScopeId: messageListScope,

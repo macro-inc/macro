@@ -9,6 +9,10 @@ inputs:
     description: Cachix auth token used to configure authenticated pulls.
     required: false
     default: ''
+  sccache-bucket:
+    description: Optional S3 bucket for shared sccache storage.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -18,6 +22,7 @@ runs:
       with:
         cachix-auth-token: ${{ inputs.cachix-auth-token }}
         dev-shell: 'true'
+        sccache-bucket: ${{ inputs.sccache-bucket }}
 
     - name: Setup bunfig.toml
       working-directory: js

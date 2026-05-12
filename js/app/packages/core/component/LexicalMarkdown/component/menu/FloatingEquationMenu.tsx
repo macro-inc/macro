@@ -1,9 +1,9 @@
-import { Tooltip } from '@core/component/Tooltip';
 import clickOutside from '@core/directive/clickOutside';
 import { useCanEdit } from '@core/signal/permissions';
 import Check from '@icon/regular/check-circle.svg';
 import { $isEquationNode } from '@lexical-core';
 import { createCallback } from '@solid-primitives/rootless';
+import { Tooltip } from '@ui';
 import { $getNodeByKey } from 'lexical';
 import {
   createEffect,
@@ -270,7 +270,7 @@ export function FloatingEquationMenu() {
                 Inline equation
               </label>
             </Show>
-            <Tooltip tooltip="Apply changes">
+            <Tooltip label="Apply changes">
               <button
                 onClick={handleSubmit}
                 disabled={!equation()}

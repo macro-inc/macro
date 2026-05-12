@@ -2,10 +2,10 @@ import type {
   SortOption,
   SystemSortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { TOKENS } from '@core/hotkey/tokens';
 import CheckIcon from '@icon/regular/check.svg';
 import SortIcon from '@phosphor-icons/core/regular/funnel-simple.svg?component-solid';
-import { Dropdown, Layer } from '@ui';
+import { Dropdown, Layer, Tooltip } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 
 export interface SortDropdownProps {
@@ -31,7 +31,7 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       placement="bottom-start"
       gutter={4}
     >
-      <Tooltip tooltip={<LabelAndHotKey label="Sort" shortcut="S" />}>
+      <Tooltip label="Sort" hotkey={TOKENS.soup.sort}>
         <Dropdown.Trigger>
           <SortIcon />
           <span>Sort</span>

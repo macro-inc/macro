@@ -2,15 +2,38 @@ use super::SqlFragment;
 use super::resolve::ResolvedFilters;
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use filter_ast::Expr;
+use item_filters::ast::date::DateLiteral;
 use item_filters::ast::email::{Email, EmailLiteral};
 use recursion::CollapsibleExt;
+
+fn date_predicate(col: &str, lit: &DateLiteral) -> SqlFragment {
+    let sql = match lit {
+        DateLiteral::GreaterThan(dt) => {
+            format!("{col} > '{}'::timestamptz", dt.to_rfc3339())
+        }
+        DateLiteral::LessThan(dt) => {
+            format!("{col} < '{}'::timestamptz", dt.to_rfc3339())
+        }
+        DateLiteral::GreaterThanOrEqual(dt) => {
+            format!("{col} >= '{}'::timestamptz", dt.to_rfc3339())
+        }
+        DateLiteral::LessThanOrEqual(dt) => {
+            format!("{col} <= '{}'::timestamptz", dt.to_rfc3339())
+        }
+    };
+    SqlFragment::raw(sql)
+}
 
 pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
     ast.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
         filter_ast::ExprFrame::Not(a) => a,
         filter_ast::ExprFrame::Literal(
-            EmailLiteral::ThreadId(_) | EmailLiteral::ProjectId(_) | EmailLiteral::CalendarOnly(_),
+            EmailLiteral::ThreadId(_)
+            | EmailLiteral::ProjectId(_)
+            | EmailLiteral::CalendarOnly(_)
+            | EmailLiteral::CreatedAt(_)
+            | EmailLiteral::UpdatedAt(_),
         ) => true,
         filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => false,
         filter_ast::ExprFrame::Literal(_) => false,
@@ -25,7 +48,9 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             EmailLiteral::ThreadId(_)
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::Shared(_)
-            | EmailLiteral::CalendarOnly(_),
+            | EmailLiteral::CalendarOnly(_)
+            | EmailLiteral::CreatedAt(_)
+            | EmailLiteral::UpdatedAt(_),
         ) => false,
         filter_ast::ExprFrame::Literal(_) => true,
     })
@@ -263,6 +288,8 @@ pub(super) fn build_message_email_filter(
         }
         filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(_)) => SqlFragment::raw("TRUE"),
+        filter_ast::ExprFrame::Literal(EmailLiteral::CreatedAt(_)) => SqlFragment::raw("TRUE"),
+        filter_ast::ExprFrame::Literal(EmailLiteral::UpdatedAt(_)) => SqlFragment::raw("TRUE"),
     });
 
     fragment.with_and_prefix()
@@ -569,7 +596,10 @@ pub(super) fn build_matching_threads_cte_body(
 }
 
 /// Builds thread-level SQL WHERE conditions. Message-level literals map to TRUE.
-pub(super) fn build_thread_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragment {
+pub(super) fn build_thread_email_filter(
+    ast: &Expr<EmailLiteral>,
+    sort_ts_field: &str,
+) -> SqlFragment {
     let fragment = ast.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => SqlFragment::and(a, b),
         filter_ast::ExprFrame::Or(a, b) => SqlFragment::or(a, b),
@@ -603,6 +633,14 @@ pub(super) fn build_thread_email_filter(ast: &Expr<EmailLiteral>) -> SqlFragment
 
         filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(false)) => {
             SqlFragment::raw("TRUE")
+        }
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::CreatedAt(ref lit)) => {
+            date_predicate("t.created_at", lit)
+        }
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::UpdatedAt(ref lit)) => {
+            date_predicate(sort_ts_field, lit)
         }
 
         filter_ast::ExprFrame::Literal(

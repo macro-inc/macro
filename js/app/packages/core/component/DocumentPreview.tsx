@@ -48,7 +48,7 @@ import { blockNameToItemType } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { cn, Surface } from '@ui';
+import { cn, Surface, Tooltip } from '@ui';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Component, JSX } from 'solid-js';
 import {
@@ -67,7 +67,6 @@ import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
 import { useItemPreviewData } from './ItemPreview';
-import { Tooltip } from './Tooltip';
 
 /**
  * Container for displaying mentions with optional collapsing
@@ -225,7 +224,7 @@ function PopupIconButton(props: {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
 }) {
   return (
-    <Tooltip tooltip={props.tooltip}>
+    <Tooltip label={props.tooltip}>
       <button
         onClick={(e) => {
           e.stopPropagation();

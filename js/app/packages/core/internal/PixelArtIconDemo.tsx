@@ -1,6 +1,6 @@
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { DebugSlider } from '@core/component/Slider';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+
 import { Bar } from '@core/component/TopBar/Bar';
 import clickOutside from '@core/directive/clickOutside';
 import Rotate from '@icon/regular/arrow-counter-clockwise.svg';
@@ -520,7 +520,7 @@ function GlyphGrid(props: GlyphGridProps) {
                     <Button
                       variant="base"
                       size="icon-md"
-                      tooltip={<LabelAndHotKey label="Edit" />}
+                      label="Edit"
                       onClick={(e) => {
                         e.preventDefault();
                         props.onEditGlyph(glyph);
@@ -531,7 +531,7 @@ function GlyphGrid(props: GlyphGridProps) {
                     <Button
                       variant="danger"
                       size="icon-md"
-                      tooltip={<LabelAndHotKey label="Delete" />}
+                      label="Delete"
                       onClick={(e) => {
                         e.preventDefault();
                         props.onDeleteGlyph(glyph);
@@ -933,7 +933,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                     <Button
                       variant="base"
                       size="icon-md"
-                      tooltip={<LabelAndHotKey label="Mirror X" />}
+                      label="Mirror X"
                       onClick={handleMirrorX}
                     >
                       <MirrorX />
@@ -941,7 +941,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                     <Button
                       variant="base"
                       size="icon-md"
-                      tooltip={<LabelAndHotKey label="Mirror Y" />}
+                      label="Mirror Y"
                       onClick={handleMirrorY}
                     >
                       <MirrorY />
@@ -949,7 +949,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                     <Button
                       variant="base"
                       size="icon-md"
-                      tooltip={<LabelAndHotKey label="Rotate 90 CCW" />}
+                      label="Rotate 90 CCW"
                       onClick={handleRotate90CC}
                     >
                       <Rotate />

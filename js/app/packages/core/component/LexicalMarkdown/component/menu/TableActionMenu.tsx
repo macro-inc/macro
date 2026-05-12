@@ -12,7 +12,6 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/Menu';
-import { Tooltip } from '@core/component/Tooltip';
 import ArrowLineDown from '@icon/regular/arrow-line-down.svg';
 import ArrowLineLeft from '@icon/regular/arrow-line-left.svg';
 import ArrowLineRight from '@icon/regular/arrow-line-right.svg';
@@ -40,6 +39,7 @@ import {
   type TableSelection,
 } from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
+import { Tooltip } from '@ui';
 import type { ElementNode, LexicalEditor } from 'lexical';
 import {
   $createParagraphNode,
@@ -355,7 +355,7 @@ function ActionMenu({
   return (
     <DropdownMenu placement="right-start">
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
-        <Tooltip tooltip="Table Options">
+        <Tooltip label="Table Options">
           <div class="size-6 rounded-md p-0 bg-button hover:bg-hover hover-transition-bg flex items-center justify-center">
             <CaretDown class="size-4" />
           </div>

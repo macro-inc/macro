@@ -1,7 +1,6 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { PropertiesView } from '@core/component/Properties/PropertiesView';
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import TagIcon from '@icon/regular/tag.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button } from '@ui';
@@ -16,7 +15,7 @@ export function EmailPropertiesButton(props: { buttonSize?: 'sm' | 'base' }) {
     <Button
       variant={drawerControl.isOpen() ? 'active' : 'ghost'}
       size={props.buttonSize === 'sm' ? 'icon-sm' : 'icon-md'}
-      tooltip={<LabelAndHotKey label="Properties" />}
+      label="Properties"
       onClick={drawerControl.toggle}
     >
       <TagIcon />

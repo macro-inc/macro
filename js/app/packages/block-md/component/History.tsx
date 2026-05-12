@@ -20,7 +20,6 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { initializeEditorWithState } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -89,7 +88,7 @@ export function HistoryButton(props: { buttonSize?: 'sm' | 'base' }) {
   const drawerControl = useDrawerControl(HISTORY_DRAWER_ID);
   return (
     <Button
-      tooltip={<LabelAndHotKey label="History" />}
+      label="History"
       variant={drawerControl.isOpen() ? 'active' : 'ghost'}
       size={props.buttonSize === 'base' ? 'icon-md' : 'icon-sm'}
       onClick={drawerControl.toggle}
@@ -120,7 +119,7 @@ export function HistoryModal(props: { documentId: string }) {
   return (
     <>
       <Button
-        tooltip={<LabelAndHotKey label="History" />}
+        label="History"
         variant={drawerControl.isOpen() ? 'active' : 'ghost'}
         size="icon-sm"
         onClick={drawerControl.toggle}

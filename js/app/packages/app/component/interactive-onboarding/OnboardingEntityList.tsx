@@ -70,7 +70,7 @@ export function OnboardingEntityList(props: OnboardingEntityListProps) {
                         <Entity.Icon entity={entity() as EntityData} />
                       </div>
                       <Entity.Title entity={entity() as EntityData} />
-                      <span class="ml-auto font-mono font-light uppercase tracking-wide text-xs text-ink/40 shrink-0">
+                      <span class="ml-auto font-light text-xs text-ink/40 shrink-0">
                         <Entity.Timestamp entity={entity() as EntityData} />
                       </span>
                     </>
@@ -121,7 +121,7 @@ export function OnboardingEntityList(props: OnboardingEntityListProps) {
                       {(entity() as EntityData & { snippet: string }).snippet}
                     </span>
                   </span>
-                  <span class="ml-auto font-mono font-light uppercase tracking-wide text-xs text-ink/40 shrink-0">
+                  <span class="ml-auto font-light text-xs text-ink/40 shrink-0">
                     <Entity.Timestamp entity={entity() as EntityData} />
                   </span>
                 </Show>

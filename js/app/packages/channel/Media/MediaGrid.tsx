@@ -1,4 +1,3 @@
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
 import { Button, cn } from '@ui';
@@ -130,7 +129,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
             event.stopPropagation();
             props.onOpen();
           }}
-          tooltip={<LabelAndHotKey label="Open video viewer" />}
+          label="Open video viewer"
         >
           <ExpandIcon />
         </Button>
