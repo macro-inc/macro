@@ -33,7 +33,7 @@ pub async fn create_instructions_handler(
 
     if get_instructions_document(&ctx.db, user_id.clone())
         .await
-        .map_err(|error| DocumentError::Internal(error.into()))?
+        .map_err(DocumentError::Internal)?
         .is_some()
     {
         return Err(DocumentError::Conflict(
@@ -73,7 +73,7 @@ async fn insert_instructions_document_with_stale_cleanup(
         Err(CreateInstructionsError::UserAlreadyHasInstructions) => {
             if get_instructions_document(&ctx.db, user_id.clone())
                 .await
-                .map_err(|error| DocumentError::Internal(error.into()))?
+                .map_err(DocumentError::Internal)?
                 .is_some()
             {
                 return Err(DocumentError::Conflict(

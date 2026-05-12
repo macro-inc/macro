@@ -46,6 +46,8 @@ pub async fn get_document_list(
         ) db ON d."fileType" = 'docx'
         WHERE
             d.owner = $1 AND d."deletedAt" IS NULL
+        ORDER BY
+            d."createdAt" ASC, d.id ASC
     "#,
         user_id
     )
