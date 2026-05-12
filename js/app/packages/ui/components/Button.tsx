@@ -3,6 +3,7 @@ import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
 import type { Placement } from '@floating-ui/dom';
 import CorvuTooltip from '@corvu/tooltip';
 import { cn } from '../utils/classname';
+import { useButtonGroupContext } from './ButtonGroup';
 import { Layer } from './Layer';
 
 export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> & {
@@ -16,9 +17,9 @@ export type ButtonProps = ButtonRootProps<'button'> & ComponentProps<'button'> &
   class?: string;
 };
 
-type ButtonSize = 'sm' | 'icon-sm' | 'md' | 'icon-md' | 'lg' | 'icon-lg';
+export type ButtonSize = 'sm' | 'icon-sm' | 'md' | 'icon-md' | 'lg' | 'icon-lg';
 
-type ButtonVariant = 'ghost' | 'base' | 'active' | 'danger';
+export type ButtonVariant = 'ghost' | 'base' | 'active' | 'danger';
 
 const variantStyles: Record<ButtonVariant, string> = {
   danger: 'bg-transparent text-failure    border border-failure/50 not-disabled:hover:bg-failure/10 not-disabled:active:bg-failure/20                   disabled:opacity-30 ',
@@ -28,12 +29,12 @@ const variantStyles: Record<ButtonVariant, string> = {
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  'lg':      '          p-2.5  [&_svg]:size-5 gap-2   text-base',
-  'md':      '          p-2                   gap-1.5 text-sm  ', /* scuffed */
-  'sm':      'h-6       px-2   [&_svg]:size-4 gap-1   text-xs  ',
-  'icon-lg': 'size-11   p-2    [&_svg]:size-7                  ', /* unused */
-  'icon-md': 'size-9    p-1.5  [&_svg]:size-6                  ',
-  'icon-sm': 'size-6    p-1    [&_svg]:size-4                  ',
+  'lg':      '          p-2.5  [&_:where(svg)]:size-5 gap-2   text-base',
+  'md':      '          p-2                           gap-1.5 text-sm  ', /* scuffed */
+  'sm':      'h-6       px-2   [&_:where(svg)]:size-4 gap-1   text-xs  ',
+  'icon-lg': 'size-11   p-2    [&_:where(svg)]:size-7                  ', /* unused */
+  'icon-md': 'size-9    p-1.5  [&_:where(svg)]:size-6                  ',
+  'icon-sm': 'size-6    p-1    [&_:where(svg)]:size-4                  ',
 };
 
 export const Button = (props: ButtonProps) => {
@@ -47,22 +48,24 @@ export const Button = (props: ButtonProps) => {
     'size',
   ]);
 
+  const group = useButtonGroupContext();
+
   const cls = () =>
     cn(
       'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-sm whitespace-nowrap',
       { 'touch:min-h-9 touch:min-w-9 touch:[&_svg]:size-6': !(props.noTouchResize) },
       'outline-none focus-visible:bg-active',
       'data-disabled:cursor-not-allowed',
-      variantStyles[local.variant ?? 'ghost'],
-      sizeStyles[local.size ?? 'md'],
+      variantStyles[local.variant ?? group?.variant ?? 'ghost'],
+      sizeStyles[local.size ?? group?.size ?? 'md'],
       local.class
     );
 
   return (
-    <Layer depth={local.depth ?? 0}>
+    <Layer depth={local.depth ?? group?.depth ?? 0}>
       <Show
         fallback={
-          <KobalteButton class={cls()} {...others}>
+          <KobalteButton class={cls()} data-button {...others}>
             {local.children}
           </KobalteButton>
         }
@@ -80,7 +83,7 @@ export const Button = (props: ButtonProps) => {
           closeDelay={250}
           openDelay={250}
         >
-          <CorvuTooltip.Trigger as={KobalteButton} class={cls()} {...others}>
+          <CorvuTooltip.Trigger as={KobalteButton} class={cls()} data-button {...others}>
             {local.children}
           </CorvuTooltip.Trigger>
           <CorvuTooltip.Portal>

@@ -45,13 +45,13 @@ import CheckIcon from '@icon/bold/check-bold.svg';
 import IconX from '@icon/bold/x-bold.svg';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import IconLink from '@icon/regular/link.svg';
+import IconShared from '@icon/regular/share.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import IconComment from '@macro-icons/wide/comment.svg';
 import WideCopy from '@macro-icons/wide/copy.svg';
 import IconEdit from '@macro-icons/wide/edit.svg';
 import IconEye from '@macro-icons/wide/eye.svg';
-import IconShared from '@macro-icons/wide/share.svg';
 import UserCircle from '@macro-icons/wide/user-circle.svg';
 import WideUsers from '@macro-icons/wide/users.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -65,7 +65,7 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Button, cn, Panel } from '@ui';
+import { Button, ButtonGroup, cn, Panel } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -1255,7 +1255,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   });
 
   return (
-    <div class="border border-edge-muted flex ml-1 items-stretch rounded-xs">
+    <ButtonGroup variant="base" size="sm" class="ml-1 bg-panel" depth={3}>
       <Tooltip
         tooltip={
           <div>
@@ -1276,8 +1276,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
           </div>
         }
       >
-        <button
-          class="text-xs hover:bg-hover text-ink px-2 flex items-center gap-1 h-full"
+        <Button
           onClick={() => {
             if (!isAuthenticated()) {
               openLoginModal();
@@ -1287,23 +1286,21 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
             }
           }}
         >
-          <IconShared class="size-3.5" />
+          <IconShared />
           Share
-        </button>
+        </Button>
       </Tooltip>
 
-      <div class="w-px bg-edge-muted" />
+      <ButtonGroup.Divider />
 
       <Button
         tooltip="Copy Share Link"
-        onClick={ShareLinkAction().action}
-        variant="ghost"
         size="icon-sm"
-        class="p-1"
+        onClick={ShareLinkAction().action}
       >
-        <Dynamic component={ShareLinkAction().icon} />
+        <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
       </Button>
-    </div>
+    </ButtonGroup>
   );
 }
 
