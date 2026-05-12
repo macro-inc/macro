@@ -739,10 +739,14 @@ where
     // Convert cursor filter from ApiEntityFilterAst to EntityFilterAst
     let cursor: SoupCursor<EntityFilterAst> = match cursor {
         axum_extra::either::Either::E1(c) => axum_extra::either::Either::E1(
-            c.map(|c| c.map_filter(|f| f.into_entity_ast().expect("cursor filter conversion"))),
+            c.map(|c| c.try_map_filter(|f| f.into_entity_ast()))
+                .transpose()
+                .map_err(|_| SoupHandlerErr::Expand)?,
         ),
         axum_extra::either::Either::E2(c) => axum_extra::either::Either::E2(
-            c.map(|c| c.map_filter(|f| f.into_entity_ast().expect("cursor filter conversion"))),
+            c.map(|c| c.try_map_filter(|f| f.into_entity_ast()))
+                .transpose()
+                .map_err(|_| SoupHandlerErr::Expand)?,
         ),
     };
 
