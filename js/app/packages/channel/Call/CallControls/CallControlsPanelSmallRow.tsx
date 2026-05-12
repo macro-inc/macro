@@ -254,7 +254,7 @@ export function CallControlsPanelSmallRow(
                     class="relative w-7 h-3 rounded-full transition-colors duration-80"
                     classList={{
                       'bg-edge': !callCtx.isSharedWithTeam(),
-                      'bg-accent': callCtx.isSharedWithTeam(),
+                      'bg-ink-muted': callCtx.isSharedWithTeam(),
                     }}
                     aria-hidden
                   >
@@ -268,7 +268,7 @@ export function CallControlsPanelSmallRow(
                   </div>
                   <Tooltip
                     placement="left"
-                    tooltip="When shared, all team members can view and search this call's transcript and AI summary in their Macro feed."
+                    tooltip="When on, all team members can view and search this call's transcript and AI summary."
                   >
                     <Info class="size-3 text-ink-subtle" />
                   </Tooltip>

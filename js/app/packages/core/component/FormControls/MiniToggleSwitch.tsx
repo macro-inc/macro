@@ -26,6 +26,7 @@ export const MiniToggleSwitch: Component<
     animateFlickerOnDeactivate?: boolean;
     size?: 'SM' | 'Base';
     compact?: boolean;
+    activeTrackClass?: string;
     disabled?: boolean;
     trueLabel?: string;
     falseLabel?: string;
@@ -95,7 +96,7 @@ export const MiniToggleSwitch: Component<
               'w-8 h-3 touch:w-12 touch:h-8': !props.compact,
               'w-6 h-2.5': !!props.compact,
               'bg-edge': !checked(),
-              'bg-accent': checked(),
+              [props.activeTrackClass ?? 'bg-accent']: checked(),
             }}
             aria-hidden
           >

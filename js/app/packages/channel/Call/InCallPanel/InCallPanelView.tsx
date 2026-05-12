@@ -138,11 +138,11 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
             <Show when={!slim()}>
               <Tooltip
                 placement="top"
-                tooltip="When on, all team members can view and search this call's transcript and AI summary in their Macro feed."
+                tooltip="When on, all team members can view and search this call's transcript and AI summary."
               >
                 <div class="flex items-center gap-1 px-1">
                   <ShareNetwork
-                    class={cn('size-3 shrink-0', callCtx.isSharedWithTeam() ? 'text-accent' : 'text-ink-muted')}
+                    class={cn('size-3 shrink-0', callCtx.isSharedWithTeam() ? 'text-ink' : 'text-ink-muted')}
                     aria-hidden
                   />
                   <MiniToggleSwitch
@@ -151,6 +151,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
                     disabled={callCtx.isConnecting()}
                     size="SM"
                     compact
+                    activeTrackClass="bg-ink-muted"
                   />
                 </div>
               </Tooltip>
