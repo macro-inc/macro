@@ -2,9 +2,9 @@
 //!
 //! Production invokes this through an EventBridge Lambda adapter. Local development
 //! uses a LocalStack SQS polling adapter. Both adapters normalize transport events
-//! into [`domain::ObjectCreated`] and call the same use case.
+//! into [`app::ObjectCreated`] and call the same use case.
 
-pub mod domain;
+pub mod app;
 pub mod inbound;
 pub mod outbound;
 pub mod ports;

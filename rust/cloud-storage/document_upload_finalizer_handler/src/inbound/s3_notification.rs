@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::domain::ObjectCreated;
+use crate::app::ObjectCreated;
 
 /// Parse S3 event-notification JSON into normalized object-created events.
 pub fn object_created_events_from_body(

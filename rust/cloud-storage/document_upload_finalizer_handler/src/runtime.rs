@@ -5,7 +5,7 @@ use lexical_client::LexicalClient;
 use sqlx::postgres::PgPoolOptions;
 use sync_service_client::SyncServiceClient;
 
-use crate::domain::{DocumentUploadFinalizer, ObjectCreated};
+use crate::app::{DocumentUploadFinalizer, ObjectCreated};
 use crate::outbound::{PgDocumentUploadPort, S3DocumentObjectReader};
 
 /// Concrete app context used by Lambda and local worker entrypoints.

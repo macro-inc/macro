@@ -1,6 +1,6 @@
 use aws_lambda_events::event::eventbridge::EventBridgeEvent;
 
-use crate::domain::ObjectCreated;
+use crate::app::ObjectCreated;
 
 /// Convert an EventBridge S3 object-created payload to the domain event.
 pub fn object_created_from_event(event: &EventBridgeEvent) -> Option<ObjectCreated> {
