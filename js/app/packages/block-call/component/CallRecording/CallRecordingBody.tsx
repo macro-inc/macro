@@ -181,7 +181,7 @@ export function CallRecordingBody(props: {
             <Show when={hasTranscripts()}>
               <section class="flex flex-col gap-3">
                 <h3 class="text-sm font-semibold text-ink">Transcript</h3>
-                <div class="max-h-[min(600px,60vh)] overflow-hidden rounded border border-edge-muted/50">
+                <div class="flex flex-col max-h-[min(600px,60vh)] overflow-hidden rounded border border-edge-muted/50">
                   <CallTranscript
                     transcript={record().transcript}
                     channelId={record().channelId}
