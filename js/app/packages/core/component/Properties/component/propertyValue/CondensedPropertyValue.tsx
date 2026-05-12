@@ -46,11 +46,7 @@ export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
   };
 
   return (
-    <HoverCard
-      unstyled
-      content={<PropertyTooltip property={props.property} />}
-      class="flex items-center"
-    >
+    <HoverCard content={<PropertyTooltip property={props.property} />}>
       <div
         class={cn(
           'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 p-1.5 h-6.5 transition-colors',

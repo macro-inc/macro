@@ -35,7 +35,7 @@ function ParticipantItem(props: { userId: string }) {
 
 function ParticipantsTooltip(props: { participantIds: string[] }) {
   return (
-    <div class="p-2 border border-edge-muted bg-panel min-w-48 max-w-72">
+    <div class="min-w-48 max-w-72">
       <div class="flex items-center gap-2 text-ink-muted border-b border-edge-muted/50 pb-1.5 mb-1.5">
         <UserCircleIcon class="size-3.5 text-ink-muted" />
         <span class="text-xs">Participants</span>
@@ -58,9 +58,7 @@ export function CallParticipants(props: { participantIds: string[] }) {
   return (
     <Show when={props.participantIds.length > 0}>
       <HoverCard
-        unstyled
         content={<ParticipantsTooltip participantIds={props.participantIds} />}
-        class="flex items-center"
       >
         <UserGroup entities={entities()} maxUsers={2} />
       </HoverCard>

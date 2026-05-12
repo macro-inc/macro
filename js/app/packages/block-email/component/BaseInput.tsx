@@ -332,7 +332,6 @@ function TruncatedRecipientList(props: {
                     {item.recipient.data.email}
                   </div>
                 }
-                class="inline shrink-0"
               >
                 <span class="shrink-0">
                   {item.prefix}

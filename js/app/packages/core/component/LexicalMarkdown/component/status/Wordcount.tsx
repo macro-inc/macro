@@ -7,7 +7,6 @@ import type { WordcountStats } from '../../plugins';
 
 export function Wordcount(props: { stats: Store<WordcountStats> }) {
   const [isExpanded, setIsExpanded] = createSignal(false);
-  const [menuOpen, setMenuOpen] = createSignal(false);
 
   const simpleWordCount = () => {
     if (props.stats.selectedWords === null) return props.stats.totalWords;
@@ -46,7 +45,7 @@ export function Wordcount(props: { stats: Store<WordcountStats> }) {
   };
 
   const Details = () => (
-    <div class="p-3 text rounded shadow-md ring-1 ring-edge w-64 bg-dialog text-ink text-sm">
+    <div class="w-64 text-sm">
       <div class="flex justify-between mb-1">
         <span>Words</span>
         <span>{Words()}</span>
@@ -59,10 +58,7 @@ export function Wordcount(props: { stats: Store<WordcountStats> }) {
   );
 
   return (
-    <div
-      class="relative flex w-fit gap-1 items-center p-1"
-      classList={{ 'bg-active': menuOpen() }}
-    >
+    <div class="relative flex w-fit gap-1 items-center p-1">
       <Button
         variant="ghost"
         size="icon-md"
@@ -73,12 +69,7 @@ export function Wordcount(props: { stats: Store<WordcountStats> }) {
       </Button>
 
       <Show when={isExpanded()}>
-        <HoverCard
-          placement="top-start"
-          onOpenChange={setMenuOpen}
-          content={<Details />}
-          unstyled
-        >
+        <HoverCard placement="top-start" content={<Details />}>
           <div class="text-sm text-ink-extra-muted flex w-32 justify-between h-7 rounded items-center hover:bg-hover hover-transition-bg p-1">
             <span>
               <span class="font-semibold">

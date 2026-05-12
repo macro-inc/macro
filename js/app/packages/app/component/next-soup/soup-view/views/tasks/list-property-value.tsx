@@ -97,17 +97,15 @@ const ListSelectValue: Component<{ property: Property }> = (props) => {
   };
 
   return (
-    <HoverCard
-      unstyled
-      content={<PropertyTooltip property={props.property} />}
-      class="list-property-cell flex items-center min-w-0"
-    >
+    <HoverCard content={<PropertyTooltip property={props.property} />}>
       <button
         type="button"
         onClick={handleClick}
-        class={cn(buttonClass(isReadOnly()), {
-          'text-ink-extra-muted/50': !firstValue(),
-        })}
+        class={cn(
+          'list-property-cell min-w-0',
+          buttonClass(isReadOnly()),
+          { 'text-ink-extra-muted/50': !firstValue() },
+        )}
       >
         <Show
           when={firstValue()}
@@ -194,17 +192,15 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
   const isSingleUser = () => isUser() && entities().length === 1;
 
   return (
-    <HoverCard
-      unstyled
-      content={<PropertyTooltip property={props.property} />}
-      class="list-property-cell flex items-center min-w-0"
-    >
+    <HoverCard content={<PropertyTooltip property={props.property} />}>
       <button
         type="button"
         onClick={handleClick}
-        class={cn(buttonClass(isReadOnly()), {
-          'text-ink-extra-muted/50': !hasValues(),
-        })}
+        class={cn(
+          'list-property-cell min-w-0',
+          buttonClass(isReadOnly()),
+          { 'text-ink-extra-muted/50': !hasValues() },
+        )}
       >
         <Show
           when={hasValues()}

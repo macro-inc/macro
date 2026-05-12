@@ -19,7 +19,6 @@ import LinkIcon from '@icon/regular/link.svg';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { proxyResource } from '@service-unfurl/client';
-import { Layer } from '@ui';
 import {
   createSignal,
   For,
@@ -77,38 +76,33 @@ const TooltipWrapper = (props: {
   const singleSelect = () => !props.property.isMultiSelect;
   const hasValue = () => propertyHasValue(props.property);
   return (
-    <Layer depth={2}>
-      <Show
-        when={hasValue()}
-        fallback={
-          <div class="p-2 border border-edge bg-panel text-xs rounded-sm shadow-md shadow-[#0001]">
-            No {props.property.displayName} set
-          </div>
-        }
+    <Show
+      when={hasValue()}
+      fallback={
+        <div class="text-xs">No {props.property.displayName} set</div>
+      }
+    >
+      <div
+        classList={{
+          'flex flex-row gap-2 items-center': singleSelect(),
+          'min-w-48 max-w-72': !singleSelect(),
+        }}
       >
         <div
-          class="p-2 border border-edge bg-panel rounded-sm shadow-md shadow-[#0001]"
+          class="flex items-center gap-2 text-ink-muted"
           classList={{
-            'flex flex-row gap-2 items-center': singleSelect(),
-            'min-w-48 max-w-72': !singleSelect(),
+            'border-b border-edge pb-1.5 mb-1.5': !singleSelect(),
           }}
         >
-          <div
-            class="flex items-center gap-2 text-ink-muted"
-            classList={{
-              'border-b border-edge pb-1.5 mb-1.5': !singleSelect(),
-            }}
-          >
-            <PropertyDataTypeIcon
-              property={props.property}
-              class="size-3.5 text-ink-muted"
-            />
-            <span class="text-xs">{props.property.displayName}</span>
-          </div>
-          {props.children}
+          <PropertyDataTypeIcon
+            property={props.property}
+            class="size-3.5 text-ink-muted"
+          />
+          <span class="text-xs">{props.property.displayName}</span>
         </div>
-      </Show>
-    </Layer>
+        {props.children}
+      </div>
+    </Show>
   );
 };
 
