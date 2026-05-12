@@ -156,10 +156,6 @@ export function ChannelThread(props: ThreadProps) {
 
   createEffect(
     on(
-      // Including `targetReplyId` makes this re-fire on every navigation cycle
-      // not just when the active target reply id changes so re-navigating to
-      // the same reply (eg resubmitting a find-bar query) restores the
-      // highlight after a channel-level clearSelection blip wiped it
       [() => props.selectedReplyId, () => props.targetReplyId, loadedReplies],
       ([selectedReplyId, _targetReplyId, replies]) => {
         if (!selectedReplyId) {
