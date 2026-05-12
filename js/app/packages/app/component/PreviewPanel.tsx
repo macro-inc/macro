@@ -18,7 +18,6 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from './split-layout/context';
-import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(
@@ -42,7 +41,6 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   props
 ) => {
   let scopedSplitPanelContextType: SplitPanelContextType = {} as any;
-  const splitPanelContext = useSplitPanelOrThrow();
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {
     ...props.splitPanelContext.layoutRefs,
   };
@@ -64,9 +62,9 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   const blockInstance = () => {
     const aliasContext = isTaskEntity(props.selectedEntity)
       ? ({
-          alias: 'task',
-          baseType: 'md',
-        } as BlockAliasContext)
+        alias: 'task',
+        baseType: 'md',
+      } as BlockAliasContext)
       : undefined;
 
     let blockType: BlockName;
