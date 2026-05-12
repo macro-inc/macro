@@ -39,13 +39,6 @@ static PREFIX: &str = r#"
         UNION ALL
         SELECT $1
     ),
-    UserAccessibleItems AS (
-        SELECT DISTINCT
-            ea.entity_id::text as item_id,
-            ea.entity_type as item_type
-        FROM entity_access ea
-        WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
-    ),
 "#;
 
 // -- Lightweight top clauses: only id + sort_ts (plus filter-required joins) --
@@ -62,9 +55,15 @@ static DOCUMENT_TOP_CLAUSE: &str = r#"
                     END::timestamptz as sort_ts
                 FROM "Document" d
                 LEFT JOIN document_sub_type dt ON dt.document_id = d.id
-                INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
                 WHERE d."deletedAt" IS NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM entity_access ea
+                      WHERE ea.entity_id::text = d.id
+                        AND ea.entity_type = 'document'
+                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+                  )
 "#;
 
 static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
@@ -91,9 +90,15 @@ static CHAT_TOP_CLAUSE: &str = r#"
                         ELSE c."updatedAt"
                     END::timestamptz as sort_ts
                 FROM "Chat" c
-                INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
                 WHERE c."deletedAt" IS NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM entity_access ea
+                      WHERE ea.entity_id::text = c.id
+                        AND ea.entity_type = 'chat'
+                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+                  )
 "#;
 
 static PROJECT_TOP_CLAUSE: &str = r#"
@@ -107,14 +112,18 @@ static PROJECT_TOP_CLAUSE: &str = r#"
                         ELSE p."updatedAt"
                     END::timestamptz as sort_ts
                 FROM "Project" p
-                INNER JOIN UserAccessibleItems uai
-                    ON uai.item_id = p.id
-                    AND uai.item_type = 'project'
                 LEFT JOIN "UserHistory" uh
                     ON uh."itemId" = p.id
                     AND uh."itemType" = 'project'
                     AND uh."userId" = $1
                 WHERE p."deletedAt" IS NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM entity_access ea
+                      WHERE ea.entity_id::text = p.id
+                        AND ea.entity_type = 'project'
+                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+                  )
 "#;
 
 // -- Detail clauses: full columns, joined back from TopItems --
