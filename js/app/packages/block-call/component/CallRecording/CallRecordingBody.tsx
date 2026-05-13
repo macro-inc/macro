@@ -114,7 +114,9 @@ export function CallRecordingBody(props: {
     )
   );
 
-  const callTitle = createMemo(() => record().channelName ?? 'Call Recording');
+  const callTitle = createMemo(
+    () => record().customName ?? record().channelName ?? 'Call Recording'
+  );
 
   const formattedDate = createMemo(() => {
     const ended = record().endedAt;
