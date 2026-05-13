@@ -80,16 +80,16 @@
   /* Semantic Color names, use these when writing tailwind */
   --color-accent:          var(--a0);
   --color-accent-bg:       oklch(var(--a0) / 0.08);
-  --color-accent-hover:    oklch(var(--a0) / 0.20); /* hover, e.g. hover state for buttons/items */
+  --color-accent-hover:    oklch(var(--a0) / 0.20);
 
-  --color-surface:         var(--b0); /* surface background (panels, pages, menus, dialogs, inputs, buttons) */
+  --color-surface:         var(--b0);
   --color-drop-shadow:     oklch(calc(var(--b0l) - 0.01 ) var(--b0c) var(--b0h) / 0.4);
-  --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2)); /* message background */
-  --color-hover:           var(--b2); /* hover, e.g. hover state for buttons/items */
-  --color-active:          var(--b1); /* elements that are selected or activated */
-  --color-overlay:         oklch(var(--b2) / 0.5); /* overlay, e.g. modal background */
-  --color-edge-muted:      var(--b3); /* muted edge */
-  --color-edge:            var(--b4); /* edge (border) */
+  --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2));
+  --color-hover:           var(--b2);
+  --color-active:          var(--b1);
+  --color-overlay:         oklch(var(--b2) / 0.5);
+  --color-edge-muted:      var(--b3);
+  --color-edge:            var(--b4);
   --color-rail:            color-mix(in oklch, var(--b4) 90%, var(--b0));
 
   --color-ink:             var(--c0);
@@ -149,10 +149,10 @@
 
 @source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
 
-@custom-variant tauri (&:where(.tauri *));
-@custom-variant ios (&:where(.tauri-ios *));
 @custom-variant touch (&:where(html[data-touch-device="true"] *));
 @custom-variant mobile-width (@media (max-width: 639px));
+@custom-variant ios (&:where(.tauri-ios *));
+@custom-variant tauri (&:where(.tauri *));
 /* `mobile:` is equivalent to `touch:mobile-width:` */
 @custom-variant mobile {
   &:where(html[data-touch-device="true"] *) {
@@ -163,6 +163,23 @@
 }
 
 :root {
+  /* mobile safe areas */
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
+  --viewport-padding: 16px;
+  --keyboard-height: 0px;
+
+  /* chat vars */
+  --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) / 2);
+  --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
+  --regular-message-padding-t: .5rem;
+  --message-padding-x: .5rem;
+  --thread-padding-y: .5rem;
+  --user-icon-width: 36px;
+  --thread-shift: 32px;
+
   /* Cursor variables — override these to use custom cursors */
   --cursor-nesw-resize: nesw-resize;
   --cursor-nwse-resize: nwse-resize;
@@ -180,8 +197,6 @@
   --cursor-text:        text;
 }
 
-
-
 /* Big hammer fix for cursor pointer. */
 @utility cursor-pointer {
   cursor: default;
@@ -198,7 +213,9 @@
 
 /* utils for striped bg images */
 @utility pattern-diagonal-* {
-  background-image: linear-gradient(-45deg,
+  background-size: --value(integer)px --value(integer)px;
+  background-image: linear-gradient(
+    -45deg,
     transparent 10%,
     var(--pattern-color) 10%,
     var(--pattern-color) 20%,
@@ -207,14 +224,17 @@
     var(--pattern-color) 60%,
     var(--pattern-color) 70%,
     transparent 70%,
-    transparent);
-  background-size: --value(integer)px --value(integer)px;
+    transparent
+  );
 }
 
 @utility pattern-dot-* {
-  background-image: radial-gradient(var(--pattern-color) 0.5px, transparent 0.6px), radial-gradient(var(--pattern-color) 0.5px, transparent 0.6px);
-  background-size: --value(integer)px --value(integer)px;
   background-position: 0 0, calc(--value(integer)px / 2) calc(--value(integer)px / 2);
+  background-image:
+    radial-gradient(var(--pattern-color) 0.5px, transparent 0.6px),
+    radial-gradient(var(--pattern-color) 0.5px, transparent 0.6px)
+  ;
+  background-size: --value(integer)px --value(integer)px;
 }
 
 @utility glow-* {
@@ -290,18 +310,9 @@
   -ms-overflow-style: none;  /* Internet Explorer 10+ */
   &::-webkit-scrollbar {     /* Safari etc */
     display: none;
-    width: 0;
     height: 0;
+    width: 0;
   }
-}
-
-:root {
-  --viewport-padding: 16px;
-  --keyboard-height: 0px;
-  --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
-  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));
-  --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
-  --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
 }
 
 /** isolate the app-root stacking context from the kobalte dialog and modal stacking context */
@@ -318,80 +329,46 @@
 }
 
 @theme default {
-    /* Font families */
-    --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    /*--font-mono: "Roboto Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;*/
-    --font-mono: "Roboto Mono Variable",  monospace;
-    --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  /* Font families */
+  --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: "Roboto Mono Variable",  monospace;
+  --text-xxs: 0.625rem;
 
-    --text-xxs: 0.625rem;
+  /* Custom container size */
+  --container-small: 40rem;
+  --container-c: 0;
 
-    /* Custom container size */
-    --container-small: 40rem;
+  /* Transitions */
+  --ease-click: cubic-bezier(.18,.91,.27,1.14);
+  --transition-duration-slow: 100ms;
 
-    /* Colors */
-    --color-macro-accent: #00c4ff;
-    --color-macro-input-border: #e4e4e4;
-    --color-macro-doc: #F9FAFB;
+  /* Animations */
+  --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-swipe-out: swipeOut 100ms ease-out;
+  --animate-typing-dot: typing-dot 1s infinite;
+  --animate-hide: hide 100ms ease-in;
 
-    /* Transitions */
-    --transition-duration-quick: 20ms;
-    --transition-duration-slow: 100ms;
-    --ease-click: cubic-bezier(.18,.91,.27,1.14);
+  @keyframes hide {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
 
-   /* Animations */
-   --animate-hide: hide 100ms ease-in;
-   --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
-   --animate-swipe-out: swipeOut 100ms ease-out;
-   --animate-typing-dot: typing-dot 1s infinite;
+  @keyframes slideIn {
+    from { transform: translateX(calc(100% + var(--viewport-padding))); }
+    to   { transform: translateX(0                                   ); }
+  }
 
-    @keyframes hide {
-        from {
-            opacity: 1;
-        }
+  @keyframes swipeOut {
+    from { transform: translateX(var(--kb-toast-swipe-end-x))         ; }
+    to   { transform: translateX(calc(100% + var(--viewport-padding))); }
+  }
 
-        to {
-            opacity: 0;
-        }
-    }
-
-    @keyframes slideIn {
-        from {
-            transform: translateX(calc(100% + var(--viewport-padding)));
-        }
-
-        to {
-            transform: translateX(0);
-        }
-    }
-
-    @keyframes swipeOut {
-        from {
-            transform: translateX(var(--kb-toast-swipe-end-x));
-        }
-
-        to {
-            transform: translateX(calc(100% + var(--viewport-padding)));
-        }
-    }
-
-    @keyframes typing-dot {
-        0% {
-            transform: scale(1) translateY(0);
-        }
-
-        50% {
-            transform: scale(1.5) translateY(-2px);
-        }
-
-        100% {
-            transform: scale(1) translateY(0);
-        }
-    }
-
-    --container-c: 0;
-
-    /* --shadow-*: initial; */
+  @keyframes typing-dot {
+    0%   { transform: scale(1)   translateY(0   ); }
+    50%  { transform: scale(1.5) translateY(-2px); }
+    100% { transform: scale(1)   translateY(0   ); }
+  }
 }
 
 @custom-variant drop-valid (&[data-drop-valid]);
@@ -400,53 +377,41 @@
 /* Hide Kobalte's popper positioner until floating-UI has computed the position.
    Without this, the card briefly appears at top:0 left:0 on first open. */
 [data-popper-positioner]:not([style*='translate']) {
-    opacity: 0 !important;
-    pointer-events: none !important;
-    will-change: transform, opacity;
+  pointer-events: none !important;
+  will-change: transform, opacity;
+  opacity: 0 !important;
 }
 
 @layer base {
-    html {
-        overscroll-behavior: none;
-        overflow: hidden;
-        font: -apple-system-body;
-    }
+  html {
+    overscroll-behavior: none;
+    font: -apple-system-body;
+    overflow: hidden;
+  }
 
-    /* Custom cursor is set via JavaScript in index.tsx to match theme accent color */
-
-    body {
-        @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
-
-        /* SCUFFED; surface might change to surface2  */
-        background-color: var(--color-surface);
-
-        width: 100dvw;
-        height: 100dvh;
-
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-
-        color: var(--color-ink);
-        font-feature-settings: "dlig" 1, "calt" 1;
-    }
-
-    @font-face {
-        font-family: "oooh-baby";
-        src: url("./asset/fonts/OoohBaby-Regular.woff2") format("truetype");
-    }
+  body {
+    @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
+    font-feature-settings: "dlig" 1, "calt" 1;
+    background-color: var(--color-surface);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: var(--color-ink);
+    height: 100dvh;
+    width: 100dvw;
+  }
 
     /* This is ugly, and we can probably do better, but it stops text from being selectable by default, which is important for mobile usage */
-    :where(*, ::before, ::after) {
-        user-select: none;
-    }
+  :where(*, ::before, ::after) {
+    user-select: none;
+  }
 
-    :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
-        user-select: text;
-    }
+  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
+    user-select: text;
+  }
 
-    *:focus-visible {
-        position: relative;
-    }
+  *:focus-visible {
+    position: relative;
+  }
 
   code {
     @apply font-mono;
@@ -466,87 +431,76 @@ html:not([data-touch-device="true"]) [data-message][data-highlighted] {
 /* Keyboard selection accent bar can coexist with hover styles */
 /* Suppressed on touch devices */
 html:not([data-touch-device="true"]) [data-message][data-selected] > .message-accent-bar {
-    @apply opacity-100;
+  @apply opacity-100;
 }
 
 /* Long-press animation */
 [data-message].long-press-animation, .long-press-animation [data-swipe-content] {
-    animation: long-press-message-highlight 400ms ease-in both;
+  animation: long-press-message-highlight 400ms ease-in both;
 }
 
 [data-message].long-press-animation > .message-accent-bar, .long-press-animation [data-accent-bar] {
-    animation: long-press-accent-bar 400ms ease-in both;
+  animation: long-press-accent-bar 400ms ease-in both;
 }
 
 @keyframes long-press-message-highlight {
-    from {
-        background-color: oklch(from var(--color-accent) l c h / 0%);
-        outline-width: 1px;
-        outline-style: solid;
-        outline-color: transparent;
-        outline-offset: -1px;
-    }
-    to {
-        background-color: oklch(from var(--color-accent) l c h / 5%);
-        outline-width: 1px;
-        outline-style: solid;
-        outline-color: oklch(from var(--color-accent) l c h / 20%);
-        outline-offset: -1px;
-    }
+  from {
+    background-color: oklch(from var(--color-accent) l c h / 0%);
+    outline-width: 1px;
+    outline-style: solid;
+    outline-color: transparent;
+    outline-offset: -1px;
+  }
+  to {
+    background-color: oklch(from var(--color-accent) l c h / 5%);
+    outline-width: 1px;
+    outline-style: solid;
+    outline-color: oklch(from var(--color-accent) l c h / 20%);
+    outline-offset: -1px;
+  }
 }
 
 @keyframes long-press-accent-bar {
-    from { opacity: 0; }
-    to { opacity: 1; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @utility no-select-children {
-    * {
-        user-select: none;
-    }
+  * {
+    user-select: none;
+  }
 }
 
 @utility select-children {
-    * {
-        user-select: text;
-    }
+  * {
+    user-select: text;
+  }
 }
 
 @utility bg-modal-overlay {
-    background-color: var(--color-overlay);
-    --pattern-color: color-mix(in srgb, var(--color-overlay), var(--color-ink) 2%);
+  --pattern-color: color-mix(in srgb, var(--color-overlay), var(--color-ink) 2%);
+  background-color: var(--color-overlay);
 }
 
 @utility bg-modal-overlay-konsole {
   background-color: var(--color-overlay);
-  background-image: linear-gradient(rgba(from var(--color-accent) r g b / 0.1) 0%, transparent 25%);
+  background-image: linear-gradient(
+    rgba(from var(--color-accent) r g b / 0.1) 0%,
+    transparent 25%
+  );
 }
 
 @utility portal-scope {
-    --documentation: "Set this element as a bounding scope for the ScopedPortal component";
+  --documentation: "Set this element as a bounding scope for the ScopedPortal component";
 }
 
 /* Apply to the content wrapper div inside any Dialog.Portal (not the overlay).
    Keeps UI elements within device safe areas (notch, home indicator, etc.). */
 @utility safe-insets {
-  margin-top: var(--safe-top);
   margin-bottom: var(--safe-bottom);
-  margin-left: var(--safe-left);
   margin-right: var(--safe-right);
-}
-
-:root {
-  --message-padding-x: .5rem;
-  --regular-message-padding-t: .5rem;
-  --thread-padding-y: .5rem;
-  --thread-shift: 32px;
-  --user-icon-width: 36px;
-  --left-of-connector: calc(
-    var(--message-padding-x) + var(--user-icon-width) / 2
-  );
-  --left-of-user-icon: calc(
-    var(--left-of-connector) - var(--user-icon-width) / 2
-  );
+  margin-left: var(--safe-left);
+  margin-top: var(--safe-top);
 }
 
 @media (min-width: 640px) {
@@ -556,111 +510,106 @@ html:not([data-touch-device="true"]) [data-message][data-selected] > .message-ac
 }
 
 @utility macro-message-width {
-    max-width: 100%;
-
-    @media (min-width: 640px) {
-        max-width: 800px;
-        min-width: 250px;
-    }
+  max-width: 100%;
+  @media (min-width: 640px) {
+    max-width: 800px;
+    min-width: 250px;
+  }
 }
 
 @utility macro-message-padding {
-
-  @container (width < 816px) {
-      padding-inline: calc(var(--spacing) * 4);
-  }
-  @container (width < 640px) {
-      padding-inline: calc(var(--spacing) * 2);
-  }
+  @container (width < 816px) { padding-inline: calc(var(--spacing) * 4); }
+  @container (width < 640px) { padding-inline: calc(var(--spacing) * 2); }
 }
 
 @utility macro-message-margin {
-
-  @container (width < 816px) {
-      margin-inline: calc(var(--spacing) * 4);
-  }
-  @container (width < 640px) {
-      margin-inline: calc(var(--spacing) * 2);
-  }
+  @container (width < 816px) { margin-inline: calc(var(--spacing) * 4); }
+  @container (width < 640px) { margin-inline: calc(var(--spacing) * 2); }
 }
 
 ::-webkit-scrollbar {
-    height: 8px;
-    /* Thickness of horizontal scrollbar */
-    width: 8px;
-    /* Thickness of vertical scrollbar */
-    overflow: auto;
+  overflow: auto;
+  height: 8px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: oklch(from var(--color-edge) l c h / 0.5);
-    border-radius: 10px;
-    margin: 2px;
+  background: oklch(from var(--color-edge) l c h / 0.5);
+  border-radius: 10px;
+  margin: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-edge);
+  background: var(--color-edge);
 }
 
 :focus-visible {
-    outline: none;
+  outline: none;
 }
 
 [type="file"]:focus {
-    outline: none;
+  outline: none;
 }
 
 /* Prevent up/down arrows showing in Firefox */
 input[type="number"] {
-    -moz-appearance: textfield;
+  -moz-appearance: textfield;
 }
 
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    margin: 0;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  margin: 0;
 }
 
 .chat-markdown-container {
-
-    .table-container,
-    .katex-display,
-    pre {
-        overflow-x: auto;
-        overflow-y: hidden;
-    }
+  .table-container, .katex-display,
+  pre {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
 }
 
 @media (pointer: coarse) {
-    .md-table-cell-resizer {
-        background-color: #adf;
-        mix-blend-mode: color;
-    }
+  .md-table-cell-resizer {
+    background-color: #adf;
+    mix-blend-mode: color;
+  }
 }
 
 .media-error {
-    background-size: 8px 8px;
-    background-image: linear-gradient(-45deg, transparent 10%, var(--color-edge-muted) 10%, var(--color-edge-muted) 20%, transparent 10%, transparent 60%, var(--color-edge-muted) 60%, var(--color-edge-muted) 70%, transparent 70%, transparent);
+  background-size: 8px 8px;
+  background-image: linear-gradient(
+    -45deg, transparent 10%,
+    var(--color-edge-muted) 10%,
+    var(--color-edge-muted) 20%,
+    transparent 10%,
+    transparent 60%,
+    var(--color-edge-muted) 60%,
+    var(--color-edge-muted) 70%,
+    transparent 70%,
+    transparent
+  );
 }
 
 [cmdk-list] {
-    height: var(--cmdk-list-height);
-    max-height: 500px;
-    transition: height 100ms ease;
-    overflow: auto;
+  height: var(--cmdk-list-height);
+  transition: height 100ms ease;
+  max-height: 500px;
+  overflow: auto;
 }
 
 input[type="time"]::-webkit-calendar-picker-indicator {
   --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 256 256'%3E%3C!-- Icon from Phosphor by Phosphor Icons - https://github.com/phosphor-icons/core/blob/main/LICENSE --%3E%3Cpath fill='currentColor' d='M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m0 192a88 88 0 1 1 88-88a88.1 88.1 0 0 1-88 88m64-88a8 8 0 0 1-8 8h-56a8 8 0 0 1-8-8V72a8 8 0 0 1 16 0v48h48a8 8 0 0 1 8 8'/%3E%3C/svg%3E");
   -webkit-mask: var(--icon) no-repeat;
-  mask: var(--icon) no-repeat;
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
   background-color: currentColor;
-  color: inherit;
-  width: 1em;
-  height: 1em;
+  -webkit-mask-size: 100% 100%;
+  mask: var(--icon) no-repeat;
   background-image: none;
+  mask-size: 100% 100%;
+  color: inherit;
+  height: 1em;
+  width: 1em;
 }

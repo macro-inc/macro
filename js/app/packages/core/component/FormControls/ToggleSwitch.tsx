@@ -39,8 +39,12 @@ export const ToggleSwitch: Component<
       init = false;
       return checkedVal;
     }
-    if (checkedVal === prevChecked) { return checkedVal; }
-    if (checkedVal === false) { return checkedVal; }
+    if (checkedVal === prevChecked) {
+      return checkedVal;
+    }
+    if (checkedVal === false) {
+      return checkedVal;
+    }
 
     return checkedVal;
   });

@@ -40,8 +40,12 @@ export const MiniToggleSwitch: Component<
       init = false;
       return checkedVal;
     }
-    if (checkedVal === prevChecked) { return checkedVal; }
-    if (checkedVal === false) { return checkedVal; }
+    if (checkedVal === prevChecked) {
+      return checkedVal;
+    }
+    if (checkedVal === false) {
+      return checkedVal;
+    }
     return checkedVal;
   });
 
