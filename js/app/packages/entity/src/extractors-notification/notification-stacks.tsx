@@ -105,7 +105,7 @@ export function NotificationStackRow(props: {
     <ContextMenu>
       <ContextMenu.Trigger class="size-full">
         <div
-          class="group/notif flex items-start gap-3 px-3 py-2.5 hover:bg-ink-muted/[0.06] min-w-0 overflow-hidden cursor-pointer"
+          class="group/notif flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/[0.06] min-w-0 overflow-hidden cursor-pointer"
           onClick={handleClick}
           role="button"
           tabIndex={0}
@@ -121,62 +121,42 @@ export function NotificationStackRow(props: {
             }
           }}
         >
-          {/* Left column: type icon + unread dot */}
-          <div class="flex flex-col items-center gap-1 pt-0.5 shrink-0 w-4">
-            <NotificationIcon
-              stack={props.stack}
-              class={cn('size-3.5 shrink-0', {
-                'text-accent': unread(),
-                'text-ink-muted': !unread(),
-              })}
-            />
-            <span
-              class={cn(
-                'size-1.5 rounded-full bg-accent shrink-0 opacity-0',
-                { 'opacity-100': unread() }
-              )}
-            />
+          <span
+            class={cn('size-1.5 rounded-full shrink-0', {
+              'bg-accent': unread(),
+              'bg-transparent': !unread(),
+            })}
+          />
+          <NotificationIcon
+            stack={props.stack}
+            class="size-3.5 shrink-0 text-ink-muted/60"
+          />
+          <div class="shrink-0">
+            <NotificationSenderIcon stack={props.stack} size="sm" />
           </div>
-
-          {/* Main content */}
-          <div class="min-w-0 flex-1">
-            {/* Header: sender icon + description + timestamp */}
-            <div class="flex items-center gap-1.5 min-w-0">
-              <div class="shrink-0">
-                <NotificationSenderIcon stack={props.stack} size="sm" />
-              </div>
-              <span class="ph-no-capture truncate min-w-0 text-xs font-medium text-ink">
-                <NotificationDescription stack={props.stack} />
-              </span>
-              <span class="text-ink-extra-muted text-xs tabular-nums shrink-0 ml-auto">
-                <NotificationTimestamp stack={props.stack} />
-              </span>
-              <Show when={canMarkDone()}>
-                <div class="shrink-0 opacity-0 group-hover/notif:opacity-100">
-                  <Button
-                    onClick={handleMarkAsDone}
-                    tooltip={'Mark done'}
-                    class="rounded text-ink-muted hover:text-accent hover:bg-accent/10 grid p-0 place-items-center size-5"
-                  >
-                    <CheckIcon class="size-3" />
-                  </Button>
-                </div>
-              </Show>
+          <span class={cn(
+            'ph-no-capture truncate min-w-0 text-xs text-ink',
+            { 'font-medium': unread() }
+          )}>
+            <NotificationDescription stack={props.stack} />
+          </span>
+          <span class="ph-no-capture truncate min-w-0 text-xs text-ink-muted/60 flex-1">
+            {props.content ?? <NotificationContent stack={props.stack} singleLine />}
+          </span>
+          <span class="text-ink-extra-muted text-xs tabular-nums shrink-0">
+            <NotificationTimestamp stack={props.stack} />
+          </span>
+          <Show when={canMarkDone()}>
+            <div class="shrink-0 opacity-0 group-hover/notif:opacity-100">
+              <Button
+                onClick={handleMarkAsDone}
+                tooltip={'Mark done'}
+                class="rounded text-ink-muted hover:text-accent hover:bg-accent/10 grid p-0 place-items-center size-5"
+              >
+                <CheckIcon class="size-3" />
+              </Button>
             </div>
-
-            {/* Content preview */}
-            <div
-              class={cn(
-                'ph-no-capture mt-1 min-w-0 text-xs text-ink-muted/80 leading-5',
-                {
-                  'truncate overflow-hidden':
-                    props.stack.type !== 'document_mention' && !props.content,
-                }
-              )}
-            >
-              {props.content ?? <NotificationContent stack={props.stack} />}
-            </div>
-          </div>
+          </Show>
         </div>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
