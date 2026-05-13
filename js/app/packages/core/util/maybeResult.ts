@@ -324,14 +324,20 @@ export class MaybeResultError<E extends string = string> extends Error {
  * Wraps a MaybeResult-returning async function to throw on error.
  * Useful for tanstack-query and other APIs that expect thrown errors.
  */
+export async function throwOnErr<E extends string>(
+  fn: () => Promise<MaybeError<E>>
+): Promise<void>;
 export async function throwOnErr<E extends string, T>(
   fn: () => Promise<MaybeResult<E, T>>
-): Promise<T> {
+): Promise<T>;
+export async function throwOnErr<E extends string, T>(
+  fn: () => Promise<MaybeError<E> | MaybeResult<E, T>>
+): Promise<T | void> {
   const result = await fn();
   if (isErr(result)) {
     throw new MaybeResultError(result[0]);
   }
-  return result[1];
+  if (result.length > 1) return (result as [null, T])[1];
 }
 
 /**

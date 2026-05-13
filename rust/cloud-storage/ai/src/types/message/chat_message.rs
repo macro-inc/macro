@@ -56,6 +56,17 @@ pub enum AssistantMessagePart {
         json: serde_json::Value,
         id: String,
     },
+    McpToolCall {
+        /// Demangled tool name from the MCP server
+        name: String,
+        /// MCP server name
+        service: String,
+        /// Human-readable title from the MCP server, if provided
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display_name: Option<String>,
+        json: serde_json::Value,
+        id: String,
+    },
     ToolCallResponseJson {
         name: String,
         json: serde_json::Value,
@@ -154,6 +165,12 @@ impl Display for AssistantMessagePart {
         match self {
             Self::Text { text } => write!(f, "{}", text),
             Self::ToolCall { name, json, .. } => write!(f, "tool call: {}\n{}", name, json),
+            Self::McpToolCall {
+                name,
+                service,
+                json,
+                ..
+            } => write!(f, "mcp tool call: {}/{}\n{}", service, name, json),
             Self::ToolCallResponseJson { name, json, .. } => {
                 write!(f, "tool response {}: {}", name, json)
             }

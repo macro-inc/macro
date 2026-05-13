@@ -204,6 +204,7 @@ impl IntoResponse for McpHandlerErr {
     )
 )]
 /// List all MCP servers configured for the authenticated user.
+#[tracing::instrument(skip_all, err)]
 pub async fn list_servers<S, O>(
     State(state): State<McpRouterState<S, O>>,
     MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
@@ -237,6 +238,7 @@ where
     )
 )]
 /// Add a new MCP server for the authenticated user.
+#[tracing::instrument(skip_all, err)]
 pub async fn add_server<S, O>(
     State(state): State<McpRouterState<S, O>>,
     MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
@@ -281,6 +283,7 @@ where
     )
 )]
 /// Update an existing MCP server's name or enabled status.
+#[tracing::instrument(skip_all, err)]
 pub async fn update_server<S, O>(
     State(state): State<McpRouterState<S, O>>,
     MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
@@ -327,6 +330,7 @@ where
     )
 )]
 /// Delete an MCP server by URL.
+#[tracing::instrument(skip_all, err)]
 pub async fn delete_server<S, O>(
     State(state): State<McpRouterState<S, O>>,
     MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
@@ -359,6 +363,7 @@ where
     )
 )]
 /// Start the OAuth authorization flow for an MCP server.
+#[tracing::instrument(skip_all, err)]
 pub async fn start_auth<S, O>(
     State(state): State<McpRouterState<S, O>>,
     MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
@@ -388,10 +393,11 @@ where
     )
 )]
 /// OAuth callback endpoint — receives code and state from the authorization server.
+#[tracing::instrument(skip_all, err)]
 pub async fn auth_callback<S, O>(
     State(state): State<McpRouterState<S, O>>,
     Query(params): Query<AuthCallbackParams>,
-) -> Result<StatusCode, McpHandlerErr>
+) -> Result<String, McpHandlerErr>
 where
     S: McpServerStore,
     O: OAuthClient,
@@ -401,5 +407,5 @@ where
         .exchange_authorization_code(&params.code, &params.state)
         .await?;
 
-    Ok(StatusCode::OK)
+    Ok("Authorization successful. You can close this tab.".to_string())
 }
