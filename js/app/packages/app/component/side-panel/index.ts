@@ -1,4 +1,4 @@
-export { SidePanel, useHasSidePanel } from './SidePanel';
+export { SidePanel, useHasSidePanel, useSidePanel } from './SidePanel';
 export type {
   SidePanelContextType,
   SidePanelSectionEntry,

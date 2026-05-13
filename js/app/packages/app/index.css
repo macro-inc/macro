@@ -94,10 +94,9 @@
 
   --color-ink:             var(--c0);
   --color-ink-muted:       var(--c1);
-  --color-default:         var(--c1); /* wtf? */
   --color-ink-extra-muted: var(--c2);
   --color-ink-disabled:    var(--c3);
-  --color-ink-placeholder: oklch(var(--c4) / 0.50);
+  --color-ink-placeholder: var(--c4);
 
   /* Below are hardcoded colors */
   --color-failure:     oklch(0.637 0.237 25.331);
@@ -130,7 +129,8 @@
   --color-task:        oklch(from var(--a0) l c 150deg);
   --color-pdf:         oklch(from var(--a0) l c  25deg);
   --color-rss:         oklch(from var(--a0) l c 260deg);
-  --color-email:       var(--theme-email); /* wtf? */
+  --color-default:     var(--c1);
+  --color-email:       var(--c1);
 
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */
@@ -387,20 +387,52 @@
     }
 
     @keyframes typing-dot {
-        0% {
-            transform: scale(1) translateY(0);
+            0% {
+                transform: scale(1) translateY(0);
+            }
+
+            50% {
+                transform: scale(1.5) translateY(-2px);
+            }
+
+            100% {
+                transform: scale(1) translateY(0);
+            }
         }
 
-        50% {
-            transform: scale(1.5) translateY(-2px);
+        /* SidePanel accordion animations */
+        --animate-accordion-down: accordion-down 200ms ease-out;
+        --animate-accordion-up: accordion-up 200ms ease-out;
+        --animate-content-fade: content-fade 200ms ease-out;
+
+        @keyframes accordion-down {
+            from {
+                height: 0;
+            }
+            to {
+                height: var(--kb-accordion-content-height);
+            }
         }
 
-        100% {
-            transform: scale(1) translateY(0);
+        @keyframes accordion-up {
+            from {
+                height: var(--kb-accordion-content-height);
+            }
+            to {
+                height: 0;
+            }
         }
-    }
 
-    --container-c: 0;
+        @keyframes content-fade {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        --container-c: 0;
 
     /* --shadow-*: initial; */
 }

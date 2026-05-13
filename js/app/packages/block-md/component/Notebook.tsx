@@ -1,4 +1,4 @@
-import { SidePanel } from '@app/component/side-panel';
+import { SidePanel, useSidePanel } from '@app/component/side-panel';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
@@ -36,11 +36,13 @@ import {
 } from 'solid-js';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
-import { DocumentDetailsSection } from './sidepanel/DocumentDetailsSection';
-import { PropertiesSection } from './sidepanel/PropertiesSection';
 import { TaskDiscussion } from './TaskDiscussion';
 import { TitleEditor } from './TitleEditor';
 import { registerMarkdownCommands } from './useMarkdownCommands';
+import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
+import { Button } from '@ui';
+import SplitIcon from '@icon/fill/square-half-fill.svg';
+import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 
 const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
@@ -283,7 +285,6 @@ export function Notebook() {
   });
 
   return (
-    <SidePanel.Layout>
       <div class={containerClasses()} ref={notebookRef}>
         <div class={contentDivClasses()} ref={contentRef}>
           <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
@@ -307,14 +308,7 @@ export function Notebook() {
           <CommentMargin />
         </div>
       </div>
-      <SidePanel.Section id="details" title="Details" defaultOpen>
-        <DocumentDetailsSection />
-      </SidePanel.Section>
-      <SidePanel.Section id="properties" title="Properties" defaultOpen>
-        <PropertiesSection canEdit={canEdit()} documentName={documentName()} />
-      </SidePanel.Section>
-    </SidePanel.Layout>
-  );
+    );
 }
 
 export function InstructionsNotebook() {

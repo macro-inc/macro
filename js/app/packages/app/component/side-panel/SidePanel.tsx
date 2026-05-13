@@ -2,7 +2,7 @@ import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { isMobile } from '@core/mobile/isMobile';
 import { Accordion } from '@kobalte/core/accordion';
 import CaretRight from '@icon/fill/caret-right-fill.svg';
-import { Panel } from '@ui';
+import { Panel, Scroll } from '@ui';
 import {
   type Accessor,
   children,
@@ -13,6 +13,7 @@ import {
   onCleanup,
   onMount,
   type ParentProps,
+  Show,
   Suspense,
   useContext,
 } from 'solid-js';
@@ -36,14 +37,18 @@ const MAIN_MIN_PX = 320;
  *
  * The side panel is hidden when:
  *   - on mobile (`isMobile()`),
- *   - the layout root is narrower than NARROW_THRESHOLD_PX, OR
- *   - no sections are currently registered.
+ *   - the layout root is narrower than NARROW_THRESHOLD_PX,
+ *   - no sections are currently registered, OR
+ *   - the user has toggled it closed via `ctx.setIsOpen(false)`.
  *
  * Sections are rendered as a Kobalte Accordion in JSX-declared order.
  */
 function Layout(props: ParentProps) {
   const [sections, setSections] = createSignal<SidePanelSectionEntry[]>([]);
   const [openIds, setOpenIds] = createSignal<string[]>([]);
+  const [isOpen, setIsOpen] = createSignal(true);
+
+  const toggle = () => setIsOpen((prev) => !prev);
 
   const register = (entry: SidePanelSectionEntry) => {
     setSections((prev) => {
@@ -63,15 +68,23 @@ function Layout(props: ParentProps) {
     setOpenIds((prev) => prev.filter((v) => v !== id));
   };
 
-  const ctx: SidePanelContextType = { register, unregister, sections };
+  const ctx: SidePanelContextType = {
+    register,
+    unregister,
+    sections,
+    isOpen,
+    setIsOpen,
+    toggle,
+  };
 
   return (
     <SidePanelContext.Provider value={ctx}>
-      <Resize.Zone direction="horizontal" gutter={2}>
+      <Resize.Zone direction="horizontal" gutter={0}>
         <SidePanelLayoutInner
           sections={sections}
           openIds={openIds}
           setOpenIds={setOpenIds}
+          isOpen={isOpen}
         >
           {props.children}
         </SidePanelLayoutInner>
@@ -85,6 +98,7 @@ function SidePanelLayoutInner(
     sections: Accessor<SidePanelSectionEntry[]>;
     openIds: Accessor<string[]>;
     setOpenIds: (ids: string[]) => void;
+    isOpen: Accessor<boolean>;
   }>
 ) {
   const resolved = children(() => props.children);
@@ -95,26 +109,31 @@ function SidePanelLayoutInner(
 
   const isNarrow = createMemo(() => zoneCtx.size() < NARROW_THRESHOLD_PX);
   const hasSections = createMemo(() => props.sections().length > 0);
-  const hidden = createMemo(() => isMobile() || isNarrow() || !hasSections());
+
+  // Panel should be hidden if: mobile, narrow, no sections, OR user toggled it closed
+  const shouldHide = createMemo(
+    () => isMobile() || isNarrow() || !hasSections() || !props.isOpen()
+  );
 
   return (
     <>
       <Resize.Panel id="side-panel-main" minSize={MAIN_MIN_PX} index={0}>
         {resolved()}
       </Resize.Panel>
-      <Resize.Panel
-        id="side-panel-side"
-        minSize={SIDE_MIN_PX}
-        maxSize={SIDE_MAX_PX}
-        hidden={hidden}
-        index={1}
-      >
-        <SidePanelOutlet
-          sections={props.sections}
-          openIds={props.openIds}
-          setOpenIds={props.setOpenIds}
-        />
-      </Resize.Panel>
+      <Show when={!shouldHide()}>
+        <Resize.Panel
+          id="side-panel-side"
+          minSize={SIDE_MIN_PX}
+          maxSize={SIDE_MAX_PX}
+          index={1}
+        >
+          <SidePanelOutlet
+            sections={props.sections}
+            openIds={props.openIds}
+            setOpenIds={props.setOpenIds}
+          />
+        </Resize.Panel>
+      </Show>
     </>
   );
 }
@@ -125,17 +144,17 @@ function SidePanelOutlet(props: {
   setOpenIds: (ids: string[]) => void;
 }) {
   return (
-    <div class="size-full p-2 flex flex-col min-h-0">
+    <Scroll class="flex flex-col min-h-0">
       <Accordion
         multiple
         collapsible
         value={props.openIds()}
         onChange={(value) => props.setOpenIds(value as string[])}
-        class="flex flex-col gap-2 min-h-0"
+        class="p-2 flex flex-col gap-2 min-h-0"
       >
         <For each={props.sections()}>{(section) => section.component()}</For>
       </Accordion>
-    </div>
+    </Scroll>
   );
 }
 
@@ -167,16 +186,22 @@ function Section(
       defaultOpen: props.defaultOpen ?? false,
       component: () => (
         <Accordion.Item value={props.id}>
-          <Panel depth={2} style={{ height: 'auto' }} class="rounded-lg shadow-md shadow-drop-shadow">
+          <Panel
+            depth={2}
+            style={{ height: 'auto' }}
+            class="rounded-lg shadow-md shadow-drop-shadow"
+          >
             <Accordion.Header class="group">
-                <Accordion.Trigger class="px-2 py-3 flex w-full items-center gap-2 text-xs text-medium hover:underline">
-                  <span>{props.title}</span>
-                  <CaretRight class="size-2.5 text-ink-extra-muted transition-transform duration-90 group-data-expanded:rotate-90" />
-                </Accordion.Trigger>
+              <Accordion.Trigger class="px-2 py-3 flex w-full items-center gap-2 text-sm hover:underline">
+                <span>{props.title}</span>
+                <CaretRight class="size-2.5 text-ink-extra-muted transition-transform duration-90 group-data-expanded:rotate-90" />
+              </Accordion.Trigger>
             </Accordion.Header>
-            <Accordion.Content>
-              <Suspense fallback={<div class="h-4"/>}>
-                <div class="px-2 py-3 text-sm">{props.children}</div>
+            <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
+              <Suspense fallback={<div class="h-4" />}>
+                <div class="px-2 pb-3 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
+                  {props.children}
+                </div>
               </Suspense>
             </Accordion.Content>
           </Panel>
@@ -188,10 +213,36 @@ function Section(
   return null;
 }
 
+/** Hook to access the SidePanel context for toggling visibility */
+function useSidePanel() {
+  const ctx = useContext(SidePanelContext);
+  if (!ctx) {
+    return null;
+  }
+  return {
+    isOpen: ctx.isOpen,
+    setIsOpen: ctx.setIsOpen,
+    toggle: ctx.toggle,
+  };
+}
+
 /** Indicates whether the current subtree has a SidePanel.Layout ancestor. */
 function useHasSidePanel(): boolean {
   return useContext(SidePanelContext) !== undefined;
 }
 
-export const SidePanel = { Layout, Section };
-export { useHasSidePanel };
+/**
+ * A simple flex row for side panel content.
+ * Children are rendered on the left, label on the right.
+ */
+function Row(props: ParentProps<{ label: JSX.Element }>) {
+  return (
+    <div class="flex flex-row items-center gap-2 text-xs">
+      {props.children}
+      <span class="text-ink-muted">{props.label}</span>
+    </div>
+  );
+}
+
+export const SidePanel = { Layout, Section, Row };
+export { useHasSidePanel, useSidePanel };

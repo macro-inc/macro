@@ -32,7 +32,6 @@ import TableActionMenu, {
 import { DraggableBlockMenu } from '@core/component/LexicalMarkdown/component/misc/DraggableBlockMenu';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
 import { TableCellResizer } from '@core/component/LexicalMarkdown/component/misc/TableCellResizer';
-import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import {
   getErrorDescription,
   MarkdownEditorErrors,
@@ -903,9 +902,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   });
 
   const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
-  plugins.use(
-    wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
-  );
+    plugins.use(
+      wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
+    );
+    setMdStore('wordcountStats', wordcountStats);
 
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
@@ -1042,35 +1042,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
           <CommentsProvider activeComment={activeCommentIdParam} />
         </Show>
-
-        <ScopedPortal scope="block">
-          <Show when={!isBlankMarkdown() && !isMobile()}>
-            <div class="absolute bottom-2 left-2 size-fit">
-              <Wordcount stats={wordcountStats} />
-            </div>
-          </Show>
-          {/* <Show
-            when={
-              isBlankMarkdown() &&
-              titleIsEmpty() &&
-              !isMobileWidth() &&
-              isContentEditable()
-            }
-          >
-            <div
-              class="absolute bottom-0 left-0 right-0 flex justify-center items-end
-                  p-4 w-full overflow-auto"
-            >
-              <div class="w-full max-w-sm sm:max-w-md lg:max-w-3xl">
-                <TemplateSelector
-                  titleEditor={md.titleEditor}
-                  editor={editor}
-                  editorContainerRef={editorContainerRef}
-                />
-              </div>
-            </div>
-          </Show> */}
-        </ScopedPortal>
 
         <Show when={canEdit()}>
           <TableCellResizer />

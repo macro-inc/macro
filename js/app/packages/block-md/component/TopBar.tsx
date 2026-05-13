@@ -47,6 +47,7 @@ import {
 import {
   ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
+  ENABLE_MARKDOWN_SIDE_PANEL,
   ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -67,6 +68,7 @@ import GitBranch from '@icon/regular/git-branch.svg';
 import Info from '@icon/regular/info.svg';
 import IconLink from '@icon/regular/link.svg';
 import Quotes from '@icon/regular/quotes.svg';
+import SidePanelIcon from '@icon/fill/square-half-fill.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
 import IconShared from '@macro-icons/wide/share.svg';
@@ -75,6 +77,8 @@ import { createEffect, For, type JSX, on, Show } from 'solid-js';
 import { DispatchAgentButton } from './DispatchAgentMenu';
 import { HISTORY_DRAWER_ID } from './History';
 import { DRAWER_ID as PROPERTIES_DRAWER_ID } from './MarkdownPropertiesModal';
+import { useSidePanel } from '@app/component/side-panel';
+import { Button, cn } from '@ui';
 
 export function TopBar() {
   const analytics = useAnalytics();
@@ -160,6 +164,8 @@ export function TopBar() {
     },
     { op: 'delete', divideAbove: true },
   ];
+
+  const sidePanel = useSidePanel();
 
   const tools: BlockTool[] = [
     {
@@ -273,7 +279,33 @@ export function TopBar() {
       action: copyLink,
       condition: isMobile,
     },
+    {
+      label: () => (sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'),
+      icon: SidePanelIcon,
+      action: () => sidePanel?.toggle(),
+      isActive: () => sidePanel?.isOpen() ?? false,
+      condition: () => ENABLE_MARKDOWN_SIDE_PANEL && !isMobile(),
+      buttonComponent: () => (
+        <Show when={sidePanel}>
+          {(panel) => <Button
+            depth={2}
+            variant="base"
+            size='icon-sm'
+            class={cn('bg-surface order-20', {
+              'bg-active': sidePanel?.isOpen(),
+            })}
+            tooltip={sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}
+            onClick={() => {
+              panel().toggle();
+            }}
+          >
+            <SidePanelIcon />
+          </Button>}
+        </Show>
+      )
+    },
   ];
+
 
   return (
     <>
@@ -286,6 +318,7 @@ export function TopBar() {
           <BlockLiveIndicators />
         </div>
       </SplitHeaderRight>
+
       <ResponsivePermissionsBadge />
 
       <ResponsiveBlockToolbar

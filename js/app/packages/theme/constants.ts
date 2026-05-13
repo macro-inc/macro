@@ -63,7 +63,7 @@ export const DEFAULT_THEMES = [
           a4: { l: 0.65, c: 0.20, h: 219 },
           b0: { l: 0.96, c: 0.00, h:  59 },
           b1: { l: 0.92, c: 0.00, h:  59 },
-          b2: { l: 0.89, c: 0.00, h:  59 },
+          b2: { l: 0.91, c: 0.00, h:  59 },
           b3: { l: 0.93, c: 0.00, h:  59 },
           b4: { l: 0.85, c: 0.00, h:  59 },
           c0: { l: 0.14, c: 0.00, h:  59 },
@@ -77,7 +77,7 @@ export const DEFAULT_THEMES = [
     id: 'Macro Dark',
     name: 'Macro Dark',
     version: 2,
-    depth: 0.15,
+    depth: 0.35,
     tokens: {
       a0: { l: 0.75, c: 0.20, h:  59 },
       a1: { l: 0.75, c: 0.20, h:  99 },
