@@ -1,4 +1,6 @@
 import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
+import { UserIcon } from '@core/component/UserIcon';
+import { useAuthor, useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
@@ -49,11 +51,60 @@ function ParticipantTileWrapper(props: {
   );
 }
 
+function LocalParticipantAvatar(props: {
+  userId: string | undefined;
+  fallbackName: string | undefined;
+  avatarSize?: 'sm' | 'md';
+}) {
+  const avatarClass = () =>
+    cn(
+      'overflow-hidden rounded-full',
+      props.avatarSize === 'sm' ? 'size-12' : 'size-20 sm:size-24'
+    );
+
+  const fallbackInitial = () => {
+    const name = props.fallbackName?.trim();
+    return (name ? name.charAt(0) : 'Y').toUpperCase();
+  };
+
+  return (
+    <div class="flex items-center justify-center size-full p-4">
+      <div class={avatarClass()}>
+        <Show
+          when={props.userId?.trim()}
+          keyed
+          fallback={
+            <div
+              class={cn(
+                'flex size-full items-center justify-center rounded-full bg-ink-extra-muted text-surface font-semibold',
+                props.avatarSize === 'sm' ? 'text-xl' : 'text-4xl'
+              )}
+            >
+              {fallbackInitial()}
+            </div>
+          }
+        >
+          {(userId) => (
+            <UserIcon
+              id={userId}
+              size="fill"
+              suppressClick
+              showTooltip={false}
+            />
+          )}
+        </Show>
+      </div>
+    </div>
+  );
+}
+
 function LocalParticipantTile(props: {
   isSpeaking: boolean;
   isConnecting: boolean;
   isVideoMuted: boolean;
   track: Track | undefined;
+  userId: string | undefined;
+  fallbackName: string | undefined;
   avatarSize?: 'sm' | 'md';
   class?: string;
 }) {
@@ -66,16 +117,11 @@ function LocalParticipantTile(props: {
       <Show
         when={!props.isConnecting && !props.isVideoMuted}
         fallback={
-          <div class="flex items-center justify-center size-full p-4">
-            <div
-              class={cn(
-                'rounded-full bg-hover flex items-center justify-center text-ink-muted font-medium',
-                props.avatarSize === 'sm' ? 'size-8 text-sm' : 'size-12 text-lg'
-              )}
-            >
-              You
-            </div>
-          </div>
+          <LocalParticipantAvatar
+            userId={props.userId}
+            fallbackName={props.fallbackName}
+            avatarSize={props.avatarSize}
+          />
         }
       >
         <TrackView track={props.track} mirror />
@@ -144,6 +190,8 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
 
 export function CallOverlay(props: { onLeave: () => void }) {
   const callCtx = useCallContext();
+  const currentUserId = useUserId();
+  const currentUserName = useAuthor();
   const isConnecting = () => callCtx.isConnecting();
   const toggleShareWithTeam = useToggleShareWithTeamMutation();
 
@@ -158,6 +206,16 @@ export function CallOverlay(props: { onLeave: () => void }) {
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
 
   const isLocalSpeaking = () => callCtx.isLocalSpeaking();
+
+  const localUserId = () => {
+    callCtx.connectionState();
+    callCtx.trackVersion();
+
+    const identity = callCtx.room()?.localParticipant.identity?.trim();
+    const macroIdentity = identity ? tryMacroId(identity) : undefined;
+    const userId = currentUserId()?.trim();
+    return macroIdentity ?? userId ?? identity;
+  };
 
   const localVideoTrack = () => {
     callCtx.trackVersion();
@@ -225,6 +283,8 @@ export function CallOverlay(props: { onLeave: () => void }) {
               isConnecting={isConnecting()}
               isVideoMuted={callCtx.isVideoMuted()}
               track={localVideoTrack()}
+              userId={localUserId()}
+              fallbackName={currentUserName()}
             />
           }
         >
@@ -245,6 +305,8 @@ export function CallOverlay(props: { onLeave: () => void }) {
               isConnecting={isConnecting()}
               isVideoMuted={callCtx.isVideoMuted()}
               track={localVideoTrack()}
+              userId={localUserId()}
+              fallbackName={currentUserName()}
               avatarSize="sm"
             />
           </div>
