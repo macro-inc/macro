@@ -78,13 +78,14 @@ export function createChannelFindBar(
         if (idx === 0) return undefined;
         const entity = results()[idx - 1];
         if (!entity) return undefined;
-        const hit = entity.search.contentHitData?.[0]?.content;
-        if (!hit) return undefined;
-        const terms = [
-          ...new Set(extractSearchTerms(hit).filter((t) => t.length > 0)),
-        ];
-        if (!terms.length) return undefined;
-        return { messageId: entity.messageId, terms };
+        const termSet = new Set<string>();
+        for (const hit of entity.search.contentHitData ?? []) {
+          for (const term of extractSearchTerms(hit.content)) {
+            if (term.length) termSet.add(term);
+          }
+        }
+        if (termSet.size === 0) return undefined;
+        return { messageId: entity.messageId, terms: [...termSet] };
       });
 
       const totalCount = createMemo<number | undefined>(() => {
