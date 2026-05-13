@@ -145,6 +145,26 @@
   --color-accent-270: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 270deg));
   --color-accent-300: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 300deg));
   --color-accent-330: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 330deg));
+
+  /* Font families */
+  --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: "Roboto Mono Variable",  monospace;
+  --text-xxs: 0.625rem;
+
+  /* Animations */
+  --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-swipe-out: swipeOut 100ms ease-out;
+  --animate-typing-dot: typing-dot 1s infinite;
+  --animate-hide: hide 100ms ease-in;
+
+  /* Transitions */
+  --ease-click: cubic-bezier(.18,.91,.27,1.14);
+  --transition-duration-slow: 100ms;
+
+  /* Custom container size */
+  --container-small: 40rem;
+  --container-c: 0;
 }
 
 @source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
@@ -376,49 +396,6 @@
   }
 }
 
-@theme default {
-  /* Font families */
-  --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-mono: "Roboto Mono Variable",  monospace;
-  --text-xxs: 0.625rem;
-
-  /* Animations */
-  --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
-  --animate-swipe-out: swipeOut 100ms ease-out;
-  --animate-typing-dot: typing-dot 1s infinite;
-  --animate-hide: hide 100ms ease-in;
-
-  /* Transitions */
-  --ease-click: cubic-bezier(.18,.91,.27,1.14);
-  --transition-duration-slow: 100ms;
-
-  /* Custom container size */
-  --container-small: 40rem;
-  --container-c: 0;
-
-  @keyframes slideIn {
-    from { transform: translateX(calc(100% + var(--viewport-padding))); }
-    to   { transform: translateX(0                                   ); }
-  }
-
-  @keyframes swipeOut {
-    from { transform: translateX(var(--kb-toast-swipe-end-x))         ; }
-    to   { transform: translateX(calc(100% + var(--viewport-padding))); }
-  }
-
-  @keyframes typing-dot {
-    0%   { transform: scale(1)   translateY(0   ); }
-    50%  { transform: scale(1.5) translateY(-2px); }
-    100% { transform: scale(1)   translateY(0   ); }
-  }
-
-  @keyframes hide {
-    from { opacity: 1; }
-    to   { opacity: 0; }
-  }
-}
-
 @custom-variant drop-valid (&[data-drop-valid]);
 @custom-variant drop-invalid (&[data-drop-invalid]);
 
@@ -508,6 +485,27 @@ html:not([data-touch-device="true"]) [data-message][data-selected] > .message-ac
 @keyframes long-press-accent-bar {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(calc(100% + var(--viewport-padding))); }
+  to   { transform: translateX(0                                   ); }
+}
+
+@keyframes swipeOut {
+  from { transform: translateX(var(--kb-toast-swipe-end-x))         ; }
+  to   { transform: translateX(calc(100% + var(--viewport-padding))); }
+}
+
+@keyframes typing-dot {
+  0%   { transform: scale(1)   translateY(0   ); }
+  50%  { transform: scale(1.5) translateY(-2px); }
+  100% { transform: scale(1)   translateY(0   ); }
+}
+
+@keyframes hide {
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }
 
 /* scuffed scrollbar should be killed. use scroll from @ui */
