@@ -148,7 +148,7 @@ function HeaderCell(props: {
             onClick={() => props.onSort?.(sortKey())}
             class={cn(
               'flex items-center gap-1 min-w-0 w-full h-full',
-              'hover:text-ink transition-colors cursor-pointer',
+              'hover:text-ink transition-colors',
               props.active && 'text-ink',
               justify()
             )}
