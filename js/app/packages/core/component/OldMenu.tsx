@@ -157,7 +157,7 @@ export function OldMenuItem(props: OldMenuItemProps) {
                 class={cn(
                   'flex justify-center items-center shrink-0',
                   isMobile() ? 'size-5' : 'size-4',
-                  selected() && 'text-accent-ink',
+                  selected() && 'text-accent',
                   props.iconClass
                 )}
               >
@@ -242,7 +242,7 @@ export function OldMenu(props: ParentProps<OldMenuProps>) {
   return (
     <div
       class={cn(
-        'flex flex-col py-1 justify-start items-start bg-menu shadow-lg rounded-md ring-1 ring-edge cursor-default select-none',
+        'flex flex-col py-1 justify-start items-start bg-surface shadow-lg rounded-md ring-1 ring-edge cursor-default select-none',
         props.width && (oldMenuWidths[props.width] ?? props.width),
         isTouchDevice() && 'relative',
         props.hide && 'hidden',

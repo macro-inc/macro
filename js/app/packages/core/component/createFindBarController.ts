@@ -11,6 +11,7 @@ export type FindBarSource<T> = {
   isFetching: Accessor<boolean>;
   navigate: (result: T) => void;
   validateText?: (text: string) => boolean;
+  totalCount?: Accessor<number | undefined>;
 };
 
 export type FindBarController = {
@@ -51,8 +52,6 @@ export function createFindBarController<T>(
 
   const source = makeSource({ isOpen, submittedQuery, activeIndex });
   const validateText = source.validateText ?? ((text) => text.length > 0);
-
-  createEffect(on(submittedQuery, () => setActiveIndex(0), { defer: true }));
 
   createEffect(
     on(source.results, (rs) => {
@@ -119,7 +118,7 @@ export function createFindBarController<T>(
     activeIndex,
     hasUnsubmittedChanges: () => query().trim() !== submittedQuery(),
     isPending: () => !!submittedQuery() && source.isFetching(),
-    resultsCount: () => source.results().length,
+    resultsCount: () => source.totalCount?.() ?? source.results().length,
     open,
     close,
     submit,

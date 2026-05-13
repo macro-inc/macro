@@ -125,7 +125,7 @@ fn push_thread_candidate_select(
     }
 
     if has_thread_literals(email_filter) {
-        build_thread_email_filter(email_filter).push_into(builder);
+        build_thread_email_filter(email_filter, sort_ts_field).push_into(builder);
     }
 
     // Push address (Sender/Cc/Bcc/Recipient) constraints into the candidate

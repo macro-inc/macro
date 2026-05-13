@@ -17,3 +17,4 @@ macro_user_id = { path = "../macro_user_id" }
 axum = { workspace = true }
 axum-macros = { workspace = true }
 tracing = { workspace = true }
+non_empty = { path = "../non_empty" }

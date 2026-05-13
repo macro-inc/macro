@@ -5,7 +5,7 @@ import {
   loadResult,
 } from '@core/block';
 import { isErr, ok } from '@core/util/maybeResult';
-import { storageServiceClient } from '@service-storage/client';
+import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { lazy } from 'solid-js';
@@ -25,7 +25,7 @@ export const definition = defineBlock({
   async load(source, intent) {
     if (source.type === 'dss') {
       const maybeDocument = await loadResult(
-        storageServiceClient.getBinaryDocument({ documentId: source.id })
+        fetchBinaryDocumentData(source.id)
       );
 
       if (intent === 'preload')

@@ -7,7 +7,7 @@ mod set_entity_property;
 mod test;
 
 use crate::domain::service::PropertiesService;
-use ai::tool::AsyncToolSet;
+use ai::tool::AsyncToolCollection;
 use std::sync::Arc;
 
 pub use get_entity_properties::{GetEntityProperties, GetEntityPropertiesResponse};
@@ -37,11 +37,11 @@ impl<T: PropertiesService> PropertiesToolContext<T> {
 }
 
 /// Create a properties toolset.
-pub fn properties_toolset<T>() -> AsyncToolSet<PropertiesToolContext<T>>
+pub fn properties_toolset<T>() -> AsyncToolCollection<PropertiesToolContext<T>>
 where
     T: PropertiesService,
 {
-    AsyncToolSet::new()
+    AsyncToolCollection::new()
         .add_tool::<GetEntityProperties, PropertiesToolContext<T>>()
         .add_tool::<SetEntityProperty, PropertiesToolContext<T>>()
 }

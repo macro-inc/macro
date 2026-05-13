@@ -33,7 +33,7 @@ function ErrorMessage(props: {
   const { currentScale } = useRenderState();
   return (
     <div
-      class="size-full bg-menu/40 rounded border border-dashed border-edge"
+      class="size-full bg-surface/40 rounded border border-dashed border-edge"
       style={{
         'font-size': 12 * (props.node.width / fileWidth) + 'px',
         'background-size':
@@ -50,7 +50,7 @@ function ErrorMessage(props: {
           <div class="size-full flex flex-row items-center">
             <LockKey
               width={18 * (props.node.width / fileWidth) + 'px'}
-              class="mx-1 fill-failure bg-menu rounded-full"
+              class="mx-1 fill-failure bg-surface rounded-full"
             />
             Unauthorized: Invalid file permissions
           </div>
@@ -59,7 +59,7 @@ function ErrorMessage(props: {
           <div class="size-full flex flex-row items-center px-2">
             <Question
               width={18 * (props.node.width / fileWidth) + 'px'}
-              class="mx-1 fill-ink-extra-muted bg-menu rounded-full"
+              class="mx-1 fill-ink-extra-muted bg-surface rounded-full"
             />
             Error: Missing file
           </div>
@@ -68,7 +68,7 @@ function ErrorMessage(props: {
           <div class="size-full flex flex-row items-center px-2">
             <Question
               width={18 * (props.node.width / fileWidth) + 'px'}
-              class="mx-1 fill-ink-extra-muted bg-menu rounded-full"
+              class="mx-1 fill-ink-extra-muted bg-surface rounded-full"
             />
             Error: Invalid file
           </div>
@@ -203,7 +203,7 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
                 >
                   <div
                     ref={setFileRef}
-                    class="size-full bg-panel rounded-lg shadow-md flex items-center"
+                    class="size-full bg-surface rounded-lg shadow-md flex items-center"
                   >
                     <div class="flex flex-row p-2 truncate">
                       <div

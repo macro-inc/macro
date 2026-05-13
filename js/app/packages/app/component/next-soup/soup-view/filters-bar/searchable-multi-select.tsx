@@ -46,7 +46,7 @@ const SearchableMultiSelectItem = (itemProps: {
   >
     <span class="size-4 flex items-center justify-center shrink-0 rounded-xs border border-edge group-data-selected:bg-accent group-data-selected:border-accent">
       <Combobox.ItemIndicator>
-        <CheckIcon class="size-2.5 text-page" />
+        <CheckIcon class="size-2.5 text-surface" />
       </Combobox.ItemIndicator>
     </span>
     <Show when={itemProps.item.rawValue.icon}>
@@ -178,7 +178,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       <Combobox.Portal>
         <Combobox.Content
           class={cn(
-            'z-action-menu bg-menu border border-edge-muted rounded-sm shadow-md w-65 max-w-[90vw] overflow-hidden',
+            'z-action-menu bg-surface border border-edge-muted rounded-sm shadow-md w-65 max-w-[90vw] overflow-hidden',
             props.contentClass
           )}
         >

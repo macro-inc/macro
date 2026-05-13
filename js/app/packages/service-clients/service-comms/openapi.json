@@ -2541,6 +2541,12 @@
           "content": {
             "type": ["string", "null"]
           },
+          "mentions": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/SimpleMention"
+            }
+          },
           "nonce": {
             "type": ["string", "null"]
           }

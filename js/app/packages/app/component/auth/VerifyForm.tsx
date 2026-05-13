@@ -131,7 +131,7 @@ export function VerifyForm(props: { setStage: (next: Stage) => void }) {
           />
           <button
             class={cn(
-              'inline-block font-medium text-accent-ink hover:text-accent-ink/80 transition',
+              'inline-block font-medium text-accent hover:text-accent/80 transition',
               showResendCode()
                 ? 'opacity-100'
                 : 'opacity-50 pointer-events-none',

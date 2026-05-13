@@ -14,6 +14,7 @@ import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg'
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { cn, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useCallContext } from '../CallContext';
 
 const menuStyles = {
@@ -34,6 +35,12 @@ export function CallControlsPanelSmallRow(
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
   const toggleShareWithTeam = useToggleShareWithTeamMutation();
+  const noiseSuppressionModeLabel = () =>
+    match(callCtx.noiseSuppressionMode())
+      .with('krisp', () => 'Krisp')
+      .with('browser', () => 'Browser')
+      .with('off', () => 'Off')
+      .exhaustive();
 
   const handleToggleShareWithTeam = async () => {
     const callId = callCtx.activeCallId();
@@ -161,6 +168,30 @@ export function CallControlsPanelSmallRow(
                 </For>
               </DropdownMenu.Group>
             </Show>
+
+            <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
+
+            <DropdownMenu.Item
+              class={menuStyles.item}
+              closeOnSelect={false}
+              onSelect={() => void callCtx.toggleNoiseSuppression()}
+            >
+              <div class="flex min-w-0 flex-1 items-center gap-2">
+                <Microphone class="size-4 shrink-0" />
+                <span class="min-w-0 flex-1">Noise suppression</span>
+                <div class="ml-auto flex items-center gap-1.5 shrink-0">
+                  <span class="text-xs text-ink-muted">
+                    {noiseSuppressionModeLabel()}
+                  </span>
+                  <MiniToggleSwitch
+                    checked={callCtx.isNoiseSuppressed()}
+                    size="SM"
+                    compact
+                    switchRootClass="pointer-events-none"
+                  />
+                </div>
+              </div>
+            </DropdownMenu.Item>
 
             <DropdownMenu.Separator class="my-1 w-full border-t border-edge" />
 

@@ -483,7 +483,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                       class={cn(
                         'text-xs font-medium whitespace-nowrap',
                         props.publicAccessLevel != null
-                          ? 'text-accent-ink'
+                          ? 'text-accent'
                           : 'text-ink-extra-muted'
                       )}
                     >
@@ -1132,7 +1132,7 @@ export function ShareModal(props: ShareModalProps) {
                           class={cn(
                             'text-xs font-medium whitespace-nowrap',
                             publicAccessLevel() != null
-                              ? 'text-accent-ink'
+                              ? 'text-accent'
                               : 'text-ink-extra-muted'
                           )}
                         >
@@ -1267,7 +1267,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
       .otherwise(() => 'This item has been shared with you');
 
   return (
-    <ButtonGroup variant="base" size="sm" class="ml-1 bg-panel" depth={3}>
+    <ButtonGroup variant="base" size="sm" class="bg-surface" depth={2}>
       <Tooltip label={shareAccessTooltip()}>
         <Button
           onClick={() => {
@@ -1278,6 +1278,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
               shareCtx.open();
             }
           }}
+          class="text-ink-muted"
         >
           <IconShared />
           Share
@@ -1290,6 +1291,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
         tooltip="Copy Share Link"
         size="icon-sm"
         onClick={ShareLinkAction().action}
+        class="text-ink-muted"
       >
         <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
       </Button>

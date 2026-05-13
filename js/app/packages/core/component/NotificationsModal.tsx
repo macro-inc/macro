@@ -34,7 +34,7 @@ export function NotificationsButton(props: {
         class={cn(
           'px-1',
           drawerControl.isOpen() &&
-            'bg-accent/20 hover:bg-accent/30 text-accent-ink'
+            'bg-accent/20 hover:bg-accent/30 text-accent'
         )}
         tooltip="View notifications"
         onClick={() => {
@@ -47,7 +47,7 @@ export function NotificationsButton(props: {
       </Button>
       <Suspense fallback={null}>
         <Show when={unreadCount() > 0}>
-          <div class="text-[6pt] bg-accent text-page font-semibold rounded-full absolute top-0 right-0 px-1 pointer-events-none">
+          <div class="text-[6pt] bg-accent text-surface font-semibold rounded-full absolute top-0 right-0 px-1 pointer-events-none">
             {unreadCount()}
           </div>
         </Show>

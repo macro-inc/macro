@@ -83,7 +83,7 @@ export function EditInput(props: {
   return (
     <div class="relative">
       <div
-        class="px-2 pt-1 pb-8 bg-input rounded-sm relative border border-edge focus-within:ring-accent focus-within:ring"
+        class="px-2 pt-1 pb-8 bg-surface rounded-sm relative border border-edge focus-within:ring-accent focus-within:ring"
         on:click={(e) => {
           e.stopPropagation();
           focusEditor();
@@ -135,7 +135,7 @@ export function NewReplyInput(props: {
         when={props.isEditing}
         fallback={
           <div
-            class="p-2 mt-2 cursor-default text-sm text-ink-extra-muted bg-input border border-edge-muted rounded-sm"
+            class="p-2 mt-2 cursor-default text-sm text-ink-extra-muted bg-surface border border-edge-muted rounded-sm"
             on:click={(e) => {
               e.stopPropagation();
               props.setEditing(true);

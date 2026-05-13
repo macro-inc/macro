@@ -56,7 +56,7 @@ const TypeIndicator = (props: { active: boolean }) => (
     )}
   >
     <Show when={props.active}>
-      <CheckIcon class="size-2.5 text-page" />
+      <CheckIcon class="size-2.5 text-surface" />
     </Show>
   </span>
 );
@@ -306,6 +306,11 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
         icon: () => <EntityIcon targetType="write" size="xs" />,
       },
       {
+        id: 'file-video',
+        label: 'Videos',
+        icon: () => <EntityIcon targetType="video" size="xs" />,
+      },
+      {
         id: 'file-other',
         label: 'Other',
         icon: () => <EntityIcon targetType="unknown" size="xs" />,
@@ -411,7 +416,7 @@ const SearchableFilterSubmenu = (props: {
 
       <Dropdown.Portal>
         <Layer depth={2}>
-          <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-65 max-w-[90vw] overflow-hidden">
+          <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl w-65 max-w-[90vw] overflow-hidden">
             <SearchableMultiSelectInline
               options={props.options}
               activeIds={props.activeIds}
@@ -442,7 +447,7 @@ function SingleValueSubmenu<T>(props: {
       </Dropdown.SubTrigger>
       <Dropdown.Portal>
         <Layer depth={2}>
-          <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+          <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
             <For each={props.options}>
               {(option) => {
                 const active = () => props.current() === option.value;
@@ -644,7 +649,7 @@ const SearchIndexSubRow = (props: {
     </Dropdown.SubTrigger>
     <Dropdown.Portal>
       <Layer depth={2}>
-        <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
+        <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
           {props.children}
         </Dropdown.SubContent>
       </Layer>
@@ -797,7 +802,7 @@ export const UnifiedFilterDropdown = () => {
     <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
       <Dropdown open={open()} onOpenChange={setOpen}>
         <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
-          <Dropdown.Trigger>
+          <Dropdown.Trigger depth={2} class="bg-surface">
             <SlidersHorizontalIcon />
             <span>Filter</span>
           </Dropdown.Trigger>
@@ -805,7 +810,7 @@ export const UnifiedFilterDropdown = () => {
 
         <Dropdown.Portal>
           <Layer depth={2}>
-            <Dropdown.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
+            <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
               <Show
                 when={
                   categories().length === 1 && !isTasksView() && !isSearchView()
@@ -822,7 +827,7 @@ export const UnifiedFilterDropdown = () => {
 
                           <Dropdown.Portal>
                             <Layer depth={2}>
-                              <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+                              <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
                                 <For each={category.options}>
                                   {(option) => {
                                     const active = () =>
@@ -842,7 +847,7 @@ export const UnifiedFilterDropdown = () => {
                                           )}
                                         >
                                           <Show when={active()}>
-                                            <CheckIcon class="size-2.5 text-page" />
+                                            <CheckIcon class="size-2.5 text-surface" />
                                           </Show>
                                         </span>
 
@@ -966,7 +971,7 @@ export const UnifiedFilterDropdown = () => {
                           )}
                         >
                           <Show when={active()}>
-                            <CheckIcon class="size-2.5 text-page" />
+                            <CheckIcon class="size-2.5 text-surface" />
                           </Show>
                         </span>
 

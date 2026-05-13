@@ -13,7 +13,7 @@ export function DeleteConfimationDialog(props: DeleteConfimationDialogProps) {
     <Dialog open={props.open} onOpenChange={props.setOpen}>
       <Dialog.Portal>
         <Dialog.Overlay class="fixed flex inset-0 z-modal bg-modal-overlay items-center justify-content" />
-        <Dialog.Content class="fixed left-1/2 top-1/2 z-modal -translate-1/2 bg-dialog rounded-xl p-4 shadow-lg w-80">
+        <Dialog.Content class="fixed left-1/2 top-1/2 z-modal -translate-1/2 bg-surface rounded-xl p-4 shadow-lg w-80">
           <Dialog.Title class="font-bold mb-2 text-ink">
             Delete Items?
           </Dialog.Title>

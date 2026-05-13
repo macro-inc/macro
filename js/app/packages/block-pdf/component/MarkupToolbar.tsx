@@ -88,12 +88,7 @@ export function MarkupToolbar() {
 
   return (
     <Show when={canComment()}>
-      <div
-        class="flex flex-row items-center"
-        on:click={(e) => {
-          e.stopPropagation();
-        }}
-      >
+      <div class="flex flex-row items-center">
         <Show when={canEdit()}>
           <Button
             size="icon-sm"

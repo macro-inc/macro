@@ -51,14 +51,17 @@ import type { CreateCommentResponse } from './generated/schemas/createCommentRes
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
 import type { CreateInstructionsDocumentResponse } from './generated/schemas/createInstructionsDocumentResponse';
+import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
+import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
-import type { CreateTaskHandler200 as CreateTaskResponse } from './generated/schemas/createTaskHandler200';
+import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler200';
 import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
 import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
 import type { DeleteUnthreadedAnchorResponse } from './generated/schemas/deleteUnthreadedAnchorResponse';
 import type { DocumentMetadata } from './generated/schemas/documentMetadata';
 import type { DocumentPreview } from './generated/schemas/documentPreview';
+import type { DocumentResponseMetadataWithContent } from './generated/schemas/documentResponseMetadataWithContent';
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
 import type { EditCommentResponse } from './generated/schemas/editCommentResponse';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
@@ -72,7 +75,7 @@ import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendin
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
 import type { Item } from './generated/schemas/item';
-import type { LocationResponseData } from './generated/schemas/locationResponseData';
+import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PinRequest } from './generated/schemas/pinRequest';
 import type { Project } from './generated/schemas/project';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
@@ -95,6 +98,10 @@ import {
   type GetDocxFileResponse,
   getDocxExpandedParts,
 } from './util/getDocxFile';
+
+function normalizeLocationResponseV3(response: LocationResponseV3) {
+  return response;
+}
 
 // the server is set to expire at 15 minutes, so expire just before that
 const MINUTES_BEFORE_PRESIGNED_EXPIRES = 14;
@@ -461,12 +468,11 @@ export const storageServiceClient = {
   },
 
   /**
-   * Creates a task with properties in a single call.
-   * NOTE: Content must be initialized separately via sync service (initializeFromSnapshot).
+   * Creates a markdown document and initializes its sync-service content on the backend.
    */
-  async createTask(request: CreateTaskRequest) {
-    const result = await dssFetch<CreateTaskResponse>(
-      `/documents/create_task`,
+  async createMarkdownDocument(request: CreateMarkdownDocumentRequest) {
+    const result = await dssFetch<CreateMarkdownHandler200>(
+      `/documents/create_markdown`,
       {
         method: 'POST',
         body: JSON.stringify(request),
@@ -485,6 +491,30 @@ export const storageServiceClient = {
     return ok({ documentId: response.documentId });
   },
 
+  /**
+   * Creates a task with properties and initializes its sync-service content on the backend.
+   */
+  async createTask(request: CreateTaskRequest) {
+    const result = await dssFetch<CreateTaskHandler200>(
+      `/documents/create_task`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!isOk(result)) {
+      const err = result[0];
+      if (err[0].message.includes('403')) {
+        showPaywall(PaywallKey.FILE_LIMIT);
+      }
+      return result;
+    }
+
+    const [, response] = result;
+    return ok(response);
+  },
+
   async copyDocument(params: {
     documentId: string;
     documentVersionId?: number;
@@ -493,20 +523,23 @@ export const storageServiceClient = {
   }) {
     const { documentId, documentVersionId, syncServiceVersion, ...body } =
       params;
-    const result: MaybeResult<FetchWithTokenErrorCode, DocumentMetadata> =
-      mapOk(
-        await dssFetch<{ data: { documentMetadata: DocumentMetadata } }>(
-          `/documents/${documentId}/copy${documentVersionId ? `?version_id=${documentVersionId}` : ''}`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              ...body,
-              versionId: syncServiceVersion,
-            }),
-          }
-        ),
-        (result) => result.data.documentMetadata
-      );
+    const copyResult = await dssFetch<{
+      data: { documentMetadata: DocumentResponseMetadataWithContent };
+    }>(
+      `/documents/${documentId}/copy${documentVersionId ? `?version_id=${documentVersionId}` : ''}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          ...body,
+          versionId: syncServiceVersion,
+        }),
+      }
+    );
+
+    const result: MaybeResult<
+      FetchWithTokenErrorCode,
+      DocumentResponseMetadataWithContent
+    > = mapOk(copyResult, (result) => result.data.documentMetadata);
 
     if (isErr(result)) {
       const err = result[0];
@@ -937,7 +970,7 @@ export const storageServiceClient = {
         return err('NOT_FOUND', 'The document resource is no longer available');
       else if (isErr(locationResult)) return locationResult;
       const [, { data }] = locationResult;
-      if (!('presignedUrl' in data)) {
+      if (data.type !== 'presignedUrl') {
         return err(
           'INVALID_DOCUMENT',
           'Document location is missing presignedUrl'
@@ -987,7 +1020,7 @@ export const storageServiceClient = {
     }
 
     const [, { data }] = maybeLocation;
-    if (!('presignedUrl' in data)) {
+    if (data.type !== 'presignedUrl') {
       return err(
         'INVALID_DOCUMENT',
         'Document location is missing presignedUrl'
@@ -1053,12 +1086,18 @@ export const storageServiceClient = {
     async function getDocumentLocation(args) {
       const { documentId, versionId } = args;
       // we want to ensure we get the converted docx url if we have enabled the DOCX to PDF feature flag
-      const maybeResult = await dssFetch<LocationResponseData>(
-        `/documents/${documentId}/location?document_version_id=${versionId}&get_converted_docx_url=${ENABLE_DOCX_TO_PDF}`
+      const params = new URLSearchParams({
+        get_converted_docx_url: String(ENABLE_DOCX_TO_PDF),
+      });
+      if (versionId != null)
+        params.set('document_version_id', String(versionId));
+
+      const maybeResult = await dssFetch<LocationResponseV3>(
+        `/documents/${documentId}/location_v3?${params.toString()}`
       );
 
       return mapOk(maybeResult, (result) => ({
-        data: result,
+        data: normalizeLocationResponseV3(result),
       }));
     },
     {

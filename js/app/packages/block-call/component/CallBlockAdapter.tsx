@@ -10,6 +10,7 @@ import { useSearchParams } from '@solidjs/router';
 import { createSignal, Match, Switch } from 'solid-js';
 import { CallRecordingBody } from './CallRecording/CallRecordingBody';
 import { CallRecordingSplitHeaderLoading } from './CallRecording/CallRecordingSplitHeader';
+import { ModalsProvider } from './ModalsProvider';
 
 function isUnauthorized(error: Error | null): boolean {
   if (error instanceof MaybeResultError) {
@@ -58,35 +59,37 @@ export function CallBlockAdapter(props: CallBlockProps) {
   });
 
   return (
-    <div class="h-full flex flex-col @container">
-      <Switch>
-        <Match when={callRecord.data}>
-          {(data) => (
-            <CallRecordingBody
-              data={data}
-              transcriptTarget={transcriptTarget}
-            />
-          )}
-        </Match>
-        <Match when={callRecord.isLoading}>
-          <CallRecordingSplitHeaderLoading />
-          <div class="flex flex-1 min-h-0 items-center justify-center text-sm text-ink-faint">
-            Loading call...
-          </div>
-        </Match>
-        <Match when={callRecord.isError && isUnauthorized(callRecord.error)}>
-          <CallRecordingSplitHeaderLoading />
-          <div class="flex flex-1 min-h-0 overflow-hidden">
-            <Unauthorized />
-          </div>
-        </Match>
-        <Match when={callRecord.isError}>
-          <CallRecordingSplitHeaderLoading />
-          <div class="flex flex-1 min-h-0 items-center justify-center text-sm text-failure">
-            Failed to load call recording.
-          </div>
-        </Match>
-      </Switch>
-    </div>
+    <ModalsProvider>
+      <div class="h-full flex flex-col @container">
+        <Switch>
+          <Match when={callRecord.data}>
+            {(data) => (
+              <CallRecordingBody
+                data={data}
+                transcriptTarget={transcriptTarget}
+              />
+            )}
+          </Match>
+          <Match when={callRecord.isLoading}>
+            <CallRecordingSplitHeaderLoading />
+            <div class="flex flex-1 min-h-0 items-center justify-center text-sm text-ink-faint">
+              Loading call...
+            </div>
+          </Match>
+          <Match when={callRecord.isError && isUnauthorized(callRecord.error)}>
+            <CallRecordingSplitHeaderLoading />
+            <div class="flex flex-1 min-h-0 overflow-hidden">
+              <Unauthorized />
+            </div>
+          </Match>
+          <Match when={callRecord.isError}>
+            <CallRecordingSplitHeaderLoading />
+            <div class="flex flex-1 min-h-0 items-center justify-center text-sm text-failure">
+              Failed to load call recording.
+            </div>
+          </Match>
+        </Switch>
+      </div>
+    </ModalsProvider>
   );
 }

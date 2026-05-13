@@ -67,7 +67,7 @@ export function PageNumberInput() {
           <div class="px-1 hover:bg-hover hover-transition-bg cursor-default focus-within:bg-active">
             <input
               class={cn(
-                'py-0.5 px-0 text-sm bg-transparent text-ink font-medium cursor-default text-center border-none flex-initial focus:bg-input',
+                'py-0.5 px-0 text-sm bg-transparent text-ink font-medium cursor-default text-center border-none flex-initial focus:bg-surface',
                 getWidthClass(currentPageNumber())
               )}
               step="1"

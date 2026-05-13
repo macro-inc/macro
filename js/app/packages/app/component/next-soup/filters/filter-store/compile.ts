@@ -30,7 +30,8 @@ type DateRangeFieldName =
   | 'chatCreatedAt'
   | 'chatUpdatedAt'
   | 'folderCreatedAt'
-  | 'folderUpdatedAt';
+  | 'folderUpdatedAt'
+  | 'emailUpdatedAt';
 
 type CompiledFieldName = Exclude<FieldName, 'properties' | DateRangeFieldName>;
 
@@ -113,6 +114,7 @@ const DATE_RANGE_FIELDS: Record<
   chatUpdatedAt: { target: 'cf', field: 'ua' },
   folderCreatedAt: { target: 'pf', field: 'ca' },
   folderUpdatedAt: { target: 'pf', field: 'ua' },
+  emailUpdatedAt: { target: 'ef', field: 'ua' },
 };
 
 const expandDateRange = (
@@ -289,15 +291,21 @@ export function defineQueryFilters(
   const { skipTargets = [] } = options;
   const referencedTargets = new Set<QueryTarget>(skipTargets);
 
-  for (const field of Object.keys(input.include ?? {}) as CompiledFieldName[]) {
+  for (const field of Object.keys(input.include ?? {})) {
     if (field in FIELD_CONFIG) {
-      referencedTargets.add(FIELD_CONFIG[field].target);
+      referencedTargets.add(FIELD_CONFIG[field as CompiledFieldName].target);
+    }
+    if (field in DATE_RANGE_FIELDS) {
+      referencedTargets.add(DATE_RANGE_FIELDS[field].target);
     }
   }
 
-  for (const field of Object.keys(input.exclude ?? {}) as CompiledFieldName[]) {
+  for (const field of Object.keys(input.exclude ?? {})) {
     if (field in FIELD_CONFIG) {
-      referencedTargets.add(FIELD_CONFIG[field].target);
+      referencedTargets.add(FIELD_CONFIG[field as CompiledFieldName].target);
+    }
+    if (field in DATE_RANGE_FIELDS) {
+      referencedTargets.add(DATE_RANGE_FIELDS[field].target);
     }
   }
 

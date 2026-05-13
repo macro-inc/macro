@@ -80,7 +80,7 @@ console.log(a + b);
 
 function Container(props: { label: string; children: JSX.Element }) {
   return (
-    <div class="flex flex-col gap-4 w-full max-w-xl p-4 bg-panel rounded-lg border border-edge h-64">
+    <div class="flex flex-col gap-4 w-full max-w-xl p-4 bg-surface rounded-lg border border-edge h-64">
       <label class="text-xs text-ink-muted">{props.label}</label>
       <div class="h-px bg-edge"></div>
       <div class="h-full overflow-y-auto">{props.children}</div>

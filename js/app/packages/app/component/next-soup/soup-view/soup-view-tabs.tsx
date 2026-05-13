@@ -167,7 +167,7 @@ export const CollapsedSoupViewTabs = () => {
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Layer depth={2}>
-          <Dropdown.Content class="z-action-menu bg-page border border-edge-muted rounded-sm shadow-sm p-1">
+          <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm p-1">
             <For each={list()}>
               {(item) => (
                 <Dropdown.Item
@@ -195,7 +195,7 @@ export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
 
   return (
-    <div class="bg-panel border-t border-edge-muted h-11 px-1">
+    <div class="bg-surface border-t border-edge-muted h-11 px-1">
       <Switch>
         <For
           each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}

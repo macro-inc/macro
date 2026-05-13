@@ -250,7 +250,7 @@ export function CodeBoxAccessory(props: {
                 >
                   <Switch.Input class="sr-only" />
                   <Switch.Control class="inline-flex h-4 w-8 hover:ring-1 hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-checked:bg-accent">
-                    <Switch.Thumb class="block size-3 rounded-full bg-dialog transition-transform data-checked:translate-x-4" />
+                    <Switch.Thumb class="block size-3 rounded-full bg-surface transition-transform data-checked:translate-x-4" />
                   </Switch.Control>
                 </Switch>
               </div>
@@ -417,7 +417,7 @@ export const StaticCodeBoxAccessory = (props: {
               <Switch checked={isPreviewMode()} onChange={setIsPreviewMode}>
                 <Switch.Input class="sr-only" />
                 <Switch.Control class="inline-flex h-4 w-8 hover:ring-1 hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-checked:bg-accent">
-                  <Switch.Thumb class="block size-3 rounded-full transition-transform data-checked:translate-x-4 bg-dialog" />
+                  <Switch.Thumb class="block size-3 rounded-full transition-transform data-checked:translate-x-4 bg-surface" />
                 </Switch.Control>
               </Switch>
             </div>

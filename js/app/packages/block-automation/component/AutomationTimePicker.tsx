@@ -90,7 +90,7 @@ export function AutomationTimePicker(props: {
       </button>
       <Show when={open()}>
         <div
-          class="absolute inset-x-0 top-full mt-1 z-action-menu bg-dialog border border-edge-muted rounded-sm p-3"
+          class="absolute inset-x-0 top-full mt-1 z-action-menu bg-surface border border-edge-muted rounded-sm p-3"
           use:clickOutside={() => setOpen(false)}
         >
           <div class="flex items-center gap-2">
@@ -150,7 +150,7 @@ export function AutomationTimePicker(props: {
                 type="button"
                 class="px-2 py-1 transition-colors"
                 classList={{
-                  'bg-accent text-dialog': period() === 'AM',
+                  'bg-accent text-surface': period() === 'AM',
                   'hover:bg-active': period() !== 'AM',
                 }}
                 onClick={() => {
@@ -164,7 +164,7 @@ export function AutomationTimePicker(props: {
                 type="button"
                 class="px-2 py-1 transition-colors"
                 classList={{
-                  'bg-accent text-dialog': period() === 'PM',
+                  'bg-accent text-surface': period() === 'PM',
                   'hover:bg-active': period() !== 'PM',
                 }}
                 onClick={() => {

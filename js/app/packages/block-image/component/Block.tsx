@@ -59,7 +59,7 @@ export default function BlockImage() {
 
   return (
     <DocumentBlockContainer>
-      <div class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
+      <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col">
         <ModalsProvider>
           <TopBar />
           <Show

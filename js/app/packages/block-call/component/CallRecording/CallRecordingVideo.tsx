@@ -33,7 +33,7 @@ export function CallRecordingVideo(props: {
   onCleanup(stopTicking);
 
   return (
-    <div class="p-4 h-full min-h-0 flex justify-center items-start overflow-hidden">
+    <div class="p-4 flex justify-center items-start overflow-hidden">
       <video
         ref={props.setVideoRef}
         class="max-w-full max-h-full rounded transition-opacity duration-200"

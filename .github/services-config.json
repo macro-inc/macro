@@ -53,15 +53,6 @@
         "contacts_service"
       ]
     },
-    "convert-service": {
-      "source_paths": [
-        "rust/cloud-storage/convert_service/**"
-      ],
-      "stack_path": "infra/stacks/convert-service/**",
-      "deploy_binaries": [
-        "convert_service"
-      ]
-    },
     "deleted-item-poller": {
       "source_paths": [
         "rust/cloud-storage/deleted_item_poller/**"
@@ -85,7 +76,8 @@
         "rust/cloud-storage/document_storage_service/**",
         "rust/cloud-storage/github/**",
         "rust/cloud-storage/delete_chat_handler/**",
-        "rust/cloud-storage/docx_unzip_handler/**"
+        "rust/cloud-storage/docx_unzip_handler/**",
+        "rust/cloud-storage/document_upload_finalizer_handler/**"
       ],
       "stack_path": "infra/stacks/cloud-storage-service/**",
       "deploy_binaries": [
@@ -93,7 +85,8 @@
       ],
       "deploy_lambdas": [
         "delete_chat_handler",
-        "docx_unzip_handler"
+        "docx_unzip_handler",
+        "document_upload_finalizer_handler"
       ]
     },
     "document-storage": {

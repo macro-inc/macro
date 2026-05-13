@@ -1,8 +1,11 @@
-import Notepad from '@phosphor-icons/core/assets/regular/notepad.svg';
+import {
+  StaticMarkdown,
+  StaticMarkdownContext,
+} from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { Accessor } from 'solid-js';
-import { createMemo, createSignal, Show } from 'solid-js';
-import { CallRecordingSectionShell } from './CallRecordingSectionShell';
+import { createMemo, Show } from 'solid-js';
 
 export function CallRecordingSummarySection(props: {
   record: Accessor<CallRecord>;
@@ -13,24 +16,38 @@ export function CallRecordingSummarySection(props: {
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
   });
-  const [open, setOpen] = createSignal(true);
+
+  const isPending = createMemo(
+    () =>
+      !summary() &&
+      !props.record().isActive &&
+      props.record().transcript.length > 0
+  );
+
+  const shouldShow = createMemo(() => summary() || isPending());
 
   return (
-    <Show when={summary()}>
-      {(text) => (
-        <CallRecordingSectionShell
-          title="Summary"
-          icon={<Notepad class="size-4 text-ink shrink-0" />}
-          accordion
-          accordionOpenMaxVh={45}
-          open={open()}
-          onToggle={() => setOpen((v) => !v)}
+    <Show when={shouldShow()}>
+      <section class="flex flex-col gap-3">
+        <h3 class="text-sm font-semibold text-ink">Summary</h3>
+        <Show
+          when={summary()}
+          fallback={
+            <div class="flex items-center gap-2 animate-pulse">
+              <div class="size-3.5 shrink-0 animate-spin rounded-full border-2 border-ink-extra-muted border-t-ink-muted" />
+              <span class="text-sm text-ink-faint">Generating summary…</span>
+            </div>
+          }
         >
-          <div class="min-h-0 flex-1 overflow-y-auto scrollbar-hidden px-4 py-3">
-            <p class="whitespace-pre-wrap text-sm text-ink">{text()}</p>
-          </div>
-        </CallRecordingSectionShell>
-      )}
+          {(text) => (
+            <div class="text-sm/6 text-ink text-pretty">
+              <StaticMarkdownContext theme={aiChatTheme}>
+                <StaticMarkdown markdown={text()} />
+              </StaticMarkdownContext>
+            </div>
+          )}
+        </Show>
+      </section>
     </Show>
   );
 }

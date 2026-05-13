@@ -612,7 +612,7 @@ function InteractiveOnboardingInner() {
         .onboarding-stagger > *:nth-child(5) { animation-delay: 330ms; }
       `
       }</style>
-      <div class="inset-0 absolute text-edge bg-panel opacity-10 -z-1">
+      <div class="inset-0 absolute text-edge bg-surface opacity-10 -z-1">
         <PcNoiseGrid
           cellSize={30}
           warp={0}
@@ -742,7 +742,7 @@ function InteractiveOnboardingInner() {
                     {/* Header */}
                     <div class="p-4">
                       <div style={headerStyle()}>
-                        <div class="bg-ink text-panel text-xs font-mono size-4 flex items-center justify-center font-bold rounded-xs">
+                        <div class="bg-ink text-surface text-xs font-mono size-4 flex items-center justify-center font-bold rounded-xs">
                           {lesson().index + 1}
                         </div>
                         <Show when={getPreviousLesson()}>

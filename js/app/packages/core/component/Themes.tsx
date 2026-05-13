@@ -20,11 +20,11 @@ export type Theme =
 // it would be better if we also defined --accent-l-surface, --accent-l-contrast
 export const themeColors: Record<Theme, string> = {
   base: 'text-ink border-edge!',
-  accent: 'text-accent-ink border-accent/30',
-  accentFill: 'text-dialog border-accent/30',
+  accent: 'text-accent border-accent/30',
+  accentFill: 'text-surface border-accent/30',
   accentOpaque:
-    'text-accent-ink border-[oklch(from_var(--color-accent)_calc(l*0.9)_calc(c*0.8)_h)]',
-  contrast: 'text-menu border-ink-extra-muted',
+    'text-accent border-[oklch(from_var(--color-accent)_calc(l*0.9)_calc(c*0.8)_h)]',
+  contrast: 'text-surface border-ink-extra-muted',
   clear: 'text-ink border-transparent',
   selected: 'text-ink border-edge',
   disabled: 'text-ink-disabled/50 border-edge',
@@ -38,7 +38,7 @@ export const themeColors: Record<Theme, string> = {
 };
 
 export const themeStyles: Record<Theme, string> = {
-  base: 'bg-menu hover:bg-hover hover-transition-bg border border-inherit',
+  base: 'bg-surface hover:bg-hover hover-transition-bg border border-inherit',
   accent:
     'bg-accent/10 hover:bg-accent/20 hover-transition-bg border border-inherit',
   accentFill: 'bg-accent hover-transition-bg border border-inherit',
@@ -49,7 +49,7 @@ export const themeStyles: Record<Theme, string> = {
   clear:
     'bg-transparent hover:bg-hover hover-transition-bg border border-transparent',
   selected: 'bg-hover hover:bg-hover hover-transition-bg border border-inherit',
-  disabled: 'bg-menu/20 border border-inherit',
+  disabled: 'bg-surface/20 border border-inherit',
   green: 'bg-success-bg hover:bg-success border border-inherit',
   red: 'bg-failure-bg hover:bg-failure border border-inherit',
   muted:
@@ -82,7 +82,7 @@ export const themeSelectedColors: Record<Theme, string> = {
 };
 
 export const shortcutBadgeStyles: Record<Theme, string> = {
-  base: 'bg-dialog border border-ink',
+  base: 'bg-surface border border-ink',
   accent: 'bg-accent/10',
   accentFill: 'bg-accent/90',
   accentOpaque:

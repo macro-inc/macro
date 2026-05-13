@@ -28,41 +28,41 @@ const symbolMap = {
 export const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
 
   extraMuted: {
-    hotkey: 'bg-dialog border border-ink-extra-muted text-ink-extra-muted',
-    label: 'bg-ink-extra-muted border border-ink-extra-muted text-dialog',
+    hotkey: 'bg-surface border border-ink-extra-muted text-ink-extra-muted',
+    label: 'bg-ink-extra-muted border border-ink-extra-muted text-surface',
   },
   disabled: {
-    hotkey: 'bg-dialog border border-ink-disabled text-ink-disabled',
-    label: 'bg-ink-disabled border border-ink-disabled text-dialog',
+    hotkey: 'bg-surface border border-ink-disabled text-ink-disabled',
+    label: 'bg-ink-disabled border border-ink-disabled text-surface',
   },
   muted: {
-    hotkey: 'bg-dialog border border-ink-muted text-ink-muted',
-    label: 'bg-ink-muted border border-ink-muted text-dialog',
+    hotkey: 'bg-surface border border-ink-muted text-ink-muted',
+    label: 'bg-ink-muted border border-ink-muted text-surface',
   },
   subtle: {
     hotkey: 'bg-transparent border border-edge text-ink-extra-muted',
-    label: 'bg-ink-extra-muted border border-edge text-dialog',
+    label: 'bg-ink-extra-muted border border-edge text-surface',
   },
   accent: {
     hotkey: 'bg-accent/10 border border-accent/30 text-accent',
-    label: 'bg-accent border border-accent/30 text-dialog',
+    label: 'bg-accent border border-accent/30 text-surface',
   },
   current: {
-    hotkey: 'bg-dialog border border-current text-current',
-    label: 'bg-current border border-current text-dialog',
+    hotkey: 'bg-surface border border-current text-current',
+    label: 'bg-current border border-current text-surface',
   },
   accentFill: {
-    hotkey: 'bg-dialog border border-accent text-accent',
-    label: 'bg-accent border border-accent text-dialog',
+    hotkey: 'bg-surface border border-accent text-accent',
+    label: 'bg-accent border border-accent text-surface',
   },
   reverse: {
-    hotkey: 'bg-ink border border-dialog text-dialog',
-    label: 'bg-dialog border border dialog text-ink',
+    hotkey: 'bg-ink border border-surface text-surface',
+    label: 'bg-surface border border dialog text-ink',
   },
 
   base: {
-    hotkey: 'bg-dialog border border-ink text-ink',
-    label: 'bg-ink border border-ink text-dialog',
+    hotkey: 'bg-surface border border-ink text-ink',
+    label: 'bg-ink border border-ink text-surface',
   },
   accentOpaque: {
     label: '',

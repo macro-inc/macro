@@ -70,7 +70,7 @@ export function SoupEntityActionDrawer() {
                       <button
                         type="button"
                         class={cn(
-                          'flex items-center gap-3 px-4 py-3 text-sm hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-panel',
+                          'flex items-center gap-3 px-4 py-3 text-sm hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-surface',
                           action.destructive ? 'text-failure-ink' : 'text-ink'
                         )}
                         onClick={async (e: MouseEvent) => {

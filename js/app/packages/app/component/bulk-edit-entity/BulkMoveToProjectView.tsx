@@ -431,7 +431,7 @@ export const BulkMoveToProjectView = (props: {
                 finishEditing();
               }
             }}
-            class="w-full px-3 py-2 text-sm bg-menu text-ink focus:outline-none border-b border-edge-muted"
+            class="w-full px-3 py-2 text-sm bg-surface text-ink focus:outline-none border-b border-edge-muted"
           />
           <div class="h-64 overflow-auto" ref={listRef}>
             <For each={items()}>

@@ -22,7 +22,43 @@ const GROUPING_WINDOW_MS = 5 * 60 * 1000;
 type SegmentItem = {
   segment: CallRecordTranscriptSegment;
   groupedWithPrevious: boolean;
+  diarizedSpeakerLabel?: string;
 };
+
+function getDiarizedSpeakerId(
+  segment: CallRecordTranscriptSegment | undefined
+): string | undefined {
+  return segment?.diarizedSpeakerId ?? undefined;
+}
+
+function buildDiarizedSpeakerLabels(
+  transcript: CallRecordTranscriptSegment[]
+): Map<string, Map<string, string>> {
+  const labelsBySpeakerId = new Map<string, Map<string, string>>();
+  for (const segment of transcript) {
+    const diarizedSpeakerId = getDiarizedSpeakerId(segment);
+    if (!diarizedSpeakerId) continue;
+
+    let labels = labelsBySpeakerId.get(segment.speakerId);
+    if (!labels) {
+      labels = new Map<string, string>();
+      labelsBySpeakerId.set(segment.speakerId, labels);
+    }
+
+    if (labels.has(diarizedSpeakerId)) continue;
+    labels.set(diarizedSpeakerId, `Speaker #${labels.size}`);
+  }
+  return labelsBySpeakerId;
+}
+
+function getDiarizedSpeakerLabel(
+  labelsBySpeakerId: Map<string, Map<string, string>>,
+  segment: CallRecordTranscriptSegment
+): string | undefined {
+  const diarizedSpeakerId = getDiarizedSpeakerId(segment);
+  if (!diarizedSpeakerId) return undefined;
+  return labelsBySpeakerId.get(segment.speakerId)?.get(diarizedSpeakerId);
+}
 
 function shouldGroupWithPrevious(
   current: CallRecordTranscriptSegment,
@@ -30,6 +66,9 @@ function shouldGroupWithPrevious(
 ): boolean {
   if (!previous) return false;
   if (current.speakerId !== previous.speakerId) return false;
+  if (getDiarizedSpeakerId(current) !== getDiarizedSpeakerId(previous)) {
+    return false;
+  }
   const gap =
     new Date(current.startedAt).getTime() -
     new Date(previous.startedAt).getTime();
@@ -58,6 +97,7 @@ function TranscriptSegmentRow(props: {
   channelId: string;
   isActive: boolean;
   timelineStartMs: number | null;
+  diarizedSpeakerLabel?: string;
   onSeekToSeconds?: (seconds: number) => void;
 }) {
   const message = segmentToApiChannelMessage(props.segment, props.channelId);
@@ -84,13 +124,20 @@ function TranscriptSegmentRow(props: {
             class="flex items-center gap-1 min-w-0"
           >
             <Message.SenderName />
-            <span class="ml-auto text-xs text-ink-muted tabular-nums">
-              <Show
-                when={videoTimestamp !== null}
-                fallback={<Message.Timestamp />}
-              >
-                {formatVideoTimestamp(videoTimestamp ?? 0)}
+            <span class="ml-auto flex shrink-0 items-center gap-2 text-xs text-ink-muted">
+              <Show when={props.diarizedSpeakerLabel}>
+                <span class="font-medium whitespace-nowrap">
+                  {props.diarizedSpeakerLabel}
+                </span>
               </Show>
+              <span class="tabular-nums">
+                <Show
+                  when={videoTimestamp !== null}
+                  fallback={<Message.Timestamp />}
+                >
+                  {formatVideoTimestamp(videoTimestamp ?? 0)}
+                </Show>
+              </span>
             </span>
           </Message.Slot>
           <Message.Slot placement="content">
@@ -161,10 +208,23 @@ export function CallTranscript(props: {
     const sorted = [...props.transcript].sort(
       (a, b) => a.sequenceNum - b.sequenceNum
     );
-    const items: SegmentItem[] = sorted.map((segment, index) => ({
-      segment,
-      groupedWithPrevious: shouldGroupWithPrevious(segment, sorted[index - 1]),
-    }));
+    const diarizedSpeakerLabels = buildDiarizedSpeakerLabels(sorted);
+    const items: SegmentItem[] = sorted.map((segment, index) => {
+      const previous = sorted[index - 1];
+      const diarizedSpeakerId = getDiarizedSpeakerId(segment);
+      const previousDiarizedSpeakerId = getDiarizedSpeakerId(previous);
+      const shouldShowDiarizedSpeakerLabel =
+        !!diarizedSpeakerId &&
+        (segment.speakerId !== previous?.speakerId ||
+          diarizedSpeakerId !== previousDiarizedSpeakerId);
+      return {
+        segment,
+        groupedWithPrevious: shouldGroupWithPrevious(segment, previous),
+        diarizedSpeakerLabel: shouldShowDiarizedSpeakerLabel
+          ? getDiarizedSpeakerLabel(diarizedSpeakerLabels, segment)
+          : undefined,
+      };
+    });
     return { items };
   });
 
@@ -317,7 +377,7 @@ export function CallTranscript(props: {
           }}
         >
           <Show when={!props.hideHeader}>
-            <div class="isolate flex items-center gap-2 sticky top-0 bg-panel z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
+            <div class="isolate flex items-center gap-2 sticky top-0 bg-surface z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
               <Subtitles class="size-4 text-ink shrink-0" />
               <p class="font-semibold text-ink select-none text-sm shrink-0">
                 Transcript
@@ -341,6 +401,7 @@ export function CallTranscript(props: {
                           item.segment.sequenceNum === props.activeSequenceNum
                         }
                         timelineStartMs={props.timelineStartMs}
+                        diarizedSpeakerLabel={item.diarizedSpeakerLabel}
                         onSeekToSeconds={props.onSeekToSeconds}
                       />
                     </div>
@@ -375,12 +436,12 @@ export function CallTranscript(props: {
           class="absolute bottom-0 inset-x-px px-2 pb-2 flex justify-center pointer-events-none z-20"
           style={{
             'background-image':
-              'linear-gradient(transparent, var(--color-panel) 85%)',
+              'linear-gradient(transparent, var(--color-surface) 85%)',
           }}
         >
           <button
             type="button"
-            class="pointer-events-auto isolate overflow-hidden relative bg-panel border border-accent/30 flex h-8 px-2 items-center justify-center text-xs/5 font-mono uppercase font-medium  whitespace-nowrap text-accent before:absolute before:inset-0 before:bg-accent/10 hover:before:bg-accent/20 before:content-[''] before:transition-colors"
+            class="pointer-events-auto isolate overflow-hidden relative bg-surface border border-accent/30 flex h-8 px-2 items-center justify-center text-xs/5 font-mono uppercase font-medium  whitespace-nowrap text-accent before:absolute before:inset-0 before:bg-accent/10 hover:before:bg-accent/20 before:content-[''] before:transition-colors"
             onClick={() => {
               setSyncToVideoTime(true);
               scrollActiveIntoView('smooth');

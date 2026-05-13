@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Presigned upload URL, when the caller still needs to upload bytes.
+ */
 export type DocumentResponsePresignedUrl = string | null;

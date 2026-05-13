@@ -178,7 +178,7 @@ type PersistedSoupViewState = {
   collapsedGroups: string[];
 };
 
-const PERSISTED_STATE_VERSION = 6;
+const PERSISTED_STATE_VERSION = 7;
 
 const listStateCache = new Map<
   string,
@@ -1038,7 +1038,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     entityRowConfig={{
                                       swipeLeftColor: 'bg-success',
                                       swipeLeftRevealedComponent: (
-                                        <CheckIcon class="size-8 text-panel" />
+                                        <CheckIcon class="size-8 text-surface" />
                                       ),
                                     }}
                                   />
@@ -1083,7 +1083,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
             </div>
           </Resize.Panel>
           <Show when={previewVisible()}>
-            <Resize.Panel id="soup-preview" minSize={300}>
+            <Resize.Panel
+              id="soup-preview"
+              minSize={300}
+              target={{ kind: 'percent', percent: 70 }}
+            >
               <PreviewPanel
                 selectedEntity={soup.focus.item()}
                 orchestrator={orchestrator}

@@ -226,7 +226,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <Show when={!isLoading()}>
-              <div class="bg-dialog text-ink">
+              <div class="bg-surface text-ink">
                 <div>
                   <Show
                     when={

@@ -1429,10 +1429,11 @@ async fn enroll_stable_speaker_voices_for_call_record<R: CallRepository, Vr: Voi
 ///
 /// Pulls the distinct `(diarized_speaker_id, voice_id)` pairs from the
 /// call's transcripts, resolves each `voice_id` to a macro user via
-/// the voice repository's nearest-neighbour lookup, then writes the
+/// the voice repository's nearest-neighbour lookup, then writes eligible
 /// assignments back via [`CallRepository::patch_call_transcript_speakers_from_voice_match`]
-/// (which only fills `custom_speaker` rows that are still `NULL` so
-/// manual corrections are preserved).
+/// (which only fills `custom_speaker` rows that are still `NULL` and whose
+/// matched user shares a team with at least one participant, so manual
+/// corrections are preserved and cross-team matches are ignored).
 async fn match_voices_for_call_record<R: CallRepository, Vr: VoiceRepository>(
     repo: &R,
     voice_repo: &Vr,

@@ -156,8 +156,8 @@ export function ChannelThread(props: ThreadProps) {
 
   createEffect(
     on(
-      [() => props.selectedReplyId, loadedReplies],
-      ([selectedReplyId, replies]) => {
+      [() => props.selectedReplyId, () => props.targetReplyId, loadedReplies],
+      ([selectedReplyId, _targetReplyId, replies]) => {
         if (!selectedReplyId) {
           if (replySelection.selectedId()) replySelection.clear();
           return;

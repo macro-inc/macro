@@ -2,25 +2,30 @@
 //!
 //! These traits define the contracts that adapters must implement.
 
+#[cfg(feature = "document_create")]
+pub mod create;
+pub mod markdown;
+
 use std::future::Future;
 
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::response::{
-    CreateDocumentResponseData, GetDocumentResponseData, LocationResponseV3,
-};
 use model::document::{ContentType, DocumentBasic, DocumentMetadata};
+
+use super::content::DocumentContent;
+use super::response::{
+    CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
+};
 
 use model::sync_service::SyncServiceVersionID;
 
 use model_entity::Entity;
 
 use super::models::{
-    CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
-    CreateTaskResponse, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    LocationQueryParams,
+    CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
+    EditDocumentRepoArgs, EditDocumentServiceArgs, LocationQueryParams,
 };
 
 /// Repository for accessing document data from the database.
@@ -55,6 +60,28 @@ pub trait DocumentRepo: Send + Sync + 'static {
     fn soft_delete_document(
         &self,
         document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Mark a document's upload/finalization lifecycle as complete.
+    fn mark_document_uploaded(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get persisted content lifecycle metadata for a document.
+    fn get_persisted_document_content(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<DocumentContent>, Self::Err>> + Send;
+
+    /// Set persisted content lifecycle metadata for a document.
+    ///
+    /// Implementations should keep legacy upload state in sync with the new
+    /// lifecycle metadata while legacy consumers still read that column.
+    fn set_document_content(
+        &self,
+        document_id: &str,
+        content: DocumentContent,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Get the latest document version ID (for editable files: js, py).
@@ -291,6 +318,12 @@ pub trait DocumentService: Send + Sync + 'static {
         job_id: Option<String>,
     ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
 
+    /// Get content lifecycle metadata for a document.
+    fn get_document_content(
+        &self,
+        document_context: &DocumentBasic,
+    ) -> impl Future<Output = Result<DocumentContent, DocumentError>> + Send;
+
     /// Convert a document's entity_id to a short UUID.
     fn get_short_id(
         &self,
@@ -324,7 +357,7 @@ pub trait DocumentService: Send + Sync + 'static {
         document_name: String,
         query_version_id: Option<i64>,
         sync_version_id: Option<SyncServiceVersionID>,
-    ) -> impl Future<Output = Result<model::document::response::DocumentResponse, DocumentError>> + Send;
+    ) -> impl Future<Output = Result<DocumentResponse, DocumentError>> + Send;
 
     /// Get the name of a project by ID.
     fn get_project_name(
@@ -337,14 +370,6 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         project_id: &str,
     ) -> impl Future<Output = Result<Vec<Entity<'static>>, DocumentError>> + Send;
-
-    /// Create a task document and optionally set property values on it.
-    fn create_task(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        plain_user_id: String,
-        request: CreateTaskRequest,
-    ) -> impl Future<Output = Result<CreateTaskResponse, DocumentError>> + Send;
 
     /// Assigns the task properties to a document
     fn handle_task_properties(

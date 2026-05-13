@@ -47,7 +47,7 @@ export const BooleanValue: Component<PropertyValueProps> = (props) => {
         }}
       >
         <Show when={isChecked()}>
-          <CheckIcon class="size-3 text-panel" />
+          <CheckIcon class="size-3 text-surface" />
         </Show>
       </div>
     </button>

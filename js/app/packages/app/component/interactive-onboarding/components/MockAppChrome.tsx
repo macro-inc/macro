@@ -153,7 +153,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
   onCleanup(() => group.dispose());
 
   return (
-    <div class="size-full p-4 bg-panel">
+    <div class="size-full p-4 bg-surface">
       <style>{`
         @keyframes sidebar-glow-pulse {
           0%, 100% { box-shadow: 0 0 0 0 rgb(from var(--color-accent) r g b / 0.7), 0 0 6px 1px rgb(from var(--color-accent) r g b / 0.7), 0 0 12px 3px rgb(from var(--color-accent) r g b / 0.4); }
@@ -161,7 +161,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
         }
         .sidebar-glow { animation: sidebar-glow-pulse 1.8s ease-in-out infinite; border-radius: 4px; }
       `}</style>
-      <div class="flex size-full bg-page rounded-sm border border-edge-muted">
+      <div class="flex size-full bg-surface rounded-sm border border-edge-muted">
         <div class="px-2 shrink-0 bg-surface-secondary/50 flex flex-col items-center py-3 gap-1">
           <MacroIcon class="size-5 text-accent mb-3" />
           <button
@@ -293,7 +293,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
         </div>
 
         {/* Main area */}
-        <div class="flex-1 min-w-0 flex flex-col m-1 ml-0 bg-panel border border-edge-muted rounded-sm">
+        <div class="flex-1 min-w-0 flex flex-col m-1 ml-0 bg-surface border border-edge-muted rounded-sm">
           {/* Mock top bar */}
           <Show when={sidebarFilter() !== 'empty'}>
             <div class="h-10 shrink-0 border-b border-edge-muted flex items-center px-3">

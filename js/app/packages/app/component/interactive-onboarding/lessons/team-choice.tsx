@@ -78,7 +78,7 @@ function TeamChoiceDemo(props: LessonContentProps) {
           type="button"
           onClick={handleChooseTeam}
           disabled={isPending()}
-          class="flex items-center gap-4 p-5 rounded-md border border-accent/50 bg-accent/5 hover:bg-accent/10 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel disabled:opacity-50 disabled:cursor-not-allowed"
+          class="flex items-center gap-4 p-5 rounded-md border border-accent/50 bg-accent/5 hover:bg-accent/10 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div class="shrink-0 size-11 rounded-full bg-accent/20 flex items-center justify-center">
             <UsersIcon class="size-5 text-accent" />
@@ -95,7 +95,7 @@ function TeamChoiceDemo(props: LessonContentProps) {
           type="button"
           onClick={handleChooseSolo}
           disabled={isPending()}
-          class="flex items-center gap-4 p-5 rounded-md border border-edge bg-panel hover:bg-ink/5 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel disabled:opacity-50 disabled:cursor-not-allowed"
+          class="flex items-center gap-4 p-5 rounded-md border border-edge bg-surface hover:bg-ink/5 text-left bracket-never focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div class="shrink-0 size-11 rounded-full bg-ink/10 flex items-center justify-center">
             {isPending() ? (

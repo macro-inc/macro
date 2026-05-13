@@ -4,10 +4,15 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { DocumentResponseMetadata } from './documentResponseMetadata';
+import type { DocumentResponseMetadataWithContent } from './documentResponseMetadataWithContent';
 import type { DocumentResponsePresignedUrl } from './documentResponsePresignedUrl';
 
+/**
+ * Document response with content lifecycle metadata.
+ */
 export interface DocumentResponse {
-  documentMetadata: DocumentResponseMetadata;
+  /** The document metadata. */
+  documentMetadata: DocumentResponseMetadataWithContent;
+  /** Presigned upload URL, when the caller still needs to upload bytes. */
   presignedUrl?: DocumentResponsePresignedUrl;
 }

@@ -100,7 +100,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
     button: {
       background: 'bg-accent',
       hover: 'hover:bg-accent/80',
-      text: 'text-panel',
+      text: 'text-surface',
     },
     closeButtonHover: 'hover:text-accent hover:bg-accent/10',
   },
@@ -303,7 +303,7 @@ function ToastContent(props: {
     <Toast
       toastId={props.toastId}
       class={`relative overflow-visible pointer-events-auto shadow-md rounded
-        data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
+        data-opened:animate-slide-in transition-[transform,opacity] duration-100 ease-in data-closed:opacity-0 data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
         data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
       persistent={true}
       onMouseEnter={() => setIsHovered(true)}
@@ -373,7 +373,7 @@ function ToastContent(props: {
                     <Dynamic
                       component={s().icon}
                       class={cn(
-                        'size-3.5 text-panel',
+                        'size-3.5 text-surface',
                         props.toastType === ToastType.LOADING
                           ? 'animate-spin'
                           : ''

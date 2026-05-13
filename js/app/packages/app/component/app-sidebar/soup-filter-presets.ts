@@ -9,6 +9,7 @@ import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
+import { subWeeks } from 'date-fns';
 
 export type SoupFiltersPreset = {
   /** Filter data for server query */
@@ -34,19 +35,26 @@ export type ViewTabConfig = {
   tabs: TabConfig;
 };
 
-/** Filters for inbox/signal: not done, importance=true for emails */
-const INBOX_SIGNAL_FILTERS = defineQueryFilters({
-  include: {
-    documentDone: false,
-    emailDone: false,
-    emailImportance: true,
-    channelDone: false,
-    chatDone: false,
-    folderDone: false,
-    emailShared: 'exclude',
-  },
-  emailView: 'inbox',
-});
+/** Filters for inbox/signal: not done, importance=true for emails, 2-week window */
+const getInboxSignalFilters = () => {
+  const twoWeeksAgo = subWeeks(new Date(), 2).toISOString();
+  return defineQueryFilters({
+    include: {
+      documentDone: false,
+      documentUpdatedAt: { gte: twoWeeksAgo },
+      emailDone: false,
+      emailImportance: true,
+      emailUpdatedAt: { gte: twoWeeksAgo },
+      channelDone: false,
+      chatDone: false,
+      chatUpdatedAt: { gte: twoWeeksAgo },
+      folderDone: false,
+      folderUpdatedAt: { gte: twoWeeksAgo },
+      emailShared: 'exclude',
+    },
+    emailView: 'inbox',
+  });
+};
 
 /** Filters for inbox/noise: not done, importance=false for emails */
 const INBOX_NOISE_FILTERS = defineQueryFilters({
@@ -67,7 +75,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     default: 'signal',
     tabs: {
       signal: () => ({
-        filters: INBOX_SIGNAL_FILTERS,
+        filters: getInboxSignalFilters(),
         clientFilters: { and: ['inbox'] },
       }),
       noise: () => ({

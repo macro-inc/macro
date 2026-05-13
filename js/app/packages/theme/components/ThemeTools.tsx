@@ -84,8 +84,8 @@ export function ThemeTools(props: { class?: string }) {
         class={cn(
           'rounded-xs py-1.5 px-2 border text-xs outline-none',
           'bg-transparent text-ink-muted border-edge-muted',
-          'hover:bg-input hover:text-ink',
-          'focus:bg-input focus:text-ink',
+          'hover:bg-surface hover:text-ink',
+          'focus:bg-surface focus:text-ink',
           'min-w-0 overflow-hidden text-ellipsis',
         )}
         style={{

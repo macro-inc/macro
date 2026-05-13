@@ -985,7 +985,7 @@ export function CanvasController(props: ParentProps) {
       use:observedSize={{ setSize: setDomRect }}
       // SCUFFED THEMING? The color-mix below is a little rough, not necessarily ideal
       class={cn(
-        'relative size-full overflow-hidden z-0 bg-[oklch(from_color-mix(in_oklch,var(--color-panel)_75%,var(--color-ink)_25%)_l_0_var(--surface-h))]',
+        'relative size-full overflow-hidden z-0 bg-[oklch(from_color-mix(in_oklch,var(--color-surface)_75%,var(--color-ink)_25%)_l_0_var(--surface-h))]',
         cursor()
       )}
       use:fileDrop={{

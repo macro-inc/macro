@@ -10,7 +10,7 @@ export default function BlockVideo() {
   useBlockEntityCommands();
   return (
     <DocumentBlockContainer>
-      <div class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
+      <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col relative">
         <ModalsProvider>
           <div class="relative">
             <TopBar />

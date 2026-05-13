@@ -44,7 +44,7 @@ export const getPresignedUrl = async ({
   }
 
   const [, { data }] = maybeLocation;
-  if (!('presignedUrl' in data)) {
+  if (data.type !== 'presignedUrl') {
     throw new Error('presignedUrl not found in location data');
   }
 

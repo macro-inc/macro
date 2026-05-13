@@ -62,7 +62,7 @@ export function SplitContainer(
           class="fixed inset-0 w-screen h-screen z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
           onClick={() => panel.handle.toggleSpotlight(false)}
         />
-        <div class="fixed inset-16 bg-panel shadow-xl" />
+        <div class="fixed inset-16 bg-surface shadow-xl" />
       </Show>
 
       <div
@@ -85,7 +85,7 @@ export function SplitContainer(
           when={!isMobile()}
           fallback={
             <Layer depth={1}>
-              <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
+              <div class="flex flex-col min-h-0 size-full bg-surface overflow-hidden">
                 <SplitHeader ref={setHeaderRef} />
                 <SplitToolbar ref={setToolbarRef} />
                 <div class="@container/split size-full overflow-hidden relative">
@@ -103,7 +103,7 @@ export function SplitContainer(
             }
             depth={1}
           >
-            <div class="flex flex-col min-h-0 size-full bg-panel overflow-hidden">
+            <div class="flex flex-col min-h-0 size-full bg-surface overflow-hidden">
               <SplitHeader ref={setHeaderRef} />
               <SplitToolbar ref={setToolbarRef} />
               <div class="@container/split size-full overflow-hidden relative">

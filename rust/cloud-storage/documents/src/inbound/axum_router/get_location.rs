@@ -8,12 +8,13 @@ use axum::{
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use model::document::DocumentBasic;
-use model::document::response::LocationResponseV3;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
 use super::{DocumentRouterState, Params};
+use crate::domain::content::DocumentContentState;
 use crate::domain::models::{DocumentError, LocationQueryParams};
 use crate::domain::ports::DocumentService;
+use crate::domain::response::LocationResponseV3;
 
 /// Handler for `GET /documents/{document_id}/location_v3`.
 ///
@@ -29,7 +30,7 @@ use crate::domain::ports::DocumentService;
         ("get_converted_docx_url" = Option<bool>, Query, description = "If true, this will return the converted docx url.")
     ),
     responses(
-        (status = 200),
+        (status = 200, body = LocationResponseV3),
         (status = 401, body = model_error_response::ErrorResponse),
         (status = 404, body = model_error_response::ErrorResponse),
         (status = 410, body = model_error_response::ErrorResponse),
@@ -51,7 +52,12 @@ pub async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessServic
 
     let mut header_map = HeaderMap::new();
     header_map.append("content-type", "application/json".parse().unwrap());
-    header_map.append("Cache-Control", "max-age-300".parse().unwrap());
+    let cache_control = if response_data.content().state == DocumentContentState::Ready {
+        "max-age=300"
+    } else {
+        "no-store"
+    };
+    header_map.append("Cache-Control", cache_control.parse().unwrap());
 
     Ok((header_map, Json(response_data)))
 }

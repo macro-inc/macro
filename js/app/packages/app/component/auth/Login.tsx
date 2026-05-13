@@ -162,7 +162,7 @@ export function Login() {
           .login-stagger > *:nth-child(5) { animation-delay: 330ms; }
         `
         }</style>
-        <div class="inset-0 absolute text-edge bg-panel opacity-10 -z-1">
+        <div class="inset-0 absolute text-edge bg-surface opacity-10 -z-1">
           <PcNoiseGrid
             cellSize={30}
             warp={0}

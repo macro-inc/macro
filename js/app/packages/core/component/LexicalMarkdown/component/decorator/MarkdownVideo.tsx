@@ -254,7 +254,8 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         class={cn(
           'relative max-w-full my-4 grid place-items-center mx-auto',
           isSelectedAsNode() && 'ring-3 ring-edge-muted',
-          state() === 'error' && 'media-error min-h-44'
+          state() === 'error' &&
+            'pattern-edge-muted pattern-diagonal-8 min-h-44'
         )}
         style={{
           'max-height': `${videoDims() ? videoDims()[1] * scale() : 640}px`,
@@ -356,7 +357,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay items-center justify-center" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center bg-transparent">
           <Dialog.Content class="relative max-w-[65%] max-h-[80vh] flex items-center justify-center">
-            <div class="absolute bg-dialog top-2 right-2 flex flex-row z-10">
+            <div class="absolute bg-surface top-2 right-2 flex flex-row z-10">
               <Dialog.CloseButton>
                 <Button variant="ghost" size="icon-md">
                   <XIcon />

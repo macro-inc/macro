@@ -197,7 +197,7 @@ const InlineFormatButton = (props: {
       size="icon-sm"
       variant="ghost"
       classList={{
-        'bg-ink/10 text-ink': !!props.selection()?.[props.format],
+        'bg-active text-ink': !!props.selection()?.[props.format],
       }}
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
@@ -252,7 +252,7 @@ export const ElementFormatButton = (props: {
       class="rounded-xs"
       variant="ghost"
       classList={{
-        'bg-ink/10 text-ink': !!props
+        'bg-active text-ink': !!props
           .selection()
           ?.elementsInRange?.has(props.format),
       }}

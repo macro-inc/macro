@@ -51,7 +51,11 @@ fn to_typed_row_channel_mention() {
 #[test]
 fn to_typed_row_document_mention() {
     let metadata = serde_json::json!({
+        "channelName": "general",
+        "channelType": "Public",
         "documentName": "doc.pdf",
+        "messageContent": "see doc.pdf",
+        "messageId": "msg-1",
         "owner": "macro|owner@example.com"
     });
     let row = make_row("document_mention", metadata);

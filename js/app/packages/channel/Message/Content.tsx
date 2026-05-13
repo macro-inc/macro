@@ -1,10 +1,14 @@
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
+import {
+  highlightTermsInText,
+  mergeAdjacentMacroEmTags,
+} from '@core/util/searchHighlight';
 import { isEmojiOnly } from '@core/util/string';
 import { cn } from '@ui';
 import { createMemo, Show } from 'solid-js';
-import { useMessage } from './context';
+import { useMessage, useSearchHighlightTermsLookup } from './context';
 
 type ContentProps = {
   class?: string;
@@ -13,6 +17,14 @@ type ContentProps = {
 export function Content(props: ContentProps) {
   const message = useMessage();
   const bigEmoji = createMemo(() => isEmojiOnly(message().content ?? ''));
+  const termsLookup = useSearchHighlightTermsLookup();
+
+  const renderedMarkdown = createMemo(() => {
+    const raw = message().content ?? '';
+    const terms = termsLookup?.(message().id);
+    if (!terms?.length) return raw;
+    return mergeAdjacentMacroEmTags(highlightTermsInText(raw, [...terms]));
+  });
 
   return (
     <Show when={message().content}>
@@ -24,7 +36,7 @@ export function Content(props: ContentProps) {
         )}
       >
         <StaticMarkdown
-          markdown={message().content ?? ''}
+          markdown={renderedMarkdown()}
           theme={channelTheme}
           target="internal"
         />

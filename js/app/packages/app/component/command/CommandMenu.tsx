@@ -457,7 +457,7 @@ export function CommandMenuInner(props: {
       depth={props.depth}
       active
     >
-      <Panel.Header class="gap-2 px-2 bg-panel">
+      <Panel.Header class="gap-2 px-2 bg-surface">
         <Show
           when={isInCommandScope()}
           fallback={
@@ -486,7 +486,10 @@ export function CommandMenuInner(props: {
 
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <Panel.Toolbar
-          class={cn('bg-panel', isEntityActionMode() ? 'px-3 gap-2' : 'px-1.5')}
+          class={cn(
+            'bg-surface',
+            isEntityActionMode() ? 'px-3 gap-2' : 'px-1.5'
+          )}
         >
           <Show
             when={isEntityActionMode()}
@@ -511,7 +514,7 @@ export function CommandMenuInner(props: {
 
       <Panel.Body>
         <div
-          class="bg-panel overflow-hidden transition-[height] duration-60 ease-out"
+          class="bg-surface overflow-hidden transition-[height] duration-60 ease-out"
           style={{ height: `${resultsHeight()}px` }}
         >
           <Show
@@ -532,7 +535,7 @@ export function CommandMenuInner(props: {
         </div>
       </Panel.Body>
 
-      <Panel.Footer class="gap-4 px-4 bg-panel text-xs text-ink-extra-muted/80">
+      <Panel.Footer class="gap-4 px-4 bg-surface text-xs text-ink-extra-muted/80">
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
             <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">

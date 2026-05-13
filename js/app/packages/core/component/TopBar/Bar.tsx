@@ -276,7 +276,7 @@ function BarContent(props: BarProps) {
       <div
         use:observedSize={{ setSize: context.setBarSize }}
         style={{ 'container-type': 'inline-size' }}
-        class="w-full bg-panel"
+        class="w-full bg-surface"
       >
         <div
           class={cn(

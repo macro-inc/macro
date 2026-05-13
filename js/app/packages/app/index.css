@@ -1,7 +1,10 @@
-@import "tailwindcss"; /* explicitly add all tsx files for all packages instead of relying on Vite */
-@source '../**/*.tsx';
-@source '../../packages/core/component/LexicalMarkdown/theme.ts';
+@import "tailwindcss";
+
 @plugin '../../tailwind-plugins/zIndex.ts';
+
+@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
+@source '../../packages/core/component/LexicalMarkdown/theme.ts';
+@source '../**/*.tsx';
 
 @property --a0l { syntax: "<number>"; inherits: true; initial-value:   0.88; }
 @property --a0c { syntax: "<number>"; inherits: true; initial-value:   0.20; }
@@ -51,8 +54,21 @@
 @property --c4c { syntax: "<number>"; inherits: true; initial-value:      0; }
 @property --c4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
 
-@theme {
-   --color-*: initial; /* Disable default tailwind color palette */
+:root {
+  /* mobile safe areas */
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
+
+  /* chat vars */
+  --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) * 0.5);
+  --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) * 0.5);
+  --regular-message-padding-t: .5rem;
+  --message-padding-x: .5rem;
+  --thread-padding-y: .5rem;
+  --user-icon-width: 36px;
+  --thread-shift: 32px;
 
   /* accent - active, hover states, high chroma */
   --a0: oklch(var(--a0l) var(--a0c) var(--a0h));
@@ -75,32 +91,32 @@
   --c3: oklch(var(--c3l) var(--c3c) var(--c3h));
   --c4: oklch(var(--c4l) var(--c4c) var(--c4h));
 
-  --transition: 0s; /* defualt 0.15, used for transition jamming, currently disabled */
+  /* scuffed: defualt 0.15, used for transition jamming, currently disabled */
+  --transition: 0s;
+}
+
+@theme {
+  /* Disable default tailwind color palette */
+   --color-*: initial;
 
   /* Semantic Color names, use these when writing tailwind */
-  --color-accent-ink:      var(--a0);
   --color-accent:          var(--a0);
-  --color-focus:           var(--a0);
   --color-accent-bg:       oklch(var(--a0) / 0.08);
-  --color-accent-hover:    oklch(var(--a0) / 0.20); /* hover, e.g. hover state for buttons/items */
+  --color-accent-hover:    oklch(var(--a0) / 0.20);
 
-  --color-panel:           var(--b0); /* block background */
-  --color-page:            var(--b0); /* page background */
-  --color-menu:            var(--b0); /* menu background */
-  --color-dialog:          var(--b0); /* dialog, e.g. dialog background */
-  --color-input:           var(--b0); /* input, e.g. chat/channel input */
-  --color-button:          var(--b0); /* dialog, e.g. dialog background */
+  --color-surface:         var(--b0);
   --color-drop-shadow:     oklch(calc(var(--b0l) - 0.01 ) var(--b0c) var(--b0h) / 0.4);
-  --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2)); /* message background */
-  --color-hover:           var(--b2); /* hover, e.g. hover state for buttons/items */
-  --color-active:          var(--b1); /* elements that are selected or activated */
-  --color-overlay:         oklch(var(--b2) / 0.5); /* overlay, e.g. modal background */
-  --color-edge-muted:      var(--b3); /* muted edge */
-  --color-edge:            var(--b4); /* edge (border) */
+  --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2));
+  --color-hover:           var(--b2);
+  --color-active:          var(--b1);
+  --color-overlay:         oklch(var(--b2) / 0.5);
+  --color-edge-muted:      var(--b3);
+  --color-edge:            var(--b4);
   --color-rail:            color-mix(in oklch, var(--b4) 90%, var(--b0));
 
   --color-ink:             var(--c0);
   --color-ink-muted:       var(--c1);
+  --color-default:         var(--c1); /* wtf? */
   --color-ink-extra-muted: var(--c2);
   --color-ink-disabled:    var(--c3);
   --color-ink-placeholder: var(--c4);
@@ -122,22 +138,21 @@
   --color-comment-bg:  oklch(from var(--color-comment) l c h / 0.15);
   --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h); /* scuffed */
 
-  --color-note:        oklch(from var(--a0) l c 293deg);
+  --color-calendar:    oklch(from var(--a0) l c 100deg);
+  --color-contact:     oklch(from var(--a0) l c  94deg);
   --color-canvas:      oklch(from var(--a0) l c  60deg);
-  --color-html:        oklch(from var(--a0) l c  47deg);
   --color-folder:      oklch(from var(--a0) l c 240deg);
-  --color-code:        oklch(from var(--a0) l c 180deg);
-  --color-pdf:         oklch(from var(--a0) l c  25deg);
   --color-image:       oklch(from var(--a0) l c  95deg);
-  --color-write:       oklch(from var(--a0) l c 260deg);
-  --color-chat:        oklch(from var(--a0) l c 220deg);
   --color-video:       oklch(from var(--a0) l c 277deg);
-  --color-rss:         oklch(from var(--a0) l c 260deg);
+  --color-write:       oklch(from var(--a0) l c 260deg);
+  --color-code:        oklch(from var(--a0) l c 180deg);
+  --color-chat:        oklch(from var(--a0) l c 220deg);
+  --color-html:        oklch(from var(--a0) l c  47deg);
+  --color-note:        oklch(from var(--a0) l c 293deg);
   --color-task:        oklch(from var(--a0) l c 150deg);
-  --color-calendar:    oklch(0.8159 0.2849 98.77);
-  --color-contact:     oklch(0.8617 0.1837 93.83);
-  --color-email:       var(--theme-email);
-  --color-default:     var(--c1);
+  --color-pdf:         oklch(from var(--a0) l c  25deg);
+  --color-rss:         oklch(from var(--a0) l c 260deg);
+  --color-email:       var(--theme-email); /* wtf? */
 
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */
@@ -152,15 +167,22 @@
   --color-accent-270: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 270deg));
   --color-accent-300: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 300deg));
   --color-accent-330: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 330deg));
+
+  /* Font families */
+  --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: "Roboto Mono Variable",  monospace;
+  --text-xxs: 0.625rem;
+
+  /* Animations */
+  --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-typing-dot: typing-dot 1s infinite;
+  --animate-swipe-out: swipeOut 100ms ease-out;
 }
 
-@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
-
-@custom-variant tauri (&:where(.tauri *));
-@custom-variant ios (&:where(.tauri-ios *));
+/* scuffed: might wan to use signals for this */
 @custom-variant touch (&:where(html[data-touch-device="true"] *));
-@custom-variant mobile-width (@media (max-width: 639px));
-/* `mobile:` is equivalent to `touch:mobile-width:` */
+
 @custom-variant mobile {
   &:where(html[data-touch-device="true"] *) {
     @media (max-width: 639px) {
@@ -169,32 +191,79 @@
   }
 }
 
-:root {
-  --color-focus: var(--color-accent);
+@layer base {
+  html {
+    overscroll-behavior: none;
+    font: -apple-system-body;
+    overflow: hidden;
+  }
 
-  /* Cursor variables — override these to use custom cursors */
-  --cursor-nesw-resize: nesw-resize;
-  --cursor-nwse-resize: nwse-resize;
-  --cursor-not-allowed: not-allowed;
-  --cursor-col-resize:  col-resize;
-  --cursor-row-resize:  row-resize;
-  --cursor-ew-resize:   ew-resize;
-  --cursor-ns-resize:   ns-resize;
-  --cursor-grabbing:    grabbing;
-  --cursor-default:     default;
-  --cursor-pointer:     default;
-  --cursor-auto:        auto;
-  --cursor-grab:        grab;
-  --cursor-move:        move;
-  --cursor-text:        text;
+  body {
+    @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
+    font-feature-settings: "dlig" 1, "calt" 1;
+    background-color: var(--color-surface);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: var(--color-ink);
+    height: 100dvh;
+    width: 100dvw;
+  }
+
+
+  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
+    user-select: text;
+  }
+
+  /* scuffed: stops text from being selectable by default for mobile usage */
+  :where(*, ::before, ::after) {
+    user-select: none;
+  }
+
+  *:focus-visible {
+    position: relative;
+  }
+
+  code {
+    @apply font-mono;
+  }
 }
 
-.bg-accent {
-  --color-focus: var(--color-panel);
+@keyframes slideIn {
+  from { transform: translateX(calc(100% + 16px)); }
+  to   { transform: translateX(0                ); }
 }
 
-.bg-panel, .bg-dialog {
-  --color-focus: var(--color-accent);
+@keyframes swipeOut {
+  from { transform: translateX(var(--kb-toast-swipe-end-x)); }
+  to   { transform: translateX(calc(100% + 16px))          ; }
+}
+
+@keyframes long-press-message-highlight {
+  from {
+    background-color: oklch(from var(--color-accent) l c h / 0%);
+    outline-color: transparent;
+    outline-offset: -1px;
+    outline-style: solid;
+    outline-width: 1px;
+  }
+  to {
+    background-color: oklch(from var(--color-accent) l c h / 5%);
+    outline-color: oklch(from var(--color-accent) l c h / 20%);
+    outline-offset: -1px;
+    outline-style: solid;
+    outline-width: 1px;
+  }
+}
+
+@keyframes typing-dot {
+  0%   { transform: scale(1)   translateY(0   ); }
+  50%  { transform: scale(1.5) translateY(-2px); }
+  100% { transform: scale(1)   translateY(0   ); }
+}
+
+@keyframes long-press-accent-bar {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* Big hammer fix for cursor pointer. */
@@ -213,7 +282,9 @@
 
 /* utils for striped bg images */
 @utility pattern-diagonal-* {
-  background-image: linear-gradient(-45deg,
+  background-size: --value(integer)px --value(integer)px;
+  background-image: linear-gradient(
+    -45deg,
     transparent 10%,
     var(--pattern-color) 10%,
     var(--pattern-color) 20%,
@@ -222,37 +293,8 @@
     var(--pattern-color) 60%,
     var(--pattern-color) 70%,
     transparent 70%,
-    transparent);
-  background-size: --value(integer)px --value(integer)px;
-}
-
-@utility pattern-dot-* {
-  background-image: radial-gradient(var(--pattern-color) 0.5px, transparent 0.6px), radial-gradient(var(--pattern-color) 0.5px, transparent 0.6px);
-  background-size: --value(integer)px --value(integer)px;
-  background-position: 0 0, calc(--value(integer)px / 2) calc(--value(integer)px / 2);
-}
-
-@utility pattern-scanline-* {
-  background-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    var(--pattern-color) 30%,
-    var(--pattern-color) 70%,
-    transparent 100%);
-  background-size: 100% --value(integer)px;
-  background-repeat: repeat-y;
-}
-
-@utility glow-* {
-  box-shadow: 0 0 40px 0 --alpha(--value(--color-*) / 30%), 0 0 6px 0 --alpha(--value(--color-*) / 50%);
-}
-
-@utility text-glow {
-  text-shadow: 0 0 0.5em rgb( from currentColor r g b / 40%), 0 0 0.01em rgb( from currentColor r g b / 50%);
-}
-
-@utility text-glow-sm {
-  text-shadow: 0 0 0.2em rgb( from currentColor r g b / 15%), 0 0 0.05em rgb( from currentColor r g b / 25%);
+    transparent
+  );
 }
 
 @utility optical-* {
@@ -265,314 +307,77 @@
   font-optical-sizing: auto;
 }
 
-/* Used when you need to use a color defined via transparency, e.g. `accent-bg` in a context where it needs to be opaque, e.g. when it is floating over other elements. Use this with any of our macro colors, e.g. floating-accent-bg */
-@utility floating-* {
-  background-color: var(--color-dialog);
-  box-shadow: inset 400px 400px --value(--color-*);
-}
-
-@utility hover-transition-text {
-  transition: color var(--transition);
-
-  &:hover {
-    transition: none;
-  }
-}
-
-@utility hover-transition-fill {
-  transition: fill var(--transition);
-
-  &:hover {
-    transition: none;
-  }
-}
-
-@utility hover-transition-stroke {
-  transition: stroke var(--transition);
-
-  &:hover {
-    transition: none;
-  }
-}
-
 @utility hover-transition-bg {
   transition: background-color var(--transition);
-
-  &:hover {
-    transition: none;
-  }
+  &:hover { transition: none; }
 }
 
 @utility hover-transition-border {
   transition: border-color var(--transition);
-
-  &:hover {
-    transition: none;
-  }
+  &:hover { transition: none; }
 }
 
 @utility scrollbar-hidden {
-  scrollbar-width: none;     /* Firefox */
-  -ms-overflow-style: none;  /* Internet Explorer 10+ */
-  &::-webkit-scrollbar {     /* Safari etc */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
     display: none;
-    width: 0;
     height: 0;
+    width: 0;
   }
 }
 
-:root {
-  --viewport-padding: 16px;
-  --keyboard-height: 0px;
-  --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
-  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));
-  --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
-  --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
+@utility no-select-children {
+  * {
+    user-select: none;
+  }
+}
+
+@utility select-children {
+  * {
+    user-select: text;
+  }
+}
+
+@utility bg-modal-overlay {
+  --pattern-color: color-mix(in srgb, var(--color-overlay), var(--color-ink) 2%);
+  background-color: var(--color-overlay);
+}
+
+@utility portal-scope {
+  --documentation: "Set this element as a bounding scope for the ScopedPortal component";
+}
+
+@utility macro-message-width {
+  max-width: 100%;
+  @media (min-width: 640px) {
+    max-width: 800px;
+    min-width: 250px;
+  }
+}
+
+@utility macro-message-padding {
+  @container (width < 816px) { padding-inline: calc(var(--spacing) * 4); }
+  @container (width < 640px) { padding-inline: calc(var(--spacing) * 2); }
+}
+
+@utility macro-message-margin {
+  @container (width < 816px) { margin-inline: calc(var(--spacing) * 4); }
+  @container (width < 640px) { margin-inline: calc(var(--spacing) * 2); }
 }
 
 /** isolate the app-root stacking context from the kobalte dialog and modal stacking context */
 #root { isolation: isolate; }
 
-/* On mobile (width and touch) bump tailwind's font-sizes up 1px. Purposefully only changing the "reading" sizes, not the heading sizes. */
+/* On mobile (width and touch) bump tailwind's font-sizes up 1px. */
+/* Purposefully only changing the "reading" sizes, not the heading sizes. */
 @media (max-width: 639px) {
   :root:where(html[data-touch-device="true"]) {
+    --text-base: 1.0625rem;
     --text-xxs: 0.6875rem;
     --text-xs: 0.8125rem;
     --text-sm: 0.9375rem;
-    --text-base: 1.0625rem;
   }
-}
-
-@theme default {
-    /* Font families */
-    --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    /*--font-mono: "Roboto Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;*/
-    --font-mono: "Roboto Mono Variable",  monospace;
-    --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-
-    --text-xxs: 0.625rem;
-
-    /* Custom container size */
-    --container-small: 40rem;
-
-    /* Colors */
-    --color-macro-accent: #00c4ff;
-    --color-macro-input-border: #e4e4e4;
-    --color-macro-doc: #F9FAFB;
-
-    /* Transitions */
-    --transition-duration-quick: 20ms;
-    --transition-duration-slow: 100ms;
-    --ease-click: cubic-bezier(.18,.91,.27,1.14);
-
-   /* Animations */
-   --animate-hide: hide 100ms ease-in;
-   --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
-   --animate-swipe-out: swipeOut 100ms ease-out;
-   --animate-typing-dot: typing-dot 1s infinite;
-
-    @keyframes hide {
-        from {
-            opacity: 1;
-        }
-
-        to {
-            opacity: 0;
-        }
-    }
-
-    @keyframes slideIn {
-        from {
-            transform: translateX(calc(100% + var(--viewport-padding)));
-        }
-
-        to {
-            transform: translateX(0);
-        }
-    }
-
-    @keyframes swipeOut {
-        from {
-            transform: translateX(var(--kb-toast-swipe-end-x));
-        }
-
-        to {
-            transform: translateX(calc(100% + var(--viewport-padding)));
-        }
-    }
-
-    @keyframes typing-dot {
-        0% {
-            transform: scale(1) translateY(0);
-        }
-
-        50% {
-            transform: scale(1.5) translateY(-2px);
-        }
-
-        100% {
-            transform: scale(1) translateY(0);
-        }
-    }
-
-    --container-c: 0;
-
-    /* --shadow-*: initial; */
-}
-
-@custom-variant drop-valid (&[data-drop-valid]);
-@custom-variant drop-invalid (&[data-drop-invalid]);
-
-/* Hide Kobalte's popper positioner until floating-UI has computed the position.
-   Without this, the card briefly appears at top:0 left:0 on first open. */
-[data-popper-positioner]:not([style*='translate']) {
-    opacity: 0 !important;
-    pointer-events: none !important;
-    will-change: transform, opacity;
-}
-
-@layer base {
-    html {
-        overscroll-behavior: none;
-        overflow: hidden;
-        font: -apple-system-body;
-    }
-
-    /* Custom cursor is set via JavaScript in index.tsx to match theme accent color */
-
-    body {
-        @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
-
-        /* SCUFFED; surface might change to surface2  */
-        background-color: var(--color-page);
-
-        width: 100dvw;
-        height: 100dvh;
-
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-
-        color: var(--color-ink);
-        font-feature-settings: "dlig" 1, "calt" 1;
-    }
-
-    @font-face {
-        font-family: "oooh-baby";
-        src: url("./asset/fonts/OoohBaby-Regular.woff2") format("truetype");
-    }
-
-    /* This is ugly, and we can probably do better, but it stops text from being selectable by default, which is important for mobile usage */
-    :where(*, ::before, ::after) {
-        user-select: none;
-    }
-
-    :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
-        user-select: text;
-    }
-
-    *:focus-visible {
-        position: relative;
-    }
-
-  code {
-    @apply font-mono;
-  }
-}
-
-@layer components {
-}
-
-/* Channel message hover + non-selection highlight */
-/* Suppressed on touch devices */
-html:not([data-touch-device="true"]) [data-message]:hover,
-html:not([data-touch-device="true"]) [data-message][data-highlighted] {
-    @apply bg-accent/5 outline-1 outline-accent/20 -outline-offset-1;
-}
-
-/* Keyboard selection accent bar can coexist with hover styles */
-/* Suppressed on touch devices */
-html:not([data-touch-device="true"]) [data-message][data-selected] > .message-accent-bar {
-    @apply opacity-100;
-}
-
-/* Long-press animation */
-[data-message].long-press-animation, .long-press-animation [data-swipe-content] {
-    animation: long-press-message-highlight 400ms ease-in both;
-}
-
-[data-message].long-press-animation > .message-accent-bar, .long-press-animation [data-accent-bar] {
-    animation: long-press-accent-bar 400ms ease-in both;
-}
-
-@keyframes long-press-message-highlight {
-    from {
-        background-color: oklch(from var(--color-accent) l c h / 0%);
-        outline-width: 1px;
-        outline-style: solid;
-        outline-color: transparent;
-        outline-offset: -1px;
-    }
-    to {
-        background-color: oklch(from var(--color-accent) l c h / 5%);
-        outline-width: 1px;
-        outline-style: solid;
-        outline-color: oklch(from var(--color-accent) l c h / 20%);
-        outline-offset: -1px;
-    }
-}
-
-@keyframes long-press-accent-bar {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@utility no-select-children {
-    * {
-        user-select: none;
-    }
-}
-
-@utility select-children {
-    * {
-        user-select: text;
-    }
-}
-
-@utility bg-modal-overlay {
-    background-color: var(--color-overlay);
-    --pattern-color: color-mix(in srgb, var(--color-overlay), var(--color-ink) 2%);
-}
-
-@utility bg-modal-overlay-konsole {
-  background-color: var(--color-overlay);
-  background-image: linear-gradient(rgba(from var(--color-accent) r g b / 0.1) 0%, transparent 25%);
-}
-
-@utility portal-scope {
-    --documentation: "Set this element as a bounding scope for the ScopedPortal component";
-}
-
-/* Apply to the content wrapper div inside any Dialog.Portal (not the overlay).
-   Keeps UI elements within device safe areas (notch, home indicator, etc.). */
-@utility safe-insets {
-  margin-top: var(--safe-top);
-  margin-bottom: var(--safe-bottom);
-  margin-left: var(--safe-left);
-  margin-right: var(--safe-right);
-}
-
-:root {
-  --message-padding-x: .5rem;
-  --regular-message-padding-t: .5rem;
-  --thread-padding-y: .5rem;
-  --thread-shift: 32px;
-  --user-icon-width: 36px;
-  --left-of-connector: calc(
-    var(--message-padding-x) + var(--user-icon-width) / 2
-  );
-  --left-of-user-icon: calc(
-    var(--left-of-connector) - var(--user-icon-width) / 2
-  );
 }
 
 @media (min-width: 640px) {
@@ -581,241 +386,98 @@ html:not([data-touch-device="true"]) [data-message][data-selected] > .message-ac
   }
 }
 
-@utility macro-message-width {
-    max-width: 100%;
-
-    @media (min-width: 640px) {
-        max-width: 800px;
-        min-width: 250px;
-    }
-}
-
-@utility macro-message-padding {
-
-  @container (width < 816px) {
-      padding-inline: calc(var(--spacing) * 4);
-  }
-  @container (width < 640px) {
-      padding-inline: calc(var(--spacing) * 2);
+@media (pointer: coarse) {
+  .md-table-cell-resizer {
+    background-color: #adf;
+    mix-blend-mode: color;
   }
 }
 
-@utility macro-message-margin {
-
-  @container (width < 816px) {
-      margin-inline: calc(var(--spacing) * 4);
-  }
-  @container (width < 640px) {
-      margin-inline: calc(var(--spacing) * 2);
-  }
+/* Hide Kobalte's popper positioner until floating-UI has computed the position. */
+/* Without this, the card briefly appears at top:0 left:0 on first open. */
+[data-popper-positioner]:not([style*='translate']) {
+  pointer-events: none !important;
+  will-change: transform, opacity;
+  opacity: 0 !important;
 }
 
-::-webkit-scrollbar {
-    height: 8px;
-    /* Thickness of horizontal scrollbar */
-    width: 8px;
-    /* Thickness of vertical scrollbar */
-    overflow: auto;
+/* Channel message hover + non-selection highlight */
+/* Suppressed on touch devices */
+html:not([data-touch-device="true"]) [data-message][data-highlighted],
+html:not([data-touch-device="true"]) [data-message]:hover{
+  @apply bg-accent/5 outline-1 outline-accent/20 -outline-offset-1;
+}
+
+/* Keyboard selection accent bar can coexist with hover styles */
+/* Suppressed on touch devices */
+html:not([data-touch-device="true"]) [data-message][data-selected] > .message-accent-bar {
+  @apply opacity-100;
+}
+
+/* Long-press animation */
+.long-press-animation [data-swipe-content],
+[data-message].long-press-animation{
+  animation: long-press-message-highlight 400ms ease-in both;
+}
+
+[data-message].long-press-animation > .message-accent-bar,
+.long-press-animation [data-accent-bar] {
+  animation: long-press-accent-bar 400ms ease-in both;
+}
+
+/* scuffed scrollbar should be killed. use scroll from @ui */
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-edge);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: oklch(from var(--color-edge) l c h / 0.5);
-    border-radius: 10px;
-    margin: 2px;
+  background: oklch(from var(--color-edge) l c h / 0.5);
+  border-radius: 10px;
+  margin: 2px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-    background: var(--color-edge);
+::-webkit-scrollbar {
+  overflow: auto;
+  height: 8px;
+  width: 8px;
 }
 
 :focus-visible {
-    outline: none;
-}
-
-[type="file"]:focus {
-    outline: none;
-}
-
-/* Prevent up/down arrows showing in Firefox */
-input[type="number"] {
-    -moz-appearance: textfield;
-}
-
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    margin: 0;
-}
-
-.chat-markdown-container {
-
-    .table-container,
-    .katex-display,
-    pre {
-        overflow-x: auto;
-        overflow-y: hidden;
-    }
-}
-
-.no-touch-callout {
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -khtml-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-}
-
-@media (pointer: coarse) {
-    .md-table-cell-resizer {
-        background-color: #adf;
-        mix-blend-mode: color;
-    }
-}
-
-.media-error {
-    background-size: 8px 8px;
-    background-image: linear-gradient(-45deg, transparent 10%, var(--color-edge-muted) 10%, var(--color-edge-muted) 20%, transparent 10%, transparent 60%, var(--color-edge-muted) 60%, var(--color-edge-muted) 70%, transparent 70%, transparent);
-}
-
-[cmdk-list] {
-    height: var(--cmdk-list-height);
-    max-height: 500px;
-    transition: height 100ms ease;
-    overflow: auto;
-}
-
-.dotted-banner {
-    position: relative;
-}
-
-.dotted-banner::before {
-    content: '';
-    position: absolute;
-    top: 20%;
-    left: 0;
-    right: 0;
-    height: 60%;
-    background-image:
-        radial-gradient(circle, var(--color-accent) .5px, transparent .5px),
-        radial-gradient(circle, var(--color-accent) .5px, transparent .5px);
-    background-size: 8px 8px;
-    background-position: 0 0, 4px 4px;
-    /* Offset second layer by half */
-    z-index: 0;
-    pointer-events: none;
-}
-
-.dotted-banner>div {
-    position: relative;
-    z-index: 1;
-    width: auto;
-}
-
-@property --pulse-width {
-    syntax: "<length>";
-    initial-value: .5px;
-    inherits: true;
-}
-
-.pulse-corners {
-    --pulse-width: 1px;
-    --pulse-length: 50%;
-}
-
-@keyframes pulse-lines-reverse {
-    0% {
-        background-size:
-            0% var(--pulse-width),
-            0% var(--pulse-width),
-            0% var(--pulse-width),
-            0% var(--pulse-width),
-            var(--pulse-width) 0%,
-            var(--pulse-width) 0%,
-            var(--pulse-width) 0%,
-            var(--pulse-width) 0%;
-        opacity: 1;
-    }
-
-    40% {
-        background-size:
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-width) var(--pulse-length),
-            var(--pulse-width) var(--pulse-length),
-            var(--pulse-width) var(--pulse-length),
-            var(--pulse-width) var(--pulse-length);
-        opacity: 1;
-    }
-
-    100% {
-        background-size:
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-width) var(--pulse-length),
-            var(--pulse-width) var(--pulse-length),
-            var(--pulse-width) var(--pulse-length),
-            var(--pulse-width) var(--pulse-length);
-        opacity: 0;
-    }
-}
-
-.pulse-corners::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background:
-        /* Top edge */
-        linear-gradient(90deg, var(--color-accent), var(--color-accent)) top center,
-        linear-gradient(90deg, var(--color-accent), var(--color-accent)) top center,
-        /* Bottom edge */
-        linear-gradient(90deg, var(--color-accent), var(--color-accent)) bottom center,
-        linear-gradient(90deg, var(--color-accent), var(--color-accent)) bottom center,
-        /* Left edge */
-        linear-gradient(180deg, var(--color-accent), var(--color-accent)) center left,
-        linear-gradient(180deg, var(--color-accent), var(--color-accent)) center left,
-        /* Right edge */
-        linear-gradient(180deg, var(--color-accent), var(--color-accent)) center right,
-        linear-gradient(180deg, var(--color-accent), var(--color-accent)) center right;
-    background-size: 0% 1px, 0% 1px, 0% 1px, 0% 1px, 1px 0%, 1px 0%, 1px 0%, 1px 0%;
-    background-repeat: no-repeat;
-    background-position:
-        top left, top right, bottom left, bottom right,
-        top left, bottom left, top right, bottom right;
-    pointer-events: none;
-    animation: pulse-lines-reverse .7s ease-out .1s forwards;
-}
-
-@keyframes flicker {
-    0%,
-    49% {
-        opacity: 0;
-    }
-    50%,
-    100% {
-        opacity: 1;
-    }
-}
-
-.portal-child-collapse > div {
-  display: contents;
+  outline: none;
 }
 
 input[type="time"]::-webkit-calendar-picker-indicator {
   --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 256 256'%3E%3C!-- Icon from Phosphor by Phosphor Icons - https://github.com/phosphor-icons/core/blob/main/LICENSE --%3E%3Cpath fill='currentColor' d='M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m0 192a88 88 0 1 1 88-88a88.1 88.1 0 0 1-88 88m64-88a8 8 0 0 1-8 8h-56a8 8 0 0 1-8-8V72a8 8 0 0 1 16 0v48h48a8 8 0 0 1 8 8'/%3E%3C/svg%3E");
   -webkit-mask: var(--icon) no-repeat;
-  mask: var(--icon) no-repeat;
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
   background-color: currentColor;
-  color: inherit;
-  width: 1em;
-  height: 1em;
+  -webkit-mask-size: 100% 100%;
+  mask: var(--icon) no-repeat;
   background-image: none;
+  mask-size: 100% 100%;
+  color: inherit;
+  height: 1em;
+  width: 1em;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+[type="file"]:focus {
+  outline: none;
+}
+
+.chat-markdown-container .table-container,
+.chat-markdown-container .katex-display,
+.chat-markdown-container pre {
+  overflow-x: auto;
+  overflow-y: hidden;
 }

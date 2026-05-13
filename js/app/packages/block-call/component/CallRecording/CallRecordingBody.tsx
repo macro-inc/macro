@@ -1,29 +1,21 @@
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
-import { cn } from '@ui';
+import { format } from 'date-fns';
 import type { Accessor } from 'solid-js';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  onCleanup,
-  untrack,
-} from 'solid-js';
+import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import { formatCallDuration } from '../../utils';
 import type { CallTranscriptTarget } from '../CallBlockAdapter';
+import { CallTranscript } from '../CallTranscript';
 import {
   getActiveTranscriptSequenceNum,
   getSegmentVideoSeconds,
   sortTranscriptSegments,
 } from '../transcript-playback';
-import {
-  CallRecordingMediaColumn,
-  type CallRecordingTimeUpdateSource,
-} from './CallRecordingMediaColumn';
-import { CallRecordingMetaStrip } from './CallRecordingMetaStrip';
+import { CallRecordingParticipantsSection } from './CallRecordingParticipants';
 import { CallRecordingSplitHeader } from './CallRecordingSplitHeader';
-import { CallRecordingTranscriptColumn } from './CallRecordingTranscriptColumn';
+import { CallRecordingSummarySection } from './CallRecordingSummary';
+import { CallRecordingVideo } from './CallRecordingVideo';
 import {
-  isCallRecordingStackedLayout,
   seekDedupeKey,
   shouldCoalesceSeekGenerationBump,
 } from './call-recording-utils';
@@ -37,37 +29,19 @@ export function CallRecordingBody(props: {
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
   const [allowFutureLead, setAllowFutureLead] = createSignal(true);
   const [videoRef, setVideoRef] = createSignal<HTMLVideoElement>();
-  const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
-  const [isStacked, setIsStacked] = createSignal(false);
+  const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
   const sortedTranscript = createMemo(() =>
     sortTranscriptSegments(record().transcript)
   );
+  const [videoSeekGeneration, setVideoSeekGeneration] = createSignal(0);
+  let lastVideoSeekBumpKey: string | null = null;
+  let lastVideoSeekBumpAtMs = 0;
 
-  // Anchor transcript-to-audio sync to the recording's actual start when
-  // available. `startedAt` is call-creation time; the room composite egress
-  // starts a few seconds later, so using `startedAt` makes the audio
-  // appear to lag the transcript on every segment. `recordingStartedAt`
-  // (captured from the LiveKit `egress_started` webhook) is the encoder's
-  // true t=0. Falls back to `startedAt` for older records.
   const timelineStartMs = createMemo(() => {
     const anchor = record().recordingStartedAt ?? record().startedAt;
     const ms = new Date(anchor).getTime();
     return Number.isFinite(ms) ? ms : null;
   });
-
-  const [transcriptOpen, setTranscriptOpen] = createSignal(true);
-  const [participantsOpen, setParticipantsOpen] = createSignal(false);
-  const [layoutDefaultsSeeded, setLayoutDefaultsSeeded] = createSignal(false);
-  const [suppressWideParticipantsMotion, setSuppressWideParticipantsMotion] =
-    createSignal(false);
-  const [participantsContentRef, setParticipantsContentRef] =
-    createSignal<HTMLDivElement>();
-  const [participantsContentHeight, setParticipantsContentHeight] =
-    createSignal(0);
-  const [videoSeekGeneration, setVideoSeekGeneration] = createSignal(0);
-  let lastVideoSeekBumpKey: string | null = null;
-  let lastVideoSeekBumpAtMs = 0;
-  let prevLayoutStacked: boolean | undefined;
 
   const bumpVideoSeekGeneration = (seconds: number) => {
     if (!Number.isFinite(seconds)) return;
@@ -98,7 +72,7 @@ export function CallRecordingBody(props: {
 
   const handleTimeUpdate = (
     seconds: number,
-    source: CallRecordingTimeUpdateSource
+    source: 'playback' | 'seeking' | 'seeked'
   ) => {
     setPlaybackSeconds(seconds);
     setAllowFutureLead(source === 'playback');
@@ -135,126 +109,96 @@ export function CallRecordingBody(props: {
       () => props.transcriptTarget?.(),
       (target) => {
         if (!target) return;
-        if (hasTranscripts()) setTranscriptOpen(true);
         goToTranscriptSegment(target.transcriptId);
       }
     )
   );
 
-  const toggleTranscript = () => {
-    setTranscriptOpen((open) => {
-      const next = !open;
-      if (next && isStacked()) setParticipantsOpen(false);
-      return next;
-    });
-  };
+  const callTitle = createMemo(
+    () => record().customName ?? record().channelName ?? 'Call Recording'
+  );
 
-  const toggleParticipants = () => {
-    setParticipantsOpen((open) => {
-      const next = !open;
-      if (next && isStacked()) setTranscriptOpen(false);
-      return next;
-    });
-  };
-
-  createEffect(() => {
-    const el = containerRef();
-    if (!el) return;
-
-    const updateLayout = () => {
-      const stacked = isCallRecordingStackedLayout(el.clientWidth);
-      setIsStacked(stacked);
-
-      if (!layoutDefaultsSeeded()) {
-        if (!stacked) setSuppressWideParticipantsMotion(true);
-        setParticipantsOpen(!stacked);
-        setLayoutDefaultsSeeded(true);
-        prevLayoutStacked = stacked;
-        queueMicrotask(() => setSuppressWideParticipantsMotion(false));
-        return;
-      }
-
-      const prev = prevLayoutStacked;
-      if (prev !== undefined && prev !== stacked) {
-        if (stacked) {
-          if (transcriptOpen() && participantsOpen())
-            setParticipantsOpen(false);
-        } else {
-          setSuppressWideParticipantsMotion(true);
-          setTranscriptOpen(hasTranscripts());
-          setParticipantsOpen(true);
-          queueMicrotask(() => setSuppressWideParticipantsMotion(false));
-        }
-      }
-
-      prevLayoutStacked = stacked;
-    };
-
-    const observer = new ResizeObserver(updateLayout);
-    observer.observe(el);
-    untrack(() => updateLayout());
-    onCleanup(() => observer.disconnect());
+  const formattedDate = createMemo(() => {
+    const ended = record().endedAt;
+    if (!ended) return null;
+    return format(new Date(ended), 'MMM d, yyyy · h:mm a');
   });
 
-  createEffect(() => {
-    const el = participantsContentRef();
-    if (!el) return;
-    const updateHeight = () => setParticipantsContentHeight(el.scrollHeight);
-    updateHeight();
-    const observer = new ResizeObserver(updateHeight);
-    observer.observe(el);
-    onCleanup(() => observer.disconnect());
+  const formattedDuration = createMemo(() => {
+    const ms = record().durationMs;
+    if (!ms) return null;
+    return formatCallDuration(ms);
   });
 
   return (
     <>
       <CallRecordingSplitHeader record={record} />
-      <CallRecordingMetaStrip
-        record={record()}
-        transcriptOpen={transcriptOpen()}
-        participantsOpen={participantsOpen()}
-        onToggleTranscript={toggleTranscript}
-        onToggleParticipants={toggleParticipants}
-      />
       <div
-        ref={setContainerRef}
-        class={cn(
-          'grid min-h-0 flex-1 overflow-hidden grid-cols-1',
-          isStacked()
-            ? 'grid-rows-1'
-            : 'transition-[grid-template-columns] duration-300 linear grid-rows-1',
-          !isStacked() &&
-            (transcriptOpen()
-              ? 'grid-cols-[minmax(0,6fr)_minmax(0,4fr)]'
-              : 'grid-cols-[minmax(0,1fr)_minmax(0,0fr)]')
-        )}
+        class="relative flex-1 min-h-0 overflow-y-auto scrollbar-hidden"
+        ref={setScrollRef}
       >
-        <div class="contents @[860px]:contents">
-          <CallRecordingMediaColumn
-            record={record}
-            hasTranscripts={hasTranscripts}
-            isStacked={isStacked}
-            participantsOpen={participantsOpen}
-            suppressWideParticipantsMotion={suppressWideParticipantsMotion}
-            participantsContentHeight={participantsContentHeight}
-            setParticipantsContentRef={setParticipantsContentRef}
-            onTimeUpdate={handleTimeUpdate}
-            setVideoRef={setVideoRef}
-          />
-          <CallRecordingTranscriptColumn
-            record={record}
-            hasTranscripts={hasTranscripts}
-            isStacked={isStacked}
-            transcriptOpen={transcriptOpen}
-            participantsOpen={participantsOpen}
-            activeSequenceNum={activeSequenceNum}
-            timelineStartMs={timelineStartMs}
-            videoSeekGeneration={videoSeekGeneration}
-            onToggleTranscript={toggleTranscript}
-            onToggleParticipants={toggleParticipants}
-            onSeekToSeconds={seekToSeconds}
-          />
+        <div class="mx-auto max-w-3xl min-w-0 px-6 pt-10 pb-16">
+          <div class="flex flex-col gap-10">
+            <header>
+              <h1 class="text-4xl font-semibold text-ink text-balance">
+                {callTitle()}
+              </h1>
+              <div class="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
+                <Show when={formattedDate()}>
+                  {(date) => <span>{date()}</span>}
+                </Show>
+                <Show when={formattedDuration()}>
+                  {(dur) => (
+                    <>
+                      <span class="text-ink-extra-muted">&middot;</span>
+                      <span>{dur()}</span>
+                    </>
+                  )}
+                </Show>
+                <Show when={record().isActive}>
+                  <span class="text-success font-medium">In progress</span>
+                </Show>
+              </div>
+            </header>
+
+            <CallRecordingParticipantsSection record={record} />
+
+            <CallRecordingSummarySection record={record} />
+
+            <Show when={record().recordingUrl}>
+              {(url) => (
+                <section class="flex flex-col gap-3">
+                  <h3 class="text-sm font-semibold text-ink">Recording</h3>
+                  <div class="overflow-hidden rounded border border-edge-muted/50">
+                    <CallRecordingVideo
+                      url={url()}
+                      onTimeUpdate={handleTimeUpdate}
+                      setVideoRef={setVideoRef}
+                    />
+                  </div>
+                </section>
+              )}
+            </Show>
+
+            <Show when={hasTranscripts()}>
+              <section class="flex flex-col gap-3">
+                <h3 class="text-sm font-semibold text-ink">Transcript</h3>
+                <div class="flex flex-col max-h-[min(600px,60vh)] overflow-hidden rounded border border-edge-muted/50">
+                  <CallTranscript
+                    transcript={record().transcript}
+                    channelId={record().channelId}
+                    timelineStartMs={timelineStartMs()}
+                    activeSequenceNum={activeSequenceNum()}
+                    videoSeekGeneration={videoSeekGeneration()}
+                    onSeekToSeconds={seekToSeconds}
+                    hideHeader
+                  />
+                </div>
+              </section>
+            </Show>
+          </div>
         </div>
+        <CustomScrollbar scrollContainer={scrollRef} />
       </div>
     </>
   );

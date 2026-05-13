@@ -53,6 +53,8 @@ pub struct Config {
     pub cloudfront_signer_public_key_id: String,
     /// CloudFront signer private key (secret name or value)
     pub cloudfront_signer_private_key: String,
+    /// MCP credentials encryption key (base64-encoded, secret name or value)
+    pub mcp_credentials_key_secret_name: String,
 }
 
 env_var!(
@@ -77,6 +79,7 @@ env_var!(
         pub DocumentStorageServiceCloudfrontDistributionUrl,
         pub DocumentStorageServiceCloudfrontSignerPublicKeyId,
         pub DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+        pub McpCredentialsKeySecretName,
     }
 );
 
@@ -124,6 +127,7 @@ impl Config {
             document_storage_service_cloudfront_distribution_url,
             document_storage_service_cloudfront_signer_public_key_id,
             document_storage_service_cloudfront_signer_private_key_secret_name,
+            mcp_credentials_key_secret_name,
         } = env_vars;
 
         Ok(Config {
@@ -154,6 +158,7 @@ impl Config {
                 document_storage_service_cloudfront_signer_public_key_id.to_string(),
             cloudfront_signer_private_key:
                 document_storage_service_cloudfront_signer_private_key_secret_name.to_string(),
+            mcp_credentials_key_secret_name: mcp_credentials_key_secret_name.to_string(),
         })
     }
 
@@ -184,6 +189,7 @@ impl Config {
             cloudfront_distribution_url: Default::default(),
             cloudfront_signer_public_key_id: Default::default(),
             cloudfront_signer_private_key: Default::default(),
+            mcp_credentials_key_secret_name: Default::default(),
         }
     }
 }

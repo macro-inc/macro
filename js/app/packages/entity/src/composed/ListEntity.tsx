@@ -250,8 +250,8 @@ export function ListEntity(props: ListEntityProps) {
       </Switch>
 
       <Show when={hasNotifications() && !isMobile()}>
-        <div class="flex gap-2 size-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
-          <div class={cn('min-w-0 flex-1 truncate ml-2 @lg/entity:ml-6')}>
+        <div class="px-2 pb-1.5 -mt-1 min-w-0 overflow-hidden">
+          <div class={cn('min-w-0 flex-1 ml-2 @lg/entity:ml-6')}>
             <Show when={isWithNotification(props.entity) && !showContentHits()}>
               <Entity.Notification.Stacks
                 entity={props.entity}

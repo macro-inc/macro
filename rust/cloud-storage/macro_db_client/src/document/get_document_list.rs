@@ -58,6 +58,7 @@ pub async fn get_document_list(
 mod tests {
     use super::*;
     use sqlx::{Pool, Postgres};
+    use std::collections::HashSet;
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_lots_of_documents")))]
     async fn test_get_document_search(pool: Pool<Postgres>) {
@@ -67,22 +68,22 @@ mod tests {
 
         assert_eq!(documents.len(), 7);
 
-        let document_ids: Vec<(String, i64)> = documents
+        let document_ids: HashSet<(String, i64)> = documents
             .iter()
             .map(|doc| (doc.document_id.clone(), doc.document_version_id))
             .collect();
 
         assert_eq!(
             document_ids,
-            vec![
+            HashSet::from([
                 ("document-one".to_string(), 1),
                 ("document-two".to_string(), 2),
                 ("document-three".to_string(), 3),
                 ("document-four".to_string(), 4),
                 ("document-five".to_string(), 5),
                 ("document-six".to_string(), 6),
-                ("document-seven".to_string(), 1)
-            ]
+                ("document-seven".to_string(), 1),
+            ])
         );
     }
 }

@@ -27,7 +27,7 @@ export type ButtonVariant = 'ghost' | 'base' | 'active' | 'danger';
 const variantStyles: Record<ButtonVariant, string> = {
   danger: 'bg-transparent text-failure    border border-failure/50 not-disabled:hover:bg-failure/10 not-disabled:active:bg-failure/20                   disabled:opacity-30 ',
   base:   'bg-transparent text-ink-muted  border border-edge-muted not-disabled:hover:bg-hover      not-disabled:hover:text-ink        active:bg-active disabled:opacity-30 ',
-  active: 'bg-accent-bg   text-accent     border border-accent-ink                                                                                      disabled:opacity-30 ',
+  active: 'bg-accent-bg   text-accent     border border-accent                                                                                      disabled:opacity-30 ',
   ghost:  'bg-transparent text-ink-muted                           not-disabled:hover:bg-hover      not-disabled:hover:text-ink        active:bg-active disabled:opacity-30 ',
 };
 
@@ -37,7 +37,7 @@ const sizeStyles: Record<ButtonSize, string> = {
   'sm':      'h-6       px-2   [&_:where(svg)]:size-4 gap-1   text-xs  ',
   'icon-lg': 'size-11   p-2    [&_:where(svg)]:size-7                  ', /* unused */
   'icon-md': 'size-9    p-1.5  [&_:where(svg)]:size-6                  ',
-  'icon-sm': 'size-6    p-1    [&_:where(svg)]:size-4                  ',
+  'icon-sm': 'size-6    p-0.5    [&_:where(svg)]:size-5                  ',
 };
 
 export const Button = (props: ButtonProps) => {
@@ -69,7 +69,7 @@ export const Button = (props: ButtonProps) => {
   const placement = () => local.tooltipPlacement ?? 'bottom';
 
   const button = () => (
-    <KobalteButton class={cls()} {...others}>
+    <KobalteButton data-button class={cls()} {...others}>
       {local.children}
     </KobalteButton>
   );

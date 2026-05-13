@@ -264,25 +264,37 @@ export function createResizeSolver(params: {
 
       let index = ndx != null && ndx < order().length ? ndx : order().length;
 
-      // default is the "equal size" share
+      const usableSize = getUsable(nextLength, params.size(), params.gutter());
+
+      // Calculate incoming share based on target spec, defaulting to equal share
       let incomingShare = 1 / nextLength;
 
-      // check max size constraint
-      if (length > 0) {
-        const usableSize = getUsable(
-          nextLength,
-          params.size(),
-          params.gutter()
-        );
-
-        if (usableSize > 0) {
-          const equalPx = usableSize / nextLength;
-          const maxPx = panel.maxSize ?? Infinity;
-          if (maxPx < equalPx) {
-            incomingShare = Math.min(maxPx / usableSize, 1 / nextLength);
-          }
+      if (panel.target && usableSize > 0) {
+        switch (panel.target.kind) {
+          case 'percent':
+            incomingShare = panel.target.percent / 100;
+            break;
+          case 'px':
+            incomingShare = panel.target.px / usableSize;
+            break;
+          case 'fr':
+            // fr needs total fr units across all panels - not supported yet, use equal
+            break;
+          default:
+            // keep equal share
+            break;
         }
       }
+
+      // Clamp to max size constraint
+      if (length > 0 && usableSize > 0) {
+        const maxPx = panel.maxSize ?? Infinity;
+        const maxShare = maxPx / usableSize;
+        incomingShare = Math.min(incomingShare, maxShare);
+      }
+
+      // Clamp share to [0, 1] for sanity
+      incomingShare = Math.max(0, Math.min(1, incomingShare));
 
       panelData[panel.id] = {
         ...initPanel(panel),

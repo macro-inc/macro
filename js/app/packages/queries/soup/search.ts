@@ -159,11 +159,14 @@ export const useSearchChannelQuery = (
       };
     },
     select: (data) => {
-      return data.pages.flatMap((page) =>
+      const items = data.pages.flatMap((page) =>
         page.results.flatMap((item) =>
           mapChannelSearchResultItem(item, channels())
         )
       ) as WithSearch<ChannelMessageEntity>[];
+      // stable per query so first page is enough
+      const totalCount = data.pages[0]?.total_count;
+      return { items, totalCount };
     },
     enabled: enabled(),
     placeholderData: (p) => p,

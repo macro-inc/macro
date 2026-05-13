@@ -283,7 +283,7 @@ export function FindAndReplace() {
 
   return (
     <Show when={findAndReplaceStore.searchIsOpen}>
-      <div class="flex items-center justify-start rounded-md border border-edge bg-menu p-1 shadow w-fit">
+      <div class="flex items-center justify-start rounded-md border border-edge bg-surface p-1 shadow w-fit">
         <div class="flex items-center px-1">
           <Tooltip
             label={`${findAndReplaceStore.replaceInputOpen ? 'Collapse' : 'Expand'} Search Bar`}
@@ -303,7 +303,7 @@ export function FindAndReplace() {
                 class={cn(
                   'size-4',
                   findAndReplaceStore.isSearching
-                    ? 'animate-pulse text-accent-ink'
+                    ? 'animate-pulse text-accent'
                     : 'text-ink'
                 )}
               />
@@ -313,7 +313,7 @@ export function FindAndReplace() {
 
         <div class="flex flex-col w-fit">
           <div class="flex items-center px-1">
-            <div class="flex rounded-md border bg-input border-edge px-1 mx-1 w-58">
+            <div class="flex rounded-md border bg-surface border-edge px-1 mx-1 w-58">
               <input
                 class="mx-0.5 flex-1 h-6 border-0 text-sm text-ink focus:outline-none focus:ring-0"
                 type="text"
@@ -373,7 +373,7 @@ export function FindAndReplace() {
 
           <Show when={findAndReplaceStore.replaceInputOpen && canEdit()}>
             <div class="flex items-center px-1">
-              <div class="flex rounded-md border bg-input border-edge px-1 mx-1 mt-1 w-58">
+              <div class="flex rounded-md border bg-surface border-edge px-1 mx-1 mt-1 w-58">
                 <input
                   class="mx-0.5 flex-1 h-6 border-0 text-sm text-ink focus:outline-none focus:ring-0"
                   type="text"

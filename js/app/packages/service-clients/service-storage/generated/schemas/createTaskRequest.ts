@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateTaskRequestMarkdown } from './createTaskRequestMarkdown';
 import type { CreateTaskRequestProjectId } from './createTaskRequestProjectId';
 import type { CreateTaskRequestPropertyValues } from './createTaskRequestPropertyValues';
 
@@ -11,6 +12,8 @@ import type { CreateTaskRequestPropertyValues } from './createTaskRequestPropert
  * Request body for creating a task.
  */
 export interface CreateTaskRequest {
+  /** Markdown source text. Defaults to an empty task document. */
+  markdown?: CreateTaskRequestMarkdown;
   /** Optional project ID to associate the task with. */
   projectId?: CreateTaskRequestProjectId;
   /** Optional property values to set on the task. */
