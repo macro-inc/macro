@@ -331,8 +331,6 @@ export default function GlobalShortcuts() {
     runWithInputFocused: true,
   });
 
-
-
   registerHotkey({
     scopeId: 'global',
     description: 'Upload files',
