@@ -30,12 +30,12 @@ export type ChannelFindBar = FindBarController & {
   getSearchTermsForMessage: Accessor<SearchHighlightTermsLookup | undefined>;
 };
 
+type ActiveMatch = { messageId: string; terms: string[] };
+
 export function createChannelFindBar(
   options: CreateChannelFindBarOptions
 ): ChannelFindBar {
-  let activeMatch: Accessor<
-    { messageId: string; terms: string[] } | undefined
-  > = () => undefined;
+  let activeMatch: Accessor<ActiveMatch | undefined> = () => undefined;
 
   const controller = createFindBarController<WithSearch<ChannelMessageEntity>>(
     ({ isOpen, submittedQuery, activeIndex }) => {
@@ -70,9 +70,7 @@ export function createChannelFindBar(
 
       // Highlight only the active match so we never paint spans we don't
       // have hit data for (results outside the loaded page have no terms).
-      activeMatch = createMemo<
-        { messageId: string; terms: string[] } | undefined
-      >(() => {
+      activeMatch = createMemo<ActiveMatch | undefined>(() => {
         if (!isOpen()) return undefined;
         const idx = activeIndex();
         if (idx === 0) return undefined;
