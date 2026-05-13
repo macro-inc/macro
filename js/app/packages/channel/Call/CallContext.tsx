@@ -62,6 +62,13 @@ type NativeAudioProcessingConstraints = MediaTrackConstraints & {
   voiceIsolation?: ConstrainBoolean;
 };
 
+type NativeAudioProcessingSettings = MediaTrackSettings & {
+  autoGainControl?: boolean;
+  echoCancellation?: boolean;
+  noiseSuppression?: boolean;
+  voiceIsolation?: boolean;
+};
+
 function normalizeNoiseSuppressionMode(
   value: unknown
 ): MicNoiseSuppressionMode {
@@ -358,6 +365,46 @@ function createCallState() {
     );
   }
 
+  function logMicAudioProcessing(
+    event: string,
+    r: Room,
+    extra?: Record<string, unknown>
+  ) {
+    const micTrack = getLocalMicTrack(r);
+    const mediaStreamTrack = micTrack?.mediaStreamTrack;
+    const settings = mediaStreamTrack?.getSettings() as
+      | NativeAudioProcessingSettings
+      | undefined;
+    const constraints = mediaStreamTrack?.getConstraints() as
+      | NativeAudioProcessingConstraints
+      | undefined;
+
+    console.debug('[call] mic audio processing', {
+      event,
+      preferredMode: persistedNoiseSuppressionMode(),
+      activeMode: store.noiseSuppressionMode,
+      krispSupported: isKrispNoiseFilterSupported(),
+      hasMicTrack: !!micTrack,
+      micReadyState: mediaStreamTrack?.readyState,
+      hasProcessor: !!micTrack?.getProcessor(),
+      settings: {
+        autoGainControl: settings?.autoGainControl,
+        echoCancellation: settings?.echoCancellation,
+        noiseSuppression: settings?.noiseSuppression,
+        voiceIsolation: settings?.voiceIsolation,
+        channelCount: settings?.channelCount,
+        sampleRate: settings?.sampleRate,
+      },
+      constraints: {
+        autoGainControl: constraints?.autoGainControl,
+        echoCancellation: constraints?.echoCancellation,
+        noiseSuppression: constraints?.noiseSuppression,
+        voiceIsolation: constraints?.voiceIsolation,
+      },
+      ...extra,
+    });
+  }
+
   // --- internal helpers ---
 
   /** Apply the preferred mic noise suppression mode to the current mic track. */
@@ -368,6 +415,7 @@ function createCallState() {
       setStore('noiseSuppressionMode', 'off');
       await detachKrispFromMicTrack(r);
       await applyNativeAudioProcessingToMicTrack(r, 'off');
+      logMicAudioProcessing('noise-suppression-off', r);
       return;
     }
 
@@ -378,6 +426,9 @@ function createCallState() {
       setStore('noiseSuppressionMode', 'browser');
       await detachKrispFromMicTrack(r);
       await applyNativeAudioProcessingToMicTrack(r, 'browser');
+      logMicAudioProcessing('browser-noise-suppression-enabled', r, {
+        reason: preferredMode === 'browser' ? 'preferred' : 'krisp-unsupported',
+      });
       return;
     }
 
@@ -386,6 +437,7 @@ function createCallState() {
       await applyNativeAudioProcessingToMicTrack(r, 'krisp');
       await existing.setEnabled(true);
       setStore('noiseSuppressionMode', 'krisp');
+      logMicAudioProcessing('krisp-noise-suppression-reused', r);
       return;
     }
 
@@ -404,12 +456,16 @@ function createCallState() {
       await micTrack.setProcessor(krisp);
       await krisp.setEnabled(true);
       setStore('noiseSuppressionMode', 'krisp');
+      logMicAudioProcessing('krisp-noise-suppression-attached', r);
     } catch (e) {
       console.error('failed to re-attach Krisp noise filter', e);
       // Fall back to a single browser-native layer if Krisp fails.
       await detachKrispFromMicTrack(r);
       setStore('noiseSuppressionMode', 'browser');
       await applyNativeAudioProcessingToMicTrack(r, 'browser');
+      logMicAudioProcessing('browser-noise-suppression-fallback', r, {
+        reason: 'krisp-attach-failed',
+      });
     }
   }
 
@@ -930,6 +986,7 @@ function createCallState() {
       if (newMode === 'off') {
         await detachKrispFromMicTrack(r);
         await applyNativeAudioProcessingToMicTrack(r, 'off');
+        logMicAudioProcessing('noise-suppression-toggled-off', r);
       } else {
         await ensureNoiseSuppressionOnMicTrack(r);
       }
