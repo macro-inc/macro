@@ -350,14 +350,6 @@
   box-shadow: 0 0 40px 0 --alpha(--value(--color-*) / 30%), 0 0 6px 0 --alpha(--value(--color-*) / 50%);
 }
 
-@utility text-glow {
-  text-shadow: 0 0 0.5em rgb( from currentColor r g b / 40%), 0 0 0.01em rgb( from currentColor r g b / 50%);
-}
-
-@utility text-glow-sm {
-  text-shadow: 0 0 0.2em rgb( from currentColor r g b / 15%), 0 0 0.05em rgb( from currentColor r g b / 25%);
-}
-
 @utility optical-* {
   font-optical-sizing: none;
   font-variation-settings: "opsz" --value(integer);
@@ -366,29 +358,6 @@
 @utility optical-auto {
   font-variation-settings: unset;
   font-optical-sizing: auto;
-}
-
-/* Used when you need to use a color defined via transparency */
-/* e.g. `accent-bg` in a context where it needs to be opaque */
-/* Use this with any of our macro colors, e.g. floating-accent-bg */
-@utility floating-* {
-  background-color: var(--color-surface);
-  box-shadow: inset 400px 400px --value(--color-*);
-}
-
-@utility hover-transition-text {
-  transition: color var(--transition);
-  &:hover { transition: none; }
-}
-
-@utility hover-transition-fill {
-  transition: fill var(--transition);
-  &:hover { transition: none; }
-}
-
-@utility hover-transition-stroke {
-  transition: stroke var(--transition);
-  &:hover { transition: none; }
 }
 
 @utility hover-transition-bg {
@@ -402,9 +371,9 @@
 }
 
 @utility scrollbar-hidden {
-  scrollbar-width: none;     /* Firefox */
-  -ms-overflow-style: none;  /* Internet Explorer 10+ */
-  &::-webkit-scrollbar {     /* Safari etc */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
     display: none;
     height: 0;
     width: 0;
@@ -428,25 +397,8 @@
   background-color: var(--color-overlay);
 }
 
-@utility bg-modal-overlay-konsole {
-  background-image: linear-gradient(
-    rgba(from var(--color-accent) r g b / 0.1) 0%,
-    transparent 25%
-  );
-  background-color: var(--color-overlay);
-}
-
 @utility portal-scope {
   --documentation: "Set this element as a bounding scope for the ScopedPortal component";
-}
-
-/* Apply to the content wrapper div inside any Dialog.Portal (not the overlay). */
-/* Keeps UI elements within device safe areas (notch, home indicator, etc.). */
-@utility safe-insets {
-  margin-bottom: var(--safe-bottom);
-  margin-right: var(--safe-right);
-  margin-left: var(--safe-left);
-  margin-top: var(--safe-top);
 }
 
 @utility macro-message-width {
