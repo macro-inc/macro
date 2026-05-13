@@ -371,7 +371,7 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   right: -4px;
   height: 100%;
   width: 8px;
-  cursor: var(--cursor-ew-resize);
+  cursor: ew-resize;
   z-index: 10;
   top: 0;
 }

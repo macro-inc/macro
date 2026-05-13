@@ -49,7 +49,7 @@ const DefinitionText = styled.p<{ truncated: boolean }>`
   font-family: Helvetica;
   font-style: normal;
   font-weight: normal;
-  cursor: var(--cursor-text);
+  cursor: text;
   user-select: text;
   font-size: ${FONT_SIZE.toString()}px;
   line-height: ${LINE_HEIGHT.toString()};
@@ -67,7 +67,7 @@ const HoverText = styled.span<{
   class: string;
 }>`
   color: ${(props) => props.color};
-  cursor: var(--cursor-pointer);
+  cursor: pointer;
 `;
 
 const SECTION_MAX_CHARS = 80;

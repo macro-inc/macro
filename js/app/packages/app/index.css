@@ -91,21 +91,7 @@
   --c3: oklch(var(--c3l) var(--c3c) var(--c3h));
   --c4: oklch(var(--c4l) var(--c4c) var(--c4h));
 
-  /* Cursor variables — override these to use custom cursors */
-  --cursor-nesw-resize: nesw-resize;
-  --cursor-nwse-resize: nwse-resize;
-  --cursor-not-allowed: not-allowed;
-  --cursor-col-resize:  col-resize;
-  --cursor-row-resize:  row-resize;
-  --cursor-ew-resize:   ew-resize;
-  --cursor-ns-resize:   ns-resize;
-  --cursor-grabbing:    grabbing;
-  --cursor-default:     default;
-  --cursor-pointer:     default;
-  --cursor-auto:        auto;
-  --cursor-grab:        grab;
-  --cursor-move:        move;
-  --cursor-text:        text;
+
 
   /* scuffed: defualt 0.15, used for transition jamming, currently disabled */
   --transition: 0s;

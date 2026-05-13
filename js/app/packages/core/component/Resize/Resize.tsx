@@ -422,8 +422,8 @@ function Gutter(props: GutterProps) {
         position: 'absolute',
         cursor:
           ctx.direction === 'horizontal'
-            ? 'var(--cursor-col-resize)'
-            : 'var(--cursor-row-resize)',
+            ? 'col-resize'
+            : 'row-resize',
         ...styles(),
       }}
       onPointerDown={onPointerDown}
