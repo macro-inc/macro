@@ -390,7 +390,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
     <Layer depth={2}>
       <button
         class={cn(
-          ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-surface ring ring-edge-muted transition-transform ease-click duration-200 rounded-sm',
+          ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-surface ring ring-edge-muted transition-transform ease-out duration-200 rounded-sm',
           `create-menu-${props.creatableBlock.label.toLowerCase()}`,
           {
             '-translate-y-2 text-ink': props.focused,
@@ -423,7 +423,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
         <div
           class={cn(
-            'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-click duration-200 transition-color border border-edge',
+            'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-out duration-200 transition-color border border-edge',
             textFg()
           )}
           style={{ background: props.focused ? 'currentColor' : 'transparent' }}
@@ -438,7 +438,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
         <div
           class={cn(
-            'w-1/3 -translate-y-1 transition-all ease-click duration-200',
+            'w-1/3 -translate-y-1 transition-all ease-out duration-200',
             textFg(),
             {
               'text-edge': !props.focused,
