@@ -1,7 +1,7 @@
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { isMobile } from '@core/mobile/isMobile';
-import { Accordion } from '@kobalte/core/accordion';
 import CaretRight from '@icon/fill/caret-right-fill.svg';
+import { Accordion } from '@kobalte/core/accordion';
 import { Panel, Scroll } from '@ui';
 import {
   type Accessor,

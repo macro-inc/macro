@@ -1,9 +1,5 @@
-import CaretUp from '@icon/regular/caret-up.svg';
-import Stats from '@icon/regular/chart-bar.svg';
-import { Button, HoverCard } from '@ui';
 import {
   createContext,
-  createSignal,
   type JSX,
   type ParentProps,
   Show,
@@ -49,10 +45,7 @@ function Words(props: { class?: string }): JSX.Element {
         fallback={<span>{stats.totalWords.toLocaleString()}</span>}
       >
         <span>{stats.selectedWords?.toLocaleString()}</span>
-        <span class="opacity-50">
-          {' '}
-          / {stats.totalWords.toLocaleString()}
-        </span>
+        <span class="opacity-50"> / {stats.totalWords.toLocaleString()}</span>
       </Show>
     </span>
   );
@@ -127,7 +120,6 @@ function CharacterLabel(): JSX.Element {
 
   return <>{count() === 1 ? 'character' : 'characters'}</>;
 }
-
 
 export const Wordcount = {
   Root,

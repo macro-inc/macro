@@ -111,7 +111,6 @@ import {
   getDragDropPosition,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { useUrlParams } from '@core/component/ParamsProvider';
-import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import {
@@ -902,10 +901,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   });
 
   const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
-    plugins.use(
-      wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
-    );
-    setMdStore('wordcountStats', wordcountStats);
+  plugins.use(
+    wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
+  );
+  setMdStore('wordcountStats', wordcountStats);
 
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>

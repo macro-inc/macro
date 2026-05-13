@@ -9,6 +9,7 @@ import {
   ADD_PINNED_PROPERTY_COMMAND,
   REMOVE_PINNED_PROPERTY_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
+import { Notifications } from '@core/component/Notifications';
 import { Modals } from '@core/component/Properties/component/modal';
 import { PanelContainer } from '@core/component/Properties/component/panel';
 import { getDefaultPinnedProperties } from '@core/component/Properties/constants';
@@ -22,11 +23,12 @@ import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
-import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
+import type { Entity, EntityType } from '@core/types';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { formatDate, type DateValue } from '@core/util/date';
+import { type DateValue, formatDate } from '@core/util/date';
+import { isErr } from '@core/util/maybeResult';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import Plus from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
@@ -35,6 +37,7 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { commsServiceClient } from '@service-comms/client';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
+import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   createEffect,
@@ -46,9 +49,6 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { isErr } from '@core/util/maybeResult';
-import type { Entity, EntityType } from '@core/types';
-import { blockNameToItemType } from '@service-storage/client';
 import { mdStore } from '../../signal/markdownBlockData';
 
 interface MarkdownSidePanelSectionsProps {
@@ -171,7 +171,10 @@ function DetailsGrid(props: {
   );
 }
 
-function DetailsRow(props: { label: string; children: import('solid-js').JSX.Element }) {
+function DetailsRow(props: {
+  label: string;
+  children: import('solid-js').JSX.Element;
+}) {
   return (
     <>
       <span class="text-ink-muted">{props.label}</span>
@@ -224,7 +227,8 @@ function PropertiesSectionContent(props: {
   const mdData = mdStore.get;
 
   const blockName = useBlockAliasedName();
-  const entityType: PropertiesEntityType = blockName === 'task' ? 'TASK' : 'DOCUMENT';
+  const entityType: PropertiesEntityType =
+    blockName === 'task' ? 'TASK' : 'DOCUMENT';
 
   const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
@@ -344,7 +348,9 @@ function PropertiesSectionContent(props: {
 
   const saveOne = (property: Property, apiValues: PropertyApiValues) =>
     saveMutation.mutateAsync({
-      properties: [{ entityId: blockId, entityType: entityType, property, apiValues }],
+      properties: [
+        { entityId: blockId, entityType: entityType, property, apiValues },
+      ],
     });
 
   const saveHandler: PropertySaveHandler = {
@@ -454,7 +460,10 @@ function StatsSectionContent() {
 
 function NotificationsSectionConditional(props: { entity: Entity }) {
   const notificationSource = useGlobalNotificationSource();
-  const notifications = useNotificationsForEntity(notificationSource, props.entity);
+  const notifications = useNotificationsForEntity(
+    notificationSource,
+    props.entity
+  );
   const count = createMemo(() => notifications().length);
   const unreadCount = createMemo(
     () => notifications().filter((n) => !n.viewed_at).length
@@ -540,11 +549,7 @@ function DebugSectionContent() {
   return (
     <div class="flex flex-col gap-2 text-xs text-ink-muted">
       <For each={items}>
-        {(i) => (
-          <div class="p-2 bg-surface-muted rounded">
-            Debug item {i}
-          </div>
-        )}
+        {(i) => <div class="p-2 bg-surface-muted rounded">Debug item {i}</div>}
       </For>
     </div>
   );

@@ -1,4 +1,3 @@
-import { SidePanel, useSidePanel } from '@app/component/side-panel';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
@@ -22,7 +21,6 @@ import {
   blockHotkeyScopeSignal,
 } from '@core/signal/blockElement';
 import { tempRedirectLocation } from '@core/signal/location';
-import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import {
@@ -39,10 +37,6 @@ import { MarkdownEditor } from './MarkdownEditor';
 import { TaskDiscussion } from './TaskDiscussion';
 import { TitleEditor } from './TitleEditor';
 import { registerMarkdownCommands } from './useMarkdownCommands';
-import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
-import { Button } from '@ui';
-import SplitIcon from '@icon/fill/square-half-fill.svg';
-import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 
 const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
@@ -77,7 +71,6 @@ export function Notebook() {
   const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
-  const canEdit = useCanEdit();
   const documentName = useBlockDocumentName();
   const scopeId = blockHotkeyScopeSignal.get;
   const isTask = useBlockAliasedName() === 'task';
@@ -285,30 +278,30 @@ export function Notebook() {
   });
 
   return (
-      <div class={containerClasses()} ref={notebookRef}>
-        <div class={contentDivClasses()} ref={contentRef}>
-          <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
-          <div class="spacer h-6" />
-          <ParamsProvider>
-            <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
-            <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
-              <TaskDiscussion />
-            </Show>
-          </ParamsProvider>
-        </div>
-        <div
-          class={commentPositioning().classes}
-          style={commentPositioning().style}
-          ref={commentMarginRef}
-          classList={{
-            block: hasComment(),
-            hidden: !hasComment(),
-          }}
-        >
-          <CommentMargin />
-        </div>
+    <div class={containerClasses()} ref={notebookRef}>
+      <div class={contentDivClasses()} ref={contentRef}>
+        <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
+        <div class="spacer h-6" />
+        <ParamsProvider>
+          <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
+          <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
+            <TaskDiscussion />
+          </Show>
+        </ParamsProvider>
       </div>
-    );
+      <div
+        class={commentPositioning().classes}
+        style={commentPositioning().style}
+        ref={commentMarginRef}
+        classList={{
+          block: hasComment(),
+          hidden: !hasComment(),
+        }}
+      >
+        <CommentMargin />
+      </div>
+    </div>
+  );
 }
 
 export function InstructionsNotebook() {

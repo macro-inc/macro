@@ -2,21 +2,26 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
+import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
-
-import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import { createEffect, createMemo, createSignal, Show, Suspense } from 'solid-js';
+import { Scroll } from '@ui';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { ModalsProvider } from './ModalsProvider';
 import { InstructionsNotebook, Notebook } from './Notebook';
+import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
 import { InstructionsTopBar, TopBar } from './TopBar';
-import { Scroll } from '@ui';
 
 export default function BlockMarkdown() {
   useBlockEntityCommands();
@@ -76,22 +81,18 @@ export default function BlockMarkdown() {
                 class="w-full grow overflow-hidden relative"
                 data-block-content
               >
-                <Scroll
-                    class="relative portal-scope"
-                    ref={setScrollRef}
-                  >
-                    <Suspense>
-                      <Show
-                        when={!isInstructionsMd()}
-                        fallback={<InstructionsNotebook />}
-                      >
-                        <Notebook />
-                      </Show>
-                    </Suspense>
-
+                <Scroll class="relative portal-scope" ref={setScrollRef}>
+                  <Suspense>
+                    <Show
+                      when={!isInstructionsMd()}
+                      fallback={<InstructionsNotebook />}
+                    >
+                      <Notebook />
+                    </Show>
+                  </Suspense>
                 </Scroll>
-                </div>
               </div>
+            </div>
           </SidePanel.Layout>
         </ModalsProvider>
       </div>
