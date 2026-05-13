@@ -49,7 +49,7 @@ export function CallRecordingSplitHeader(props: {
   const record = props.record;
   const blockId = useBlockId();
   const shareCtx = useShareDialogContext();
-  const callName = () => record().channelName ?? 'Call';
+  const callName = () => record().customName ?? record().channelName ?? 'Call';
   const call = useCall(() => record().channelId);
 
   const tools: BlockTool[] = [
