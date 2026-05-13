@@ -134,19 +134,24 @@ export function NotificationStackRow(props: {
           <div class="shrink-0">
             <NotificationSenderIcon stack={props.stack} size="sm" />
           </div>
-          <span class={cn(
-            'ph-no-capture truncate min-w-0 text-xs text-ink',
-            { 'font-medium': unread() }
-          )}>
+          <span
+            class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
+              'font-medium': unread(),
+            })}
+          >
             <NotificationDescription stack={props.stack} />
           </span>
           <span class="ph-no-capture truncate min-w-0 text-xs text-ink-muted/60 flex-1">
-            {props.content ?? <NotificationContent stack={props.stack} singleLine />}
+            {props.content ?? (
+              <NotificationContent stack={props.stack} singleLine />
+            )}
           </span>
           <div class="shrink-0 ml-auto">
-            <span class={cn('text-ink-extra-muted text-xs tabular-nums', {
-              'group-hover/notif:hidden': canMarkDone(),
-            })}>
+            <span
+              class={cn('text-ink-extra-muted text-xs tabular-nums', {
+                'group-hover/notif:hidden': canMarkDone(),
+              })}
+            >
               <NotificationTimestamp stack={props.stack} />
             </span>
             <Show when={canMarkDone()}>
