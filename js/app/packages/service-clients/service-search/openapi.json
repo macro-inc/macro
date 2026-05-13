@@ -1948,6 +1948,10 @@
             "type": ["boolean", "null"],
             "description": "Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
+          "include_root": {
+            "type": "boolean",
+            "description": "When true, `project_ids` also matches the projects themselves in addition to their children."
+          },
           "notification_filters": {
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by project notification state."
@@ -1964,7 +1968,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects."
+            "description": "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects.\nBy default matches children of these projects; set `include_root` to also match the projects themselves."
           }
         }
       },
