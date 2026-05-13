@@ -14,24 +14,23 @@ interface ToggleButtonProps {
 function ToggleButton(props: ToggleButtonProps) {
   return (
     <Show when={props.hasMore}>
-      <div class="w-full flex items-center gap-2 my-2">
+      <div class="px-3 py-1.5">
         <button
           type="button"
-          class="flex items-center gap-1 text-xs hover:text-accent"
+          class="flex items-center gap-1 text-[0.6875rem] text-ink-muted/70 hover:text-ink-muted"
           data-collapsible-toggle
           data-collapsible-state={props.showAll ? 'expanded' : 'collapsed'}
           onClick={props.toggle}
         >
           <ChevronDownIcon
-            class={cn('size-3 transition-transform duration-100', {
+            class={cn('size-2.5', {
               'rotate-180': props.showAll,
             })}
           />
-          <Show when={!props.showAll} fallback="Collapse">
+          <Show when={!props.showAll} fallback="Show less">
             {props.getExpandTextFn(props.itemsLength - props.visibleCount)}
           </Show>
         </button>
-        <div class="border-t border-edge-muted grow" />
       </div>
     </Show>
   );
