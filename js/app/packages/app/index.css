@@ -1,7 +1,8 @@
 @import "tailwindcss";
 @source '../**/*.tsx';
-@plugin '../../tailwind-plugins/zIndex.ts';
 @source '../../packages/core/component/LexicalMarkdown/theme.ts';
+@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
+@plugin '../../tailwind-plugins/zIndex.ts';
 
 @property --a0l { syntax: "<number>"; inherits: true; initial-value:   0.88; }
 @property --a0c { syntax: "<number>"; inherits: true; initial-value:   0.20; }
@@ -110,7 +111,6 @@
   --transition: 0s;
 }
 
-
 @theme {
   /* Disable default tailwind color palette */
    --color-*: initial;
@@ -205,6 +205,27 @@
   --container-c: 0;
 }
 
+@custom-variant touch (&:where(html[data-touch-device="true"] *));
+
+@custom-variant mobile-width (@media (max-width: 639px));
+
+@custom-variant drop-invalid (&[data-drop-invalid]);
+
+@custom-variant drop-valid (&[data-drop-valid]);
+
+/* `mobile:` is equivalent to `touch:mobile-width:` */
+@custom-variant mobile {
+  &:where(html[data-touch-device="true"] *) {
+    @media (max-width: 639px) {
+      @slot;
+    }
+  }
+}
+
+@custom-variant ios (&:where(.tauri-ios *));
+
+@custom-variant tauri (&:where(.tauri *));
+
 @layer base {
   html {
     overscroll-behavior: none;
@@ -223,7 +244,8 @@
     width: 100dvw;
   }
 
-    /* scuffed: stops text from being selectable by default, important for mobile usage */
+  /* scuffed: stops text from being selectable by default */
+  /* important for mobile usage */
   :where(*, ::before, ::after) {
     user-select: none;
   }
@@ -241,7 +263,48 @@
   }
 }
 
-@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
+@keyframes slideIn {
+  from { transform: translateX(calc(100% + var(--viewport-padding))); }
+  to   { transform: translateX(0                                   ); }
+}
+
+@keyframes swipeOut {
+  from { transform: translateX(var(--kb-toast-swipe-end-x))         ; }
+  to   { transform: translateX(calc(100% + var(--viewport-padding))); }
+}
+
+@keyframes long-press-message-highlight {
+  from {
+    background-color: oklch(from var(--color-accent) l c h / 0%);
+    outline-width: 1px;
+    outline-style: solid;
+    outline-color: transparent;
+    outline-offset: -1px;
+  }
+  to {
+    background-color: oklch(from var(--color-accent) l c h / 5%);
+    outline-width: 1px;
+    outline-style: solid;
+    outline-color: oklch(from var(--color-accent) l c h / 20%);
+    outline-offset: -1px;
+  }
+}
+
+@keyframes typing-dot {
+  0%   { transform: scale(1)   translateY(0   ); }
+  50%  { transform: scale(1.5) translateY(-2px); }
+  100% { transform: scale(1)   translateY(0   ); }
+}
+
+@keyframes long-press-accent-bar {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes hide {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
 
 /* Big hammer fix for cursor pointer. */
 @utility cursor-pointer {
@@ -305,7 +368,9 @@
   font-optical-sizing: auto;
 }
 
-/* Used when you need to use a color defined via transparency, e.g. `accent-bg` in a context where it needs to be opaque, e.g. when it is floating over other elements. Use this with any of our macro colors, e.g. floating-accent-bg */
+/* Used when you need to use a color defined via transparency */
+/* e.g. `accent-bg` in a context where it needs to be opaque */
+/* Use this with any of our macro colors, e.g. floating-accent-bg */
 @utility floating-* {
   background-color: var(--color-surface);
   box-shadow: inset 400px 400px --value(--color-*);
@@ -428,70 +493,6 @@
     mix-blend-mode: color;
   }
 }
-
-@keyframes slideIn {
-  from { transform: translateX(calc(100% + var(--viewport-padding))); }
-  to   { transform: translateX(0                                   ); }
-}
-
-@keyframes swipeOut {
-  from { transform: translateX(var(--kb-toast-swipe-end-x))         ; }
-  to   { transform: translateX(calc(100% + var(--viewport-padding))); }
-}
-
-@keyframes long-press-message-highlight {
-  from {
-    background-color: oklch(from var(--color-accent) l c h / 0%);
-    outline-width: 1px;
-    outline-style: solid;
-    outline-color: transparent;
-    outline-offset: -1px;
-  }
-  to {
-    background-color: oklch(from var(--color-accent) l c h / 5%);
-    outline-width: 1px;
-    outline-style: solid;
-    outline-color: oklch(from var(--color-accent) l c h / 20%);
-    outline-offset: -1px;
-  }
-}
-
-@keyframes typing-dot {
-  0%   { transform: scale(1)   translateY(0   ); }
-  50%  { transform: scale(1.5) translateY(-2px); }
-  100% { transform: scale(1)   translateY(0   ); }
-}
-
-@keyframes long-press-accent-bar {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-
-@keyframes hide {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-
-@custom-variant touch (&:where(html[data-touch-device="true"] *));
-
-@custom-variant mobile-width (@media (max-width: 639px));
-
-@custom-variant drop-invalid (&[data-drop-invalid]);
-
-@custom-variant drop-valid (&[data-drop-valid]);
-
-@custom-variant mobile { /* `mobile:` is equivalent to `touch:mobile-width:` */
-  &:where(html[data-touch-device="true"] *) {
-    @media (max-width: 639px) {
-      @slot;
-    }
-  }
-}
-
-@custom-variant ios (&:where(.tauri-ios *));
-
-@custom-variant tauri (&:where(.tauri *));
 
 /* Hide Kobalte's popper positioner until floating-UI has computed the position. */
 /* Without this, the card briefly appears at top:0 left:0 on first open. */
