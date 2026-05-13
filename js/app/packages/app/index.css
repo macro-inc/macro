@@ -129,7 +129,7 @@
   --color-task:        oklch(from var(--a0) l c 150deg);
   --color-calendar:    oklch(0.8159 0.2849 98.77);
   --color-contact:     oklch(0.8617 0.1837 93.83);
-  --color-email:       var(--theme-email);
+  --color-email:       var(--c1);
   --color-default:     var(--c1);
 
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */

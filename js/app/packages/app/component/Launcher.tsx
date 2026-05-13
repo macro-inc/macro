@@ -393,7 +393,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
           ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-surface ring ring-edge-muted transition-transform ease-click duration-200 rounded-sm',
           `create-menu-${props.creatableBlock.label.toLowerCase()}`,
           {
-            '-translate-y-2 text-ink bg-active': props.focused,
+            '-translate-y-2 text-ink': props.focused,
             'text-ink-extra-muted': !props.focused,
           }
         )}
@@ -408,16 +408,16 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       >
         <div
           class={cn(
-            'absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color',
+            'absolute size-full inset-0 transition-transform origin-top ease duration-200',
             getIconConfig(props.creatableBlock.blockName).background,
             {
-              'scale-y-0': !props.focused,
-              'scale-y-100': props.focused,
+              'opacity-0': !props.focused,
+              'opacity-20': props.focused,
             }
           )}
         ></div>
 
-        <div class="absolute top-1.5 left-2 z-user-highlight p-1 px-1.5 bg-surface text-ink border border-edge-muted rounded-xs text-xs">
+        <div class="absolute top-1.5 left-2 z-user-highlight p-1 px-1.5 text-ink border border-edge-muted rounded-xs text-xs">
           <Hotkey token={props.creatableBlock.hotkeyToken} />
         </div>
 
@@ -450,8 +450,8 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
             when={ENABLE_ANIMATED_ICONS && AnimatedIcon}
             fallback={<Dynamic component={StaticIcon} />}
           >
-            {(Icon) => (
-              <Dynamic component={Icon()} triggerAnimation={props.focused} />
+            {(icon) => (
+              <Dynamic component={icon()} triggerAnimation={props.focused} />
             )}
           </Show>
         </div>
