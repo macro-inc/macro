@@ -13,7 +13,7 @@ export type VideoPreviewProps = {
 
 const CONTAINER_THEMES = {
   small:
-    'size-15 overflow-hidden rounded-2xl border border-edge-muted bg-menu select-none',
+    'size-15 overflow-hidden rounded-2xl border border-edge-muted bg-surface select-none',
   dynamic: 'flex min-h-20 max-w-[480px] max-h-[480px] not-first:mt-2',
 };
 

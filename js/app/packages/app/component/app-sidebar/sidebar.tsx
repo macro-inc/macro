@@ -556,7 +556,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           </div>
           <div class="grow shrink-10 min-w-0" />
           <Button
-            class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-page [&_svg]:size-4"
+            class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-surface [&_svg]:size-4"
             onClick={() => handleSidebarOpenChange(!isExpanded())}
             onMouseEnter={() => setSidebarBtnHovering(true)}
             onMouseLeave={() => setSidebarBtnHovering(false)}

@@ -101,7 +101,7 @@ export const MiniToggleSwitch: Component<
             aria-hidden
           >
             <div
-              class="absolute top-0.5 rounded-full bg-panel transition-transform duration-200 ease-click"
+              class="absolute top-0.5 rounded-full bg-surface transition-transform duration-200 ease-click"
               classList={{
                 'size-2 touch:size-7': !props.compact,
                 'size-1.5': !!props.compact,

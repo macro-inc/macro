@@ -7,7 +7,7 @@ import { type Component, Show } from 'solid-js';
 export function inCallAvatarPlaceholderClasses(size: UserIconProps['size']) {
   const s = size ?? 'sm';
   const container = cn(
-    'flex shrink-0 items-center justify-center rounded-full bg-ink-extra-muted text-panel leading-none',
+    'flex shrink-0 items-center justify-center rounded-full bg-ink-extra-muted text-surface leading-none',
     s === 'sm' && 'size-4',
     s === 'md' && 'size-6',
     s === 'lg' && 'size-10',

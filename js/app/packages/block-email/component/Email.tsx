@@ -484,7 +484,7 @@ function EmailContent(props: EmailViewProps) {
                 onRecipientsChange: context.onRecipientsChange,
               }}
             >
-              <div class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
+              <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col">
                 <TopBar
                   id={props.threadId()}
                   title={props.title}
@@ -531,7 +531,7 @@ function EmailContent(props: EmailViewProps) {
                 >
                   {(info) => (
                     <div class="shrink-0 w-full pb-2">
-                      <div class="relative w-full flex flex-row justify-center bg-panel macro-message-width macro-message-padding mx-auto">
+                      <div class="relative w-full flex flex-row justify-center bg-surface macro-message-width macro-message-padding mx-auto">
                         <FloatingInputLoader
                           isLoading={context.query.isFetching}
                           loadingText="Loading messages"

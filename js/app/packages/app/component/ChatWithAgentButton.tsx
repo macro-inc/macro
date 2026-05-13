@@ -96,7 +96,7 @@ export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
       onMouseLeave={() => setHovering(false)}
       onClick={() => openChatWithAgent(props.entity)}
       depth={2}
-      class="bg-panel text-ink-muted"
+      class="bg-surface text-ink-muted"
     >
       <AnimatedStarIcon triggerAnimation={hovering()} />
       <span class="text-xs">Chat</span>

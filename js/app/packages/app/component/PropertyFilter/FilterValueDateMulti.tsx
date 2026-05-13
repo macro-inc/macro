@@ -56,13 +56,13 @@ export const FilterValueDateMulti: Component<FilterValueDateMultiProps> = (
       {/* Selected date pills */}
       <For each={props.values}>
         {(dateStr) => (
-          <div class="group relative h-6 px-1.5 text-xxs text-ink border border-edge bg-panel font-mono flex items-center">
+          <div class="group relative h-6 px-1.5 text-xxs text-ink border border-edge bg-surface font-mono flex items-center">
             <span class="whitespace-nowrap">{formatDisplayDate(dateStr)}</span>
             {/* X shows on hover, overlays the text */}
             <button
               type="button"
               onClick={() => handleRemoveDate(dateStr)}
-              class="absolute inset-0 flex items-center justify-end pr-1 bg-linear-to-l from-panel via-panel to-transparent opacity-0 group-hover:opacity-100 hover:text-failure-ink"
+              class="absolute inset-0 flex items-center justify-end pr-1 bg-linear-to-l from-surface via-surface to-transparent opacity-0 group-hover:opacity-100 hover:text-failure-ink"
             >
               <XIcon class="size-3" />
             </button>

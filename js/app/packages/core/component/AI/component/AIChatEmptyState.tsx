@@ -26,7 +26,7 @@ export function AiChatEmptyState() {
         <div class="grid gap-3">
           <For each={CLI_COMMANDS}>
             {(item) => (
-              <div class="overflow-hidden rounded-md border border-edge-muted bg-input/70">
+              <div class="overflow-hidden rounded-md border border-edge-muted bg-surface/70">
                 <div class="flex items-center justify-between gap-3 border-b border-edge-muted px-4 py-2">
                   <span class="text-sm text-ink-muted">{item.label}</span>
                   <Button
@@ -56,7 +56,7 @@ export function AiChatEmptyState() {
           </For>
         </div>
 
-        <div class="overflow-hidden rounded-md border border-edge-muted bg-input/70">
+        <div class="overflow-hidden rounded-md border border-edge-muted bg-surface/70">
           <div class="flex items-center justify-between gap-3 border-b border-edge-muted px-4 py-2">
             <span class="text-sm text-ink-muted">
               Or configure in your favorite IDE

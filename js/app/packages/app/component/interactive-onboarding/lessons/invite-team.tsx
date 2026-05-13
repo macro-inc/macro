@@ -268,7 +268,7 @@ function InviteTeamDemo(props: LessonContentProps) {
             disabled={false}
             aria-describedby="team-name-counter"
             class={cn(
-              'w-[calc(100%-36px)] px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
+              'w-[calc(100%-36px)] px-3 py-2 text-base rounded-xs border bg-surface text-ink placeholder:text-ink/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
               errors().teamName
                 ? 'border-failure focus-visible:ring-failure'
                 : 'border-edge focus-visible:ring-accent',
@@ -322,7 +322,7 @@ function InviteTeamDemo(props: LessonContentProps) {
                       aria-describedby="invite-members-description"
                       aria-invalid={!!errors().emails?.[index]}
                       class={cn(
-                        'flex-1 px-3 py-2 text-base rounded-xs border bg-panel text-ink placeholder:text-ink/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-panel',
+                        'flex-1 px-3 py-2 text-base rounded-xs border bg-surface text-ink placeholder:text-ink/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
                         errors().emails?.[index]
                           ? 'border-failure focus-visible:ring-failure'
                           : 'border-edge focus-visible:ring-accent',
@@ -334,7 +334,7 @@ function InviteTeamDemo(props: LessonContentProps) {
                         value={entry().tier}
                         onChange={(tier) => updateTier(index, tier)}
                         disabled={false}
-                        triggerClass="flex items-center justify-between gap-1 w-28 px-3 py-2 text-base border border-edge rounded-xs bg-panel text-ink outline-none shrink-0 hover:bg-ink/5 data-[expanded]:bg-ink/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel [&>svg]:data-[expanded]:rotate-180 [&>svg]:transition-transform"
+                        triggerClass="flex items-center justify-between gap-1 w-28 px-3 py-2 text-base border border-edge rounded-xs bg-surface text-ink outline-none shrink-0 hover:bg-ink/5 data-[expanded]:bg-ink/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface [&>svg]:data-[expanded]:rotate-180 [&>svg]:transition-transform"
                       />
                     </Show>
                     <Tooltip
@@ -355,7 +355,7 @@ function InviteTeamDemo(props: LessonContentProps) {
                             : 'Clear email'
                         }
                         class={cn(
-                          'shrink-0 p-1.5 text-ink/40 hover:text-ink hover:bg-ink/5 rounded-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel'
+                          'shrink-0 p-1.5 text-ink/40 hover:text-ink hover:bg-ink/5 rounded-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface'
                         )}
                       >
                         <Show
@@ -382,7 +382,7 @@ function InviteTeamDemo(props: LessonContentProps) {
             disabled={!canAddEmail()}
             aria-label="Add another email invite"
             class={cn(
-              'mx-2 flex items-center gap-2 px-3 py-2 text-sm rounded-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-panel shrink-0',
+              'mx-2 flex items-center gap-2 px-3 py-2 text-sm rounded-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface shrink-0',
               canAddEmail()
                 ? 'text-ink bg-ink/8 hover:bg-ink/12'
                 : 'text-ink/30 bg-ink/4 cursor-not-allowed'

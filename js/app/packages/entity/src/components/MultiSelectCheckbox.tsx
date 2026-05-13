@@ -36,7 +36,7 @@ export function MultiSelectCheckbox(props: MultiSelectCheckboxProps) {
         )}
       >
         <Show when={props.checked}>
-          <CheckIcon class="size-full text-panel" />
+          <CheckIcon class="size-full text-surface" />
         </Show>
       </div>
     </button>

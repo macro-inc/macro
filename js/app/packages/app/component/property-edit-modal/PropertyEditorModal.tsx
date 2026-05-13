@@ -152,7 +152,7 @@ export function PropertyEditorModal() {
       <Surface depth={2} active>
         <div class="*:max-h-[75vh]">
           <div class="flex flex-col max-h-108 overflow-hidden text-sm">
-            <div class="flex items-center gap-2 bg-panel px-2 h-10 border-b border-edge-muted shrink-0">
+            <div class="flex items-center gap-2 bg-surface px-2 h-10 border-b border-edge-muted shrink-0">
               <span class="pl-2 pointer-events-none">❯</span>
               <SearchInput
                 placeHolder={placeholder() || defaultPlaceholder}

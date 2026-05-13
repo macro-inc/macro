@@ -379,7 +379,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay items-center justify-center" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center bg-transparent">
           <Dialog.Content class="relative max-w-[65%] max-h-[80vh] flex items-center justify-center">
-            <div class="absolute bg-dialog top-2 right-2 flex flex-row">
+            <div class="absolute bg-surface top-2 right-2 flex flex-row">
               <Dialog.CloseButton>
                 <Button variant="ghost" size="icon-md">
                   <XIcon />

@@ -27,7 +27,7 @@ export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
 
   return (
     <div class="flex flex-col size-full p-6 overflow-hidden relative">
-      <div class="inset-0 absolute text-edge bg-panel opacity-10 -z-1">
+      <div class="inset-0 absolute text-edge bg-surface opacity-10 -z-1">
         <PcNoiseGrid
           cellSize={30}
           warp={0}
@@ -62,11 +62,11 @@ export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
             placeholder="name@company.com"
             value={email()}
             onInput={(e) => setEmail(e.currentTarget.value)}
-            class="w-full px-3 py-2.5 text-base border border-edge-muted rounded-xs bg-panel text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+            class="w-full px-3 py-2.5 text-base border border-edge-muted rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
           />
           <button
             type="submit"
-            class="w-full px-3 py-2.5 text-lg font-bold rounded-xs bg-accent text-panel border-none"
+            class="w-full px-3 py-2.5 text-lg font-bold rounded-xs bg-accent text-surface border-none"
           >
             Sign Up
           </button>

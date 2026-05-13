@@ -147,7 +147,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     >
       {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
       <div
-        class="relative w-full flex items-center justify-between shrink-0 h-10 bg-panel px-2 border-b border-edge-muted"
+        class="relative w-full flex items-center justify-between shrink-0 h-10 bg-surface px-2 border-b border-edge-muted"
         data-preview-split-toolbar
       >
         <div

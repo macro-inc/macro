@@ -146,7 +146,7 @@ export function MobileSearchInner() {
   };
 
   return (
-    <div class="flex flex-col h-full bg-panel">
+    <div class="flex flex-col h-full bg-surface">
       <ResultsContainer
         nameMatchItems={filteredItems()}
         fullTextItems={fullTextResults()}
@@ -164,7 +164,7 @@ export function MobileSearchInner() {
         <CategoryFilterTabs />
       </Show>
       {/* Search Input */}
-      <div class="flex items-center gap-2 bg-page px-2 border-t border-edge-muted">
+      <div class="flex items-center gap-2 bg-surface px-2 border-t border-edge-muted">
         <button
           class="text-ink-muted flex flex-col items-center justify-center pl-2 pt-3 pb-2"
           onClick={handleBack}
@@ -218,7 +218,7 @@ function ResultsContainer(props: {
   };
 
   return (
-    <div class="flex-1 min-h-0 bg-panel" ref={ref}>
+    <div class="flex-1 min-h-0 bg-surface" ref={ref}>
       <Switch>
         <Match when={props.isLoading?.()}>
           <div class="flex items-center gap-2 text-ink-muted h-10 px-2">
@@ -379,7 +379,7 @@ function FullTextResultItem(props: {
 
 function CategoryFilterTabs() {
   return (
-    <div class="bg-panel border-t border-edge-muted h-11 px-1 overflow-x-auto scrollbar-hidden">
+    <div class="bg-surface border-t border-edge-muted h-11 px-1 overflow-x-auto scrollbar-hidden">
       <Tabs
         list={CATEGORIES.map((c) => ({ value: c.id, label: c.label }))}
         value={SearchState.categoryFilter()}

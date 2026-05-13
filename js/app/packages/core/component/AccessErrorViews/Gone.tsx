@@ -12,7 +12,7 @@ export default function Gone() {
       <p class="text-ink-muted text-center max-w-xs">
         Whoops! It looks like the file was not successfully uploaded.
       </p>
-      <span class="text-accent-ink">410</span>
+      <span class="text-accent">410</span>
     </div>
   );
 }

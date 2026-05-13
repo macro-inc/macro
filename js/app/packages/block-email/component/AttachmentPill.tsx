@@ -49,7 +49,7 @@ export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
             if (props.onRemove) props.onRemove();
           }}
           onPointerEnter={() => {
-            parentDiv.style.backgroundColor = 'var(--color-panel)';
+            parentDiv.style.backgroundColor = 'var(--color-surface)';
           }}
           onPointerLeave={() => {
             parentDiv.style.backgroundColor = '';

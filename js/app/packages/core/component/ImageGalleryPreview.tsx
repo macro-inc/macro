@@ -57,7 +57,7 @@ function GalleryImagePlaceholder(props: {
 }) {
   return (
     <div
-      class="flex items-center justify-center border border-edge rounded-2xl bg-menu"
+      class="flex items-center justify-center border border-edge rounded-2xl bg-surface"
       style={
         props.dims
           ? {
@@ -132,7 +132,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
             <div class={props.variant === 'dynamic' ? 'max-w-50 w-fit' : ''}>
               <div class="flex group relative">
                 <Show when={props.variant !== 'small'}>
-                  <div class="group-hover:visible invisible absolute top-2 right-2 bg-button rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">
+                  <div class="group-hover:visible invisible absolute top-2 right-2 bg-surface rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">
                     <Dialog.Trigger
                       onClick={() => setClickedIndex(index())}
                       disabled={props.isContext}

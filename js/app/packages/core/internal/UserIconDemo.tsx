@@ -41,7 +41,7 @@ function SizeLabel(props: { size: string }) {
 
 export default function UserIconDemo() {
   return (
-    <div class="p-8 space-y-12 bg-panel min-h-full overflow-auto">
+    <div class="p-8 space-y-12 bg-surface min-h-full overflow-auto">
       <div>
         <h1 class="text-xl font-bold text-ink mb-2">
           UserIcon & UserGroup Demo

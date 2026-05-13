@@ -187,7 +187,7 @@ function ShareSheetHeaderActions(props: {
 
 function ShareSheetComposerError(_props: { error: unknown }) {
   return (
-    <div class="macro-message-width flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-[5px] border border-edge-muted bg-input px-4 py-6 text-center">
+    <div class="macro-message-width flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-[5px] border border-edge-muted bg-surface px-4 py-6 text-center">
       <p class="text-sm text-ink">Couldn&apos;t load the composer.</p>
       <p class="text-xs text-ink-muted">
         Close the sheet and try sharing again.

@@ -150,7 +150,7 @@ function formatViolations(
   }
 
   console.log('💡 Tip: Replace these with semantic classes.');
-  console.log('   Example: bg-red-500 → bg-failure, bg-white → bg-dialog, font-berkely → font-mono, etc');
+  console.log('   Example: bg-red-500 → bg-failure, bg-white → bg-surface, font-berkely → font-mono, etc');
 }
 
 async function main(): Promise<void> {

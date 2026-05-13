@@ -96,7 +96,7 @@ export const SegmentedControl: ParentComponent<
                     class="flex justify-center items-center border border-ink p-1 font-bold uppercase font-mono text-[11px]"
                     classList={{
                       // [`${sizeClass[props.size || 'Base']}`]: true,
-                      'bg-ink text-panel': value() === item,
+                      'bg-ink text-surface': value() === item,
                       'text-ink': value() !== item,
                       [`${props.itemLabelClass}`]: !!props.itemLabelClass,
                       // 'animate-[flicker_50ms_2]': showFlicker(),

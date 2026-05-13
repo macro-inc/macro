@@ -93,7 +93,7 @@ export const InviteModal = () => {
               value={value()}
               onInput={(e) => setValue(e.currentTarget.value)}
               rows={4}
-              class="w-full px-3 py-2 text-sm/relaxed border border-edge-muted rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none focus:border-accent/50 resize-none"
+              class="w-full px-3 py-2 text-sm/relaxed border border-edge-muted rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent/50 resize-none"
             />
           </div>
 
@@ -124,7 +124,7 @@ export const InviteModal = () => {
                     type="text"
                     readOnly
                     value={url()}
-                    class="flex-1 px-3 py-1.5 text-xs border border-edge-muted rounded-xs bg-input text-ink/70 outline-none select-all"
+                    class="flex-1 px-3 py-1.5 text-xs border border-edge-muted rounded-xs bg-surface text-ink/70 outline-none select-all"
                     onClick={(e) => e.currentTarget.select()}
                   />
                   <Button

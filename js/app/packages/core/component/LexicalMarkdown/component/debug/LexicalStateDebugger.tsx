@@ -328,7 +328,7 @@ export function LexicalStateDebugger(props: { state: EditorState }) {
     <Show when={blockElement()}>
       <Portal mount={blockElement()}>
         <div
-          class="absolute font-mono bottom-6 right-6 size-1/2 p-2 text-ink bg-panel text-xs rounded-sm border border-edge opacity-95 z-30 flex flex-col space-y-1"
+          class="absolute font-mono bottom-6 right-6 size-1/2 p-2 text-ink bg-surface text-xs rounded-sm border border-edge opacity-95 z-30 flex flex-col space-y-1"
           classList={{
             'size-12 overflow-hidden overflow-y-hidden': collapsed(),
           }}
@@ -337,7 +337,7 @@ export function LexicalStateDebugger(props: { state: EditorState }) {
           }}
         >
           <div
-            class="top-2 left-2 size-4 flex items-center justify-center bg-panel rounded-sm shadow-sm"
+            class="top-2 left-2 size-4 flex items-center justify-center bg-surface rounded-sm shadow-sm"
             role="button"
             onClick={() => {
               setCollapsed((prev) => !prev);
@@ -352,7 +352,7 @@ export function LexicalStateDebugger(props: { state: EditorState }) {
             </Show>
           </div>
           <Show when={!collapsed()}>
-            <div class="overflow-y-auto h-full bg-panel rounded-sm border-edge border select-children">
+            <div class="overflow-y-auto h-full bg-surface rounded-sm border-edge border select-children">
               <For each={state().nodeList}>
                 {(node) => {
                   return (

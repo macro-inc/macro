@@ -48,11 +48,11 @@ function ErrorMessage(props: {
   const bottomMargin = !tooSmall() ? 8 : 0;
   const textColor = 'text-ink';
   const visibilityScreen =
-    'w-full h-full bg-menu/50 flex flex-col items-center justify-center';
+    'w-full h-full bg-surface/50 flex flex-col items-center justify-center';
 
   return (
     <div
-      class="flex flex-col size-full text-center bg-menu/40 rounded border border-dashed border-edge items-center justify-center"
+      class="flex flex-col size-full text-center bg-surface/40 rounded border border-dashed border-edge items-center justify-center"
       style={{
         'border-radius': getBorderRadius(props.node),
         'font-size': TOOLTIP_FONTSIZE / currentScale() + 'px',
@@ -70,7 +70,7 @@ function ErrorMessage(props: {
           <div class={visibilityScreen}>
             <LockKey
               width={iconSize / currentScale() + 'px'}
-              class="fill-ink bg-menu rounded-full"
+              class="fill-ink bg-surface rounded-full"
               style={{
                 'margin-bottom': bottomMargin / currentScale() + 'px',
               }}
@@ -87,7 +87,7 @@ function ErrorMessage(props: {
           <div class={visibilityScreen}>
             <Question
               width={iconSize / currentScale() + 'px'}
-              class="fill-ink bg-menu rounded-full"
+              class="fill-ink bg-surface rounded-full"
               style={{
                 'margin-bottom': bottomMargin / currentScale() + 'px',
               }}
@@ -101,7 +101,7 @@ function ErrorMessage(props: {
           <div class={visibilityScreen}>
             <Question
               width={iconSize / currentScale() + 'px'}
-              class="fill-ink bg-menu rounded-full"
+              class="fill-ink bg-surface rounded-full"
               style={{
                 'margin-bottom': bottomMargin / currentScale() + 'px',
               }}
@@ -330,7 +330,7 @@ export function DSSMedia(props: { node: MediaNode; mode: RenderMode }) {
               <div class="absolute top-1/2 left-1/2 -translate-1/2 z-10 flex pointer-events-auto cursor-auto">
                 <div
                   onPointerDown={handleVideoRewind}
-                  class="text-panel bg-edge rounded-full flex items-center justify-center"
+                  class="text-surface bg-edge rounded-full flex items-center justify-center"
                   style={{
                     'margin-right': 10 / currentScale() + 'px',
                     ...size(),
@@ -340,7 +340,7 @@ export function DSSMedia(props: { node: MediaNode; mode: RenderMode }) {
                 </div>
                 <div
                   onPointerDown={handleVideoClick}
-                  class="text-panel bg-edge rounded-full flex items-center justify-center"
+                  class="text-surface bg-edge rounded-full flex items-center justify-center"
                   style={size()}
                 >
                   {controlIcon}

@@ -1299,7 +1299,7 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 bg-input border border-edge rounded-md max-w-full"
+      class="relative flex flex-col flex-1 bg-surface border border-edge rounded-md max-w-full"
     >
       {/* Top Bar */}
       <div class="relative flex items-start gap-2 p-2">
@@ -1745,7 +1745,7 @@ export function BaseInput(props: {
                 }
               >
                 <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                  <ArrowUp class="group-hover:text-input! group-hover:fill-input! text-accent-ink! fill-accent! size-4 transition ease-in-out" />
+                  <ArrowUp class="group-hover:text-surface! group-hover:fill-surface! text-accent! fill-accent! size-4 transition ease-in-out" />
                 </div>
               </Show>
             </button>

@@ -94,7 +94,7 @@ function FloatingContent(props: {
       ref={ref}
       style={{ position: 'fixed', left: `${pos().x}px`, top: `${pos().y}px` }}
       class={cn(
-        'bg-menu w-fit p-1 border border-edge-muted rounded-xs shadow z-highlight-menu',
+        'bg-surface w-fit p-1 border border-edge-muted rounded-xs shadow z-highlight-menu',
         props.class
       )}
     >

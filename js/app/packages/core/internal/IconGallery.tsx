@@ -204,7 +204,7 @@ export default function IconGallery() {
   };
 
   return (
-    <div class="size-full overflow-auto bg-panel p-8 font-mono">
+    <div class="size-full overflow-auto bg-surface p-8 font-mono">
       <style>{`
         .icon-gallery-slider {
           -webkit-appearance: none;

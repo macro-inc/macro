@@ -117,7 +117,7 @@ export const Dropdown = <T extends string | number>(
         ref={buttonRef}
         type="button"
         onClick={() => setIsOpen(!isOpen())}
-        class="w-full p-1.5 border border-edge-muted bg-input text-sm text-ink text-left flex items-center gap-2 hover:bg-hover rounded-sm"
+        class="w-full p-1.5 border border-edge-muted bg-surface text-sm text-ink text-left flex items-center gap-2 hover:bg-hover rounded-sm"
       >
         {props.renderValue?.(selectedOption()) ??
           defaultRenderValue(selectedOption())}
@@ -128,7 +128,7 @@ export const Dropdown = <T extends string | number>(
           <Layer depth={2}>
             <div
               ref={menuRef}
-              class="z-toast-region border border-edge bg-menu shadow-lg max-h-64 overflow-y-auto p-1"
+              class="z-toast-region border border-edge bg-surface shadow-lg max-h-64 overflow-y-auto p-1"
               style={getMenuStyle()}
             >
               <For each={props.options}>

@@ -96,7 +96,7 @@ export function UnfurledLinkCollection(props: UnfurledLinkCollection) {
                     : ''}
                 </p>
                 <Show when={props.links.length > 1}>
-                  <p class="font-medium text-accent-ink">
+                  <p class="font-medium text-accent">
                     +{props.links.length - 1} More
                   </p>
                 </Show>

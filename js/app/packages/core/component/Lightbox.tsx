@@ -267,7 +267,7 @@ export function Lightbox(props: LightboxProps) {
   });
 
   const navButtonClass =
-    'absolute top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300 disabled:cursor-not-allowed disabled:opacity-50';
+    'absolute top-1/2 -translate-y-1/2 bg-surface backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-surface transition-opacity duration-300 disabled:cursor-not-allowed disabled:opacity-50';
 
   const navVisible = () => true;
 
@@ -281,7 +281,7 @@ export function Lightbox(props: LightboxProps) {
         'margin-right': 'max(var(--safe-right), 0.5rem)',
       }}
     >
-      <Dialog.Content class="flex items-center justify-center bg-panel">
+      <Dialog.Content class="flex items-center justify-center bg-surface">
         {/* Toolbar */}
         <LightboxToolbar isVisible={true}>
           <Button
@@ -346,7 +346,7 @@ export function Lightbox(props: LightboxProps) {
         <Show when={props.indexLabel}>
           <div
             class={cn(
-              'absolute top-4 left-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge px-3 py-1.5 shadow-md transition-opacity duration-300',
+              'absolute top-4 left-4 bg-surface backdrop-blur-sm rounded-lg border border-edge px-3 py-1.5 shadow-md transition-opacity duration-300',
               navVisible() ? 'opacity-100' : 'opacity-0 pointer-events-none'
             )}
             style={{ 'z-index': stackingContext.zModal + 1 }}
@@ -362,7 +362,7 @@ export function Lightbox(props: LightboxProps) {
           <Show
             when={props.src()}
             fallback={
-              <div class="flex flex-col items-center justify-center gap-2 size-15 border border-edge rounded-md bg-menu">
+              <div class="flex flex-col items-center justify-center gap-2 size-15 border border-edge rounded-md bg-surface">
                 <Spinner class="size-4 animate-spin" />
               </div>
             }
@@ -401,7 +401,7 @@ type LightboxToolbarProps = {
 export function LightboxToolbar(props: LightboxToolbarProps) {
   return (
     <div
-      class="absolute top-4 right-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
+      class="absolute top-4 right-4 bg-surface backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
       classList={{
         'opacity-100': isMobile() || props.isVisible,
         'opacity-0 pointer-events-none': !isMobile() && !props.isVisible,

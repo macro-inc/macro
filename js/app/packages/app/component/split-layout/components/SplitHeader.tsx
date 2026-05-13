@@ -169,8 +169,8 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
       data-split-header
       ref={props.ref}
     >
-      <div class="absolute inset-0 flex justify-start items-center bg-panel">
-        <div class="z-annotation-layer relative flex items-center bg-panel pl-2 mobile:pl-0 h-full">
+      <div class="absolute inset-0 flex justify-start items-center bg-surface">
+        <div class="z-annotation-layer relative flex items-center bg-surface pl-2 mobile:pl-0 h-full">
           <div class="mobile:hidden">
             <SplitCloseButton />
           </div>

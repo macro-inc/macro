@@ -14,17 +14,17 @@ export function HoverButtonWrapper(props: ButtonWrapperProps) {
   return (
     <button
       class={cn(
-        props.showOnHover ? 'hidden' : 'ring-1 ring-edge bg-button',
+        props.showOnHover ? 'hidden' : 'ring-1 ring-edge bg-surface',
         ICON_SIZES[props.size ?? 'sm'],
         'flex flex-none',
         props.size === 'sm' ? 'p-px' : 'p-1.5',
         'rounded-full justify-center items-center',
         'text-ink-muted',
         'transition-scale duration-200',
-        'hover:text-ink hover:scale-105 hover:bg-panel hover-transition-bg',
-        'group-hover/item:flex group-hover/item:bg-panel/50 group-hover/item:ring-1',
+        'hover:text-ink hover:scale-105 hover:bg-surface hover-transition-bg',
+        'group-hover/item:flex group-hover/item:bg-surface/50 group-hover/item:ring-1',
         'group-hover/item:ring-edge group-hover/item:shadow',
-        'group-focus-within/item:flex group-focus-within/item:bg-panel/50 group-focus-within/item:ring-1',
+        'group-focus-within/item:flex group-focus-within/item:bg-surface/50 group-focus-within/item:ring-1',
         'group-focus-within/item:ring-edge group-focus-within/item:shadow',
         props.class
       )}

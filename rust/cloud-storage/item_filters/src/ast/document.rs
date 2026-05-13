@@ -102,7 +102,8 @@ fn expand_file_association(association: FileAssociation) -> impl Iterator<Item =
 /// not pdf,
 /// not md,
 /// not canvas,
-/// not code
+/// not code,
+/// not video
 /// yes this is kinda weird
 fn other(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
     tag("other")
@@ -116,6 +117,7 @@ fn other(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
                         | FileAssociation::Md(_)
                         | FileAssociation::Canvas(_)
                         | FileAssociation::Code(_)
+                        | FileAssociation::Video(_)
                 )
             })
         })

@@ -37,7 +37,7 @@ export function ParticipantsAddPanel(props: {
 
   return (
     <div class="flex flex-col gap-2 md:flex-row md:items-center">
-      <div class="min-w-0 flex-1 rounded-xs border border-edge-muted bg-input px-3 py-2 text-sm text-ink outline-none focus-within:border-accent/50">
+      <div class="min-w-0 flex-1 rounded-xs border border-edge-muted bg-surface px-3 py-2 text-sm text-ink outline-none focus-within:border-accent/50">
         <RecipientSelector<'user'>
           setSelectedOptions={setSelectedUsers}
           selectedOptions={selectedUsers()}
@@ -51,7 +51,7 @@ export function ParticipantsAddPanel(props: {
         type="button"
         disabled={selectedUsers().length === 0}
         onClick={handleAddParticipants}
-        class="w-full shrink-0 rounded-xs bg-accent px-3 py-1.5 text-sm font-medium text-menu transition-colors hover:bg-accent/90 disabled:opacity-50 md:w-auto"
+        class="w-full shrink-0 rounded-xs bg-accent px-3 py-1.5 text-sm font-medium text-surface transition-colors hover:bg-accent/90 disabled:opacity-50 md:w-auto"
       >
         {selectedUsers().length > 1 ? 'Add Participants' : 'Add Participant'}
       </button>

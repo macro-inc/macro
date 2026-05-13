@@ -74,7 +74,7 @@ function CornerHandle(props: {
   const select = useSelect();
   return (
     <div
-      class="absolute border-accent bg-panel"
+      class="absolute border-accent bg-surface"
       style={{
         cursor: cornerToCursor(props.corner),
         width: safeSize() + 'px',

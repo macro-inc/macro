@@ -187,7 +187,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               onClick={() => sendMessage({ modelOverride: 'claude-opus-4-6' })}
             >
               <div class="group hover:bg-accent transition ease-in-out size-6 p-0.5 border border-accent rounded-full flex items-center justify-center">
-                <ArrowUp class="group-hover:text-input! group-hover:fill-input! text-accent-ink! fill-accent! size-4 transition ease-in-out" />
+                <ArrowUp class="group-hover:text-surface! group-hover:fill-surface! text-accent! fill-accent! size-4 transition ease-in-out" />
               </div>
             </Button>
           </Show>

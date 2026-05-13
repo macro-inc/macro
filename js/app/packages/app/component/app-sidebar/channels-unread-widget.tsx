@@ -215,7 +215,7 @@ function ChannelGroupItem(props: {
           />
         </Show>
         <Show when={isSlim()}>
-          <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full ring-page ring-2" />
+          <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full ring-surface ring-2" />
         </Show>
       </div>
 

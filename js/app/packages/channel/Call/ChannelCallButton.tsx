@@ -48,7 +48,7 @@ export function ChannelCallButton(props: { channelId: string }) {
       tooltip={tooltip()}
       class={
         isHighlighted()
-          ? 'px-1 bg-accent/20 hover:bg-accent/30 text-accent-ink'
+          ? 'px-1 bg-accent/20 hover:bg-accent/30 text-accent'
           : 'px-1'
       }
       size={isTouchDevice() ? 'icon-md' : 'icon-sm'}

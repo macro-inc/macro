@@ -168,7 +168,7 @@ export function ToolBar() {
 
   return (
     <ScopedPortal scope="block">
-      <div class="absolute left-1/2 bottom-2 flex flex-row p-1 bg-menu border border-edge -translate-x-1/2">
+      <div class="absolute left-1/2 bottom-2 flex flex-row p-1 bg-surface border border-edge -translate-x-1/2">
         <div
           class={cn(
             'flex flex-row items-center space-x-2',

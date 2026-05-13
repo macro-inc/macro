@@ -137,7 +137,7 @@ export class InternalPDFViewer {
     this._interceptLinks = popupViewer != null;
     this._popupViewer = popupViewer;
     const container = document.createElement('div');
-    container.className = 'pdfViewerContainer bg-panel';
+    container.className = 'pdfViewerContainer bg-surface';
     container.tabIndex = 0;
     const viewerDiv = document.createElement('div');
     viewerDiv.className = 'pdfViewer';

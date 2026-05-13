@@ -168,7 +168,7 @@ export default function SvgNoiseGridDemo() {
         center={<div></div>}
       ></Bar>
       <div class="flex size-full">
-        <div class="flex-1 relative bg-panel flex items-center justify-center">
+        <div class="flex-1 relative bg-surface flex items-center justify-center">
           <div class="size-64 flex items-center justify-center border border-edge">
             <div
               id="svg-preview"
@@ -179,7 +179,7 @@ export default function SvgNoiseGridDemo() {
           </div>
         </div>
 
-        <div class="w-[50%] max-w-lg bg-panel p-4 overflow-y-auto border-l border-edge border-dashed">
+        <div class="w-[50%] max-w-lg bg-surface p-4 overflow-y-auto border-l border-edge border-dashed">
           <h2 class="font-mono mb-6">SVG Noise Grid Generator</h2>
 
           <div class="space-y-6">
@@ -254,14 +254,14 @@ export default function SvgNoiseGridDemo() {
           <div class="mt-8 space-y-3">
             <button
               onClick={downloadSvg}
-              class="w-full px-4 py-2 bg-ink-extra-muted text-page font-medium"
+              class="w-full px-4 py-2 bg-ink-extra-muted text-surface font-medium"
             >
               Download SVG
             </button>
 
             <button
               onClick={() => navigator.clipboard.writeText(generateSvg())}
-              class="w-full px-4 py-2 bg-ink-extra-muted text-page font-medium"
+              class="w-full px-4 py-2 bg-ink-extra-muted text-surface font-medium"
             >
               Copy SVG Code
             </button>

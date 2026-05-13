@@ -16,14 +16,14 @@ const mono = [
 ].join(', ');
 
 const base = {
-  bg: 'var(--color-page)',
+  bg: 'var(--color-surface)',
   fg: 'var(--color-ink)',
-  panel: 'var(--color-panel)',
+  panel: 'var(--color-surface)',
 
-  fg70: 'color-mix(in oklch, var(--color-ink), var(--color-page) 30%)',
-  fg50: 'color-mix(in oklch, var(--color-ink), var(--color-page) 50%)',
-  fg30: 'color-mix(in oklch, var(--color-ink), var(--color-page) 70%)',
-  fg10: 'color-mix(in oklch, var(--color-ink), var(--color-page) 90%)',
+  fg70: 'color-mix(in oklch, var(--color-ink), var(--color-surface) 30%)',
+  fg50: 'color-mix(in oklch, var(--color-ink), var(--color-surface) 50%)',
+  fg30: 'color-mix(in oklch, var(--color-ink), var(--color-surface) 70%)',
+  fg10: 'color-mix(in oklch, var(--color-ink), var(--color-surface) 90%)',
 
   success50: 'rgb(from var(--color-success) r g b / 0.5)',
   failure50: 'rgb(from var(--color-failure) r g b / 0.5)',
@@ -34,7 +34,7 @@ const base = {
 
   alt: 'var(--color-ink-extra-muted)',
   edge: 'var(--color-edge)',
-  edge50: 'color-mix(in oklch, var(--color-edge), var(--color-page) 50%)',
+  edge50: 'color-mix(in oklch, var(--color-edge), var(--color-surface) 50%)',
   accent: 'var(--color-accent)',
   error: 'var(--color-failure)',
   link: 'var(--color-accent)',

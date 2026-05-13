@@ -138,7 +138,7 @@ function SoupChatInputInner() {
       class="absolute bottom-0 inset-x-px pb-2 px-2 flex justify-center pointer-events-none"
       classList={{ hidden: !!soup.previewEntity() }}
       style={{
-        'background-image': `linear-gradient(transparent, var(--color-panel) 85%)`,
+        'background-image': `linear-gradient(transparent, var(--color-surface) 85%)`,
       }}
     >
       <div class="w-full max-w-3xl">

@@ -71,11 +71,11 @@ export default function HotkeyDebugger() {
   });
 
   return (
-    <div class="flex size-full flex-col overflow-hidden bg-dialog font-mono text-xs text-ink">
+    <div class="flex size-full flex-col overflow-hidden bg-surface font-mono text-xs text-ink">
       <SplitHeaderLeft>
         <StaticSplitLabel label="Hotkey Debugger" />
       </SplitHeaderLeft>
-      <div class="flex flex-col gap-2 border-b border-edge bg-panel px-4 py-3">
+      <div class="flex flex-col gap-2 border-b border-edge bg-surface px-4 py-3">
         <div class="flex items-baseline gap-2">
           <span class="text-ink-muted">
             active scope:{' '}
@@ -112,7 +112,7 @@ export default function HotkeyDebugger() {
 
       <div class="flex-1 overflow-auto">
         <table class="w-full border-collapse">
-          <thead class="sticky top-0 z-10 bg-panel">
+          <thead class="sticky top-0 z-10 bg-surface">
             <tr class="text-left text-xxs uppercase tracking-wide text-ink-muted">
               <th class="border-b border-edge px-3 py-2 font-normal">Lvl</th>
               <th class="border-b border-edge px-3 py-2 font-normal">Scope</th>

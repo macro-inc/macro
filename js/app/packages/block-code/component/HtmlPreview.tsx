@@ -8,7 +8,7 @@ export function HtmlPreview() {
   });
 
   return (
-    <div class="size-full bg-panel overflow-auto">
+    <div class="size-full bg-surface overflow-auto">
       <iframe
         title="HTML preview"
         class="size-full border-0"

@@ -17,7 +17,7 @@ export const EntitySelectionToolbarModal = (
     <ScopedPortal scope="split">
       <div class="absolute left-1/2 bottom-16 -translate-x-1/2">
         {/*<div class="absolute size-full pattern-edge-muted pattern-diagonal-4 left-1 top-1 -z-1" />*/}
-        <div class="text-sm font-bold flex rounded-sm flex-row items-center gap-2 p-2 bg-menu border border-edge-muted">
+        <div class="text-sm font-bold flex rounded-sm flex-row items-center gap-2 p-2 bg-surface border border-edge-muted">
           <div class="flex items-center">
             <button
               type="button"

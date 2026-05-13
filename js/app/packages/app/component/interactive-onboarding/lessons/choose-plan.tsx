@@ -101,7 +101,7 @@ function ChoosePlanDemo(props: LessonContentProps) {
             disabled={isPending()}
             class="w-full py-2 rounded-xs text-base font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             classList={{
-              'bg-accent text-panel':
+              'bg-accent text-surface':
                 plan.highlighted && selectedPlan() !== plan.tier,
               'bg-accent/20 text-accent': selectedPlan() === plan.tier,
               'bg-ink/8 text-ink hover:bg-ink/12':

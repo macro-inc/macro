@@ -68,7 +68,7 @@ function TypeButton(props: {
   return (
     <button
       class={`w-full p-4 text-left border-b border-edge-muted transition-all ${
-        props.isSelected ? 'bg-accent text-ink' : 'bg-menu hover:bg-hover'
+        props.isSelected ? 'bg-accent text-ink' : 'bg-surface hover:bg-hover'
       }`}
       onClick={props.onSelect}
     >
@@ -114,7 +114,7 @@ function NotificationItem(props: {
       class={`w-full p-4 text-left border-b border-edge-muted transition-all ${
         props.isSelected
           ? 'bg-accent/10 border-l-2 border-l-accent'
-          : 'bg-menu hover:bg-hover'
+          : 'bg-surface hover:bg-hover'
       }`}
       onClick={props.onSelect}
     >
@@ -186,7 +186,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
               <div class="text-xs font-mono text-ink-muted uppercase mb-2">
                 Title
               </div>
-              <div class="bg-menu p-4 rounded-lg border border-edge-muted text-sm text-ink font-medium">
+              <div class="bg-surface p-4 rounded-lg border border-edge-muted text-sm text-ink font-medium">
                 {browserNotif()!.title}
               </div>
             </div>
@@ -194,7 +194,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
               <div class="text-xs font-mono text-ink-muted uppercase mb-2">
                 Description (Body)
               </div>
-              <div class="bg-menu p-4 rounded-lg border border-edge-muted text-sm text-ink">
+              <div class="bg-surface p-4 rounded-lg border border-edge-muted text-sm text-ink">
                 {browserNotif()!.body || (
                   <span class="italic text-ink-muted">(empty)</span>
                 )}
@@ -204,7 +204,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
               <div class="text-xs font-mono text-ink-muted uppercase mb-2">
                 Icon
               </div>
-              <div class="bg-menu p-4 rounded-lg border border-edge-muted">
+              <div class="bg-surface p-4 rounded-lg border border-edge-muted">
                 <code class="text-xs text-ink-muted">
                   {browserNotif()!.icon}
                 </code>
@@ -216,7 +216,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
             <summary class="text-xs font-mono text-ink-muted uppercase hover:text-accent">
               Raw JSON ▸
             </summary>
-            <pre class="bg-menu p-4 rounded-lg border border-edge-muted text-xs overflow-auto mt-2">
+            <pre class="bg-surface p-4 rounded-lg border border-edge-muted text-xs overflow-auto mt-2">
               {JSON.stringify(browserNotif(), null, 2)}
             </pre>
           </details>
@@ -257,8 +257,8 @@ function CustomBuilder(props: {
   onTest: (notification: UnifiedNotification) => void;
 }) {
   return (
-    <div class="w-96 border-r border-edge-muted bg-menu flex flex-col shrink-0">
-      <div class="p-6 border-b border-edge-muted bg-menu sticky top-0">
+    <div class="w-96 border-r border-edge-muted bg-surface flex flex-col shrink-0">
+      <div class="p-6 border-b border-edge-muted bg-surface sticky top-0">
         <h2 class="text-lg font-semibold text-ink mb-1">
           Custom Message Builder
         </h2>
@@ -270,7 +270,7 @@ function CustomBuilder(props: {
           <label class="block text-sm font-medium text-ink mb-3">
             Message Content
           </label>
-          <div class="border border-edge-muted rounded-lg p-3 bg-menu min-h-64 max-h-96 overflow-auto">
+          <div class="border border-edge-muted rounded-lg p-3 bg-surface min-h-64 max-h-96 overflow-auto">
             <MarkdownShell
               config={props.markdownEditor}
               placeholder="Type your markdown message here... (use @ for mentions)"
@@ -294,7 +294,7 @@ function CustomBuilder(props: {
 
         <div>
           <h3 class="text-sm font-medium text-ink mb-3">Live Preview</h3>
-          <div class="p-4 bg-menu-hover rounded-lg border border-edge-muted">
+          <div class="p-4 bg-surface-hover rounded-lg border border-edge-muted">
             <NotificationRenderer
               notification={props.customNotification}
               mode="preview"
@@ -313,8 +313,8 @@ function NotificationList(props: {
   onSelect: (notification: UnifiedNotification) => void;
 }) {
   return (
-    <div class="w-96 border-r border-edge-muted bg-menu flex flex-col shrink-0">
-      <div class="p-6 border-b border-edge-muted bg-menu sticky top-0">
+    <div class="w-96 border-r border-edge-muted bg-surface flex flex-col shrink-0">
+      <div class="p-6 border-b border-edge-muted bg-surface sticky top-0">
         <h2 class="text-lg font-semibold text-ink mb-1">
           {NOTIFICATION_LABEL_BY_TYPE[
             props.type as keyof typeof NOTIFICATION_LABEL_BY_TYPE
@@ -371,7 +371,7 @@ function NotificationDetail(props: {
 
       <section class="mb-10">
         <h3 class="text-lg font-semibold text-ink mb-4">Preview Mode</h3>
-        <div class="p-4 bg-menu rounded-xl border border-edge-muted">
+        <div class="p-4 bg-surface rounded-xl border border-edge-muted">
           <div class="flex items-start gap-3">
             <div
               class={`size-2 mt-1 shrink-0  ${
@@ -394,7 +394,7 @@ function NotificationDetail(props: {
         <h3 class="text-lg font-semibold text-ink mb-4">Full Mode</h3>
         <div
           class={`p-6 rounded-xl border border-edge-muted ${
-            !props.notification.viewed_at ? 'bg-menu-hover' : 'bg-menu'
+            !props.notification.viewed_at ? 'bg-surface-hover' : 'bg-surface'
           }`}
         >
           <div class="flex justify-start items-center gap-3 mb-4 font-mono text-ink-muted text-xs uppercase">
@@ -437,7 +437,7 @@ function NotificationDetail(props: {
           <summary class="text-lg font-semibold text-ink mb-4 hover:text-accent">
             Raw Notification Data ▸
           </summary>
-          <pre class="bg-menu p-6 rounded-xl border border-edge-muted text-xs overflow-auto mt-4">
+          <pre class="bg-surface p-6 rounded-xl border border-edge-muted text-xs overflow-auto mt-4">
             {JSON.stringify(props.notification, null, 2)}
           </pre>
         </details>
@@ -566,7 +566,7 @@ function PlaygroundContent() {
     <Show
       when={!isLoading()}
       fallback={
-        <div class="h-screen flex items-center justify-center bg-menu">
+        <div class="h-screen flex items-center justify-center bg-surface">
           <div class="text-center">
             <div class="text-lg text-ink-muted animate-pulse mb-2">
               Loading notifications...
@@ -576,10 +576,10 @@ function PlaygroundContent() {
         </div>
       }
     >
-      <div class="h-screen flex bg-menu">
+      <div class="h-screen flex bg-surface">
         {/* Type selector sidebar */}
-        <div class="w-80 border-r border-edge-muted bg-menu flex flex-col shrink-0">
-          <div class="p-6 border-b border-edge-muted bg-menu sticky top-0">
+        <div class="w-80 border-r border-edge-muted bg-surface flex flex-col shrink-0">
+          <div class="p-6 border-b border-edge-muted bg-surface sticky top-0">
             <h1 class="text-xl font-semibold text-ink mb-2">
               Notifications Playground
             </h1>
@@ -594,7 +594,9 @@ function PlaygroundContent() {
           <div class="border-b border-edge-muted">
             <button
               class={`w-full p-4 text-left transition-all ${
-                customMode() ? 'bg-accent text-ink' : 'bg-menu hover:bg-hover'
+                customMode()
+                  ? 'bg-accent text-ink'
+                  : 'bg-surface hover:bg-hover'
               }`}
               onClick={() => {
                 setCustomMode(true);
@@ -661,7 +663,7 @@ function PlaygroundContent() {
         </Show>
 
         {/* Detail view */}
-        <div class="flex-1 overflow-auto bg-menu">
+        <div class="flex-1 overflow-auto bg-surface">
           <Show
             when={selectedNotification()}
             fallback={

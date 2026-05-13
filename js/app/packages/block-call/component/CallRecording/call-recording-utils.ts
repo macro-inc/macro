@@ -53,7 +53,7 @@ export function shouldCoalesceSeekGenerationBump(
 
 /** Transcript / participants meta strip toggles when the panel is open (stacked or wide). */
 export const CALL_META_STRIP_TOGGLE_ACTIVE =
-  'inline-flex items-center justify-center font-medium focus-visible:outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 bg-ink text-page not-disabled:hover:bg-ink/90 not-disabled:active:bg-ink/80 py-1 text-xs gap-1 rounded-xs [&_svg]:size-4 px-1 border border-transparent';
+  'inline-flex items-center justify-center font-medium focus-visible:outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 bg-ink text-surface not-disabled:hover:bg-ink/90 not-disabled:active:bg-ink/80 py-1 text-xs gap-1 rounded-xs [&_svg]:size-4 px-1 border border-transparent';
 
 export const CALL_META_STRIP_TOGGLE_IDLE =
   'flex shrink-0 items-center gap-1.5 rounded-xs border border-edge-muted px-2 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:outline-none';

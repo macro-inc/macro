@@ -180,7 +180,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
 
         <div
           class={cn(
-            'px-2 py-3 bg-panel rounded-b-lg w-full',
+            'px-2 py-3 bg-surface rounded-b-lg w-full',
             slim() && 'px-2 pt-2 pb-1 flex flex-col items-center gap-2'
           )}
         >
@@ -228,7 +228,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
 
         <div
           class={cn(
-            !slim() && 'bg-panel border-t border-edge-muted',
+            !slim() && 'bg-surface border-t border-edge-muted',
             slim() && 'px-2 pt-1 pb-2'
           )}
         >

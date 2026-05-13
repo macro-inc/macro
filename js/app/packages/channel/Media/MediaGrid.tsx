@@ -79,7 +79,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
   const videoHeight = () => props.item.height ?? undefined;
 
   return (
-    <div class="group relative flex min-h-20 max-h-120 max-w-120 min-w-0 overflow-hidden rounded-2xl border border-edge bg-menu">
+    <div class="group relative flex min-h-20 max-h-120 max-w-120 min-w-0 overflow-hidden rounded-2xl border border-edge bg-surface">
       <Show
         when={isInlinePlaying()}
         fallback={
@@ -100,7 +100,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
             </button>
             <button
               type="button"
-              class="absolute bottom-2 left-2 rounded-md bg-dialog/90 px-2 py-1 text-xs font-medium text-ink shadow-sm"
+              class="absolute bottom-2 left-2 rounded-md bg-surface/90 px-2 py-1 text-xs font-medium text-ink shadow-sm"
               onClick={(event) => {
                 event.stopPropagation();
                 setIsInlinePlaying(true);
@@ -140,7 +140,7 @@ function MessageVideoTile(props: { item: MediaItem; onOpen: () => void }) {
 
 function AttachmentVideoTile(props: { item: MediaItem; onOpen?: () => void }) {
   return (
-    <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
+    <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-surface">
       <MediaVideo.Preview
         src={props.item.src}
         class="size-full object-cover"

@@ -19,7 +19,7 @@ function ImagePlaceholder(props: {
 }) {
   return (
     <div
-      class="flex items-center justify-center rounded-2xl border border-edge bg-menu"
+      class="flex items-center justify-center rounded-2xl border border-edge bg-surface"
       style={
         props.square
           ? {

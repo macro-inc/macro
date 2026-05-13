@@ -28,14 +28,14 @@ type ButtonGroupProps = {
 const groupVariantStyles: Record<ButtonVariant, string> = {
   danger: 'border border-failure/50  ',
   base:   'border border-edge-muted  ',
-  active: 'border border-accent-ink  ',
+  active: 'border border-accent  ',
   ghost:  '                          ',
 };
 
 const dividerVariantStyles: Record<ButtonVariant, string> = {
   danger: 'bg-failure/50',
   base:   'bg-edge-muted',
-  active: 'bg-accent-ink',
+  active: 'bg-accent',
   ghost:  'bg-edge-muted',
 };
 
