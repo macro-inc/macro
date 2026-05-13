@@ -217,17 +217,6 @@
   background-position: 0 0, calc(--value(integer)px / 2) calc(--value(integer)px / 2);
 }
 
-@utility pattern-scanline-* {
-  background-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    var(--pattern-color) 30%,
-    var(--pattern-color) 70%,
-    transparent 100%);
-  background-size: 100% --value(integer)px;
-  background-repeat: repeat-y;
-}
-
 @utility glow-* {
   box-shadow: 0 0 40px 0 --alpha(--value(--color-*) / 30%), 0 0 6px 0 --alpha(--value(--color-*) / 50%);
 }
@@ -644,15 +633,6 @@ input[type="number"]::-webkit-outer-spin-button {
     }
 }
 
-.no-touch-callout {
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -khtml-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-}
-
 @media (pointer: coarse) {
     .md-table-cell-resizer {
         background-color: #adf;
@@ -670,126 +650,6 @@ input[type="number"]::-webkit-outer-spin-button {
     max-height: 500px;
     transition: height 100ms ease;
     overflow: auto;
-}
-
-.dotted-banner {
-    position: relative;
-}
-
-.dotted-banner::before {
-    content: '';
-    position: absolute;
-    top: 20%;
-    left: 0;
-    right: 0;
-    height: 60%;
-    background-image:
-        radial-gradient(circle, var(--color-accent) .5px, transparent .5px),
-        radial-gradient(circle, var(--color-accent) .5px, transparent .5px);
-    background-size: 8px 8px;
-    background-position: 0 0, 4px 4px;
-    /* Offset second layer by half */
-    z-index: 0;
-    pointer-events: none;
-}
-
-.dotted-banner>div {
-    position: relative;
-    z-index: 1;
-    width: auto;
-}
-
-@property --pulse-width {
-    syntax: "<length>";
-    initial-value: .5px;
-    inherits: true;
-}
-
-.pulse-corners {
-    --pulse-width: 1px;
-    --pulse-length: 50%;
-}
-
-@keyframes pulse-lines-reverse {
-    0% {
-        background-size:
-            0% var(--pulse-width),
-            0% var(--pulse-width),
-            0% var(--pulse-width),
-            0% var(--pulse-width),
-            var(--pulse-width) 0%,
-            var(--pulse-width) 0%,
-            var(--pulse-width) 0%,
-            var(--pulse-width) 0%;
-        opacity: 1;
-    }
-
-    40% {
-        background-size:
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-width) var(--pulse-length),
-            var(--pulse-width) var(--pulse-length),
-            var(--pulse-width) var(--pulse-length),
-            var(--pulse-width) var(--pulse-length);
-        opacity: 1;
-    }
-
-    100% {
-        background-size:
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-length) var(--pulse-width),
-            var(--pulse-width) var(--pulse-length),
-            var(--pulse-width) var(--pulse-length),
-            var(--pulse-width) var(--pulse-length),
-            var(--pulse-width) var(--pulse-length);
-        opacity: 0;
-    }
-}
-
-.pulse-corners::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background:
-        /* Top edge */
-        linear-gradient(90deg, var(--color-accent), var(--color-accent)) top center,
-        linear-gradient(90deg, var(--color-accent), var(--color-accent)) top center,
-        /* Bottom edge */
-        linear-gradient(90deg, var(--color-accent), var(--color-accent)) bottom center,
-        linear-gradient(90deg, var(--color-accent), var(--color-accent)) bottom center,
-        /* Left edge */
-        linear-gradient(180deg, var(--color-accent), var(--color-accent)) center left,
-        linear-gradient(180deg, var(--color-accent), var(--color-accent)) center left,
-        /* Right edge */
-        linear-gradient(180deg, var(--color-accent), var(--color-accent)) center right,
-        linear-gradient(180deg, var(--color-accent), var(--color-accent)) center right;
-    background-size: 0% 1px, 0% 1px, 0% 1px, 0% 1px, 1px 0%, 1px 0%, 1px 0%, 1px 0%;
-    background-repeat: no-repeat;
-    background-position:
-        top left, top right, bottom left, bottom right,
-        top left, bottom left, top right, bottom right;
-    pointer-events: none;
-    animation: pulse-lines-reverse .7s ease-out .1s forwards;
-}
-
-@keyframes flicker {
-    0%,
-    49% {
-        opacity: 0;
-    }
-    50%,
-    100% {
-        opacity: 1;
-    }
-}
-
-.portal-child-collapse > div {
-  display: contents;
 }
 
 input[type="time"]::-webkit-calendar-picker-indicator {

@@ -22,8 +22,6 @@ export const MiniToggleSwitch: Component<
     labelPlacement?: 'left' | 'right';
     labelClass?: string;
     switchRootClass?: string;
-    animateFlicker?: boolean;
-    animateFlickerOnDeactivate?: boolean;
     size?: 'SM' | 'Base';
     compact?: boolean;
     activeTrackClass?: string;
@@ -42,10 +40,8 @@ export const MiniToggleSwitch: Component<
       init = false;
       return checkedVal;
     }
-    if (checkedVal === prevChecked) return checkedVal;
-    if (props.animateFlickerOnDeactivate === false && checkedVal === false) {
-      return checkedVal;
-    }
+    if (checkedVal === prevChecked) { return checkedVal; }
+    if (checkedVal === false) { return checkedVal; }
     return checkedVal;
   });
 
