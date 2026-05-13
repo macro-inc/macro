@@ -150,6 +150,25 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # document_upload_finalizer (local worker)
+  # LocalStack S3 ObjectCreated -> SQS consumer for document upload finalization.
+  # Production uses the document_upload_finalizer_handler Lambda.
+  # ============================================================================
+  document_upload_finalizer:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/document_upload_finalizer_local_worker"]
+    environment:
+      LOCAL_AWS_URL: ${LOCAL_AWS_URL:-http://localstack:4566}
+      DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL: ${DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL:-http://localstack:4566/000000000000/document-upload-finalizer-queue}
+    depends_on:
+      - postgres
+      - sync_service
+      - lexical_service
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
   # email_service (Port 8087)
   # Email processing and management
   # ============================================================================

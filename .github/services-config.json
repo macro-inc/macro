@@ -76,7 +76,8 @@
         "rust/cloud-storage/document_storage_service/**",
         "rust/cloud-storage/github/**",
         "rust/cloud-storage/delete_chat_handler/**",
-        "rust/cloud-storage/docx_unzip_handler/**"
+        "rust/cloud-storage/docx_unzip_handler/**",
+        "rust/cloud-storage/document_upload_finalizer_handler/**"
       ],
       "stack_path": "infra/stacks/cloud-storage-service/**",
       "deploy_binaries": [
@@ -84,7 +85,8 @@
       ],
       "deploy_lambdas": [
         "delete_chat_handler",
-        "docx_unzip_handler"
+        "docx_unzip_handler",
+        "document_upload_finalizer_handler"
       ]
     },
     "document-storage": {

@@ -3,6 +3,8 @@
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentMetadata, FileType};
+
+use super::response::DocumentResponse;
 use model::sync_service::SyncServiceVersionID;
 use models_properties::api::requests::SetPropertyValue;
 use serde_json::Value;
@@ -51,7 +53,7 @@ pub struct CopyDocumentResponse {
     /// Indicates if an error occurred.
     pub error: bool,
     /// The copied document data.
-    pub data: model::document::response::DocumentResponse,
+    pub data: DocumentResponse,
 }
 
 /// Arguments for copying a document in the repository.
@@ -190,6 +192,32 @@ fn default_true() -> bool {
     true
 }
 
+/// Request body for creating a markdown document whose content is initialized
+/// by the backend.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateMarkdownDocumentRequest {
+    /// The document name.
+    pub document_name: String,
+    /// Markdown source text. Defaults to an empty document.
+    pub markdown: Option<String>,
+    /// Optional project ID to associate the document with.
+    pub project_id: Option<uuid::Uuid>,
+    /// Whether to add a viewed_at record for this document upon creation.
+    #[serde(default)]
+    pub skip_history: bool,
+}
+
+/// Response for creating a markdown document.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateMarkdownDocumentResponse {
+    /// The document ID of the created markdown document.
+    pub document_id: String,
+}
+
 /// Request body for creating a task.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -197,6 +225,8 @@ fn default_true() -> bool {
 pub struct CreateTaskRequest {
     /// The name of the task.
     pub task_name: String,
+    /// Markdown source text. Defaults to an empty task document.
+    pub markdown: Option<String>,
     /// Optional project ID to associate the task with.
     pub project_id: Option<uuid::Uuid>,
     /// Optional property values to set on the task.

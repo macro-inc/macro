@@ -23,8 +23,6 @@ export const ToggleSwitch: Component<
     labelPlacement?: 'left' | 'right';
     labelClass?: string;
     switchRootClass?: string;
-    animateFlicker?: boolean;
-    animateFlickerOnDeactivate?: boolean;
     size?: 'SM' | 'Base';
     disabled?: boolean;
     trueLabel?: string;
@@ -32,7 +30,6 @@ export const ToggleSwitch: Component<
   } & SwitchRootOptions
 > = (props) => {
   const [checked, setChecked] = createSignal(props.checked);
-  const [showFlicker, setShowFlicker] = createSignal(false);
 
   let init = true;
   createEffect((prevChecked) => {
@@ -42,12 +39,13 @@ export const ToggleSwitch: Component<
       init = false;
       return checkedVal;
     }
-    if (checkedVal === prevChecked) return checkedVal;
-    if (props.animateFlickerOnDeactivate === false && checkedVal === false) {
+    if (checkedVal === prevChecked) {
+      return checkedVal;
+    }
+    if (checkedVal === false) {
       return checkedVal;
     }
 
-    setShowFlicker(true);
     return checkedVal;
   });
 
@@ -85,7 +83,6 @@ export const ToggleSwitch: Component<
             'cursor-not-allowed': props.disabled,
             'whitespace-nowrap': true,
           }}
-          // style={{ 'font-size-adjust': 'ex-height 0.5' }}
         >
           {typeof props.label === 'function' ? props.label() : props.label}
         </KSwitch.Label>
@@ -93,16 +90,7 @@ export const ToggleSwitch: Component<
 
       <div class="relative size-fit rounded-full focus-within:bg-active">
         <KSwitch.Input class="absolute inset-0 size-full! pointer-events-none" />
-        <KSwitch.Control
-          classList={{
-            'animate-[flicker_50ms_3_150ms]':
-              props.animateFlicker && showFlicker(),
-          }}
-          onAnimationEnd={() => {
-            setShowFlicker(false);
-          }}
-          class="relative"
-        >
+        <KSwitch.Control class="relative">
           <div
             class="relative grid grid-cols-[auto_1fr] auto-cols-auto overflow-clip"
             aria-hidden

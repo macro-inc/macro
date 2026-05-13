@@ -1,4 +1,4 @@
-use crate::AsyncToolSet;
+use crate::AsyncToolCollection;
 use schemars::Schema;
 use schemars::transform::Transform;
 use serde::{Deserialize, Serialize};
@@ -282,7 +282,7 @@ impl CombinedToolSchemasBuilder {
     }
 }
 
-impl<Context> ToolSchemaGenerator for AsyncToolSet<Context> {
+impl<Context> ToolSchemaGenerator for AsyncToolCollection<Context> {
     fn generate_schemas(&self) -> ToolSchemas {
         let schemas = self
             .tools

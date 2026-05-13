@@ -73,7 +73,7 @@ export function ThemeList() {
                   }}
                   style="
                     transition: color var(--transition);
-                    cursor: var(--cursor-pointer);
+                    cursor: pointer;
                     background-color: var(--b0);
                     box-sizing: border-box;
                     white-space: nowrap;

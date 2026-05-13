@@ -37,6 +37,13 @@ export const setupS3EventBridgeTriggers = () => {
     .getOutput('documentTextExtractorLambdaArn')
     .apply((id) => id as string);
 
+  const documentUploadFinalizerLambdaArn = new pulumi.StackReference(
+    'cloud-storage-service',
+    { name: `macro-inc/cloud-storage-service/${stack}` }
+  )
+    .getOutput('documentUploadFinalizerArn')
+    .apply((id) => id as string);
+
   // Enable EventBridge notifications for the S3 bucket
   new aws.s3.BucketNotification('eventbridge-notification', {
     bucket: bucketId,
@@ -50,9 +57,13 @@ export const setupS3EventBridgeTriggers = () => {
 
   const searchUploadRuleName = `search-upload-rule-${stack}`;
   const textExtractorRuleName = `text-extractor-rule-${stack}`;
+  const documentUploadFinalizerRuleName = `document-upload-finalizer-rule-${stack}`;
 
   const searchUploadRuleArn = getEventRuleArn(searchUploadRuleName);
   const textExtractorRuleArn = getEventRuleArn(textExtractorRuleName);
+  const documentUploadFinalizerRuleArn = getEventRuleArn(
+    documentUploadFinalizerRuleName
+  );
 
   const createDlqPolicy = (
     name: string,
@@ -90,6 +101,20 @@ export const setupS3EventBridgeTriggers = () => {
   });
 
   createDlqPolicy('text-extractor', textExtractorDlq, textExtractorRuleArn);
+
+  const documentUploadFinalizerDlq = new aws.sqs.Queue(
+    `document-upload-finalizer-dlq-${stack}`,
+    {
+      name: `document-upload-finalizer-dlq-${stack}`,
+      messageRetentionSeconds: 14 * 24 * 60 * 60,
+    }
+  );
+
+  createDlqPolicy(
+    'document-upload-finalizer',
+    documentUploadFinalizerDlq,
+    documentUploadFinalizerRuleArn
+  );
 
   // Configure EventBridge rules for each Lambda
   pulumi
@@ -154,6 +179,40 @@ export const setupS3EventBridgeTriggers = () => {
       });
     });
 
+  pulumi
+    .all([
+      bucketId,
+      documentUploadFinalizerLambdaArn,
+      documentUploadFinalizerDlq.arn,
+    ])
+    .apply(([bucketId, finalizerArn, dlqArn]) => {
+      const documentUploadFinalizerRule = new aws.cloudwatch.EventRule(
+        `document-upload-finalizer-rule-${stack}`,
+        {
+          name: documentUploadFinalizerRuleName,
+          description:
+            'Finalize documents when their versioned storage object is created',
+          eventPattern: JSON.stringify({
+            source: ['aws.s3'],
+            'detail-type': ['Object Created'],
+            detail: {
+              bucket: {
+                name: [bucketId],
+              },
+            },
+          }),
+        }
+      );
+
+      new aws.cloudwatch.EventTarget('document-upload-finalizer-target', {
+        rule: documentUploadFinalizerRule.name,
+        arn: finalizerArn,
+        deadLetterConfig: {
+          arn: dlqArn,
+        },
+      });
+    });
+
   // Add necessary permissions for EventBridge to invoke Lambda functions
   const createLambdaPermission = (functionArn: string, ruleName: string) => {
     return new aws.lambda.Permission(`eventbridge-permission-${ruleName}`, {
@@ -166,13 +225,18 @@ export const setupS3EventBridgeTriggers = () => {
 
   // Create permissions for all Lambda functions
   pulumi
-    .all([searchUploadHandlerLambdaArn, documentTextExtractorLambdaArn])
-    .apply(([searchUploadHandlerLambdaArn, extractorArn]) => {
+    .all([
+      searchUploadHandlerLambdaArn,
+      documentTextExtractorLambdaArn,
+      documentUploadFinalizerLambdaArn,
+    ])
+    .apply(([searchUploadHandlerLambdaArn, extractorArn, finalizerArn]) => {
       createLambdaPermission(
         searchUploadHandlerLambdaArn,
         searchUploadRuleName
       );
       createLambdaPermission(extractorArn, textExtractorRuleName);
+      createLambdaPermission(finalizerArn, documentUploadFinalizerRuleName);
     });
 };
 

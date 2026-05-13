@@ -72,6 +72,8 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 fn api_router(api_context: ApiContext) -> Router {
     let memory_service = api_context.memory_service.clone();
 
+    let mcp_state = api_context.mcp_state.clone();
+
     let internal_router = Router::new()
         .nest("/chats", chats::router(api_context.clone()))
         .nest("/stream", stream::router(api_context.clone()))
@@ -80,6 +82,7 @@ fn api_router(api_context: ApiContext) -> Router {
         .nest("/preview", preview::router())
         .nest("/id_mapping", id_mapping::router())
         .merge(memory::inbound::axum_router::memory_router(memory_service))
+        .merge(mcp_client::inbound::mcp_router(mcp_state.clone()))
         .with_state(api_context.clone())
         .route(
             "/chat/completions",
@@ -102,4 +105,5 @@ fn api_router(api_context: ApiContext) -> Router {
     Router::new()
         .nest("/{version}", internal_router.clone())
         .merge(internal_router)
+        .merge(mcp_client::inbound::mcp_oauth_callback_router(mcp_state))
 }

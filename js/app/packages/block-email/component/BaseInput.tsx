@@ -6,7 +6,7 @@ import {
   MACRO_EMAIL_SIGNATURE,
   MAX_ATTACHMENTS_BYTES_SIZE,
 } from '@block-email/constants';
-import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
+import { addUserMentionToCc } from '@block-email/util/mentionToCc';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import {
   applyInlineFormat,
@@ -1058,40 +1058,14 @@ export function BaseInput(props: {
   };
 
   const handleUserMention = (mention: UserMentionRecord) => {
-    // Extract the email from the mention argument
-    const mentionEmail = mention.mentions[0].split('|')[1];
-
-    // Check if user already in To or CC
-    const isInTo = form()
-      .recipients()
-      .to.some((recipient: EmailRecipient) => {
-        const email = recipient.data.email;
-        if (!email) return false;
-        return email === mentionEmail;
-      });
-
-    const isInCc = form()
-      .recipients()
-      .cc.some((recipient: EmailRecipient) => {
-        const email = recipient.data.email;
-        if (!email) return false;
-        return email === mentionEmail;
-      });
-
-    // If not already in To or CC, add user to CC
-    if (!isInTo && !isInCc) {
-      // Find the user in recipient options, or construct from mention data
-      const userOption =
-        ctx.recipientOptions().find((recipient) => {
-          const email = recipient.data.email;
-          if (!email) return false;
-          return email === mentionEmail;
-        }) ?? convertContactInfoToEmailRecipient({ email: mentionEmail });
-
-      // Add to CC recipients
-      form().setRecipients('cc', [...form().recipients().cc, userOption]);
-      toast.success(`${mentionEmail} added to CC`);
-    }
+    addUserMentionToCc({
+      mention,
+      recipientOptions: ctx.recipientOptions(),
+      toRecipients: form().recipients().to,
+      ccRecipients: form().recipients().cc,
+      bccRecipients: form().recipients().bcc,
+      setCc: (next) => form().setRecipients('cc', next),
+    });
   };
 
   onMount(() => {

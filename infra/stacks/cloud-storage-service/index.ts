@@ -19,6 +19,10 @@ import {
   DocxUnzipHandlerLambda,
   type DocxUnzipLambdaEnvVars,
 } from './docx-unzip-handler-lambda';
+import {
+  DocumentUploadFinalizerLambda,
+  type DocumentUploadFinalizerLambdaEnvVars,
+} from './document-upload-finalizer-lambda';
 
 const tags = {
   environment: stack,
@@ -62,14 +66,24 @@ const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .apply((secret) => secret.arn);
 
 const INTERNAL_API_SECRET_KEY = config.require(`internal_api_key`);
-const internalApiKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: INTERNAL_API_SECRET_KEY })
-  .apply((secret) => secret.arn);
+const internalApiSecret = aws.secretsmanager.getSecretVersionOutput({
+  secretId: INTERNAL_API_SECRET_KEY,
+});
+const internalApiKeyArn: pulumi.Output<string> = internalApiSecret.apply(
+  (secret) => secret.arn
+);
+const internalApiSecretValue: pulumi.Output<string> = internalApiSecret.apply(
+  (secret) => secret.secretString
+);
 
 const SYNC_SERVICE_AUTH_KEY = config.require(`sync_service_auth_key`);
-const syncServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY })
-  .apply((secret) => secret.arn);
+const syncServiceAuthSecret = aws.secretsmanager.getSecretVersionOutput({
+  secretId: SYNC_SERVICE_AUTH_KEY,
+});
+const syncServiceAuthKeyArn: pulumi.Output<string> =
+  syncServiceAuthSecret.apply((secret) => secret.arn);
+const syncServiceAuthKeyValue: pulumi.Output<string> =
+  syncServiceAuthSecret.apply((secret) => secret.secretString);
 
 const AUTHENTICATION_SERVICE_SECRET_KEY = config.require(
   `authentication_service_secret_key`
@@ -549,6 +563,10 @@ const cloudStorageService = new CloudStorageService(
         value: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
       },
       {
+        name: ServiceUrl.LEXICAL_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
+      },
+      {
         name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
         value: pulumi.interpolate`${AUTHENTICATION_SERVICE_SECRET_KEY}`,
       },
@@ -676,6 +694,30 @@ const docxUnzipHandler = new DocxUnzipHandlerLambda(
 
 export const docxUnzipHandlerRoleArn = docxUnzipHandler.role.arn;
 export const docxUnzipHandlerName = docxUnzipHandler.lambda.name;
+
+// ------------------------------------------- Document Upload Finalizer -------------------------------------------
+const documentUploadFinalizerEnvVars: DocumentUploadFinalizerLambdaEnvVars = {
+  DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
+  INTERNAL_API_SECRET_KEY: pulumi.interpolate`${internalApiSecretValue}`,
+  SYNC_SERVICE_AUTH_KEY: pulumi.interpolate`${syncServiceAuthKeyValue}`,
+  LEXICAL_SERVICE_URL: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
+  SYNC_SERVICE_URL: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
+  RUST_LOG: 'document_upload_finalizer_handler=info,documents=info',
+};
+
+const documentUploadFinalizer = new DocumentUploadFinalizerLambda(
+  `document-upload-finalizer-${stack}`,
+  {
+    documentStorageBucketArn,
+    envVars: documentUploadFinalizerEnvVars,
+    vpc: coparse_api_vpc,
+    tags,
+  }
+);
+
+export const documentUploadFinalizerRoleArn = documentUploadFinalizer.role.arn;
+export const documentUploadFinalizerName = documentUploadFinalizer.lambda.name;
+export const documentUploadFinalizerArn = documentUploadFinalizer.lambda.arn;
 
 // attach lambda to s3 event
 // disabling in dev to test theory of editor crash in web app and potentially use a new paradigm for docx file upload

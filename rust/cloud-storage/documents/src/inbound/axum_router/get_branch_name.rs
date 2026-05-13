@@ -55,10 +55,12 @@ pub async fn get_branch_name_handler<T: DocumentService, Svc: EntityAccessServic
     let document = state.service.get_document(receipt.clone()).await?;
     let short_id = state.service.get_short_id(receipt).await?;
 
-    match document.document_metadata.sub_type {
+    match document.document_metadata.metadata.sub_type {
         Some(DocumentSubType::Task) => {
-            let branch_name =
-                build_task_branch_name(&short_id, &document.document_metadata.document_name);
+            let branch_name = build_task_branch_name(
+                &short_id,
+                &document.document_metadata.metadata.document_name,
+            );
             Ok(Json(BranchNameResponse {
                 short_id,
                 branch_name,

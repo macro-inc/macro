@@ -11,17 +11,19 @@ use crate::domain::{
 use document_sub_type::DocumentSubType;
 use documents::domain::models::EditDocumentServiceArgs;
 use documents::domain::{
+    content::{DocumentContent, DocumentContentLocation},
     models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams},
     ports::DocumentService,
+    response::{
+        CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
+        GetDocumentResponseData, LocationResponseV3,
+    },
 };
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::{
-    DocumentBasic, DocumentMetadata,
-    response::{CreateDocumentResponseData, GetDocumentResponseData, LocationResponseV3},
-};
+use model::document::{DocumentBasic, DocumentMetadata};
 use model_entity::Entity;
 use models_permissions::share_permission::access_level::AccessLevel;
 
@@ -134,7 +136,10 @@ impl DocumentService for StubDocumentService {
         let document_id = receipt.entity().entity_id.clone();
         if document_id == KNOWN_TASK_UUID {
             Ok(GetDocumentResponseData {
-                document_metadata: Self::task_metadata(&document_id),
+                document_metadata: DocumentMetadataWithContent::new(
+                    Self::task_metadata(&document_id),
+                    DocumentContent::ready(DocumentContentLocation::SyncService),
+                ),
                 user_access_level: AccessLevel::Owner,
                 view_location: None,
             })
@@ -171,6 +176,12 @@ impl DocumentService for StubDocumentService {
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         unimplemented!()
     }
+    async fn get_document_content(
+        &self,
+        _document_context: &DocumentBasic,
+    ) -> Result<DocumentContent, DocumentError> {
+        unimplemented!()
+    }
     async fn update_task_status(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -200,16 +211,7 @@ impl DocumentService for StubDocumentService {
         _document_name: String,
         _query_version_id: Option<i64>,
         _sync_version_id: Option<model::sync_service::SyncServiceVersionID>,
-    ) -> Result<model::document::response::DocumentResponse, DocumentError> {
-        unimplemented!()
-    }
-
-    async fn create_task(
-        &self,
-        _user_id: MacroUserIdStr<'static>,
-        _plain_user_id: String,
-        _request: documents::domain::models::CreateTaskRequest,
-    ) -> Result<documents::domain::models::CreateTaskResponse, DocumentError> {
+    ) -> Result<DocumentResponse, DocumentError> {
         unimplemented!()
     }
 

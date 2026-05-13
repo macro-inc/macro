@@ -14,7 +14,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { constrainImageDimensions } from '@lexical-core/utils/media';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import { storageServiceClient } from '@service-storage/client';
+import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { Button, cn } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
@@ -55,9 +55,7 @@ const THEMES = {
 
 // NOTE: copied logic from block-image
 const getDssImageBlob = async (documentId: string) => {
-  const maybeDocument = await storageServiceClient.getBinaryDocument({
-    documentId,
-  });
+  const maybeDocument = await fetchBinaryDocumentData(documentId);
   const documentResult = maybeThrow(maybeDocument);
   // presigned url with expiry
   const { blobUrl } = documentResult;

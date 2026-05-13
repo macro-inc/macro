@@ -118,19 +118,11 @@ export let cloudStorageServiceUrl: pulumi.Output<string>;
 
 // use the invoke the lambdas locally with a local dss server for testing
 if (stack !== 'local') {
-  const documentStorageServiceAuthKeyName = config.get(
-    `document_storage_service_auth_key`
-  );
-  if (!documentStorageServiceAuthKeyName) {
-    throw new Error('document_storage_service_auth_key must be set');
-  }
-
   const documentStorageServiceAuthKey = aws.secretsmanager
     .getSecretVersionOutput({
-      secretId: documentStorageServiceAuthKeyName,
+      secretId: config.require(`document_storage_service_auth_key`),
     })
     .apply((secret) => secret.secretString);
-
   cloudStorageServiceUrl = cloudStorageServiceStack!
     .getOutput('cloudStorageServiceUrl')
     .apply((url) => url as string);

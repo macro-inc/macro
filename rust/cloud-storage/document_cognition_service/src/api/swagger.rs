@@ -17,6 +17,10 @@ use crate::model::{
     },
     stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
 };
+use mcp_client::inbound::axum_router::{
+    self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
+    UpdateServerRequest,
+};
 use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryResponse};
 
 use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPreviewResponse};
@@ -76,7 +80,13 @@ use utoipa::OpenApi;
             chat_history_batch_messages::get_chat_history_batch_messages_handler,
             chat_message::send_chat_message,
             stream_stop::stop_chat_stream,
-            memory_api::get_memory_handler
+            memory_api::get_memory_handler,
+            mcp_api::list_servers,
+            mcp_api::add_server,
+            mcp_api::update_server,
+            mcp_api::delete_server,
+            mcp_api::start_auth,
+            mcp_api::auth_callback
         ),
         components(
             schemas(
@@ -157,6 +167,14 @@ use utoipa::OpenApi;
                 // Memory
                 MemoryResponse,
                 MemoryErrorBody,
+
+                // MCP
+                ServerResponse,
+                AddServerRequest,
+                UpdateServerRequest,
+                StartAuthRequest,
+                StartAuthResponse,
+                model_error_response::ErrorResponse,
 
                 // Tools
                 ai::tool::schema::ToolSchema,

@@ -14,6 +14,7 @@ import type {
   HotkeyRegistrationOptions,
   ValidHotkey,
 } from '@core/hotkey/types';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   createCanvasFileFromJsonString,
   createChat,
@@ -66,49 +67,47 @@ const createBlock = async (spec: {
 
   setCreateMenuOpen(false, false);
 
-  if (!loading) {
-    const id = await createFn();
-    if (!id) return;
+  // WORKAROUND: On mobile, the navigation interceptor in createMobileSwipeLayout
+  // consumes openWithSplit calls and returns undefined instead of a SplitHandle.
+  // This means we can't show a loading spinner then replace it via split.replace(),
+  // because we never get a handle back. Instead, on mobile we skip the loading state
+  // and navigate directly to the created block after the async creation completes.
+  // If the mobile navigation interceptor is refactored to return handles, this
+  // workaround can be removed and both paths can use the loading-then-replace flow.
+  const showLoadingFirst = loading && !isMobile();
 
-    analytics.track('create_entity', {
-      entityType: blockName,
-      source: 'launcher',
-    });
+  const split = showLoadingFirst
+    ? openWithSplit(
+        { type: 'component', id: 'loading' },
+        { referredFrom: 'launcher', preferNewSplit: spec.shouldInsert }
+      )
+    : undefined;
 
-    const block = { type: blockName, id };
-
-    openWithSplit(block, {
-      referredFrom: 'launcher',
-      preferNewSplit: spec.shouldInsert,
-    });
-
+  const id = await createFn();
+  if (!id) {
+    split?.goBack();
     return;
+  }
+
+  analytics.track('create_entity', {
+    entityType: blockName,
+    source: 'launcher',
+  });
+
+  if (split) {
+    split.replace({
+      next: { type: blockName, id },
+      mergeHistory: true,
+      referredFrom: 'launcher',
+    });
   } else {
-    const split = openWithSplit(
-      { type: 'component', id: 'loading' },
+    openWithSplit(
+      { type: blockName, id },
       {
         referredFrom: 'launcher',
         preferNewSplit: spec.shouldInsert,
       }
     );
-
-    const id = await createFn();
-    if (!id) {
-      split?.goBack();
-      return;
-    }
-
-    analytics.track('create_entity', {
-      entityType: blockName,
-      source: 'launcher',
-    });
-
-    if (split)
-      split.replace({
-        next: { type: blockName, id },
-        mergeHistory: true,
-        referredFrom: 'launcher',
-      });
   }
 };
 
@@ -412,7 +411,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
         <div
           class={cn(
-            'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-click duration-200 transition-color border border-edge',
+            'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-out duration-200 transition-color border border-edge',
             textFg()
           )}
           style={{ background: props.focused ? 'currentColor' : 'transparent' }}
@@ -427,7 +426,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
         <div
           class={cn(
-            'w-1/3 -translate-y-1 transition-all ease-click duration-200',
+            'w-1/3 -translate-y-1 transition-all ease-out duration-200',
             textFg(),
             {
               'text-ink-extra-muted': !props.focused,

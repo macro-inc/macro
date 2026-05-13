@@ -27,6 +27,7 @@ use futures::StreamExt;
 use macro_auth::headers::AccessTokenExtractor;
 use macro_db_client::dcs::create_chat;
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_client::domain::ports::McpServerStore;
 use memory::domain::MemoryService;
 use model::user::UserContext;
 use model_entity::{Entity, EntityType};
@@ -444,7 +445,8 @@ fn stream_and_save_message(
 ) {
     tracing::trace!(request=?request, "streaming chat request");
     let tool_context = ctx.tool_service_context.clone();
-    let toolset = ctx.all_tools.clone();
+    let static_tools = ctx.all_tools.clone();
+    let mcp_store = ctx.mcp_state.store();
 
     let request_context = RequestContext {
         user_id: user_id.clone(),
@@ -474,6 +476,10 @@ fn stream_and_save_message(
             yield json;
         }
 
+        let mcp_records = mcp_store.list(&user_id).await.unwrap_or_default();
+        let toolset = Arc::new(
+            mcp_client::domain::service::CombinedToolSet::new(static_tools, &mcp_records).await,
+        );
         let client = ToolLoop::new(toolset, tool_context);
         let mut chat = client.chat();
 

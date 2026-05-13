@@ -1426,7 +1426,7 @@ export class InternalPDFViewer {
     overlayElement.style.width = `${rect.width * 1.05}%`;
     overlayElement.style.height = `${rect.height * 1.1}%`;
     overlayElement.style.mixBlendMode = 'lighten';
-    overlayElement.style.cursor = 'var(--cursor-pointer)';
+    overlayElement.style.cursor = 'pointer';
     overlayElement.style.transition = 'all 0.3s ease-in-out';
     overlayElement.style.pointerEvents = 'auto';
     overlayElement.addEventListener('mouseenter', () => {

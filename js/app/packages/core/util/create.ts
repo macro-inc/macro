@@ -1,13 +1,11 @@
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
-import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
 import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { rawMarkdownStateToLoroSnapshot } from '@lexical-core/markdown-loro-snapshot';
 import {
   authKeys,
   invalidateUserQuota,
@@ -23,7 +21,6 @@ import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
-import { syncServiceClient } from '@service-sync/client';
 import { isPaymentError } from './handlePaymentError';
 import { contentHash } from './hash';
 import {
@@ -33,18 +30,6 @@ import {
 } from './languageQuery';
 import { err, isErr, ok } from './maybeResult';
 
-/**
- * Generate a fake sha256 hash
- *
- * HACK: Since we don't actually store markdown files in dss, we need to provide a fake sha256 hash
- * to dss.
- */
-function fakeSha256() {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes); // secure RNG
-  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 type CreateMarkdownFileArgs = {
   title?: string;
   content?: string;
@@ -52,44 +37,24 @@ type CreateMarkdownFileArgs = {
 };
 
 /**
- * Initializes a new markdown file in dss & sync_service given a content string.
+ * Creates a new markdown file and initializes sync-service on the backend.
  * Use createTask for the task subtype.
  */
 export async function createMarkdownFile(
   args?: CreateMarkdownFileArgs
 ): Promise<string | undefined> {
-  const emptyMarkdownState = await createMarkdownStateFromContent(
-    args?.content
-  );
-  const snapshot = await rawMarkdownStateToLoroSnapshot(
-    emptyMarkdownState as any
-  );
-  const fakeSha = fakeSha256();
-  const result = await storageServiceClient.createDocument({
+  const result = await storageServiceClient.createMarkdownDocument({
     documentName: args?.title ?? '',
-    fileType: 'md',
-    sha: fakeSha,
+    markdown: args?.content ?? '',
     projectId: args?.projectId,
-    isTask: false,
   });
 
   invalidateUserQuota();
 
-  if (isErr(result) || !snapshot) return;
-  let [
-    ,
-    {
-      metadata: { documentId },
-    },
-  ] = result;
+  if (isErr(result)) return;
 
-  let res = await syncServiceClient.initializeFromSnapshot({
-    snapshot,
-    documentId: documentId,
-  });
-  if (isErr(res)) {
-    return;
-  }
+  const { documentId } = result[1];
+
   setPreviewOnCreate({
     itemId: documentId,
     itemType: 'document',
@@ -114,12 +79,6 @@ type CreateTaskArgs = {
 export async function createTask(
   args?: CreateTaskArgs
 ): Promise<string | undefined> {
-  // Convert content to loro snapshot for sync service
-  const markdownState = await createMarkdownStateFromContent(args?.content);
-  const snapshot = await rawMarkdownStateToLoroSnapshot(markdownState as any);
-
-  if (!snapshot) return;
-
   // Ensure status is always set, defaulting to NOT_STARTED
   const existingPropertyValues = args?.propertyValues ?? [];
   const hasStatus = existingPropertyValues.some(
@@ -138,9 +97,10 @@ export async function createTask(
         },
       ];
 
-  // Create task with properties in one call
+  // Create task, properties, and sync-service content in one backend-owned lifecycle.
   const result = await storageServiceClient.createTask({
     taskName: args?.title ?? '',
+    markdown: args?.content ?? '',
     projectId: args?.projectId,
     propertyValues,
   });
@@ -150,17 +110,6 @@ export async function createTask(
   if (isErr(result)) return;
 
   const { documentId } = result[1];
-
-  // Initialize sync service with content
-  const syncRes = await syncServiceClient.initializeFromSnapshot({
-    snapshot,
-    documentId,
-  });
-
-  if (isErr(syncRes)) {
-    console.error('Failed to initialize task content in sync service');
-    // Task was created, just without content - still return the id
-  }
 
   setPreviewOnCreate({
     itemId: documentId,

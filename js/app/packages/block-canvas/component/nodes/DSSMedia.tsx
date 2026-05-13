@@ -8,7 +8,7 @@ import PlayIcon from '@icon/regular/play.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import LockKey from '@phosphor-icons/core/regular/lock-key.svg?component-solid';
 import Question from '@phosphor-icons/core/regular/question.svg?component-solid';
-import { storageServiceClient } from '@service-storage/client';
+import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import {
   createEffect,
@@ -170,9 +170,7 @@ export function DSSMedia(props: { node: MediaNode; mode: RenderMode }) {
 
   createEffect(async () => {
     if (props.node.status === 'dss' || !props.node.status) {
-      const res = await storageServiceClient.getBinaryDocument({
-        documentId: props.node.uuid,
-      });
+      const res = await fetchBinaryDocumentData(props.node.uuid);
 
       if (isErr(res, 'UNAUTHORIZED') || isErr(res, 'HTTP_ERROR')) {
         setError();

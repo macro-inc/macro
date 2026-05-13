@@ -84,8 +84,8 @@ mod tests {
             .with(eq("user_id"), eq("document_id"))
             .return_once(|_, _| Ok(()));
 
-        let result = mock.delete_document(&"user_id", &"document_id").await;
+        let result = mock.delete_document("user_id", "document_id").await;
 
-        assert_eq!(result.is_ok(), true);
+        assert!(result.is_ok());
     }
 }

@@ -5,7 +5,7 @@ use crate::domain::{
     ports::{ChatRepo, ChatService},
 };
 use ai::types::{AssistantMessagePart, ChatMessageContent};
-use ai_toolset::{AsyncToolSet, RequestContext, tool_object::UserToolResponse};
+use ai_toolset::{AsyncToolCollection, RequestContext, tool_object::UserToolResponse};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
@@ -22,7 +22,7 @@ where
     ToolSetContext: Clone + Send + Sync + 'static,
 {
     // toolset should be replaced with trait;
-    toolset: Arc<AsyncToolSet<ToolSetContext>>,
+    toolset: Arc<AsyncToolCollection<ToolSetContext>>,
     context: ToolSetContext,
     repo: R,
     entity_access_management_service: Eam,
@@ -36,7 +36,7 @@ where
     /// Create a new [`ChatServiceImpl`] wrapping the given repo and tool executor.
     pub fn new(
         repo: R,
-        toolset: Arc<AsyncToolSet<ToolSetContext>>,
+        toolset: Arc<AsyncToolCollection<ToolSetContext>>,
         context: ToolSetContext,
         entity_access_management_service: Eam,
     ) -> Self {

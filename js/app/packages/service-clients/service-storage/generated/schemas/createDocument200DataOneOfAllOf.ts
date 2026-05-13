@@ -7,8 +7,8 @@
 import type { CreateDocument200DataOneOfAllOfFileType } from './createDocument200DataOneOfAllOfFileType';
 
 export type CreateDocument200DataOneOfAllOf = {
-  /** Content type of the document converted from file type */
+  /** Content type of the document converted from file type. */
   contentType: string;
-  /** The file type of the document */
+  /** The file type of the document. */
   fileType?: CreateDocument200DataOneOfAllOfFileType;
 };

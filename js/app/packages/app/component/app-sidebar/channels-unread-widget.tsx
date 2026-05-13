@@ -71,8 +71,8 @@ function computeChannelLetters(groups: ChannelGroup[]): Map<string, string> {
 
 function ChannelLetterIcon(props: { letters: string }) {
   return (
-    <Avatar size="md">
-      <Avatar.Fallback>#{props.letters}</Avatar.Fallback>
+    <Avatar size="md" class="bg-ink-extra-muted/15 text-ink-muted">
+      <Avatar.Fallback>{props.letters}</Avatar.Fallback>
     </Avatar>
   );
 }
