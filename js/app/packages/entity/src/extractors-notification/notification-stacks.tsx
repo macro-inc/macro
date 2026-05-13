@@ -143,20 +143,22 @@ export function NotificationStackRow(props: {
           <span class="ph-no-capture truncate min-w-0 text-xs text-ink-muted/60 flex-1">
             {props.content ?? <NotificationContent stack={props.stack} singleLine />}
           </span>
-          <span class="text-ink-extra-muted text-xs tabular-nums shrink-0">
-            <NotificationTimestamp stack={props.stack} />
-          </span>
-          <Show when={canMarkDone()}>
-            <div class="shrink-0 opacity-0 group-hover/notif:opacity-100">
+          <div class="shrink-0 ml-auto">
+            <span class={cn('text-ink-extra-muted text-xs tabular-nums', {
+              'group-hover/notif:hidden': canMarkDone(),
+            })}>
+              <NotificationTimestamp stack={props.stack} />
+            </span>
+            <Show when={canMarkDone()}>
               <Button
                 onClick={handleMarkAsDone}
                 tooltip={'Mark done'}
-                class="rounded text-ink-muted hover:text-accent hover:bg-accent/10 grid p-0 place-items-center size-5"
+                class="rounded text-ink-muted hover:text-accent hover:bg-accent/10 hidden group-hover/notif:grid p-0 place-items-center size-5"
               >
                 <CheckIcon class="size-3" />
               </Button>
-            </div>
-          </Show>
+            </Show>
+          </div>
         </div>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
