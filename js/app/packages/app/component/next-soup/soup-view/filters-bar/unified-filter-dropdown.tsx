@@ -802,7 +802,7 @@ export const UnifiedFilterDropdown = () => {
     <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
       <Dropdown open={open()} onOpenChange={setOpen}>
         <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
-          <Dropdown.Trigger>
+          <Dropdown.Trigger depth={2}>
             <SlidersHorizontalIcon />
             <span>Filter</span>
           </Dropdown.Trigger>
