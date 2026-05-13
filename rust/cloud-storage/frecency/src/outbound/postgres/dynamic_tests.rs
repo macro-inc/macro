@@ -301,7 +301,7 @@ async fn test_dynamic_filter_by_project_ids_include_root(pool: PgPool) {
     assert_eq!(results.len(), 2);
     let ids: std::collections::HashSet<String> = results
         .iter()
-        .map(|r| r.id.entity.entity_id.clone())
+        .map(|r| r.id.entity.entity_id.to_string())
         .collect();
     assert!(ids.contains(&parent_project_id.to_string()));
     assert!(ids.contains(&child_project_id.to_string()));
