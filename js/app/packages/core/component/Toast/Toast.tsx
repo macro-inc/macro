@@ -303,7 +303,7 @@ function ToastContent(props: {
     <Toast
       toastId={props.toastId}
       class={`relative overflow-visible pointer-events-auto shadow-md rounded
-        data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
+        data-opened:animate-slide-in transition-[transform,opacity] duration-100 ease-in data-closed:opacity-0 data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
         data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
       persistent={true}
       onMouseEnter={() => setIsHovered(true)}
