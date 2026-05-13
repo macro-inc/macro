@@ -279,7 +279,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
                 type="button"
                 class="px-3 py-2 hover:bg-active transition-colors"
                 classList={{
-                  'bg-accent text-surface hover:bg-accent-ink':
+                  'bg-accent text-surface hover:bg-accent':
                     displayMonth() === index(),
                 }}
                 onClick={() => handleMonthSelect(index())}
@@ -305,7 +305,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
                   type="button"
                   class="px-3 py-2 hover:bg-active transition-colors"
                   classList={{
-                    'bg-accent text-surface hover:bg-accent-ink':
+                    'bg-accent text-surface hover:bg-accent':
                       displayYear() === year,
                   }}
                   onClick={() => handleYearSelect(year)}

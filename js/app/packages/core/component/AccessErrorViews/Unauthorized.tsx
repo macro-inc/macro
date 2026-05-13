@@ -26,7 +26,7 @@ export default function Unauthorized() {
         You {currentUserEmail() ? `(${currentUserEmail()})` : ''} do not have
         permission to view this file.
       </p>
-      <span class="text-accent-ink">401</span>
+      <span class="text-accent">401</span>
     </div>
   );
 }

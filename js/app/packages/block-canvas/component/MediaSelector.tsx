@@ -190,8 +190,8 @@ export function MediaSelector() {
                     },
                   }}
                 >
-                  <UploadSimple class="size-3.5 shrink-0 text-accent-ink" />
-                  <span class="text-sm font-medium text-accent-ink">
+                  <UploadSimple class="size-3.5 shrink-0 text-accent" />
+                  <span class="text-sm font-medium text-accent">
                     Upload File
                   </span>
                 </div>

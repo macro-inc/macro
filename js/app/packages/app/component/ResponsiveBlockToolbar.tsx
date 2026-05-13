@@ -44,7 +44,7 @@ export function ToolButton(props: { tool: BlockTool }) {
       class={cn(
         'px-1',
         props.tool.isActive?.() &&
-          'bg-accent/20 hover:bg-accent/30 text-accent-ink'
+          'bg-accent/20 hover:bg-accent/30 text-accent'
       )}
       size="icon-sm"
     >

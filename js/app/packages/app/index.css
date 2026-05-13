@@ -78,9 +78,7 @@
   --transition: 0s; /* defualt 0.15, used for transition jamming, currently disabled */
 
   /* Semantic Color names, use these when writing tailwind */
-  --color-accent-ink:      var(--a0);
   --color-accent:          var(--a0);
-  --color-focus:           var(--a0);
   --color-accent-bg:       oklch(var(--a0) / 0.08);
   --color-accent-hover:    oklch(var(--a0) / 0.20); /* hover, e.g. hover state for buttons/items */
 
@@ -165,8 +163,6 @@
 }
 
 :root {
-  --color-focus: var(--color-accent);
-
   /* Cursor variables — override these to use custom cursors */
   --cursor-nesw-resize: nesw-resize;
   --cursor-nwse-resize: nwse-resize;
@@ -184,13 +180,7 @@
   --cursor-text:        text;
 }
 
-.bg-accent {
-  --color-focus: var(--color-surface);
-}
 
-.bg-surface {
-  --color-focus: var(--color-accent);
-}
 
 /* Big hammer fix for cursor pointer. */
 @utility cursor-pointer {

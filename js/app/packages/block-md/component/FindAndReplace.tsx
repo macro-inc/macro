@@ -303,7 +303,7 @@ export function FindAndReplace() {
                 class={cn(
                   'size-4',
                   findAndReplaceStore.isSearching
-                    ? 'animate-pulse text-accent-ink'
+                    ? 'animate-pulse text-accent'
                     : 'text-ink'
                 )}
               />

@@ -57,7 +57,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
             <Button
               size="icon-sm"
               disabled={props.disabled}
-              class="size-auto gap-1 bg-accent/20 text-accent-ink hover:bg-accent/15! hover:text-accent-ink!"
+              class="size-auto gap-1 bg-accent/20 text-accent hover:bg-accent/15! hover:text-accent!"
             >
               <ClockIcon />
               <span class="text-sm">{formattedDate()}</span>

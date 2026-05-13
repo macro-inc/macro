@@ -157,7 +157,7 @@ export function OldMenuItem(props: OldMenuItemProps) {
                 class={cn(
                   'flex justify-center items-center shrink-0',
                   isMobile() ? 'size-5' : 'size-4',
-                  selected() && 'text-accent-ink',
+                  selected() && 'text-accent',
                   props.iconClass
                 )}
               >

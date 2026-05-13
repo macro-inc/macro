@@ -80,7 +80,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
             </Show>
           </div>
         </Show>
-        <p class="text-accent-ink font-medium whitespace-nowrap">
+        <p class="text-accent font-medium whitespace-nowrap">
           {getThreadReplyCountLabel(local.collapsedRepliesCount)}
         </p>
         <div class="hidden @min-[40rem]:block min-w-[15ch]">

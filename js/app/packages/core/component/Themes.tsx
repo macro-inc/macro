@@ -20,10 +20,10 @@ export type Theme =
 // it would be better if we also defined --accent-l-surface, --accent-l-contrast
 export const themeColors: Record<Theme, string> = {
   base: 'text-ink border-edge!',
-  accent: 'text-accent-ink border-accent/30',
+  accent: 'text-accent border-accent/30',
   accentFill: 'text-surface border-accent/30',
   accentOpaque:
-    'text-accent-ink border-[oklch(from_var(--color-accent)_calc(l*0.9)_calc(c*0.8)_h)]',
+    'text-accent border-[oklch(from_var(--color-accent)_calc(l*0.9)_calc(c*0.8)_h)]',
   contrast: 'text-surface border-ink-extra-muted',
   clear: 'text-ink border-transparent',
   selected: 'text-ink border-edge',

@@ -190,7 +190,7 @@ export function SplitFileMenu(props: {
         as={Button}
         class={cn(
           'px-1',
-          open() && 'bg-accent/20 hover:bg-accent/30 text-accent-ink',
+          open() && 'bg-accent/20 hover:bg-accent/30 text-accent',
           props.buttonClass
         )}
         size="icon-sm"
