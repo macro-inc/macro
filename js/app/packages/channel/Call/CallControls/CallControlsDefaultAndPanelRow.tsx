@@ -13,6 +13,7 @@ import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import PhoneDisconnect from '@macro-icons/wide/call-disconnect.svg';
 import { cn } from '@ui';
 import { type Accessor, For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { BACKGROUND_IMAGES, useCallContext } from '../CallContext';
 import { CallDeviceList } from '../CallDeviceList';
 import {
@@ -154,16 +155,12 @@ export function CallControlsDefaultAndPanelRow(
   const isConnecting = () => callCtx.isConnecting();
   const size = () => props.size();
   const iconClass = () => (size() === 'sm' ? 'w-4 h-4' : 'w-5 h-5');
-  const noiseSuppressionModeLabel = () => {
-    switch (callCtx.noiseSuppressionMode()) {
-      case 'krisp':
-        return 'Krisp';
-      case 'browser':
-        return 'Browser';
-      case 'off':
-        return 'Off';
-    }
-  };
+  const noiseSuppressionModeLabel = () =>
+    match(callCtx.noiseSuppressionMode())
+      .with('krisp', () => 'Krisp')
+      .with('browser', () => 'Browser')
+      .with('off', () => 'Off')
+      .exhaustive();
 
   return (
     <div

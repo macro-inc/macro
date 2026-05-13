@@ -14,6 +14,7 @@ import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg'
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { cn, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useCallContext } from '../CallContext';
 
 const menuStyles = {
@@ -34,16 +35,12 @@ export function CallControlsPanelSmallRow(
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
   const toggleShareWithTeam = useToggleShareWithTeamMutation();
-  const noiseSuppressionModeLabel = () => {
-    switch (callCtx.noiseSuppressionMode()) {
-      case 'krisp':
-        return 'Krisp';
-      case 'browser':
-        return 'Browser';
-      case 'off':
-        return 'Off';
-    }
-  };
+  const noiseSuppressionModeLabel = () =>
+    match(callCtx.noiseSuppressionMode())
+      .with('krisp', () => 'Krisp')
+      .with('browser', () => 'Browser')
+      .with('off', () => 'Off')
+      .exhaustive();
 
   const handleToggleShareWithTeam = async () => {
     const callId = callCtx.activeCallId();
