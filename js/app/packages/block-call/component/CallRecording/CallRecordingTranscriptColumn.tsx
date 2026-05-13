@@ -47,6 +47,19 @@ export function CallRecordingTranscriptColumn(props: {
               : 'flex min-h-0 flex-1 flex-col @[860px]:h-full @[860px]:min-h-0 @[860px]:min-w-[40cqw]'
           )}
         >
+          <Show when={props.isStacked()}>
+            <CallRecordingSectionShell
+              title="Participants"
+              icon={<UsersThree class="size-4 text-ink shrink-0" />}
+              open={props.participantsOpen()}
+              accordion
+              accordionOpenMaxVh={38}
+              onToggle={props.onToggleParticipants}
+            >
+              <CallRecordingParticipantsSection record={props.record} />
+            </CallRecordingSectionShell>
+          </Show>
+
           <CallRecordingSectionShell
             title="Transcript"
             icon={<Subtitles class="size-4 text-ink shrink-0" />}
@@ -66,19 +79,6 @@ export function CallRecordingTranscriptColumn(props: {
               hideHeader
             />
           </CallRecordingSectionShell>
-
-          <Show when={props.isStacked()}>
-            <CallRecordingSectionShell
-              title="Participants"
-              icon={<UsersThree class="size-4 text-ink shrink-0" />}
-              open={props.participantsOpen()}
-              accordion
-              accordionOpenMaxVh={38}
-              onToggle={props.onToggleParticipants}
-            >
-              <CallRecordingParticipantsSection record={props.record} />
-            </CallRecordingSectionShell>
-          </Show>
         </div>
       </Show>
     </div>

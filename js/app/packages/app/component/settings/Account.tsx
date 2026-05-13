@@ -190,7 +190,7 @@ export function Account() {
 
           <Panel.Toolbar class="h-full w-full">
             <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
-              <div class="bg-surface px-6 py-2 w-full">
+              <div class="px-4 py-2 w-full">
                 <PaywallComponent
                   hideCloseButton
                   cb={() => {}}
@@ -546,7 +546,7 @@ function NameInput(props: {
   };
 
   return (
-    <div class="ph-no-capture group relative flex items-center gap-1 rounded-sm h-7 mobile:h-9 px-2 border text-xs bg-transparent text-ink-muted border-edge-muted hover:bg-surface hover:text-ink focus-within:bg-surface focus-within:text-ink">
+    <div class="ph-no-capture group relative flex items-center gap-1 rounded-sm h-7 mobile:h-9 px-2 border text-xs bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink">
       <input
         type="text"
         class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-xs placeholder:text-ink-extra-muted"

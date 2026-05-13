@@ -159,9 +159,9 @@ export function CallRecordingBody(props: {
               </div>
             </header>
 
-            <CallRecordingSummarySection record={record} />
-
             <CallRecordingParticipantsSection record={record} />
+
+            <CallRecordingSummarySection record={record} />
 
             <Show when={record().recordingUrl}>
               {(url) => (

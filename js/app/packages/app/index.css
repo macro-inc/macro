@@ -94,6 +94,7 @@
 
   --color-ink:             var(--c0);
   --color-ink-muted:       var(--c1);
+  --color-default:         var(--c1); /* wtf? */
   --color-ink-extra-muted: var(--c2);
   --color-ink-disabled:    var(--c3);
   --color-ink-placeholder: var(--c4);
@@ -115,22 +116,21 @@
   --color-comment-bg:  oklch(from var(--color-comment) l c h / 0.15);
   --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h); /* scuffed */
 
-  --color-note:        oklch(from var(--a0) l c 293deg);
+  --color-calendar:    oklch(from var(--a0) l c 100deg);
+  --color-contact:     oklch(from var(--a0) l c  94deg);
   --color-canvas:      oklch(from var(--a0) l c  60deg);
-  --color-html:        oklch(from var(--a0) l c  47deg);
   --color-folder:      oklch(from var(--a0) l c 240deg);
-  --color-code:        oklch(from var(--a0) l c 180deg);
-  --color-pdf:         oklch(from var(--a0) l c  25deg);
   --color-image:       oklch(from var(--a0) l c  95deg);
-  --color-write:       oklch(from var(--a0) l c 260deg);
-  --color-chat:        oklch(from var(--a0) l c 220deg);
   --color-video:       oklch(from var(--a0) l c 277deg);
-  --color-rss:         oklch(from var(--a0) l c 260deg);
+  --color-write:       oklch(from var(--a0) l c 260deg);
+  --color-code:        oklch(from var(--a0) l c 180deg);
+  --color-chat:        oklch(from var(--a0) l c 220deg);
+  --color-html:        oklch(from var(--a0) l c  47deg);
+  --color-note:        oklch(from var(--a0) l c 293deg);
   --color-task:        oklch(from var(--a0) l c 150deg);
-  --color-calendar:    oklch(0.8159 0.2849 98.77);
-  --color-contact:     oklch(0.8617 0.1837 93.83);
-  --color-email:       var(--c1);
-  --color-default:     var(--c1);
+  --color-pdf:         oklch(from var(--a0) l c  25deg);
+  --color-rss:         oklch(from var(--a0) l c 260deg);
+  --color-email:       var(--theme-email); /* wtf? */
 
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */

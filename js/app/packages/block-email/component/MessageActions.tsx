@@ -1,3 +1,4 @@
+import { isReplyAllEligible } from '@block-email/util/recipientConversion';
 import type { ReplyType } from '@block-email/util/replyType';
 import { useEmail } from '@core/context/user';
 import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
@@ -21,15 +22,8 @@ export function MessageActions(props: {
 }) {
   const formRegistry = getEmailFormRegistry();
   const userEmail = useEmail();
-  const filteredTo = () => {
-    return props.message.to.filter((to) => to.email !== userEmail());
-  };
-  const filteredCc = () => {
-    return props.message.cc.filter((cc) => cc.email !== userEmail());
-  };
-  const shouldShowReplyAll = () => {
-    return filteredTo().length + filteredCc().length > 1;
-  };
+  const shouldShowReplyAll = () =>
+    isReplyAllEligible(props.message, userEmail() ?? '');
 
   const canShowActions = () => {
     if (!props.showActions) return false;
@@ -55,26 +49,24 @@ export function MessageActions(props: {
 
   return (
     <div
-      class="flex flex-row items-center gap-4 transition-opacity"
+      class="flex flex-row items-center gap-1 transition-opacity"
       classList={{
         'opacity-0 pointer-events-none': !canShowActions(),
         'opacity-100': canShowActions(),
       }}
     >
+      <Show when={!props.hiddenActions?.includes('reply')}>
+        <Button
+          class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+          onClick={onChangeReplyType('reply')}
+          tooltip="Reply"
+        >
+          <ArrowBendUpLeft class="size-5" />
+        </Button>
+      </Show>
       <Show
         when={
           shouldShowReplyAll() && !props.hiddenActions?.includes('reply-all')
-        }
-        fallback={
-          <Show when={!props.hiddenActions?.includes('reply')}>
-            <Button
-              class="size-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
-              onClick={onChangeReplyType('reply')}
-              tooltip="Reply"
-            >
-              <ArrowBendUpLeft class="size-5" />
-            </Button>
-          </Show>
         }
       >
         <Button
