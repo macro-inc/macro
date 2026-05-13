@@ -79,6 +79,7 @@ export type DateItem = ParsedDate & {
 export type UserMentionRecord = {
   documentId: string;
   mentions: string[];
+  email: string;
   metadata: DocumentMentionMetadata;
 };
 
@@ -155,20 +156,19 @@ export async function handleUserMention(
   let mentionId: string | undefined;
 
   if (blockName !== 'channel') {
-    if (blockId) {
-      const record: UserMentionRecord = {
-        documentId: blockId,
-        mentions: [user.id],
-        metadata: {
-          mention_id: v7(),
-        },
-      };
-      if (onUserMention) {
-        onUserMention(record);
-      }
-      if (!disableMentionTracking) {
-        mentionId = await trackMention(blockId, 'user', user.id);
-      }
+    const record: UserMentionRecord = {
+      documentId: blockId ?? '',
+      mentions: [user.id],
+      email: user.email,
+      metadata: {
+        mention_id: v7(),
+      },
+    };
+    if (onUserMention) {
+      onUserMention(record);
+    }
+    if (blockId && !disableMentionTracking) {
+      mentionId = await trackMention(blockId, 'user', user.id);
     }
   }
 
