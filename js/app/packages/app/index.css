@@ -300,10 +300,73 @@
   }
 }
 
+@utility no-select-children {
+  * {
+    user-select: none;
+  }
+}
+
+@utility select-children {
+  * {
+    user-select: text;
+  }
+}
+
+@utility bg-modal-overlay {
+  --pattern-color: color-mix(in srgb, var(--color-overlay), var(--color-ink) 2%);
+  background-color: var(--color-overlay);
+}
+
+@utility bg-modal-overlay-konsole {
+  background-image: linear-gradient(
+    rgba(from var(--color-accent) r g b / 0.1) 0%,
+    transparent 25%
+  );
+  background-color: var(--color-overlay);
+}
+
+@utility portal-scope {
+  --documentation: "Set this element as a bounding scope for the ScopedPortal component";
+}
+
+/* Apply to the content wrapper div inside any Dialog.Portal (not the overlay). */
+/* Keeps UI elements within device safe areas (notch, home indicator, etc.). */
+@utility safe-insets {
+  margin-bottom: var(--safe-bottom);
+  margin-right: var(--safe-right);
+  margin-left: var(--safe-left);
+  margin-top: var(--safe-top);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --thread-shift: 40px;
+  }
+}
+
+@utility macro-message-width {
+  max-width: 100%;
+  @media (min-width: 640px) {
+    max-width: 800px;
+    min-width: 250px;
+  }
+}
+
+@utility macro-message-padding {
+  @container (width < 816px) { padding-inline: calc(var(--spacing) * 4); }
+  @container (width < 640px) { padding-inline: calc(var(--spacing) * 2); }
+}
+
+@utility macro-message-margin {
+  @container (width < 816px) { margin-inline: calc(var(--spacing) * 4); }
+  @container (width < 640px) { margin-inline: calc(var(--spacing) * 2); }
+}
+
 /** isolate the app-root stacking context from the kobalte dialog and modal stacking context */
 #root { isolation: isolate; }
 
-/* On mobile (width and touch) bump tailwind's font-sizes up 1px. Purposefully only changing the "reading" sizes, not the heading sizes. */
+/* On mobile (width and touch) bump tailwind's font-sizes up 1px. */
+/* Purposefully only changing the "reading" sizes, not the heading sizes. */
 @media (max-width: 639px) {
   :root:where(html[data-touch-device="true"]) {
     --text-base: 1.0625rem;
@@ -320,24 +383,19 @@
   --font-mono: "Roboto Mono Variable",  monospace;
   --text-xxs: 0.625rem;
 
-  /* Custom container size */
-  --container-small: 40rem;
-  --container-c: 0;
-
-  /* Transitions */
-  --ease-click: cubic-bezier(.18,.91,.27,1.14);
-  --transition-duration-slow: 100ms;
-
   /* Animations */
   --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
   --animate-swipe-out: swipeOut 100ms ease-out;
   --animate-typing-dot: typing-dot 1s infinite;
   --animate-hide: hide 100ms ease-in;
 
-  @keyframes hide {
-    from { opacity: 1; }
-    to   { opacity: 0; }
-  }
+  /* Transitions */
+  --ease-click: cubic-bezier(.18,.91,.27,1.14);
+  --transition-duration-slow: 100ms;
+
+  /* Custom container size */
+  --container-small: 40rem;
+  --container-c: 0;
 
   @keyframes slideIn {
     from { transform: translateX(calc(100% + var(--viewport-padding))); }
@@ -354,13 +412,18 @@
     50%  { transform: scale(1.5) translateY(-2px); }
     100% { transform: scale(1)   translateY(0   ); }
   }
+
+  @keyframes hide {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
 }
 
 @custom-variant drop-valid (&[data-drop-valid]);
 @custom-variant drop-invalid (&[data-drop-invalid]);
 
-/* Hide Kobalte's popper positioner until floating-UI has computed the position.
-   Without this, the card briefly appears at top:0 left:0 on first open. */
+/* Hide Kobalte's popper positioner until floating-UI has computed the position. */
+/* Without this, the card briefly appears at top:0 left:0 on first open. */
 [data-popper-positioner]:not([style*='translate']) {
   pointer-events: none !important;
   will-change: transform, opacity;
@@ -385,7 +448,7 @@
     width: 100dvw;
   }
 
-    /* This is ugly, and we can probably do better, but it stops text from being selectable by default, which is important for mobile usage */
+    /* scuffed: stops text from being selectable by default, important for mobile usage */
   :where(*, ::before, ::after) {
     user-select: none;
   }
@@ -447,72 +510,9 @@ html:not([data-touch-device="true"]) [data-message][data-selected] > .message-ac
   to { opacity: 1; }
 }
 
-@utility no-select-children {
-  * {
-    user-select: none;
-  }
-}
-
-@utility select-children {
-  * {
-    user-select: text;
-  }
-}
-
-@utility bg-modal-overlay {
-  --pattern-color: color-mix(in srgb, var(--color-overlay), var(--color-ink) 2%);
-  background-color: var(--color-overlay);
-}
-
-@utility bg-modal-overlay-konsole {
-  background-color: var(--color-overlay);
-  background-image: linear-gradient(
-    rgba(from var(--color-accent) r g b / 0.1) 0%,
-    transparent 25%
-  );
-}
-
-@utility portal-scope {
-  --documentation: "Set this element as a bounding scope for the ScopedPortal component";
-}
-
-/* Apply to the content wrapper div inside any Dialog.Portal (not the overlay).
-   Keeps UI elements within device safe areas (notch, home indicator, etc.). */
-@utility safe-insets {
-  margin-bottom: var(--safe-bottom);
-  margin-right: var(--safe-right);
-  margin-left: var(--safe-left);
-  margin-top: var(--safe-top);
-}
-
-@media (min-width: 640px) {
-  :root {
-    --thread-shift: 40px;
-  }
-}
-
-@utility macro-message-width {
-  max-width: 100%;
-  @media (min-width: 640px) {
-    max-width: 800px;
-    min-width: 250px;
-  }
-}
-
-@utility macro-message-padding {
-  @container (width < 816px) { padding-inline: calc(var(--spacing) * 4); }
-  @container (width < 640px) { padding-inline: calc(var(--spacing) * 2); }
-}
-
-@utility macro-message-margin {
-  @container (width < 816px) { margin-inline: calc(var(--spacing) * 4); }
-  @container (width < 640px) { margin-inline: calc(var(--spacing) * 2); }
-}
-
-::-webkit-scrollbar {
-  overflow: auto;
-  height: 8px;
-  width: 8px;
+/* scuffed scrollbar should be killed. use scroll from @ui */
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-edge);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -521,29 +521,42 @@ html:not([data-touch-device="true"]) [data-message][data-selected] > .message-ac
   margin: 2px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-edge);
+::-webkit-scrollbar {
+  overflow: auto;
+  height: 8px;
+  width: 8px;
 }
 
 :focus-visible {
   outline: none;
 }
 
-[type="file"]:focus {
-  outline: none;
+input[type="time"]::-webkit-calendar-picker-indicator {
+  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 256 256'%3E%3C!-- Icon from Phosphor by Phosphor Icons - https://github.com/phosphor-icons/core/blob/main/LICENSE --%3E%3Cpath fill='currentColor' d='M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m0 192a88 88 0 1 1 88-88a88.1 88.1 0 0 1-88 88m64-88a8 8 0 0 1-8 8h-56a8 8 0 0 1-8-8V72a8 8 0 0 1 16 0v48h48a8 8 0 0 1 8 8'/%3E%3C/svg%3E");
+  -webkit-mask: var(--icon) no-repeat;
+  background-color: currentColor;
+  -webkit-mask-size: 100% 100%;
+  mask: var(--icon) no-repeat;
+  background-image: none;
+  mask-size: 100% 100%;
+  color: inherit;
+  height: 1em;
+  width: 1em;
 }
 
-/* Prevent up/down arrows showing in Firefox */
-input[type="number"] {
-  -moz-appearance: textfield;
-}
-
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
+input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
   margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+[type="file"]:focus {
+  outline: none;
 }
 
 .chat-markdown-container {
@@ -566,17 +579,4 @@ input[type="number"]::-webkit-outer-spin-button {
   transition: height 100ms ease;
   max-height: 500px;
   overflow: auto;
-}
-
-input[type="time"]::-webkit-calendar-picker-indicator {
-  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 256 256'%3E%3C!-- Icon from Phosphor by Phosphor Icons - https://github.com/phosphor-icons/core/blob/main/LICENSE --%3E%3Cpath fill='currentColor' d='M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m0 192a88 88 0 1 1 88-88a88.1 88.1 0 0 1-88 88m64-88a8 8 0 0 1-8 8h-56a8 8 0 0 1-8-8V72a8 8 0 0 1 16 0v48h48a8 8 0 0 1 8 8'/%3E%3C/svg%3E");
-  -webkit-mask: var(--icon) no-repeat;
-  background-color: currentColor;
-  -webkit-mask-size: 100% 100%;
-  mask: var(--icon) no-repeat;
-  background-image: none;
-  mask-size: 100% 100%;
-  color: inherit;
-  height: 1em;
-  width: 1em;
 }
