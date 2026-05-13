@@ -270,9 +270,12 @@ export const SoupViewContextProvider: FlowComponent<
 
     const sorts = soup.sort.active();
     if (sorts.length > 0 && !search.isSearching()) {
+      const directions = sorts.map((s) =>
+        soup.sort.isReversed(s.id) ? -1 : 1
+      );
       transformed.sort((a, b) => {
-        for (const sort of sorts) {
-          const result = sort.fn(a, b);
+        for (let i = 0; i < sorts.length; i++) {
+          const result = sorts[i].fn(a, b) * directions[i];
           if (result !== 0) return result;
         }
         return 0;

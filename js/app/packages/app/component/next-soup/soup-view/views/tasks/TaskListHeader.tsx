@@ -55,6 +55,7 @@ export function TaskListHeader(props: { class?: string }) {
   const { soup } = useSoupView();
   const activeSortId = createMemo(() => soup.sort.active()[0]?.id);
   const setSort = (id: SystemSortOption) => soup.sort.setAll([id]);
+  const reverseSort = (id: SystemSortOption) => soup.sort.toggleDirection(id);
 
   return (
     <div
@@ -76,13 +77,21 @@ export function TaskListHeader(props: { class?: string }) {
       <For each={TASK_GRID_COLUMNS}>
         {(col) => {
           const sortKey = COLUMN_SORT_KEYS[col.id];
+          const isActive = () =>
+            sortKey !== undefined && activeSortId() === sortKey;
           return (
             <HeaderCell
               gridArea={col.id}
               label={col.label}
               sortKey={sortKey}
-              active={sortKey !== undefined && activeSortId() === sortKey}
+              active={isActive()}
+              reversed={
+                sortKey !== undefined &&
+                isActive() &&
+                soup.sort.isReversed(sortKey)
+              }
               onSort={setSort}
+              onReverse={reverseSort}
               narrowIcon={COLUMN_ICONS[col.id]}
             />
           );
@@ -99,7 +108,11 @@ export function TaskListHeader(props: { class?: string }) {
         label="Updated"
         sortKey="updated_at"
         active={activeSortId() === 'updated_at'}
+        reversed={
+          activeSortId() === 'updated_at' && soup.sort.isReversed('updated_at')
+        }
         onSort={setSort}
+        onReverse={reverseSort}
         align="end"
       />
     </div>
@@ -111,7 +124,9 @@ function HeaderCell(props: {
   label: string;
   sortKey?: SystemSortOption;
   active?: boolean;
+  reversed?: boolean;
   onSort?: (id: SystemSortOption) => void;
+  onReverse?: (id: SystemSortOption) => void;
   narrowIcon?: () => JSX.Element;
   align?: 'start' | 'end';
   class?: string;
@@ -122,7 +137,7 @@ function HeaderCell(props: {
   return (
     <div
       style={{ 'grid-area': props.gridArea }}
-      class={cn('flex items-center min-w-0', props.class)}
+      class={cn('flex items-center min-w-0 pl-2', props.class)}
     >
       <Show
         when={props.sortKey}
@@ -143,29 +158,35 @@ function HeaderCell(props: {
         }
       >
         {(sortKey) => (
-          <button
-            type="button"
-            onClick={() => props.onSort?.(sortKey())}
-            class={cn(
-              'flex items-center gap-1 min-w-0 w-full h-full',
-              'hover:text-ink transition-colors',
-              props.active && 'text-ink',
-              justify()
-            )}
+          <Tooltip
+            label={`Sort by ${props.label.toLowerCase()}, shift-click to reverse`}
           >
-            <Show when={props.narrowIcon}>
-              <Tooltip label={props.label}>{props.narrowIcon?.()}</Tooltip>
-            </Show>
-            <span class="truncate @max-[840px]/u-list:hidden">
-              {props.label}
-            </span>
-            <ArrowDownIcon
+            <button
+              type="button"
+              onClick={(e) => {
+                if (e.shiftKey) props.onReverse?.(sortKey());
+                else props.onSort?.(sortKey());
+              }}
               class={cn(
-                'size-3 shrink-0 @max-[840px]/u-list:hidden',
-                props.active ? 'text-ink' : 'text-ink-extra-muted'
+                'flex items-center gap-1 min-w-0 w-full h-full select-none',
+                'hover:text-ink transition-colors',
+                props.active && 'text-ink',
+                justify()
               )}
-            />
-          </button>
+            >
+              <Show when={props.narrowIcon}>{props.narrowIcon?.()}</Show>
+              <span class="truncate @max-[840px]/u-list:hidden">
+                {props.label}
+              </span>
+              <ArrowDownIcon
+                class={cn(
+                  'size-3 shrink-0 @max-[840px]/u-list:hidden transition-transform',
+                  props.active ? 'text-ink' : 'text-ink-extra-muted',
+                  props.reversed && 'rotate-180'
+                )}
+              />
+            </button>
+          </Tooltip>
         )}
       </Show>
     </div>
