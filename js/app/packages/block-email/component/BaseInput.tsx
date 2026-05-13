@@ -610,6 +610,10 @@ export function BaseInput(props: {
             toRef()?.focus();
           }
         }, 100);
+      } else if (rt === 'reply' || rt === 'reply-all') {
+        setTimeout(() => {
+          editor()?.focus();
+        }, 100);
       }
     });
   });
@@ -1152,18 +1156,22 @@ export function BaseInput(props: {
     }
   });
 
-  // Focus when external shouldFocus signal is set to true
+  // Focus when external shouldFocus signal is set to true. Gated on
+  // editor() so the effect re-runs once the Lexical editor is captured —
+  // when the input is freshly mounted (e.g. opening from BottomReplyButtons),
+  // shouldFocusInput is true before captureEditor fires.
   createEffect(() => {
-    if (form().shouldFocusInput()) {
-      if (!isMobile()) {
-        requestAnimationFrame(() => {
-          editor()?.focus();
-          form().setShouldFocusInput(false);
-        });
-      } else {
-        form().setShouldFocusInput(false);
-      }
+    if (!form().shouldFocusInput()) return;
+    if (isMobile()) {
+      form().setShouldFocusInput(false);
+      return;
     }
+    const ed = editor();
+    if (!ed) return;
+    requestAnimationFrame(() => {
+      ed.focus();
+      form().setShouldFocusInput(false);
+    });
   });
 
   const handleAddAttachments = (files: File[]) => {
