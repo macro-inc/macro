@@ -1391,55 +1391,41 @@
         "enum": ["ios", "android", "iosvoip"]
       },
       "DocumentMentionMetadata": {
-        "type": "object",
-        "description": "Someone mentioned a document in a channel",
-        "required": ["channelType", "documentName", "messageContent", "messageId", "owner"],
-        "properties": {
-          "channelName": {
-            "type": "string"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ChannelMentionMetadata"
           },
-          "channelType": {
-            "$ref": "#/components/schemas/ChannelType"
-          },
-          "documentName": {
-            "type": "string",
-            "description": "The name of the document"
-          },
-          "fileType": {
-            "type": ["string", "null"],
-            "description": "The file type of the document"
-          },
-          "messageContent": {
-            "type": "string",
-            "description": "The message content"
-          },
-          "messageId": {
-            "type": "string",
-            "description": "The message you were mentioned in"
-          },
-          "owner": {
-            "type": "string",
-            "description": "The owner of the document"
-          },
-          "senderProfilePictureUrl": {
-            "type": ["string", "null"]
-          },
-          "threadId": {
-            "type": ["string", "null"],
-            "description": "the id of the thread"
-          },
-          "subType": {
-            "oneOf": [
-              {
-                "type": "null"
+          {
+            "type": "object",
+            "required": ["documentName", "owner"],
+            "properties": {
+              "documentName": {
+                "type": "string",
+                "description": "The name of the document"
               },
-              {
-                "$ref": "#/components/schemas/NotificationDocumentSubType",
-                "description": "The sub type of the document (e.g. task)"
+              "fileType": {
+                "type": ["string", "null"],
+                "description": "The file type of the document"
+              },
+              "owner": {
+                "type": "string",
+                "description": "The owner of the document"
+              },
+              "subType": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/NotificationDocumentSubType",
+                    "description": "The sub type of the document (e.g. task)"
+                  }
+                ]
               }
-            ]
+            }
           }
-        }
+        ],
+        "description": "Someone mentioned a document in a channel"
       },
       "EmptyResponse": {
         "type": "object",

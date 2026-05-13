@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type DocumentMentionMetadataSenderProfilePictureUrl = string | null;
+/**
+ * The file type of the document
+ */
+export type DocumentMentionMetadataAllOfFileType = string | null;

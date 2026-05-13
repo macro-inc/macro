@@ -5,18 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChannelMentionMetadata } from './channelMentionMetadata';
-import type { DocumentMentionMetadataFileType } from './documentMentionMetadataFileType';
-import type { DocumentMentionMetadataSubType } from './documentMentionMetadataSubType';
+import type { DocumentMentionMetadataAllOf } from './documentMentionMetadataAllOf';
 
 /**
  * Someone mentioned a document in a channel
  */
-export type DocumentMentionMetadata = ChannelMentionMetadata & {
-  /** The name of the document */
-  documentName: string;
-  /** The file type of the document */
-  fileType?: DocumentMentionMetadataFileType;
-  /** The owner of the document */
-  owner: string;
-  subType?: DocumentMentionMetadataSubType;
-};
+export type DocumentMentionMetadata = ChannelMentionMetadata &
+  DocumentMentionMetadataAllOf;
