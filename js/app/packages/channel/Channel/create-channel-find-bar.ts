@@ -2,6 +2,7 @@ import {
   createFindBarController,
   type FindBarController,
 } from '@core/component/createFindBarController';
+import { extractSearchTerms } from '@core/util/searchHighlight';
 import {
   type ChannelMessageEntity,
   isChannelMessageEntity,
@@ -13,6 +14,7 @@ import {
 } from '@queries/soup/search';
 import { ChannelSortTimestamp } from '@service-search/generated/models';
 import { type Accessor, createEffect, createMemo } from 'solid-js';
+import type { SearchHighlightTermsLookup } from '../Message/context';
 
 const FIND_BAR_PAGE_SIZE = 50;
 const FIND_BAR_PREFETCH_THRESHOLD = 10;
@@ -23,12 +25,17 @@ type CreateChannelFindBarOptions = {
   clearSelection: () => void;
 };
 
-export type ChannelFindBar = FindBarController;
+export type ChannelFindBar = FindBarController & {
+  /** Per-message highlight terms derived from loaded search results. */
+  getSearchTermsForMessage: Accessor<SearchHighlightTermsLookup | undefined>;
+};
 
 export function createChannelFindBar(
   options: CreateChannelFindBarOptions
 ): ChannelFindBar {
-  return createFindBarController<WithSearch<ChannelMessageEntity>>(
+  let termsByMessageId: Accessor<Map<string, string[]>> = () => new Map();
+
+  const controller = createFindBarController<WithSearch<ChannelMessageEntity>>(
     ({ isOpen, submittedQuery, activeIndex }) => {
       // Channel-only search with thread sort so results paginate monotonically
       // through the channel's thread list (replies cluster with their parent
@@ -57,6 +64,28 @@ export function createChannelFindBar(
           (e): e is WithSearch<ChannelMessageEntity> =>
             isChannelMessageEntity(e) && e.channelId === options.channelId()
         );
+      });
+
+      termsByMessageId = createMemo<Map<string, string[]>>(() => {
+        if (!isOpen()) return new Map();
+        const map = new Map<string, string[]>();
+        for (const entity of results()) {
+          const hit = entity.search.contentHitData?.[0]?.content;
+          if (!hit) continue;
+          const terms = [
+            ...new Set(extractSearchTerms(hit).filter((t) => t.length > 0)),
+          ];
+          if (!terms.length) continue;
+          const existing = map.get(entity.messageId);
+          if (existing) {
+            for (const t of terms) {
+              if (!existing.includes(t)) existing.push(t);
+            }
+          } else {
+            map.set(entity.messageId, terms);
+          }
+        }
+        return map;
       });
 
       const totalCount = createMemo<number | undefined>(() => {
@@ -97,4 +126,14 @@ export function createChannelFindBar(
       onBeforeSubmit: () => options.clearSelection(),
     }
   );
+
+  const getSearchTermsForMessage: Accessor<
+    SearchHighlightTermsLookup | undefined
+  > = () => {
+    const map = termsByMessageId();
+    if (map.size === 0) return undefined;
+    return (messageId: string) => map.get(messageId);
+  };
+
+  return { ...controller, getSearchTermsForMessage };
 }

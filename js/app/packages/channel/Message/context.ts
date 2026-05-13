@@ -4,8 +4,23 @@ import type { MessageActions, MessageData } from './types';
 const MessageContext = createContext<Accessor<MessageData>>();
 const MessageActionsContext = createContext<MessageActions>();
 
+export type SearchHighlightTermsLookup = (
+  messageId: string
+) => readonly string[] | undefined;
+
+const SearchHighlightTermsContext =
+  createContext<Accessor<SearchHighlightTermsLookup | undefined>>();
+
 export const MessageProvider = MessageContext.Provider;
 export const MessageActionsProvider = MessageActionsContext.Provider;
+export const SearchHighlightTermsProvider =
+  SearchHighlightTermsContext.Provider;
+
+export function useSearchHighlightTermsLookup():
+  | Accessor<SearchHighlightTermsLookup | undefined>
+  | undefined {
+  return useContext(SearchHighlightTermsContext);
+}
 
 export function useMessage(): Accessor<MessageData> {
   const ctx = useContext(MessageContext);
