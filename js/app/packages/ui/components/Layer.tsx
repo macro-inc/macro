@@ -13,7 +13,6 @@ export function Layer(props: LayerProps) {
       data-layer-depth={props.depth}
       style={{
         'display': 'contents',
-
         '--b0': `oklch(calc(var(--b0l) + ${depth()}) var(--b0c) var(--b0h))`,
         '--b1': `oklch(calc(var(--b1l) + ${depth()}) var(--b1c) var(--b1h))`,
         '--b2': `oklch(calc(var(--b2l) + ${depth()}) var(--b2c) var(--b2h))`,
@@ -29,7 +28,7 @@ export function Layer(props: LayerProps) {
         '--color-accent-bg':       'oklch(from var(--a0) l c h / 0.15)',
 
         // TODO (seamus): --color-surface could be better handled with fractional layer depth
-        '--color-surface':         `oklch(calc(var(--b0l) + ${depth() + 0.02}) var(--b0c) var(--b0h))`,
+        '--color-surface':         'var(--b0)',
         '--color-shadow':          'oklch(calc(var(--b0l) - 0.005 ) var(--b0c) var(--b0h) / 0.2)',
         // TODO (seamus): --color-message could be better handled with fractional layer depth
         '--color-message':         'color-mix(in oklch, var(--b1) 50%, var(--b2))',

@@ -24,14 +24,13 @@ import type { ThemeV2 } from '@theme/types/themeTypes';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type Component, createMemo, onCleanup } from 'solid-js';
 import {
-  monochromeIcons,
   setDarkModeTheme,
   setLightModeTheme,
-  setMonochromeIcons,
   setThemeShouldMatchSystem,
   themeShouldMatchSystem,
   themes,
 } from '../../theme/signals/themeSignals';
+
 import { applyTheme } from '../../theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
 import { CommandState } from './command';
@@ -332,15 +331,7 @@ export default function GlobalShortcuts() {
     runWithInputFocused: true,
   });
 
-  registerHotkey({
-    scopeId: 'global',
-    description: 'Toggle monochrome icons',
-    keyDownHandler: () => {
-      setMonochromeIcons(!monochromeIcons());
-      return true;
-    },
-    runWithInputFocused: true,
-  });
+
 
   registerHotkey({
     scopeId: 'global',

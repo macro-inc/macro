@@ -6,13 +6,14 @@ import { isMobile } from '@core/mobile/isMobile';
 import { createSignal, Show } from 'solid-js';
 import { Tabs } from '@core/component/Tabs';
 import { Panel } from '@ui';
+import { UI } from './UI';
 
 type PanelA = 'basic' | 'advanced';
-type PanelB ='list' | 'settings'
+type PanelB ='themes' | 'ui'
 
 export function Appearance() {
   const [activeTabA, setActiveTabA] = createSignal<PanelA>('basic');
-  const [activeTabB, setActiveTabB] = createSignal<PanelB>('list');
+  const [activeTabB, setActiveTabB] = createSignal<PanelB>('themes');
 
   return (
     <div class="h-full overflow-hidden flex justify-center p-2">
@@ -63,16 +64,19 @@ export function Appearance() {
             <Tabs
             onChange={(value) => setActiveTabB(value as PanelB)}
               list={[
-                { value: 'list', label: 'Theme List' },
-                { value: 'settings', label: 'Settings' },
+                { value: 'themes', label: 'Themes' },
+                { value: 'ui', label: 'UI' },
               ]}
               value={activeTabB()}
               defaultValue="list"
             />
           </Panel.Header>
           <Panel.Body scroll>
-            <Show when={activeTabB() === 'list'}>
+            <Show when={activeTabB() === 'themes'}>
               <ThemeList />
+            </Show>
+            <Show when={activeTabB() === 'ui'}>
+              <UI />
             </Show>
           </Panel.Body>
         </Panel>
