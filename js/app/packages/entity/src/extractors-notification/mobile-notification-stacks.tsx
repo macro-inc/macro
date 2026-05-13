@@ -10,13 +10,13 @@ import { cn } from '@ui';
 import { createEffect, type JSX, useContext } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { CollapsibleList } from '../components/CollapsibleList';
-import { UnreadIndicator } from '../components/UnreadIndicator';
 import { Entity } from '../entity';
 import { type EntityData, isChannelEntity } from '../types/entity';
 import type { WithNotification } from '../types/notification';
 import { isNotificationUnread } from '../utils/notification';
 import { useNotificationStackActions } from './notification-actions';
 import { NotificationContent } from './notification-content';
+import { NotificationSenderIcon } from './notification-sender-icon';
 import { NotificationTimestamp } from './notification-timestamp';
 
 export type EntityRowConfig = {
@@ -34,43 +34,49 @@ function MobileStackRowLayout(props: {
 }) {
   return (
     <Entity.Layout
-      class="w-full text-sm grid bg-message border-edge"
+      class="w-full text-sm grid"
       onClick={props.onClick}
       style={{
-        'grid-template-columns':
-          'var(--soup-stack-row-unread-column-width) 1fr auto',
+        'grid-template-columns': 'auto 1fr auto',
         'grid-template-rows': 'auto auto',
-        'grid-template-areas': '"unread title timestamp" "unread body body"',
-        'border-left-width': 'var(--soup-stack-row-border-l)',
+        'grid-template-areas': '"icon title timestamp" "icon body body"',
       }}
     >
-      <Entity.Slot placement="unread" class="flex items-center justify-center">
-        <UnreadIndicator
-          class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)"
-          active={props.unread}
+      <Entity.Slot
+        placement="icon"
+        class="flex flex-col items-center gap-1 pt-3.5 pl-3 pr-2"
+      >
+        <Entity.Notification.Icon
+          stack={props.stack}
+          class={cn('size-3.5 shrink-0', {
+            'text-accent': props.unread,
+            'text-ink-muted': !props.unread,
+          })}
+        />
+        <span
+          class={cn('size-1.5 rounded-full bg-accent shrink-0 opacity-0', {
+            'opacity-100': props.unread,
+          })}
         />
       </Entity.Slot>
       <Entity.Slot
         placement="title"
-        class="flex items-center gap-2 overflow-hidden min-w-0 font-semibold pt-3"
+        class="flex items-center gap-2 overflow-hidden min-w-0 pt-3"
       >
-        <Entity.Notification.Icon
-          stack={props.stack}
-          class="size-3.5 shrink-0"
-        />
-        <span class="truncate min-w-0">
+        <NotificationSenderIcon stack={props.stack} size="sm" />
+        <span class="truncate min-w-0 font-medium text-ink">
           <Entity.Notification.Description stack={props.stack} />
         </span>
       </Entity.Slot>
       <Entity.Slot
         placement="timestamp"
-        class="text-xs text-right text-ink-extra-muted font-light pt-3 pr-4 pl-2"
+        class="text-xs text-right text-ink-extra-muted pt-3 pr-4 pl-2 tabular-nums"
       >
         <NotificationTimestamp stack={props.stack} />
       </Entity.Slot>
       <Entity.Slot
         placement="body"
-        class={cn('text-ink-extra-muted pb-2 min-h-lh pr-4', {
+        class={cn('text-ink-muted/80 pb-2.5 min-h-lh pr-4 text-xs', {
           truncate: props.stack.type !== 'document_mention',
         })}
       >
@@ -198,7 +204,7 @@ export function MobileNotificationStacks(props: MobileNotificationStacksProps) {
         </span>
       </div>
       {/* Stack rows */}
-      <div class="flex flex-col gap-3">
+      <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden divide-y divide-ink-muted/8">
         <CollapsibleList
           items={stacks}
           visibleCount={props.visibleCount ?? 3}

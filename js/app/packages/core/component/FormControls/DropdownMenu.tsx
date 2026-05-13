@@ -126,7 +126,7 @@ const DropdownMenu: ParentComponent<
               when={props.shadowTheme === 'Base' || props.shadowTheme == null}
             >
               <div
-                class="absolute bg-panel"
+                class="absolute bg-surface"
                 style={{
                   width: `calc(100% - ${triggerSize().width - (props.dropdownCutout ?? 2)}px)`,
                   '--dropdown-cutout': `${props.dropdownCutout ?? 4}px`,
@@ -159,7 +159,7 @@ const DropdownMenu: ParentComponent<
             </Show>
           </div>
           <div
-            class="relative bg-panel"
+            class="relative bg-surface"
             classList={{
               'border-accent border-2': props.shadowAccent ?? true,
             }}

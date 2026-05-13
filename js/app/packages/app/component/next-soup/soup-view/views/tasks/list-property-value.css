@@ -7,14 +7,14 @@
 }
 
 /* Medium containers: hide Created By column */
-@container uList (max-width: 1220px) {
+@container u-list (max-width: 1220px) {
   .task-grid-row {
     --task-col-created-by: 0rem;
   }
 }
 
 /* Narrow containers: collapse property columns to icons */
-@container uList (max-width: 840px) {
+@container u-list (max-width: 840px) {
   .task-grid-row {
     --task-col-status: 2rem;
     --task-col-priority: 2rem;

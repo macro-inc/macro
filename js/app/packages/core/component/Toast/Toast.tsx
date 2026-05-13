@@ -100,7 +100,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
     button: {
       background: 'bg-accent',
       hover: 'hover:bg-accent/80',
-      text: 'text-panel',
+      text: 'text-surface',
     },
     closeButtonHover: 'hover:text-accent hover:bg-accent/10',
   },
@@ -373,7 +373,7 @@ function ToastContent(props: {
                     <Dynamic
                       component={s().icon}
                       class={cn(
-                        'size-3.5 text-panel',
+                        'size-3.5 text-surface',
                         props.toastType === ToastType.LOADING
                           ? 'animate-spin'
                           : ''

@@ -4,7 +4,7 @@ import { PcNoiseGrid } from './PcNoiseGrid';
 
 export function LoadingSpinner() {
   return (
-    <div class="bg-panel text-accent size-48 relative p-2">
+    <div class="bg-surface text-accent size-48 relative p-2">
       <PcNoiseGrid
         cellSize={12}
         warp={1}
@@ -15,7 +15,7 @@ export function LoadingSpinner() {
         speed={[0.3, 0]}
         circleMask={0.4}
       />
-      <Macro class="text-panel size-48 inset-0 absolute p-14" />
+      <Macro class="text-surface size-48 inset-0 absolute p-14" />
     </div>
   );
 }

@@ -2,7 +2,7 @@ export function BetaBadge() {
   return (
     <div class="hidden sm:flex px-2 rounded-lg border border-accent/50 py-0.5 bg-accent/10 justify-center items-center">
       <p
-        class="text-accent-ink text-xs font-medium whitespace-nowrap"
+        class="text-accent text-xs font-medium whitespace-nowrap"
         aria-label="Beta Badge"
       >
         Beta

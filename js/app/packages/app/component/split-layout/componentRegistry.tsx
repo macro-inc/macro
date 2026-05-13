@@ -299,8 +299,8 @@ registerComponent(
 
 if (LOCAL_ONLY) {
   registerComponent(
-    'ring-shootout',
-    lazy(() => import('@core/internal/RingShootoutDemo'))
+    'theme-debug',
+    lazy(() => import('@core/internal/ThemeDebug'))
   );
   registerComponent(
     'core',

@@ -85,7 +85,7 @@ function _GroupedMeta(props: { messageEditor?: MessageEditor }) {
       <div
         class={cn(
           'absolute right-4 -top-9 z-10',
-          'items-center gap-2 shrink-0 bg-panel p-1',
+          'items-center gap-2 shrink-0 bg-surface p-1',
           'hidden group-hover/message:flex',
           isTouchDevice() && 'hidden'
         )}

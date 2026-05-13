@@ -46,7 +46,7 @@ function PlayOverlay(props: { onOpen?: () => void; class?: string }) {
       )}
       onClick={() => props.onOpen?.()}
     >
-      <PlayIcon class="size-5 text-page drop-shadow" />
+      <PlayIcon class="size-5 text-surface drop-shadow" />
     </div>
   );
 }

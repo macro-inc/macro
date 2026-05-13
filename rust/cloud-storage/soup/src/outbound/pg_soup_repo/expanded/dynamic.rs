@@ -12,7 +12,7 @@ use item_filters::ast::{
     date::DateLiteral,
     document::DocumentLiteral,
     project::ProjectLiteral,
-    properties::{PropertiesLiteral, PropertyMatchValue},
+    properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
@@ -39,13 +39,6 @@ static PREFIX: &str = r#"
         UNION ALL
         SELECT $1
     ),
-    UserAccessibleItems AS (
-        SELECT DISTINCT
-            ea.entity_id::text as item_id,
-            ea.entity_type as item_type
-        FROM entity_access ea
-        WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
-    ),
 "#;
 
 // -- Lightweight top clauses: only id + sort_ts (plus filter-required joins) --
@@ -62,6 +55,9 @@ static DOCUMENT_TOP_CLAUSE: &str = r#"
                     END::timestamptz as sort_ts
                 FROM "Document" d
                 LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+"#;
+
+static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
                 LEFT JOIN entity_properties ep_assignees
                     ON dt.sub_type = 'task'
                     AND ep_assignees.entity_id = d.id
@@ -72,9 +68,18 @@ static DOCUMENT_TOP_CLAUSE: &str = r#"
                     AND ep_status.entity_id = d.id
                     AND ep_status.entity_type = 'TASK'
                     AND ep_status.property_definition_id = $7
-                INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
+"#;
+
+static DOCUMENT_TOP_WHERE_CLAUSE: &str = r#"
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
                 WHERE d."deletedAt" IS NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM entity_access ea
+                      WHERE ea.entity_id::text = d.id
+                        AND ea.entity_type = 'document'
+                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+                  )
 "#;
 
 static CHAT_TOP_CLAUSE: &str = r#"
@@ -88,9 +93,15 @@ static CHAT_TOP_CLAUSE: &str = r#"
                         ELSE c."updatedAt"
                     END::timestamptz as sort_ts
                 FROM "Chat" c
-                INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
                 WHERE c."deletedAt" IS NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM entity_access ea
+                      WHERE ea.entity_id::text = c.id
+                        AND ea.entity_type = 'chat'
+                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+                  )
 "#;
 
 static PROJECT_TOP_CLAUSE: &str = r#"
@@ -104,14 +115,18 @@ static PROJECT_TOP_CLAUSE: &str = r#"
                         ELSE p."updatedAt"
                     END::timestamptz as sort_ts
                 FROM "Project" p
-                INNER JOIN UserAccessibleItems uai
-                    ON uai.item_id = p.id
-                    AND uai.item_type = 'project'
                 LEFT JOIN "UserHistory" uh
                     ON uh."itemId" = p.id
                     AND uh."itemType" = 'project'
                     AND uh."userId" = $1
                 WHERE p."deletedAt" IS NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM entity_access ea
+                      WHERE ea.entity_id::text = p.id
+                        AND ea.entity_type = 'project'
+                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+                  )
 "#;
 
 // -- Detail clauses: full columns, joined back from TopItems --
@@ -494,40 +509,146 @@ fn build_properties_filter(ast: Option<&Expr<PropertiesLiteral>>, entity_id_sql:
     }
 }
 
+fn document_filter_needs_task_property_joins(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+    ast.is_some_and(|expr| {
+        expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
+            filter_ast::ExprFrame::Not(a) => a,
+            filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(_))
+            | filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(true)) => true,
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
+}
+
+fn properties_filter_can_apply_to(
+    ast: Option<&Expr<PropertiesLiteral>>,
+    entity_types: &[PropertyEntityType],
+) -> bool {
+    ast.is_none_or(|expr| {
+        expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) => a && b,
+            filter_ast::ExprFrame::Or(a, b) => a || b,
+            // Be conservative: NOT can turn an inapplicable predicate into a match.
+            filter_ast::ExprFrame::Not(_) => true,
+            filter_ast::ExprFrame::Literal(PropertiesLiteral { entity_type, .. }) => {
+                entity_type.is_none_or(|entity_type| entity_types.contains(&entity_type))
+            }
+        })
+    })
+}
+
+fn chat_filter_is_impossible(ast: Option<&Expr<ChatLiteral>>) -> bool {
+    ast.is_some_and(|expr| {
+        expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) => a || b,
+            filter_ast::ExprFrame::Or(a, b) => a && b,
+            filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(ChatLiteral::ChatId(id)) => id.is_nil(),
+            filter_ast::ExprFrame::Literal(ChatLiteral::Importance(false)) => true,
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
+}
+
+fn document_filter_is_impossible(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+    ast.is_some_and(|expr| {
+        expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) => a || b,
+            filter_ast::ExprFrame::Or(a, b) => a && b,
+            filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(DocumentLiteral::Id(id)) => id.is_nil(),
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
+}
+
+fn project_filter_is_impossible(ast: Option<&Expr<ProjectLiteral>>) -> bool {
+    ast.is_some_and(|expr| {
+        expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) => a || b,
+            filter_ast::ExprFrame::Or(a, b) => a && b,
+            filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => true,
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
+}
+
+fn push_union_separator(builder: &mut QueryBuilder<'_, Postgres>, needs_separator: &mut bool) {
+    if *needs_separator {
+        builder.push(" UNION ALL ");
+    }
+    *needs_separator = true;
+}
+
 fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBuilder<'_, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
+
+    let include_documents = !document_filter_is_impossible(filter_ast.document_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::Document, PropertyEntityType::Task],
+        );
+    let include_chats = !chat_filter_is_impossible(filter_ast.chat_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::Chat],
+        );
+    let include_projects = !project_filter_is_impossible(filter_ast.project_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::Project],
+        );
 
     // TopItems CTE: lightweight id + sort_ts with filters, cursor, and limit
     builder.push("TopItems AS (");
     builder.push("SELECT all_items.item_type, all_items.id, all_items.sort_ts FROM (");
 
-    // Document top clause (lightweight)
-    builder.push(DOCUMENT_TOP_CLAUSE);
-    builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
-    builder.push(build_properties_filter(
-        filter_ast.properties_filter.as_deref(),
-        "d.id",
-    ));
+    let mut needs_separator = false;
 
-    builder.push(" UNION ALL ");
+    if include_documents {
+        push_union_separator(&mut builder, &mut needs_separator);
+        // Document top clause (lightweight)
+        builder.push(DOCUMENT_TOP_CLAUSE);
+        if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
+            builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
+        }
+        builder.push(DOCUMENT_TOP_WHERE_CLAUSE);
+        builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "d.id",
+        ));
+    }
 
-    // Chat top clause (lightweight)
-    builder.push(CHAT_TOP_CLAUSE);
-    builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
-    builder.push(build_properties_filter(
-        filter_ast.properties_filter.as_deref(),
-        "c.id",
-    ));
+    if include_chats {
+        push_union_separator(&mut builder, &mut needs_separator);
+        // Chat top clause (lightweight)
+        builder.push(CHAT_TOP_CLAUSE);
+        builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "c.id",
+        ));
+    }
 
-    builder.push(" UNION ALL ");
+    if include_projects {
+        push_union_separator(&mut builder, &mut needs_separator);
+        // Project top clause (lightweight)
+        builder.push(PROJECT_TOP_CLAUSE);
+        builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "p.id",
+        ));
+    }
 
-    // Project top clause (lightweight)
-    builder.push(PROJECT_TOP_CLAUSE);
-    builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
-    builder.push(build_properties_filter(
-        filter_ast.properties_filter.as_deref(),
-        "p.id",
-    ));
+    if !needs_separator {
+        builder.push(
+            "SELECT 'document'::text as item_type, NULL::text as id, NULL::timestamptz as sort_ts WHERE false",
+        );
+    }
 
     builder.push(") all_items ");
 
@@ -558,14 +679,49 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
     builder.push(" ORDER BY all_items.sort_ts DESC, all_items.id DESC LIMIT $3");
     builder.push("), ");
 
-    // Combined CTE: full detail joins back from TopItems
+    // Combined CTE: full detail joins back from TopItems. Keep this in sync
+    // with the TopItems branches so task-only/property-specific filters do not
+    // pay planning/execution cost for impossible entity types.
     builder.push("Combined AS (");
 
-    builder.push(DOCUMENT_DETAIL_CLAUSE);
-    builder.push(" UNION ALL ");
-    builder.push(CHAT_DETAIL_CLAUSE);
-    builder.push(" UNION ALL ");
-    builder.push(PROJECT_DETAIL_CLAUSE);
+    let mut needs_separator = false;
+    if include_documents {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(DOCUMENT_DETAIL_CLAUSE);
+    }
+    if include_chats {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(CHAT_DETAIL_CLAUSE);
+    }
+    if include_projects {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(PROJECT_DETAIL_CLAUSE);
+    }
+    if !needs_separator {
+        builder.push(
+            r#"SELECT
+                'document' as "item_type",
+                NULL::text as "id",
+                NULL::text as "document_version_id",
+                NULL::text as "user_id",
+                NULL::text as "name",
+                NULL::text as "branched_from_id",
+                NULL::bigint as "branched_from_version_id",
+                NULL::bigint as "document_family_id",
+                NULL::text as "file_type",
+                NULL::timestamptz as "created_at",
+                NULL::timestamptz as "updated_at",
+                NULL::text as "project_id",
+                NULL::boolean as "is_persistent",
+                NULL::text as "sha",
+                NULL::document_sub_type_value as "sub_type",
+                NULL::timestamptz as "viewed_at",
+                NULL::timestamptz as "sort_ts",
+                NULL::boolean as "is_completed",
+                NULL::timestamptz as "deleted_at"
+            WHERE false"#,
+        );
+    }
 
     builder.push(DETAIL_SUFFIX);
 

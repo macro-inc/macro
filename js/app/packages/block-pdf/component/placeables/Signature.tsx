@@ -133,7 +133,7 @@ function SignatureEditor(props: SignatureEditorProps) {
           class={cn(
             'absolute z-modal min-w-[calc(100vw-2rem)]',
             '@sm:min-w-96 p-3',
-            'bg-dialog shadow',
+            'bg-surface shadow',
             'rounded-lg border border-edge',
             'flex-col justify-start inline-flex gap-3',
             'duration-slow',

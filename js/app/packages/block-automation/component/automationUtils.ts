@@ -11,7 +11,7 @@ import type {
 import type { ScheduleDraft, ScheduleFrequency } from './types';
 
 export const INPUT_CLASS =
-  'w-full border border-edge-muted rounded-sm bg-input px-2 py-1.5 text-sm text-ink outline-none placeholder:text-ink/30 focus:border-accent/20 cursor-default';
+  'w-full border border-edge-muted rounded-sm bg-surface px-2 py-1.5 text-sm text-ink outline-none placeholder:text-ink/30 focus:border-accent/20 cursor-default';
 export const DEFAULT_TIME = '09:00';
 
 export const FREQUENCY_OPTIONS: Array<{

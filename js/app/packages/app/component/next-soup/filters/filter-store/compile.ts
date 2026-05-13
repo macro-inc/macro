@@ -1,4 +1,5 @@
 import type {
+  DateRangeFilter,
   EmailView,
   FieldFilters,
   FieldName,
@@ -23,7 +24,15 @@ export type TargetAstMap = {
   emailView?: EmailView;
 };
 
-type CompiledFieldName = Exclude<FieldName, 'properties'>;
+type DateRangeFieldName =
+  | 'documentCreatedAt'
+  | 'documentUpdatedAt'
+  | 'chatCreatedAt'
+  | 'chatUpdatedAt'
+  | 'folderCreatedAt'
+  | 'folderUpdatedAt';
+
+type CompiledFieldName = Exclude<FieldName, 'properties' | DateRangeFieldName>;
 
 const AST = {
   or(asts: BackendAst[]): BackendAst {
@@ -92,6 +101,30 @@ const FIELD_CONFIG: Record<
   callChannelId: { target: 'callf', field: 'ChannelId' },
   callSpeakerId: { target: 'callf', field: 'Speaker' },
   callAttended: { target: 'callf', field: 'Attended' },
+};
+
+const DATE_RANGE_FIELDS: Record<
+  string,
+  { target: QueryTarget; field: string }
+> = {
+  documentCreatedAt: { target: 'df', field: 'ca' },
+  documentUpdatedAt: { target: 'df', field: 'ua' },
+  chatCreatedAt: { target: 'cf', field: 'ca' },
+  chatUpdatedAt: { target: 'cf', field: 'ua' },
+  folderCreatedAt: { target: 'pf', field: 'ca' },
+  folderUpdatedAt: { target: 'pf', field: 'ua' },
+};
+
+const expandDateRange = (
+  field: string,
+  range: DateRangeFilter
+): BackendAst[] => {
+  const asts: BackendAst[] = [];
+  if (range.gt) asts.push(AST.literal(field, { gt: range.gt }));
+  if (range.gte) asts.push(AST.literal(field, { gte: range.gte }));
+  if (range.lt) asts.push(AST.literal(field, { lt: range.lt }));
+  if (range.lte) asts.push(AST.literal(field, { lte: range.lte }));
+  return asts;
 };
 
 const propertyToAst = (p: PropertyFilter): BackendAst =>
@@ -197,6 +230,27 @@ export function compileToAst(state: QueryState): TargetAstMap {
 
       if (filtered.length > 0) {
         byTarget.propf.push(AST.not(AST.or(filtered.map(propertyToAst))));
+      }
+    }
+  }
+
+  for (const [fieldName, config] of Object.entries(DATE_RANGE_FIELDS)) {
+    const includeVal = state.include[fieldName as FieldName] as
+      | DateRangeFilter
+      | undefined;
+    const excludeVal = state.exclude[fieldName as FieldName] as
+      | DateRangeFilter
+      | undefined;
+
+    if (includeVal) {
+      byTarget[config.target].push(
+        ...expandDateRange(config.field, includeVal)
+      );
+    }
+    if (excludeVal) {
+      const expanded = expandDateRange(config.field, excludeVal);
+      if (expanded.length) {
+        byTarget[config.target].push(AST.not(AST.and(expanded)));
       }
     }
   }

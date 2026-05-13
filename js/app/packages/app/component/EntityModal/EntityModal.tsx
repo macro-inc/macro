@@ -38,7 +38,7 @@ export const EntityModalActionFooter = (props: {
           'uppercase py-1 px-3 font-mono text-sm',
           props.isDisabled
             ? 'bg-edge text-ink-placeholder cursor-not-allowed'
-            : 'bg-accent text-menu'
+            : 'bg-accent text-surface'
         )}
         onClick={props.onConfirm}
         disabled={props.isDisabled}
@@ -76,7 +76,7 @@ const EntityModalContent = (props: {
     >
       <div
         ref={entityModalContentRef}
-        class="pointer-events-auto w-full max-w-[min(36rem,calc(100%-1rem))] mx-auto mt-16 bg-menu border border-edge h-fit p-2"
+        class="pointer-events-auto w-full max-w-[min(36rem,calc(100%-1rem))] mx-auto mt-16 bg-surface border border-edge h-fit p-2"
       >
         <div class="w-full my-1">
           <Show when={props.view() === 'rename'}>

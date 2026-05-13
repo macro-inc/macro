@@ -105,7 +105,7 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
       <span
         ref={mentionRef}
         class={cn(
-          'relative p-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent-ink',
+          'relative p-0.5 cursor-default rounded-xs bg-accent/8 hover:bg-accent/20 focus:bg-accent/20 text-accent',
           isSelectedAsNode() && 'bg-active'
         )}
         {...navHandlers}
@@ -131,7 +131,7 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
       <Show when={popupOpen()}>
         <Portal>
           <div
-            class="absolute select-none overflow-hidden z-toast-region w-64 bg-dialog ring-1 ring-edge text-ink rounded-lg p-3"
+            class="absolute select-none overflow-hidden z-toast-region w-64 bg-surface ring-1 ring-edge text-ink rounded-lg p-3"
             use:floatWithElement={{ element: () => mentionRef }}
           >
             <div class="flex items-center gap-2">

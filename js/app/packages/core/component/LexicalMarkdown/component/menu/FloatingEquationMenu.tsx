@@ -1,9 +1,9 @@
-import { Tooltip } from '@core/component/Tooltip';
 import clickOutside from '@core/directive/clickOutside';
 import { useCanEdit } from '@core/signal/permissions';
 import Check from '@icon/regular/check-circle.svg';
 import { $isEquationNode } from '@lexical-core';
 import { createCallback } from '@solid-primitives/rootless';
+import { Tooltip } from '@ui';
 import { $getNodeByKey } from 'lexical';
 import {
   createEffect,
@@ -219,7 +219,7 @@ export function FloatingEquationMenu() {
   return (
     <Show when={menuOpen()}>
       <div
-        class="p-4 fixed bg-menu top-0 left-0 z-action-menu rounded-lg shadow-lg w-96 border border-edge"
+        class="p-4 fixed bg-surface top-0 left-0 z-action-menu rounded-lg shadow-lg w-96 border border-edge"
         use:floatWithElement={{ element: getElement }}
         use:floatWithSelection={{
           selection: untrack(getSelection),
@@ -270,11 +270,11 @@ export function FloatingEquationMenu() {
                 Inline equation
               </label>
             </Show>
-            <Tooltip tooltip="Apply changes">
+            <Tooltip label="Apply changes">
               <button
                 onClick={handleSubmit}
                 disabled={!equation()}
-                class="px-3 py-1.5 bg-accent/80 text-menu rounded-md hover:bg-accent transition disabled:bg-edge disabled:cursor-not-allowed flex items-center gap-1.5 text-sm font-medium"
+                class="px-3 py-1.5 bg-accent/80 text-surface rounded-md hover:bg-accent transition disabled:bg-edge disabled:cursor-not-allowed flex items-center gap-1.5 text-sm font-medium"
               >
                 <Check class="size-4" />
                 {isNewEquation() ? 'Insert' : 'Update'}

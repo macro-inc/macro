@@ -14,7 +14,7 @@ export const SoupViewFileDropzone: FlowComponent = (props) => {
 
   return (
     <div
-      class="relative flex flex-col bg-panel size-full"
+      class="relative flex flex-col bg-surface size-full"
       use:fileFolderDrop={{
         onDrop: (fileEntries, folderEntries) => {
           handleFileFolderDrop(fileEntries, folderEntries, handleFileUpload);

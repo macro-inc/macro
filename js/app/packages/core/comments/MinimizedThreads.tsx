@@ -97,7 +97,7 @@ export function MinimizedThread(props: {
         <Layer depth={2}>
           <div
             class={cn(
-              'flex flex-row justify-between p-0.5 gap-1 bg-panel transition-transform shadow-md shadow-drop-shadow items-center text-ink-muted ring-edge ring relative overflow-clip rounded-sm pointer-events-auto',
+              'flex flex-row justify-between p-0.5 gap-1 bg-surface transition-transform shadow-md shadow-drop-shadow items-center text-ink-muted ring-edge ring relative overflow-clip rounded-sm pointer-events-auto',
               props.isActive && '-translate-x-4'
             )}
             onClick={clickHandler}
@@ -106,7 +106,7 @@ export function MinimizedThread(props: {
               class={cn(
                 'size-6 flex items-center justify-center rounded-xs',
                 props.isActive
-                  ? 'bg-comment text-page'
+                  ? 'bg-comment text-surface'
                   : 'bg-comment-bg text-comment-fg'
               )}
             >

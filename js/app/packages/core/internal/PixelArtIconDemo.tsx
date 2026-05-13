@@ -1,6 +1,6 @@
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { DebugSlider } from '@core/component/Slider';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+
 import { Bar } from '@core/component/TopBar/Bar';
 import clickOutside from '@core/directive/clickOutside';
 import Rotate from '@icon/regular/arrow-counter-clockwise.svg';
@@ -516,11 +516,11 @@ function GlyphGrid(props: GlyphGridProps) {
                     />
                   </div>
 
-                  <div class="absolute top-1 right-1 flex gap-0 opacity-0 bg-panel group-hover:opacity-100">
+                  <div class="absolute top-1 right-1 flex gap-0 opacity-0 bg-surface group-hover:opacity-100">
                     <Button
                       variant="base"
                       size="icon-md"
-                      tooltip={<LabelAndHotKey label="Edit" />}
+                      label="Edit"
                       onClick={(e) => {
                         e.preventDefault();
                         props.onEditGlyph(glyph);
@@ -531,7 +531,7 @@ function GlyphGrid(props: GlyphGridProps) {
                     <Button
                       variant="danger"
                       size="icon-md"
-                      tooltip={<LabelAndHotKey label="Delete" />}
+                      label="Delete"
                       onClick={(e) => {
                         e.preventDefault();
                         props.onDeleteGlyph(glyph);
@@ -794,7 +794,7 @@ function GlyphEditor(props: GlyphEditorProps) {
     <Show when={props.isOpen}>
       <div class="absolute inset-0 bg-modal-overlay flex items-center justify-center z-action-menu">
         <div
-          class="bg-menu border border-edge max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+          class="bg-surface border border-edge max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
           use:clickOutside={() => props.onClose()}
         >
           <div class="p-2 border-b border-edge flex items-center justify-between">
@@ -933,7 +933,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                     <Button
                       variant="base"
                       size="icon-md"
-                      tooltip={<LabelAndHotKey label="Mirror X" />}
+                      label="Mirror X"
                       onClick={handleMirrorX}
                     >
                       <MirrorX />
@@ -941,7 +941,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                     <Button
                       variant="base"
                       size="icon-md"
-                      tooltip={<LabelAndHotKey label="Mirror Y" />}
+                      label="Mirror Y"
                       onClick={handleMirrorY}
                     >
                       <MirrorY />
@@ -949,7 +949,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                     <Button
                       variant="base"
                       size="icon-md"
-                      tooltip={<LabelAndHotKey label="Rotate 90 CCW" />}
+                      label="Rotate 90 CCW"
                       onClick={handleRotate90CC}
                     >
                       <Rotate />
@@ -1035,7 +1035,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
   });
 
   return (
-    <div class="w-100 bg-panel p-4 overflow-y-auto border-l border-edge border-dashed shrink-0">
+    <div class="w-100 bg-surface p-4 overflow-y-auto border-l border-edge border-dashed shrink-0">
       <div class="space-y-4">
         <h3 class="font-mono text-sm text-ink">[ Global Settings ]</h3>
 

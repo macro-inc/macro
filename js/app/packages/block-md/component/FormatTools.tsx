@@ -15,8 +15,8 @@ import {
   MenuItem,
   SubTrigger,
 } from '@core/component/Menu';
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
+import { TOKENS } from '@core/hotkey/tokens';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import ThreeDots from '@icon/bold/dots-three-bold.svg';
 import TextBold from '@icon/bold/text-b-bold.svg';
@@ -192,16 +192,12 @@ const InlineFormatButton = (props: {
   const icon = InlineIcons[props.format];
   return (
     <Button
-      tooltip={
-        <LabelAndHotKey
-          label={props.format}
-          shortcut={InlineShortcuts[props.format]}
-        />
-      }
+      label={props.format}
+      hotkey={TOKENS.global.commandMenu}
       size="icon-sm"
       variant="ghost"
       classList={{
-        'bg-ink/10 text-ink': !!props.selection()?.[props.format],
+        'bg-active text-ink': !!props.selection()?.[props.format],
       }}
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
@@ -224,8 +220,8 @@ const InlineFormatMenuItem = (props: {
     <div class="flex justify-between">
       <span class="capitalize">{props.format}</span>
       <Show when={InlineShortcuts[props.format]}>
-        {(shortcut) => {
-          return <Hotkey shortcut={shortcut()} />;
+        {(_shortcut) => {
+          return <Hotkey token={TOKENS.global.commandMenu} />;
         }}
       </Show>
     </div>
@@ -256,7 +252,7 @@ export const ElementFormatButton = (props: {
       class="rounded-xs"
       variant="ghost"
       classList={{
-        'bg-ink/10 text-ink': !!props
+        'bg-active text-ink': !!props
           .selection()
           ?.elementsInRange?.has(props.format),
       }}

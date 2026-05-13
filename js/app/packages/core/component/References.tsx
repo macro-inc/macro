@@ -196,7 +196,7 @@ export function References(props: ReferenceProps) {
 
               return (
                 <button
-                  class="bg-menu hover:bg-hover p-2 pb-3 border-edge-muted border-b w-full text-left"
+                  class="bg-surface hover:bg-hover p-2 pb-3 border-edge-muted border-b w-full text-left"
                   {...navHandlers}
                 >
                   <div class="flex justify-start items-center gap-2 mb-4 font-mono text-ink-muted text-xs uppercase">
@@ -237,7 +237,7 @@ export function References(props: ReferenceProps) {
 
               return (
                 <button
-                  class="bg-menu hover:bg-hover p-2 pb-3 border-edge-muted border-b w-full text-left"
+                  class="bg-surface hover:bg-hover p-2 pb-3 border-edge-muted border-b w-full text-left"
                   {...navHandlers}
                 >
                   <div class="flex justify-start items-center gap-2 mb-4 font-mono text-ink-muted text-xs uppercase">

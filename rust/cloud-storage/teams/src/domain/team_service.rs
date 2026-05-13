@@ -6,6 +6,9 @@ mod test;
 use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Context;
+use entity_access::domain::models::{
+    AdminTeamRole, EntityAccessReceipt, MemberTeamRole, OwnerTeamRole,
+};
 use macro_user_id::{
     cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
 };
@@ -316,18 +319,24 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn invite_users_to_team(
         &self,
-        team_id: &uuid::Uuid,
-        invited_by: &MacroUserIdStr<'_>,
+        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
         invites: non_empty::NonEmpty<&[(Email<Lowercase<'_>>, TeamUserTier)]>,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        let invited_by = entity_access_receipt
+            .get_authenticated_user()
+            .map_err(|e| InviteUsersToTeamError::TeamError(TeamError::AccessError(e)))?;
+
         let invited = self
             .team_repository
-            .invite_users_to_team(team_id, invited_by, invites)
+            .invite_users_to_team(&team_id, invited_by, invites)
             .await?;
 
         // Send notifications for new invites
         if !invited.is_empty() {
-            let team_name = self.team_repository.get_team_name(team_id).await.ok();
+            let team_name = self.team_repository.get_team_name(&team_id).await.ok();
 
             if let Some(team_name) = team_name {
                 let invited_by_owned = invited_by.clone().into_owned();
@@ -339,7 +348,7 @@ where
                                 .expect("this cannot fail"),
                             invite.team_invite_id,
                             InviteToTeamMetadata {
-                                team_id: *team_id,
+                                team_id,
                                 team_invite_id: invite.team_invite_id,
                                 invited_by: invited_by_owned.clone(),
                                 team_name: team_name.clone(),
@@ -374,20 +383,23 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn remove_user_from_team(
         &self,
-        team_id: &uuid::Uuid,
+        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), RemoveUserFromTeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
         let removed_member = self
             .team_repository
-            .remove_user_from_team(team_id, user_id)
+            .remove_user_from_team(&team_id, user_id)
             .await?;
 
         self.team_channels_repository
-            .remove_team_member_from_channels(team_id, user_id)
+            .remove_team_member_from_channels(&team_id, user_id)
             .await?;
         let channels_removed = true;
 
-        let subscription_id = match self.get_team_subscription(team_id).await {
+        let subscription_id = match self.get_team_subscription(&team_id).await {
             Ok(subscription_id) => subscription_id,
             Err(GetTeamSubscriptionError::Customer(e)) => {
                 self.rollback_remove_user_from_team(&removed_member, channels_removed)
@@ -446,23 +458,32 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn delete_team_invite(
         &self,
-        team_id: &uuid::Uuid,
+        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
         team_invite_id: &uuid::Uuid,
     ) -> Result<(), RemoveTeamInviteError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
         self.team_repository
-            .delete_team_invite(team_id, team_invite_id)
+            .delete_team_invite(&team_id, team_invite_id)
             .await?;
 
         Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn delete_team(&self, team_id: &uuid::Uuid) -> Result<(), DeleteTeamError> {
-        let members = self.team_repository.get_all_team_members(team_id).await?;
+    async fn delete_team(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+    ) -> Result<(), DeleteTeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        let members = self.team_repository.get_all_team_members(&team_id).await?;
 
         let subscription_id = self
             .team_repository
-            .get_team_subscription_id(team_id)
+            .get_team_subscription_id(&team_id)
             .await?;
         if let Some(subscription_id) = subscription_id {
             // Cancel subscription
@@ -473,7 +494,7 @@ where
         }
 
         self.team_repository
-            .delete_team(team_id)
+            .delete_team(&team_id)
             .await
             .map_err(DeleteTeamError::TeamError)?;
 
@@ -603,8 +624,13 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn get_team(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
-        self.team_repository.get_team_by_id(team_id).await
+    async fn get_team(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<TeamWithMembers, TeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+        self.team_repository.get_team_by_id(&team_id).await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -623,17 +649,22 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn get_team_invites(
         &self,
-        team_id: &uuid::Uuid,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> Result<Vec<TeamInviteDetails>, TeamError> {
-        self.team_repository.get_team_invites(team_id).await
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+        self.team_repository.get_team_invites(&team_id).await
     }
 
     #[tracing::instrument(skip(self), err)]
     async fn patch_team(
         &self,
-        team_id: &uuid::Uuid,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         req: &PatchTeamRequest,
     ) -> Result<(), TeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
         if let Some(user_role_updates) = req.user_role_updates.as_ref() {
             if user_role_updates.iter().any(|u| u.role == TeamRole::Owner) {
                 return Err(TeamError::BadRequest(
@@ -642,7 +673,7 @@ where
             }
 
             if !user_role_updates.is_empty() {
-                let team = self.team_repository.get_team_by_id(team_id).await?;
+                let team = self.team_repository.get_team_by_id(&team_id).await?;
 
                 if user_role_updates
                     .iter()
@@ -655,22 +686,13 @@ where
 
                 for update in user_role_updates {
                     self.team_repository
-                        .patch_team_user_role(team_id, &update.team_user_id, update.role)
+                        .patch_team_user_role(&team_id, &update.team_user_id, update.role)
                         .await?;
                 }
             }
         }
 
-        self.team_repository.patch_team(team_id, req).await
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn get_team_role(
-        &self,
-        team_id: &uuid::Uuid,
-        user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Option<TeamRole>, TeamError> {
-        self.team_repository.get_team_role(team_id, user_id).await
+        self.team_repository.patch_team(&team_id, req).await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -687,12 +709,14 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn patch_team_user_tier(
         &self,
-        team_id: &uuid::Uuid,
+        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
         request: &PatchTeamUserTierRequest,
     ) -> Result<(), TeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
         let team_member = self
             .team_repository
-            .get_team_member(team_id, &request.team_user_id)
+            .get_team_member(&team_id, &request.team_user_id)
             .await?;
 
         if team_member.tier == request.new_tier {
@@ -702,12 +726,12 @@ where
         }
 
         let team_subscription_id = self
-            .get_team_subscription(team_id)
+            .get_team_subscription(&team_id)
             .await
             .map_err(GetTeamSubscriptionError::into_team_error)?;
 
         self.team_repository
-            .patch_team_tier(team_id, &request.team_user_id, request.new_tier)
+            .patch_team_tier(&team_id, &request.team_user_id, request.new_tier)
             .await?;
 
         // ensure team member has old tier removed

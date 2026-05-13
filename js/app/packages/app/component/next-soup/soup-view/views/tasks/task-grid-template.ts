@@ -10,6 +10,7 @@ export const TASK_GRID_COLUMNS = [
     dataType: DataType.SELECT_STRING,
     isMultiSelect: false,
     specificEntityType: null,
+    sortKey: 'status',
     // CSS variable with fallback - updated by container queries in task-grid.css
     width: 'var(--task-col-status, 7rem)',
   },
@@ -20,6 +21,7 @@ export const TASK_GRID_COLUMNS = [
     dataType: DataType.SELECT_STRING,
     isMultiSelect: false,
     specificEntityType: null,
+    sortKey: 'priority',
     width: 'var(--task-col-priority, 7rem)',
   },
   {

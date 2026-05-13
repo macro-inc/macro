@@ -51,8 +51,6 @@ export function CallRecordingMediaColumn(props: {
         </Show>
       </Show>
 
-      <CallRecordingSummarySection record={props.record} />
-
       <div
         class={cn(
           'overflow-hidden @[860px]:block',
@@ -81,6 +79,8 @@ export function CallRecordingMediaColumn(props: {
           <CallRecordingParticipantsSection record={props.record} />
         </div>
       </div>
+
+      <CallRecordingSummarySection record={props.record} />
     </div>
   );
 }

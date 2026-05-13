@@ -1,8 +1,8 @@
-import { Tooltip } from '@core/component/Tooltip';
 import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
 } from '@kobalte/core/segmented-control';
+import { Tooltip } from '@ui';
 import {
   createEffect,
   createSignal,
@@ -96,7 +96,7 @@ export const SegmentedControl: ParentComponent<
                     class="flex justify-center items-center border border-ink p-1 font-bold uppercase font-mono text-[11px]"
                     classList={{
                       // [`${sizeClass[props.size || 'Base']}`]: true,
-                      'bg-ink text-panel': value() === item,
+                      'bg-ink text-surface': value() === item,
                       'text-ink': value() !== item,
                       [`${props.itemLabelClass}`]: !!props.itemLabelClass,
                       // 'animate-[flicker_50ms_2]': showFlicker(),
@@ -109,7 +109,7 @@ export const SegmentedControl: ParentComponent<
                   </div> */}
                     <Switch>
                       <Match when={tooltip()}>
-                        <Tooltip tooltip={tooltip()}>
+                        <Tooltip label={tooltip() ?? ''}>
                           <ToggleButton
                             size={props.size}
                             pressed={value() === itemValue()}

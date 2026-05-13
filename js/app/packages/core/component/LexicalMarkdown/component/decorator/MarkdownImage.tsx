@@ -13,7 +13,7 @@ import { mergeRegister } from '@lexical/utils';
 import { $isImageNode, type ImageDecoratorProps } from '@lexical-core';
 import { calculateEffectiveDimensions } from '@lexical-core/utils/media';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn } from '@ui';
+import { Button, cn, Layer } from '@ui';
 import {
   $createNodeSelection,
   $getNodeByKey,
@@ -357,19 +357,21 @@ export function MarkdownImage(props: ImageDecoratorProps) {
             (state() === 'ok' || state() === 'error')
           }
         >
-          <div class="size-full absolute top-0 left-0 pointer-events-none bg-edge/10" />
-          <MediaButtons
-            delete={interactable() ? deleteImage : undefined}
-            enlarge={state() === 'ok' ? viewFull : undefined}
-            newTab={
-              state() === 'ok'
-                ? () => {
-                    window.open(imageUrl(), '_blank');
-                  }
-                : undefined
-            }
-            containerRef={containerRef}
-          />
+          <Layer depth={3}>
+            <div class="size-full absolute top-0 left-0 pointer-events-none bg-edge/10" />
+            <MediaButtons
+              delete={interactable() ? deleteImage : undefined}
+              enlarge={state() === 'ok' ? viewFull : undefined}
+              newTab={
+                state() === 'ok'
+                  ? () => {
+                      window.open(imageUrl(), '_blank');
+                    }
+                  : undefined
+              }
+              containerRef={containerRef}
+            />
+          </Layer>
         </Show>
       </div>
 
@@ -377,7 +379,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay items-center justify-center" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center bg-transparent">
           <Dialog.Content class="relative max-w-[65%] max-h-[80vh] flex items-center justify-center">
-            <div class="absolute bg-dialog top-2 right-2 flex flex-row">
+            <div class="absolute bg-surface top-2 right-2 flex flex-row">
               <Dialog.CloseButton>
                 <Button variant="ghost" size="icon-md">
                   <XIcon />

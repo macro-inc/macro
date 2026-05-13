@@ -41,7 +41,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
     <button
       type="button"
       class={cn(
-        'flex flex-row gap-2 items-center text-xs w-fit h-(--user-icon-width) touch:min-h-(--user-icon-width) border bg-menu hover:bg-hover hover-transition-bg pr-2 pl-1 mb-2 select-none outline-none focus:bg-active',
+        'flex flex-row gap-2 items-center text-xs w-fit h-(--user-icon-width) touch:min-h-(--user-icon-width) border bg-surface hover:bg-hover hover-transition-bg pr-2 pl-1 mb-2 select-none outline-none focus:bg-active',
         local.hasNewMessages ? 'border-accent' : 'border-edge-muted',
         local.class
       )}
@@ -80,7 +80,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
             </Show>
           </div>
         </Show>
-        <p class="text-accent-ink font-medium whitespace-nowrap">
+        <p class="text-accent font-medium whitespace-nowrap">
           {getThreadReplyCountLabel(local.collapsedRepliesCount)}
         </p>
         <div class="hidden @min-[40rem]:block min-w-[15ch]">

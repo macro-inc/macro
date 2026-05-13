@@ -32,8 +32,8 @@ function ChoosePlanDemo(props: LessonContentProps) {
     enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
   });
 
-  // Returns to /welcome?subscriptionSuccess=true on success, which triggers
-  // completeOnParam and lands the user on the next lesson (team-choice or launch).
+  // Returns to /welcome?subscriptionSuccess=true on success, which completes
+  // all lessons except launch, landing the user on the launch lesson.
   const checkoutMutation = useOnboardingCheckoutMutation({
     onSuccess: (result) => {
       analytics.track('subscription_start', {
@@ -101,7 +101,7 @@ function ChoosePlanDemo(props: LessonContentProps) {
             disabled={isPending()}
             class="w-full py-2 rounded-xs text-base font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             classList={{
-              'bg-accent text-panel':
+              'bg-accent text-surface':
                 plan.highlighted && selectedPlan() !== plan.tier,
               'bg-accent/20 text-accent': selectedPlan() === plan.tier,
               'bg-ink/8 text-ink hover:bg-ink/12':

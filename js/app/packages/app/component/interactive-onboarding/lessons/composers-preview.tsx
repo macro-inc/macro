@@ -30,7 +30,7 @@ function ComposersPreviewDemo() {
   return (
     <div class="size-full flex flex-col items-center justify-center gap-6 px-10 py-8">
       {/* Task composer */}
-      <div class="w-full max-w-lg rounded-sm border border-edge-muted bg-panel flex flex-col overflow-hidden">
+      <div class="w-full max-w-lg rounded-sm border border-edge-muted bg-surface flex flex-col overflow-hidden">
         <div class="px-4 pt-3 pb-1">
           <div class="flex items-center gap-2">
             <div class="size-5 rounded-xs bg-task-bg flex items-center justify-center">
@@ -86,7 +86,7 @@ function ComposersPreviewDemo() {
       </div>
 
       {/* Email composer */}
-      <div class="w-full max-w-lg rounded-sm border border-edge-muted bg-panel flex flex-col overflow-hidden">
+      <div class="w-full max-w-lg rounded-sm border border-edge-muted bg-surface flex flex-col overflow-hidden">
         {/* From line */}
         <div class="px-4 py-2.5 flex items-center justify-between text-xs">
           <span class="text-ink/40">from seamus@macro.com</span>

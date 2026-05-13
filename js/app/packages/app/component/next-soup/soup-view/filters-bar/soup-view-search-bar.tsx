@@ -38,18 +38,16 @@ const variantStyles: Record<SearchbarVariant, string> = {
   filled:
     'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-edge-muted focus-within:bg-ink/7 focus-within:text-ink',
   secondary:
-    'bg-transparent text-ink-muted border-edge-muted hover:bg-input hover:text-ink focus-within:bg-input focus-within:text-ink',
+    'bg-transparent text-ink-muted border-edge-muted hover:bg-surface hover:text-ink focus-within:bg-surface focus-within:text-ink',
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const { setSearchText, setSearchPaused, setSearchMentions, queryFilters } =
-    useSoupView();
+  const { setSearchText, setSearchPaused, queryFilters } = useSoupView();
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
 
   const [hasContent, setHasContent] = createSignal(false);
   const [latestMarkdown, setLatestMarkdown] = createSignal('');
-  const [mentions, setMentions] = createSignal<string[]>([]);
 
   const editor = buildConfig('chat')
     .namespace('soup-search-bar')
@@ -57,16 +55,6 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     .withMentions({
       sources: ['users'],
       disableMentionTracking: true,
-      onCreate: (mention) => {
-        if (mention.itemType !== 'user') return;
-        setMentions((prev) =>
-          prev.includes(mention.itemId) ? prev : [...prev, mention.itemId]
-        );
-      },
-      onRemove: (mention) => {
-        if (mention.itemType !== 'user') return;
-        setMentions((prev) => prev.filter((m) => m !== mention.itemId));
-      },
     })
     .withHistory({ timeGap: 400 })
     .onChange((markdown) => {
@@ -99,9 +87,9 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       )
     );
 
-  // Sync search text + mention filters only when the mention menu is closed.
-  // This avoids cascading reactive updates during mention insertion and
-  // prevents search from firing while typing @partial.
+  // Sync search text only when the mention menu is closed. This avoids
+  // cascading reactive updates during mention insertion and prevents search
+  // from firing while typing @partial.
   const menuIsOpen = () => editor.controls.isInlineMenuOpen();
 
   createEffect(() => setSearchPaused(menuIsOpen()));
@@ -112,8 +100,6 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       setSearchText(markdownToPlainText(markdown).trim());
     })
   );
-
-  createEffect(() => setSearchMentions(mentions()));
 
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],
@@ -179,9 +165,11 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
             class="min-h-0! overflow-visible!"
           />
         </div>
-        <Show when={!hasContent() && !props.onDismiss}>
+        <Show
+          when={!hasContent() && !props.onDismiss && !!searchHotkey.hotkey()}
+        >
           <div class="shrink-0 text-xxs text-ink-extra-muted/50 rounded-sm border border-ink/5 px-1.5 py-px group-focus-within:hidden">
-            <Hotkey shortcut="cmd+f" class="flex gap-1" />
+            <Hotkey shortcut={searchHotkey.hotkey()} class="flex gap-1" />
           </div>
         </Show>
         <Show when={hasContent() || props.onDismiss}>
@@ -194,8 +182,6 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
               editor.controls.clear();
               setSearchText('');
               setHasContent(false);
-              setMentions([]);
-              setSearchMentions([]);
               props.onDismiss?.();
             }}
           >

@@ -19,7 +19,7 @@ import { storageServiceClient } from '@service-storage/client';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
-import { Button } from '@ui';
+import { Button, ButtonGroup } from '@ui';
 import { type Component, createSignal, For, type JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -191,29 +191,27 @@ export function DispatchAgentButton() {
 
   return (
     <DropdownMenu open={open()} onOpenChange={setOpen}>
-      <div class="border border-edge-muted flex ml-1 items-stretch rounded-xs">
+      <ButtonGroup
+        variant="base"
+        size="icon-sm"
+        depth={2}
+        class="bg-surface text-ink-muted"
+      >
         <Button
           onClick={handlePrimaryClick}
           tooltip={lastUsed().name}
-          variant="ghost"
-          size="icon-sm"
-          class="p-1"
+          class="text-ink-muted"
         >
           <Dynamic
             component={lastUsed().buttonIcon ?? lastUsed().icon}
-            class="size-3.5"
+            class="size-3!"
           />
         </Button>
-        <div class="w-px bg-edge-muted" />
-        <DropdownMenu.Trigger
-          as={Button}
-          variant="ghost"
-          size="icon-sm"
-          class="p-1"
-        >
-          <CaretDown class="size-3" />
+        <ButtonGroup.Divider />
+        <DropdownMenu.Trigger as={Button} class="p-1 text-ink-muted">
+          <CaretDown class="size-3.5!" />
         </DropdownMenu.Trigger>
-      </div>
+      </ButtonGroup>
       <DropdownMenu.Portal>
         <DropdownMenuContent>
           <MenuItem

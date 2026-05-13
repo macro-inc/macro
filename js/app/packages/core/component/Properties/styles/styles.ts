@@ -6,7 +6,7 @@
 export const PROPERTY_STYLES = {
   input: {
     search:
-      'w-full pl-10 pr-3 py-1 border border-edge text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent bg-input text-ink placeholder-ink-muted',
+      'w-full pl-10 pr-3 py-1 border border-edge text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent bg-surface text-ink placeholder-ink-muted',
   },
 
   button: {

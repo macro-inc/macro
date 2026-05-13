@@ -8,12 +8,12 @@ import {
   getEntityValues,
   getSelectValues,
 } from '@core/component/Properties/utils';
-import { Tooltip } from '@core/component/Tooltip';
 import { UserGroup } from '@core/component/UserGroup';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import CircleDashedEmpty from '@icon/regular/circle-dashed.svg';
+import { HoverCard } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { type Component, Show } from 'solid-js';
 import './list-property-value.css';
@@ -97,41 +97,42 @@ const ListSelectValue: Component<{ property: Property }> = (props) => {
   };
 
   return (
-    <Tooltip
-      unstyled
-      tooltip={<PropertyTooltip property={props.property} />}
-      class="list-property-cell flex items-center min-w-0"
-    >
-      <button
-        type="button"
-        onClick={handleClick}
-        class={cn(buttonClass(isReadOnly()), {
-          'text-ink-extra-muted/50': !firstValue(),
-        })}
-      >
-        <Show
-          when={firstValue()}
-          fallback={<CircleDashedEmpty class="size-3 shrink-0" />}
+    <HoverCard>
+      <HoverCard.Trigger>
+        <button
+          type="button"
+          onClick={handleClick}
+          class={cn('list-property-cell min-w-0', buttonClass(isReadOnly()), {
+            'text-ink-extra-muted/50': !firstValue(),
+          })}
         >
-          {(value) => <PropertyValueIcon optionId={value()} />}
-        </Show>
-        {/* Label hidden when container is narrow via CSS */}
-        <span
-          class={cn(
-            'list-property-label truncate flex-1 @max-[840px]/uList:hidden',
-            {
-              'text-ink-extra-muted opacity-50': firstValue() === undefined,
-            }
-          )}
-        >
-          {displayText()}
-        </span>
-        {/* Caret hidden when container is narrow */}
-        <Show when={!isReadOnly()}>
-          <CaretDownIcon class="size-3 shrink-0 @max-[840px]/uList:hidden" />
-        </Show>
-      </button>
-    </Tooltip>
+          <Show
+            when={firstValue()}
+            fallback={<CircleDashedEmpty class="size-3 shrink-0" />}
+          >
+            {(value) => <PropertyValueIcon optionId={value()} />}
+          </Show>
+          {/* Label hidden when container is narrow via CSS */}
+          <span
+            class={cn(
+              'list-property-label truncate flex-1 @max-[840px]/u-list:hidden',
+              {
+                'text-ink-extra-muted opacity-50': firstValue() === undefined,
+              }
+            )}
+          >
+            {displayText()}
+          </span>
+          {/* Caret hidden when container is narrow */}
+          <Show when={!isReadOnly()}>
+            <CaretDownIcon class="size-3 shrink-0 @max-[840px]/u-list:hidden" />
+          </Show>
+        </button>
+      </HoverCard.Trigger>
+      <HoverCard.Content>
+        <PropertyTooltip property={props.property} />
+      </HoverCard.Content>
+    </HoverCard>
   );
 };
 
@@ -144,7 +145,7 @@ const SingleUserValue: Component<{ userId: string }> = (props) => {
     <div class="flex items-center gap-1.5 min-w-0">
       <UserIcon id={props.userId} size="sm" suppressClick showTooltip />
       {/* First name hidden on narrow containers */}
-      <span class="truncate @max-[840px]/uList:hidden">{firstName()}</span>
+      <span class="truncate @max-[840px]/u-list:hidden">{firstName()}</span>
     </div>
   );
 };
@@ -154,7 +155,7 @@ const MultiUserValue: Component<{ userIds: string[] }> = (props) => {
   return (
     <>
       {/* Wide mode: show up to 2 users */}
-      <div class="flex @max-[840px]/uList:hidden">
+      <div class="flex @max-[840px]/u-list:hidden">
         <UserGroup
           userIds={props.userIds}
           size="sm"
@@ -164,7 +165,7 @@ const MultiUserValue: Component<{ userIds: string[] }> = (props) => {
         />
       </div>
       {/* Narrow mode: show 1 user */}
-      <div class="hidden @max-[840px]/uList:flex">
+      <div class="hidden @max-[840px]/u-list:flex">
         <UserGroup
           userIds={props.userIds}
           size="sm"
@@ -194,55 +195,58 @@ const ListEntityValue: Component<{ property: Property }> = (props) => {
   const isSingleUser = () => isUser() && entities().length === 1;
 
   return (
-    <Tooltip
-      unstyled
-      tooltip={<PropertyTooltip property={props.property} />}
-      class="list-property-cell flex items-center min-w-0"
-    >
-      <button
-        type="button"
-        onClick={handleClick}
-        class={cn(buttonClass(isReadOnly()), {
-          'text-ink-extra-muted/50': !hasValues(),
-        })}
-      >
-        <Show
-          when={hasValues()}
-          fallback={
-            <>
-              <CircleDashedEmpty class="size-3 shrink-0" />
-              <span class="truncate flex-1 @max-[840px]/uList:hidden">
-                None
-              </span>
-            </>
-          }
+    <HoverCard>
+      <HoverCard.Trigger>
+        <button
+          type="button"
+          onClick={handleClick}
+          class={cn('list-property-cell min-w-0', buttonClass(isReadOnly()), {
+            'text-ink-extra-muted/50': !hasValues(),
+          })}
         >
           <Show
-            when={isUser()}
+            when={hasValues()}
             fallback={
-              <span class="truncate flex-1 @max-[840px]/uList:hidden">
-                {entities().length === 1
-                  ? '1 item'
-                  : `${entities().length} items`}
-              </span>
+              <>
+                <CircleDashedEmpty class="size-3 shrink-0" />
+                <span class="truncate flex-1 @max-[840px]/u-list:hidden">
+                  None
+                </span>
+              </>
             }
           >
-            {/* Single user: show icon + first name */}
             <Show
-              when={isSingleUser()}
+              when={isUser()}
               fallback={
-                <MultiUserValue userIds={entities().map((e) => e.entity_id)} />
+                <span class="truncate flex-1 @max-[840px]/u-list:hidden">
+                  {entities().length === 1
+                    ? '1 item'
+                    : `${entities().length} items`}
+                </span>
               }
             >
-              <SingleUserValue userId={entities()[0].entity_id} />
+              {/* Single user: show icon + first name */}
+              <Show
+                when={isSingleUser()}
+                fallback={
+                  <MultiUserValue
+                    userIds={entities().map((e) => e.entity_id)}
+                  />
+                }
+              >
+                <SingleUserValue userId={entities()[0].entity_id} />
+              </Show>
             </Show>
           </Show>
-        </Show>
-        {/* Caret hidden when container is narrow */}
-        <Show when={!isReadOnly()}>
-          <CaretDownIcon class="size-3 shrink-0 @max-[840px]/uList:hidden" />
-        </Show>
-      </button>
-    </Tooltip>
+          {/* Caret hidden when container is narrow */}
+          <Show when={!isReadOnly()}>
+            <CaretDownIcon class="size-3 shrink-0 @max-[840px]/u-list:hidden" />
+          </Show>
+        </button>
+      </HoverCard.Trigger>
+      <HoverCard.Content>
+        <PropertyTooltip property={props.property} />
+      </HoverCard.Content>
+    </HoverCard>
   );
 };

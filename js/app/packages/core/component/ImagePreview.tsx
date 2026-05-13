@@ -74,7 +74,7 @@ function ImagePlaceholder(props: {
 }) {
   return (
     <div
-      class="flex items-center justify-center border border-edge rounded-2xl bg-menu"
+      class="flex items-center justify-center border border-edge rounded-2xl bg-surface"
       style={
         props.dims
           ? {
@@ -154,7 +154,7 @@ export function ImagePreview(props: ImagePreviewProps) {
     <Dialog modal={true}>
       <div class="flex group relative">
         <Show when={props.variant !== 'small'}>
-          <div class="group-hover:visible invisible absolute top-2 right-2 bg-button rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">
+          <div class="group-hover:visible invisible absolute top-2 right-2 bg-surface rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">
             <Dialog.Trigger disabled={props.isContext}>
               <Button variant="ghost" size="icon-md">
                 <ExpandIcon />

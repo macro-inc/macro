@@ -1,7 +1,6 @@
 import { UnfurlLink } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import { Tooltip } from '@core/component/Tooltip';
 import clickOutside from '@core/directive/clickOutside';
 import { useUnfurl } from '@core/signal/unfurl';
 import NewTab from '@icon/regular/arrow-square-out.svg';
@@ -13,7 +12,7 @@ import Pencil from '@icon/regular/pencil-simple.svg';
 import LinkText from '@icon/regular/text-t.svg';
 import { mergeRegister } from '@lexical/utils';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
-import { Button } from '@ui';
+import { Button, Tooltip } from '@ui';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -351,7 +350,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
       <Show when={linkInfo()?.linkRef || linkInfo()?.selection}>
         <ScopedPortal scope="block">
           <div
-            class="p-2 fixed bg-menu top-0 left-0 text-sm z-modal-content ring ring-edge-muted rounded-sm shadow-lg min-w-80"
+            class="p-2 fixed bg-surface top-0 left-0 text-sm z-modal-content ring ring-edge-muted rounded-sm shadow-lg min-w-80"
             use:floatWithElement={floatWithElementProps()}
             use:floatWithSelection={floatWithSelectionProps()}
             use:clickOutside={() => {
@@ -374,7 +373,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
           {(link) => (
             <ScopedPortal>
               <div
-                class="p-2 absolute top-0 left-0 z-10 bg-menu w-80 shadow-lg ring-edge-muted rounded-sm ring-1"
+                class="p-2 absolute top-0 left-0 z-10 bg-surface w-80 shadow-lg ring-edge-muted rounded-sm ring-1"
                 use:floatWithElement={{
                   element: () => link().linkRef,
                   useBlockBoundary: true,
@@ -517,7 +516,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
               'max-h-24 mt-1': expanded(),
             }}
           >
-            <Tooltip tooltip="Apply link changes">
+            <Tooltip label="Apply link changes">
               <Button
                 onClick={handleSubmit}
                 class="focus:ring-failure focus:ring-2 focus:ring-offset-2"

@@ -35,10 +35,23 @@ export type HoverCardComponentProps = {
   gutter?: number;
   /** Additional class for content */
   contentClass?: string;
+  /**
+   * Element type Kobalte should render the trigger as. Defaults to `span`.
+   * Use `div` when the trigger child is itself block-level (e.g. a chip).
+   */
+  triggerAs?: 'span' | 'div';
+  /** Class applied to the underlying trigger element. */
+  triggerClass?: string;
   /** Whether to disable the hover card */
   disabled?: boolean;
   /** Callback when open state changes */
   onOpenChange?: (open: boolean) => void;
+  /**
+   * Optional controlled open state. When provided, the consumer is
+   * responsible for syncing it via `onOpenChange` (e.g. so inner content
+   * can dismiss the card via a close callback).
+   */
+  open?: boolean;
   /** Placement of the hover card */
   placement?: HoverCardRootProps['placement'];
 };
@@ -54,6 +67,14 @@ export function HoverCard(props: HoverCardComponentProps) {
 
   const [nestedOpenCount, setNestedOpenCount] = createSignal(0);
   const [isHoverCardOpen, setIsHoverCardOpen] = createSignal(false);
+
+  // Keep the internal open signal in sync with controlled `open` so the
+  // nested-card tracking effect below still fires when consumers control state.
+  createEffect(() => {
+    if (props.open !== undefined) {
+      setIsHoverCardOpen(props.open);
+    }
+  });
 
   createEffect(() => {
     if (isHoverCardOpen()) {
@@ -87,11 +108,15 @@ export function HoverCard(props: HoverCardComponentProps) {
       openDelay={props.openDelay ?? 100}
       closeDelay={props.closeDelay ?? 150}
       gutter={props.gutter ?? 8}
-      open={isHoverCardOpen()}
+      open={props.open ?? isHoverCardOpen()}
       onOpenChange={handleOpenChange}
       forceMount={shouldForceMount()}
     >
-      <KobalteHoverCard.Trigger as="span" disabled={props.disabled}>
+      <KobalteHoverCard.Trigger
+        as={props.triggerAs ?? 'span'}
+        class={props.triggerClass}
+        disabled={props.disabled}
+      >
         {props.trigger}
       </KobalteHoverCard.Trigger>
 

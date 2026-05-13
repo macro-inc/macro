@@ -1,4 +1,3 @@
-import { LabelAndHotKey } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -47,13 +46,7 @@ export function ParticipantsListItem(props: {
       </span>
       <div class="shrink-0">
         <Button
-          tooltip={
-            <LabelAndHotKey
-              label={
-                canRemove ? 'Remove participant' : 'Cannot remove participant'
-              }
-            />
-          }
+          label={canRemove ? 'Remove participant' : 'Cannot remove participant'}
           variant="ghost"
           size="icon-sm"
           disabled={!canRemove}

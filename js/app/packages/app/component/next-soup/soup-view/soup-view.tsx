@@ -63,10 +63,10 @@ import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { Resize } from '@core/component/Resize';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
@@ -90,7 +90,7 @@ import {
 } from '@queries/soup/normalized-cache';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
-import { Button, cn } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -239,6 +239,7 @@ export const SoupView = (props: SoupViewProps) => {
 
   registerHotkey({
     hotkey: 'cmd+f',
+    hotkeyToken: TOKENS.soup.openSearch,
     scopeId: panel.splitHotkeyScope,
     registrationType: 'add',
     description: 'Search',
@@ -361,11 +362,7 @@ export const SoupView = (props: SoupViewProps) => {
                   )}
                   collapsed={() => (
                     <Show when={!narrowSearchExpanded()}>
-                      <Tooltip
-                        tooltip={
-                          <LabelAndHotKey label="Search" shortcut="⌘F" />
-                        }
-                      >
+                      <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                         <Button
                           variant="ghost"
                           class="p-1 rounded-xs"
@@ -874,7 +871,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
             maxSize={previewVisible() ? 840 : undefined}
           >
             <div
-              class="@container/uList size-full unified-list-root flex flex-col"
+              class="@container/u-list size-full unified-list-root flex flex-col"
               classList={{
                 'border-r border-edge-muted':
                   soup.previewEntity() !== undefined,
@@ -1041,7 +1038,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     entityRowConfig={{
                                       swipeLeftColor: 'bg-success',
                                       swipeLeftRevealedComponent: (
-                                        <CheckIcon class="size-8 text-panel" />
+                                        <CheckIcon class="size-8 text-surface" />
                                       ),
                                     }}
                                   />
@@ -1086,7 +1083,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
             </div>
           </Resize.Panel>
           <Show when={previewVisible()}>
-            <Resize.Panel id="soup-preview" minSize={300}>
+            <Resize.Panel
+              id="soup-preview"
+              minSize={300}
+              target={{ kind: 'percent', percent: 70 }}
+            >
               <PreviewPanel
                 selectedEntity={soup.focus.item()}
                 orchestrator={orchestrator}

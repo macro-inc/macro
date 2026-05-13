@@ -44,7 +44,7 @@ function expandGroupMention(
  *   participant, de-duplicated against explicitly mentioned users.
  * - Regular user mentions are de-duplicated so the same user isn't sent twice.
  */
-function expandMentions(
+export function expandMentions(
   mentions: ItemMention[],
   participantIds: string[]
 ): SimpleMention[] {

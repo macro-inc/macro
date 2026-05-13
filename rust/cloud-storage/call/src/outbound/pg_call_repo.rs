@@ -1444,8 +1444,9 @@ impl CallRepository for PgCallRepo {
     ///
     /// `call_record_id` scopes the scan to a single call's archived transcript rows.
     /// A speaker is returned only when every row for that `speaker_id` has the
-    /// same non-NULL `voice_id`; ambiguous, missing, or unresolved speakers are
-    /// skipped. The returned `macro_user_id` is the user's canonical
+    /// same non-NULL `diarized_speaker_id`; all distinct non-NULL `voice_id`s
+    /// on those rows are returned. Ambiguous, missing, or unresolved speakers
+    /// are skipped. The returned `macro_user_id` is the user's canonical
     /// `macro_user.id`, suitable for linking to `voice_id` in `macro_user_voice`.
     #[tracing::instrument(err, skip(self))]
     async fn get_stable_speaker_voices_for_call_record(
@@ -1458,9 +1459,9 @@ impl CallRepository for PgCallRepo {
                 SELECT
                     u.macro_user_id,
                     COUNT(*) AS total_segments,
-                    COUNT(t.voice_id) AS voiced_segments,
-                    COUNT(DISTINCT t.voice_id) AS distinct_voice_ids,
-                    (array_agg(DISTINCT t.voice_id) FILTER (WHERE t.voice_id IS NOT NULL))[1] AS voice_id,
+                    COUNT(t.diarized_speaker_id) AS diarized_segments,
+                    COUNT(DISTINCT t.diarized_speaker_id) AS distinct_diarized_speaker_ids,
+                    ARRAY_AGG(DISTINCT t.voice_id) FILTER (WHERE t.voice_id IS NOT NULL) AS voice_ids,
                     MIN(t.sequence_num) AS first_sequence_num
                 FROM call_record_transcripts t
                 JOIN "User" u
@@ -1469,11 +1470,12 @@ impl CallRepository for PgCallRepo {
                 WHERE t.call_record_id = $1
                 GROUP BY t.speaker_id, u.macro_user_id
             )
-            SELECT macro_user_id AS "macro_user_id!", voice_id AS "voice_id!"
+            SELECT macro_user_id AS "macro_user_id!", voices.voice_id AS "voice_id!"
             FROM per_speaker
-            WHERE total_segments = voiced_segments
-              AND distinct_voice_ids = 1
-            ORDER BY first_sequence_num ASC
+            CROSS JOIN LATERAL UNNEST(voice_ids) AS voices(voice_id)
+            WHERE total_segments = diarized_segments
+              AND distinct_diarized_speaker_ids = 1
+            ORDER BY first_sequence_num ASC, voices.voice_id ASC
             "#,
             call_record_id,
         )

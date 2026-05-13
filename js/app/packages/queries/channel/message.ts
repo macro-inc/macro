@@ -18,6 +18,7 @@ import type {
   PostMessageRequest,
 } from '@service-comms/generated/models';
 import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
+import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
@@ -516,6 +517,7 @@ type PatchMessageParams = {
   channelID: string;
   messageID: string;
   content: string;
+  mentions: SimpleMention[];
   attachmentIDsToDelete?: string[];
   attachmentsToAdd?: NewAttachment[];
 };
@@ -547,6 +549,7 @@ export function usePatchMessageMutation(
             channel_id: vars.channelID,
             message_id: vars.messageID,
             content: vars.content,
+            mentions: vars.mentions,
             attachment_ids_to_delete: vars.attachmentIDsToDelete,
             attachments_to_add: vars.attachmentsToAdd,
             nonce: patchNonce.use(vars),

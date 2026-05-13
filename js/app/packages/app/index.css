@@ -78,18 +78,11 @@
   --transition: 0s; /* defualt 0.15, used for transition jamming, currently disabled */
 
   /* Semantic Color names, use these when writing tailwind */
-  --color-accent-ink:      var(--a0);
   --color-accent:          var(--a0);
-  --color-focus:           var(--a0);
   --color-accent-bg:       oklch(var(--a0) / 0.08);
   --color-accent-hover:    oklch(var(--a0) / 0.20); /* hover, e.g. hover state for buttons/items */
 
-  --color-panel:           var(--b0); /* block background */
-  --color-page:            var(--b0); /* page background */
-  --color-menu:            var(--b0); /* menu background */
-  --color-dialog:          var(--b0); /* dialog, e.g. dialog background */
-  --color-input:           var(--b0); /* input, e.g. chat/channel input */
-  --color-button:          var(--b0); /* dialog, e.g. dialog background */
+  --color-surface:         var(--b0); /* surface background (panels, pages, menus, dialogs, inputs, buttons) */
   --color-drop-shadow:     oklch(calc(var(--b0l) - 0.01 ) var(--b0c) var(--b0h) / 0.4);
   --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2)); /* message background */
   --color-hover:           var(--b2); /* hover, e.g. hover state for buttons/items */
@@ -101,6 +94,7 @@
 
   --color-ink:             var(--c0);
   --color-ink-muted:       var(--c1);
+  --color-default:         var(--c1); /* wtf? */
   --color-ink-extra-muted: var(--c2);
   --color-ink-disabled:    var(--c3);
   --color-ink-placeholder: oklch(var(--c4) / 0.50);
@@ -122,22 +116,21 @@
   --color-comment-bg:  oklch(from var(--color-comment) l c h / 0.15);
   --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h); /* scuffed */
 
-  --color-note:        oklch(from var(--a0) l c 293deg);
+  --color-calendar:    oklch(from var(--a0) l c 100deg);
+  --color-contact:     oklch(from var(--a0) l c  94deg);
   --color-canvas:      oklch(from var(--a0) l c  60deg);
-  --color-html:        oklch(from var(--a0) l c  47deg);
   --color-folder:      oklch(from var(--a0) l c 240deg);
-  --color-code:        oklch(from var(--a0) l c 180deg);
-  --color-pdf:         oklch(from var(--a0) l c  25deg);
   --color-image:       oklch(from var(--a0) l c  95deg);
-  --color-write:       oklch(from var(--a0) l c 260deg);
-  --color-chat:        oklch(from var(--a0) l c 220deg);
   --color-video:       oklch(from var(--a0) l c 277deg);
-  --color-rss:         oklch(from var(--a0) l c 260deg);
+  --color-write:       oklch(from var(--a0) l c 260deg);
+  --color-code:        oklch(from var(--a0) l c 180deg);
+  --color-chat:        oklch(from var(--a0) l c 220deg);
+  --color-html:        oklch(from var(--a0) l c  47deg);
+  --color-note:        oklch(from var(--a0) l c 293deg);
   --color-task:        oklch(from var(--a0) l c 150deg);
-  --color-calendar:    oklch(0.8159 0.2849 98.77);
-  --color-contact:     oklch(0.8617 0.1837 93.83);
-  --color-email:       var(--theme-email);
-  --color-default:     var(--c1);
+  --color-pdf:         oklch(from var(--a0) l c  25deg);
+  --color-rss:         oklch(from var(--a0) l c 260deg);
+  --color-email:       var(--theme-email); /* wtf? */
 
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */
@@ -170,8 +163,6 @@
 }
 
 :root {
-  --color-focus: var(--color-accent);
-
   /* Cursor variables — override these to use custom cursors */
   --cursor-nesw-resize: nesw-resize;
   --cursor-nwse-resize: nwse-resize;
@@ -189,13 +180,7 @@
   --cursor-text:        text;
 }
 
-.bg-accent {
-  --color-focus: var(--color-panel);
-}
 
-.bg-panel, .bg-dialog {
-  --color-focus: var(--color-accent);
-}
 
 /* Big hammer fix for cursor pointer. */
 @utility cursor-pointer {
@@ -267,7 +252,7 @@
 
 /* Used when you need to use a color defined via transparency, e.g. `accent-bg` in a context where it needs to be opaque, e.g. when it is floating over other elements. Use this with any of our macro colors, e.g. floating-accent-bg */
 @utility floating-* {
-  background-color: var(--color-dialog);
+  background-color: var(--color-surface);
   box-shadow: inset 400px 400px --value(--color-*);
 }
 
@@ -444,7 +429,7 @@
         @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
 
         /* SCUFFED; surface might change to surface2  */
-        background-color: var(--color-page);
+        background-color: var(--color-surface);
 
         width: 100dvw;
         height: 100dvh;

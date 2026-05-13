@@ -3,7 +3,6 @@ import { useSenderName } from '@app/component/app-sidebar/utils';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { compareDateDesc } from '@core/util/date';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -11,7 +10,7 @@ import { openNotification } from '@notifications';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
-import { Avatar, Button, cn } from '@ui';
+import { Avatar, Button, cn, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -216,7 +215,7 @@ function ChannelGroupItem(props: {
           />
         </Show>
         <Show when={isSlim()}>
-          <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full ring-page ring-2" />
+          <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full ring-surface ring-2" />
         </Show>
       </div>
 
@@ -240,10 +239,7 @@ function ChannelGroupItem(props: {
         <Show
           when={!isSlim()}
           fallback={
-            <Tooltip
-              tooltip={<span class="text-xs">{displayName()}</span>}
-              placement="right"
-            >
+            <Tooltip label={displayName()} placement="right">
               <ButtonContent />
             </Tooltip>
           }

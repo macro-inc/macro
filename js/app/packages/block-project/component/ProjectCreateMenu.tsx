@@ -292,7 +292,7 @@ function MenuContent(props: { projectId: string }) {
   }));
 
   return (
-    <DropdownMenu.Content class="isolate relative flex flex-col gap-2 bg-dialog -mb-1 p-2 border-2 border-accent min-w-max">
+    <DropdownMenu.Content class="isolate relative flex flex-col gap-2 bg-surface -mb-1 p-2 border-2 border-accent min-w-max">
       <For each={items}>
         {(item, index) => <MenuItem {...item} index={index() + 1} />}
       </For>

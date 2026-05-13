@@ -1,13 +1,16 @@
+import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
 import ArrowsOut from '@icon/regular/arrows-out.svg';
-import { cn } from '@ui';
+import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
+import { useToggleShareWithTeamMutation } from '@queries/call/call';
+import { cn, Surface, Tooltip } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';
+import { useCallContext } from '../CallContext';
 import type { CallControlsVariant } from '../CallControls/CallControls';
 import { CallControls } from '../CallControls/CallControls';
 import type { InCallPanelProps } from '../InCallPanel/types';
 import { openChannelCallTab } from '../open-channel-call-tab';
 import {
-  IN_CALL_ROSTER_CARD_CLASS,
   InCallParticipantsListPopover,
   InCallRosterListSection,
 } from './InCallParticipantsListPopover';
@@ -26,6 +29,15 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
     onLeaveCall: props.onLeaveCall,
     onJoinCall: props.onJoinCall,
   });
+  const callCtx = useCallContext();
+  const toggleShareWithTeam = useToggleShareWithTeamMutation();
+
+  const handleToggleShareWithTeam = async () => {
+    const callId = callCtx.activeCallId();
+    if (!callId) return;
+    const newValue = await toggleShareWithTeam.mutateAsync(callId);
+    callCtx.setSharedWithTeam(newValue);
+  };
 
   /** Memo so `props.isSlim` (boolean or accessor) always drives updates. */
   const isSlimLayout = createMemo((): boolean => {
@@ -85,10 +97,8 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
 
   const headerRowClass = createMemo(() =>
     cn(
-      'py-1 px-2 border-b border-edge-muted bg-accent/5 rounded-t-lg flex items-center gap-1 min-w-0 w-full',
-      !slim() || showExpandToFullCall()
-        ? 'justify-between gap-0'
-        : 'justify-center'
+      'py-1 px-2 border-b border-edge-muted bg-accent/5 rounded-t-lg flex items-center min-w-0 w-full',
+      slim() ? 'justify-center' : 'justify-between'
     )
   );
 
@@ -120,30 +130,57 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
             </Show>
           </div>
 
-          <Show when={showExpandToFullCall()}>
-            <button
-              type="button"
-              class={cn(
-                'shrink-0 transition-colors hover:bg-accent/30 outline-0 outline-accent/50 hover:outline-1 hover-transition-outline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-edge-muted',
-                slim() && 'animate-pulse hover:outline-0'
-              )}
-              title="Open full call view"
-              aria-label="Open full call view"
-              onClick={() => {
-                const id = panel.callCtx.activeChannelId();
-                if (id) void openChannelCallTab(id);
-              }}
-            >
-              <ArrowsOut
-                class={cn('text-accent', slim() ? 'size-3.5' : 'size-4')}
-              />
-            </button>
-          </Show>
+          <div class="flex items-center gap-1 shrink-0">
+            <Show when={!slim()}>
+              <Tooltip
+                placement="top"
+                label="When on, all team members can view and search this call's transcript and AI summary."
+              >
+                <div class="flex items-center gap-1 px-1">
+                  <ShareNetwork
+                    class={cn(
+                      'size-3 shrink-0',
+                      callCtx.isSharedWithTeam() ? 'text-ink' : 'text-ink-muted'
+                    )}
+                    aria-hidden
+                  />
+                  <MiniToggleSwitch
+                    checked={callCtx.isSharedWithTeam()}
+                    onChange={() => void handleToggleShareWithTeam()}
+                    disabled={callCtx.isConnecting()}
+                    size="SM"
+                    compact
+                    activeTrackClass="bg-ink-muted"
+                  />
+                </div>
+              </Tooltip>
+            </Show>
+
+            <Show when={showExpandToFullCall()}>
+              <button
+                type="button"
+                class={cn(
+                  'shrink-0 transition-colors hover:bg-accent/30 outline-0 outline-accent/50 hover:outline-1 hover-transition-outline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-edge-muted',
+                  slim() && 'animate-pulse hover:outline-0'
+                )}
+                title="Open full call view"
+                aria-label="Open full call view"
+                onClick={() => {
+                  const id = panel.callCtx.activeChannelId();
+                  if (id) void openChannelCallTab(id);
+                }}
+              >
+                <ArrowsOut
+                  class={cn('text-accent', slim() ? 'size-3.5' : 'size-4')}
+                />
+              </button>
+            </Show>
+          </div>
         </div>
 
         <div
           class={cn(
-            'px-2 py-3 bg-panel rounded-b-lg w-full',
+            'px-2 py-3 bg-surface rounded-b-lg w-full',
             slim() && 'px-2 pt-2 pb-1 flex flex-col items-center gap-2'
           )}
         >
@@ -164,14 +201,14 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
                 defaultEmptyUserPlaceholder
                 overflowChipClass="bg-edge-muted"
                 overflowTooltipContent={(close) => (
-                  <div class={IN_CALL_ROSTER_CARD_CLASS}>
+                  <Surface depth={3} class="min-w-48 max-w-72">
                     <InCallRosterListSection
                       panel={panel}
                       members={orderedMembers()}
                       onClose={() => close()}
                       allowOpenDm={false}
                     />
-                  </div>
+                  </Surface>
                 )}
               >
                 {(image) => (
@@ -191,7 +228,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
 
         <div
           class={cn(
-            !slim() && 'bg-panel border-t border-edge-muted',
+            !slim() && 'bg-surface border-t border-edge-muted',
             slim() && 'px-2 pt-1 pb-2'
           )}
         >

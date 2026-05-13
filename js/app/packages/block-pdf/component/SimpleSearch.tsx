@@ -1,19 +1,9 @@
 import { searchLocationPendingSignal } from '@block-pdf/signal/location';
+import type { FindBarController } from '@core/component/createFindBarController';
+import { FindBar } from '@core/component/FindBar';
 import { IS_MAC } from '@core/constant/isMac';
 import { blockElementSignal } from '@core/signal/blockElement';
-import CaretDown from '@icon/regular/caret-down.svg';
-import CaretUp from '@icon/regular/caret-up.svg';
-import MagnifyingGlass from '@icon/regular/magnifying-glass.svg';
-import X from '@icon/regular/x.svg';
-import { Button, cn } from '@ui';
-import {
-  createEffect,
-  createSignal,
-  type JSX,
-  onCleanup,
-  Show,
-  untrack,
-} from 'solid-js';
+import { createEffect, createSignal, onCleanup, Show, untrack } from 'solid-js';
 import {
   isSearchOpenSignal,
   searchSignal,
@@ -29,101 +19,97 @@ export function SimpleSearch() {
   const jumpToResult = useJumpToResult();
   const closeSearchBar = useSearchClose();
   const locationPending = searchLocationPendingSignal.get;
-  let inputRef: HTMLInputElement | undefined;
+  const [inputEl, setInputEl] = createSignal<HTMLInputElement>();
 
-  const [isSearching, setIsSearching] = createSignal(false);
   const [isOpen, setIsOpen] = isSearchOpenSignal;
   const [searchText, setSearchText] = searchSignal;
+  const [isPending, setIsPending] = createSignal(false);
 
-  // search on open
+  // Re-run the active search when the bar opens (or re-opens with prior text).
   createEffect(() => {
     if (untrack(locationPending)) return;
     const text = untrack(searchText);
-    if (isOpen()) searchStart({ query: text });
+    if (isOpen()) {
+      searchStart({ query: text });
+      if (text) setIsPending(true);
+    }
   });
 
+  // Sync the input value when the search subsystem normalizes/echoes a query.
+  // Clear the pending flag once the results match the current query — guards
+  // against the controller emitting a stale matchesCount mid-transition.
   createEffect(() => {
-    const query = searchResults()?.query;
+    const r = searchResults();
     if (untrack(locationPending)) return;
-    if (query != null) {
-      setSearchText(query);
-    }
-
-    if (searchResults()) {
-      setIsSearching(false);
-    }
+    if (r?.query != null) setSearchText(r.query);
+    if (r?.query === untrack(searchText)) setIsPending(false);
   });
 
-  const jumpTo = (dir: 'next' | 'prev') => {
-    const result = searchResults();
-    if (!result || result.count.total === 0) return;
+  const submittedQuery = () => searchResults()?.query ?? '';
+  const total = () => searchResults()?.count.total ?? 0;
+  const current = () => searchResults()?.count.current ?? 0;
 
-    const {
-      query,
-      matches,
-      count: { current, total },
-    } = result;
-
-    let index = 0;
-    if (dir === 'next') {
-      if (current === total) index = 0;
-      else index = current;
-    } else {
-      if (current === 1) index = total - 1;
-      else index = current - 2;
-    }
-    jumpToResult(matches[index]);
-
-    if (searchText() !== query) {
-      setSearchText(query);
-    }
+  const submit = () => {
+    const query = searchText();
+    searchStart({ query });
+    if (query) setIsPending(true);
   };
 
-  const closeSearch = () => {
+  const next = () => {
+    const result = searchResults();
+    if (!result || result.count.total === 0) return;
+    const { matches, count } = result;
+    const idx = count.current === count.total ? 0 : count.current;
+    jumpToResult(matches[idx]);
+  };
+
+  const previous = () => {
+    const result = searchResults();
+    if (!result || result.count.total === 0) return;
+    const { matches, count } = result;
+    const idx = count.current === 1 ? count.total - 1 : count.current - 2;
+    jumpToResult(matches[idx]);
+  };
+
+  const close = () => {
     closeSearchBar();
     setIsOpen(false);
   };
 
-  const inputKeyDownHandler: JSX.EventHandler<
-    HTMLInputElement,
-    KeyboardEvent
-  > = (e) => {
-    const query = searchText();
-    const result = searchResults();
-    if (e.key === 'Enter') {
-      if (result && result.query === query) {
-        if (e.shiftKey) {
-          jumpTo('prev');
-        } else {
-          jumpTo('next');
-        }
-      } else {
-        searchStart({ query });
-        if (!query) return;
-        setIsSearching(true);
-      }
-    } else if (e.key === 'Escape') {
-      closeSearch();
-    }
+  // PDF.js owns the search state (queries, results, cursor). Expose it as a
+  // FindBarController so it can drive the shared <FindBar> UI.
+  const controller: FindBarController = {
+    isOpen,
+    query: searchText,
+    setQuery: setSearchText,
+    submittedQuery,
+    activeIndex: current,
+    hasUnsubmittedChanges: () => searchText() !== submittedQuery(),
+    isPending,
+    resultsCount: total,
+    open: () => setIsOpen(true),
+    close,
+    submit,
+    next,
+    previous,
+    setInputEl: (el) => setInputEl(el),
   };
 
-  const keyDownHandler = (e: KeyboardEvent) => {
-    if ((IS_MAC ? e.metaKey : e.ctrlKey) && e.key === 'f') {
-      e.stopPropagation();
-      e.preventDefault();
-
-      if (isOpen()) {
-        if (inputRef === document.activeElement) {
-          closeSearch();
-          setIsOpen(false);
-        } else {
-          inputRef?.focus();
-          inputRef?.select();
-        }
+  const handleHotkey = (e: KeyboardEvent) => {
+    if (!((IS_MAC ? e.metaKey : e.ctrlKey) && e.key === 'f')) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const input = inputEl();
+    if (isOpen()) {
+      if (input === document.activeElement) {
+        close();
       } else {
-        setIsOpen(true);
-        inputRef?.focus();
+        input?.focus();
+        input?.select();
       }
+    } else {
+      setIsOpen(true);
+      input?.focus();
     }
   };
 
@@ -131,60 +117,17 @@ export function SimpleSearch() {
   createEffect(() => {
     const element = blockElement();
     if (!element) return;
-
-    // the document event listener will act as a fallback to handle all splits for when the block element is not in focus
-    element.addEventListener('keydown', keyDownHandler);
-    document.addEventListener('keydown', keyDownHandler);
-
+    element.addEventListener('keydown', handleHotkey);
+    document.addEventListener('keydown', handleHotkey);
     onCleanup(() => {
-      element.removeEventListener('keydown', keyDownHandler);
-      document.removeEventListener('keydown', keyDownHandler);
+      element.removeEventListener('keydown', handleHotkey);
+      document.removeEventListener('keydown', handleHotkey);
     });
   });
 
   return (
     <Show when={isOpen()}>
-      <div class="flex items-center justify-start rounded-md border border-edge floating-hover p-1 focus-within:floating-input focus-within:border-accent">
-        <div class="px-2">
-          <MagnifyingGlass
-            class={cn(
-              'size-4',
-              isSearching() ? 'animate-pulse text-accent-ink' : 'text-ink'
-            )}
-          />
-        </div>
-        <input
-          class="mx-0.5 flex-1 border-0 text-sm text-ink focus:outline-none focus:ring-0"
-          type="text"
-          ref={inputRef}
-          value={searchText()}
-          onInput={(e) => setSearchText(e.target.value)}
-          onKeyDown={inputKeyDownHandler}
-        />
-        <div class="flex-0 ml-auto mr-3 text-right w-24">
-          <Show when={!!searchText() && searchResults()}>
-            {(result) => {
-              const current = () => result().count.current;
-              const total = () => result().count.total;
-
-              return (
-                <>
-                  {current()}/{total()}
-                </>
-              );
-            }}
-          </Show>
-        </div>
-        <Button variant="ghost" size="icon-md" onClick={() => jumpTo('prev')}>
-          <CaretUp />
-        </Button>
-        <Button variant="ghost" size="icon-md" onClick={() => jumpTo('next')}>
-          <CaretDown />
-        </Button>
-        <Button variant="ghost" size="icon-md" onClick={closeSearch}>
-          <X />
-        </Button>
-      </div>
+      <FindBar controller={controller} />
     </Show>
   );
 }

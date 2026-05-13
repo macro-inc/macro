@@ -15,7 +15,7 @@ export function useTeamInvitesQuery(teamId: Accessor<string>) {
   return useQuery(() => ({
     queryKey: teamKeys.invites(teamId()).queryKey,
     queryFn: async () =>
-      await throwOnErr(() => authServiceClient.getTeamInvites(teamId())),
+      await throwOnErr(() => authServiceClient.getTeamInvites()),
     enabled: !!teamId(),
   }));
 }
@@ -31,8 +31,8 @@ type InviteToTeamCallbacks = MutationCallbacks<void, Error, InviteToTeamArgs>;
 
 export function useInviteToTeamMutation(callbacks?: InviteToTeamCallbacks) {
   return useMutation(() => ({
-    mutationFn: async ({ teamId, request }: InviteToTeamArgs) => {
-      await throwOnErr(() => authServiceClient.inviteToTeam(teamId, request));
+    mutationFn: async ({ request }: InviteToTeamArgs) => {
+      await throwOnErr(() => authServiceClient.inviteToTeam(request));
     },
 
     ...withCallbacks<void, Error, InviteToTeamArgs>(
@@ -67,10 +67,8 @@ export function useDeleteTeamInviteMutation(
   callbacks?: DeleteTeamInviteCallbacks
 ) {
   return useMutation(() => ({
-    mutationFn: async ({ teamId, teamInviteId }: DeleteTeamInviteArgs) => {
-      await throwOnErr(() =>
-        authServiceClient.deleteTeamInvite(teamId, teamInviteId)
-      );
+    mutationFn: async ({ teamInviteId }: DeleteTeamInviteArgs) => {
+      await throwOnErr(() => authServiceClient.deleteTeamInvite(teamInviteId));
     },
 
     ...withCallbacks<

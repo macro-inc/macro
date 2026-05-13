@@ -63,7 +63,7 @@ export function CallRecordingSectionShell(props: {
       <Show
         when={props.accordion && props.onToggle}
         fallback={
-          <div class="isolate flex shrink-0 items-center gap-2 sticky top-0 bg-panel z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
+          <div class="isolate flex shrink-0 items-center gap-2 sticky top-0 bg-surface z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
             {props.icon}
             <p class="font-semibold text-ink select-none text-sm shrink-0">
               {props.title}
@@ -96,7 +96,7 @@ export function CallRecordingSectionShell(props: {
       >
         <button
           type="button"
-          class="isolate sticky top-0 z-10 flex w-full min-w-0 shrink-0  items-center gap-2 border-b border-edge-muted/50 bg-panel px-4 py-2 text-left @[860px]:py-4 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0"
+          class="isolate sticky top-0 z-10 flex w-full min-w-0 shrink-0  items-center gap-2 border-b border-edge-muted/50 bg-surface px-4 py-2 text-left @[860px]:py-4 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0"
           aria-expanded={props.open}
           aria-label={toggleLabel()}
           title={toggleLabel()}

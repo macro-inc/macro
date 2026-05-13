@@ -3,7 +3,9 @@
 mod queries;
 
 use crate::domain::{
-    models::{AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, EntityType},
+    models::{
+        AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, EntityType, UserTeamInfo,
+    },
     ports::AccessRepository,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
@@ -187,5 +189,13 @@ impl AccessRepository for PgAccessRepository {
             channel_id: r.channel_id,
             share_permission_id: r.share_permission_id,
         }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_team(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Option<UserTeamInfo>, AccessError> {
+        Ok(queries::team_access::get_user_team(&self.pool, user_id).await?)
     }
 }

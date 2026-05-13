@@ -10,6 +10,7 @@ export type Theme =
   | 'red'
   | 'muted'
   | 'extraMuted'
+  | 'subtle'
   | 'accentFill'
   | 'current'
   | 'reverse';
@@ -19,11 +20,11 @@ export type Theme =
 // it would be better if we also defined --accent-l-surface, --accent-l-contrast
 export const themeColors: Record<Theme, string> = {
   base: 'text-ink border-edge!',
-  accent: 'text-accent-ink border-accent/30',
-  accentFill: 'text-dialog border-accent/30',
+  accent: 'text-accent border-accent/30',
+  accentFill: 'text-surface border-accent/30',
   accentOpaque:
-    'text-accent-ink border-[oklch(from_var(--color-accent)_calc(l*0.9)_calc(c*0.8)_h)]',
-  contrast: 'text-menu border-ink-extra-muted',
+    'text-accent border-[oklch(from_var(--color-accent)_calc(l*0.9)_calc(c*0.8)_h)]',
+  contrast: 'text-surface border-ink-extra-muted',
   clear: 'text-ink border-transparent',
   selected: 'text-ink border-edge',
   disabled: 'text-ink-disabled/50 border-edge',
@@ -31,12 +32,13 @@ export const themeColors: Record<Theme, string> = {
   red: 'text-failure-ink border-failure/50',
   muted: 'text-ink-muted border-transparent',
   extraMuted: 'text-ink-extra-muted border-transparent',
+  subtle: 'text-ink-extra-muted border-ink/5',
   current: 'text-current border-transparent',
   reverse: 'bg-current border-transparent',
 };
 
 export const themeStyles: Record<Theme, string> = {
-  base: 'bg-menu hover:bg-hover hover-transition-bg border border-inherit',
+  base: 'bg-surface hover:bg-hover hover-transition-bg border border-inherit',
   accent:
     'bg-accent/10 hover:bg-accent/20 hover-transition-bg border border-inherit',
   accentFill: 'bg-accent hover-transition-bg border border-inherit',
@@ -47,13 +49,15 @@ export const themeStyles: Record<Theme, string> = {
   clear:
     'bg-transparent hover:bg-hover hover-transition-bg border border-transparent',
   selected: 'bg-hover hover:bg-hover hover-transition-bg border border-inherit',
-  disabled: 'bg-menu/20 border border-inherit',
+  disabled: 'bg-surface/20 border border-inherit',
   green: 'bg-success-bg hover:bg-success border border-inherit',
   red: 'bg-failure-bg hover:bg-failure border border-inherit',
   muted:
     'bg-transparent hover:bg-hover hover-transition-bg border border-transparent',
   extraMuted:
     'bg-transparent hover:bg-hover hover-transition-bg border border-transparent',
+  subtle:
+    'bg-transparent hover:bg-hover hover-transition-bg border border-inherit',
   current: 'bg-transparent hover:bg-current/20',
   reverse: 'bg-current hover:bg-current/90',
 };
@@ -72,12 +76,13 @@ export const themeSelectedColors: Record<Theme, string> = {
   red: 'bg-failure-bg!',
   muted: 'bg-hover!',
   extraMuted: 'bg-hover!',
+  subtle: 'bg-hover!',
   current: 'bg-current/20',
   reverse: 'bg-current',
 };
 
 export const shortcutBadgeStyles: Record<Theme, string> = {
-  base: 'bg-dialog border border-ink',
+  base: 'bg-surface border border-ink',
   accent: 'bg-accent/10',
   accentFill: 'bg-accent/90',
   accentOpaque:
@@ -90,6 +95,7 @@ export const shortcutBadgeStyles: Record<Theme, string> = {
   red: 'bg-failure-bg/30',
   muted: 'bg-hover',
   extraMuted: 'bg-hover',
+  subtle: 'bg-transparent',
   current: 'bg-current/20',
   reverse: 'bg-current',
 };

@@ -1089,7 +1089,7 @@ async fn archive_call_rolls_up_consecutive_same_speaker_transcripts(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn get_stable_speaker_voices_for_call_record_returns_only_unambiguous_speakers(
+async fn get_stable_speaker_voices_for_call_record_returns_all_voices_for_consistent_diarized_speakers(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
@@ -1103,10 +1103,12 @@ async fn get_stable_speaker_voices_for_call_record_returns_only_unambiguous_spea
     insert_user_mapping(&pool, USER_C.deref(), MACRO_USER_C).await?;
 
     let segments = [
-        // USER_A is stable: every transcript row has the same non-null voice id.
+        // USER_A is stable: every row has the same non-null diarized speaker,
+        // so all non-null voice ids from those rows should be returned.
         ("stable-a-1", USER_A.as_ref(), Some("spk-a0"), Some(voice_a)),
-        ("stable-a-2", USER_A.as_ref(), Some("spk-a1"), Some(voice_a)),
-        // USER_B is ambiguous: more than one distinct voice id.
+        ("stable-a-2", USER_A.as_ref(), Some("spk-a0"), Some(voice_b)),
+        ("stable-a-3", USER_A.as_ref(), Some("spk-a0"), None),
+        // USER_B is ambiguous: more than one distinct diarized speaker id.
         (
             "ambiguous-b-1",
             USER_B.as_ref(),
@@ -1119,15 +1121,15 @@ async fn get_stable_speaker_voices_for_call_record_returns_only_unambiguous_spea
             Some("spk-b1"),
             Some(voice_b),
         ),
-        // USER_C is incomplete: at least one transcript row has no voice id.
+        // USER_C is incomplete: at least one transcript row has no diarized speaker id.
         (
             "missing-c-1",
             USER_C.as_ref(),
             Some("spk-c0"),
             Some(voice_a),
         ),
-        ("missing-c-2", USER_C.as_ref(), Some("spk-c0"), None),
-        // Unknown speaker ids are ignored even if their voice id is stable.
+        ("missing-c-2", USER_C.as_ref(), None, Some(voice_b)),
+        // Unknown speaker ids are ignored even if their diarized speaker id is stable.
         (
             "unknown-speaker",
             "macro|unknown-speaker@test.com",
@@ -1160,11 +1162,14 @@ async fn get_stable_speaker_voices_for_call_record_returns_only_unambiguous_spea
 
     let record_id = repo.archive_call(&CALL1).await?;
 
-    let stable = repo
+    let mut stable = repo
         .get_stable_speaker_voices_for_call_record(&record_id)
         .await?;
+    stable.sort();
 
-    assert_eq!(stable, vec![(MACRO_USER_A, voice_a)]);
+    let mut expected = vec![(MACRO_USER_A, voice_a), (MACRO_USER_A, voice_b)];
+    expected.sort();
+    assert_eq!(stable, expected);
     Ok(())
 }
 

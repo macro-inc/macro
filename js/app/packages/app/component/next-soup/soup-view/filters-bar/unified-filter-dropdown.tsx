@@ -14,16 +14,16 @@ import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import CaretRightIcon from '@icon/regular/caret-right.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useContacts } from '@queries/contacts/contacts';
-import { cn, Dropdown, Layer } from '@ui';
+import { cn, Dropdown, Layer, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -56,7 +56,7 @@ const TypeIndicator = (props: { active: boolean }) => (
     )}
   >
     <Show when={props.active}>
-      <CheckIcon class="size-2.5 text-page" />
+      <CheckIcon class="size-2.5 text-surface" />
     </Show>
   </span>
 );
@@ -306,6 +306,11 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
         icon: () => <EntityIcon targetType="write" size="xs" />,
       },
       {
+        id: 'file-video',
+        label: 'Videos',
+        icon: () => <EntityIcon targetType="video" size="xs" />,
+      },
+      {
         id: 'file-other',
         label: 'Other',
         icon: () => <EntityIcon targetType="unknown" size="xs" />,
@@ -411,7 +416,7 @@ const SearchableFilterSubmenu = (props: {
 
       <Dropdown.Portal>
         <Layer depth={2}>
-          <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-65 max-w-[90vw] overflow-hidden">
+          <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl w-65 max-w-[90vw] overflow-hidden">
             <SearchableMultiSelectInline
               options={props.options}
               activeIds={props.activeIds}
@@ -442,7 +447,7 @@ function SingleValueSubmenu<T>(props: {
       </Dropdown.SubTrigger>
       <Dropdown.Portal>
         <Layer depth={2}>
-          <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+          <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
             <For each={props.options}>
               {(option) => {
                 const active = () => props.current() === option.value;
@@ -644,7 +649,7 @@ const SearchIndexSubRow = (props: {
     </Dropdown.SubTrigger>
     <Dropdown.Portal>
       <Layer depth={2}>
-        <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
+        <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
           {props.children}
         </Dropdown.SubContent>
       </Layer>
@@ -786,6 +791,7 @@ export const UnifiedFilterDropdown = () => {
     hotkey: 'f',
     scopeId: panel.splitHotkeyScope,
     description: 'Open filter menu',
+    hotkeyToken: TOKENS.soup.filter,
     keyDownHandler: () => {
       setOpen(true);
       return true;
@@ -795,8 +801,8 @@ export const UnifiedFilterDropdown = () => {
   return (
     <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
       <Dropdown open={open()} onOpenChange={setOpen}>
-        <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="F" />}>
-          <Dropdown.Trigger>
+        <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
+          <Dropdown.Trigger depth={2} class="bg-surface">
             <SlidersHorizontalIcon />
             <span>Filter</span>
           </Dropdown.Trigger>
@@ -804,7 +810,7 @@ export const UnifiedFilterDropdown = () => {
 
         <Dropdown.Portal>
           <Layer depth={2}>
-            <Dropdown.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
+            <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
               <Show
                 when={
                   categories().length === 1 && !isTasksView() && !isSearchView()
@@ -821,7 +827,7 @@ export const UnifiedFilterDropdown = () => {
 
                           <Dropdown.Portal>
                             <Layer depth={2}>
-                              <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+                              <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
                                 <For each={category.options}>
                                   {(option) => {
                                     const active = () =>
@@ -841,7 +847,7 @@ export const UnifiedFilterDropdown = () => {
                                           )}
                                         >
                                           <Show when={active()}>
-                                            <CheckIcon class="size-2.5 text-page" />
+                                            <CheckIcon class="size-2.5 text-surface" />
                                           </Show>
                                         </span>
 
@@ -965,7 +971,7 @@ export const UnifiedFilterDropdown = () => {
                           )}
                         >
                           <Show when={active()}>
-                            <CheckIcon class="size-2.5 text-page" />
+                            <CheckIcon class="size-2.5 text-surface" />
                           </Show>
                         </span>
 

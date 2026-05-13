@@ -1,5 +1,5 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { LabelAndHotKey } from '@core/component/Tooltip';
+
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@icon/regular/x.svg';
 import { Button, Layer } from '@ui';
@@ -64,7 +64,7 @@ export function SplitDrawer(
   };
 
   const getPositionClasses = () => {
-    const baseClasses = `absolute bg-panel border-edge-muted z-annotation-layer flex flex-col`;
+    const baseClasses = `absolute bg-surface border-edge-muted z-annotation-layer flex flex-col`;
     let positionClasses = '';
     switch (props.side) {
       case 'top':
@@ -133,7 +133,7 @@ export function SplitDrawer(
               <Button
                 variant="ghost"
                 size="icon-sm"
-                tooltip={<LabelAndHotKey label="Close" />}
+                label="Close"
                 onClick={drawerControl.close}
               >
                 <CloseIcon />

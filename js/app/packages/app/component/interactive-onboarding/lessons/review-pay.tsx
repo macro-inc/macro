@@ -34,7 +34,7 @@ function toTeamUserTier(tier: PaidPlanTier): TeamUserTier {
 }
 
 import { analytics } from '@app/lib/analytics/analytics';
-import { Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@ui';
 
 function ReviewPayContent() {
   return (
@@ -50,8 +50,8 @@ function ReviewPayDemo(props: LessonContentProps) {
   const isAuthenticated = useIsAuthenticated();
   const [isRedirecting, setIsRedirecting] = createSignal(false);
 
-  // Returns to /welcome?subscriptionSuccess=true on success, which triggers
-  // completeOnParam and runs onCompleteParam to create the pending team.
+  // Returns to /welcome?subscriptionSuccess=true on success, which completes
+  // all lessons except launch and runs onCompleteParam to create the pending team.
   const checkoutMutation = useOnboardingCheckoutMutation({
     onSuccess: (result) => {
       analytics.track('subscription_start', {
@@ -242,7 +242,7 @@ function ReviewPayDemo(props: LessonContentProps) {
                     <span class="text-ink/60">
                       Team · {group.plan.name} × {group.count}
                     </span>
-                    <Tooltip tooltip="Charged when invite is accepted">
+                    <Tooltip label="Charged when invite is accepted">
                       <span class="underline decoration-dotted underline-offset-4 italic cursor-help">
                         <span class="text-ink">
                           ${group.plan.price * group.count}
@@ -257,7 +257,7 @@ function ReviewPayDemo(props: LessonContentProps) {
                 <div class="flex justify-between items-center py-2">
                   <span class="text-ink/60 flex items-center gap-1">
                     Total
-                    <Tooltip tooltip="Team charges begin when members accept their invite">
+                    <Tooltip label="Team charges begin when members accept their invite">
                       <InfoIcon class="size-3.5 text-ink/40" />
                     </Tooltip>
                   </span>
@@ -358,12 +358,11 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
       .map((m) => ({ email: m.email, tier: toTeamUserTier(m.tier) }));
 
     if (invites.length > 0) {
-      await throwOnErr(() =>
-        authServiceClient.inviteToTeam(team.id, { invites })
-      );
+      await throwOnErr(() => authServiceClient.inviteToTeam({ invites }));
     }
 
     await invalidateUserTeams();
+
     clearPendingTeam();
 
     analytics.track('onboarding_team_created', {
@@ -386,6 +385,8 @@ export const reviewPayLesson: LessonDefinition = {
   demo: ReviewPayDemo,
   order: 95,
   hideContinue: true,
+  completeOnParam: 'subscriptionSuccess',
+  onCompleteParam: createPendingTeamOnReturn,
   previousLesson: ({ onboarding, isLessonSkipped }) => {
     // When teams feature is disabled, these lessons are skipped
     if (isLessonSkipped('team-choice')) {
@@ -396,6 +397,4 @@ export const reviewPayLesson: LessonDefinition = {
       onboarding.teamName().trim() !== '';
     return hasTeam ? 'invite-team' : 'team-choice';
   },
-  completeOnParam: 'subscriptionSuccess',
-  onCompleteParam: createPendingTeamOnReturn,
 };

@@ -12,7 +12,7 @@ export default function NotFound() {
       <p class="text-ink-muted">
         Whoops! It doesn't look like a file exists at this link.
       </p>
-      <span class="text-accent-ink">404</span>
+      <span class="text-accent">404</span>
     </div>
   );
 }

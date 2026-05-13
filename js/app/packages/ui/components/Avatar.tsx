@@ -41,7 +41,7 @@ export function Avatar(props: AvatarProps) {
       data-slot="avatar"
       data-size={size()}
       class={cn(
-        'group/avatar relative flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted text-panel',
+        'group/avatar relative flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted text-surface',
         size() === 'fill' && '@container',
         AVATAR_SIZE_CLASSES,
         AVATAR_SVG_CLASSES,
@@ -138,7 +138,7 @@ const GROUP_RING_CLASSES: Record<AvatarGroupSize, string> = {
 /**
  * Avatar group container. Displays avatars in an overlapping style.
  *
- * Uses --avatar-group-separator CSS variable for ring color (defaults to --color-panel).
+ * Uses --avatar-group-separator CSS variable for ring color (defaults to --color-surface).
  * Parent containers can override to match hover backgrounds.
  *
  * @example
@@ -165,7 +165,7 @@ export function AvatarGroup(props: AvatarGroupProps) {
         'isolate flex w-fit shrink-0 items-center',
         GROUP_OVERLAP_CLASSES[size()],
         GROUP_RING_CLASSES[size()],
-        '**:data-[slot=avatar]:ring-(--avatar-group-separator,var(--color-panel))',
+        '**:data-[slot=avatar]:ring-(--avatar-group-separator,var(--color-surface))',
         local.class
       )}
       {...others}
@@ -199,8 +199,8 @@ function AvatarGroupCount(props: AvatarGroupCountProps) {
     <div
       data-slot="avatar-group-count"
       class={cn(
-        'relative z-10 flex shrink-0 select-none items-center justify-center rounded-full bg-menu text-ink leading-none',
-        'ring-(--avatar-group-separator,var(--color-panel))',
+        'relative z-10 flex shrink-0 select-none items-center justify-center rounded-full bg-surface text-ink leading-none',
+        'ring-(--avatar-group-separator,var(--color-surface))',
         GROUP_COUNT_CLASSES[size()],
         props.class
       )}

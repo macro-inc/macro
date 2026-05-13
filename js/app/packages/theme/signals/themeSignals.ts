@@ -1,5 +1,5 @@
 import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, DEFAULT_THEMES } from '../constants';
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import type { ThemeV0, ThemeV1, ThemeV2 } from '../types/themeTypes';
 import { convertThemev0v1, convertThemev1v2 } from '../utils/themeMigrations';
 import { makePersisted } from '@solid-primitives/storage';
@@ -72,42 +72,4 @@ if (supportsMatchMedia) {
   });
 }
 
-export const [monochromeIcons, setMonochromeIcons] = makePersisted(
-  createSignal<boolean>(false),
-  {name: 'enable-monochrome-icons'}
-);
-
 export const [themeDepth, setThemeDepth] = createSignal<number>(0.15);
-
-
-createEffect(() => {
-  if(monochromeIcons()){
-    document.documentElement.style.setProperty('--theme-contact', 'var(--c0)');
-    document.documentElement.style.setProperty('--theme-canvas' , 'var(--c0)');
-    document.documentElement.style.setProperty('--theme-folder' , 'var(--c0)');
-    document.documentElement.style.setProperty('--theme-image'  , 'var(--c0)');
-    document.documentElement.style.setProperty('--theme-write'  , 'var(--c0)');
-    document.documentElement.style.setProperty('--theme-video'  , 'var(--c0)');
-    document.documentElement.style.setProperty('--theme-html'   , 'var(--c0)');
-    document.documentElement.style.setProperty('--theme-note'   , 'var(--c0)');
-    document.documentElement.style.setProperty('--theme-code'   , 'var(--c0)');
-    document.documentElement.style.setProperty('--theme-chat'   , 'var(--c0)');
-    document.documentElement.style.setProperty('--theme-pdf'    , 'var(--c0)');
-    document.documentElement.style.setProperty('--theme-rss'    , 'var(--c0)');
-    document.documentElement.style.setProperty('--theme-task'   , 'var(--c0)');
-  }
-  else{
-    document.documentElement.style.setProperty( '--theme-folder', 'oklch(var(--a0l) var(--a0c) 240)');
-    document.documentElement.style.setProperty( '--theme-canvas', 'oklch(var(--a0l) var(--a0c)  60)');
-    document.documentElement.style.setProperty( '--theme-write' , 'oklch(var(--a0l) var(--a0c) 260)');
-    document.documentElement.style.setProperty( '--theme-video' , 'oklch(var(--a0l) var(--a0c) 277)');
-    document.documentElement.style.setProperty( '--theme-note'  , 'oklch(var(--a0l) var(--a0c) 293)');
-    document.documentElement.style.setProperty( '--theme-code'  , 'oklch(var(--a0l) var(--a0c) 180)');
-    document.documentElement.style.setProperty( '--theme-chat'  , 'oklch(var(--a0l) var(--a0c) 220)');
-    document.documentElement.style.setProperty( '--theme-image' , 'oklch(var(--a0l) var(--a0c)  95)');
-    document.documentElement.style.setProperty( '--theme-html'  , 'oklch(var(--a0l) var(--a0c)  47)');
-    document.documentElement.style.setProperty( '--theme-rss'   , 'oklch(var(--a0l) var(--a0c) 260)');
-    document.documentElement.style.setProperty( '--theme-task'  , 'oklch(var(--a0l) var(--a0c) 150)');
-    document.documentElement.style.setProperty( '--theme-pdf'   , 'oklch(var(--a0l) var(--a0c)  25)');
-  }
-});
