@@ -33,7 +33,9 @@ export type ChannelFindBar = FindBarController & {
 export function createChannelFindBar(
   options: CreateChannelFindBarOptions
 ): ChannelFindBar {
-  let termsByMessageId: Accessor<Map<string, string[]>> = () => new Map();
+  let activeMatch: Accessor<
+    { messageId: string; terms: string[] } | undefined
+  > = () => undefined;
 
   const controller = createFindBarController<WithSearch<ChannelMessageEntity>>(
     ({ isOpen, submittedQuery, activeIndex }) => {
@@ -66,26 +68,23 @@ export function createChannelFindBar(
         );
       });
 
-      termsByMessageId = createMemo<Map<string, string[]>>(() => {
-        if (!isOpen()) return new Map();
-        const map = new Map<string, string[]>();
-        for (const entity of results()) {
-          const hit = entity.search.contentHitData?.[0]?.content;
-          if (!hit) continue;
-          const terms = [
-            ...new Set(extractSearchTerms(hit).filter((t) => t.length > 0)),
-          ];
-          if (!terms.length) continue;
-          const existing = map.get(entity.messageId);
-          if (existing) {
-            for (const t of terms) {
-              if (!existing.includes(t)) existing.push(t);
-            }
-          } else {
-            map.set(entity.messageId, terms);
-          }
-        }
-        return map;
+      // Highlight only the active match so we never paint spans we don't
+      // have hit data for (results outside the loaded page have no terms).
+      activeMatch = createMemo<
+        { messageId: string; terms: string[] } | undefined
+      >(() => {
+        if (!isOpen()) return undefined;
+        const idx = activeIndex();
+        if (idx === 0) return undefined;
+        const entity = results()[idx - 1];
+        if (!entity) return undefined;
+        const hit = entity.search.contentHitData?.[0]?.content;
+        if (!hit) return undefined;
+        const terms = [
+          ...new Set(extractSearchTerms(hit).filter((t) => t.length > 0)),
+        ];
+        if (!terms.length) return undefined;
+        return { messageId: entity.messageId, terms };
       });
 
       const totalCount = createMemo<number | undefined>(() => {
@@ -130,9 +129,10 @@ export function createChannelFindBar(
   const getSearchTermsForMessage: Accessor<
     SearchHighlightTermsLookup | undefined
   > = () => {
-    const map = termsByMessageId();
-    if (map.size === 0) return undefined;
-    return (messageId: string) => map.get(messageId);
+    const match = activeMatch();
+    if (!match) return undefined;
+    return (messageId: string) =>
+      messageId === match.messageId ? match.terms : undefined;
   };
 
   return { ...controller, getSearchTermsForMessage };
