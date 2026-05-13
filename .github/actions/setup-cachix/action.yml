@@ -43,15 +43,40 @@ runs:
         echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
         echo "CACHIX_CACHE_NAME=$CACHIX_CACHE_NAME" >> "$GITHUB_ENV"
 
+        retry() {
+          local attempts=$1
+          shift
+          local delay=5
+          local attempt=1
+
+          until "$@"; do
+            if [ "$attempt" -ge "$attempts" ]; then
+              return 1
+            fi
+            echo "Command failed, retrying in ${delay}s (${attempt}/${attempts}): $*" >&2
+            sleep "$delay"
+            attempt=$((attempt + 1))
+            delay=$((delay * 2))
+          done
+        }
+
         if ! command -v cachix >/dev/null 2>&1; then
-          nix profile add nixpkgs#cachix
+          if ! retry 3 nix profile add nixpkgs#cachix; then
+            echo "::warning::Failed to install Cachix; continuing without the Cachix binary cache."
+          fi
         fi
 
         export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
-        if [ -n "$CACHIX_AUTH_TOKEN" ]; then
-          cachix authtoken "$CACHIX_AUTH_TOKEN"
+        if command -v cachix >/dev/null 2>&1; then
+          if [ -n "$CACHIX_AUTH_TOKEN" ] && ! retry 3 cachix authtoken "$CACHIX_AUTH_TOKEN"; then
+            echo "::warning::Failed to authenticate Cachix; continuing without authenticated cache access."
+          fi
+          if ! retry 3 cachix use "$CACHIX_CACHE_NAME"; then
+            echo "::warning::Failed to configure Cachix cache '$CACHIX_CACHE_NAME'; continuing without the Cachix binary cache."
+          fi
+        else
+          echo "::warning::Cachix is unavailable; continuing without the Cachix binary cache."
         fi
-        cachix use "$CACHIX_CACHE_NAME"
 
     - name: Configure sccache
       shell: bash
