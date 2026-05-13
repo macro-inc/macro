@@ -312,6 +312,9 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectId(p)) => {
             format!("entity_id = '{p}'")
         }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectIdSelf(p)) => {
+            format!("entity_id = '{p}'")
+        }
         filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => {
             format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "userId" = '{o}' AND "deletedAt" IS NULL)"#)
         }

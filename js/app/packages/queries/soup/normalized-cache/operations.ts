@@ -279,7 +279,7 @@ export function buildSingleEntityFilter(
     }))
     .with('project', () => ({
       ...base,
-      project_filters: { project_ids: [entityId] },
+      project_filters: { project_ids: [entityId], include_root: true },
     }))
     .with('emailThread', () => ({
       ...base,

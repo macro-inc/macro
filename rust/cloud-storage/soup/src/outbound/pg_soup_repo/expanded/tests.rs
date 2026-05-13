@@ -1165,8 +1165,8 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
 
     assert_eq!(
         project_ids.len(),
-        3,
-        "Should get project-A, project-B (child of project-A), and project-D"
+        1,
+        "Should get exactly 1 project (project-B, child of project-A)"
     );
     assert_eq!(doc_count, 5, "Should get all documents");
     assert_eq!(chat_count, 4, "Should get all chats");
@@ -1174,9 +1174,7 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
     let returned_ids = project_ids;
 
     let expected_ids: HashSet<Uuid> = [
-        "11111111-1111-1111-1111-111111111111", // Project A (self)
         "22222222-2222-2222-2222-222222222222", // Project B (parentId = project-A)
-        "44444444-4444-4444-4444-444444444444", // Project D (self)
     ]
     .iter()
     .map(|&s| Uuid::parse_str(s).unwrap())
@@ -1184,7 +1182,70 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
 
     assert_eq!(
         returned_ids, expected_ids,
-        "Should get project-A, project-B (child of A), and project-D"
+        "Should get project-B (child of project-A)"
+    );
+
+    Ok(())
+}
+
+// Test filtering projects by specific project IDs with include_root=true
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_by_project_ids_include_root(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{EntityFilters, ProjectFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    let entity_filters = EntityFilters {
+        project_filters: ProjectFilters {
+            project_ids: vec![
+                "11111111-1111-1111-1111-111111111111".to_string(),
+                "44444444-4444-4444-4444-444444444444".to_string(),
+            ],
+            include_root: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let project_ids: HashSet<Uuid> = items
+        .iter()
+        .filter_map(|item| match item {
+            SoupItem::Project(p) => Some(p.id),
+            _ => None,
+        })
+        .collect();
+
+    let expected_ids: HashSet<Uuid> = [
+        "11111111-1111-1111-1111-111111111111", // Project A (self)
+        "22222222-2222-2222-2222-222222222222", // Project B (child of A)
+        "44444444-4444-4444-4444-444444444444", // Project D (self)
+    ]
+    .iter()
+    .map(|&s| Uuid::parse_str(s).unwrap())
+    .collect();
+
+    assert_eq!(
+        project_ids, expected_ids,
+        "include_root=true should match the projects themselves plus their direct children"
     );
 
     Ok(())
@@ -1239,12 +1300,12 @@ async fn test_combined_entity_filters(db: PgPool) -> anyhow::Result<()> {
     )
     .await?;
 
-    // Should get: doc-in-A, doc-in-B, chat-standalone, project-D = 4 items
-    // Note: project filter for project-D returns project-D itself (no children exist)
+    // Should get: doc-in-A, doc-in-B, chat-standalone = 3 items
+    // Note: project filter for project-D returns 0 projects (no children of project-D exist)
     assert_eq!(
         items.len(),
-        4,
-        "Should get 4 items total (2 docs + 1 chat + project-D itself)"
+        3,
+        "Should get 3 items total (2 docs + 1 chat, no projects match parentId filter)"
     );
 
     let mut doc_count = 0;
@@ -1280,8 +1341,8 @@ async fn test_combined_entity_filters(db: PgPool) -> anyhow::Result<()> {
     assert_eq!(doc_count, 2, "Should get 2 documents");
     assert_eq!(chat_count, 1, "Should get 1 chat");
     assert_eq!(
-        project_count, 1,
-        "Should get 1 project (project-D itself)"
+        project_count, 0,
+        "Should get 0 projects (no children of project-D)"
     );
 
     Ok(())
