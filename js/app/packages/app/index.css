@@ -62,8 +62,8 @@
   --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
 
   /* chat vars */
-  --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) / 2);
-  --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
+  --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) * 0.5);
+  --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) * 0.5);
   --regular-message-padding-t: .5rem;
   --message-padding-x: .5rem;
   --thread-padding-y: .5rem;
@@ -275,17 +275,17 @@
 @keyframes long-press-message-highlight {
   from {
     background-color: oklch(from var(--color-accent) l c h / 0%);
-    outline-width: 1px;
-    outline-style: solid;
     outline-color: transparent;
     outline-offset: -1px;
+    outline-style: solid;
+    outline-width: 1px;
   }
   to {
     background-color: oklch(from var(--color-accent) l c h / 5%);
-    outline-width: 1px;
-    outline-style: solid;
     outline-color: oklch(from var(--color-accent) l c h / 20%);
     outline-offset: -1px;
+    outline-style: solid;
+    outline-width: 1px;
   }
 }
 
@@ -339,8 +339,6 @@
   ;
   background-size: --value(integer)px --value(integer)px;
 }
-
-
 
 @utility optical-* {
   font-optical-sizing: none;
