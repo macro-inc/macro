@@ -104,8 +104,7 @@ function Step(props: ButtonProps) {
       classList={{
         'translate-y-full bg-transparent border-2 border-accent border-current text-ink-disabled pattern-ink-disabled pattern-diagonal-2':
           props.disabled && !props.completed,
-        'starting:translate-y-full':
-          !props.disabled && !props.completed,
+        'starting:translate-y-full': !props.disabled && !props.completed,
         'bg-transparent text-accent! border-2 border-accent': props.completed,
       }}
     >

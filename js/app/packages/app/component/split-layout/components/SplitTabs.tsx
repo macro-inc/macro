@@ -155,8 +155,7 @@ export function SplitTabs(props: {
                 class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
                 classList={{
                   'z-user-highlight text-accent': isActive(),
-                  'text-ink-disabled hover:text-accent/70':
-                    !isActive(),
+                  'text-ink-disabled hover:text-accent/70': !isActive(),
                 }}
                 data-hotkey-token={
                   TOKENS.soup.tabs[
