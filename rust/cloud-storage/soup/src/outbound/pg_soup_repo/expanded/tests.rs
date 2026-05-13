@@ -1165,8 +1165,8 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
 
     assert_eq!(
         project_ids.len(),
-        1,
-        "Should get exactly 1 project (project-B, child of project-A)"
+        3,
+        "Should get project-A, project-B (child of project-A), and project-D"
     );
     assert_eq!(doc_count, 5, "Should get all documents");
     assert_eq!(chat_count, 4, "Should get all chats");
@@ -1174,7 +1174,9 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
     let returned_ids = project_ids;
 
     let expected_ids: HashSet<Uuid> = [
+        "11111111-1111-1111-1111-111111111111", // Project A (self)
         "22222222-2222-2222-2222-222222222222", // Project B (parentId = project-A)
+        "44444444-4444-4444-4444-444444444444", // Project D (self)
     ]
     .iter()
     .map(|&s| Uuid::parse_str(s).unwrap())
@@ -1182,7 +1184,7 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
 
     assert_eq!(
         returned_ids, expected_ids,
-        "Should get project-B (child of project-A)"
+        "Should get project-A, project-B (child of A), and project-D"
     );
 
     Ok(())
@@ -1237,12 +1239,12 @@ async fn test_combined_entity_filters(db: PgPool) -> anyhow::Result<()> {
     )
     .await?;
 
-    // Should get: doc-in-A, doc-in-B, chat-standalone = 3 items
-    // Note: project filter for project-D returns 0 projects (no children of project-D exist)
+    // Should get: doc-in-A, doc-in-B, chat-standalone, project-D = 4 items
+    // Note: project filter for project-D returns project-D itself (no children exist)
     assert_eq!(
         items.len(),
-        3,
-        "Should get 3 items total (2 docs + 1 chat, no projects match parentId filter)"
+        4,
+        "Should get 4 items total (2 docs + 1 chat + project-D itself)"
     );
 
     let mut doc_count = 0;
@@ -1278,8 +1280,8 @@ async fn test_combined_entity_filters(db: PgPool) -> anyhow::Result<()> {
     assert_eq!(doc_count, 2, "Should get 2 documents");
     assert_eq!(chat_count, 1, "Should get 1 chat");
     assert_eq!(
-        project_count, 0,
-        "Should get 0 projects (no children of project-D)"
+        project_count, 1,
+        "Should get 1 project (project-D itself)"
     );
 
     Ok(())
