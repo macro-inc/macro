@@ -1,8 +1,11 @@
+import { useEmail } from '@core/context/user';
+import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@icon/regular/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
+import { Show } from 'solid-js';
 import type { ReplyType } from '../util/replyType';
 import { useEmailContext } from './EmailContext';
 import { getEmailFormRegistry } from './EmailFormContext';
@@ -10,6 +13,19 @@ import { getEmailFormRegistry } from './EmailFormContext';
 export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
   const ctx = useEmailContext();
   const formRegistry = getEmailFormRegistry();
+  const userEmail = useEmail();
+
+  const shouldShowReplyAll = () => {
+    const me = userEmail();
+    const sender = props.lastMessage.from?.email;
+    // If we sent the last message, Reply and Reply-all resolve to the
+    // same recipients (see getReplyRecipientsFromParent), so hide it.
+    if (sender === me) return false;
+    const isOther = (email: string) => email !== me && email !== sender;
+    const otherTo = props.lastMessage.to.filter((r) => isOther(r.email));
+    const otherCc = props.lastMessage.cc.filter((r) => isOther(r.email));
+    return otherTo.length + otherCc.length > 0;
+  };
 
   const open = (type: ReplyType) =>
     createCallback(() => {
@@ -25,25 +41,38 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
     });
 
   return (
-    <div class="w-full border-t border-edge-muted flex flex-row items-center justify-center gap-2 pt-3 pb-2">
-      <Button
-        variant="base"
-        size="md"
-        class="rounded-full px-4 py-1"
-        onClick={open('reply')}
-      >
-        <ArrowBendUpLeft class="size-4" />
-        <span>Reply</span>
-      </Button>
-      <Button
-        variant="base"
-        size="md"
-        class="rounded-full px-4 py-1"
-        onClick={open('forward')}
-      >
-        <ArrowBendUpRight class="size-4" />
-        <span>Forward</span>
-      </Button>
+    <div class="w-full border-t border-edge-muted pt-3 pb-2">
+      <div class="flex flex-row items-center gap-2 pl-[calc(var(--user-icon-width)+2*var(--message-padding-x))]">
+        <Button
+          variant="base"
+          size="md"
+          class="rounded-full px-4 py-1"
+          onClick={open('reply')}
+        >
+          <ArrowBendUpLeft class="size-4" />
+          <span>Reply</span>
+        </Button>
+        <Show when={shouldShowReplyAll()}>
+          <Button
+            variant="base"
+            size="md"
+            class="rounded-full px-4 py-1"
+            onClick={open('reply-all')}
+          >
+            <ArrowBendDoubleUpLeft class="size-4" />
+            <span>Reply all</span>
+          </Button>
+        </Show>
+        <Button
+          variant="base"
+          size="md"
+          class="rounded-full px-4 py-1"
+          onClick={open('forward')}
+        >
+          <ArrowBendUpRight class="size-4" />
+          <span>Forward</span>
+        </Button>
+      </div>
     </div>
   );
 }
