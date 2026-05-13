@@ -164,8 +164,8 @@ function HeaderCell(props: {
             <button
               type="button"
               onClick={(e) => {
+                props.onSort?.(sortKey());
                 if (e.shiftKey) props.onReverse?.(sortKey());
-                else props.onSort?.(sortKey());
               }}
               class={cn(
                 'flex items-center gap-1 min-w-0 w-full h-full select-none',
