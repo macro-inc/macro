@@ -249,12 +249,12 @@ export async function refetchSoupEntity(
   const [, page] = result;
   if (!page.items.length) return;
 
-  const item = page.items[0];
-
-  if (hasSoupEntity(entityId)) {
-    optimisticUpdateSoupEntity(item);
-  } else {
-    insertSoupEntity(item);
+  for (const item of page.items) {
+    if (hasSoupEntity(entityId)) {
+      optimisticUpdateSoupEntity(item);
+    } else {
+      insertSoupEntity(item);
+    }
   }
 }
 
