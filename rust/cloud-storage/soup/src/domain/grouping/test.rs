@@ -1,6 +1,7 @@
 use super::*;
 use chrono::Duration;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_pagination::SimpleSortMethod;
 use models_soup::{chat::SoupChat, document::SoupDocument, project::SoupProject};
 use uuid::Uuid;
 
@@ -82,7 +83,7 @@ fn test_group_by_date_buckets() {
         per_group: 10,
         total: 100,
     };
-    let response = group_items(items, &config, None, limits).unwrap();
+    let response = group_items(items, &config, None, limits, SimpleSortMethod::UpdatedAt).unwrap();
 
     assert_eq!(response.groups.len(), 4);
     assert_eq!(response.groups[0].key, "today");
@@ -106,7 +107,7 @@ fn test_group_by_entity_type() {
         per_group: 10,
         total: 100,
     };
-    let response = group_items(items, &config, None, limits).unwrap();
+    let response = group_items(items, &config, None, limits, SimpleSortMethod::UpdatedAt).unwrap();
 
     assert_eq!(response.groups.len(), 3);
 
@@ -139,7 +140,7 @@ fn test_per_group_limit() {
         per_group: 5,
         total: 100,
     };
-    let response = group_items(items, &config, None, limits).unwrap();
+    let response = group_items(items, &config, None, limits, SimpleSortMethod::UpdatedAt).unwrap();
 
     // Should have at most 5 items per group
     for group in &response.groups {
@@ -161,7 +162,7 @@ fn test_group_key_filter() {
         per_group: 10,
         total: 100,
     };
-    let response = group_items(items, &config, None, limits).unwrap();
+    let response = group_items(items, &config, None, limits, SimpleSortMethod::UpdatedAt).unwrap();
 
     assert_eq!(response.groups.len(), 1);
     assert_eq!(response.groups[0].key, "yesterday");
@@ -180,7 +181,7 @@ fn test_total_limit() {
         per_group: 100,
         total: 10,
     };
-    let response = group_items(items, &config, None, limits).unwrap();
+    let response = group_items(items, &config, None, limits, SimpleSortMethod::UpdatedAt).unwrap();
 
     assert_eq!(response.items.len(), 10);
 }
@@ -201,7 +202,8 @@ fn test_pagination_cursor() {
         .collect();
 
     // First page
-    let response1 = group_items(items1, &config, None, limits).unwrap();
+    let response1 =
+        group_items(items1, &config, None, limits, SimpleSortMethod::UpdatedAt).unwrap();
     assert!(response1.next_cursor.is_some());
 
     // Generate items for second page (same pattern)
@@ -210,7 +212,14 @@ fn test_pagination_cursor() {
         .collect();
 
     // Second page
-    let response2 = group_items(items2, &config, response1.next_cursor.as_ref(), limits).unwrap();
+    let response2 = group_items(
+        items2,
+        &config,
+        response1.next_cursor.as_ref(),
+        limits,
+        SimpleSortMethod::UpdatedAt,
+    )
+    .unwrap();
 
     // With fresh items and cursor, second page should have different group positions
     // (items start at offset from cursor)
@@ -231,7 +240,7 @@ fn test_group_metadata() {
         per_group: 10,
         total: 100,
     };
-    let response = group_items(items, &config, None, limits).unwrap();
+    let response = group_items(items, &config, None, limits, SimpleSortMethod::UpdatedAt).unwrap();
 
     let today = response.groups.iter().find(|g| g.key == "today").unwrap();
     assert_eq!(today.total_count, 2);
@@ -254,7 +263,7 @@ fn test_empty_items() {
     let items: Vec<FrecencySoupItem> = vec![];
     let config = GroupingConfig::new(GroupByField::Date);
     let limits = GroupedPaginationLimits::default();
-    let response = group_items(items, &config, None, limits).unwrap();
+    let response = group_items(items, &config, None, limits, SimpleSortMethod::UpdatedAt).unwrap();
 
     assert!(response.items.is_empty());
     assert!(response.groups.is_empty());

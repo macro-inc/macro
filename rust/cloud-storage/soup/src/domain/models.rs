@@ -12,7 +12,6 @@ use item_filters::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
-use models_grouping::GroupingConfig;
 use models_pagination::{
     Cursor, CursorVal, CursorWithValAndFilter, Frecency, FrecencyValue, Identify, Query,
     SimpleSortMethod, SortOn,
@@ -372,34 +371,6 @@ impl SortOn<SimpleSortMethod> for FrecencySoupItem {
         let mut cb = SoupItem::sort_on(sort);
         move |v| cb(&v.item)
     }
-}
-
-/// A soup request with optional grouping configuration.
-#[derive(Debug)]
-pub struct GroupedSoupRequest<T> {
-    /// Base soup request parameters
-    pub base: SoupRequest<T>,
-    /// Optional grouping configuration
-    pub grouping: Option<GroupingConfig>,
-}
-
-/// A soup item with group metadata attached (returned from grouped queries).
-#[derive(Debug)]
-pub struct GroupedSoupItem {
-    /// The soup item
-    pub item: SoupItem,
-    /// The frecency score (if available)
-    pub frecency_score: Option<AggregateFrecency>,
-    /// Which group this item belongs to
-    pub group_key: String,
-    /// Total items in this group (computed via window function)
-    pub group_total_count: u32,
-    /// This item's position within the group (1-indexed)
-    pub row_in_group: u32,
-    /// Label for this group (from property_options or computed)
-    pub group_label: Option<String>,
-    /// Display order for this group
-    pub group_display_order: Option<i32>,
 }
 
 #[derive(Debug, Error)]

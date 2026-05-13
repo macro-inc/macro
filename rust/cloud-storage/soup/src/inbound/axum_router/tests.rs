@@ -26,11 +26,12 @@ use item_filters::ast::EntityFilterAst;
 
 use crate::{
     domain::{
+        grouping::GroupedResponse,
         models::{
-            FrecencyQueryInner, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
-            SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType,
+            FrecencyQueryInner, IntoSoupReqAst, SimpleQueryInner, SoupErr, SoupQuery, SoupRequest,
+            SoupType,
         },
-        ports::{SoupOutput, SoupService},
+        ports::{GroupedSoupRequest, SoupOutput, SoupService},
     },
     inbound::axum_router::ApiEntityFilterAst,
     inbound::axum_router::{SoupRouterState, soup_router},
@@ -102,10 +103,7 @@ impl SoupService for MockSoup {
         Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
     }
 
-    async fn get_user_soup_grouped(
-        &self,
-        _req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
+    async fn get_soup_grouped(&self, _req: GroupedSoupRequest) -> Result<GroupedResponse, SoupErr> {
         Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
     }
 }

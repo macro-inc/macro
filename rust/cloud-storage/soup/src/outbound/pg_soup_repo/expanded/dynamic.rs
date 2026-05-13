@@ -236,8 +236,6 @@ static DETAIL_SUFFIX: &str = r#"
     LIMIT $3
 "#;
 
-// -- Grouped detail clauses: join from GroupedItems, include group columns --
-
 fn build_notification_exists_clause(
     entity_id_sql: &str,
     entity_type: &str,

@@ -706,6 +706,7 @@ where
             grouping,
             limits,
             cursor: request.cursor.map(Into::into),
+            sort_method,
         })
         .await?;
 

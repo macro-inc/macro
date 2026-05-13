@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use crate::domain::{
-    grouping::{GroupedResponse, group_items},
+    grouping::{GroupedResponse, compute_group_key, group_items_with_counts},
     models::{
         AdvancedSortParams, FrecencyQueryInner, FrecencySoupItem, IntoSoupReqAst, SimpleQueryInner,
         SimpleSortQuery, SimpleSortRequest, SoupErr, SoupQuery, SoupRequest, SoupType,
@@ -98,12 +100,10 @@ where
                 .map_err(anyhow::Error::from)?,
         };
 
-        Ok(res
-            .into_iter()
-            .map(|item| FrecencySoupItem {
-                item,
-                frecency_score: None,
-            }))
+        Ok(res.into_iter().map(|item| FrecencySoupItem {
+            item,
+            frecency_score: None,
+        }))
     }
 
     #[tracing::instrument(skip(self, req))]
@@ -478,6 +478,7 @@ where
             grouping,
             limits,
             cursor,
+            sort_method,
         } = req;
 
         let limit = soup_request.limit.clamp(20, 500);
@@ -485,6 +486,8 @@ where
         let email_request = soup_request.build_email_request();
         let comms_request = soup_request.build_comms_request();
         let call_request = soup_request.build_call_request();
+
+        let user_id_str = soup_request.user.as_ref();
 
         let main_soup_fut = self.handle_simple_request(
             soup_request.soup_type,
@@ -506,8 +509,31 @@ where
         let comms_soup_fut = self.handle_comms_request(comms_request);
         let call_soup_fut = self.handle_call_request(call_request);
 
-        let (main_soup, email_soup, comms_soup, call_soup) =
-            tokio::join!(main_soup_fut, email_soup_fut, comms_soup_fut, call_soup_fut);
+        // In load-more mode (group_key set), only fetch count for that specific group
+        let db_counts_fut = async {
+            if let Some(ref key) = grouping.group_key {
+                self.soup_storage
+                    .grouped_soup_bucket_count(user_id_str, &grouping.field, key)
+                    .await
+                    .map(|count| {
+                        let mut map = HashMap::with_capacity(1);
+                        map.insert(key.clone(), count);
+                        map
+                    })
+            } else {
+                self.soup_storage
+                    .grouped_soup_counts(user_id_str, &grouping.field)
+                    .await
+            }
+        };
+
+        let (main_soup, email_soup, comms_soup, call_soup, db_counts) = tokio::join!(
+            main_soup_fut,
+            email_soup_fut,
+            comms_soup_fut,
+            call_soup_fut,
+            db_counts_fut
+        );
 
         let mut all_items: Vec<FrecencySoupItem> = Vec::new();
 
@@ -539,14 +565,37 @@ where
             }
         }
 
-        // Note: Entity filtering is already applied at the query level for each source
+        // Start with SQL counts for DB items (documents, chats, projects)
+        let mut counts: HashMap<String, u32> = match db_counts.map_err(anyhow::Error::from) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!(error = ?e, "Failed to fetch group counts, falling back to item counts");
+                HashMap::new()
+            }
+        };
 
-        // Sort all items by updated_at descending (grouping engine expects sorted input)
-        all_items.sort_by_key(|item| std::cmp::Reverse(item.item.updated_at()));
+        // Add counts for emails, channels, calls from fetched items
+        // (SQL counts don't include these yet)
+        for item in &all_items {
+            if matches!(
+                item.item,
+                models_soup::item::SoupItem::EmailThread(_)
+                    | models_soup::item::SoupItem::Channel(_)
+                    | models_soup::item::SoupItem::Call(_)
+            ) {
+                let key = compute_group_key(&item.item, &grouping.field);
+                *counts.entry(key).or_default() += 1;
+            }
+        }
 
-        // Apply Rust grouping
-        let response = group_items(all_items, &grouping, cursor.as_ref(), limits)
-            .map_err(|e| SoupErr::SoupDbErr(anyhow::anyhow!("Grouping error: {}", e)))?;
+        let response = group_items_with_counts(
+            all_items,
+            &counts,
+            &grouping,
+            cursor.as_ref(),
+            limits,
+            sort_method,
+        );
 
         Ok(response)
     }

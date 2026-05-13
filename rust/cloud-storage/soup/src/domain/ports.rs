@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::domain::{
     grouping::{GroupedCursor, GroupedPaginationLimits, GroupedResponse},
     models::{
@@ -6,14 +8,14 @@ use crate::domain::{
     },
 };
 use either::Either;
-use models_grouping::GroupingConfig;
+use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{Frecency, PaginatedCursor, SimpleSortMethod};
 use models_soup::item::SoupItem;
 use serde::Serialize;
 
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait SoupRepo: Send + Sync + 'static {
-    type Err;
+    type Err: Send;
     fn expanded_generic_cursor_soup<'a>(
         &self,
         req: SimpleSortRequest<'a>,
@@ -39,6 +41,21 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         items: &mut [SoupItem],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Fetch per-group counts for soup items.
+    fn grouped_soup_counts(
+        &self,
+        user_id: &str,
+        field: &GroupByField,
+    ) -> impl Future<Output = Result<HashMap<String, u32>, Self::Err>> + Send;
+
+    /// Fetch count for a single group bucket (used in load-more mode).
+    fn grouped_soup_bucket_count(
+        &self,
+        user_id: &str,
+        field: &GroupByField,
+        bucket_key: &str,
+    ) -> impl Future<Output = Result<u32, Self::Err>> + Send;
 }
 
 /// type alias which represents the posible outputs of soup
@@ -63,6 +80,8 @@ pub struct GroupedSoupRequest {
     pub limits: GroupedPaginationLimits,
     /// Optional cursor for pagination
     pub cursor: Option<GroupedCursor>,
+    /// Sort method for items within groups
+    pub sort_method: SimpleSortMethod,
 }
 
 pub trait SoupService: Send + Sync + 'static {

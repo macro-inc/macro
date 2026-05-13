@@ -1,11 +1,14 @@
+use std::collections::HashMap;
+
 use crate::{
     domain::{
         models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest},
         ports::SoupRepo,
     },
-    outbound::pg_soup_repo::expanded::dynamic::ExpandedDynamicCursorArgs,
+    outbound::{group_counts, pg_soup_repo::expanded::dynamic::ExpandedDynamicCursorArgs},
 };
 use either::Either;
+use models_grouping::GroupByField;
 use models_soup::{SoupProperty, item::SoupItem};
 use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
@@ -122,6 +125,37 @@ impl SoupRepo for PgSoupRepo {
         items: &mut [SoupItem],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send {
         populate_properties(&self.pool.0, items)
+    }
+
+    async fn grouped_soup_counts(
+        &self,
+        user_id: &str,
+        field: &GroupByField,
+    ) -> Result<HashMap<String, u32>, Self::Err> {
+        group_counts::grouped_soup_counts(&self.pool.0, user_id, field)
+            .await
+            .map_err(|e| match e {
+                group_counts::GroupCountError::Database(e) => e,
+                group_counts::GroupCountError::InvalidBucketKey(key) => {
+                    sqlx::Error::TypeNotFound { type_name: key }
+                }
+            })
+    }
+
+    async fn grouped_soup_bucket_count(
+        &self,
+        user_id: &str,
+        field: &GroupByField,
+        bucket_key: &str,
+    ) -> Result<u32, Self::Err> {
+        group_counts::grouped_soup_bucket_count(&self.pool.0, user_id, field, bucket_key)
+            .await
+            .map_err(|e| match e {
+                group_counts::GroupCountError::Database(e) => e,
+                group_counts::GroupCountError::InvalidBucketKey(key) => {
+                    sqlx::Error::TypeNotFound { type_name: key }
+                }
+            })
     }
 }
 
