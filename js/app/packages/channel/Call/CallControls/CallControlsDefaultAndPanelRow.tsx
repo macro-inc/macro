@@ -154,6 +154,17 @@ export function CallControlsDefaultAndPanelRow(
   const isConnecting = () => callCtx.isConnecting();
   const size = () => props.size();
   const iconClass = () => (size() === 'sm' ? 'w-4 h-4' : 'w-5 h-5');
+  const noiseSuppressionModeLabel = () => {
+    switch (callCtx.noiseSuppressionMode()) {
+      case 'krisp':
+        return 'Krisp';
+      case 'browser':
+        return 'Browser';
+      case 'off':
+        return 'Off';
+    }
+  };
+
   return (
     <div
       data-call-controls
@@ -186,6 +197,24 @@ export function CallControlsDefaultAndPanelRow(
                 onSelect={(id) => callCtx.switchAudioOutput(id)}
               />
             </Show>
+            <MenuSeparator />
+            <MenuGroup>
+              <GroupLabel>Audio processing</GroupLabel>
+              <MenuItem
+                text={
+                  <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+                    <span>Noise suppression</span>
+                    <span class="text-xs text-ink-muted">
+                      {noiseSuppressionModeLabel()}
+                    </span>
+                  </div>
+                }
+                selectorType="checkbox"
+                checked={callCtx.isNoiseSuppressed()}
+                closeOnSelect={false}
+                onClick={() => void callCtx.toggleNoiseSuppression()}
+              />
+            </MenuGroup>
           </>
         )}
       >
