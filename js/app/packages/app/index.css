@@ -116,7 +116,6 @@
 
   --color-ink:             var(--c0);
   --color-ink-muted:       var(--c1);
-  --color-default:         var(--c1); /* wtf? */
   --color-ink-extra-muted: var(--c2);
   --color-ink-disabled:    var(--c3);
   --color-ink-placeholder: var(--c4);
@@ -152,7 +151,8 @@
   --color-task:        oklch(from var(--a0) l c 150deg);
   --color-pdf:         oklch(from var(--a0) l c  25deg);
   --color-rss:         oklch(from var(--a0) l c 260deg);
-  --color-email:       var(--theme-email); /* wtf? */
+  --color-default:     var(--c1);
+  --color-email:       var(--color-default);
 
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */
