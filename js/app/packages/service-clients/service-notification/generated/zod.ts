@@ -188,10 +188,28 @@ export const listTypedNotificationsResponse = zod
                             .string()
                             .nullish()
                             .describe('The file type of the document'),
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                          messageContent: zod
+                            .string()
+                            .describe('The message content'),
                           owner: zod
                             .string()
                             .describe('The owner of the document'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          messageId: zod
+                            .string()
+                            .describe('The message you were mentioned in'),
+                          threadId: zod
+                            .string()
+                            .nullish()
+                            .describe('the id of the thread'),
                           subType: zod
                             .union([
                               zod.null(),
@@ -621,10 +639,28 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .string()
                             .nullish()
                             .describe('The file type of the document'),
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                          messageContent: zod
+                            .string()
+                            .describe('The message content'),
                           owner: zod
                             .string()
                             .describe('The owner of the document'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          messageId: zod
+                            .string()
+                            .describe('The message you were mentioned in'),
+                          threadId: zod
+                            .string()
+                            .nullish()
+                            .describe('the id of the thread'),
                           subType: zod
                             .union([
                               zod.null(),
@@ -1048,10 +1084,28 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .string()
                             .nullish()
                             .describe('The file type of the document'),
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                          messageContent: zod
+                            .string()
+                            .describe('The message content'),
                           owner: zod
                             .string()
                             .describe('The owner of the document'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          messageId: zod
+                            .string()
+                            .describe('The message you were mentioned in'),
+                          threadId: zod
+                            .string()
+                            .nullish()
+                            .describe('the id of the thread'),
                           subType: zod
                             .union([
                               zod.null(),
@@ -1484,8 +1538,26 @@ export const getTypedNotificationByIdResponse = zod
                     .string()
                     .nullish()
                     .describe('The file type of the document'),
+                  channelName: zod.string().optional(),
+                  channelType: zod.enum([
+                    'public',
+                    'organization',
+                    'private',
+                    'directMessage',
+                    'team',
+                  ]),
+                  messageContent: zod
+                    .string()
+                    .describe('The message content'),
+                  messageId: zod
+                    .string()
+                    .describe('The message you were mentioned in'),
                   owner: zod.string().describe('The owner of the document'),
                   senderProfilePictureUrl: zod.string().nullish(),
+                  threadId: zod
+                    .string()
+                    .nullish()
+                    .describe('the id of the thread'),
                   subType: zod
                     .union([
                       zod.null(),

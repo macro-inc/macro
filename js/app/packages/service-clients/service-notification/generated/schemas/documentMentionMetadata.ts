@@ -4,20 +4,19 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelMentionMetadata } from './channelMentionMetadata';
 import type { DocumentMentionMetadataFileType } from './documentMentionMetadataFileType';
-import type { DocumentMentionMetadataSenderProfilePictureUrl } from './documentMentionMetadataSenderProfilePictureUrl';
 import type { DocumentMentionMetadataSubType } from './documentMentionMetadataSubType';
 
 /**
  * Someone mentioned a document in a channel
  */
-export interface DocumentMentionMetadata {
+export type DocumentMentionMetadata = ChannelMentionMetadata & {
   /** The name of the document */
   documentName: string;
   /** The file type of the document */
   fileType?: DocumentMentionMetadataFileType;
   /** The owner of the document */
   owner: string;
-  senderProfilePictureUrl?: DocumentMentionMetadataSenderProfilePictureUrl;
   subType?: DocumentMentionMetadataSubType;
-}
+};
