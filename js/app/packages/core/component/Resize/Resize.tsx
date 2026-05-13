@@ -13,7 +13,12 @@ import {
   useContext,
 } from 'solid-js';
 import { createResizeSolver } from './solver';
-import type { PanelConfig, PanelId, ResizeZoneCtx } from './types';
+import type {
+  PanelConfig,
+  PanelId,
+  PanelSizeSpec,
+  ResizeZoneCtx,
+} from './types';
 
 export const ResizeZoneContext = createContext<ResizeZoneCtx>();
 
@@ -190,6 +195,14 @@ type PanelProps = {
   id: PanelId;
   minSize: number;
   maxSize?: number;
+  /**
+   * Initial target size for the panel at registration time.
+   * - number: interpreted as a percentage (e.g., 25 = 25%)
+   * - PanelSizeSpec: explicit spec like { kind: 'percent', percent: 25 } or { kind: 'px', px: 300 }
+   *
+   * After initial layout, the panel resizes normally via drag handles.
+   */
+  target?: number | PanelSizeSpec;
   collapsed?: () => boolean;
   hidden?: () => boolean;
   /** The index position for this panel in the layout order */
@@ -227,6 +240,15 @@ function Panel(props: ParentProps<PanelProps>) {
   const ctx = useContext(ResizeZoneContext);
   if (!ctx) throw new Error('<Resize.Panel> must be inside <Resize.Zone>');
 
+  // Convert shorthand number (percentage) to PanelSizeSpec
+  const getTarget = (): PanelSizeSpec | undefined => {
+    if (props.target === undefined) return undefined;
+    if (typeof props.target === 'number') {
+      return { kind: 'percent', percent: props.target };
+    }
+    return props.target;
+  };
+
   onMount(() => {
     if (props.collapsed?.() === false) return;
     ctx.register(
@@ -234,6 +256,7 @@ function Panel(props: ParentProps<PanelProps>) {
         id: props.id,
         minSize: props.minSize,
         maxSize: props.maxSize ?? Infinity,
+        target: getTarget(),
       },
       props.index
     );
@@ -257,6 +280,7 @@ function Panel(props: ParentProps<PanelProps>) {
           id: props.id,
           minSize: props.minSize,
           maxSize: props.maxSize ?? Infinity,
+          target: getTarget(),
         },
         props.index
       );
@@ -282,6 +306,7 @@ function Panel(props: ParentProps<PanelProps>) {
             id: props.id,
             minSize: props.minSize,
             maxSize: props.maxSize ?? Infinity,
+            target: getTarget(),
           },
           props.index
         );
