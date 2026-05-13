@@ -60,8 +60,6 @@
   --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
   --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
   --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
-  --viewport-padding: 16px;
-  --keyboard-height: 0px;
 
   /* chat vars */
   --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) / 2);
@@ -265,13 +263,13 @@
 }
 
 @keyframes slideIn {
-  from { transform: translateX(calc(100% + var(--viewport-padding))); }
-  to   { transform: translateX(0                                   ); }
+  from { transform: translateX(calc(100% + 16px)); }
+  to   { transform: translateX(0                ); }
 }
 
 @keyframes swipeOut {
-  from { transform: translateX(var(--kb-toast-swipe-end-x))         ; }
-  to   { transform: translateX(calc(100% + var(--viewport-padding))); }
+  from { transform: translateX(var(--kb-toast-swipe-end-x)); }
+  to   { transform: translateX(calc(100% + 16px))          ; }
 }
 
 @keyframes long-press-message-highlight {
