@@ -3703,28 +3703,6 @@ export const getDocumentLocationV3Response = zod
           .describe(
             'Returns basic information of a document used for some db queries'
           ),
-        syncServiceMetadata: zod
-          .object({
-            id: zod.string().describe('Sync-service document id.'),
-            peers: zod
-              .array(
-                zod
-                  .object({
-                    peer_id: zod.string().describe('Sync-service peer id.'),
-                    user_id: zod.string().describe('Macro user id.'),
-                  })
-                  .describe(
-                    'Peer\/user mapping returned by sync-service metadata.'
-                  )
-              )
-              .describe('Known peers for the sync document.'),
-            version_id: zod
-              .string()
-              .describe('Current sync-service version id.'),
-          })
-          .describe(
-            'Sync-service document metadata exposed through document location responses.'
-          ),
         type: zod.enum(['syncServiceContent']),
       })
       .describe('Sync-service backed content.'),

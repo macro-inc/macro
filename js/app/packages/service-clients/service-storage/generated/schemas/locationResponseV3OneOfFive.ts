@@ -8,7 +8,6 @@
 import type { DocumentBasic } from './documentBasic';
 import type { DocumentContent } from './documentContent';
 import type { LocationResponseV3OneOfFiveType } from './locationResponseV3OneOfFiveType';
-import type { SyncServiceDocumentMetadata } from './syncServiceDocumentMetadata';
 
 /**
  * Sync-service backed content.
@@ -18,7 +17,5 @@ export type LocationResponseV3OneOfFive = {
   content: DocumentContent;
   /** Basic document metadata. */
   metadata: DocumentBasic;
-  /** Sync-service metadata. */
-  syncServiceMetadata: SyncServiceDocumentMetadata;
   type: LocationResponseV3OneOfFiveType;
 };
