@@ -25,7 +25,7 @@ export function MessageList(props: MessageListProps) {
 
   return (
     <div
-      class="pt-2 pb-6 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden hide-scrollbar text-sm"
+      class="pt-1 pb-6 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden hide-scrollbar text-sm gap-1.5"
       ref={context.registerMessagesList}
       onscroll={(e) => {
         // Since the list is reversed, calculate scroll from visual top
@@ -114,7 +114,7 @@ export function MessageList(props: MessageListProps) {
       <Show when={isMobile() && props.title}>
         <div class="shrink-0 w-full flex justify-center pb-3">
           <div class="macro-message-width macro-message-padding w-full">
-            <h1 class="text-2xl font-semibold text-ink pt-1 pb-0">
+            <h1 class="text-xl font-semibold text-ink pt-1 pb-0 tracking-tight text-balance">
               {props.title}
             </h1>
           </div>

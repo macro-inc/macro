@@ -33,35 +33,35 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
     });
 
   return (
-    <div class="w-full border-t border-edge-muted pt-3 pb-2">
-      <div class="flex flex-row items-center gap-2 pl-[calc(var(--user-icon-width)+2*var(--message-padding-x))]">
+    <div class="w-full pt-2 pb-1">
+      <div class="flex flex-row items-center gap-2">
         <Button
           variant="base"
-          size="md"
-          class="rounded-full px-4 py-1"
+          size="sm"
+          class="rounded-lg px-3 py-1.5 text-sm text-ink-muted hover:text-ink border border-ink-muted/8 bg-ink-muted/[0.025] hover:bg-ink-muted/[0.06]"
           onClick={open('reply')}
         >
-          <ArrowBendUpLeft class="size-4" />
+          <ArrowBendUpLeft class="size-3.5" />
           <span>Reply</span>
         </Button>
         <Show when={shouldShowReplyAll()}>
           <Button
             variant="base"
-            size="md"
-            class="rounded-full px-4 py-1"
+            size="sm"
+            class="rounded-lg px-3 py-1.5 text-sm text-ink-muted hover:text-ink border border-ink-muted/8 bg-ink-muted/[0.025] hover:bg-ink-muted/[0.06]"
             onClick={open('reply-all')}
           >
-            <ArrowBendDoubleUpLeft class="size-4" />
+            <ArrowBendDoubleUpLeft class="size-3.5" />
             <span>Reply all</span>
           </Button>
         </Show>
         <Button
           variant="base"
-          size="md"
-          class="rounded-full px-4 py-1"
+          size="sm"
+          class="rounded-lg px-3 py-1.5 text-sm text-ink-muted hover:text-ink border border-ink-muted/8 bg-ink-muted/[0.025] hover:bg-ink-muted/[0.06]"
           onClick={open('forward')}
         >
-          <ArrowBendUpRight class="size-4" />
+          <ArrowBendUpRight class="size-3.5" />
           <span>Forward</span>
         </Button>
       </div>

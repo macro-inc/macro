@@ -32,6 +32,7 @@ import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { scrollToMessage } from '../util/scrollToMessage';
 import { BottomReplyButtons } from './BottomReplyButtons';
 import { EmailFormContextProvider } from './EmailFormContext';
+import { EmailParticipants } from './EmailParticipants';
 import { MessageList } from './MessageList';
 import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
@@ -502,13 +503,16 @@ function EmailContent(props: EmailViewProps) {
                       <div
                         class="macro-message-width macro-message-padding w-full border-b"
                         classList={{
-                          'border-edge-muted': isScrolled(),
+                          'border-edge-muted/50': isScrolled(),
                           'border-transparent': !isScrolled(),
                         }}
                       >
-                        <h1 class="ph-no-capture text-3xl font-semibold text-ink pt-3 pb-2">
+                        <h1 class="ph-no-capture text-2xl font-semibold text-ink pt-3 pb-1.5 tracking-tight text-balance">
                           {props.title}
                         </h1>
+                        <div class="pb-2.5">
+                          <EmailParticipants />
+                        </div>
                       </div>
                     </div>
                   </Show>
@@ -530,7 +534,7 @@ function EmailContent(props: EmailViewProps) {
                   }
                 >
                   {(info) => (
-                    <div class="shrink-0 w-full pb-2">
+                    <div class="shrink-0 w-full pb-4">
                       <div class="relative w-full flex flex-row justify-center bg-surface macro-message-width macro-message-padding mx-auto">
                         <FloatingInputLoader
                           isLoading={context.query.isFetching}

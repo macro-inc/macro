@@ -1307,10 +1307,10 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 bg-surface border border-edge rounded-md max-w-full"
+      class="relative flex flex-col flex-1 bg-ink-muted/[0.025] border border-ink-muted/8 rounded-lg max-w-full"
     >
       {/* Top Bar */}
-      <div class="relative flex items-start gap-2 p-2">
+      <div class="relative flex items-start gap-2 px-3 py-1.5 border-b border-ink-muted/8">
         <DropdownMenu>
           <DropdownMenu.Trigger>
             <div class="px-1">
@@ -1507,7 +1507,7 @@ export function BaseInput(props: {
       </div>
       <div class="size-full flex flex-col">
         <Show when={showFormatRibbon()}>
-          <div class="flex flex-row w-full gap-2 items-center p-2">
+          <div class="flex flex-row w-full gap-2 items-center px-3 py-1.5">
             <FormatButtons
               selectionState={() => formatState}
               onInlineFormat={(format) => {
@@ -1528,7 +1528,7 @@ export function BaseInput(props: {
           </div>
         </Show>
         <div
-          class="max-h-80 overflow-y-scroll w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-3"
+          class="max-h-80 overflow-y-scroll w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-2"
           onclick={() => {
             editor()?.focus();
           }}
@@ -1655,7 +1655,7 @@ export function BaseInput(props: {
             </For>
           </div>
         </div>
-        <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2">
+        <div class="flex flex-row w-full h-9 justify-between items-center px-3 pb-2 pt-0.5 space-x-2">
           <div class="flex flex-row items-center gap-1">
             <div class="relative">
               <Button
@@ -1744,17 +1744,15 @@ export function BaseInput(props: {
                 !!form().sendTime()
               }
               onClick={() => sendEmail()}
-              class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
+              class="flex items-center justify-center rounded-full size-7 bg-accent hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Show
                 when={!sendMutation.isPending}
                 fallback={
-                  <Spinner class="size-6 animate-spin cursor-disabled" />
+                  <Spinner class="size-4 animate-spin text-surface" />
                 }
               >
-                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                  <ArrowUp class="group-hover:text-surface! group-hover:fill-surface! text-accent! fill-accent! size-4 transition ease-in-out" />
-                </div>
+                <ArrowUp class="text-surface! fill-surface! size-4" />
               </Show>
             </button>
           </Tooltip>

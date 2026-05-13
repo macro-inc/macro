@@ -2,7 +2,7 @@ import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { useEmail } from '@core/context/user';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { cn } from '@ui/utils/classname';
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo } from 'solid-js';
 import { getSenderDisplayName, getSenderMacroId } from '../util/emailUser';
 import { formatShortDate } from './EmailMessageTopBar';
 import { EmailUserTooltip } from './EmailUserTooltip';
@@ -15,8 +15,6 @@ interface CollapsedMessageProps {
 }
 
 export function CollapsedMessage(props: CollapsedMessageProps) {
-  const [hover, setHover] = createSignal(false);
-  const [hasMouseLeft, setHasMouseLeft] = createSignal(false);
   const currentUserEmail = useEmail();
 
   const senderDisplay = createMemo(() =>
@@ -30,7 +28,6 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
   });
 
   const snippet = createMemo(() => {
-    // Prefer body_text for snippet, fall back to stripping HTML
     if (props.message.body_text) {
       return props.message.body_text.replace(/\s+/g, ' ').trim();
     }
@@ -54,41 +51,24 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
 
   return (
     <div class="shrink-0 flex justify-center w-full">
-      {/* These pl/pr below are needed to align with expanded messages at mobile width. */}
-      <div class="macro-message-width macro-message-margin w-full pl-2 pr-4 sm:px-0">
+      <div class="macro-message-width macro-message-padding w-full">
         <div
-          class={cn('relative flex flex-row items-center w-full pb-2', {
-            'bg-active': props.isFocused,
-            'bg-hover': hover(),
-            'pt-2': !props.isFirstMessage,
-            'opacity-80': hasMouseLeft() && !hover(),
-            'opacity-100': !hasMouseLeft() || hover(),
-          })}
+          class={cn(
+            'group/msg flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] cursor-pointer min-w-0',
+            props.isFocused
+              ? 'bg-ink-muted/[0.06]'
+              : 'hover:bg-ink-muted/[0.06]'
+          )}
           data-message-body-id={props.message.db_id}
           tabIndex={0}
           onClick={props.onClick}
           onKeyDown={handleKeyDown}
-          onMouseEnter={() => setHover(true)}
-          onMouseLeave={() => {
-            setHover(false);
-            setHasMouseLeft(true);
-          }}
         >
-          {/* Rail line - behind avatar */}
           <div
-            class="absolute top-0 bottom-0 border-l border-rail z-0"
-            style={{
-              left: 'var(--left-of-connector)',
-            }}
-          />
-          {/* Avatar - centered on the rail, in front of rail */}
-          <div
-            class="relative z-10 flex justify-center items-center shrink-0"
+            class="shrink-0 flex justify-center items-center"
             style={{
               width: 'var(--user-icon-width)',
               height: 'var(--user-icon-width)',
-              'margin-left':
-                'calc(var(--left-of-connector) - var(--user-icon-width) / 2 + 1px)',
             }}
           >
             <UserIcon
@@ -98,24 +78,22 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
               suppressClick={true}
             />
           </div>
-          {/* Sender + Snippet - aligned with expanded message content */}
-          <div
-            class="flex-1 flex items-center min-w-0"
-            style={{
-              'padding-left': 'var(--message-padding-x)',
-            }}
-          >
-            <span class="w-16 shrink-0">
-              <EmailUserTooltip recipient={props.message.from}>
-                <span class="text-ink font-semibold truncate text-sm cursor-default block">
-                  {senderDisplay()}
-                </span>
-              </EmailUserTooltip>
-            </span>
-            <span class="text-ink truncate">{snippet()}</span>
+          <div class="shrink-0 min-w-0 max-w-28">
+            <EmailUserTooltip recipient={props.message.from}>
+              <div
+                class={cn(
+                  'text-sm truncate cursor-default',
+                  props.isFocused ? 'text-ink font-medium' : 'text-ink font-medium'
+                )}
+              >
+                {senderDisplay()}
+              </div>
+            </EmailUserTooltip>
           </div>
-          {/* Date */}
-          <div class="text-xs text-ink shrink-0 ml-4 pr-2">
+          <div class="flex-1 min-w-0 text-sm text-ink-muted/60 truncate">
+            {snippet()}
+          </div>
+          <div class="shrink-0 text-xs text-ink-extra-muted tabular-nums">
             {props.message.internal_date_ts &&
               formatShortDate(props.message.internal_date_ts)}
           </div>
