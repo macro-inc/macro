@@ -227,11 +227,12 @@ export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
  */
 export async function refetchSoupEntity(
   entityId: string,
-  entityType: SoupEntityTag
+  entityType: SoupEntityTag,
+  options?: { includeRoot?: boolean }
 ): Promise<void> {
   const { storageServiceClient } = await import('@service-storage/client');
 
-  const filter = buildSingleEntityFilter(entityType, entityId);
+  const filter = buildSingleEntityFilter(entityType, entityId, options);
 
   const result = await storageServiceClient.getSoupItems({
     params: {},
@@ -261,7 +262,8 @@ export async function refetchSoupEntity(
 /** @private */
 export function buildSingleEntityFilter(
   entityType: SoupEntityTag,
-  entityId: string
+  entityId: string,
+  options?: { includeRoot?: boolean }
 ): PostSoupRequest {
   const base: PostSoupRequest = {
     ...QUERY_FILTERS_BASE,
@@ -279,7 +281,10 @@ export function buildSingleEntityFilter(
     }))
     .with('project', () => ({
       ...base,
-      project_filters: { project_ids: [entityId], include_root: true },
+      project_filters: {
+        project_ids: [entityId],
+        include_root: options?.includeRoot ?? false,
+      },
     }))
     .with('emailThread', () => ({
       ...base,

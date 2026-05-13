@@ -34,7 +34,7 @@ export function useHandleFileUpload({
       upload.projectId.then((createdProjectId) => {
         if (!createdProjectId) return;
 
-        refetchSoupEntity(createdProjectId, 'project');
+        refetchSoupEntity(createdProjectId, 'project', { includeRoot: true });
         refetchHistory();
 
         toast.success(`Uploaded ${upload.name}`, undefined, [

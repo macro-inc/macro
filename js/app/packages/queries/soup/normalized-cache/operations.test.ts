@@ -246,6 +246,18 @@ describe('buildSingleEntityFilter', () => {
       expect(ids).toEqual([NIL_ID]);
     }
   });
+
+  it('project filter defaults include_root to false', () => {
+    const filter = buildSingleEntityFilter('project', 'entity-1');
+    expect((filter as any).project_filters.include_root).toBe(false);
+  });
+
+  it('project filter respects includeRoot option', () => {
+    const filter = buildSingleEntityFilter('project', 'entity-1', {
+      includeRoot: true,
+    });
+    expect((filter as any).project_filters.include_root).toBe(true);
+  });
 });
 
 describe('insertSoupEntity', () => {
