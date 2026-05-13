@@ -251,7 +251,8 @@ export async function refetchSoupEntity(
   if (!page.items.length) return;
 
   for (const item of page.items) {
-    if (hasSoupEntity(entityId)) {
+    const itemId = getSoupItemId(item);
+    if (hasSoupEntity(itemId)) {
       optimisticUpdateSoupEntity(item);
     } else {
       insertSoupEntity(item);
