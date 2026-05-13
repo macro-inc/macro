@@ -45,18 +45,21 @@ use crate::domain::ports::DocumentService;
 use crate::domain::ports::create::DocumentCreationService;
 
 // Re-export handlers and utoipa path types for external use (swagger, internal routes)
-pub use copy_document::*;
-pub use create_document::*;
+pub use copy_document::{__path_copy_document_handler, copy_document_handler};
+pub use create_document::{__path_create_document_handler, create_document_handler};
 #[cfg(feature = "document_create")]
-pub use create_markdown::*;
-pub use create_task::*;
-pub use delete_document::*;
-pub use edit_document::*;
-pub use get_branch_name::*;
-pub use get_document::*;
-pub use get_location::*;
-pub use get_short_id::*;
-
+pub use create_markdown::{__path_create_markdown_handler, create_markdown_handler};
+pub use create_task::{__path_create_task_handler, create_task_handler};
+pub use delete_document::{__path_delete_document_handler, delete_document_handler};
+pub use edit_document::{
+    __path_edit_document_handler, EditDocumentResponse, edit_document_handler,
+};
+pub use get_branch_name::{
+    __path_get_branch_name_handler, BranchNameResponse, get_branch_name_handler,
+};
+pub use get_document::{__path_get_document_handler, get_document_handler};
+pub use get_location::{__path_get_location_v3_handler, get_location_v3_handler};
+pub use get_short_id::{__path_get_short_id_handler, ShortIdResponse, get_short_id_handler};
 impl IntoResponse for DocumentError {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {

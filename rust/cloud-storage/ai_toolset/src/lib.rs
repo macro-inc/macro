@@ -134,6 +134,9 @@ pub mod schema;
 mod tool;
 mod toolset;
 
-pub use context::*;
-pub use tool::*;
-pub use toolset::*;
+pub use context::{RequestContext, ServiceContext};
+pub use tool::{AsyncTool, NoContext, ToolCallError, ToolResult};
+pub use toolset::{
+    AsyncToolCollection, RequestSchema, ToolCollection, ToolInfo, ToolSchema, ToolSet,
+    ToolSetCreationError, ToolSetError, tool_object,
+};

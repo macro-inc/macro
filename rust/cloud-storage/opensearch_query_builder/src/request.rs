@@ -12,11 +12,13 @@ mod collapse;
 mod highlight;
 mod sort_type;
 
-pub use aggregation_type::*;
-pub use collapse::*;
-pub use highlight::*;
-pub use sort_type::*;
-
+pub use aggregation_type::{AggregationType, CardinalityAggregation, TermsAggregation};
+pub use collapse::Collapse;
+pub use highlight::{Highlight, HighlightField};
+pub use sort_type::{
+    FieldSort, Lang, ScoreWithOrderSort, Script, ScriptSort, ScriptSortType, SortMode, SortOrder,
+    SortType,
+};
 /// Struct representing a search request.
 #[derive(Default, Debug, Clone, Serialize)]
 pub struct SearchRequest<'a> {

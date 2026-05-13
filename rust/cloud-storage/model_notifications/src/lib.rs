@@ -8,10 +8,15 @@ mod device;
 pub mod digest_state;
 mod metadata;
 mod unsubscribe;
-pub use device::*;
-pub use metadata::*;
-pub use unsubscribe::*;
-
+pub use device::DeviceType;
+pub use metadata::{
+    AiResponseMetadata, ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
+    ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, CommonChannelMetadata,
+    DocumentMentionMetadata, InviteToTeamMetadata, ItemSharedMetadata,
+    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
+    NotificationTitle, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
+};
+pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(transparent)]
 pub struct ChannelMessageDocumentMetadata(pub DocumentMentionMetadata);
