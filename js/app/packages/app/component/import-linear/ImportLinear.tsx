@@ -261,7 +261,7 @@ export default function ImportLinear() {
                           </div>
                         </div>
                         <select
-                          class="text-sm bg-menu border border-edge rounded-xs px-2 py-1"
+                          class="text-sm bg-surface border border-edge rounded-xs px-2 py-1"
                           value={assigneeMapping[assignee] ?? ''}
                           onChange={(e) =>
                             setAssigneeMapping(assignee, e.currentTarget.value)

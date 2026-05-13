@@ -95,7 +95,7 @@ export function SoupViewMobileCreateButton(props: {
       <Layer depth={1}>
         <button
           type="button"
-          class="absolute bottom-4 right-4 z-10 pl-3 pr-4 py-2 rounded-full bg-panel ring text-accent flex items-center justify-center gap-2 shadow-md ring-accent/20"
+          class="absolute bottom-4 right-4 z-10 pl-3 pr-4 py-2 rounded-full bg-surface ring text-accent flex items-center justify-center gap-2 shadow-md ring-accent/20"
           onClick={() => {
             hapticImpact('light');
             setAnimating(true);

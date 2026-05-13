@@ -215,7 +215,7 @@ export function AssistantMessage(props: {
                   </button>
                 </div>
                 <Show when={props.ttft && ENABLE_TTFT}>
-                  <div class="flex flex-row items-center space-x-1 text-xs font-mono bg-panel px-2 py-1">
+                  <div class="flex flex-row items-center space-x-1 text-xs font-mono bg-surface px-2 py-1">
                     <span class="text-ink-muted">Time to first token:</span>
                     <span class="text-ink font-medium">
                       {props.ttft! / 1000}s

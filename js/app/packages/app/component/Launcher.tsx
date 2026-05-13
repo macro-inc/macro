@@ -390,7 +390,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
     <Layer depth={2}>
       <button
         class={cn(
-          ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel ring ring-edge-muted transition-transform ease-click duration-200 rounded-sm',
+          ' size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-surface ring ring-edge-muted transition-transform ease-click duration-200 rounded-sm',
           `create-menu-${props.creatableBlock.label.toLowerCase()}`,
           {
             '-translate-y-2 text-ink bg-active': props.focused,
@@ -417,7 +417,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
           )}
         ></div>
 
-        <div class="absolute top-1.5 left-2 z-user-highlight p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
+        <div class="absolute top-1.5 left-2 z-user-highlight p-1 px-1.5 bg-surface text-ink border border-edge-muted rounded-xs text-xs">
           <Hotkey token={props.creatableBlock.hotkeyToken} />
         </div>
 
@@ -672,7 +672,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   };
 
   return (
-    <div class="bg-menu ring-1 ring-edge-muted rounded-sm">
+    <div class="bg-surface ring-1 ring-edge-muted rounded-sm">
       <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">

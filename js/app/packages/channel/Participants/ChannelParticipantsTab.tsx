@@ -25,7 +25,7 @@ function ParticipantsSection(props: {
   return (
     <div
       class={cn(
-        'rounded-sm border border-edge-muted bg-menu py-3',
+        'rounded-sm border border-edge-muted bg-surface py-3',
         props.class
       )}
     >

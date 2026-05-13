@@ -61,7 +61,7 @@ const PropertyDropdown: Component<PropertyDropdownProps> = (props) => {
       <div
         ref={props.dropdownRef}
         class="absolute inset-x-0  top-full mt-1 z-full-page-modal-base
-               border border-edge bg-menu shadow-lg
+               border border-edge bg-surface shadow-lg
                max-h-48 overflow-y-auto
                font-mono"
       >

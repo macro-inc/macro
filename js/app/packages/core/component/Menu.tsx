@@ -248,7 +248,7 @@ export function MenuItem(props: MenuItemProps) {
       </Show>
       <Show when={props.hotkeyToken} keyed>
         {(hotkeyToken) => (
-          <div class="ml-auto text-page text-xs">
+          <div class="ml-auto text-surface text-xs">
             <Hotkey token={hotkeyToken} class="text-ink-muted" showPlus />
           </div>
         )}
@@ -359,7 +359,7 @@ const menuWidths: Record<MenuWidth, string> = {
   screen: 'w-screen',
 };
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-menu shadow-lg ring-1 ring-edge-muted rounded-sm p-1 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-lg ring-1 ring-edge-muted rounded-sm p-1 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
 
 type MenuContentProps = ParentProps<{
   class?: string;

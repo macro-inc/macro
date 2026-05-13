@@ -82,7 +82,7 @@ function AboutUsDemo() {
         <For each={PANELS}>
           {(panel) => (
             <div class="flex-1 w-full flex flex-col">
-              <div class="border border-edge-muted bg-panel rounded-xs overflow-hidden">
+              <div class="border border-edge-muted bg-surface rounded-xs overflow-hidden">
                 <div class="p-6 flex flex-col items-center gap-4 text-center">
                   {panel.icon()}
                   <p class="text-sm text-ink/70 font-medium">{panel.label}</p>

@@ -30,14 +30,14 @@ export function Layer(props: LayerProps) {
         '--color-focus':           'var(--a0)',
         '--color-accent-bg':       'oklch(from var(--a0) l c h / 0.15)',
 
-        '--color-panel':           'var(--b0)',
-        '--color-page':            'var(--b0)',
-        '--color-menu':            'var(--b0)',
-        '--color-dialog':          'var(--b0)',
+        '--color-surface':           'var(--b0)',
+        '--color-surface':            'var(--b0)',
+        '--color-surface':            'var(--b0)',
+        '--color-surface':          'var(--b0)',
 
-        // TODO (seamus): --color-input could be better handled with fractional layer depth
-        '--color-input':           `oklch(calc(var(--b0l) + ${depth() + 0.02}) var(--b0c) var(--b0h))`,
-        '--color-button':          'var(--b0)',
+        // TODO (seamus): --color-surface could be better handled with fractional layer depth
+        '--color-surface':           `oklch(calc(var(--b0l) + ${depth() + 0.02}) var(--b0c) var(--b0h))`,
+        '--color-surface':          'var(--b0)',
         '--color-shadow':          'oklch(calc(var(--b0l) - 0.005 ) var(--b0c) var(--b0h) / 0.2)',
         // TODO (seamus): --color-message could be better handled with fractional layer depth
         '--color-message':         'color-mix(in oklch, var(--b1) 50%, var(--b2))',

@@ -23,7 +23,7 @@ function CollapsibleCard(props: {
   const isCopied = () => props.copiedKey() === props.copyKey;
 
   return (
-    <div class="overflow-hidden rounded-md border border-edge-muted bg-input/70">
+    <div class="overflow-hidden rounded-md border border-edge-muted bg-surface/70">
       <button
         type="button"
         class="flex items-center gap-2 w-full px-4 py-2 text-left"

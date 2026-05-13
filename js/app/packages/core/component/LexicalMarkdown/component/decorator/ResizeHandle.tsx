@@ -121,7 +121,7 @@ export function ResizeHandle(props: ResizeHandleProps) {
       }}
     >
       <div
-        class="w-1 h-[50%] min-h-8 absolute top-1/2 bg-ink ring-2 ring-panel rounded-full transition-all duration-200 pointer-events-none"
+        class="w-1 h-[50%] min-h-8 absolute top-1/2 bg-ink ring-2 ring-surface rounded-full transition-all duration-200 pointer-events-none"
         classList={{
           'right-3': props.side === 'right',
           'left-3': props.side === 'left',

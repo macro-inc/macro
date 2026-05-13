@@ -419,7 +419,7 @@ export const MoveToProjectView = (props: {
           placeholder="Search folders..."
           value={searchQuery()}
           onInput={(e) => setSearchQuery(e.currentTarget.value)}
-          class="w-full p-2 text-sm border border-edge bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none selection:bg-ink selection:text-panel"
+          class="w-full p-2 text-sm border border-edge bg-surface text-ink placeholder:text-ink-placeholder focus:outline-none selection:bg-ink selection:text-surface"
         />
       </div>
       <div class="w-full max-h-64 h-75 overflow-hidden">

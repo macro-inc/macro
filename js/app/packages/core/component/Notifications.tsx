@@ -57,7 +57,7 @@ export function Notifications(props: NotificationsProps) {
               <button
                 class={cn(
                   'w-full p-2 pb-3 border-b border-edge-muted hover:bg-hover text-left',
-                  isUnread ? 'bg-menu-hover' : 'bg-menu'
+                  isUnread ? 'bg-surface-hover' : 'bg-surface'
                 )}
                 {...navHandlers}
               >

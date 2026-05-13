@@ -58,7 +58,7 @@ export function FindBar(props: FindBarProps) {
     >
       <div
         class={cn(
-          'flex items-center gap-1 rounded-md border border-edge bg-panel p-1 shadow-md focus-within:border-accent',
+          'flex items-center gap-1 rounded-md border border-edge bg-surface p-1 shadow-md focus-within:border-accent',
           props.class
         )}
       >

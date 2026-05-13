@@ -1267,7 +1267,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
       .otherwise(() => 'This item has been shared with you');
 
   return (
-    <ButtonGroup variant="base" size="sm" class="bg-panel" depth={2}>
+    <ButtonGroup variant="base" size="sm" class="bg-surface" depth={2}>
       <Tooltip label={shareAccessTooltip()}>
         <Button
           onClick={() => {

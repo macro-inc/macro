@@ -17,7 +17,7 @@ function VideoTag(props: {
   return (
     <div
       class={cn(
-        'absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-panel/70 text-ink text-xs',
+        'absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface/70 text-ink text-xs',
         props.variant === 'truncated' ? 'truncate max-w-[80%]' : '',
         props.class
       )}
@@ -82,7 +82,7 @@ function LocalParticipantTile(props: {
       </Show>
 
       <Show when={props.isConnecting} fallback={<VideoTag>You</VideoTag>}>
-        <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-panel/70 text-ink-muted text-xs">
+        <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface/70 text-ink-muted text-xs">
           Connecting...
         </div>
       </Show>

@@ -317,7 +317,7 @@ export function CallTranscript(props: {
           }}
         >
           <Show when={!props.hideHeader}>
-            <div class="isolate flex items-center gap-2 sticky top-0 bg-panel z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
+            <div class="isolate flex items-center gap-2 sticky top-0 bg-surface z-10 px-4 py-2 @[860px]:py-4 border-b border-edge-muted/50">
               <Subtitles class="size-4 text-ink shrink-0" />
               <p class="font-semibold text-ink select-none text-sm shrink-0">
                 Transcript
@@ -375,12 +375,12 @@ export function CallTranscript(props: {
           class="absolute bottom-0 inset-x-px px-2 pb-2 flex justify-center pointer-events-none z-20"
           style={{
             'background-image':
-              'linear-gradient(transparent, var(--color-panel) 85%)',
+              'linear-gradient(transparent, var(--color-surface) 85%)',
           }}
         >
           <button
             type="button"
-            class="pointer-events-auto isolate overflow-hidden relative bg-panel border border-accent/30 flex h-8 px-2 items-center justify-center text-xs/5 font-mono uppercase font-medium  whitespace-nowrap text-accent before:absolute before:inset-0 before:bg-accent/10 hover:before:bg-accent/20 before:content-[''] before:transition-colors"
+            class="pointer-events-auto isolate overflow-hidden relative bg-surface border border-accent/30 flex h-8 px-2 items-center justify-center text-xs/5 font-mono uppercase font-medium  whitespace-nowrap text-accent before:absolute before:inset-0 before:bg-accent/10 hover:before:bg-accent/20 before:content-[''] before:transition-colors"
             onClick={() => {
               setSyncToVideoTime(true);
               scrollActiveIntoView('smooth');

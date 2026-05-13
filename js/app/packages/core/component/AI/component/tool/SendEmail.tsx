@@ -94,7 +94,7 @@ function DraftPreviewButton(props: {
 
   return (
     <button
-      class="text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center"
+      class="text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-surface-hover flex flex-row h-6 px-2 justify-center items-center"
       onClick={() =>
         replaceOrInsertSplit({
           ...(props.threadId

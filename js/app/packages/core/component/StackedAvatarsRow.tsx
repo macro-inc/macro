@@ -51,41 +51,41 @@ const STACK_STYLE: Record<
   sm: {
     overlap: '-mr-1.5',
     overflowChip:
-      'size-4 shrink-0 rounded-full border-2 border-panel bg-menu flex flex-col items-center justify-center',
+      'size-4 shrink-0 rounded-full border-2 border-surface bg-surface flex flex-col items-center justify-center',
     overflowChipText:
       'text-[8px] font-semibold tabular-nums leading-none text-ink',
     inner:
-      'bg-panel size-4 rounded-full p-[1px] border-2 border-panel box-border',
+      'bg-surface size-4 rounded-full p-[1px] border-2 border-surface box-border',
     defaultEmptyIcon: 'w-2 h-2',
   },
   md: {
     overlap: '-mr-2',
     overflowChip:
-      'size-6 shrink-0 rounded-full border-2 border-panel bg-menu flex flex-col items-center justify-center',
+      'size-6 shrink-0 rounded-full border-2 border-surface bg-surface flex flex-col items-center justify-center',
     overflowChipText:
       'text-[10px] font-semibold tabular-nums leading-none text-ink',
     inner:
-      'bg-panel size-6 rounded-full p-[2px] border-2 border-panel box-border',
+      'bg-surface size-6 rounded-full p-[2px] border-2 border-surface box-border',
     defaultEmptyIcon: 'w-3 h-3',
   },
   lg: {
     overlap: '-mr-4',
     overflowChip:
-      'size-10 shrink-0 rounded-full border-2 border-panel bg-menu flex flex-col items-center justify-center',
+      'size-10 shrink-0 rounded-full border-2 border-surface bg-surface flex flex-col items-center justify-center',
     overflowChipText:
       'text-sm font-semibold tabular-nums leading-none text-ink',
     inner:
-      'bg-panel size-10 rounded-full p-[2px] border-2 border-panel box-border',
+      'bg-surface size-10 rounded-full p-[2px] border-2 border-surface box-border',
     defaultEmptyIcon: 'w-5 h-5',
   },
   fill: {
     overlap: '-mr-2',
     overflowChip:
-      'size-6 shrink-0 rounded-full border-2 border-panel bg-menu flex flex-col items-center justify-center',
+      'size-6 shrink-0 rounded-full border-2 border-surface bg-surface flex flex-col items-center justify-center',
     overflowChipText:
       'text-[10px] font-semibold tabular-nums leading-none text-ink',
     inner:
-      'bg-panel size-6 rounded-full p-[2px] border-2 border-panel box-border',
+      'bg-surface size-6 rounded-full p-[2px] border-2 border-surface box-border',
     defaultEmptyIcon: 'w-3 h-3',
   },
 };
@@ -118,7 +118,7 @@ export function StackedAvatarsDefaultEmptyPlaceholder(props: {
   const s = () => props.size ?? 'md';
   return (
     <div class={stackedAvatarInnerClass(s())}>
-      <div class="flex size-full min-h-0 min-w-0 items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted text-panel leading-none">
+      <div class="flex size-full min-h-0 min-w-0 items-center justify-center overflow-hidden rounded-full bg-ink-extra-muted text-surface leading-none">
         <User
           class={cn(STACK_STYLE[s()].defaultEmptyIcon, 'block shrink-0')}
           aria-hidden

@@ -516,7 +516,7 @@ function GlyphGrid(props: GlyphGridProps) {
                     />
                   </div>
 
-                  <div class="absolute top-1 right-1 flex gap-0 opacity-0 bg-panel group-hover:opacity-100">
+                  <div class="absolute top-1 right-1 flex gap-0 opacity-0 bg-surface group-hover:opacity-100">
                     <Button
                       variant="base"
                       size="icon-md"
@@ -794,7 +794,7 @@ function GlyphEditor(props: GlyphEditorProps) {
     <Show when={props.isOpen}>
       <div class="absolute inset-0 bg-modal-overlay flex items-center justify-center z-action-menu">
         <div
-          class="bg-menu border border-edge max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+          class="bg-surface border border-edge max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
           use:clickOutside={() => props.onClose()}
         >
           <div class="p-2 border-b border-edge flex items-center justify-between">
@@ -1035,7 +1035,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
   });
 
   return (
-    <div class="w-100 bg-panel p-4 overflow-y-auto border-l border-edge border-dashed shrink-0">
+    <div class="w-100 bg-surface p-4 overflow-y-auto border-l border-edge border-dashed shrink-0">
       <div class="space-y-4">
         <h3 class="font-mono text-sm text-ink">[ Global Settings ]</h3>
 

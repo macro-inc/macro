@@ -425,7 +425,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         }}
         contentEditable={false}
         class={cn(
-          'relative my-2 rounded border border-edge bg-panel no-select-children select-none overflow-hidden flex flex-col',
+          'relative my-2 rounded border border-edge bg-surface no-select-children select-none overflow-hidden flex flex-col',
           isSelectedAsNode() &&
             !channelMessageId() &&
             'bg-active outline-edge outline-4',

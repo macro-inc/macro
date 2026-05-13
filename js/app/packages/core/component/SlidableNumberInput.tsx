@@ -164,7 +164,7 @@ export function SlidableNumberInput(props: SlidableNumberInputProps) {
       <OptionalTooltipWrapper tooltip={props.tooltip}>
         <div
           class={cn(
-            'flex flex-row items-center bg-input rounded px-1.5 h-8',
+            'flex flex-row items-center bg-surface rounded px-1.5 h-8',
             props.labelPosition === 'top' &&
               (props.width === 'sm'
                 ? 'w-22'

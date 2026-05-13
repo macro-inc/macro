@@ -228,7 +228,7 @@ function MobileDeleteButton() {
 
   return (
     <Show when={selection.active() && isMobileWidth()}>
-      <div class="max-h-12 flex p-2 bg-menu cursor-auto justify-center items-center rounded shadow-md ring ring-edge">
+      <div class="max-h-12 flex p-2 bg-surface cursor-auto justify-center items-center rounded shadow-md ring ring-edge">
         <Button
           variant="ghost"
           size="icon-md"
@@ -485,7 +485,7 @@ export function FloatingMenu() {
     >
       <div
         class={cn(
-          'flex bg-menu rounded-lg shadow-lg ring ring-edge',
+          'flex bg-surface rounded-lg shadow-lg ring ring-edge',
           isMobileWidth() ? 'flex-row p-2 mr-2' : 'flex-col w-54 p-3',
           selectedNodes().length + selectedEdges().length <= 1 &&
             validMenus().size === 0 &&

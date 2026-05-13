@@ -252,7 +252,7 @@ function ChatInner(props: {
 
   return (
     <DragDropWrapper
-      class="size-full bg-panel overscroll-none overflow-hidden flex flex-col"
+      class="size-full bg-surface overscroll-none overflow-hidden flex flex-col"
       isEntityDraggingOver={isDraggingOver}
     >
       <Show when={!isNestedBlock}>
@@ -276,7 +276,7 @@ function ChatInner(props: {
         </Show>
       </SplitToolbarLeft>
       <Show when={showStreamDebug()}>
-        <div class="px-2 py-1 bg-menu border-b border-edge text-ink font-mono text-sm">
+        <div class="px-2 py-1 bg-surface border-b border-edge text-ink font-mono text-sm">
           <Show when={chat.stream()} fallback={<div>No active stream</div>}>
             {(stream) => (
               <div class="flex gap-x-4">

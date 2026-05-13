@@ -498,7 +498,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           : undefined
       }
       class={cn(
-        'ph-no-capture w-full text-sm offset-2 bg-input focus-within:bg-active',
+        'ph-no-capture w-full text-sm offset-2 bg-surface focus-within:bg-active',
         !props.hideBorder && 'border border-edge',
         !props.noPadding && 'py-2',
         props.class
@@ -687,7 +687,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       </Combobox.Control>
 
       <Combobox.Portal>
-        <Combobox.Content class="z-modal-content bg-menu border translate-y-1 border-edge p-1">
+        <Combobox.Content class="z-modal-content bg-surface border translate-y-1 border-edge p-1">
           <Combobox.Listbox
             ref={setListboxRef}
             class="flex flex-col gap-1"

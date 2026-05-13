@@ -56,7 +56,7 @@ const TypeIndicator = (props: { active: boolean }) => (
     )}
   >
     <Show when={props.active}>
-      <CheckIcon class="size-2.5 text-page" />
+      <CheckIcon class="size-2.5 text-surface" />
     </Show>
   </span>
 );
@@ -416,7 +416,7 @@ const SearchableFilterSubmenu = (props: {
 
       <Dropdown.Portal>
         <Layer depth={2}>
-          <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-65 max-w-[90vw] overflow-hidden">
+          <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl w-65 max-w-[90vw] overflow-hidden">
             <SearchableMultiSelectInline
               options={props.options}
               activeIds={props.activeIds}
@@ -447,7 +447,7 @@ function SingleValueSubmenu<T>(props: {
       </Dropdown.SubTrigger>
       <Dropdown.Portal>
         <Layer depth={2}>
-          <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+          <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
             <For each={props.options}>
               {(option) => {
                 const active = () => props.current() === option.value;
@@ -649,7 +649,7 @@ const SearchIndexSubRow = (props: {
     </Dropdown.SubTrigger>
     <Dropdown.Portal>
       <Layer depth={2}>
-        <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
+        <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
           {props.children}
         </Dropdown.SubContent>
       </Layer>
@@ -810,7 +810,7 @@ export const UnifiedFilterDropdown = () => {
 
         <Dropdown.Portal>
           <Layer depth={2}>
-            <Dropdown.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
+            <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-45 p-1">
               <Show
                 when={
                   categories().length === 1 && !isTasksView() && !isSearchView()
@@ -827,7 +827,7 @@ export const UnifiedFilterDropdown = () => {
 
                           <Dropdown.Portal>
                             <Layer depth={2}>
-                              <Dropdown.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+                              <Dropdown.SubContent class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
                                 <For each={category.options}>
                                   {(option) => {
                                     const active = () =>
@@ -847,7 +847,7 @@ export const UnifiedFilterDropdown = () => {
                                           )}
                                         >
                                           <Show when={active()}>
-                                            <CheckIcon class="size-2.5 text-page" />
+                                            <CheckIcon class="size-2.5 text-surface" />
                                           </Show>
                                         </span>
 
@@ -971,7 +971,7 @@ export const UnifiedFilterDropdown = () => {
                           )}
                         >
                           <Show when={active()}>
-                            <CheckIcon class="size-2.5 text-page" />
+                            <CheckIcon class="size-2.5 text-surface" />
                           </Show>
                         </span>
 

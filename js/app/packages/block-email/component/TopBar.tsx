@@ -179,7 +179,7 @@ export function TopBar(props: {
             onMouseLeave={() => setHovering(false)}
             onClick={openTaskCompose}
             depth={2}
-            class="bg-panel text-ink-muted"
+            class="bg-surface text-ink-muted"
           >
             <AnimatedTaskIcon triggerAnimation={hovering()} />
             <span class="text-xs text-ink-extra-muted">Task</span>

@@ -356,7 +356,7 @@ function ActionMenu({
     <DropdownMenu placement="right-start">
       <DropdownMenu.Trigger class="dropdown-menu__trigger">
         <Tooltip label="Table Options">
-          <div class="size-6 rounded-md p-0 bg-button hover:bg-hover hover-transition-bg flex items-center justify-center">
+          <div class="size-6 rounded-md p-0 bg-surface hover:bg-hover hover-transition-bg flex items-center justify-center">
             <CaretDown class="size-4" />
           </div>
         </Tooltip>

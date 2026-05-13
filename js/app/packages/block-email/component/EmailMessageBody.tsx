@@ -340,7 +340,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
               variant="ghost"
               size="icon-sm"
               onClick={() => setShowFullHTML(true)}
-              class={cn(props.isFocused ? 'hover:bg-panel' : 'hover:bg-active')}
+              class={cn(props.isFocused ? 'hover:bg-surface' : 'hover:bg-active')}
             >
               <DotsThree />
             </Button>

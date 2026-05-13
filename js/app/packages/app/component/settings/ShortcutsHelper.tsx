@@ -31,7 +31,7 @@ export function ShortcutsHelper() {
         <button
           type="button"
           onClick={handleClick}
-          class="flex items-center gap-1.5 rounded-xs px-3 py-1.5 bg-panel border border-edge-muted ring-accent text-ink text-sm font-medium shadow hover:bg-panel-secondary hover:border-accent/50 transition-colors"
+          class="flex items-center gap-1.5 rounded-xs px-3 py-1.5 bg-surface border border-edge-muted ring-accent text-ink text-sm font-medium shadow hover:bg-surface-secondary hover:border-accent/50 transition-colors"
         >
           <KeyboardIcon class="size-4 text-accent" />
           <span>Shortcuts</span>

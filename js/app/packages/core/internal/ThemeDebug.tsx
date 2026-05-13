@@ -27,7 +27,7 @@ const BUTTON_SIZES = ['sm', 'md', 'lg'] as const;
 
 function ThemeDebug() {
   return (
-    <div class="size-full overflow-auto bg-panel p-6">
+    <div class="size-full overflow-auto bg-surface p-6">
       <div class="flex flex-col gap-8 max-w-6xl mx-auto">
         <h1 class="text-2xl font-bold text-ink">Theme Debug</h1>
 

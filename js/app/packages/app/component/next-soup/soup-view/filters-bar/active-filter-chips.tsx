@@ -212,7 +212,7 @@ const FilterChip = (props: {
 
             <DropdownMenu.Portal>
               <Layer depth={2}>
-                <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
+                <DropdownMenu.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-xl min-w-40 p-1">
                   <For each={props.filter.categoryOptions}>
                     {(option) => {
                       const active = () =>
@@ -245,7 +245,7 @@ const FilterChip = (props: {
                                 )}
                               >
                                 <Show when={active()}>
-                                  <CheckIcon class="size-2.5 text-page" />
+                                  <CheckIcon class="size-2.5 text-surface" />
                                 </Show>
                               </span>
                             }
@@ -259,7 +259,7 @@ const FilterChip = (props: {
                               )}
                             >
                               <Show when={active()}>
-                                <CheckIcon class="size-2.5 text-page" />
+                                <CheckIcon class="size-2.5 text-surface" />
                               </Show>
                             </span>
                           </Show>

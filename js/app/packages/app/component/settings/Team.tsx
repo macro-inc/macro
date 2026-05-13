@@ -130,7 +130,7 @@ function RoleSelect(props: {
         <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-25 p-1">
+        <Select.Content class="z-50 bg-surface border border-edge rounded shadow-lg min-w-25 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -182,7 +182,7 @@ function TierSelect(props: {
         <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-menu border border-edge rounded shadow-lg min-w-55 p-1">
+        <Select.Content class="z-50 bg-surface border border-edge rounded shadow-lg min-w-55 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -216,7 +216,7 @@ function InviteEntryRow(props: {
           onBlur={() => props.onBlur()}
           placeholder="Enter email address"
           class={cn(
-            'flex-1 min-w-0 px-3 py-2 text-sm border rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none',
+            'flex-1 min-w-0 px-3 py-2 text-sm border rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none',
             props.error
               ? 'border-failure focus:border-failure'
               : 'border-edge-muted focus:border-accent/50'
@@ -226,7 +226,7 @@ function InviteEntryRow(props: {
           <TierSelect
             value={props.entry.tier}
             onChange={props.onTierChange}
-            triggerClass="flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink outline-none focus:border-accent/50 shrink-0"
+            triggerClass="flex items-center justify-between w-24 px-3 py-2 text-sm border border-edge-muted rounded-xs bg-surface text-ink outline-none focus:border-accent/50 shrink-0"
           />
         </Show>
         <Show when={props.showRemove}>
@@ -710,7 +710,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
             onBlur={() => validateTeamName()}
             placeholder="My Team"
             class={cn(
-              'w-full px-3 py-2 text-sm border rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none',
+              'w-full px-3 py-2 text-sm border rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none',
               teamNameError()
               ? 'border-failure focus:border-failure'
               : 'border-edge-muted focus:border-accent/50'
@@ -1023,7 +1023,7 @@ function TeamManagement(props: {
                     value={teamNameValue()}
                     onInput={(e) => setEditingTeamName(e.currentTarget.value)}
                     placeholder="Enter team name"
-                    class="text-sm bg-input border-none outline-none text-ink text-right w-48"
+                    class="text-sm bg-surface border-none outline-none text-ink text-right w-48"
                   />
                   <Show when={hasTeamNameChanged()}>
                     <div class="flex items-center gap-1 shrink-0">
@@ -1169,7 +1169,7 @@ function TeamManagement(props: {
               value={deleteConfirmation()}
               onInput={(e) => setDeleteConfirmation(e.currentTarget.value)}
               placeholder={deleteConfirmationPhrase()}
-              class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-input text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
+              class="w-full px-3 py-2 text-sm border border-edge-muted rounded-xs bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent/50"
             />
             <div class="flex justify-end gap-1 pt-2">
               <Button

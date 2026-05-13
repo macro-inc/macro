@@ -56,7 +56,7 @@ export const RenameView = (props: {
           value={editValue()}
           onInput={(e) => setEditValue(e.currentTarget.value)}
           onKeyDown={handleKeyDown}
-          class="w-full p-2 text-sm border border-edge bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none focus:bg-active selection:bg-ink selection:text-panel"
+          class="w-full p-2 text-sm border border-edge bg-surface text-ink placeholder:text-ink-placeholder focus:outline-none focus:bg-active selection:bg-ink selection:text-surface"
           placeholder="Enter title..."
         />
       </div>

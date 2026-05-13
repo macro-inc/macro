@@ -361,7 +361,7 @@ export function ComposeTool(props: ComposeToolProps) {
         <ComposeLayout
           bodyDebugName={`chat-compose:${props.chatId}:${props.messageId}:${props.toolCallId}`}
           class={cn(
-            'flex flex-col w-full text-sm border border-edge-muted rounded-lg p-4 bg-input',
+            'flex flex-col w-full text-sm border border-edge-muted rounded-lg p-4 bg-surface',
             uiDisabled() &&
               '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
           )}

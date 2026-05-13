@@ -38,7 +38,7 @@ const variantStyles: Record<SearchbarVariant, string> = {
   filled:
     'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-edge-muted focus-within:bg-ink/7 focus-within:text-ink',
   secondary:
-    'bg-transparent text-ink-muted border-edge-muted hover:bg-input hover:text-ink focus-within:bg-input focus-within:text-ink',
+    'bg-transparent text-ink-muted border-edge-muted hover:bg-surface hover:text-ink focus-within:bg-surface focus-within:text-ink',
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {

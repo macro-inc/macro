@@ -50,7 +50,7 @@ function DocumentMentionPill(props: { notification: UnifiedNotification }) {
 
   return (
     <div
-      class="group relative flex items-center gap-1.5 px-2 py-1 rounded border border-edge-muted bg-panel hover:bg-hover text-xs min-w-0 max-w-48 shrink-0"
+      class="group relative flex items-center gap-1.5 px-2 py-1 rounded border border-edge-muted bg-surface hover:bg-hover text-xs min-w-0 max-w-48 shrink-0"
       onClick={handleClick}
       role="button"
       tabIndex={0}
@@ -58,7 +58,7 @@ function DocumentMentionPill(props: { notification: UnifiedNotification }) {
       <EntityIcon targetType={targetType()} size="xs" />
       <span class="truncate min-w-0">{documentName()}</span>
       <Button
-        class="absolute -top-2 -right-2 size-6 rounded-full bg-panel border border-edge-muted p-0 place-items-center hidden group-hover:grid hover:bg-accent! hover:text-panel!"
+        class="absolute -top-2 -right-2 size-6 rounded-full bg-surface border border-edge-muted p-0 place-items-center hidden group-hover:grid hover:bg-accent! hover:text-surface!"
         tooltip="Mark as done"
         onClick={(e) => {
           e.stopPropagation();
@@ -181,7 +181,7 @@ function DocumentMentionPills(props: { stack: NotificationStack }) {
         </For>
         <Show when={overflow() > 0}>
           <button
-            class="text-xs text-ink-muted border border-edge-muted rounded px-2 py-1 bg-panel hover:bg-edge shrink-0"
+            class="text-xs text-ink-muted border border-edge-muted rounded px-2 py-1 bg-surface hover:bg-edge shrink-0"
             onClick={(e) => {
               e.stopPropagation();
               setExpanded(true);

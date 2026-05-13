@@ -159,9 +159,9 @@ export const BulkRenameEntitiesView = (props: {
             value={editValue()}
             onInput={(e) => setEditValue(e.currentTarget.value)}
             onKeyDown={handleKeyDown}
-            class="w-full p-2 text-sm border border-edge bg-menu text-ink
+            class="w-full p-2 text-sm border border-edge bg-surface text-ink
                    placeholder:text-ink-placeholder focus:outline-none focus:bg-active
-                   selection:bg-ink selection:text-panel"
+                   selection:bg-ink selection:text-surface"
             placeholder="Enter new text..."
           />
         </div>
@@ -169,13 +169,13 @@ export const BulkRenameEntitiesView = (props: {
         <Show when={multi() && mode() === 'replace'}>
           <div class="flex flex-col gap-2">
             <input
-              class="p-1 text-sm border border-edge bg-menu"
+              class="p-1 text-sm border border-edge bg-surface"
               placeholder="Find…"
               value={replaceFind()}
               onInput={(e) => setReplaceFind(e.currentTarget.value)}
             />
             <input
-              class="p-1 text-sm border border-edge bg-menu"
+              class="p-1 text-sm border border-edge bg-surface"
               placeholder="Replace with…"
               value={replaceWith()}
               onInput={(e) => setReplaceWith(e.currentTarget.value)}

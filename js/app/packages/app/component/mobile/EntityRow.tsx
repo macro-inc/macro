@@ -533,7 +533,7 @@ export function EntityRow(
         {/* Swipe Content */}
         <div
           data-swipe-content
-          class="size-full min-h-0 overflow-hidden flex items-center p-0 bg-panel"
+          class="size-full min-h-0 overflow-hidden flex items-center p-0 bg-surface"
         >
           {props.children}
         </div>

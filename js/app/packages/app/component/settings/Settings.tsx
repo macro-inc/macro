@@ -159,7 +159,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   function BottomTabs() {
     return (
-    <div class="bg-panel border-t border-edge-muted h-11 shrink-0 px-1">
+    <div class="bg-surface border-t border-edge-muted h-11 shrink-0 px-1">
       <Tabs
         list={settingsTabs()}
         value={activeTabId()}
@@ -263,7 +263,7 @@ function CollapsedSettingsTabs(props: CollapsedSettingsTabsProps) {
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Layer depth={2}>
-          <Dropdown.Content class="z-action-menu bg-page border border-edge-muted rounded-sm shadow-sm p-1">
+          <Dropdown.Content class="z-action-menu bg-surface border border-edge-muted rounded-sm shadow-sm p-1">
             <For each={props.tabs}>
               {(item) => (
                 <Dropdown.Item

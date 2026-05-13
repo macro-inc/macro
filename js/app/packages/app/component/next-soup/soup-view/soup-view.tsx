@@ -1038,7 +1038,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     entityRowConfig={{
                                       swipeLeftColor: 'bg-success',
                                       swipeLeftRevealedComponent: (
-                                        <CheckIcon class="size-8 text-panel" />
+                                        <CheckIcon class="size-8 text-surface" />
                                       ),
                                     }}
                                   />

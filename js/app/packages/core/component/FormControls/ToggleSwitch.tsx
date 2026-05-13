@@ -148,7 +148,7 @@ export const ToggleSwitch: Component<
                   <div
                     class="absolute inset-0 flex justify-center items-center mr-[100cqh] transition-[clip-path] duration-100"
                     classList={{
-                      'font-bold bg-ink text-panel':
+                      'font-bold bg-ink text-surface':
                         !props.switchRootClass?.includes('subtle'),
                       'font-medium bg-ink/20 text-ink/80':
                         props.switchRootClass?.includes('subtle'),

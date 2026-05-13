@@ -195,7 +195,7 @@ export function DispatchAgentButton() {
         variant="base"
         size="icon-sm"
         depth={2}
-        class="bg-panel text-ink-muted"
+        class="bg-surface text-ink-muted"
       >
         <Button
           onClick={handlePrimaryClick}
