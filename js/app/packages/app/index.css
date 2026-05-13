@@ -51,9 +51,23 @@
 @property --c4c { syntax: "<number>"; inherits: true; initial-value:      0; }
 @property --c4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
 
-@theme {
-  /* Disable default tailwind color palette */
-   --color-*: initial;
+:root {
+  /* mobile safe areas */
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
+  --viewport-padding: 16px;
+  --keyboard-height: 0px;
+
+  /* chat vars */
+  --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) / 2);
+  --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
+  --regular-message-padding-t: .5rem;
+  --message-padding-x: .5rem;
+  --thread-padding-y: .5rem;
+  --user-icon-width: 36px;
+  --thread-shift: 32px;
 
   /* accent - active, hover states, high chroma */
   --a0: oklch(var(--a0l) var(--a0c) var(--a0h));
@@ -76,8 +90,30 @@
   --c3: oklch(var(--c3l) var(--c3c) var(--c3h));
   --c4: oklch(var(--c4l) var(--c4c) var(--c4h));
 
-  /* defualt 0.15, used for transition jamming, currently disabled */
+  /* Cursor variables — override these to use custom cursors */
+  --cursor-nesw-resize: nesw-resize;
+  --cursor-nwse-resize: nwse-resize;
+  --cursor-not-allowed: not-allowed;
+  --cursor-col-resize:  col-resize;
+  --cursor-row-resize:  row-resize;
+  --cursor-ew-resize:   ew-resize;
+  --cursor-ns-resize:   ns-resize;
+  --cursor-grabbing:    grabbing;
+  --cursor-default:     default;
+  --cursor-pointer:     default;
+  --cursor-auto:        auto;
+  --cursor-grab:        grab;
+  --cursor-move:        move;
+  --cursor-text:        text;
+
+  /* scuffed: defualt 0.15, used for transition jamming, currently disabled */
   --transition: 0s;
+}
+
+
+@theme {
+  /* Disable default tailwind color palette */
+   --color-*: initial;
 
   /* Semantic Color names, use these when writing tailwind */
   --color-accent:          var(--a0);
@@ -206,41 +242,6 @@
 }
 
 @source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
-
-:root {
-  /* mobile safe areas */
-  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));
-  --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
-  --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
-  --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
-  --viewport-padding: 16px;
-  --keyboard-height: 0px;
-
-  /* chat vars */
-  --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) / 2);
-  --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
-  --regular-message-padding-t: .5rem;
-  --message-padding-x: .5rem;
-  --thread-padding-y: .5rem;
-  --user-icon-width: 36px;
-  --thread-shift: 32px;
-
-  /* Cursor variables — override these to use custom cursors */
-  --cursor-nesw-resize: nesw-resize;
-  --cursor-nwse-resize: nwse-resize;
-  --cursor-not-allowed: not-allowed;
-  --cursor-col-resize:  col-resize;
-  --cursor-row-resize:  row-resize;
-  --cursor-ew-resize:   ew-resize;
-  --cursor-ns-resize:   ns-resize;
-  --cursor-grabbing:    grabbing;
-  --cursor-default:     default;
-  --cursor-pointer:     default;
-  --cursor-auto:        auto;
-  --cursor-grab:        grab;
-  --cursor-move:        move;
-  --cursor-text:        text;
-}
 
 /* Big hammer fix for cursor pointer. */
 @utility cursor-pointer {
