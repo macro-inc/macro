@@ -710,11 +710,29 @@ function createCallState() {
       throw e;
     }
 
-    // Sync participants that were already in the room when we connected
+    // Sync participants that were already in the room when we connected.
     setStore('remoteParticipants', new Map(targetRoom.remoteParticipants));
     bumpTrackVersion();
 
-    // Enable microphone by default, video off by default
+    // Default to microphone on, video off as soon as the room is connected.
+    setStore('isAudioMuted', false);
+    setStore('isVideoMuted', true);
+
+    // Treat the LiveKit connection itself as the join success boundary. Local
+    // media/device setup can be interrupted by OS-level flows (e.g. macOS
+    // screenshot) or slow permission/device APIs; if we await it here, the
+    // join mutation timeout can fire after the user is already in the room and
+    // run failed-join cleanup, which calls DELETE /call/:channel and kicks the
+    // user out. Run the non-critical setup in the background instead.
+    void finishLocalMediaSetup(targetRoom).catch((e) => {
+      console.error('failed to finish local call media setup', e);
+    });
+  }
+
+  async function finishLocalMediaSetup(targetRoom: Room) {
+    if (room() !== targetRoom) return;
+
+    // Enable microphone by default.
     try {
       await targetRoom.localParticipant.setMicrophoneEnabled(
         true,
@@ -723,15 +741,25 @@ function createCallState() {
     } catch (e) {
       console.error('failed to enable microphone', e);
     }
-    setStore('isAudioMuted', false);
-    setStore('isVideoMuted', true);
+    if (room() !== targetRoom) return;
+    if (store.isAudioMuted) {
+      // The user muted while the initial enable was in flight; honor their
+      // latest intent instead of letting background setup re-open the mic.
+      try {
+        await targetRoom.localParticipant.setMicrophoneEnabled(false);
+      } catch (e) {
+        console.error('failed to keep microphone muted', e);
+      }
+    } else {
+      // Attach Krisp when supported; otherwise keep native browser NS enabled.
+      // ensureKrispOnMicTrack is a no-op when the user's NS pref is off.
+      await ensureKrispOnMicTrack(targetRoom);
+    }
+    if (room() !== targetRoom) return;
 
-    // Attach Krisp when supported; otherwise keep native browser NS enabled.
-    // ensureKrispOnMicTrack is a no-op when the user's NS pref is off.
-    await ensureKrispOnMicTrack(targetRoom);
-
-    // Enumerate available devices and track active ones
+    // Enumerate available devices and track active ones.
     await enumerateDevices();
+    if (room() !== targetRoom) return;
     trackActiveDevices(targetRoom);
   }
 
