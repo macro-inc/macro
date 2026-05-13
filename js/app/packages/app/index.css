@@ -1,7 +1,7 @@
-@import "tailwindcss"; /* explicitly add all tsx files for all packages instead of relying on Vite */
+@import "tailwindcss";
 @source '../**/*.tsx';
-@source '../../packages/core/component/LexicalMarkdown/theme.ts';
 @plugin '../../tailwind-plugins/zIndex.ts';
+@source '../../packages/core/component/LexicalMarkdown/theme.ts';
 
 @property --a0l { syntax: "<number>"; inherits: true; initial-value:   0.88; }
 @property --a0c { syntax: "<number>"; inherits: true; initial-value:   0.20; }
@@ -52,7 +52,8 @@
 @property --c4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
 
 @theme {
-   --color-*: initial; /* Disable default tailwind color palette */
+  /* Disable default tailwind color palette */
+   --color-*: initial;
 
   /* accent - active, hover states, high chroma */
   --a0: oklch(var(--a0l) var(--a0c) var(--a0h));
@@ -75,7 +76,8 @@
   --c3: oklch(var(--c3l) var(--c3c) var(--c3h));
   --c4: oklch(var(--c4l) var(--c4c) var(--c4h));
 
-  --transition: 0s; /* defualt 0.15, used for transition jamming, currently disabled */
+  /* defualt 0.15, used for transition jamming, currently disabled */
+  --transition: 0s;
 
   /* Semantic Color names, use these when writing tailwind */
   --color-accent:          var(--a0);
@@ -575,11 +577,4 @@ input[type="number"] {
     overflow-x: auto;
     overflow-y: hidden;
   }
-}
-
-[cmdk-list] {
-  height: var(--cmdk-list-height);
-  transition: height 100ms ease;
-  max-height: 500px;
-  overflow: auto;
 }
