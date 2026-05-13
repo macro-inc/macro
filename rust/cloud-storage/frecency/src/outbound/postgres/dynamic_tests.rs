@@ -146,10 +146,23 @@ async fn test_dynamic_filter_by_project_ids(pool: PgPool) {
     let child_project_id = Uuid::new_v4();
     let unrelated_project_id = Uuid::new_v4();
     let doc_id_1 = Uuid::new_v4();
+    let macro_user_id = Uuid::new_v4();
 
-    sqlx::query(r#"INSERT INTO "User" ("id", "email") VALUES ($1, $2)"#)
+    sqlx::query(
+        r#"INSERT INTO "macro_user" ("id", "username", "email", "stripe_customer_id") VALUES ($1, $2, $3, $4)"#,
+    )
+    .bind(macro_user_id)
+    .bind("test@example.com")
+    .bind("test@example.com")
+    .bind("stripe_id")
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(r#"INSERT INTO "User" ("id", "email", "macro_user_id") VALUES ($1, $2, $3)"#)
         .bind(test_user_id.as_ref())
         .bind("test@example.com")
+        .bind(macro_user_id)
         .execute(&pool)
         .await
         .unwrap();
@@ -230,10 +243,23 @@ async fn test_dynamic_filter_by_project_ids_include_root(pool: PgPool) {
     let parent_project_id = Uuid::new_v4();
     let child_project_id = Uuid::new_v4();
     let unrelated_project_id = Uuid::new_v4();
+    let macro_user_id = Uuid::new_v4();
 
-    sqlx::query(r#"INSERT INTO "User" ("id", "email") VALUES ($1, $2)"#)
+    sqlx::query(
+        r#"INSERT INTO "macro_user" ("id", "username", "email", "stripe_customer_id") VALUES ($1, $2, $3, $4)"#,
+    )
+    .bind(macro_user_id)
+    .bind("test@example.com")
+    .bind("test@example.com")
+    .bind("stripe_id")
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(r#"INSERT INTO "User" ("id", "email", "macro_user_id") VALUES ($1, $2, $3)"#)
         .bind(test_user_id.as_ref())
         .bind("test@example.com")
+        .bind(macro_user_id)
         .execute(&pool)
         .await
         .unwrap();
