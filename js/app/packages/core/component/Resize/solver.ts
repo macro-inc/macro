@@ -280,7 +280,6 @@ export function createResizeSolver(params: {
           case 'fr':
             // fr needs total fr units across all panels - not supported yet, use equal
             break;
-          case 'auto':
           default:
             // keep equal share
             break;
