@@ -418,9 +418,6 @@
   }
 }
 
-@layer components {
-}
-
 /* Channel message hover + non-selection highlight */
 /* Suppressed on touch devices */
 html:not([data-touch-device="true"]) [data-message]:hover,
@@ -579,20 +576,7 @@ input[type="number"]::-webkit-outer-spin-button {
   }
 }
 
-.media-error {
-  background-size: 8px 8px;
-  background-image: linear-gradient(
-    -45deg, transparent 10%,
-    var(--color-edge-muted) 10%,
-    var(--color-edge-muted) 20%,
-    transparent 10%,
-    transparent 60%,
-    var(--color-edge-muted) 60%,
-    var(--color-edge-muted) 70%,
-    transparent 70%,
-    transparent
-  );
-}
+
 
 [cmdk-list] {
   height: var(--cmdk-list-height);
