@@ -1059,6 +1059,7 @@ export function BaseInput(props: {
       recipientOptions: ctx.recipientOptions(),
       toRecipients: form().recipients().to,
       ccRecipients: form().recipients().cc,
+      bccRecipients: form().recipients().bcc,
       setCc: (next) => form().setRecipients('cc', next),
     });
   };

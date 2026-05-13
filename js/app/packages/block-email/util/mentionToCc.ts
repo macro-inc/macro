@@ -8,17 +8,30 @@ export function addUserMentionToCc(params: {
   recipientOptions: EmailRecipient[];
   toRecipients: EmailRecipient[];
   ccRecipients: EmailRecipient[];
+  bccRecipients: EmailRecipient[];
   setCc: (next: EmailRecipient[]) => void;
 }) {
-  const { mention, recipientOptions, toRecipients, ccRecipients, setCc } =
-    params;
+  const {
+    mention,
+    recipientOptions,
+    toRecipients,
+    ccRecipients,
+    bccRecipients,
+    setCc,
+  } = params;
   const mentionEmail = mention.email;
   if (!mentionEmail) return;
 
   const matches = (recipient: EmailRecipient) =>
     recipient.data.email === mentionEmail;
 
-  if (toRecipients.some(matches) || ccRecipients.some(matches)) return;
+  if (
+    toRecipients.some(matches) ||
+    ccRecipients.some(matches) ||
+    bccRecipients.some(matches)
+  ) {
+    return;
+  }
 
   const userOption =
     recipientOptions.find(matches) ??

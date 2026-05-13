@@ -177,6 +177,7 @@ export function ComposeBody(props: {
                 recipientOptions: ctx.recipientOptions(),
                 toRecipients: ctx.recipients().to,
                 ccRecipients: ctx.recipients().cc,
+                bccRecipients: ctx.recipients().bcc,
                 setCc: (next) => ctx.setRecipients('cc', next),
               });
             }}
