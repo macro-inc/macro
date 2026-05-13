@@ -167,20 +167,43 @@
   --container-c: 0;
 }
 
-@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
+@layer base {
+  html {
+    overscroll-behavior: none;
+    font: -apple-system-body;
+    overflow: hidden;
+  }
 
-@custom-variant touch (&:where(html[data-touch-device="true"] *));
-@custom-variant mobile-width (@media (max-width: 639px));
-@custom-variant ios (&:where(.tauri-ios *));
-@custom-variant tauri (&:where(.tauri *));
-/* `mobile:` is equivalent to `touch:mobile-width:` */
-@custom-variant mobile {
-  &:where(html[data-touch-device="true"] *) {
-    @media (max-width: 639px) {
-      @slot;
-    }
+  body {
+    @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
+    font-feature-settings: "dlig" 1, "calt" 1;
+    background-color: var(--color-surface);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: var(--color-ink);
+    height: 100dvh;
+    width: 100dvw;
+  }
+
+    /* scuffed: stops text from being selectable by default, important for mobile usage */
+  :where(*, ::before, ::after) {
+    user-select: none;
+  }
+
+  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
+    user-select: text;
+  }
+
+  *:focus-visible {
+    position: relative;
+  }
+
+  code {
+    @apply font-mono;
   }
 }
+
+@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
 
 :root {
   /* mobile safe areas */
@@ -358,12 +381,6 @@
   margin-top: var(--safe-top);
 }
 
-@media (min-width: 640px) {
-  :root {
-    --thread-shift: 40px;
-  }
-}
-
 @utility macro-message-width {
   max-width: 100%;
   @media (min-width: 640px) {
@@ -396,8 +413,82 @@
   }
 }
 
-@custom-variant drop-valid (&[data-drop-valid]);
+@media (min-width: 640px) {
+  :root {
+    --thread-shift: 40px;
+  }
+}
+
+@media (pointer: coarse) {
+  .md-table-cell-resizer {
+    background-color: #adf;
+    mix-blend-mode: color;
+  }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(calc(100% + var(--viewport-padding))); }
+  to   { transform: translateX(0                                   ); }
+}
+
+@keyframes swipeOut {
+  from { transform: translateX(var(--kb-toast-swipe-end-x))         ; }
+  to   { transform: translateX(calc(100% + var(--viewport-padding))); }
+}
+
+@keyframes long-press-message-highlight {
+  from {
+    background-color: oklch(from var(--color-accent) l c h / 0%);
+    outline-width: 1px;
+    outline-style: solid;
+    outline-color: transparent;
+    outline-offset: -1px;
+  }
+  to {
+    background-color: oklch(from var(--color-accent) l c h / 5%);
+    outline-width: 1px;
+    outline-style: solid;
+    outline-color: oklch(from var(--color-accent) l c h / 20%);
+    outline-offset: -1px;
+  }
+}
+
+@keyframes typing-dot {
+  0%   { transform: scale(1)   translateY(0   ); }
+  50%  { transform: scale(1.5) translateY(-2px); }
+  100% { transform: scale(1)   translateY(0   ); }
+}
+
+@keyframes long-press-accent-bar {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+
+@keyframes hide {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@custom-variant touch (&:where(html[data-touch-device="true"] *));
+
+@custom-variant mobile-width (@media (max-width: 639px));
+
 @custom-variant drop-invalid (&[data-drop-invalid]);
+
+@custom-variant drop-valid (&[data-drop-valid]);
+
+@custom-variant mobile { /* `mobile:` is equivalent to `touch:mobile-width:` */
+  &:where(html[data-touch-device="true"] *) {
+    @media (max-width: 639px) {
+      @slot;
+    }
+  }
+}
+
+@custom-variant ios (&:where(.tauri-ios *));
+
+@custom-variant tauri (&:where(.tauri *));
 
 /* Hide Kobalte's popper positioner until floating-UI has computed the position. */
 /* Without this, the card briefly appears at top:0 left:0 on first open. */
@@ -405,42 +496,6 @@
   pointer-events: none !important;
   will-change: transform, opacity;
   opacity: 0 !important;
-}
-
-@layer base {
-  html {
-    overscroll-behavior: none;
-    font: -apple-system-body;
-    overflow: hidden;
-  }
-
-  body {
-    @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
-    font-feature-settings: "dlig" 1, "calt" 1;
-    background-color: var(--color-surface);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    color: var(--color-ink);
-    height: 100dvh;
-    width: 100dvw;
-  }
-
-    /* scuffed: stops text from being selectable by default, important for mobile usage */
-  :where(*, ::before, ::after) {
-    user-select: none;
-  }
-
-  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
-    user-select: text;
-  }
-
-  *:focus-visible {
-    position: relative;
-  }
-
-  code {
-    @apply font-mono;
-  }
 }
 
 /* Channel message hover + non-selection highlight */
@@ -463,49 +518,6 @@ html:not([data-touch-device="true"]) [data-message][data-selected] > .message-ac
 
 [data-message].long-press-animation > .message-accent-bar, .long-press-animation [data-accent-bar] {
   animation: long-press-accent-bar 400ms ease-in both;
-}
-
-@keyframes long-press-message-highlight {
-  from {
-    background-color: oklch(from var(--color-accent) l c h / 0%);
-    outline-width: 1px;
-    outline-style: solid;
-    outline-color: transparent;
-    outline-offset: -1px;
-  }
-  to {
-    background-color: oklch(from var(--color-accent) l c h / 5%);
-    outline-width: 1px;
-    outline-style: solid;
-    outline-color: oklch(from var(--color-accent) l c h / 20%);
-    outline-offset: -1px;
-  }
-}
-
-@keyframes long-press-accent-bar {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideIn {
-  from { transform: translateX(calc(100% + var(--viewport-padding))); }
-  to   { transform: translateX(0                                   ); }
-}
-
-@keyframes swipeOut {
-  from { transform: translateX(var(--kb-toast-swipe-end-x))         ; }
-  to   { transform: translateX(calc(100% + var(--viewport-padding))); }
-}
-
-@keyframes typing-dot {
-  0%   { transform: scale(1)   translateY(0   ); }
-  50%  { transform: scale(1.5) translateY(-2px); }
-  100% { transform: scale(1)   translateY(0   ); }
-}
-
-@keyframes hide {
-  from { opacity: 1; }
-  to   { opacity: 0; }
 }
 
 /* scuffed scrollbar should be killed. use scroll from @ui */
@@ -562,13 +574,6 @@ input[type="number"] {
   pre {
     overflow-x: auto;
     overflow-y: hidden;
-  }
-}
-
-@media (pointer: coarse) {
-  .md-table-cell-resizer {
-    background-color: #adf;
-    mix-blend-mode: color;
   }
 }
 
