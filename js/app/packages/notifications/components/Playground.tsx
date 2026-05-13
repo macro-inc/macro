@@ -594,7 +594,9 @@ function PlaygroundContent() {
           <div class="border-b border-edge-muted">
             <button
               class={`w-full p-4 text-left transition-all ${
-                customMode() ? 'bg-accent text-ink' : 'bg-surface hover:bg-hover'
+                customMode()
+                  ? 'bg-accent text-ink'
+                  : 'bg-surface hover:bg-hover'
               }`}
               onClick={() => {
                 setCustomMode(true);
