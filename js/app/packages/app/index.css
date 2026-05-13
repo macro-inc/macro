@@ -267,42 +267,27 @@
 
 @utility hover-transition-text {
   transition: color var(--transition);
-
-  &:hover {
-    transition: none;
-  }
+  &:hover { transition: none; }
 }
 
 @utility hover-transition-fill {
   transition: fill var(--transition);
-
-  &:hover {
-    transition: none;
-  }
+  &:hover { transition: none; }
 }
 
 @utility hover-transition-stroke {
   transition: stroke var(--transition);
-
-  &:hover {
-    transition: none;
-  }
+  &:hover { transition: none; }
 }
 
 @utility hover-transition-bg {
   transition: background-color var(--transition);
-
-  &:hover {
-    transition: none;
-  }
+  &:hover { transition: none; }
 }
 
 @utility hover-transition-border {
   transition: border-color var(--transition);
-
-  &:hover {
-    transition: none;
-  }
+  &:hover { transition: none; }
 }
 
 @utility scrollbar-hidden {
@@ -321,10 +306,10 @@
 /* On mobile (width and touch) bump tailwind's font-sizes up 1px. Purposefully only changing the "reading" sizes, not the heading sizes. */
 @media (max-width: 639px) {
   :root:where(html[data-touch-device="true"]) {
+    --text-base: 1.0625rem;
     --text-xxs: 0.6875rem;
     --text-xs: 0.8125rem;
     --text-sm: 0.9375rem;
-    --text-base: 1.0625rem;
   }
 }
 
@@ -575,8 +560,6 @@ input[type="number"]::-webkit-outer-spin-button {
     mix-blend-mode: color;
   }
 }
-
-
 
 [cmdk-list] {
   height: var(--cmdk-list-height);
