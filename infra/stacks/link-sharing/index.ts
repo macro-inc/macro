@@ -86,6 +86,11 @@ const docxUnzipRoleArn: pulumi.Output<string> = cloudStorageServiceStack
   .getOutput('docxUnzipHandlerRoleArn')
   .apply((arn) => arn as string);
 
+const documentUploadFinalizerRoleArn: pulumi.Output<string> =
+  cloudStorageServiceStack
+    .getOutput('documentUploadFinalizerRoleArn')
+    .apply((arn) => arn as string);
+
 const shaCleanupWorkerArn: pulumi.Output<string> = shaCleanupStack
   .getOutput('shaCleanupWorkerRoleArn')
   .apply((shaCleanupWorkerArn) => shaCleanupWorkerArn as string);
@@ -130,6 +135,7 @@ export const bucketPolicy = attachPolicyToBucket({
   shaCleanupWorkerArn,
   documentProcessingServiceRoleArn,
   pdfPreprocessLambdaRoleArn,
+  documentUploadFinalizerRoleArn,
   documentStorageBucketReplicationRoleArn,
   documentTextExtractorArn,
   searchProcessingServiceRoleArn,
