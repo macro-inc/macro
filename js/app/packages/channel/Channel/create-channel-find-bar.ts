@@ -13,7 +13,12 @@ import {
   validateSearchServiceText,
 } from '@queries/soup/search';
 import { ChannelSortTimestamp } from '@service-search/generated/models';
-import { type Accessor, createEffect, createMemo } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSelector,
+} from 'solid-js';
 import type { SearchHighlightTermsLookup } from '../Message/context';
 
 const FIND_BAR_PAGE_SIZE = 50;
@@ -27,7 +32,7 @@ type CreateChannelFindBarOptions = {
 
 export type ChannelFindBar = FindBarController & {
   /** Per-message highlight terms derived from loaded search results. */
-  getSearchTermsForMessage: Accessor<SearchHighlightTermsLookup | undefined>;
+  getSearchTermsForMessage: SearchHighlightTermsLookup;
 };
 
 type ActiveMatch = { messageId: string; terms: string[] };
@@ -125,14 +130,12 @@ export function createChannelFindBar(
     }
   );
 
-  const getSearchTermsForMessage: Accessor<
-    SearchHighlightTermsLookup | undefined
-  > = () => {
-    const match = activeMatch();
-    if (!match) return undefined;
-    return (messageId: string) =>
-      messageId === match.messageId ? match.terms : undefined;
-  };
+  const isActiveMessage = createSelector<string | undefined, string>(
+    () => activeMatch()?.messageId
+  );
+
+  const getSearchTermsForMessage: SearchHighlightTermsLookup = (messageId) =>
+    isActiveMessage(messageId) ? activeMatch()?.terms : undefined;
 
   return { ...controller, getSearchTermsForMessage };
 }

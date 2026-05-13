@@ -8,8 +8,7 @@ export type SearchHighlightTermsLookup = (
   messageId: string
 ) => readonly string[] | undefined;
 
-const SearchHighlightTermsContext =
-  createContext<Accessor<SearchHighlightTermsLookup | undefined>>();
+const SearchHighlightTermsContext = createContext<SearchHighlightTermsLookup>();
 
 export const MessageProvider = MessageContext.Provider;
 export const MessageActionsProvider = MessageActionsContext.Provider;
@@ -17,7 +16,7 @@ export const SearchHighlightTermsProvider =
   SearchHighlightTermsContext.Provider;
 
 export function useSearchHighlightTermsLookup():
-  | Accessor<SearchHighlightTermsLookup | undefined>
+  | SearchHighlightTermsLookup
   | undefined {
   return useContext(SearchHighlightTermsContext);
 }

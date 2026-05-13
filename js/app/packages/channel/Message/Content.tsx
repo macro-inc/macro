@@ -21,7 +21,7 @@ export function Content(props: ContentProps) {
 
   const renderedMarkdown = createMemo(() => {
     const raw = message().content ?? '';
-    const terms = termsLookup?.()?.(message().id);
+    const terms = termsLookup?.(message().id);
     if (!terms?.length) return raw;
     return mergeAdjacentMacroEmTags(highlightTermsInText(raw, [...terms]));
   });
