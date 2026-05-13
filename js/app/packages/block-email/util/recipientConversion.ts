@@ -75,6 +75,22 @@ export const getReplyAllRecipients = (
   return { to, cc, bcc: [] };
 };
 
+// Whether Reply-all is meaningfully different from Reply for this message.
+// Hidden when the user sent the message (Reply == Reply-all per
+// getReplyRecipientsFromParent), or when no recipient remains in to/cc
+// after filtering out both the user and the sender.
+export const isReplyAllEligible = (
+  message: ApiMessage,
+  userEmail: string
+): boolean => {
+  const sender = message.from?.email;
+  if (sender === userEmail) return false;
+  const isOther = (email: string) => email !== userEmail && email !== sender;
+  const otherTo = message.to.filter((r) => isOther(r.email));
+  const otherCc = message.cc.filter((r) => isOther(r.email));
+  return otherTo.length + otherCc.length > 0;
+};
+
 export const getReplyRecipientsFromParent = (
   replyingTo: ApiMessage | undefined,
   userEmail: string

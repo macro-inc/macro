@@ -6,6 +6,7 @@ import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
+import { isReplyAllEligible } from '../util/recipientConversion';
 import type { ReplyType } from '../util/replyType';
 import { useEmailContext } from './EmailContext';
 import { getEmailFormRegistry } from './EmailFormContext';
@@ -15,17 +16,8 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
   const formRegistry = getEmailFormRegistry();
   const userEmail = useEmail();
 
-  const shouldShowReplyAll = () => {
-    const me = userEmail();
-    const sender = props.lastMessage.from?.email;
-    // If we sent the last message, Reply and Reply-all resolve to the
-    // same recipients (see getReplyRecipientsFromParent), so hide it.
-    if (sender === me) return false;
-    const isOther = (email: string) => email !== me && email !== sender;
-    const otherTo = props.lastMessage.to.filter((r) => isOther(r.email));
-    const otherCc = props.lastMessage.cc.filter((r) => isOther(r.email));
-    return otherTo.length + otherCc.length > 0;
-  };
+  const shouldShowReplyAll = () =>
+    isReplyAllEligible(props.lastMessage, userEmail() ?? '');
 
   const open = (type: ReplyType) =>
     createCallback(() => {

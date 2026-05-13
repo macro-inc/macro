@@ -1,3 +1,4 @@
+import { isReplyAllEligible } from '@block-email/util/recipientConversion';
 import type { ReplyType } from '@block-email/util/replyType';
 import { useEmail } from '@core/context/user';
 import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
@@ -21,17 +22,8 @@ export function MessageActions(props: {
 }) {
   const formRegistry = getEmailFormRegistry();
   const userEmail = useEmail();
-  const shouldShowReplyAll = () => {
-    const me = userEmail();
-    const sender = props.message.from?.email;
-    // If we sent the message, Reply and Reply-all resolve to the same
-    // recipients (see getReplyRecipientsFromParent), so hide it.
-    if (sender === me) return false;
-    const isOther = (email: string) => email !== me && email !== sender;
-    const otherTo = props.message.to.filter((r) => isOther(r.email));
-    const otherCc = props.message.cc.filter((r) => isOther(r.email));
-    return otherTo.length + otherCc.length > 0;
-  };
+  const shouldShowReplyAll = () =>
+    isReplyAllEligible(props.message, userEmail() ?? '');
 
   const canShowActions = () => {
     if (!props.showActions) return false;
