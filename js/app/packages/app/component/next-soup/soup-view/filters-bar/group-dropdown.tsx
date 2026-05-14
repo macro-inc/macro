@@ -2,7 +2,6 @@ import type {
   GroupOption,
   GroupOptionId,
 } from '@app/component/next-soup/soup-view/group-options';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import StackSimpleIcon from '@icon/regular/stack-simple.svg';
@@ -26,17 +25,16 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
       placement="bottom-start"
       gutter={4}
     >
-      <Tooltip tooltip={<LabelAndHotKey label="Group by" shortcut="G" />}>
-        <DropdownMenu.Trigger
-          as={Button}
-          variant="ghost"
-          size="sm"
-          class="whitespace-nowrap rounded-xs [&_svg]:size-4 px-1"
-        >
-          <StackSimpleIcon />
-          <ChevronDownIcon class="size-4" />
-        </DropdownMenu.Trigger>
-      </Tooltip>
+      <DropdownMenu.Trigger
+        as={Button}
+        variant="ghost"
+        size="sm"
+        class="whitespace-nowrap rounded-xs [&_svg]:size-4 px-1"
+      >
+        <StackSimpleIcon />
+        <ChevronDownIcon class="size-4" />
+      </DropdownMenu.Trigger>
+
       <DropdownMenu.Portal>
         <Layer depth={2}>
           <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-sm min-w-35 p-1">
