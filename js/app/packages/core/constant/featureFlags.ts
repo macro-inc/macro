@@ -349,3 +349,8 @@ export const ENABLE_MARKDOWN_SIDE_PANEL = resolveFeatureFlag(
   'ENABLE_MARKDOWN_SIDE_PANEL',
   false
 );
+
+export const ENABLE_MOBILE_TOAST = resolveFeatureFlag(
+  'ENABLE_MOBILE_TOAST',
+  false
+);
