@@ -7917,6 +7917,16 @@
           },
           "projectId": {
             "type": ["string", "null"]
+          },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DocumentSubType"
+              }
+            ]
           }
         }
       },
@@ -8532,6 +8542,16 @@
               },
               "fileType": {
                 "type": ["string", "null"]
+              },
+              "subType": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DocumentSubType"
+                  }
+                ]
               }
             }
           }
