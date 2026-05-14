@@ -343,12 +343,6 @@ if (LOCAL_ONLY) {
     lazy(() => import('@core/component/AI/component/debug/HttpStream'))
   );
   registerComponent(
-    'new-form-primitives',
-    lazy(
-      () => import('@core/component/FormControls/debug/NewFormPrimitivesDemo')
-    )
-  );
-  registerComponent(
     'resize',
     lazy(() => import('@core/internal/ResizeDemo'))
   );
