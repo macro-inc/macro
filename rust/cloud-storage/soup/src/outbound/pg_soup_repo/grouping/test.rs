@@ -5,13 +5,13 @@ use crate::outbound::pg_soup_repo::expanded::dynamic::{
 use item_filters::ast::EntityFilterAst;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use models_grouping::GroupingConfig;
+use models_grouping::{GroupingConfig, date_bucket_order, date_bucket_sql_key};
 use models_pagination::{Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
 
 #[test]
 fn date_bucket_select_contains_all_keys() {
-    let expr = date_bucket_select_expr();
+    let expr = date_bucket_sql_key("sort_ts");
     assert!(expr.contains("'today'"));
     assert!(expr.contains("'yesterday'"));
     assert!(expr.contains("'this_week'"));
@@ -23,11 +23,11 @@ fn date_bucket_select_contains_all_keys() {
 
 #[test]
 fn date_bucket_order_matches_display_order() {
-    assert_eq!(date_bucket_display_order("today"), 0);
-    assert_eq!(date_bucket_display_order("yesterday"), 1);
-    assert_eq!(date_bucket_display_order("this_week"), 2);
-    assert_eq!(date_bucket_display_order("older"), 6);
-    assert_eq!(date_bucket_display_order("unknown"), 6);
+    assert_eq!(date_bucket_order("today"), 0);
+    assert_eq!(date_bucket_order("yesterday"), 1);
+    assert_eq!(date_bucket_order("this_week"), 2);
+    assert_eq!(date_bucket_order("older"), 6);
+    assert_eq!(date_bucket_order("unknown"), 6);
 }
 
 #[test]

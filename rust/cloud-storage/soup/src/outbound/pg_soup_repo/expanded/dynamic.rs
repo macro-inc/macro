@@ -29,10 +29,10 @@ use uuid::Uuid;
 
 use crate::domain::models::GroupedSoupItem;
 use crate::outbound::pg_soup_repo::grouping::{
-    GroupJoinClause, date_bucket_order_expr, group_join_clause, group_select_expr,
+    GroupJoinClause, group_join_clause, group_select_expr,
 };
 use crate::outbound::pg_soup_repo::{populate_properties, type_err};
-use models_grouping::{GroupByField, GroupingConfig};
+use models_grouping::{GroupByField, GroupingConfig, date_bucket_sql_order};
 
 static PREFIX: &str = r#"
     WITH user_source_ids AS (
@@ -1413,7 +1413,7 @@ fn build_grouped_query<'a>(
 
     match &grouping.field {
         GroupByField::Date => {
-            builder.push(date_bucket_order_expr().replace("sort_ts", "\"sort_ts\""));
+            builder.push(date_bucket_sql_order("\"sort_ts\""));
         }
         _ => {
             builder.push("\"group_key\"");

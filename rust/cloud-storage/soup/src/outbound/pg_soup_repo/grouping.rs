@@ -1,86 +1,12 @@
 //! SQL grouping expressions for soup queries.
 
-use models_grouping::GroupByField;
+use models_grouping::{GroupByField, date_bucket_sql_key, date_bucket_sql_order};
 use std::borrow::Cow;
-
-/// A single date bucket definition - source of truth for both SQL and Rust.
-struct DateBucket {
-    key: &'static str,
-    condition: &'static str,
-    order: i32,
-}
-
-/// Single source of truth for date buckets.
-/// Order matters: first match wins in the CASE expression.
-const DATE_BUCKETS: &[DateBucket] = &[
-    DateBucket {
-        key: "today",
-        condition: "sort_ts::date = CURRENT_DATE",
-        order: 0,
-    },
-    DateBucket {
-        key: "yesterday",
-        condition: "sort_ts::date = CURRENT_DATE - 1",
-        order: 1,
-    },
-    DateBucket {
-        key: "this_week",
-        condition: "sort_ts >= CURRENT_DATE - 6",
-        order: 2,
-    },
-    DateBucket {
-        key: "last_week",
-        condition: "sort_ts >= CURRENT_DATE - 13",
-        order: 3,
-    },
-    DateBucket {
-        key: "this_month",
-        condition: "sort_ts >= CURRENT_DATE - 30",
-        order: 4,
-    },
-    DateBucket {
-        key: "last_month",
-        condition: "sort_ts >= CURRENT_DATE - 60",
-        order: 5,
-    },
-];
-
-const OLDER_KEY: &str = "older";
-const OLDER_ORDER: i32 = 6;
-
-/// Generate SQL CASE expression that returns the bucket key.
-pub fn date_bucket_select_expr() -> String {
-    let mut sql = String::from("CASE ");
-    for bucket in DATE_BUCKETS {
-        sql.push_str(&format!("WHEN {} THEN '{}' ", bucket.condition, bucket.key));
-    }
-    sql.push_str(&format!("ELSE '{}' END", OLDER_KEY));
-    sql
-}
-
-/// Generate SQL CASE expression that returns the bucket order.
-pub fn date_bucket_order_expr() -> String {
-    let mut sql = String::from("CASE ");
-    for bucket in DATE_BUCKETS {
-        sql.push_str(&format!("WHEN {} THEN {} ", bucket.condition, bucket.order));
-    }
-    sql.push_str(&format!("ELSE {} END", OLDER_ORDER));
-    sql
-}
-
-/// Get display order for a date bucket key (for Rust-side sorting).
-pub fn date_bucket_display_order(key: &str) -> i32 {
-    DATE_BUCKETS
-        .iter()
-        .find(|b| b.key == key)
-        .map(|b| b.order)
-        .unwrap_or(OLDER_ORDER)
-}
 
 /// Build the group select expression for a field.
 pub fn group_select_expr(field: &GroupByField) -> Cow<'static, str> {
     match field {
-        GroupByField::Date => Cow::Owned(date_bucket_select_expr()),
+        GroupByField::Date => Cow::Owned(date_bucket_sql_key("sort_ts")),
         GroupByField::EntityType => Cow::Borrowed("item_type"),
         GroupByField::Project => Cow::Borrowed("COALESCE(project_id::text, '')"),
         GroupByField::Property { .. } => {
@@ -94,7 +20,7 @@ pub fn group_select_expr(field: &GroupByField) -> Cow<'static, str> {
 /// Build the group order expression for a field.
 pub fn group_order_expr(field: &GroupByField) -> Cow<'static, str> {
     match field {
-        GroupByField::Date => Cow::Owned(date_bucket_order_expr()),
+        GroupByField::Date => Cow::Owned(date_bucket_sql_order("sort_ts")),
         GroupByField::EntityType => Cow::Borrowed("item_type"),
         GroupByField::Project => Cow::Borrowed("project_id NULLS LAST"),
         GroupByField::Property { .. } => {
