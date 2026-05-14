@@ -9,9 +9,9 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 
 use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-    PatchTeamRequest, PatchTeamUserTierRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
+    PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
     RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
-    TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
+    TeamInvite, TeamInviteDetails, TeamMember, TeamRole, TeamWithMembers,
 };
 
 /// The TeamChannelsRepository defines a set of actions related to team channels
@@ -50,7 +50,6 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
-        team_user_tier: &TeamUserTier,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
     /// Invites users to a team.
@@ -60,7 +59,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
         invited_by: &MacroUserIdStr<'_>,
-        invites: non_empty::NonEmpty<&[(Email<Lowercase<'_>>, TeamUserTier)]>,
+        invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
     /// Marks the given team invites as sent by updating their last_sent_at timestamp.
@@ -203,14 +202,6 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<TeamMember<'_>, TeamError>> + Send;
 
-    /// Patches the tier of the provided user id for the team
-    fn patch_team_tier(
-        &self,
-        team_id: &uuid::Uuid,
-        user_id: &MacroUserIdStr<'_>,
-        team_tier: TeamUserTier,
-    ) -> impl Future<Output = Result<(), TeamError>> + Send;
-
     /// Patches the role of the provided user id for the team
     fn patch_team_user_role(
         &self,
@@ -235,7 +226,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     fn invite_users_to_team(
         &self,
         entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
-        invites: non_empty::NonEmpty<&[(Email<Lowercase<'_>>, TeamUserTier)]>,
+        invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
     /// Remove user from a team.
@@ -326,11 +317,4 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     ) -> impl Future<
         Output = Result<HashSet<roles_and_permissions::domain::model::PermissionId>, TeamError>,
     > + Send;
-
-    /// Patches the team users tier and updates the stripe subscription accordingly
-    fn patch_team_user_tier(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
-        request: &PatchTeamUserTierRequest,
-    ) -> impl Future<Output = Result<(), TeamError>> + Send;
 }

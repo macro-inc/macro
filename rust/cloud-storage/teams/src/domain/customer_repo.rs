@@ -2,7 +2,7 @@
 
 use macro_user_id::user_id::MacroUserIdStr;
 
-use crate::domain::model::{CreateSubscriptionArgs, CustomerError, TeamUserTier};
+use crate::domain::model::{CreateSubscriptionArgs, CustomerError};
 
 /// The CustomerRepository defines a set of actions to perform on customer data
 pub trait CustomerRepository: Clone + Send + Sync + 'static {
@@ -25,28 +25,6 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         &self,
         args: CreateSubscriptionArgs,
     ) -> impl Future<Output = Result<stripe::SubscriptionId, CustomerError>> + Send;
-
-    /// Increases the quantity of a subscription
-    fn increase_subscription_quantity(
-        &self,
-        subscription_id: &stripe::SubscriptionId,
-        tier: TeamUserTier,
-    ) -> impl Future<Output = Result<(), CustomerError>> + Send;
-
-    /// Decrement the quantity of a subscription
-    fn decrease_subscription_quantity(
-        &self,
-        subscription_id: &stripe::SubscriptionId,
-        team_user_tier: TeamUserTier,
-    ) -> impl Future<Output = Result<(), CustomerError>> + Send;
-
-    /// Updates the stripe subscription when a team members tier is changed
-    fn update_subscription_tier(
-        &self,
-        subscription_id: &stripe::SubscriptionId,
-        old_team_user_tier: TeamUserTier,
-        new_team_user_tier: TeamUserTier,
-    ) -> impl Future<Output = Result<(), CustomerError>> + Send;
 
     /// Cancels a subscription immediately.
     fn cancel_subscription(
