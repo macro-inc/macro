@@ -1937,68 +1937,6 @@
         }
       }
     },
-    "/team/tier": {
-      "patch": {
-        "tags": ["teams::inbound::axum_router::patch_team_user_tier"],
-        "summary": "Updates a team.",
-        "operationId": "patch_team_user_tier",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatchTeamUserTierRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/team/user": {
       "get": {
         "tags": ["teams::inbound::axum_router::get_user_teams"],
@@ -3386,10 +3324,6 @@
           "email": {
             "type": "string",
             "description": "The email of the user to invite"
-          },
-          "tier": {
-            "$ref": "#/components/schemas/TeamUserTier",
-            "description": "The tier for this user (defaults to Haiku if not provided)"
           }
         }
       },
@@ -3484,21 +3418,6 @@
           "role": {
             "$ref": "#/components/schemas/TeamRole",
             "description": "The new role of the team user"
-          },
-          "team_user_id": {
-            "type": "string",
-            "description": "The team user you are updating"
-          }
-        }
-      },
-      "PatchTeamUserTierRequest": {
-        "type": "object",
-        "description": "Request to update a team user's tier",
-        "required": ["team_user_id", "new_tier"],
-        "properties": {
-          "new_tier": {
-            "$ref": "#/components/schemas/TeamUserTier",
-            "description": "The new tier of the team user"
           },
           "team_user_id": {
             "type": "string",
@@ -3755,7 +3674,7 @@
       "TeamMember": {
         "type": "object",
         "description": "The team member struct",
-        "required": ["team_id", "user_id", "role", "tier"],
+        "required": ["team_id", "user_id", "role"],
         "properties": {
           "role": {
             "$ref": "#/components/schemas/TeamRole",
@@ -3765,10 +3684,6 @@
             "type": "string",
             "format": "uuid",
             "description": "The id of the team"
-          },
-          "tier": {
-            "type": "string",
-            "description": "The tier of the team member"
           },
           "user_id": {
             "type": "string",
@@ -3780,11 +3695,6 @@
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["member", "admin", "owner"]
-      },
-      "TeamUserTier": {
-        "type": "string",
-        "description": "Ordered from lowest to highest tier top -> bottom",
-        "enum": ["Haiku", "Sonnet", "Opus"]
       },
       "TeamWithMembers": {
         "type": "object",

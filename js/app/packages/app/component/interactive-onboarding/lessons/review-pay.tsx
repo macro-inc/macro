@@ -12,7 +12,6 @@ import InfoIcon from '@icon/regular/info.svg';
 import LockIcon from '@icon/regular/lock.svg';
 import { invalidateUserTeams } from '@queries/team';
 import { authServiceClient } from '@service-auth/client';
-import { TeamUserTier } from '@service-auth/generated/schemas/teamUserTier';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { useOnboarding } from '../onboarding-context';
@@ -23,15 +22,6 @@ import {
   savePendingTeam,
   useOnboardingCheckoutMutation,
 } from '../use-onboarding-checkout';
-
-function toTeamUserTier(tier: PaidPlanTier): TeamUserTier {
-  const map: Record<PaidPlanTier, TeamUserTier> = {
-    haiku: TeamUserTier.Haiku,
-    sonnet: TeamUserTier.Sonnet,
-    opus: TeamUserTier.Opus,
-  };
-  return map[tier];
-}
 
 import { analytics } from '@app/lib/analytics/analytics';
 import { Tooltip } from '@ui';
@@ -355,7 +345,7 @@ async function createPendingTeamOnReturn(): Promise<boolean> {
 
     const invites = pendingTeam.members
       .filter((m) => m.email.trim())
-      .map((m) => ({ email: m.email, tier: toTeamUserTier(m.tier) }));
+      .map((m) => ({ email: m.email }));
 
     if (invites.length > 0) {
       await throwOnErr(() => authServiceClient.inviteToTeam({ invites }));
