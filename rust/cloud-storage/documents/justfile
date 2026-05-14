@@ -7,3 +7,82 @@ prepare_db:
 
 check:
   cargo check --all-features
+
+# Dry-run markdown lifecycle backfill against dev DB/sync-service.
+# Extra script flags can be passed directly after the recipe name, for example:
+# just backfill_markdown_content_location_dev --limit 100 --batch-size 25
+backfill_markdown_content_location_dev *FLAGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    DATABASE_URL="$(../scripts/rds_database_url.sh macro-db-dev macrodb-password-dev macrodb)"
+    SYNC_SERVICE_AUTH_KEY="$(aws secretsmanager get-secret-value --secret-id sync-service-key-dev --query SecretString --output text)"
+    INTERNAL_API_SECRET_KEY="$(aws secretsmanager get-secret-value --secret-id document-storage-service-auth-key-dev --query SecretString --output text)"
+    eval "$(aws configure export-credentials --format env)"
+    SYNC_SERVICE_URL="https://sync-service-dev3.macroverse.workers.dev"
+    LEXICAL_SERVICE_URL="https://lexical-service-dev.macroverse.workers.dev"
+    DOCUMENT_STORAGE_BUCKET="doc-storage-dev"
+    RUST_LOG="${RUST_LOG:-info}" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" SYNC_SERVICE_URL="$SYNC_SERVICE_URL" LEXICAL_SERVICE_URL="$LEXICAL_SERVICE_URL" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
+        cargo run -p documents --features backfill_binary --bin backfill_markdown_content_location -- {{ FLAGS }}
+
+# Apply markdown lifecycle backfill against dev DB/sync-service.
+# Extra script flags can be passed directly after the recipe name, for example:
+# just backfill_markdown_content_location_dev_apply --limit 100 --batch-size 25
+backfill_markdown_content_location_dev_apply *FLAGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo -e "\033[33mWARNING: this will update dev Document.contentState/contentLocation for markdown documents found in sync-service.\033[0m"
+    echo -n "Continue? [y/N] "
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]$ ]]; then
+        echo "Backfill cancelled."
+        exit 0
+    fi
+    DATABASE_URL="$(../scripts/rds_database_url.sh macro-db-dev macrodb-password-dev macrodb)"
+    SYNC_SERVICE_AUTH_KEY="$(aws secretsmanager get-secret-value --secret-id sync-service-key-dev --query SecretString --output text)"
+    INTERNAL_API_SECRET_KEY="$(aws secretsmanager get-secret-value --secret-id document-storage-service-auth-key-dev --query SecretString --output text)"
+    eval "$(aws configure export-credentials --format env)"
+    SYNC_SERVICE_URL="https://sync-service-dev3.macroverse.workers.dev"
+    LEXICAL_SERVICE_URL="https://lexical-service-dev.macroverse.workers.dev"
+    DOCUMENT_STORAGE_BUCKET="doc-storage-dev"
+    RUST_LOG="${RUST_LOG:-info}" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" SYNC_SERVICE_URL="$SYNC_SERVICE_URL" LEXICAL_SERVICE_URL="$LEXICAL_SERVICE_URL" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
+        cargo run -p documents --features backfill_binary --bin backfill_markdown_content_location -- --apply {{ FLAGS }}
+
+# Dry-run markdown lifecycle backfill against prod DB/sync-service.
+# Extra script flags can be passed directly after the recipe name, for example:
+# just backfill_markdown_content_location_prod --limit 100 --batch-size 25
+backfill_markdown_content_location_prod *FLAGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    DATABASE_URL="$(../scripts/rds_database_url.sh macro-db-prod macrodb-password-prod macrodb)"
+    SYNC_SERVICE_AUTH_KEY="$(aws secretsmanager get-secret-value --secret-id sync-service-key-prod --query SecretString --output text)"
+    INTERNAL_API_SECRET_KEY="$(aws secretsmanager get-secret-value --secret-id document-storage-service-auth-key-prod --query SecretString --output text)"
+    eval "$(aws configure export-credentials --format env)"
+    SYNC_SERVICE_URL="https://sync-service-prod2.macroverse.workers.dev"
+    LEXICAL_SERVICE_URL="https://lexical-service.macroverse.workers.dev"
+    DOCUMENT_STORAGE_BUCKET="macro-document-storage-prod"
+    RUST_LOG="${RUST_LOG:-info}" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" SYNC_SERVICE_URL="$SYNC_SERVICE_URL" LEXICAL_SERVICE_URL="$LEXICAL_SERVICE_URL" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
+        cargo run -p documents --features backfill_binary --bin backfill_markdown_content_location -- {{ FLAGS }}
+
+# Apply markdown lifecycle backfill against prod DB/sync-service.
+# Extra script flags can be passed directly after the recipe name, for example:
+# just backfill_markdown_content_location_prod_apply --limit 100 --batch-size 25
+backfill_markdown_content_location_prod_apply *FLAGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo -e "\033[31mWARNING: this will update PRODUCTION Document.contentState/contentLocation for markdown documents found in sync-service.\033[0m"
+    echo -e "\033[31mThis may also initialize missing PRODUCTION sync-service documents if --initialize-missing is passed.\033[0m"
+    echo -n "Type 'prod backfill' to continue: "
+    read -r response
+    if [[ "$response" != "prod backfill" ]]; then
+        echo "Production backfill cancelled."
+        exit 0
+    fi
+    DATABASE_URL="$(../scripts/rds_database_url.sh macro-db-prod macrodb-password-prod macrodb)"
+    SYNC_SERVICE_AUTH_KEY="$(aws secretsmanager get-secret-value --secret-id sync-service-key-prod --query SecretString --output text)"
+    INTERNAL_API_SECRET_KEY="$(aws secretsmanager get-secret-value --secret-id document-storage-service-auth-key-prod --query SecretString --output text)"
+    eval "$(aws configure export-credentials --format env)"
+    SYNC_SERVICE_URL="https://sync-service-prod2.macroverse.workers.dev"
+    LEXICAL_SERVICE_URL="https://lexical-service.macroverse.workers.dev"
+    DOCUMENT_STORAGE_BUCKET="macro-document-storage-prod"
+    RUST_LOG="${RUST_LOG:-info}" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" SYNC_SERVICE_URL="$SYNC_SERVICE_URL" LEXICAL_SERVICE_URL="$LEXICAL_SERVICE_URL" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
+        cargo run -p documents --features backfill_binary --bin backfill_markdown_content_location -- --apply {{ FLAGS }}

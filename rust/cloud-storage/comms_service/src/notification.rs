@@ -106,7 +106,16 @@ impl ChannelMessageEvent<'_> {
                                     Some("task") => Some(NotificationDocumentSubType::Task),
                                     _ => None,
                                 },
-                                sender_profile_picture_url: self.sender_profile_picture_url.clone(),
+                                channel: ChannelMentionMetadata {
+                                    message_content: self.message.content.clone(),
+                                    message_id: self.message.id.to_string(),
+                                    has_attachments: self.has_attachments,
+                                    thread_id: self.message.thread_id.map(|t| t.to_string()),
+                                    common: self.channel_metadata.clone(),
+                                    sender_profile_picture_url: self
+                                        .sender_profile_picture_url
+                                        .clone(),
+                                },
                             },
                             sender_id: sender(),
                             recipient_ids: doc_recipients.clone(),

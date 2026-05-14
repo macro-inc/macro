@@ -1,15 +1,17 @@
 use sqlx::{Pool, Postgres};
 mod delete_history;
 mod upsert_history;
-pub use delete_history::*;
-pub use upsert_history::*;
-
+pub use delete_history::delete_user_history;
 use document_sub_type::DocumentSubType;
 use model::item::{
     Item,
     map_item::{map_chat_item, map_document_item, map_project_item},
 };
 use system_properties::{StatusOption, SystemPropertyKey};
+pub use upsert_history::{
+    add_user_history_for_project_tree, upsert_item_last_accessed,
+    upsert_item_last_accessed_timestamp, upsert_user_history, upsert_user_history_timestamp,
+};
 
 /// Gets a users recently opened history.
 #[tracing::instrument(skip(db))]

@@ -57,11 +57,17 @@ fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<Ap
                 macro_middleware::user_permissions::attach_user_permissions::handler,
             )),
         )
-        .route("/stripe/checkout", post(stripe::create_checkout_session))
-        .route("/stripe/portal", post(stripe::create_portal_session))
+        .route(
+            "/stripe/checkout",
+            post(stripe::create_checkout_session::create_checkout_session),
+        )
+        .route(
+            "/stripe/portal",
+            post(stripe::create_portal_session::create_portal_session),
+        )
         .route(
             "/stripe/subscription",
-            patch(stripe::patch_subscription_tier),
+            patch(stripe::patch_subscription_tier::patch_subscription_tier),
         )
         .route(
             "/legacy_user_permissions",

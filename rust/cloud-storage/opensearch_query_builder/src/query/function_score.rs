@@ -10,13 +10,13 @@ mod score_function;
 mod score_mode;
 mod script_score;
 
-pub use boost_mode::*;
-pub use decay_function::*;
-pub use field_value_factor::*;
-pub use random_score::*;
-pub use score_function::*;
-pub use score_mode::*;
-pub use script_score::*;
+pub use boost_mode::BoostMode;
+pub use decay_function::DecayFunction;
+pub use field_value_factor::FieldValueFactor;
+pub use random_score::RandomScore;
+pub use score_function::{ScoreFunction, ScoreFunctionType};
+pub use score_mode::ScoreMode;
+pub use script_score::ScriptScore;
 use serde_json::{Map, Value};
 
 use crate::util::is_empty_slice;

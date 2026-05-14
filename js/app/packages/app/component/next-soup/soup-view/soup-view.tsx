@@ -285,22 +285,13 @@ export const SoupView = (props: SoupViewProps) => {
         <div class="size-full flex flex-col">
           <div class="flex flex-col w-full">
             <SplitHeaderLeft>
-              <div
-                class={cn('h-full flex gap-3 items-center', {
-                  'shrink-0': !narrowSearchExpanded(),
-                  'flex-1 min-w-0': narrowSearchExpanded(),
-                })}
-              >
+              <div class="h-full flex gap-3 items-center shrink-0">
                 <Show when={!isMobile()}>
                   <h1 class="font-semibold text-ink select-none text-sm shrink-0">
                     {props.viewName}
                   </h1>
                 </Show>
-                <Show
-                  when={
-                    !narrowSearchExpanded() && !isComponentListView('search')
-                  }
-                >
+                <Show when={!isComponentListView('search')}>
                   <Show when={!isMobile()}>
                     <CollapsibleHeaderItem
                       id="tabs"
@@ -317,21 +308,21 @@ export const SoupView = (props: SoupViewProps) => {
                     <MobileFilterDrawer />
                   </Show>
                 </Show>
-                <Show when={narrowSearchExpanded()}>
-                  <div class="flex-1 min-w-0">
-                    <SoupSearchbar
-                      variant="secondary"
-                      autoFocus
-                      initialValue={props.initialSearchText}
-                      onDismiss={() => setNarrowSearchExpanded(false)}
-                    />
-                  </div>
-                </Show>
               </div>
             </SplitHeaderLeft>
             <SplitHeaderRight>
               <Show when={isMobile() && !narrowSearchExpanded()}>
                 <SettingsButton />
+              </Show>
+              <Show when={narrowSearchExpanded()}>
+                <div class="flex-1 min-w-0">
+                  <SoupSearchbar
+                    variant="secondary"
+                    autoFocus
+                    initialValue={props.initialSearchText}
+                    onDismiss={() => setNarrowSearchExpanded(false)}
+                  />
+                </div>
               </Show>
               <Show
                 when={!isComponentListView('search')}

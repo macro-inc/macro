@@ -11,6 +11,7 @@ import {
   ResponsivePermissionsBadge,
   ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
+import { useSidePanel } from '@app/component/side-panel';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
@@ -47,6 +48,7 @@ import {
 import {
   ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
+  ENABLE_MARKDOWN_SIDE_PANEL,
   ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -58,6 +60,7 @@ import type { EntityType } from '@core/types';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import SidePanelIcon from '@icon/fill/square-half-fill.svg';
 import Bell from '@icon/regular/bell.svg';
 import ShowComments from '@icon/regular/chat-circle-dots.svg';
 import HideComments from '@icon/regular/chat-circle-slash.svg';
@@ -71,6 +74,7 @@ import TagIcon from '@icon/regular/tag.svg';
 import TerminalWindowIcon from '@icon/regular/terminal-window.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import { blockNameToItemType } from '@service-storage/client';
+import { Button, cn } from '@ui';
 import { createEffect, For, type JSX, on, Show } from 'solid-js';
 import { DispatchAgentButton } from './DispatchAgentMenu';
 import { HISTORY_DRAWER_ID } from './History';
@@ -160,6 +164,8 @@ export function TopBar() {
     },
     { op: 'delete', divideAbove: true },
   ];
+
+  const sidePanel = useSidePanel();
 
   const tools: BlockTool[] = [
     {
@@ -273,6 +279,36 @@ export function TopBar() {
       action: copyLink,
       condition: isMobile,
     },
+    {
+      label: () =>
+        sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel',
+      icon: SidePanelIcon,
+      action: () => sidePanel?.toggle(),
+      isActive: () => sidePanel?.isOpen() ?? false,
+      condition: () => ENABLE_MARKDOWN_SIDE_PANEL && !isMobile(),
+      buttonComponent: () => (
+        <Show when={sidePanel}>
+          {(panel) => (
+            <Button
+              depth={2}
+              variant="base"
+              size="icon-sm"
+              class={cn('bg-surface order-20', {
+                'bg-active': sidePanel?.isOpen(),
+              })}
+              tooltip={
+                sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'
+              }
+              onClick={() => {
+                panel().toggle();
+              }}
+            >
+              <SidePanelIcon />
+            </Button>
+          )}
+        </Show>
+      ),
+    },
   ];
 
   return (
@@ -286,6 +322,7 @@ export function TopBar() {
           <BlockLiveIndicators />
         </div>
       </SplitHeaderRight>
+
       <ResponsivePermissionsBadge />
 
       <ResponsiveBlockToolbar

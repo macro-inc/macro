@@ -181,30 +181,59 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          documentName: zod
-                            .string()
-                            .describe('The name of the document'),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('The file type of the document'),
-                          owner: zod
-                            .string()
-                            .describe('The owner of the document'),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
                         })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            messageContent: zod
+                              .string()
+                              .describe('The message content'),
+                            messageId: zod
+                              .string()
+                              .describe('The message you were mentioned in'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            threadId: zod
+                              .string()
+                              .nullish()
+                              .describe('the id of the thread'),
+                          })
+                        )
+                        .and(
+                          zod.object({
+                            documentName: zod
+                              .string()
+                              .describe('The name of the document'),
+                            fileType: zod
+                              .string()
+                              .nullish()
+                              .describe('The file type of the document'),
+                            owner: zod
+                              .string()
+                              .describe('The owner of the document'),
+                            subType: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .object({
+                                    type: zod.enum(['task']),
+                                  })
+                                  .describe(
+                                    'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                  ),
+                              ])
+                              .optional(),
+                          })
+                        )
                         .describe('Someone mentioned a document in a channel'),
                       tag: zod.enum(['document_mention']),
                     })
@@ -226,6 +255,18 @@ export const listTypedNotificationsResponse = zod
                             .string()
                             .describe('The owner of the document.'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                ),
+                            ])
+                            .optional(),
                           text: zod
                             .string()
                             .describe('the text of the comment'),
@@ -253,6 +294,18 @@ export const listTypedNotificationsResponse = zod
                             .string()
                             .describe('The owner of the document.'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                ),
+                            ])
+                            .optional(),
                           text: zod
                             .string()
                             .describe('the text of the comment'),
@@ -282,6 +335,18 @@ export const listTypedNotificationsResponse = zod
                             .string()
                             .describe('The owner of the document.'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                ),
+                            ])
+                            .optional(),
                           text: zod
                             .string()
                             .describe('the text of the comment'),
@@ -450,6 +515,18 @@ export const listTypedNotificationsResponse = zod
                             .string()
                             .describe('The user who assigned the task'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                ),
+                            ])
+                            .optional(),
                           taskId: zod
                             .string()
                             .describe('The unique identifier of the task'),
@@ -614,30 +691,59 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          documentName: zod
-                            .string()
-                            .describe('The name of the document'),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('The file type of the document'),
-                          owner: zod
-                            .string()
-                            .describe('The owner of the document'),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
                         })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            messageContent: zod
+                              .string()
+                              .describe('The message content'),
+                            messageId: zod
+                              .string()
+                              .describe('The message you were mentioned in'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            threadId: zod
+                              .string()
+                              .nullish()
+                              .describe('the id of the thread'),
+                          })
+                        )
+                        .and(
+                          zod.object({
+                            documentName: zod
+                              .string()
+                              .describe('The name of the document'),
+                            fileType: zod
+                              .string()
+                              .nullish()
+                              .describe('The file type of the document'),
+                            owner: zod
+                              .string()
+                              .describe('The owner of the document'),
+                            subType: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .object({
+                                    type: zod.enum(['task']),
+                                  })
+                                  .describe(
+                                    'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                  ),
+                              ])
+                              .optional(),
+                          })
+                        )
                         .describe('Someone mentioned a document in a channel'),
                       tag: zod.enum(['document_mention']),
                     })
@@ -659,6 +765,18 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .string()
                             .describe('The owner of the document.'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                ),
+                            ])
+                            .optional(),
                           text: zod
                             .string()
                             .describe('the text of the comment'),
@@ -686,6 +804,18 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .string()
                             .describe('The owner of the document.'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                ),
+                            ])
+                            .optional(),
                           text: zod
                             .string()
                             .describe('the text of the comment'),
@@ -715,6 +845,18 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .string()
                             .describe('The owner of the document.'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                ),
+                            ])
+                            .optional(),
                           text: zod
                             .string()
                             .describe('the text of the comment'),
@@ -883,6 +1025,18 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .string()
                             .describe('The user who assigned the task'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                ),
+                            ])
+                            .optional(),
                           taskId: zod
                             .string()
                             .describe('The unique identifier of the task'),
@@ -1041,30 +1195,59 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
-                          documentName: zod
-                            .string()
-                            .describe('The name of the document'),
-                          fileType: zod
-                            .string()
-                            .nullish()
-                            .describe('The file type of the document'),
-                          owner: zod
-                            .string()
-                            .describe('The owner of the document'),
-                          senderProfilePictureUrl: zod.string().nullish(),
-                          subType: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
-                                .describe(
-                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                                ),
-                            ])
-                            .optional(),
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'organization',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
                         })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            messageContent: zod
+                              .string()
+                              .describe('The message content'),
+                            messageId: zod
+                              .string()
+                              .describe('The message you were mentioned in'),
+                            senderProfilePictureUrl: zod.string().nullish(),
+                            threadId: zod
+                              .string()
+                              .nullish()
+                              .describe('the id of the thread'),
+                          })
+                        )
+                        .and(
+                          zod.object({
+                            documentName: zod
+                              .string()
+                              .describe('The name of the document'),
+                            fileType: zod
+                              .string()
+                              .nullish()
+                              .describe('The file type of the document'),
+                            owner: zod
+                              .string()
+                              .describe('The owner of the document'),
+                            subType: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .object({
+                                    type: zod.enum(['task']),
+                                  })
+                                  .describe(
+                                    'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                  ),
+                              ])
+                              .optional(),
+                          })
+                        )
                         .describe('Someone mentioned a document in a channel'),
                       tag: zod.enum(['document_mention']),
                     })
@@ -1086,6 +1269,18 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .string()
                             .describe('The owner of the document.'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                ),
+                            ])
+                            .optional(),
                           text: zod
                             .string()
                             .describe('the text of the comment'),
@@ -1113,6 +1308,18 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .string()
                             .describe('The owner of the document.'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                ),
+                            ])
+                            .optional(),
                           text: zod
                             .string()
                             .describe('the text of the comment'),
@@ -1142,6 +1349,18 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .string()
                             .describe('The owner of the document.'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                ),
+                            ])
+                            .optional(),
                           text: zod
                             .string()
                             .describe('the text of the comment'),
@@ -1310,6 +1529,18 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .string()
                             .describe('The user who assigned the task'),
                           senderProfilePictureUrl: zod.string().nullish(),
+                          subType: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  type: zod.enum(['task']),
+                                })
+                                .describe(
+                                  'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                                ),
+                            ])
+                            .optional(),
                           taskId: zod
                             .string()
                             .describe('The unique identifier of the task'),
@@ -1477,28 +1708,55 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
-                  documentName: zod
-                    .string()
-                    .describe('The name of the document'),
-                  fileType: zod
-                    .string()
-                    .nullish()
-                    .describe('The file type of the document'),
-                  owner: zod.string().describe('The owner of the document'),
-                  senderProfilePictureUrl: zod.string().nullish(),
-                  subType: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .object({
-                          type: zod.enum(['task']),
-                        })
-                        .describe(
-                          'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
-                        ),
-                    ])
-                    .optional(),
+                  channelName: zod.string().optional(),
+                  channelType: zod.enum([
+                    'public',
+                    'organization',
+                    'private',
+                    'directMessage',
+                    'team',
+                  ]),
                 })
+                .describe('Common metadata for notifications on channels')
+                .and(
+                  zod.object({
+                    messageContent: zod
+                      .string()
+                      .describe('The message content'),
+                    messageId: zod
+                      .string()
+                      .describe('The message you were mentioned in'),
+                    senderProfilePictureUrl: zod.string().nullish(),
+                    threadId: zod
+                      .string()
+                      .nullish()
+                      .describe('the id of the thread'),
+                  })
+                )
+                .and(
+                  zod.object({
+                    documentName: zod
+                      .string()
+                      .describe('The name of the document'),
+                    fileType: zod
+                      .string()
+                      .nullish()
+                      .describe('The file type of the document'),
+                    owner: zod.string().describe('The owner of the document'),
+                    subType: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            type: zod.enum(['task']),
+                          })
+                          .describe(
+                            'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                          ),
+                      ])
+                      .optional(),
+                  })
+                )
                 .describe('Someone mentioned a document in a channel'),
               tag: zod.enum(['document_mention']),
             })
@@ -1518,6 +1776,18 @@ export const getTypedNotificationByIdResponse = zod
                   mentionId: zod.string().describe('The mention ID.'),
                   owner: zod.string().describe('The owner of the document.'),
                   senderProfilePictureUrl: zod.string().nullish(),
+                  subType: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          type: zod.enum(['task']),
+                        })
+                        .describe(
+                          'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                        ),
+                    ])
+                    .optional(),
                   text: zod.string().describe('the text of the comment'),
                   threadId: zod.number().describe('the thread id'),
                 })
@@ -1541,6 +1811,18 @@ export const getTypedNotificationByIdResponse = zod
                     .describe('The file type of the document.'),
                   owner: zod.string().describe('The owner of the document.'),
                   senderProfilePictureUrl: zod.string().nullish(),
+                  subType: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          type: zod.enum(['task']),
+                        })
+                        .describe(
+                          'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                        ),
+                    ])
+                    .optional(),
                   text: zod.string().describe('the text of the comment'),
                   threadId: zod.number().describe('the thread id'),
                 })
@@ -1566,6 +1848,18 @@ export const getTypedNotificationByIdResponse = zod
                     .describe('The file type of the document.'),
                   owner: zod.string().describe('The owner of the document.'),
                   senderProfilePictureUrl: zod.string().nullish(),
+                  subType: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          type: zod.enum(['task']),
+                        })
+                        .describe(
+                          'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                        ),
+                    ])
+                    .optional(),
                   text: zod.string().describe('the text of the comment'),
                   threadId: zod.number().describe('the thread id'),
                 })
@@ -1718,6 +2012,18 @@ export const getTypedNotificationByIdResponse = zod
                     .string()
                     .describe('The user who assigned the task'),
                   senderProfilePictureUrl: zod.string().nullish(),
+                  subType: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          type: zod.enum(['task']),
+                        })
+                        .describe(
+                          'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
+                        ),
+                    ])
+                    .optional(),
                   taskId: zod
                     .string()
                     .describe('The unique identifier of the task'),

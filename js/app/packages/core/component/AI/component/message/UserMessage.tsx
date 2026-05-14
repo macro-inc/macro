@@ -44,8 +44,8 @@ export function UserMessage(props: {
     let content;
     const messageContent = props.message.content as string;
     if (messageContent.startsWith('<quote>')) {
-      let start = messageContent.indexOf('<quote>');
-      let end = messageContent.indexOf('</quote>');
+      const start = messageContent.indexOf('<quote>');
+      const end = messageContent.indexOf('</quote>');
       quote = messageContent.substring(start + 7, end);
       content = messageContent.substring(end + 9);
       return [quote, content];
@@ -82,7 +82,7 @@ export function UserMessage(props: {
         </div>
       </Show>
       <Show when={props.message.attachments.length > 0}>
-        <div class="flex flex-col flex-wrap justify-end items-end gap-1 w-full px-1 mb-2">
+        <div class="flex flex-col items-end gap-1 ml-auto max-w-[calc(100%-8rem)] mb-2">
           <For each={imageAttachments()}>
             {(attachment) => (
               <ImagePreview
@@ -94,18 +94,21 @@ export function UserMessage(props: {
           </For>
           <For each={itemPreviewAttachments()}>
             {(attachment) => (
-              <ItemPreview
-                id={attachment.entity_id}
-                type={
-                  (attachment.entity_type === 'email_thread'
-                    ? 'email'
-                    : attachment.entity_type) as
-                    | 'channel'
-                    | 'document'
-                    | 'email'
-                    | 'project'
-                }
-              />
+              <div class="max-w-full overflow-hidden p-[0.5px]">
+                <ItemPreview
+                  id={attachment.entity_id}
+                  type={
+                    (attachment.entity_type === 'email_thread'
+                      ? 'email'
+                      : attachment.entity_type) as
+                      | 'channel'
+                      | 'document'
+                      | 'email'
+                      | 'project'
+                  }
+                  class="max-w-full"
+                />
+              </div>
             )}
           </For>
         </div>

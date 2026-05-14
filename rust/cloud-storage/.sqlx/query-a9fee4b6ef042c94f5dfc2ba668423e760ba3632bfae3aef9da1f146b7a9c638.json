@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            d.id as \"document_id\",\n            d.owner,\n            d.name as \"document_name\",\n            d.\"branchedFromId\" as \"branched_from_id\",\n            d.\"branchedFromVersionId\" as \"branched_from_version_id\",\n            d.\"documentFamilyId\" as \"document_family_id\",\n            d.\"fileType\" as \"file_type\",\n            d.\"projectId\" as \"project_id\",\n            d.\"deletedAt\"::timestamptz as \"deleted_at\"\n        FROM\n            \"Document\" d\n        WHERE\n            d.id = ANY($1)\n        ",
+  "query": "\n        SELECT\n            d.id as \"document_id\",\n            d.owner,\n            d.name as \"document_name\",\n            d.\"branchedFromId\" as \"branched_from_id\",\n            d.\"branchedFromVersionId\" as \"branched_from_version_id\",\n            d.\"documentFamilyId\" as \"document_family_id\",\n            d.\"fileType\" as \"file_type\",\n            dt.sub_type as \"sub_type?: DocumentSubType\",\n            d.\"projectId\" as \"project_id\",\n            d.\"deletedAt\"::timestamptz as \"deleted_at\"\n        FROM\n            \"Document\" d\n        LEFT JOIN document_sub_type dt ON dt.document_id = d.id\n        WHERE\n            d.id = $1\n    ",
   "describe": {
     "columns": [
       {
@@ -40,18 +40,32 @@
       },
       {
         "ordinal": 7,
+        "name": "sub_type?: DocumentSubType",
+        "type_info": {
+          "Custom": {
+            "name": "document_sub_type_value",
+            "kind": {
+              "Enum": [
+                "task"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
         "name": "project_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "TextArray"
+        "Text"
       ]
     },
     "nullable": [
@@ -62,9 +76,10 @@
       true,
       true,
       true,
+      false,
       true,
       null
     ]
   },
-  "hash": "e005d05a4d52c32e5e7a2b4b6cfda3b6809a01149579c45d3bcbf921e155dd25"
+  "hash": "a9fee4b6ef042c94f5dfc2ba668423e760ba3632bfae3aef9da1f146b7a9c638"
 }

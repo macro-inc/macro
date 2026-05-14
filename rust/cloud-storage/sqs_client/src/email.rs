@@ -2,8 +2,9 @@ use crate::SQS;
 use email::domain::ports::EmailMessageEnqueuer;
 use models_email::email::service::backfill::BackfillPubsubMessage;
 pub use models_email::email::service::pubsub::LinkManagerMessage;
-use models_email::service::pubsub::{SFSUploaderMessage, ScheduledPubsubMessage};
-use serde::{Deserialize, Serialize};
+#[cfg(feature = "sfs_uploader")]
+use models_email::service::pubsub::SFSUploaderMessage;
+use models_email::service::pubsub::ScheduledPubsubMessage;
 use uuid::Uuid;
 
 impl SQS {
@@ -258,7 +259,7 @@ pub async fn enqueue_sfs_delete_message(
 
 /// The message we send to the sfs_delete
 #[cfg(feature = "sfs_delete")]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct SFSDeleteMessage {
     /// The ID of the row in email_attachments_sfs
     pub db_id: Uuid,

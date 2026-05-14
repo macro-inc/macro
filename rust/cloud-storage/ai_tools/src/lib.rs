@@ -24,8 +24,19 @@ use subagent::Subagent;
 
 pub use build_context::build_tool_service_context_from_env;
 pub use search::search_toolset;
-pub use tool_context::*;
-
+#[cfg(any(test, feature = "test-support"))]
+pub use tool_context::no_op_schedule_context;
+pub use tool_context::{
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
+    NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext,
+    ToolCallRecordQueryService, ToolCallService, ToolCallToolContext, ToolChannelMessagesService,
+    ToolChannelToolContext, ToolChatService, ToolChatToolContext, ToolCommsService,
+    ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
+    ToolEntityAccessManagementService, ToolEntityAccessService, ToolFrecencyService,
+    ToolNotificationQueue, ToolNotificationService, ToolNotificationToolContext,
+    ToolPropertiesService, ToolPropertiesToolContext, ToolServiceContext, ToolSoupService,
+    ToolUserEmailService, build_channel_tool_context,
+};
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
 pub struct ToolSetWithPrompt {

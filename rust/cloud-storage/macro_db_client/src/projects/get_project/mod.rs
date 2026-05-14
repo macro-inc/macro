@@ -7,5 +7,5 @@ pub mod get_basic_project;
 pub mod get_project_chats;
 pub mod get_project_documents;
 
-pub use get_project_by_id::*;
-pub use get_project_content::*;
+pub use get_project_by_id::get_project_by_id;
+pub use get_project_content::get_project_content_v2;

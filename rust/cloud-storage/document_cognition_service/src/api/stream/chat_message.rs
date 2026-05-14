@@ -22,7 +22,7 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
 use chat::domain::ports::MessageService;
-use chat::inbound::ChatModelAccess;
+use chat::inbound::http::extractors::ChatModelAccess;
 use futures::StreamExt;
 use macro_auth::headers::AccessTokenExtractor;
 use macro_db_client::dcs::create_chat;

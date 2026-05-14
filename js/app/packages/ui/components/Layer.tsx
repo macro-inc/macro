@@ -42,7 +42,7 @@ export function Layer(props: LayerProps) {
         '--color-ink-muted':       'var(--c1)',
         '--color-ink-extra-muted': 'var(--c2)',
         '--color-ink-disabled':    'var(--c3)',
-        '--color-ink-placeholder': 'var(--c4)',
+        '--color-ink-placeholder': 'oklch(var(--c4) / 0.5))',
       }}
     >
       {props.children}

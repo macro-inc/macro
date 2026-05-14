@@ -2840,7 +2840,7 @@
     },
     "/user/stripe/checkout": {
       "post": {
-        "tags": ["user::stripe"],
+        "tags": ["user::stripe::create_checkout_session"],
         "summary": "Creates a Stripe checkout session for the user to subscribe.",
         "operationId": "create_checkout_session",
         "requestBody": {
@@ -2909,7 +2909,7 @@
     },
     "/user/stripe/portal": {
       "post": {
-        "tags": ["user::stripe"],
+        "tags": ["user::stripe::create_portal_session"],
         "summary": "Creates a Stripe billing portal session.",
         "operationId": "create_portal_session",
         "requestBody": {
@@ -2958,7 +2958,7 @@
     },
     "/user/stripe/subscription": {
       "patch": {
-        "tags": ["user::stripe"],
+        "tags": ["user::stripe::patch_subscription_tier"],
         "summary": "Updates the user's subscription tier, swapping both their RBAC role and Stripe subscription line item.",
         "operationId": "patch_subscription_tier",
         "requestBody": {

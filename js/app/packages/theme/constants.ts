@@ -77,7 +77,7 @@ export const DEFAULT_THEMES = [
     id: 'Macro Dark',
     name: 'Macro Dark',
     version: 2,
-    depth: 0.15,
+    depth: 0.35,
     tokens: {
       a0: { l: 0.75, c: 0.20, h:  59 },
       a1: { l: 0.75, c: 0.20, h:  99 },

@@ -3,5 +3,5 @@
 mod chat;
 mod message;
 
-pub use chat::*;
-pub use message::*;
+pub use chat::ChatServiceImpl;
+pub use message::MessageServiceImpl;

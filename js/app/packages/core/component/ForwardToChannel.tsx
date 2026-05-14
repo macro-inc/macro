@@ -280,11 +280,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   const blockId = useMaybeBlockId() ?? props.blockId;
   const asAttachment = () => {
     const itemType =
-      blockName === 'email'
-        ? 'thread'
-        : blockName != null
-          ? blockNameToItemType(blockName)
-          : undefined;
+      blockName != null ? blockNameToItemType(blockName) : undefined;
     return {
       entity_type: itemType ?? 'unknown',
       entity_id: blockId ?? '',

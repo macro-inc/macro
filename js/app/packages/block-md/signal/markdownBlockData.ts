@@ -2,6 +2,7 @@ import { blockDataSignalAs, createBlockStore } from '@core/block';
 import type {
   PluginManager,
   SelectionData,
+  WordcountStats,
 } from '@core/component/LexicalMarkdown/plugins';
 import { createCallback } from '@solid-primitives/rootless';
 import type { LexicalEditor } from 'lexical';
@@ -26,6 +27,7 @@ export type MdData = {
   titleEditor?: LexicalEditor;
   plugins?: PluginManager;
   selection?: Store<SelectionData>;
+  wordcountStats?: Store<WordcountStats>;
   notebook?: HTMLElement;
   scrollContainer?: HTMLElement;
   commentMargin?: HTMLElement;

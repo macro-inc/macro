@@ -1,6 +1,6 @@
 use super::EmailServiceClientExternal;
 use anyhow::Result;
-use email::inbound::ApiPaginatedThreadCursor;
+use email::inbound::axum::api_types::ApiPaginatedThreadCursor;
 use models_email::email::service::thread::PreviewView;
 use reqwest::Method;
 use reqwest::Url;

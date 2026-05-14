@@ -12,17 +12,17 @@
 #[cfg(test)]
 mod tests;
 
-mod copy_document;
-mod create_document;
+pub mod copy_document;
+pub mod create_document;
 #[cfg(feature = "document_create")]
-mod create_markdown;
-mod create_task;
-mod delete_document;
-mod edit_document;
-mod get_branch_name;
-mod get_document;
-mod get_location;
-mod get_short_id;
+pub mod create_markdown;
+pub mod create_task;
+pub mod delete_document;
+pub mod edit_document;
+pub mod get_branch_name;
+pub mod get_document;
+pub mod get_location;
+pub mod get_short_id;
 
 use std::sync::Arc;
 
@@ -39,23 +39,20 @@ use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use sqlx::PgPool;
 
+#[cfg(feature = "document_create")]
+use self::create_markdown::create_markdown_handler;
+use self::{
+    copy_document::copy_document_handler, create_document::create_document_handler,
+    create_task::create_task_handler, delete_document::delete_document_handler,
+    edit_document::edit_document_handler, get_branch_name::get_branch_name_handler,
+    get_document::get_document_handler, get_location::get_location_v3_handler,
+    get_short_id::get_short_id_handler,
+};
+
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
 #[cfg(feature = "document_create")]
 use crate::domain::ports::create::DocumentCreationService;
-
-// Re-export handlers and utoipa path types for external use (swagger, internal routes)
-pub use copy_document::*;
-pub use create_document::*;
-#[cfg(feature = "document_create")]
-pub use create_markdown::*;
-pub use create_task::*;
-pub use delete_document::*;
-pub use edit_document::*;
-pub use get_branch_name::*;
-pub use get_document::*;
-pub use get_location::*;
-pub use get_short_id::*;
 
 impl IntoResponse for DocumentError {
     fn into_response(self) -> axum::response::Response {

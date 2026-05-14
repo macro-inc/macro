@@ -53,8 +53,14 @@ export function ResponsiveTaskListHeader(props: { class?: string }) {
  */
 export function TaskListHeader(props: { class?: string }) {
   const { soup } = useSoupView();
-  const activeSortId = createMemo(() => soup.sort.active()[0]?.id);
-  const setSort = (id: SystemSortOption) => soup.sort.setAll([id]);
+  const activeSort = createMemo(() => soup.sort.active()[0]);
+  const setSort = (id: SystemSortOption) => {
+    if (activeSort()?.id === id) {
+      soup.sort.flip(id);
+    } else {
+      soup.sort.setAll([id]);
+    }
+  };
 
   return (
     <div
@@ -81,7 +87,8 @@ export function TaskListHeader(props: { class?: string }) {
               gridArea={col.id}
               label={col.label}
               sortKey={sortKey}
-              active={sortKey !== undefined && activeSortId() === sortKey}
+              active={sortKey !== undefined && activeSort()?.id === sortKey}
+              reversed={activeSort()?.reversed ?? false}
               onSort={setSort}
               narrowIcon={COLUMN_ICONS[col.id]}
             />
@@ -98,7 +105,8 @@ export function TaskListHeader(props: { class?: string }) {
         gridArea="timestamp"
         label="Updated"
         sortKey="updated_at"
-        active={activeSortId() === 'updated_at'}
+        active={activeSort()?.id === 'updated_at'}
+        reversed={activeSort()?.reversed ?? false}
         onSort={setSort}
         align="end"
       />
@@ -111,6 +119,7 @@ function HeaderCell(props: {
   label: string;
   sortKey?: SystemSortOption;
   active?: boolean;
+  reversed?: boolean;
   onSort?: (id: SystemSortOption) => void;
   narrowIcon?: () => JSX.Element;
   align?: 'start' | 'end';
@@ -161,8 +170,9 @@ function HeaderCell(props: {
             </span>
             <ArrowDownIcon
               class={cn(
-                'size-3 shrink-0 @max-[840px]/u-list:hidden',
-                props.active ? 'text-ink' : 'text-ink-extra-muted'
+                'size-3 shrink-0 @max-[840px]/u-list:hidden transition-transform',
+                props.active ? 'text-ink' : 'text-ink-extra-muted',
+                props.active && props.reversed && 'rotate-180'
               )}
             />
           </button>

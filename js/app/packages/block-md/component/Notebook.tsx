@@ -21,7 +21,6 @@ import {
   blockHotkeyScopeSignal,
 } from '@core/signal/blockElement';
 import { tempRedirectLocation } from '@core/signal/location';
-import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import {
@@ -33,7 +32,6 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { FrontMatterProperties } from './FrontMatterProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
 import { TaskDiscussion } from './TaskDiscussion';
@@ -73,7 +71,6 @@ export function Notebook() {
   const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
-  const canEdit = useCanEdit();
   const documentName = useBlockDocumentName();
   const scopeId = blockHotkeyScopeSignal.get;
   const isTask = useBlockAliasedName() === 'task';
@@ -284,11 +281,7 @@ export function Notebook() {
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
         <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
-        <FrontMatterProperties
-          canEdit={canEdit()}
-          documentName={documentName()}
-          fallback={<div class="h-6 w-full" />}
-        />
+        <div class="spacer h-6" />
         <ParamsProvider>
           <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>

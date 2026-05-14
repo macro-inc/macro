@@ -8,7 +8,7 @@ pub(crate) mod scheduled;
 use crate::api::ApiContext;
 use axum::Router;
 use axum::routing::{delete, post};
-use email::inbound::draft_router;
+use email::inbound::axum::draft_router::draft_router;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()

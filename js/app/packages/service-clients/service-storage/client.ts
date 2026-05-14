@@ -184,6 +184,7 @@ export function stringToItemType(str: string): ItemType | undefined {
     case 'thread': {
       return 'email';
     }
+    case 'call':
     case 'chat':
     case 'document':
     case 'project':

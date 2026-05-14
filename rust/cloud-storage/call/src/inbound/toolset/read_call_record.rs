@@ -39,6 +39,8 @@ pub struct TranscriptSegment {
 pub struct ReadCallRecordResponse {
     /// The call id the transcript belongs to.
     pub call_id: Uuid,
+    /// The AI generated summary of the call if one was generated. Use this before you read through the transcript.
+    pub summary: Option<String>,
     /// Transcript segments in chronological order.
     pub transcript: Vec<TranscriptSegment>,
 }
@@ -110,6 +112,7 @@ where
         Ok(ReadCallRecordResponse {
             call_id: record.call_id,
             transcript,
+            summary: record.summary,
         })
     }
 }

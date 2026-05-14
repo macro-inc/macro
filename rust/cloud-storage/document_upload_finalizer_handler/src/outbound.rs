@@ -1,8 +1,8 @@
-use anyhow::Context as _;
 use documents::domain::content::DocumentContent;
 use documents::domain::models::DocumentError;
 use documents::domain::upload_finalize::{RepoUploadFinalizePort, UploadFinalizeDocumentPort};
 use documents::outbound::pg_document_repo::PgDocumentRepo;
+use documents::outbound::s3_utf8_object_reader::S3Utf8ObjectReader;
 use model::document::DocumentBasic;
 
 use crate::ports::{DocumentObjectReader, DocumentUploadMetadataPort};
@@ -10,36 +10,26 @@ use crate::ports::{DocumentObjectReader, DocumentUploadMetadataPort};
 /// S3-backed object reader for uploaded document bytes.
 #[derive(Clone)]
 pub struct S3DocumentObjectReader {
-    s3_client: aws_sdk_s3::Client,
+    utf8_reader: S3Utf8ObjectReader,
 }
 
 impl S3DocumentObjectReader {
     /// Construct an S3 object reader.
     pub fn new(s3_client: aws_sdk_s3::Client) -> Self {
-        Self { s3_client }
+        Self {
+            utf8_reader: S3Utf8ObjectReader::new(s3_client),
+        }
     }
 }
 
 impl DocumentObjectReader for S3DocumentObjectReader {
     async fn read_utf8_object(&self, bucket: &str, key: &str) -> Result<String, anyhow::Error> {
-        let response = self
-            .s3_client
-            .get_object()
-            .bucket(bucket)
-            .key(key)
-            .send()
+        self.utf8_reader
+            .read_utf8(bucket, key)
             .await
-            .with_context(|| format!("failed to read upload from s3://{bucket}/{key}"))?;
-
-        let bytes = response
-            .body
-            .collect()
-            .await
-            .context("failed to collect object body")?
-            .into_bytes();
-
-        String::from_utf8(bytes.to_vec())
-            .with_context(|| format!("uploaded object is not valid utf-8: s3://{bucket}/{key}"))
+            .map_err(|error| {
+                anyhow::anyhow!("failed to read upload from s3://{bucket}/{key}: {error:?}")
+            })
     }
 }
 

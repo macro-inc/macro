@@ -5,7 +5,9 @@ use thiserror::Error;
 
 use crate::domain::{models::EmailErr, ports::EmailService};
 
-use super::{ApiLabel, EmailLinkExtractor, EmailRouterState};
+use super::{
+    api_types::ApiLabel, axum_impls::EmailLinkExtractor, previews_router::EmailRouterState,
+};
 
 /// Response body for listing labels.
 #[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]

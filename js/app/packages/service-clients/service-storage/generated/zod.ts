@@ -564,6 +564,16 @@ export const editCommentResponse = zod
       documentName: zod.string(),
       documentOwner: zod.string(),
       fileType: zod.string().nullish(),
+      subType: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['task'])
+            .describe(
+              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+            ),
+        ])
+        .optional(),
     })
   );
 
@@ -3596,6 +3606,16 @@ export const getDocumentLocationV3Response = zod
             fileType: zod.string().nullish(),
             owner: zod.string(),
             projectId: zod.string().nullish(),
+            subType: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum(['task'])
+                  .describe(
+                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+                  ),
+              ])
+              .optional(),
           })
           .describe(
             'Returns basic information of a document used for some db queries'
@@ -3642,6 +3662,16 @@ export const getDocumentLocationV3Response = zod
             fileType: zod.string().nullish(),
             owner: zod.string(),
             projectId: zod.string().nullish(),
+            subType: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum(['task'])
+                  .describe(
+                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+                  ),
+              ])
+              .optional(),
           })
           .describe(
             'Returns basic information of a document used for some db queries'
@@ -3699,6 +3729,16 @@ export const getDocumentLocationV3Response = zod
             fileType: zod.string().nullish(),
             owner: zod.string(),
             projectId: zod.string().nullish(),
+            subType: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum(['task'])
+                  .describe(
+                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+                  ),
+              ])
+              .optional(),
           })
           .describe(
             'Returns basic information of a document used for some db queries'
@@ -5846,6 +5886,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        include_root: zod
+          .boolean()
+          .optional()
+          .describe(
+            'When true, `project_ids` also matches the projects themselves in addition to their children.'
+          ),
         notification_filters: zod
           .object({
             done: zod
@@ -5873,7 +5919,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects."
+            "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects.\nBy default matches children of these projects; set `include_root` to also match the projects themselves."
           ),
       })
       .optional()
