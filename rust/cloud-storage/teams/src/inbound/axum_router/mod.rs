@@ -18,8 +18,6 @@ pub mod get_user_teams;
 pub mod invite_to_team;
 /// Join a team via invite.
 pub mod join_team;
-/// Team access control middleware.
-pub mod middleware;
 /// Update a team.
 pub mod patch_team;
 /// Patch a team users tier.
