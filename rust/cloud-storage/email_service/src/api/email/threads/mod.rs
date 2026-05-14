@@ -11,7 +11,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let required_link_routes = Router::new()
         .nest(
             "/previews",
-            email::inbound::router(state.email_service.clone()),
+            email::inbound::axum::previews_router::router(state.email_service.clone()),
         )
         .route("/{id}/seen", post(seen::seen_handler))
         .route("/{id}/messages", get(get::get_thread_messages_handler))
@@ -21,16 +21,19 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             crate::api::middleware::link::attach_link_context,
         ));
 
-    let hex_thread_routes = email::inbound::thread_router(state.email_thread_state.clone());
+    let hex_thread_routes =
+        email::inbound::axum::get_thread_router::thread_router(state.email_thread_state.clone());
 
-    let hex_thread_labels_routes = email::inbound::thread_labels_router::<
+    let hex_thread_labels_routes = email::inbound::axum::thread_labels_router::thread_labels_router::<
         ApiContext,
         crate::api::context::EmailSvc,
         email::outbound::GmailTokenProviderImpl,
     >();
 
     let hex_thread_project_routes =
-        email::inbound::thread_project_router(state.email_thread_state.clone());
+        email::inbound::axum::thread_project_router::thread_project_router(
+            state.email_thread_state.clone(),
+        );
 
     Router::new()
         .merge(required_link_routes)

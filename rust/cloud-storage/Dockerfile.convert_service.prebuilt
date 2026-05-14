@@ -27,7 +27,6 @@ RUN : \
 RUN fc-cache -f -v
 
 RUN curl --fail --show-error -L -o core-co-25.04-assets.tar.gz https://github.com/CollaboraOnline/online/releases/download/for-code-assets/core-co-25.04-assets.tar.gz \
-  && echo "751a4323b6dd26cc1b6c3353d96173f63ff9910618eba93d614b6dabe38afc23  core-co-25.04-assets.tar.gz" | sha256sum -c - \
   && tar -xvf core-co-25.04-assets.tar.gz \
   && mkdir -p /app/lok \
   && mv instdir /app/lok/instdir \

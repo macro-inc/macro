@@ -3,7 +3,7 @@ pub(crate) mod labels;
 
 use axum::Router;
 use axum::routing::{get, patch, post};
-use email::inbound::send_router;
+use email::inbound::axum::send_router::send_router;
 
 use crate::api::ApiContext;
 

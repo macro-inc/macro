@@ -29,7 +29,7 @@ use channels::{
 };
 use comms::{
     domain::service::ChannelServiceImpl,
-    inbound::CommsRouterState,
+    inbound::router::CommsRouterState,
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use config::{Config, Environment};

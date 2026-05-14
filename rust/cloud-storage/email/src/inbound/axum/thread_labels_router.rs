@@ -14,7 +14,10 @@ use crate::domain::{
     ports::{EmailService, GmailTokenProvider},
 };
 
-use super::{EmailRouterState, GmailAccessTokenExtractor, GmailTokenState};
+use super::{
+    axum_impls::{GmailAccessTokenExtractor, GmailTokenState},
+    previews_router::EmailRouterState,
+};
 
 /// Request body for updating a thread's labels.
 #[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]

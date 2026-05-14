@@ -3,7 +3,7 @@ use crate::{
         models::{EmailErr, Link, PreviewView},
         ports::{EmailService, GmailTokenProvider},
     },
-    inbound::{ApiSortMethod, EmailRouterState},
+    inbound::axum::{api_types::ApiSortMethod, previews_router::EmailRouterState},
 };
 use axum::{
     RequestPartsExt,

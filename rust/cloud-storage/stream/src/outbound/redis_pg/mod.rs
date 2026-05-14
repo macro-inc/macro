@@ -7,5 +7,5 @@ mod repo;
 #[cfg(feature = "redis-test")]
 mod test;
 
-pub use manager::*;
-pub use repo::*;
+pub use manager::RedisPostgresStreamManager;
+pub use repo::RedisPostgresStreamRepo;

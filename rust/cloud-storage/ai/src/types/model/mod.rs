@@ -1,10 +1,8 @@
-use anyhow::Result;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, EnumString};
 use utoipa::ToSchema;
 mod metadata;
-pub use metadata::*;
-
+pub use metadata::{ModelMetadata, ModelWithMetadataAndProvider, Provider};
 #[derive(
     Serialize,
     Deserialize,
@@ -180,23 +178,4 @@ impl Model {
             _unknown => return None,
         })
     }
-}
-
-/// Serialize [`Model`] as strings from [`constants::models`].
-pub fn serialize_model_without_version<S>(model: &Model, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let (_, model_string) = model.to_provider_model_string();
-    serializer.serialize_str(model_string)
-}
-
-/// Deserialize [`Model`] from strings from [`models`]
-pub fn deserialize_model_without_version<'de, D>(deserializer: D) -> Result<Model, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let model_str = String::deserialize(deserializer)?;
-    Model::from_model_str(&model_str)
-        .ok_or_else(|| serde::de::Error::custom(format!("Unknown model: {}", model_str)))
 }

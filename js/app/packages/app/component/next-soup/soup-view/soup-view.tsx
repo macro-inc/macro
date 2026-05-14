@@ -312,21 +312,21 @@ export const SoupView = (props: SoupViewProps) => {
                     <MobileFilterDrawer />
                   </Show>
                 </Show>
-                <Show when={narrowSearchExpanded()}>
-                  <div class="flex-1 min-w-0">
-                    <SoupSearchbar
-                      variant="secondary"
-                      autoFocus
-                      initialValue={props.initialSearchText}
-                      onDismiss={() => setNarrowSearchExpanded(false)}
-                    />
-                  </div>
-                </Show>
               </div>
             </SplitHeaderLeft>
             <SplitHeaderRight>
               <Show when={isMobile() && !narrowSearchExpanded()}>
                 <SettingsButton />
+              </Show>
+              <Show when={narrowSearchExpanded()}>
+                <div class="flex-1 min-w-0">
+                  <SoupSearchbar
+                    variant="secondary"
+                    autoFocus
+                    initialValue={props.initialSearchText}
+                    onDismiss={() => setNarrowSearchExpanded(false)}
+                  />
+                </div>
               </Show>
               <Show
                 when={!isComponentListView('search')}

@@ -14,20 +14,22 @@ mod term;
 mod terms;
 mod wildcard;
 
-pub use bool::*;
-pub use function_score::*;
-pub use match_phrase::*;
-pub use match_phrase_prefix::*;
-pub use match_query::*;
-pub use range::*;
-pub use regexp::*;
-use serde_json::Value;
-pub use simple_query_string::*;
-pub use term::*;
-pub use terms::*;
-pub use wildcard::*;
-
 use crate::ToOpenSearchJson;
+pub use bool::{BoolQuery, BoolQueryBuilder};
+pub use function_score::{
+    BoostMode, DecayFunction, FieldValueFactor, FunctionScoreQuery, FunctionScoreQueryBuilder,
+    RandomScore, ScoreFunction, ScoreFunctionType, ScoreMode, ScriptScore,
+};
+pub use match_phrase::MatchPhraseQuery;
+pub use match_phrase_prefix::MatchPhrasePrefixQuery;
+pub use match_query::MatchQuery;
+pub use range::{RangeQuery, RangeQueryBuilder};
+pub use regexp::{RegexpQuery, RegexpQueryFlags};
+use serde_json::Value;
+pub use simple_query_string::SimpleQueryStringQuery;
+pub use term::TermQuery;
+pub use terms::TermsQuery;
+pub use wildcard::WildcardQuery;
 
 /// Enum representing the different types of queries that can be used in a search request.
 #[derive(Debug, Clone, Serialize)]

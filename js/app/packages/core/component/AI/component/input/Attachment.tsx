@@ -109,7 +109,7 @@ function ChatAttachment(props: {
           props.attachment.entity_type
         )}
       >
-        <div class="flex items-center px-1 space-x-1 hover:bg-hover hover-transition-bg cursor-default text-sm border border-edge-muted rounded-xs">
+        <div class="flex items-center px-1 space-x-1 hover:bg-hover hover-transition-bg cursor-default text-sm border border-edge-muted rounded-xs max-w-full min-w-0">
           <ItemPreview
             id={props.attachment.entity_id}
             type={
