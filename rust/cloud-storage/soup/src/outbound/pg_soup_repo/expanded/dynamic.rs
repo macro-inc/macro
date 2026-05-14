@@ -53,7 +53,8 @@ static DOCUMENT_TOP_CLAUSE: &str = r#"
                         WHEN 'created_at' THEN d."createdAt"
                         ELSE d."updatedAt"
                     END::timestamptz as sort_ts
-                FROM "Document" d
+                FROM AccessibleItems ai
+                INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
                 LEFT JOIN document_sub_type dt ON dt.document_id = d.id
 "#;
 
@@ -73,13 +74,6 @@ static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
 static DOCUMENT_TOP_WHERE_CLAUSE: &str = r#"
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
                 WHERE d."deletedAt" IS NULL
-                  AND EXISTS (
-                      SELECT 1
-                      FROM entity_access ea
-                      WHERE ea.entity_id::text = d.id
-                        AND ea.entity_type = 'document'
-                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
-                  )
 "#;
 
 static CHAT_TOP_CLAUSE: &str = r#"
@@ -92,16 +86,10 @@ static CHAT_TOP_CLAUSE: &str = r#"
                         WHEN 'created_at' THEN c."createdAt"
                         ELSE c."updatedAt"
                     END::timestamptz as sort_ts
-                FROM "Chat" c
+                FROM AccessibleItems ai
+                INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
                 WHERE c."deletedAt" IS NULL
-                  AND EXISTS (
-                      SELECT 1
-                      FROM entity_access ea
-                      WHERE ea.entity_id::text = c.id
-                        AND ea.entity_type = 'chat'
-                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
-                  )
 "#;
 
 static PROJECT_TOP_CLAUSE: &str = r#"
@@ -114,19 +102,13 @@ static PROJECT_TOP_CLAUSE: &str = r#"
                         WHEN 'created_at' THEN p."createdAt"
                         ELSE p."updatedAt"
                     END::timestamptz as sort_ts
-                FROM "Project" p
+                FROM AccessibleItems ai
+                INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
                 LEFT JOIN "UserHistory" uh
                     ON uh."itemId" = p.id
                     AND uh."itemType" = 'project'
                     AND uh."userId" = $1
                 WHERE p."deletedAt" IS NULL
-                  AND EXISTS (
-                      SELECT 1
-                      FROM entity_access ea
-                      WHERE ea.entity_id::text = p.id
-                        AND ea.entity_type = 'project'
-                        AND ea.source_id IN (SELECT source_id FROM user_source_ids)
-                  )
 "#;
 
 // -- Detail clauses: full columns, joined back from TopItems --
@@ -585,6 +567,41 @@ fn push_union_separator(builder: &mut QueryBuilder<'_, Postgres>, needs_separato
     *needs_separator = true;
 }
 
+fn push_accessible_items_cte(
+    builder: &mut QueryBuilder<'_, Postgres>,
+    include_documents: bool,
+    include_chats: bool,
+    include_projects: bool,
+) {
+    let mut entity_types = Vec::with_capacity(3);
+    if include_documents {
+        entity_types.push("'document'");
+    }
+    if include_chats {
+        entity_types.push("'chat'");
+    }
+    if include_projects {
+        entity_types.push("'project'");
+    }
+
+    if entity_types.is_empty() {
+        return;
+    }
+
+    builder.push(format!(
+        r#"AccessibleItems AS MATERIALIZED (
+        SELECT DISTINCT
+            ea.entity_id::text as item_id,
+            ea.entity_type as item_type
+        FROM entity_access ea
+        INNER JOIN user_source_ids usi ON usi.source_id = ea.source_id
+        WHERE ea.entity_type IN ({})
+    ),
+"#,
+        entity_types.join(", ")
+    ));
+}
+
 fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBuilder<'_, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
@@ -603,6 +620,13 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
             filter_ast.properties_filter.as_deref(),
             &[PropertyEntityType::Project],
         );
+
+    push_accessible_items_cte(
+        &mut builder,
+        include_documents,
+        include_chats,
+        include_projects,
+    );
 
     // TopItems CTE: lightweight id + sort_ts with filters, cursor, and limit
     builder.push("TopItems AS (");
