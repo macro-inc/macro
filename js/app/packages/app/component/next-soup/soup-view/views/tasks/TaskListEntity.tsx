@@ -128,13 +128,12 @@ export function TaskListEntity(props: TaskListEntityProps) {
         'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mx-1 relative group/narrow flex flex-col py-0.5',
         {
           'min-h-10': !isMobile(),
-          'bg-ink/3 rounded-sm': props.checked,
+          'bg-ink/3 rounded-sm':
+            props.checked || (props.highlighted && !isMobile()),
           'hover:bg-hover rounded-sm group-data-expanded/cm-trigger:bg-hover':
             !props.checked && !props.highlighted && !props.hovered,
           'bg-hover rounded-sm':
             props.hovered && !props.highlighted && !props.checked,
-          'bg-ink/3 rounded-sm':
-            props.highlighted && !isMobile(),
         }
       )}
       onMouseMove={props.onMouseMove}
