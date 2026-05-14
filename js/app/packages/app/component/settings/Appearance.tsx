@@ -15,18 +15,18 @@ function UserInterface() {
   return (
     <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
       <div class="bg-surface flex items-center justify-between h-15.25 px-6">
-        <div class="text-sm">Show tooltips</div>
+        <div class="text-sm">Monochrome Icons</div>
         <ToggleSwitch
-          onChange={setTooltipsEnabled}
-          checked={tooltipsEnabled()}
+          onChange={setMonochromeIcons}
+          checked={monochromeIcons()}
         />
       </div>
 
       <div class="bg-surface flex items-center justify-between h-15.25 px-6">
-        <div class="text-sm">Monochrome icons</div>
+        <div class="text-sm">Show Tooltips</div>
         <ToggleSwitch
-          onChange={setMonochromeIcons}
-          checked={monochromeIcons()}
+          onChange={setTooltipsEnabled}
+          checked={tooltipsEnabled()}
         />
       </div>
     </div>
