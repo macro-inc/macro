@@ -14,13 +14,17 @@ import {
   LIST_VIEW_PATHS,
   type ListView,
 } from '@app/constants/list-views';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 
-import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import {
+  ENABLE_CALLS,
+  ENABLE_DASHBOARD_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
@@ -31,6 +35,7 @@ import BellIcon from '@icon/regular/bell.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import LogoIcon from '@macro-icons/macro-logo.svg';
 import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
+import { AnimatedDashboardIcon } from '@macro-icons/wide/animating/dashboard';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedCommandIcon } from '@macro-icons/wide/animating/command';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
@@ -435,12 +440,25 @@ const CALLS_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.calls,
 };
 
+const DASHBOARD_LINK: SidebarItem = {
+  id: 'dashboard',
+  label: 'Dashboard',
+  href: LIST_VIEW_PATHS.dashboard,
+  icon: AnimatedDashboardIcon,
+  hotkey: 'h',
+  hotkeyToken: TOKENS.sidebar.goTo.dashboard,
+};
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
+
+  const dashboardEnabled = useFeatureFlag('enable-dashboard', {
+    enabledOverride: ENABLE_DASHBOARD_OVERRIDE,
+  });
 
   const showEnableNotifications = () =>
     notificationSettings.isSupported && notificationSettings.canPrompt();
@@ -456,14 +474,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
 
-  const visibleLinks = createMemo(() => {
-    if (!ENABLE_CALLS()) return SIDEBAR_LINKS;
-    const idx = SIDEBAR_LINKS.findIndex((l) => l.id === 'channels');
-    return [
-      ...SIDEBAR_LINKS.slice(0, idx + 1),
-      CALLS_LINK,
-      ...SIDEBAR_LINKS.slice(idx + 1),
-    ];
+  const visibleLinks = createMemo((): SidebarItem[] => {
+    let links: SidebarItem[] = [...SIDEBAR_LINKS];
+
+    if (dashboardEnabled().enabled) {
+      links = [DASHBOARD_LINK, ...links];
+    }
+
+    if (ENABLE_CALLS()) {
+      const idx = links.findIndex((l) => l.id === 'channels');
+      links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
+    }
+
+    return links;
   });
 
   const resetHotkeysState = () => {

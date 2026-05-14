@@ -349,3 +349,5 @@ export const ENABLE_MARKDOWN_SIDE_PANEL = resolveFeatureFlag(
   'ENABLE_MARKDOWN_SIDE_PANEL',
   false
 );
+
+export const ENABLE_DASHBOARD_OVERRIDE = DEV_MODE_ENV ? true : undefined;

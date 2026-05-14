@@ -71,6 +71,15 @@ const INBOX_NOISE_FILTERS = defineQueryFilters({
 });
 
 export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
+  dashboard: {
+    default: 'overview',
+    tabs: {
+      overview: () => ({
+        filters: {},
+        clientFilters: {},
+      }),
+    },
+  },
   inbox: {
     default: 'signal',
     tabs: {

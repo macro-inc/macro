@@ -331,6 +331,7 @@ export function buildContactLabel(
 }
 
 export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
+  dashboard: [],
   inbox: INBOX_FILTER_CATEGORIES,
   agents: [],
   mail: MAIL_FILTER_CATEGORIES,
