@@ -7,8 +7,8 @@ export const soupKeys = createQueryKeys('soup', {
   items: (args: SoupItemsQueryArgs) => ({
     queryKey: [args.params, args.body],
   }),
-  astItems: (args: SoupAstItemsQueryArgs & { groupBy?: GroupByField }) => ({
-    queryKey: [args.params, args.body, args.groupBy],
+  astItems: (args: SoupAstItemsQueryArgs) => ({
+    queryKey: [args.params, args.body, args.groupBy, args.groupKey],
   }),
   search: (args: SearchSoupQueryArgs) => ({
     queryKey: [args.params, args.body],

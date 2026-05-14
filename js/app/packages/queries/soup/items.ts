@@ -42,6 +42,7 @@ export type SoupAstItemsQueryArgs = {
   params: SoupAstParams;
   body: SoupAstBody;
   groupBy?: GroupByField;
+  groupKey?: string;
 };
 
 export type UseSoupQueryResult = UseInfiniteQueryResult<EntityData[], Error>;
@@ -116,10 +117,10 @@ export const useSoupAstItemsQuery = (
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
   return useInfiniteQuery(() => {
-    const { params, body, groupBy } = args();
+    const { params, body, groupBy, groupKey } = args();
 
     return {
-      queryKey: soupKeys.astItems({ params, body, groupBy }).queryKey,
+      queryKey: soupKeys.astItems({ params, body, groupBy, groupKey }).queryKey,
       queryFn: async (ctx): Promise<SoupAstItemsPage> => {
         if (groupBy) {
           const response = await throwOnErr(
@@ -128,6 +129,7 @@ export const useSoupAstItemsQuery = (
                 params: {
                   cursor: ctx.pageParam,
                   group_by: serializeGroupByField(groupBy),
+                  group_key: groupKey,
                 },
                 body: {
                   ...body,
