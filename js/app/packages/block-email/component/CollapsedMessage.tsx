@@ -54,10 +54,10 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="macro-message-width macro-message-padding w-full">
         <div
           class={cn(
-            'group/msg flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] cursor-pointer min-w-0',
+            'group/msg relative flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-ink-muted/8 cursor-pointer min-w-0',
             props.isFocused
-              ? 'bg-ink-muted/[0.06]'
-              : 'hover:bg-ink-muted/[0.06]'
+              ? 'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1'
+              : 'bg-ink-muted/[0.025] hover:bg-ink-muted/[0.06]'
           )}
           data-message-body-id={props.message.db_id}
           tabIndex={0}

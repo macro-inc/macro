@@ -217,8 +217,8 @@ function EmailContent(props: EmailViewProps) {
         );
         context.messages.setFocused(lastUnreadMessageId_!);
       } else {
-        // No unread message, scroll to last message
-        scrollToLastMessage('instant', true);
+        // No unread message, scroll to last message without selecting
+        scrollToLastMessage('instant', false);
       }
     }
 
@@ -290,10 +290,24 @@ function EmailContent(props: EmailViewProps) {
   });
 
   const navigateMessage = createCallback((dir: 'prev' | 'next') => {
-    const currentFocusedId = context.messages.focusedID();
     const messages = context.messages.list();
     const list = context.messagesListRef();
-    if (!currentFocusedId || !messages || !list) return false;
+    if (!messages?.length || !list) return false;
+
+    const currentFocusedId = context.messages.focusedID();
+
+    if (!currentFocusedId) {
+      const target =
+        dir === 'prev'
+          ? messages[messages.length - 1]
+          : messages[0];
+      if (!target?.db_id) return false;
+      performScrollToMessage(target.db_id, {
+        behavior: 'smooth',
+        focus: true,
+      });
+      return true;
+    }
 
     const currentIndex = messages.findIndex(
       (m) => m.db_id === currentFocusedId
@@ -301,13 +315,18 @@ function EmailContent(props: EmailViewProps) {
     if (currentIndex < 0) return false;
 
     const delta = dir === 'prev' ? -1 : 1;
-
     const targetIndex = currentIndex + delta;
 
-    if (targetIndex < 0 || targetIndex >= messages.length) return false;
+    if (targetIndex < 0 || targetIndex >= messages.length) {
+      if (dir === 'next' && markdownDomRef) {
+        context.messages.setFocused(undefined);
+        markdownDomRef.focus();
+        return true;
+      }
+      return false;
+    }
 
     const targetMsg = messages[targetIndex];
-
     if (!targetMsg?.db_id) return false;
 
     performScrollToMessage(targetMsg.db_id, {

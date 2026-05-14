@@ -200,7 +200,13 @@ export function MessageContainer(props: MessageContainerProps) {
       {/* Expanded message view */}
       <div class="shrink-0 flex justify-center w-full">
         <div class="macro-message-width macro-message-padding w-full">
-          <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden px-1.5 py-1.5 [&>div]:!bg-transparent">
+          <div
+            class="relative rounded-lg border border-ink-muted/8 overflow-hidden px-1.5 py-1.5 [&>div]:!bg-transparent"
+            classList={{
+              'bg-accent/5 outline-1 outline-accent/20 -outline-offset-1': props.isFocused,
+              'bg-ink-muted/[0.025]': !props.isFocused,
+            }}
+          >
             <Message
               id={props.message.db_id ?? undefined}
               focused={false}
@@ -317,18 +323,18 @@ export function MessageContainer(props: MessageContainerProps) {
                 </div>
               </Show>
             </Message>
-          </div>
-          <Show when={(showReply() || draftChild()) && !props.isLastMessage}>
-            <Show when={context.permissions().isOwner}>
-              <div class="pt-1.5">
-                <EmailInput
-                  replyingTo={() => props.message}
-                  setShowReply={setShowReply}
-                  draft={draftChild()}
-                />
-              </div>
+            <Show when={(showReply() || draftChild()) && !props.isLastMessage}>
+              <Show when={context.permissions().isOwner}>
+                <div class="border-t border-ink-muted/8 -mx-1.5 px-1.5 pt-2 pb-1 [&>*>div]:!border-0 [&>*>div]:!bg-transparent [&>*>div]:!rounded-none">
+                  <EmailInput
+                    replyingTo={() => props.message}
+                    setShowReply={setShowReply}
+                    draft={draftChild()}
+                  />
+                </div>
+              </Show>
             </Show>
-          </Show>
+          </div>
         </div>
       </div>
     </Show>

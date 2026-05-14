@@ -1127,6 +1127,36 @@ export function BaseInput(props: {
       });
 
       registerHotkey({
+        hotkey: 'arrowup',
+        scopeId: composeHotkeyScope,
+        description: 'Select last message',
+        runWithInputFocused: true,
+        condition: () => {
+          const ed = editor();
+          if (!ed) return false;
+          return ed.read(() => {
+            const text = $getRoot().getTextContent();
+            return text.trim().length === 0;
+          });
+        },
+        keyDownHandler: () => {
+          const messages = ctx.messages.list();
+          if (!messages?.length) return false;
+          const lastMsg = messages[messages.length - 1];
+          if (!lastMsg?.db_id) return false;
+          editor()?.blur();
+          ctx.messages.setFocused(lastMsg.db_id);
+          const msgEl = document.querySelector(
+            `[data-message-body-id="${lastMsg.db_id}"]`
+          ) as HTMLElement | null;
+          const focusable = msgEl?.closest('[tabindex="0"]') as HTMLElement | null;
+          focusable?.focus();
+          return true;
+        },
+        hotkeyToken: TOKENS.email.previousMessage,
+      });
+
+      registerHotkey({
         hotkey: 'escape',
         scopeId: composeHotkeyScope,
         description: 'Close reply',
