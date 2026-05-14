@@ -1,5 +1,5 @@
-import Subtitles from '@phosphor-icons/core/assets/regular/subtitles.svg';
-import UsersThree from '@phosphor-icons/core/assets/regular/users-three.svg';
+import Subtitles from '@icon/regular/subtitles.svg';
+import UsersThree from '@icon/regular/users-three.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { cn } from '@ui';
 import type { Accessor } from 'solid-js';

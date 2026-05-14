@@ -1,6 +1,6 @@
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
 import ArrowsOut from '@icon/regular/arrows-out.svg';
-import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
+import ShareNetwork from '@icon/regular/share-network.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { cn, Surface, ToggleSwitch, Tooltip } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';
