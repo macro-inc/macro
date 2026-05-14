@@ -121,12 +121,39 @@ export const useSoupAstItemsQuery = (
     return {
       queryKey: soupKeys.astItems({ params, body, groupBy }).queryKey,
       queryFn: async (ctx): Promise<SoupAstItemsPage> => {
+        if (groupBy) {
+          const response = await throwOnErr(
+            async () =>
+              await storageServiceClient.getGroupedSoupAstItems({
+                params: {
+                  cursor: ctx.pageParam,
+                  group_by: serializeGroupByField(groupBy),
+                },
+                body: {
+                  ...body,
+                  ...params,
+                },
+              })
+          );
+
+          const groups = response.groups
+            ? (response.groups as Array<Record<string, unknown>>).map(
+                parseGroupMeta
+              )
+            : undefined;
+
+          return {
+            items: response.items,
+            nextCursor: response.next_cursor ?? null,
+            groups,
+          };
+        }
+
         const response = await throwOnErr(
           async () =>
             await storageServiceClient.getSoupAstItems({
               params: {
-                cursor: groupBy ? undefined : ctx.pageParam,
-                group_by: groupBy ? serializeGroupByField(groupBy) : undefined,
+                cursor: ctx.pageParam,
               },
               body: {
                 ...body,
@@ -135,16 +162,10 @@ export const useSoupAstItemsQuery = (
             })
         );
 
-        const groups = response.groups
-          ? (response.groups as Array<Record<string, unknown>>).map(
-              parseGroupMeta
-            )
-          : undefined;
-
         return {
           items: response.items,
           nextCursor: response.next_cursor ?? null,
-          groups,
+          groups: [],
         };
       },
       initialPageParam: null as string | null,
