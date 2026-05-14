@@ -37,7 +37,7 @@ backfill_markdown_content_location_dev *FLAGS:
     LEXICAL_SERVICE_URL="https://lexical-service-dev.macroverse.workers.dev"
     DOCUMENT_STORAGE_BUCKET="doc-storage-dev"
     RUST_LOG="${RUST_LOG:-info}" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" SYNC_SERVICE_URL="$SYNC_SERVICE_URL" LEXICAL_SERVICE_URL="$LEXICAL_SERVICE_URL" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
-        cargo run -p document_storage_service --bin backfill_markdown_content_location -- {{ FLAGS }}
+        cargo run -p documents --bin backfill_markdown_content_location -- {{ FLAGS }}
 
 # Apply markdown lifecycle backfill against dev DB/sync-service.
 # Extra script flags can be passed directly after the recipe name, for example:
@@ -60,7 +60,7 @@ backfill_markdown_content_location_dev_apply *FLAGS:
     LEXICAL_SERVICE_URL="https://lexical-service-dev.macroverse.workers.dev"
     DOCUMENT_STORAGE_BUCKET="doc-storage-dev"
     RUST_LOG="${RUST_LOG:-info}" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" SYNC_SERVICE_URL="$SYNC_SERVICE_URL" LEXICAL_SERVICE_URL="$LEXICAL_SERVICE_URL" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
-        cargo run -p document_storage_service --bin backfill_markdown_content_location -- --apply {{ FLAGS }}
+        cargo run -p documents --bin backfill_markdown_content_location -- --apply {{ FLAGS }}
 
 # Build dev service Docker images to pre-warm the cache used by root `run_local`.
 build_dev_service_images:

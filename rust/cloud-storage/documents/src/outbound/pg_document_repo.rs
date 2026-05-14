@@ -8,6 +8,7 @@ mod tests;
 mod copy;
 mod create;
 mod edit;
+mod markdown_backfill;
 mod share;
 
 use document_sub_type::DocumentSubType;

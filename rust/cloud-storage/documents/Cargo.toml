@@ -59,6 +59,7 @@ service = ["dep:entity_access_management", "ports"]
 # Core
 anyhow = { workspace = true }
 chrono = { workspace = true }
+clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -77,6 +78,7 @@ entity_access_management = { path = "../entity_access_management", default-featu
   "ports",
 ], optional = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
+macro_entrypoint = { path = "../macro_entrypoint" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
