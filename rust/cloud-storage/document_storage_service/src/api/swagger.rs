@@ -69,7 +69,10 @@ use channels::inbound::axum_router::{
     ChannelMessageFilters,
 };
 use document_sub_type::DocumentSubType;
-use documents_hex::inbound::axum_router::{BranchNameResponse, ShortIdResponse};
+use documents_hex::inbound::axum_router::{
+    edit_document::EditDocumentResponse, get_branch_name::BranchNameResponse,
+    get_short_id::ShortIdResponse,
+};
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -139,23 +142,23 @@ use utoipa::OpenApi;
 
         // documents
         documents::get_user_documents::get_user_documents_handler,
-        documents_hex::inbound::axum_router::get_document_handler,
+        documents_hex::inbound::axum_router::get_document::get_document_handler,
         documents::get_document_version::handler,
-        documents_hex::inbound::axum_router::create_document_handler,
-        documents_hex::inbound::axum_router::create_markdown_handler,
-        documents_hex::inbound::axum_router::copy_document_handler,
+        documents_hex::inbound::axum_router::create_document::create_document_handler,
+        documents_hex::inbound::axum_router::create_markdown::create_markdown_handler,
+        documents_hex::inbound::axum_router::copy_document::copy_document_handler,
         documents::save_document::save_document_handler,
         documents::pre_save::presave_document_handler,
-        documents_hex::inbound::axum_router::edit_document_handler,
-        documents_hex::inbound::axum_router::delete_document_handler,
+        documents_hex::inbound::axum_router::edit_document::edit_document_handler,
+        documents_hex::inbound::axum_router::delete_document::delete_document_handler,
         documents::delete_document::permanently_delete_document_handler,
         documents::get_document_list::get_document_list_handler,
         documents::get_document_permissions::get_document_permissions_handler_v2,
         documents::get_document_views::get_document_views_handler,
         documents::location::get_location_handler,
-        documents_hex::inbound::axum_router::get_location_v3_handler,
-        documents_hex::inbound::axum_router::get_branch_name_handler,
-        documents_hex::inbound::axum_router::get_short_id_handler,
+        documents_hex::inbound::axum_router::get_location::get_location_v3_handler,
+        documents_hex::inbound::axum_router::get_branch_name::get_branch_name_handler,
+        documents_hex::inbound::axum_router::get_short_id::get_short_id_handler,
         documents::simple_save::handler,
         documents::initialize_user_documents::handler,
         documents::get_batch_preview::get_batch_preview_handler,
@@ -163,7 +166,7 @@ use utoipa::OpenApi;
         documents::permissions_token::validate_permissions_token::handler,
         documents::revert_delete_document::handler,
         documents::export_document::handler,
-        documents_hex::inbound::axum_router::create_task_handler,
+        documents_hex::inbound::axum_router::create_task::create_task_handler,
 
         // instructions
         instructions::create_instructions::create_instructions_handler,
@@ -287,7 +290,7 @@ use utoipa::OpenApi;
             documents_hex::domain::models::CopyDocumentQueryParams,
             documents_hex::domain::models::CopyDocumentResponse, // Copy document
             documents_hex::domain::models::EditDocumentServiceArgs,
-            documents_hex::inbound::axum_router::EditDocumentResponse, // Edit document
+            EditDocumentResponse, // Edit document
             UserDocumentsResponse,
             GetDocumentsResponse, // Get user documents
             GetDocumentProcessingResult,

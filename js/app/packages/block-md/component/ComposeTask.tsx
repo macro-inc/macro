@@ -597,6 +597,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     .withCode()
     .withMedia({ fileDrop: true })
     .withSelectionData()
+    .withHistory()
     .onChange(setContent)
     .onFocusLeave({
       onStart: (e) => editorFocusChange(e, -1),

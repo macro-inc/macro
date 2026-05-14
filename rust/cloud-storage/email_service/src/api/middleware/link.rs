@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::Cached;
-use email::{domain::ports::EmailService, inbound::EmailLinkExtractor};
+use email::{domain::ports::EmailService, inbound::axum::axum_impls::EmailLinkExtractor};
 
 pub(in crate::api) async fn attach_link_context<U: EmailService>(
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<U>>,

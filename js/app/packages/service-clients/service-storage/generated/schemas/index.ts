@@ -677,8 +677,6 @@ export * from './soupProjectViewedAt';
 export * from './soupProperty';
 export * from './soupPropertyValue';
 export * from './successResponse';
-export * from './syncServiceDocumentMetadata';
-export * from './syncServicePeerWithUserId';
 export * from './syncServiceVersionID';
 export * from './taskFilters';
 export * from './taskFiltersIncludeCbmAtmNc';

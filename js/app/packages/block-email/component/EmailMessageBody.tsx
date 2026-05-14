@@ -152,7 +152,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       a.setAttribute('rel', 'noopener noreferrer');
     }
     messageDiv.style.userSelect = 'text';
-    messageDiv.style.cursor = 'var(--cursor-auto)';
+    messageDiv.style.cursor = 'auto';
     shadow.appendChild(messageDiv);
     return hostContainer;
   });

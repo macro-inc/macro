@@ -1,15 +1,26 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
-import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
+import { useCanEdit } from '@core/signal/permissions';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import { createEffect, createSignal, Show, Suspense } from 'solid-js';
+import { Scroll } from '@ui';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { ModalsProvider } from './ModalsProvider';
 import { InstructionsNotebook, Notebook } from './Notebook';
+import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
 import { InstructionsTopBar, TopBar } from './TopBar';
 
 export default function BlockMarkdown() {
@@ -18,9 +29,9 @@ export default function BlockMarkdown() {
   const blockId = useBlockId();
   const instructionsMdId = useInstructionsMdIdQuery();
   const notificationSource = useGlobalNotificationSource();
-  const isInstructionsMd = () => {
-    return blockId === instructionsMdId.data;
-  };
+  const canEdit = useCanEdit();
+  const documentName = useBlockDocumentName();
+  const isInstructionsMd = createMemo(() => blockId === instructionsMdId.data);
 
   createEffect(() => {
     const el = scrollRef();
@@ -36,44 +47,53 @@ export default function BlockMarkdown() {
         tabIndex={-1}
       >
         <ModalsProvider>
-          <div class="relative">
-            <Suspense>
-              <Show
-                when={!isInstructionsMd()}
-                fallback={<InstructionsTopBar />}
+          <SidePanel.Layout>
+            <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructionsMd()}>
+              <MarkdownSidePanelSections
+                canEdit={canEdit()}
+                documentName={documentName()}
+              />
+            </Show>
+            <div class="flex flex-col size-full">
+              <div class="relative shrink-0">
+                <Suspense>
+                  <Show
+                    when={!isInstructionsMd()}
+                    fallback={<InstructionsTopBar />}
+                  >
+                    <TopBar />
+                  </Show>
+                </Suspense>
+                {/* off until - https://linear.app/macro-eng/issue/M-5203/markdown-unloads-completely-after-find */}
+                <Suspense>
+                  <Show when={!isInstructionsMd() && false}>
+                    <div class="absolute right-4 bottom-[-12] translate-y-full z-action-menu flex justify-end">
+                      <FindAndReplace />
+                    </div>
+                  </Show>
+                </Suspense>
+              </div>
+              <DocumentDebouncedNotificationReadMarker
+                notificationSource={notificationSource}
+                documentId={blockId}
+              />
+              <div
+                class="w-full grow overflow-hidden relative"
+                data-block-content
               >
-                <TopBar />
-              </Show>
-            </Suspense>
-            {/* off until - https://linear.app/macro-eng/issue/M-5203/markdown-unloads-completely-after-find */}
-            <Suspense>
-              <Show when={!isInstructionsMd() && false}>
-                <div class="absolute right-4 bottom-[-12] translate-y-full z-action-menu flex justify-end">
-                  <FindAndReplace />
-                </div>
-              </Show>
-            </Suspense>
-          </div>
-          <DocumentDebouncedNotificationReadMarker
-            notificationSource={notificationSource}
-            documentId={blockId}
-          />
-          <div class="w-full grow overflow-hidden relative" data-block-content>
-            <div
-              class="size-full relative overflow-auto portal-scope scrollbar-hidden"
-              ref={setScrollRef}
-            >
-              <Suspense>
-                <Show
-                  when={!isInstructionsMd()}
-                  fallback={<InstructionsNotebook />}
-                >
-                  <Notebook />
-                </Show>
-              </Suspense>
+                <Scroll class="relative portal-scope" ref={setScrollRef}>
+                  <Suspense>
+                    <Show
+                      when={!isInstructionsMd()}
+                      fallback={<InstructionsNotebook />}
+                    >
+                      <Notebook />
+                    </Show>
+                  </Suspense>
+                </Scroll>
+              </div>
             </div>
-            <CustomScrollbar scrollContainer={scrollRef} />
-          </div>
+          </SidePanel.Layout>
         </ModalsProvider>
       </div>
     </DocumentBlockContainer>

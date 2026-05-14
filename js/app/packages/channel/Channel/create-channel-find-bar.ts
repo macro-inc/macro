@@ -2,6 +2,7 @@ import {
   createFindBarController,
   type FindBarController,
 } from '@core/component/createFindBarController';
+import { extractSearchTerms } from '@core/util/searchHighlight';
 import {
   type ChannelMessageEntity,
   isChannelMessageEntity,
@@ -12,7 +13,13 @@ import {
   validateSearchServiceText,
 } from '@queries/soup/search';
 import { ChannelSortTimestamp } from '@service-search/generated/models';
-import { type Accessor, createEffect, createMemo } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSelector,
+} from 'solid-js';
+import type { SearchHighlightTermsLookup } from '../Message/context';
 
 const FIND_BAR_PAGE_SIZE = 50;
 const FIND_BAR_PREFETCH_THRESHOLD = 10;
@@ -23,12 +30,19 @@ type CreateChannelFindBarOptions = {
   clearSelection: () => void;
 };
 
-export type ChannelFindBar = FindBarController;
+export type ChannelFindBar = FindBarController & {
+  /** Per-message highlight terms derived from loaded search results. */
+  getSearchTermsForMessage: SearchHighlightTermsLookup;
+};
+
+type ActiveMatch = { messageId: string; terms: string[] };
 
 export function createChannelFindBar(
   options: CreateChannelFindBarOptions
 ): ChannelFindBar {
-  return createFindBarController<WithSearch<ChannelMessageEntity>>(
+  let activeMatch: Accessor<ActiveMatch | undefined> = () => undefined;
+
+  const controller = createFindBarController<WithSearch<ChannelMessageEntity>>(
     ({ isOpen, submittedQuery, activeIndex }) => {
       // Channel-only search with thread sort so results paginate monotonically
       // through the channel's thread list (replies cluster with their parent
@@ -57,6 +71,24 @@ export function createChannelFindBar(
           (e): e is WithSearch<ChannelMessageEntity> =>
             isChannelMessageEntity(e) && e.channelId === options.channelId()
         );
+      });
+
+      // Highlight only the active match so we never paint spans we don't
+      // have hit data for (results outside the loaded page have no terms).
+      activeMatch = createMemo<ActiveMatch | undefined>(() => {
+        if (!isOpen()) return undefined;
+        const idx = activeIndex();
+        if (idx === 0) return undefined;
+        const entity = results()[idx - 1];
+        if (!entity) return undefined;
+        const termSet = new Set<string>();
+        for (const hit of entity.search.contentHitData ?? []) {
+          for (const term of extractSearchTerms(hit.content)) {
+            if (term.length) termSet.add(term);
+          }
+        }
+        if (termSet.size === 0) return undefined;
+        return { messageId: entity.messageId, terms: [...termSet] };
       });
 
       const totalCount = createMemo<number | undefined>(() => {
@@ -97,4 +129,13 @@ export function createChannelFindBar(
       onBeforeSubmit: () => options.clearSelection(),
     }
   );
+
+  const isActiveMessage = createSelector<string | undefined, string>(
+    () => activeMatch()?.messageId
+  );
+
+  const getSearchTermsForMessage: SearchHighlightTermsLookup = (messageId) =>
+    isActiveMessage(messageId) ? activeMatch()?.terms : undefined;
+
+  return { ...controller, getSearchTermsForMessage };
 }

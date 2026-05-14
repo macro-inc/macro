@@ -1,7 +1,7 @@
 use super::*;
 use crate::openai_toolset::OpenAIToolSetExt;
 use crate::tool::types::{
-    AsyncToolSet, PartialToolCall, RequestContext, StreamPart, ToolCall, ToolResult,
+    AsyncToolCollection, PartialToolCall, RequestContext, StreamPart, ToolCall, ToolResult, ToolSet,
 };
 use crate::tool::types::{ChatCompletionStream, ExtendedPartStream, PartOrExt, ToolResponse};
 use crate::types::noop::NoOpClient;
@@ -39,7 +39,7 @@ where
     T: Clone + Send + Sync + 'static,
 {
     client: I,
-    toolset: Arc<AsyncToolSet<T>>,
+    toolset: Arc<AsyncToolCollection<T>>,
     request: CreateChatCompletionRequest,
     messages: Vec<ChatCompletionRequestMessage>,
     context: T,
@@ -54,7 +54,7 @@ where
     I: ExtendedClient + Send + Sync,
     T: Clone + Send + Sync,
 {
-    pub fn new(client: I, toolset: Arc<AsyncToolSet<T>>, context: T) -> Chat<I, T> {
+    pub fn new(client: I, toolset: Arc<AsyncToolCollection<T>>, context: T) -> Chat<I, T> {
         Chat {
             client,
             toolset,
@@ -410,7 +410,7 @@ where
 
 fn create_mock_chat() -> Chat<NoOpClient, String> {
     let client = NoOpClient;
-    let toolset = Arc::new(AsyncToolSet::new());
+    let toolset = Arc::new(AsyncToolCollection::new());
     Chat::new(client, toolset, "test_context".to_string())
 }
 

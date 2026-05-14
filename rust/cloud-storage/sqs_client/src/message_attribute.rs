@@ -3,8 +3,6 @@
     feature = "convert",
     feature = "document",
     feature = "document_text_extractor",
-    feature = "email",
-    feature = "gmail",
     feature = "upload_extractor"
 ))]
 pub(crate) fn build_string_message_attribute(
@@ -17,7 +15,7 @@ pub(crate) fn build_string_message_attribute(
     Ok(result)
 }
 
-#[cfg(any(feature = "gmail", feature = "organization_retention"))]
+#[cfg(feature = "organization_retention")]
 /// generified so we can pass different integer sizes
 pub(crate) fn build_number_message_attribute<T>(
     attr: T,

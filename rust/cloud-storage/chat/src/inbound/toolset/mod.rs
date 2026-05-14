@@ -6,7 +6,7 @@ mod read_chat;
 mod test;
 
 use crate::domain::ports::ChatService;
-use ai::tool::AsyncToolSet;
+use ai::tool::AsyncToolCollection;
 use entity_access::domain::ports::EntityAccessService;
 use read_chat::ReadChat;
 use std::sync::Arc;
@@ -51,10 +51,10 @@ where
 }
 
 /// Create a chat toolset.
-pub fn chat_toolset<CSvc, ESvc>() -> AsyncToolSet<ChatToolContext<CSvc, ESvc>>
+pub fn chat_toolset<CSvc, ESvc>() -> AsyncToolCollection<ChatToolContext<CSvc, ESvc>>
 where
     CSvc: ChatService,
     ESvc: EntityAccessService,
 {
-    AsyncToolSet::new().add_tool::<ReadChat, ChatToolContext<CSvc, ESvc>>()
+    AsyncToolCollection::new().add_tool::<ReadChat, ChatToolContext<CSvc, ESvc>>()
 }

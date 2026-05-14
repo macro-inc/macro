@@ -215,6 +215,11 @@ describe('buildSingleEntityFilter', () => {
       filterKey: 'project_filters',
       idKey: 'project_ids',
     },
+    {
+      entityType: 'call' as const,
+      filterKey: 'call_filters',
+      idKey: 'call_ids',
+    },
   ])('unblocks only $entityType filter with the real entityId', ({
     entityType,
     filterKey,
@@ -233,12 +238,25 @@ describe('buildSingleEntityFilter', () => {
       'chat_filters',
       'channel_filters',
       'project_filters',
+      'call_filters',
     ].filter((k) => k !== filterKey);
 
     for (const key of otherFilters) {
       const ids = Object.values((filter as any)[key])[0];
       expect(ids).toEqual([NIL_ID]);
     }
+  });
+
+  it('project filter defaults include_root to false', () => {
+    const filter = buildSingleEntityFilter('project', 'entity-1');
+    expect((filter as any).project_filters.include_root).toBe(false);
+  });
+
+  it('project filter respects includeRoot option', () => {
+    const filter = buildSingleEntityFilter('project', 'entity-1', {
+      includeRoot: true,
+    });
+    expect((filter as any).project_filters.include_root).toBe(true);
   });
 });
 

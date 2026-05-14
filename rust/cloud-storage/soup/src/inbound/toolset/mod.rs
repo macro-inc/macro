@@ -6,7 +6,7 @@ mod list_entities;
 mod test;
 
 use crate::domain::ports::SoupService;
-use ai::tool::AsyncToolSet;
+use ai::tool::AsyncToolCollection;
 use email::domain::ports::EmailService;
 use std::sync::Arc;
 
@@ -40,10 +40,10 @@ impl<T: SoupService, E: EmailService> SoupToolContext<T, E> {
 }
 
 /// Create a soup toolset
-pub fn soup_toolset<T, E>() -> AsyncToolSet<SoupToolContext<T, E>>
+pub fn soup_toolset<T, E>() -> AsyncToolCollection<SoupToolContext<T, E>>
 where
     T: SoupService,
     E: EmailService,
 {
-    AsyncToolSet::new().add_tool::<ListEntities, SoupToolContext<T, E>>()
+    AsyncToolCollection::new().add_tool::<ListEntities, SoupToolContext<T, E>>()
 }

@@ -8,6 +8,6 @@ mod link;
 mod sync;
 
 #[cfg(feature = "link")]
-pub use link::*;
+pub use link::{Auth, GithubLinkService, GithubOauth, GithubRepo};
 #[cfg(feature = "sync")]
-pub use sync::*;
+pub use sync::{GithubSyncClient, GithubSyncRepo, GithubSyncService};

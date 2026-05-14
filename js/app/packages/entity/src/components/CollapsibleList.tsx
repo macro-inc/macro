@@ -14,24 +14,26 @@ interface ToggleButtonProps {
 function ToggleButton(props: ToggleButtonProps) {
   return (
     <Show when={props.hasMore}>
-      <div class="px-3 py-1.5">
-        <button
-          type="button"
-          class="flex items-center gap-1 text-[0.6875rem] text-ink-muted/70 hover:text-ink-muted"
-          data-collapsible-toggle
-          data-collapsible-state={props.showAll ? 'expanded' : 'collapsed'}
-          onClick={props.toggle}
-        >
-          <ChevronDownIcon
-            class={cn('size-2.5', {
-              'rotate-180': props.showAll,
-            })}
-          />
-          <Show when={!props.showAll} fallback="Show less">
-            {props.getExpandTextFn(props.itemsLength - props.visibleCount)}
-          </Show>
-        </button>
-      </div>
+      <button
+        type="button"
+        class="w-full flex items-center gap-1 px-3 py-1.5 text-[0.6875rem] text-ink-muted/70 hover:text-ink-muted hover:bg-ink-muted/[0.06]"
+        data-collapsible-toggle
+        data-collapsible-state={props.showAll ? 'expanded' : 'collapsed'}
+        onClick={props.toggle}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      >
+        <ChevronDownIcon
+          class={cn('size-2.5', {
+            'rotate-180': props.showAll,
+          })}
+        />
+        <Show when={!props.showAll} fallback="Show less">
+          {props.getExpandTextFn(props.itemsLength - props.visibleCount)}
+        </Show>
+      </button>
     </Show>
   );
 }

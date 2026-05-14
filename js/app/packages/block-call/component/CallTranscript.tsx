@@ -22,7 +22,43 @@ const GROUPING_WINDOW_MS = 5 * 60 * 1000;
 type SegmentItem = {
   segment: CallRecordTranscriptSegment;
   groupedWithPrevious: boolean;
+  diarizedSpeakerLabel?: string;
 };
+
+function getDiarizedSpeakerId(
+  segment: CallRecordTranscriptSegment | undefined
+): string | undefined {
+  return segment?.diarizedSpeakerId ?? undefined;
+}
+
+function buildDiarizedSpeakerLabels(
+  transcript: CallRecordTranscriptSegment[]
+): Map<string, Map<string, string>> {
+  const labelsBySpeakerId = new Map<string, Map<string, string>>();
+  for (const segment of transcript) {
+    const diarizedSpeakerId = getDiarizedSpeakerId(segment);
+    if (!diarizedSpeakerId) continue;
+
+    let labels = labelsBySpeakerId.get(segment.speakerId);
+    if (!labels) {
+      labels = new Map<string, string>();
+      labelsBySpeakerId.set(segment.speakerId, labels);
+    }
+
+    if (labels.has(diarizedSpeakerId)) continue;
+    labels.set(diarizedSpeakerId, `Speaker #${labels.size}`);
+  }
+  return labelsBySpeakerId;
+}
+
+function getDiarizedSpeakerLabel(
+  labelsBySpeakerId: Map<string, Map<string, string>>,
+  segment: CallRecordTranscriptSegment
+): string | undefined {
+  const diarizedSpeakerId = getDiarizedSpeakerId(segment);
+  if (!diarizedSpeakerId) return undefined;
+  return labelsBySpeakerId.get(segment.speakerId)?.get(diarizedSpeakerId);
+}
 
 function shouldGroupWithPrevious(
   current: CallRecordTranscriptSegment,
@@ -30,6 +66,9 @@ function shouldGroupWithPrevious(
 ): boolean {
   if (!previous) return false;
   if (current.speakerId !== previous.speakerId) return false;
+  if (getDiarizedSpeakerId(current) !== getDiarizedSpeakerId(previous)) {
+    return false;
+  }
   const gap =
     new Date(current.startedAt).getTime() -
     new Date(previous.startedAt).getTime();
@@ -58,6 +97,7 @@ function TranscriptSegmentRow(props: {
   channelId: string;
   isActive: boolean;
   timelineStartMs: number | null;
+  diarizedSpeakerLabel?: string;
   onSeekToSeconds?: (seconds: number) => void;
 }) {
   const message = segmentToApiChannelMessage(props.segment, props.channelId);
@@ -84,13 +124,20 @@ function TranscriptSegmentRow(props: {
             class="flex items-center gap-1 min-w-0"
           >
             <Message.SenderName />
-            <span class="ml-auto text-xs text-ink-muted tabular-nums">
-              <Show
-                when={videoTimestamp !== null}
-                fallback={<Message.Timestamp />}
-              >
-                {formatVideoTimestamp(videoTimestamp ?? 0)}
+            <span class="ml-auto flex shrink-0 items-center gap-2 text-xs text-ink-muted">
+              <Show when={props.diarizedSpeakerLabel}>
+                <span class="font-medium whitespace-nowrap">
+                  {props.diarizedSpeakerLabel}
+                </span>
               </Show>
+              <span class="tabular-nums">
+                <Show
+                  when={videoTimestamp !== null}
+                  fallback={<Message.Timestamp />}
+                >
+                  {formatVideoTimestamp(videoTimestamp ?? 0)}
+                </Show>
+              </span>
             </span>
           </Message.Slot>
           <Message.Slot placement="content">
@@ -161,10 +208,23 @@ export function CallTranscript(props: {
     const sorted = [...props.transcript].sort(
       (a, b) => a.sequenceNum - b.sequenceNum
     );
-    const items: SegmentItem[] = sorted.map((segment, index) => ({
-      segment,
-      groupedWithPrevious: shouldGroupWithPrevious(segment, sorted[index - 1]),
-    }));
+    const diarizedSpeakerLabels = buildDiarizedSpeakerLabels(sorted);
+    const items: SegmentItem[] = sorted.map((segment, index) => {
+      const previous = sorted[index - 1];
+      const diarizedSpeakerId = getDiarizedSpeakerId(segment);
+      const previousDiarizedSpeakerId = getDiarizedSpeakerId(previous);
+      const shouldShowDiarizedSpeakerLabel =
+        !!diarizedSpeakerId &&
+        (segment.speakerId !== previous?.speakerId ||
+          diarizedSpeakerId !== previousDiarizedSpeakerId);
+      return {
+        segment,
+        groupedWithPrevious: shouldGroupWithPrevious(segment, previous),
+        diarizedSpeakerLabel: shouldShowDiarizedSpeakerLabel
+          ? getDiarizedSpeakerLabel(diarizedSpeakerLabels, segment)
+          : undefined,
+      };
+    });
     return { items };
   });
 
@@ -341,6 +401,7 @@ export function CallTranscript(props: {
                           item.segment.sequenceNum === props.activeSequenceNum
                         }
                         timelineStartMs={props.timelineStartMs}
+                        diarizedSpeakerLabel={item.diarizedSpeakerLabel}
                         onSeekToSeconds={props.onSeekToSeconds}
                       />
                     </div>

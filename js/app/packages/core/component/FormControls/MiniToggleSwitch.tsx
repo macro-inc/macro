@@ -22,8 +22,6 @@ export const MiniToggleSwitch: Component<
     labelPlacement?: 'left' | 'right';
     labelClass?: string;
     switchRootClass?: string;
-    animateFlicker?: boolean;
-    animateFlickerOnDeactivate?: boolean;
     size?: 'SM' | 'Base';
     compact?: boolean;
     activeTrackClass?: string;
@@ -42,8 +40,10 @@ export const MiniToggleSwitch: Component<
       init = false;
       return checkedVal;
     }
-    if (checkedVal === prevChecked) return checkedVal;
-    if (props.animateFlickerOnDeactivate === false && checkedVal === false) {
+    if (checkedVal === prevChecked) {
+      return checkedVal;
+    }
+    if (checkedVal === false) {
       return checkedVal;
     }
     return checkedVal;
@@ -101,7 +101,7 @@ export const MiniToggleSwitch: Component<
             aria-hidden
           >
             <div
-              class="absolute top-0.5 rounded-full bg-surface transition-transform duration-200 ease-click"
+              class="absolute top-0.5 rounded-full bg-surface transition-transform duration-200 ease-out"
               classList={{
                 'size-2 touch:size-7': !props.compact,
                 'size-1.5': !!props.compact,

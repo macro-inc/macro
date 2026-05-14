@@ -509,12 +509,14 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         >
           <Surface depth={2} active class="py-2">
             <Show
-              when={controller.combinedItems().length > 0}
-              fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
-            >
-              <Show
-                when={controller.viewAllMode()}
-                fallback={
+              when={controller.viewAllMode()}
+              fallback={
+                <Show
+                  when={controller.combinedItems().length > 0}
+                  fallback={
+                    <div class="px-2 text-ink-extra-muted">No results</div>
+                  }
+                >
                   <div>
                     <For each={visibleBuckets()}>
                       {(bucket, idx) => (
@@ -552,44 +554,47 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                       )}
                     </For>
                   </div>
-                }
-              >
-                <Show when={!isMobile()}>
-                  <div class="px-2 pb-2">
-                    <div class="flex items-center justify-between">
-                      <span class="text-xs font-medium text-ink-muted">
-                        {viewAllCategoryLabel()}
-                      </span>
-                      <button
-                        type="button"
-                        class="text-xs font-medium text-ink-muted hover:text-ink hover:underline flex items-center gap-1"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleBackToAll();
-                        }}
-                      >
-                        <div class="p-0.5 px-1 -my-2 bg-surface text-ink border border-edge-muted rounded-xs text-xs">
-                          ←
-                        </div>
-                        Back to everything
-                      </button>
-                    </div>
-                  </div>
                 </Show>
-                <VirtualizedItemList
-                  items={controller.combinedItems()}
-                  selectedIndex={controller.selectedIndex()}
-                  itemAction={itemAction}
-                  setIndex={setSelectedIndexFromMouse}
-                  setOpen={setMenuOpen}
-                  maxHeight={contentMaxHeight()}
-                />
+              }
+            >
+              <Show when={!isMobile()}>
+                <div class="px-2 pb-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-ink-muted">
+                      {viewAllCategoryLabel()}
+                    </span>
+                    <button
+                      type="button"
+                      class="text-xs font-medium text-ink-muted hover:text-ink hover:underline flex items-center gap-1"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleBackToAll();
+                      }}
+                    >
+                      <div class="p-0.5 px-1 -my-2 bg-surface text-ink border border-edge-muted rounded-xs text-xs">
+                        ←
+                      </div>
+                      Back to everything
+                    </button>
+                  </div>
+                </div>
               </Show>
+              <Show when={controller.combinedItems().length === 0}>
+                <div class="px-2 text-ink-extra-muted">No results</div>
+              </Show>
+              <VirtualizedItemList
+                items={controller.combinedItems()}
+                selectedIndex={controller.selectedIndex()}
+                itemAction={itemAction}
+                setIndex={setSelectedIndexFromMouse}
+                setOpen={setMenuOpen}
+                maxHeight={contentMaxHeight()}
+              />
             </Show>
           </Surface>
         </div>

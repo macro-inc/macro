@@ -10136,7 +10136,7 @@
           {
             "type": "object",
             "description": "Sync-service backed content.",
-            "required": ["metadata", "syncServiceMetadata", "content", "type"],
+            "required": ["metadata", "content", "type"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/DocumentContent",
@@ -10145,10 +10145,6 @@
               "metadata": {
                 "$ref": "#/components/schemas/DocumentBasic",
                 "description": "Basic document metadata."
-              },
-              "syncServiceMetadata": {
-                "$ref": "#/components/schemas/SyncServiceDocumentMetadata",
-                "description": "Sync-service metadata."
               },
               "type": {
                 "type": "string",
@@ -10929,6 +10925,10 @@
             "type": ["boolean", "null"],
             "description": "Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
+          "include_root": {
+            "type": "boolean",
+            "description": "When true, `project_ids` also matches the projects themselves in addition to their children."
+          },
           "notification_filters": {
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by project notification state."
@@ -10945,7 +10945,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects."
+            "description": "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects.\nBy default matches children of these projects; set `include_root` to also match the projects themselves."
           }
         }
       },
@@ -12363,43 +12363,6 @@
           "error": {
             "type": "boolean",
             "description": "Indicates if an error occurred"
-          }
-        }
-      },
-      "SyncServiceDocumentMetadata": {
-        "type": "object",
-        "description": "Sync-service document metadata exposed through document location responses.",
-        "required": ["id", "peers", "version_id"],
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "Sync-service document id."
-          },
-          "peers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SyncServicePeerWithUserId"
-            },
-            "description": "Known peers for the sync document."
-          },
-          "version_id": {
-            "type": "string",
-            "description": "Current sync-service version id."
-          }
-        }
-      },
-      "SyncServicePeerWithUserId": {
-        "type": "object",
-        "description": "Peer/user mapping returned by sync-service metadata.",
-        "required": ["peer_id", "user_id"],
-        "properties": {
-          "peer_id": {
-            "type": "string",
-            "description": "Sync-service peer id."
-          },
-          "user_id": {
-            "type": "string",
-            "description": "Macro user id."
           }
         }
       },

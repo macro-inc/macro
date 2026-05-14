@@ -1,6 +1,5 @@
 use crate::document::{DocumentBasic, FileType};
 use crate::response::PresignedUrl;
-use crate::sync_service::DocumentMetadata as SyncServiceMetadata;
 use anyhow::Result;
 use std::str::FromStr;
 use utoipa::ToSchema;
@@ -18,7 +17,6 @@ pub enum LocationResponseV3 {
     },
     SyncServiceContent {
         metadata: DocumentBasic,
-        sync_service_metadata: SyncServiceMetadata,
     },
 }
 
@@ -28,18 +26,6 @@ impl LocationResponseV3 {
             Self::PresignedUrl { metadata, .. } => metadata,
             Self::PresignedUrls { metadata, .. } => metadata,
             Self::SyncServiceContent { metadata, .. } => metadata,
-        }
-    }
-
-    pub fn sync_service_metadata(&self) -> Option<&SyncServiceMetadata> {
-        if let Self::SyncServiceContent {
-            sync_service_metadata,
-            ..
-        } = self
-        {
-            Some(sync_service_metadata)
-        } else {
-            None
         }
     }
 

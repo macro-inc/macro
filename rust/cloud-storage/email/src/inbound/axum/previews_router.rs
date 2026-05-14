@@ -14,10 +14,11 @@ use uuid::Uuid;
 
 use crate::{
     domain::{models::GetEmailsRequest, ports::EmailService},
-    inbound::{
-        ApiPaginatedThreadCursor, EmailLinkExtractor,
-        axum::axum_impls::{
-            GetPreviewsCursorError, GetPreviewsCursorParams, PreviewViewPathExtractor,
+    inbound::axum::{
+        api_types::ApiPaginatedThreadCursor,
+        axum_impls::{
+            EmailLinkExtractor, GetPreviewsCursorError, GetPreviewsCursorParams,
+            PreviewViewPathExtractor,
         },
     },
 };

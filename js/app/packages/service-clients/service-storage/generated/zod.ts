@@ -3703,28 +3703,6 @@ export const getDocumentLocationV3Response = zod
           .describe(
             'Returns basic information of a document used for some db queries'
           ),
-        syncServiceMetadata: zod
-          .object({
-            id: zod.string().describe('Sync-service document id.'),
-            peers: zod
-              .array(
-                zod
-                  .object({
-                    peer_id: zod.string().describe('Sync-service peer id.'),
-                    user_id: zod.string().describe('Macro user id.'),
-                  })
-                  .describe(
-                    'Peer\/user mapping returned by sync-service metadata.'
-                  )
-              )
-              .describe('Known peers for the sync document.'),
-            version_id: zod
-              .string()
-              .describe('Current sync-service version id.'),
-          })
-          .describe(
-            'Sync-service document metadata exposed through document location responses.'
-          ),
         type: zod.enum(['syncServiceContent']),
       })
       .describe('Sync-service backed content.'),
@@ -5868,6 +5846,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        include_root: zod
+          .boolean()
+          .optional()
+          .describe(
+            'When true, `project_ids` also matches the projects themselves in addition to their children.'
+          ),
         notification_filters: zod
           .object({
             done: zod
@@ -5895,7 +5879,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects."
+            "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects.\nBy default matches children of these projects; set `include_root` to also match the projects themselves."
           ),
       })
       .optional()

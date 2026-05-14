@@ -267,7 +267,7 @@ pub async fn build_tool_service_context_from_env(
     let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone());
     let chat_service = chat::domain::service::ChatServiceImpl::new(
         chat_repo,
-        Arc::new(ai_toolset::AsyncToolSet::new()),
+        Arc::new(ai_toolset::AsyncToolCollection::new()),
         (),
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(pool.clone()),

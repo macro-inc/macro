@@ -6,9 +6,11 @@ mod test;
 mod link;
 mod sync;
 
-pub use link::*;
-pub use sync::*;
-
+pub use link::{GithubAccessToken, GithubExchangeTokenResponse, GithubLink, GithubUserInfo};
+pub use sync::{
+    GithubInstallationAccessToken, GithubKey, GithubWebhookEventType, MacroTaskId,
+    ValidatedGithubWebhookEvent,
+};
 /// Errors that can occur during github operations.
 #[derive(Debug, thiserror::Error)]
 pub enum GithubError {

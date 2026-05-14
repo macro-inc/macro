@@ -14,7 +14,7 @@ interface CustomScrollbarProps {
   horizontal?: boolean;
 }
 
-const THUMB_SIZE = 200;
+const MIN_THUMB_SIZE = 24;
 const GUTTER_SIZE = 8;
 const THUMB_INSET = 3;
 const THUMB_THICKNESS = 2;
@@ -64,6 +64,17 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
 
   const maxScroll = () => Math.max(0, scrollSize() - clientSize());
 
+  const trackSize = () => Math.max(0, clientSize() - THUMB_INSET * 2);
+
+  const thumbSize = () => {
+    const ts = trackSize();
+    const ss = scrollSize();
+    const ratio = ss > 0 ? clientSize() / ss : 1;
+    return Math.max(MIN_THUMB_SIZE, Math.min(ts, ts * ratio));
+  };
+
+  const maxTop = () => Math.max(0, trackSize() - thumbSize());
+
   const scrollOffset = () => {
     const max = maxScroll();
     if (max <= 0) return 0;
@@ -74,11 +85,9 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   };
 
   const thumbOffset = () => {
-    const cSize = clientSize();
     const max = maxScroll();
     if (max <= 0) return 0;
-    const maxTop = Math.max(0, cSize - THUMB_SIZE - THUMB_INSET * 2);
-    return THUMB_INSET + (scrollOffset() / max) * maxTop;
+    return THUMB_INSET + (scrollOffset() / max) * maxTop();
   };
 
   const isVisible = () => scrollSize() > clientSize();
@@ -114,13 +123,12 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     if (!container) return;
     const max = maxScroll();
     if (max <= 0) return;
-    const cSize = clientSize();
-    const maxTop = Math.max(0, cSize - THUMB_SIZE - THUMB_INSET * 2);
-    if (maxTop <= 0) return;
+    const mt = maxTop();
+    if (mt <= 0) return;
     const start = horiz() ? gutterRect.left : gutterRect.top;
-    const localPos = clientPos - start - THUMB_SIZE / 2;
-    const clamped = Math.max(0, Math.min(maxTop, localPos - THUMB_INSET));
-    let newPos = (clamped / maxTop) * max;
+    const localPos = clientPos - start - thumbSize() / 2;
+    const clamped = Math.max(0, Math.min(mt, localPos - THUMB_INSET));
+    let newPos = (clamped / mt) * max;
     if (props.reverse && !horiz()) newPos = newPos - max;
     if (horiz()) {
       container.scrollLeft = newPos;
@@ -184,7 +192,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
             horiz()
               ? {
                   transform: `translateX(${thumbOffset()}px)`,
-                  width: `${THUMB_SIZE}px`,
+                  width: `${thumbSize()}px`,
                   height: `${THUMB_THICKNESS}px`,
                   bottom: `${EDGE_INSET}px`,
                   left: '0',
@@ -196,7 +204,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
                 }
               : {
                   transform: `translateY(${thumbOffset()}px)`,
-                  height: `${THUMB_SIZE}px`,
+                  height: `${thumbSize()}px`,
                   width: `${THUMB_THICKNESS}px`,
                   right: `${EDGE_INSET}px`,
                   top: '0',
@@ -215,7 +223,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
               props.labelClass
             )}
             style={{
-              top: `${thumbOffset() + THUMB_SIZE / 2}px`,
+              top: `${thumbOffset() + thumbSize() * 0.5}px`,
               opacity: scrollLabelVisible() ? 1 : 0,
             }}
           >

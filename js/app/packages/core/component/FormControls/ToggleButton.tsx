@@ -22,7 +22,6 @@ export const ToggleButton: ParentComponent<
   {
     size?: Size;
     tabIndex?: number;
-    animateFlickerOnDeactivate?: boolean;
     class?: string;
     classList?: JSX.CustomAttributes<HTMLButtonElement>['classList'];
     disabled?: boolean;
@@ -30,35 +29,12 @@ export const ToggleButton: ParentComponent<
   } & ToggleButtonRootOptions
 > = (props) => {
   const [pressed, setPressed] = createSignal(props.pressed);
-  // const [showFlicker, setShowFlicker] = createSignal(false);
-  // let init = true;
-
-  // createEffect((prevPressed) => {
-  //   const pressedVal = pressed();
-
-  //   if (init) {
-  //     return pressedVal;
-  //   }
-  //   if (pressedVal === prevPressed) return pressedVal;
-  //   if (props.animateFlickerOnDeactivate === false && pressedVal === false) {
-  //     return pressedVal;
-  //   }
-
-  //   setShowFlicker(true);
-  //   return pressedVal;
-  // });
 
   createEffect(() => {
     if (props.pressed !== undefined) {
       setPressed(props.pressed);
     }
   });
-
-  // onMount(() => {
-  //   setTimeout(() => {
-  //     init = false;
-  //   });
-  // });
 
   const onChange = (isPressed: boolean) => {
     if (props.pressed === undefined) {
@@ -88,12 +64,8 @@ export const ToggleButton: ParentComponent<
             [`${sizeClass[props.size || 'Base']}`]: true,
             'bg-edge-muted text-ink': state.pressed(),
             'text-ink-extra-muted': !state.pressed(),
-            // 'animate-[flicker_50ms_3]': showFlicker(),
             'hover:opacity-80': !props.disabled,
           }}
-          // onAnimationEnd={() => {
-          //   setShowFlicker(false);
-          // }}
         >
           {props.children}
         </div>

@@ -141,7 +141,13 @@ export const createMockNotification = (
   viewed_at: null,
   notification_metadata: {
     tag: 'document_mention',
-    content: { documentName: 'Test Document', owner: 'user_123' },
+    content: {
+      channelType: 'private',
+      documentName: 'Test Document',
+      messageContent: 'Test message',
+      messageId: 'message_123',
+      owner: 'user_123',
+    },
   },
   ...overrides,
 });

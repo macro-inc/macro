@@ -259,7 +259,7 @@ function MenuItem(props: MenuItemProps) {
   return (
     <DropdownMenu.Item
       class={cn(
-        'flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-click duration-200 text-ink-extra-muted outline-none data-highlighted:bg-active',
+        'flex justify-between items-center gap-12 px-1.5 py-1 text-sm isolate transition-transform ease-out duration-200 text-ink-extra-muted outline-none data-highlighted:bg-active',
         `data-highlighted:${selectedColor}`
       )}
       onSelect={props.action}

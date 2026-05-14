@@ -327,23 +327,15 @@ impl<
         Ok(DocumentContent::from_legacy_uploaded(uploaded, file_type))
     }
 
-    async fn markdown_sync_service_location_response(
+    fn markdown_sync_service_location_response(
         &self,
         document_context: &DocumentBasic,
-        document_id: &str,
         content: DocumentContent,
-    ) -> Result<LocationResponseV3, DocumentError> {
-        let sync_service_metadata = self
-            .sync_service_client
-            .get_metadata(document_id)
-            .await
-            .map_err(DocumentError::Internal)?;
-
-        Ok(LocationResponseV3::SyncServiceContent {
+    ) -> LocationResponseV3 {
+        LocationResponseV3::SyncServiceContent {
             metadata: document_context.clone(),
-            sync_service_metadata: sync_service_metadata.into(),
             content,
-        })
+        }
     }
 
     async fn resolve_markdown_sync_service_location(
@@ -355,18 +347,18 @@ impl<
         if content.state == DocumentContentState::Ready
             && content.location == Some(DocumentContentLocation::SyncService)
         {
-            return self
-                .markdown_sync_service_location_response(document_context, document_id, content)
-                .await
-                .map(Some);
+            return Ok(Some(self.markdown_sync_service_location_response(
+                document_context,
+                content,
+            )));
         }
 
-        match self.sync_service_client.get_metadata(document_id).await {
-            Ok(sync_service_metadata) => Ok(Some(LocationResponseV3::SyncServiceContent {
-                metadata: document_context.clone(),
-                sync_service_metadata: sync_service_metadata.into(),
-                content: DocumentContent::ready(DocumentContentLocation::SyncService),
-            })),
+        match self.sync_service_client.exists(document_id).await {
+            Ok(true) => Ok(Some(self.markdown_sync_service_location_response(
+                document_context,
+                DocumentContent::ready(DocumentContentLocation::SyncService),
+            ))),
+            Ok(false) => Ok(None),
             Err(error) => {
                 tracing::warn!(
                     error=?error,

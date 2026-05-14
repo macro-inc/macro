@@ -186,12 +186,10 @@ export function ListEntity(props: ListEntityProps) {
         'soup-list-entity @container/entity w-full relative group/narrow flex flex-col',
         {
           'min-h-10': !isMobile(),
-          'bg-accent/8': props.checked,
+          'bg-accent/8': props.checked || (props.highlighted && !isMobile()),
           'hover:bg-hover group-data-expanded/cm-trigger:bg-hover':
             !props.checked && !props.highlighted && !props.hovered,
           'bg-hover': props.hovered && !props.highlighted && !props.checked,
-          'bg-accent/8 outline-1 outline-accent/20 -outline-offset-1':
-            props.highlighted && !isMobile(),
         }
       )}
       onMouseMove={props.onMouseMove}
