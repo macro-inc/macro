@@ -1324,7 +1324,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let (query_builder, entity_type_bind) =
+    let (mut query_builder, entity_type_bind) =
         build_grouped_query(cursor.filter(), exclude_frecency, &grouping);
 
     let mut query = query_builder
