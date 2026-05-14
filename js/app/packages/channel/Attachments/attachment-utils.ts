@@ -53,6 +53,9 @@ export function buildAttachmentEntityFilters(
       case 'project':
         projectIds.push(a.entity_id);
         break;
+      case 'call':
+        callIds.push(a.entity_id);
+        break;
     }
   }
 

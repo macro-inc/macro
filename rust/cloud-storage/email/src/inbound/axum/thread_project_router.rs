@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::domain::{models::EmailErr, ports::EmailService};
 
-use super::EmailThreadRouterState;
+use super::get_thread_router::EmailThreadRouterState;
 
 /// Request body for updating a thread's project.
 #[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]

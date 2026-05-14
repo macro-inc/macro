@@ -9,11 +9,11 @@ use model::response::StringIDResponse;
 use model_user::UserContext;
 use tower::util::ServiceExt;
 
-use super::*;
 use crate::domain::models::{
     ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs, Result,
 };
 use crate::domain::ports::ChatService;
+use crate::inbound::http::router::{ChatRouterState, chat_id_router};
 use ai_toolset::tool_object::UserToolResponse;
 use entity_access::domain::models::{
     AccessError, AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType,

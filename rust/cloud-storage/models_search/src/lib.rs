@@ -14,10 +14,11 @@ mod simple;
 pub mod timestamp;
 pub mod unified;
 
-pub use simple::*;
-
-pub use timestamp::*;
-
+pub use simple::{
+    Highlight, SearchGotoCallRecord, SearchGotoChannel, SearchGotoChat, SearchGotoContent,
+    SearchGotoDocument, SearchGotoEmail, SimpleSearchResponse, SimpleSearchResponseItem,
+};
+pub use timestamp::{HumanReadableTimestamp, TimestampField, TimestampSeconds};
 #[derive(
     Serialize, Deserialize, Debug, ToSchema, Copy, Clone, EnumString, Display, JsonSchema, Default,
 )]

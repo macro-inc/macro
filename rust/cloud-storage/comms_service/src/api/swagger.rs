@@ -20,7 +20,7 @@ use crate::api::{
     },
     preview::get_batch_preview::{GetBatchChannelPreviewRequest, GetBatchChannelPreviewResponse},
 };
-use comms::inbound::{ApiActivity, ApiChannelWithLatest};
+use comms::inbound::router::{ApiActivity, ApiChannelWithLatest};
 use comms_db_client::channels::patch_channel::PatchChannelOptions;
 use comms_db_client::model::{
     Activity, ActivityType, CountedReaction, EntityMention, Message, NewAttachment, Reaction,
@@ -63,13 +63,13 @@ use super::preview::get_batch_preview;
         paths(
             create_channel::create_channel_handler,
             get_channel::get_channel_handler,
-            comms::inbound::get_channels_handler,
+            comms::inbound::router::get_channels_handler,
             post_message::post_message_handler,
             post_typing::post_typing_handler,
             post_reaction::post_reaction_handler,
             patch_message::patch_message_handler,
             delete_message::delete_message_handler,
-            comms::inbound::get_activity_handler,
+            comms::inbound::router::get_activity_handler,
             post_activity::post_activity_handler,
             join_channel::join_channel_handler,
             leave_channel::leave_channel_handler,

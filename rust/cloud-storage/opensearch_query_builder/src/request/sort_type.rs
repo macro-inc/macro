@@ -7,8 +7,7 @@ use crate::ToOpenSearchJson;
 
 mod script;
 
-pub use script::*;
-
+pub use script::{Lang, Script, ScriptSort, ScriptSortType};
 /// Sort Order
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "lowercase")]

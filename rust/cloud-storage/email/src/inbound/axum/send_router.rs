@@ -6,8 +6,9 @@ use thiserror::Error;
 use crate::domain::{models::EmailErr, ports::EmailService};
 
 use super::{
-    EmailLinkExtractor, EmailRouterState,
     api_types::{SendMessageRequest, SendMessageResponse},
+    axum_impls::EmailLinkExtractor,
+    previews_router::EmailRouterState,
 };
 
 /// Create the send router with a `POST /` handler.

@@ -6,13 +6,12 @@ mod document;
 mod highlight;
 mod project;
 
-pub use chat::*;
-pub use document::*;
-pub use highlight::*;
+pub use chat::search_chat_names;
+pub use document::search_document_names;
+pub use highlight::highlight_name;
 pub use models_opensearch::SearchEntityType;
 use models_search_cursor::{PaginatedResult, SearchCursorAttributes};
-pub use project::*;
-
+pub use project::search_project_names;
 /// Escapes special regex characters in a search term
 pub fn escape_regex(term: &str) -> String {
     let special_chars = [

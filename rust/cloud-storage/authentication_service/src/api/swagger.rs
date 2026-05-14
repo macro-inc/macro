@@ -26,10 +26,10 @@ use crate::api::user::patch_user_group::PatchUserGroupRequest;
 use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
 use crate::api::user::post_get_names::PostGetNamesRequestBody;
 use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
-use crate::api::user::stripe::{
-    CreateCheckoutSessionRequest, CreatePortalSessionRequest, PatchSubscriptionTierRequest,
-    StripeProductTier, StripeSessionResponse,
-};
+use crate::api::user::stripe::create_checkout_session::CreateCheckoutSessionRequest;
+use crate::api::user::stripe::create_portal_session::CreatePortalSessionRequest;
+use crate::api::user::stripe::patch_subscription_tier::PatchSubscriptionTierRequest;
+use crate::api::user::stripe::{StripeProductTier, StripeSessionResponse};
 use crate::api::{
     email, health, jwt, link, login, logout, merge, mobile_welcome_email, oauth, oauth2,
     permissions, session, user,
@@ -98,9 +98,9 @@ use model::user::{
                 user::get_user_quota::handler,
                 user::get_legacy_user_permissions::handler,
                 user::patch_tutorial::handler,
-                user::stripe::create_checkout_session,
-                user::stripe::create_portal_session,
-                user::stripe::patch_subscription_tier,
+                user::stripe::create_checkout_session::create_checkout_session,
+                user::stripe::create_portal_session::create_portal_session,
+                user::stripe::patch_subscription_tier::patch_subscription_tier,
 
                 /// /session
                 session::session_login::handler,

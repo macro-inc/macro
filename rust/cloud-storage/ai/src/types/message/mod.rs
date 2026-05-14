@@ -2,8 +2,11 @@ mod chat_message;
 mod message_builder;
 mod system_prompt;
 
-pub use chat_message::*;
-pub use message_builder::*;
+pub use chat_message::{
+    AssistantMessagePart, ChatMessage, ChatMessageContent, ChatMessages, ToolResponseMessage,
+    UserMessagePart,
+};
+pub use message_builder::{MessageBuilder, NoContent, NoRole};
 pub use system_prompt::SystemPrompt;
 
 use serde::{Deserialize, Serialize};

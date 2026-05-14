@@ -18,7 +18,10 @@ use email::{
         models::{Link, PreviewView},
         ports::EmailService,
     },
-    inbound::{EmailLinkErr, EmailLinkExtractor, EmailRouterState},
+    inbound::axum::{
+        axum_impls::{EmailLinkErr, EmailLinkExtractor},
+        previews_router::EmailRouterState,
+    },
 };
 use filter_ast::{Expr, ExprFrame};
 use item_filters::{

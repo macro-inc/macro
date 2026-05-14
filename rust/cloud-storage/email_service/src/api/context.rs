@@ -2,7 +2,10 @@ use axum::extract::FromRef;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
     domain::service::EmailServiceImpl,
-    inbound::{EmailRouterState, EmailThreadRouterState, GmailTokenState},
+    inbound::axum::{
+        axum_impls::GmailTokenState, get_thread_router::EmailThreadRouterState,
+        previews_router::EmailRouterState,
+    },
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
 

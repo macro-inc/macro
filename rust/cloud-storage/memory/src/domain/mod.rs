@@ -1,4 +1,4 @@
 pub mod ports;
 pub mod service;
 
-pub use ports::*;
+pub use ports::{Memory, MemoryError, MemoryRecord, MemoryRepo, MemoryService, Result};

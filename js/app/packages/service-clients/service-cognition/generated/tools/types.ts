@@ -1365,6 +1365,10 @@ export interface ReadCallRecordResponse {
    */
   callId: string;
   /**
+   * The AI generated summary of the call if one was generated. Use this before you read through the transcript.
+   */
+  summary?: string | null;
+  /**
    * Transcript segments in chronological order.
    */
   transcript: TranscriptSegment[];

@@ -145,6 +145,12 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       class="w-full flex items-center shrink-0 grow min-w-0 mobile:-order-2"
       data-search-bar-wrapper
       data-no-focus-restore
+      onFocusOut={(e) => {
+        if (hasContent() || !props.onDismiss) return;
+        const next = e.relatedTarget as Node | null;
+        if (next && e.currentTarget.contains(next)) return;
+        props.onDismiss();
+      }}
     >
       <div
         class={cn(
