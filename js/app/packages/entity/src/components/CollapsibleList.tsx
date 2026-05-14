@@ -20,6 +20,10 @@ function ToggleButton(props: ToggleButtonProps) {
         data-collapsible-toggle
         data-collapsible-state={props.showAll ? 'expanded' : 'collapsed'}
         onClick={props.toggle}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
       >
         <ChevronDownIcon
           class={cn('size-2.5', {
