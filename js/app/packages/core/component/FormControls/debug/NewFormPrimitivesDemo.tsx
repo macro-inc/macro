@@ -1,12 +1,11 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import { Button } from '@ui';
+import { Button, ToggleSwitch } from '@ui';
 import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
 import DropdownMenu from '../DropdownMenu';
 import { SegmentedControl } from '../SegmentControls';
 import { ToggleButton } from '../ToggleButton';
-import { ToggleSwitch } from '../ToggleSwitch';
 
 const NewFormPrimitivesDemo = () => {
   const [list] = createStore(['!', '*', '★', '⍻']);
@@ -29,7 +28,7 @@ const NewFormPrimitivesDemo = () => {
     <div class="p-6">
       <h2>Size: SM</h2>
       <div class="flex gap-4 items-center">
-        <ToggleSwitch size="SM" label="Subscribe" />
+        <ToggleSwitch label="Subscribe" labelClass="text-xs" />
         <SegmentedControl
           size="SM"
           label="Show"
@@ -71,13 +70,19 @@ const NewFormPrimitivesDemo = () => {
               </section>
               <section class="grid gap-1 p-2">
                 <ToggleSwitch
-                  size="SM"
-                  label="Unroll Notifications"
-                  checked={unrollNotifications()}
                   onChange={setUnrollNotifications}
+                  checked={unrollNotifications()}
+                  class="justify-between text-xs"
+                  label="Unroll Notifications"
                 />
-                <ToggleSwitch size="SM" label="Indicate Unread" />
-                <ToggleSwitch size="SM" label="Monochrome" />
+                <ToggleSwitch
+                  class="justify-between text-xs"
+                  label="Indicate Unread"
+                />
+                <ToggleSwitch
+                  class="justify-between text-xs"
+                  label="Monochrome"
+                />
               </section>
             </div>
             <div class="grid grid-flow-col w-full border-edge border-t-2">
@@ -144,13 +149,19 @@ const NewFormPrimitivesDemo = () => {
               </section>
               <section class="grid gap-1 p-2">
                 <ToggleSwitch
-                  size="SM"
+                  class="justify-between text-xs"
                   label="Unroll Notifications"
                   checked={unrollNotifications()}
                   onChange={setUnrollNotifications}
                 />
-                <ToggleSwitch size="SM" label="Indicate Unread" />
-                <ToggleSwitch size="SM" label="Monochrome" />
+                <ToggleSwitch
+                  class="justify-between text-xs"
+                  label="Indicate Unread"
+                />
+                <ToggleSwitch
+                  class="justify-between text-xs"
+                  label="Monochrome"
+                />
               </section>
             </div>
             <div class="grid grid-flow-col w-full border-edge border-t-2">
