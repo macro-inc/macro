@@ -6,22 +6,22 @@ import type { JSX } from 'solid-js';
 export type ToggleSwitchProps = {
   onChange?: (checked: boolean) => void;
   defaultChecked?: boolean;
+  labelClass?: string;
+  label?: JSX.Element;
   disabled?: boolean;
   checked?: boolean;
   class?: string;
-  label?: JSX.Element;
-  labelClass?: string;
 };
 
 export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
   const [local, others] = splitProps(props, [
     'defaultChecked',
+    'labelClass',
     'onChange',
     'disabled',
     'checked',
     'class',
     'label',
-    'labelClass',
   ]);
 
   return (
