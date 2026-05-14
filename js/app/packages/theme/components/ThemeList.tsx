@@ -34,7 +34,7 @@ export function ThemeList() {
             overflow-x: hidden;
             font-size: 14px;
             display: grid;
-            gap: 1px;
+            gap: 1px 0px;
           "
         >
           <For each={themes()}>
@@ -73,12 +73,12 @@ export function ThemeList() {
                   }}
                   style="
                     transition: color var(--transition);
-                    cursor: pointer;
                     background-color: var(--b0);
                     box-sizing: border-box;
                     white-space: nowrap;
                     align-items: center;
                     padding: 0 20px;
+                    cursor: pointer;
                     display: flex;
                     height: 100%;
                     width: 100%;

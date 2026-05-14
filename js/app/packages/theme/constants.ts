@@ -258,6 +258,29 @@ export const DEFAULT_THEMES = [
       c4: { l: 0.65, c: 0.02, h: 318 },
     },
   },
+  {
+    id: 'Void',
+    name: 'Void',
+    version: 2,
+    depth: 0.23,
+    tokens: {
+      a0: { l: 0.87, c: 0, h:   0 },
+      a1: { l: 0.87, c: 0, h:  40 },
+      a2: { l: 0.87, c: 0, h:  80 },
+      a3: { l: 0.87, c: 0, h: 120 },
+      a4: { l: 0.87, c: 0, h: 160 },
+      b0: { l: 0.13, c: 0, h:   0 },
+      b1: { l: 0.16, c: 0, h:   0 },
+      b2: { l: 0.23, c: 0, h:   0 },
+      b3: { l: 0.25, c: 0, h:   0 },
+      b4: { l: 0.30, c: 0, h:   0 },
+      c0: { l: 0.88, c: 0, h:   0 },
+      c1: { l: 0.84, c: 0, h:   0 },
+      c2: { l: 0.79, c: 0, h:   0 },
+      c3: { l: 0.73, c: 0, h:   0 },
+      c4: { l: 0.67, c: 0, h:   0 },
+    },
+  },
 ] as const satisfies ReadonlyArray<ThemeV2>;
 
 type DefaultTheme = (typeof DEFAULT_THEMES)[number]['id'];

@@ -86,7 +86,7 @@ export function ThemeEditorAdvanced(){
                         align-items: center;
                         display: grid;
                         height: 40px;
-                        gap: 1px;
+                        gap: 1px 0px;
                       "
                     >
                       <div
