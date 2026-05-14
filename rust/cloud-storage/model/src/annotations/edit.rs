@@ -1,3 +1,4 @@
+use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -55,6 +56,8 @@ pub struct EditCommentResponse {
     pub document_id: String,
     pub document_name: String,
     pub file_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub_type: Option<DocumentSubType>,
     #[schema(value_type = String)]
     pub document_owner: MacroUserIdStr<'static>,
     #[serde(flatten)]

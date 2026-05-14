@@ -539,7 +539,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
         isExpanded() &&
-          'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
+          'max-w-[199px] w-full mobile:max-w-2/3 translate-x-0 opacity-100',
         props.sidebarState === 'hidden' &&
           '-translate-x-full overflow-hidden opacity-0',
 
@@ -735,8 +735,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
           draggable={false}
           variant="ghost"
           class={cn(
-            'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-xs py-1 text-ink-extra-muted',
-            isActive() && 'bg-ink/5 not-disabled:hover:bg-ink/10 text-ink'
+            'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-sm py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3',
+            isActive() && 'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink'
           )}
           tooltipPlacement="right"
           onMouseEnter={() => setIsHovering(true)}
@@ -751,12 +751,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
               : undefined
           }
           onMouseLeave={() => setIsHovering(false)}
-          onClick={(e) => {
+          onMouseDown={(e) => {
+            if (e.button !== 0) return;
             analytics.track('sidebar_click', {
               view: props.id,
             });
-            // Middle mouse handling
-            if (e.button === 1) return;
 
             e.preventDefault();
             let currentContentHandle = layoutManager?.activeSplit();

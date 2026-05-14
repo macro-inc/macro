@@ -198,7 +198,9 @@ function ChannelGroupItem(props: {
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),
       }}
-      onClick={(e) => {
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
         navigateToLatestNotification(e.shiftKey);
       }}
     >

@@ -1,10 +1,9 @@
-import { MiniToggleSwitch } from '@core/component/FormControls/MiniToggleSwitch';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import ShareNetwork from '@phosphor-icons/core/assets/regular/share-network.svg';
 import { useToggleShareWithTeamMutation } from '@queries/call/call';
-import { cn, Tooltip } from '@ui';
+import { cn, ToggleSwitch, Tooltip } from '@ui';
 import { type RemoteParticipant, Track } from 'livekit-client';
 import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
@@ -339,12 +338,10 @@ export function CallOverlay(props: { onLeave: () => void }) {
                 )}
                 aria-hidden
               />
-              <MiniToggleSwitch
-                checked={callCtx.isSharedWithTeam()}
+              <ToggleSwitch
                 onChange={() => void handleToggleShareWithTeam()}
+                checked={callCtx.isSharedWithTeam()}
                 disabled={isConnecting()}
-                size="SM"
-                activeTrackClass="bg-ink-muted"
               />
             </div>
           </Tooltip>

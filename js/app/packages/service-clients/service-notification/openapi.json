@@ -1243,6 +1243,17 @@
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
           },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the document (e.g. task)."
+              }
+            ]
+          },
           "text": {
             "type": "string",
             "description": "the text of the comment"
@@ -1609,6 +1620,17 @@
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
           },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the document (e.g. task)."
+              }
+            ]
+          },
           "text": {
             "type": "string",
             "description": "the text of the comment"
@@ -1904,6 +1926,17 @@
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
           },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the document (e.g. task)."
+              }
+            ]
+          },
           "text": {
             "type": "string",
             "description": "the text of the comment"
@@ -1937,6 +1970,17 @@
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
+          },
+          "subType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationDocumentSubType",
+                "description": "The sub type of the backing document (task)."
+              }
+            ]
           },
           "taskId": {
             "type": "string",

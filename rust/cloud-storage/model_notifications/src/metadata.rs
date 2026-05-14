@@ -375,6 +375,10 @@ pub struct TaskAssignedMetadata {
     /// The name of the task (optional)
     #[serde(alias = "task_name")]
     pub task_name: Option<String>,
+    /// The sub type of the backing document (task).
+    #[serde(alias = "sub_type")]
+    #[serde(default)]
+    pub sub_type: Option<NotificationDocumentSubType>,
     /// The user who assigned the task
     #[serde(alias = "assigned_by")]
     #[schema(value_type = String)]
@@ -600,6 +604,10 @@ pub struct MentionedInDocumentCommentMetadata {
     pub owner: MacroUserIdStr<'static>,
     /// The file type of the document.
     pub file_type: Option<String>,
+    /// The sub type of the document (e.g. task).
+    #[serde(alias = "sub_type")]
+    #[serde(default)]
+    pub sub_type: Option<NotificationDocumentSubType>,
     /// The mention ID.
     pub mention_id: String,
     /// the comment id
@@ -646,6 +654,10 @@ pub struct RepliedToDocumentCommentThreadMetadata {
     pub owner: MacroUserIdStr<'static>,
     /// The file type of the document.
     pub file_type: Option<String>,
+    /// The sub type of the document (e.g. task).
+    #[serde(alias = "sub_type")]
+    #[serde(default)]
+    pub sub_type: Option<NotificationDocumentSubType>,
     /// the comment id
     pub comment_id: i64,
     /// the thread id
@@ -714,6 +726,10 @@ pub struct CommentedOnDocumentMetadata {
     pub owner: MacroUserIdStr<'static>,
     /// The file type of the document.
     pub file_type: Option<String>,
+    /// The sub type of the document (e.g. task).
+    #[serde(alias = "sub_type")]
+    #[serde(default)]
+    pub sub_type: Option<NotificationDocumentSubType>,
     /// the comment id
     pub comment_id: i64,
     /// the thread id

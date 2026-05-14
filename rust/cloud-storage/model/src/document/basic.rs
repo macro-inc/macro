@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use super::file_type::FileType;
 use crate::document::FileTypeExt;
+use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
 use utoipa::ToSchema;
 
@@ -99,6 +100,8 @@ pub struct DocumentBasic {
     pub owner: MacroUserIdStr<'static>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_type: Option<DocumentSubType>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub branched_from_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
