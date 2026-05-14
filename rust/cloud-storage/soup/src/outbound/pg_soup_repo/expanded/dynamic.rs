@@ -417,6 +417,33 @@ static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
         WHERE gi.item_type = 'project'
 "#;
 
+static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
+        SELECT
+            'document' as "item_type",
+            NULL::text as "id",
+            NULL::text as "document_version_id",
+            NULL::text as "user_id",
+            NULL::text as "name",
+            NULL::text as "branched_from_id",
+            NULL::bigint as "branched_from_version_id",
+            NULL::bigint as "document_family_id",
+            NULL::text as "file_type",
+            NULL::timestamptz as "created_at",
+            NULL::timestamptz as "updated_at",
+            NULL::text as "project_id",
+            NULL::boolean as "is_persistent",
+            NULL::text as "sha",
+            NULL::document_sub_type_value as "sub_type",
+            NULL::timestamptz as "viewed_at",
+            NULL::timestamptz as "sort_ts",
+            NULL::boolean as "is_completed",
+            NULL::timestamptz as "deleted_at",
+            NULL::text as "group_key",
+            NULL::bigint as "group_total_count",
+            NULL::bigint as "row_in_group"
+        WHERE false
+"#;
+
 fn build_notification_exists_clause(
     entity_id_sql: &str,
     entity_type: &str,
@@ -1312,8 +1339,24 @@ fn build_grouped_query<'a>(
 ) -> (QueryBuilder<'a, Postgres>, Option<String>) {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
-    // For grouped queries, we include all entity types
-    push_accessible_items_cte(&mut builder, true, true, true);
+    // Determine which entity types to include based on filters (same logic as build_query)
+    let include_documents = !document_filter_is_impossible(filter_ast.document_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::Document, PropertyEntityType::Task],
+        );
+    let include_chats = !chat_filter_is_impossible(filter_ast.chat_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::Chat],
+        );
+    let include_projects = !project_filter_is_impossible(filter_ast.project_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::Project],
+        );
+
+    push_accessible_items_cte(&mut builder, include_documents, include_chats, include_projects);
 
     // TopItems CTE: lightweight id + sort_ts + project_id with filters, cursor, and limit
     builder.push("TopItems AS (");
@@ -1321,37 +1364,48 @@ fn build_grouped_query<'a>(
         "SELECT all_items.item_type, all_items.id, all_items.sort_ts, all_items.project_id FROM (",
     );
 
-    // Document top clause (with project_id for grouping)
-    builder.push(GROUPED_DOCUMENT_TOP_CLAUSE);
-    if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
-        builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
+    let mut needs_separator = false;
+
+    if include_documents {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(GROUPED_DOCUMENT_TOP_CLAUSE);
+        if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
+            builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
+        }
+        builder.push(DOCUMENT_TOP_WHERE_CLAUSE);
+        builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "d.id",
+        ));
     }
-    builder.push(DOCUMENT_TOP_WHERE_CLAUSE);
-    builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
-    builder.push(build_properties_filter(
-        filter_ast.properties_filter.as_deref(),
-        "d.id",
-    ));
 
-    builder.push(" UNION ALL ");
+    if include_chats {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(GROUPED_CHAT_TOP_CLAUSE);
+        builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "c.id",
+        ));
+    }
 
-    // Chat top clause (with project_id for grouping)
-    builder.push(GROUPED_CHAT_TOP_CLAUSE);
-    builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
-    builder.push(build_properties_filter(
-        filter_ast.properties_filter.as_deref(),
-        "c.id",
-    ));
+    if include_projects {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(GROUPED_PROJECT_TOP_CLAUSE);
+        builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "p.id",
+        ));
+    }
 
-    builder.push(" UNION ALL ");
-
-    // Project top clause (with project_id for grouping)
-    builder.push(GROUPED_PROJECT_TOP_CLAUSE);
-    builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
-    builder.push(build_properties_filter(
-        filter_ast.properties_filter.as_deref(),
-        "p.id",
-    ));
+    // Fallback when all entity types are filtered out
+    if !needs_separator {
+        builder.push(
+            "SELECT 'document'::text as item_type, NULL::text as id, NULL::timestamptz as sort_ts, NULL::text as project_id WHERE false",
+        );
+    }
 
     builder.push(") all_items ");
 
@@ -1395,17 +1449,31 @@ fn build_grouped_query<'a>(
     };
 
     builder.push("Combined AS (");
-    builder.push(
-        GROUPED_DOCUMENT_DETAIL_CLAUSE.replace("GroupedItems gi", &format!("{} gi", source_table)),
-    );
-    builder.push(" UNION ALL ");
-    builder.push(
-        GROUPED_CHAT_DETAIL_CLAUSE.replace("GroupedItems gi", &format!("{} gi", source_table)),
-    );
-    builder.push(" UNION ALL ");
-    builder.push(
-        GROUPED_PROJECT_DETAIL_CLAUSE.replace("GroupedItems gi", &format!("{} gi", source_table)),
-    );
+
+    let mut combined_needs_separator = false;
+    if include_documents {
+        push_union_separator(&mut builder, &mut combined_needs_separator);
+        builder.push(
+            GROUPED_DOCUMENT_DETAIL_CLAUSE
+                .replace("GroupedItems gi", &format!("{} gi", source_table)),
+        );
+    }
+    if include_chats {
+        push_union_separator(&mut builder, &mut combined_needs_separator);
+        builder.push(
+            GROUPED_CHAT_DETAIL_CLAUSE.replace("GroupedItems gi", &format!("{} gi", source_table)),
+        );
+    }
+    if include_projects {
+        push_union_separator(&mut builder, &mut combined_needs_separator);
+        builder.push(
+            GROUPED_PROJECT_DETAIL_CLAUSE
+                .replace("GroupedItems gi", &format!("{} gi", source_table)),
+        );
+    }
+    if !combined_needs_separator {
+        builder.push(GROUPED_EMPTY_COMBINED_CLAUSE);
+    }
     builder.push(") ");
 
     // Final SELECT with group-aware ordering
