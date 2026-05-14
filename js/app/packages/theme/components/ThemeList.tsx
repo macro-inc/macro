@@ -30,7 +30,7 @@ export function ThemeList() {
             grid-template-columns: min-content 1fr min-content;
             background-color: var(--b3);
             box-sizing: border-box;
-            grid-auto-rows: 40px;
+            grid-auto-rows: 61px;
             overflow-x: hidden;
             font-size: 14px;
             display: grid;

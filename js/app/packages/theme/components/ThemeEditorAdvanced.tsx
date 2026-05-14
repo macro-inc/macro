@@ -85,7 +85,7 @@ export function ThemeEditorAdvanced(){
                         background-color: var(--b3);
                         align-items: center;
                         display: grid;
-                        height: 40px;
+                        height: 61px;
                         gap: 1px 0px;
                       "
                     >
