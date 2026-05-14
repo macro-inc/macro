@@ -658,7 +658,7 @@ function VirtualizedCommandList(props: {
       }}
       data={props.items}
       style={{ height: '100%' }}
-      class="scrollbar-hidden"
+      class="scrollbar-hidden p-2"
     >
       {(item, index) => (
         <CommandItem
