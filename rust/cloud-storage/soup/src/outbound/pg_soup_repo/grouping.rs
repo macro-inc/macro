@@ -99,7 +99,9 @@ pub fn group_order_expr(field: &GroupByField) -> Cow<'static, str> {
         GroupByField::Project => Cow::Borrowed("project_id NULLS LAST"),
         GroupByField::Property { .. } => {
             // values->'value' is an array of UUID strings, extract first and lookup display_order
-            Cow::Borrowed("COALESCE((SELECT po.display_order FROM property_options po WHERE po.id::text = (ep_group.values->'value'->>0)), 999999)")
+            Cow::Borrowed(
+                "COALESCE((SELECT po.display_order FROM property_options po WHERE po.id::text = (ep_group.values->'value'->>0)), 999999)",
+            )
         }
     }
 }
