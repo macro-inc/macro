@@ -1,6 +1,6 @@
 mod grouping;
 
-pub use grouping::{GroupMeta, date_buckets, entity_type_labels};
+pub use grouping::{GroupMeta, entity_type_labels};
 
 use call::domain::models::GetCallRecordsRequest;
 use comms::domain::models::GetChannelsRequest;

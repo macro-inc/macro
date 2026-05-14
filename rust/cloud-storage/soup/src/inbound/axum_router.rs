@@ -1,8 +1,7 @@
 use crate::domain::{
     models::{
         FrecencyQueryInner, FrecencySoupItem, GroupMeta, GroupedSortRequest, IntoSoupReqAst,
-        SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType, date_buckets,
-        entity_type_labels,
+        SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType, entity_type_labels,
     },
     ports::SoupService,
 };
@@ -38,7 +37,7 @@ use item_filters::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
-use models_grouping::{GroupByField, GroupingConfig};
+use models_grouping::{GroupByField, GroupingConfig, date_bucket_label, date_bucket_order};
 use models_pagination::{
     CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
     TypeEraseCursor,
@@ -485,8 +484,8 @@ fn build_grouped_response_with_cursors(
 fn resolve_group_label_and_order(key: &str, group_by: &ApiGroupByField) -> (String, Option<i32>) {
     match group_by {
         ApiGroupByField::Date => (
-            date_buckets::label(key).to_string(),
-            Some(date_buckets::display_order(key)),
+            date_bucket_label(key).to_string(),
+            Some(date_bucket_order(key)),
         ),
         ApiGroupByField::EntityType => (
             entity_type_labels::label(key).to_string(),
