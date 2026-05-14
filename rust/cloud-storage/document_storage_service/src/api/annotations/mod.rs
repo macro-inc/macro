@@ -237,15 +237,6 @@ impl NotificationRecipients {
     }
 }
 
-pub(crate) fn notification_document_sub_type(
-    sub_type: Option<document_sub_type::DocumentSubType>,
-) -> Option<NotificationDocumentSubType> {
-    match sub_type {
-        Some(document_sub_type::DocumentSubType::Task) => Some(NotificationDocumentSubType::Task),
-        None => None,
-    }
-}
-
 pub(crate) struct CommentNotifContext {
     pub text: String,
     pub comment_id: i64,

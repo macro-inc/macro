@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    api::annotations::{CommentNotifContext, notification_document_sub_type},
-    service::conn_gateway::update_live_comment_state,
+    api::annotations::CommentNotifContext, service::conn_gateway::update_live_comment_state,
 };
 use axum::{
     Json,
@@ -21,6 +20,7 @@ use model::{
     response::ErrorResponse,
     user::UserContext,
 };
+use model_notifications::NotificationDocumentSubType;
 use notification::domain::service::NotificationIngress;
 use sqlx::PgPool;
 
@@ -77,7 +77,7 @@ pub async fn edit_comment_handler(
                     document_id: res.document_id.to_string(),
                     owner: res.document_owner.clone(),
                     file_type: res.file_type.clone(),
-                    sub_type: notification_document_sub_type(res.sub_type.clone()),
+                    sub_type: res.sub_type.map(|_| NotificationDocumentSubType::Task),
                     sender_id: user_id.clone().try_into().ok(),
                     sender_profile_picture_url,
                 };
