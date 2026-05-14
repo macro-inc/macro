@@ -225,7 +225,6 @@ export function DispatchAgentButton() {
           <MenuItem
             text="Copy branch name"
             icon={GitBranch}
-            hotkeyToken={TOKENS.entity.action.copyBranchName}
             onClick={() => {
               copyBranchNameToClipboard(blockId);
               setOpen(false);
